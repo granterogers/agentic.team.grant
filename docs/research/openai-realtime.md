@@ -233,6 +233,17 @@ assistant speech costs roughly 4x user speech per second.
 | Context window | 128,000 | 128,000 |
 | Max output tokens | 32,000 | 32,000 |
 
+> **Independently corroborated 2026-09-02** (primary session, second fetch of
+> <https://developers.openai.com/api/docs/pricing>): the six current-model audio
+> figures above are confirmed verbatim against the official pricing table —
+> `gpt-realtime-2.1` audio in **$32.00** / cached **$0.40** / out **$64.00**, and
+> `gpt-realtime-2.1-mini` audio in **$10.00** / cached **$0.30** / out **$20.00**.
+> The cost arithmetic in §"Cost estimate" below therefore rests on verified
+> numbers, not on third-party trackers. Note that a web search for mini pricing
+> returns self-contradictory results (quoting both $0.60 and $10.00 for audio
+> input, having conflated the text and audio rows) — **use the official pricing
+> table, not search snippets, when revising the budget.**
+
 ### Deprecated models, for spec comparison (per 1M tokens)
 
 | | `gpt-realtime` | `gpt-realtime-mini` |
@@ -732,8 +743,12 @@ tuning discussed in section 5 a *cost* lever, not just a context lever.
    so the estimate can be replaced with a measurement.
 7. **TURN relay may be needed** on restrictive mobile/corporate networks. Not covered by
    OpenAI's docs; budget a connectivity spike and possibly a TURN provider.
-8. **`gpt-realtime-mini` audio pricing is UNVERIFIED** (see section 4). Moot if the spec moves
-   to 2.1-mini, which *is* fully published.
+8. ~~**`gpt-realtime-mini` audio pricing is UNVERIFIED**~~ — **RESOLVED as a
+   non-risk, 2026-09-02.** The gap applies only to the *deprecated* mini, which
+   dies 2027-01-20 and must not be built on. All six audio figures for the two
+   *current* models were independently re-verified against the official pricing
+   table (see the corroboration note in section 4), so the budget arithmetic
+   rests on verified numbers. No action needed.
 9. **Echo cancellation on iOS** is the practical make-or-break for barge-in quality. Untested
    here. If the assistant interrupts itself, barge-in feels broken even though the API is
    working correctly.
