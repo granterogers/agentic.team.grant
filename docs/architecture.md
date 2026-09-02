@@ -32,25 +32,26 @@ covered in `core-invariants.md` §1.
 
 | Component | Runs on | Why |
 |---|---|---|
-| Next.js app + API routes | **Cloudflare Workers** via `@opennextjs/cloudflare` | no cold-sleep, free tier viable for commercial use, and it is where the webhooks land |
+| Next.js app + API routes | **Vercel Hobby** (or Cloudflare Workers) | Hobby is viable for personal non-commercial use; webhooks land here |
 | Postgres, auth, realtime | **Supabase Free** → Pro if needed | the operational source of truth |
-| Notebook worker (Python) | **Oracle Cloud Always Free ARM VM** | needs a long-running process, not request-scoped compute |
-| Scheduler | **Cloudflare Cron Triggers** | 10-minute cadence, free, colocated with the app |
+| Notebook sync (Python) | **Vercel Python function** (GA: 3.12–3.14) | pure HTTP, finishes in seconds — **no VM needed** |
+| Scheduler | **external trigger** → app route (Cloudflare Cron / GitHub Actions / `pg_cron`) | Vercel Hobby cron is once-daily, so schedule from outside |
 | Queue | **Postgres** (`SKIP LOCKED` or pgmq) | transactional with the state it guards |
 | Backups | **Cloudflare R2** | 10 GB free, egress free |
 
-**$0/month** if the free tiers hold; **~$32/month** realistic fallback
-(Supabase Pro $25 + Hetzner ~$6.53). Three named fragilities: Supabase pausing
-after ~1 week of no *user* database activity, Supabase's total absence of
-backups on Free, and Oracle's idle reclamation plus ARM capacity lottery.
+**$0/month mandatory.** Recommended configuration ~$3/month (private
+inference); see `docs/cost-and-hosting-decisions.md` for the four cost classes.
+Two remaining fragilities: Supabase pausing after ~1 week of no *user* database
+activity, and Supabase's total absence of backups on Free.
 
 ### Rejected, and why it matters
 
-- **Vercel** — disqualified twice over. Its commercial-use ban covers *"any
-  Deployment used for the purpose of financial gain of anyone involved…
-  including a paid employee or consultant writing the code"*, and **Hobby cron
-  is capped at once per day**, so `*/10 * * * *` fails at deploy time. Either
-  alone rules it out.
+- **Vercel** — **not rejected** (corrected 2026-09-02). Hobby's commercial-use
+  restriction targets monetized deployments; none of its five enumerated
+  examples match a personal non-monetized tool. Hobby cron *is* capped at once
+  per day, so `*/10 * * * *` fails at deploy time — but that limits Vercel's own
+  scheduler, not inbound HTTP, so an external trigger preserves Vercel. See
+  `docs/cost-and-hosting-decisions.md` §1.
 - **Netlify** — Free is 300 credits/month and **a production deploy costs 15**.
   Twenty deploys exhaust the month before serving a request.
 - **Render / Fly.io / Railway** — Render offers **no background workers or cron
@@ -308,10 +309,17 @@ two spare — but `username`/`icon_url` overrides (current `chat:write.customize
 scope, not deprecated) are **cosmetic only**: an overridden identity is **not
 `@mentionable`, not DM-able, and absent from the member list**.
 
-So: **3–5 senior staff get real separate apps** (the only way to be
-addressable); the rest present via one shared app with overrides; **reserve ≥3
-of the 10 slots**. Telegram carries the identity weight instead, where per-bot
-identities are strictly better.
+**V1 architecture (addendum §3): ONE shared AI Team HQ app.** Multiple
+per-staff apps are explicitly *not* a V1 requirement — current Free limits make
+that brittle, and the shared app must be proven first (Gate 4). All eight staff,
+plus temporary specialists, present through it via `chat:write.customize` with
+rich block-based identity.
+
+**True staff identity lives in Postgres, never in Slack message authorship.**
+Dedicated per-staff apps are revisited only after the shared-app gate passes,
+current install limits are re-verified, and a real UX benefit is demonstrated.
+
+Created: app ID `A0BUFRVSSLD` (see `docs/slack-app-status.md`).
 
 ### Cliff edge
 

@@ -66,26 +66,35 @@ Two rules that follow, and they matter operationally:
 - All Notebook automation, Google OAuth, and project sharing hang off this
   account.
 
-### P2. Google AI Pro on that account — **required, Phase 3** 💳 ~$20/mo
+### P2. Google AI Pro — **OPTIONAL / deferred** (superseded)
 
-Not optional, despite the spec's free-tier assumption. The free tier allows
-**50 chats/day, 3 audio overviews/day, and Deep Research 10 per *month***. Eight
-agents on 10-minute polling exhaust that in an afternoon.
+**Do not buy this yet.** My earlier "mandatory" verdict was wrong: it assumed
+agents *converse with Notebook to reason*, which is the wrong architecture.
+Notebook is the knowledge layer, not the inference engine.
 
-Pro raises this to 500 chats/day, 20 Deep Research/day, 300 sources/notebook.
+Pulling each source's text **once** and caching it in Postgres costs no chat
+quota, which puts realistic usage near **5–15 chats/day against a 50/day
+limit**. The only real ceiling is **50 sources per notebook** — and the free
+tier allows 100 notebooks, so a large project can be split behind the adapter.
 
-### P3. OpenAI account with billing — **required, Phase 3** 💳 ~$24/mo
+Revisit only when a project approaches 50 sources, or Notebook-native Deep
+Research proves better than ours. Full analysis in
+`docs/cost-and-hosting-decisions.md` §3.
 
-For Realtime voice. Set a **usage limit** in the OpenAI dashboard as a hard
+### P3. OpenAI account with billing — **OPTIONAL** (voice only) 💳 ~$24/mo
+
+Voice is an optional premium feature; the system is complete without it.
+Already supplied and verified working. For Realtime voice. Set a **usage limit** in the OpenAI dashboard as a hard
 backstop independent of our own budget tracking — belt and braces on the one
 intentionally paid component.
 
 Expect **~$24/mo** at 30 min/day on `gpt-realtime-2.1-mini`, ~$58 on the full
 model.
 
-### P4. OpenRouter account — **required, Phase 2** 💳 $10 one-off
+### P4. OpenRouter — **recommended, $10 one-off** (key already supplied)
 
-Sign up and **purchase $10 of credit once**. This is what unlocks 1,000
+Verified working, currently `is_free_tier: true` = **50 req/day**.
+**Purchase $10 of credit once** (optional but high value). This is what unlocks 1,000
 requests/day instead of 50; at 50 the plan misses by 2.7×.
 
 Then create a **dedicated API key with a hard spend limit** (not the account's
@@ -102,11 +111,15 @@ prudence — that part is automated.
 
 For Workers (app + webhooks), Cron Triggers (scheduler), and R2 (backups).
 
-### P7. Oracle Cloud Always Free — **Phase 4**, free
+### ~~P7. Oracle Cloud Always Free~~ — **REMOVED, not needed**
 
-For the Python Notebook worker. Two caveats worth knowing before you rely on it:
-Oracle **halved** Always Free ARM capacity on 2026-06-15, and instances can be
-reclaimed when idle. Fallback is Hetzner CAX11 at ~€6/mo. Ask before spending.
+No always-on VM is required. `notebooklm-py` in master-token mode is **pure
+HTTP with no browser**, so the 10-minute sync is a short serverless invocation.
+Vercel's Python runtime (GA, 3.12–3.14) hosts it alongside the app.
+
+Reintroduced only if Gate 2 proves master-token auth unusable and browser
+automation becomes necessary — which is the POC's job to decide, not an
+assumption.
 
 ### P8. Google Cloud project — **Phase 7**, free tier
 
@@ -133,7 +146,7 @@ with all eight.
 ### P10. Slack workspace + app configuration token — **Phase 2**
 
 1. Create a Slack workspace for AI Team HQ (Free plan is sufficient — it allows
-   10 app installs, including custom apps, so eight staff apps fit).
+   10 app installs. V1 uses **ONE** shared app, per addendum §3 — not eight).
 2. Go to <https://api.slack.com/apps>, scroll **below** the app list to **"Your
    App Configuration Tokens"** → **Generate Token**, selecting that workspace.
 3. Hand over **both** values: the config token (`xoxe.xoxp-…`) and the refresh
@@ -214,7 +227,7 @@ Nothing waits on the full list. Each phase needs only its own row.
 | **1** — foundation | P5 Supabase, P6 Cloudflare |
 | **2** — connections | D2, P4 OpenRouter, P9 one Telegram bot, P10 Slack workspace + config token |
 | **3** — POC gates | D1, P2 Google AI Pro, P3 OpenAI |
-| **4** — project engine | P7 Oracle (or accept ~€6/mo Hetzner) |
+| **4** — project engine | *(nothing — no VM needed)* |
 | **7** — communications | P8 Google Cloud TTS, P9 remaining seven bots, per-app installs |
 | **9** — Google ecosystem | P11 OAuth consent |
 
@@ -234,14 +247,15 @@ Phase 1 can begin as soon as P5 and P6 exist.
 
 | Item | Monthly | When |
 |---|---|---|
-| Google AI Pro | ~$20 | Phase 3 |
-| OpenAI Realtime (`2.1-mini`, 30 min/day) | ~$24 | Phase 3 |
+| ~~Google AI Pro~~ | **deferred — optional** | revisit at 50 sources |
+| OpenAI Realtime (`2.1-mini`) | **optional** ~$24 | voice only |
 | Secondary inference (capped, if D2a) | ~$10 | Phase 2 |
 | OpenRouter credit | $10 **one-off** | Phase 2 |
 | Hosting, database, storage, backups | $0 | — |
-| **Baseline** | **~$54/mo** | |
-| If free infra tiers give way | **~$86/mo** | |
+| **Mandatory total** | **$0/mo** | |
+| **Recommended (private inference)** | **~$3/mo** + $10 one-off | |
 
-The spec never named a budget. If ~$54/mo is wrong, the two levers are voice
-(−$24, text-only) and strict-$0 inference (−$10, at a privacy cost). Say so
-before Phase 3 rather than after.
+**Corrected 2026-09-02.** The mandatory cost is **$0/month** — there is no
+required subscription. The recommended configuration is **~$3/month** plus a
+$10 one-off. See `docs/cost-and-hosting-decisions.md` for all four cost classes
+and the three inference configurations.

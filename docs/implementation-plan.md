@@ -131,7 +131,7 @@ callback, webhook replay.
 
 ## Phase 3 — POC gates
 
-§27's four gates, **strictly sequential**. Complete one, record PASS evidence,
+**All FIVE** of §27's gates (addendum §4), **strictly sequential**. Complete one, record PASS evidence,
 then start the next. Do not parallelise: it hides dependency failures.
 
 ### Gate 1 — Realtime voice on iPhone Safari

@@ -7,6 +7,24 @@ documentation. Evidence and source URLs in `docs/research/`.
 
 ---
 
+> ### ⚠️ Superseded in part — read this first
+>
+> Grant's decisions and the Feasibility Audit Addendum (both 2026-09-02) revise
+> parts of this document. Where they conflict, **they win**. Canonical:
+> **`AI_TEAM_HQ_MASTER_SPEC.md`**; corrections in
+> **`docs/cost-and-hosting-decisions.md`**.
+>
+> | This document said | Now |
+> |---|---|
+> | A1 iOS voice — open decision | **DECIDED**: foreground/screen-on is sufficient. No native iOS app. |
+> | A2 inference — recommend capped $10/mo | **NOT accepted.** Three configs offered (A $0 / B ~$3 / C ~$8–32); Grant chooses. |
+> | A4 Google AI Pro **required** | **Wrong — it is OPTIONAL.** Notebook is the knowledge layer, not the inference engine. |
+> | Vercel disqualified | **Not disqualified.** Hobby is likely permissible; cron limit bypassed by external scheduler. |
+> | Oracle Always Free VM required | **No VM required at all.** |
+> | Baseline ~$54/mo | **Mandatory $0/mo**; recommended ~$3/mo. |
+> | Slack: 3–5 separate staff apps | **ONE shared app for V1** (addendum §3). |
+> | "four gates" | **FIVE gates** (addendum §4). |
+
 ## Overall verdict
 
 **AI Team HQ is buildable substantially as specified.** No part of the design is
@@ -19,14 +37,14 @@ decision only Grant can make; three have clear verified replacements.
 
 | # | Assumption | Verdict | Resolution |
 |---|---|---|---|
-| **A1** | Mobile PWA supports continuous voice like ChatGPT Voice (§9) | ❌ **Invalid on iOS** | **Needs Grant's decision.** A PWA cannot keep the mic alive when backgrounded or screen-locked. Options in §1 below. |
-| **A2** | Free-tier-only secondary inference (§3, §11, principles 7–8) | ⚠️ **Fails on data terms, not cost** | Recommend a hard-capped ~$10/mo budget with all enforcement intact. Grant's call. |
+| **A1** | Mobile PWA supports continuous voice like ChatGPT Voice (§9) | ❌ **Invalid on iOS** | ✅ **RESOLVED** — Grant accepted foreground/screen-on. No native iOS app. Gate 1 amended. |
+| **A2** | Free-tier-only secondary inference (§3, §11, principles 7–8) | ⚠️ **Fails on data terms, not cost** | ⏳ **OPEN** — three configs offered (A $0 / B ~$3 / C ~$8–32). Grant chooses; recommendation not accepted. |
 | **A3** | `gpt-realtime` / `gpt-realtime-mini` (§3) | ❌ **Deprecated** | `gpt-realtime-2.1-mini`. Mechanical fix. |
-| **A4** | Consumer Gemini Notebook tier is adequate (§3, §5) | ❌ **Too small** | Google AI Pro required. Recurring cost. |
+| **A4** | Consumer Gemini Notebook tier is adequate (§3, §5) | ✅ **Adequate after redesign** | ~~Pro required~~ **wrong.** Cache source text; ~5–15 chats/day vs 50 limit. Pro deferred. |
 
-Plus five corrections that are mechanical rather than decisions: Vercel is
-unusable, Socket Mode is unsuitable, GitHub Models is retired, `.secrets.local`
-does not exist in this project, and the realtime token-minting endpoint changed.
+Plus corrections that are mechanical rather than decisions: Socket Mode is
+unsuitable, GitHub Models is retired, and the realtime token-minting endpoint
+changed. (~~Vercel is unusable~~ — **retracted**; see the banner above.)
 
 ---
 
@@ -280,11 +298,11 @@ Worth stating, since most of the spec came through intact:
   violates its terms. Piper also lost its former standing: relicensed GPL-3.0,
   and its docs state it is *"intended for personal use and text to speech
   research only"*.
-- **A $0 24/7 deployment appears achievable** — Cloudflare Workers +
-  Supabase Free + Oracle Always Free ARM VM + Cloudflare R2 — with a realistic
-  fallback floor of **~$32/mo** (Supabase Pro $25 + Hetzner ~$6.53) if the
-  fragile tiers give way. Three named fragilities: Supabase pausing, Supabase's
-  absent backups, and Oracle's idle reclamation plus A1 capacity lottery.
+- **A $0 24/7 deployment is achievable** — Vercel Hobby (app + Python sync
+  function) or Cloudflare Workers, plus Supabase Free, an external free
+  scheduler, and Cloudflare R2 for backups. **No VM.** Two remaining
+  fragilities: Supabase pausing after ~1 week without *user* database activity,
+  and Supabase's absent backups on Free.
 
 ---
 
@@ -294,12 +312,12 @@ The spec never states a budget, so this is the number to react to:
 
 | Item | Monthly |
 |---|---|
-| OpenAI Realtime (`2.1-mini`, 30 min/day) | ~$24 |
-| Google AI Pro (Notebook — **required**, §4 above) | ~$20 |
-| Secondary inference (hard-capped, recommended) | ~$10 |
+| OpenAI Realtime — **optional premium** | $0 or ~$24 |
+| ~~Google AI Pro~~ — **optional, deferred** | $0 |
+| Secondary inference (Config A/B/C) | $0 / ~$3 / ~$8 |
 | Hosting / DB / storage / backups | $0 |
-| **Baseline** | **~$54** |
-| If free infra tiers give way | **~$86** |
+| **Mandatory total** | **$0** |
+| Recommended (private inference) | **~$3** + $10 one-off |
 
 Strict-$0 secondary inference saves ~$10 and costs data privacy. Dropping voice
 to text-only saves ~$24. Neither is recommended; both are available.
