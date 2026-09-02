@@ -16,7 +16,11 @@ research and design.
 
 | Read this | For |
 |---|---|
-| **[`docs/prerequisites.md`](docs/prerequisites.md)** | **What Grant needs to do.** Two decisions and a short list of accounts. Start here. |
+| **[`HUMAN_ONLY_PREREQUISITES.md`](HUMAN_ONLY_PREREQUISITES.md)** | ⭐ **What Grant needs to do.** 3 blockers, two of them 60-second fixes. Start here. |
+| **[`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md)** | ⭐ **CANONICAL specification.** Consolidates the original prompt, the audit addendum, and verified corrections. |
+| [`docs/adr/`](docs/adr/) | Why each material decision was made |
+| [`docs/cost-and-hosting-decisions.md`](docs/cost-and-hosting-decisions.md) | Cost classes, three inference configs, corrected verdicts |
+| [`docs/prerequisites.md`](docs/prerequisites.md) | Longer-form prerequisites (superseded in part) |
 | [`docs/feasibility-validation.md`](docs/feasibility-validation.md) | Which assumptions survived contact with current reality, and which did not |
 | [`docs/architecture.md`](docs/architecture.md) | The chosen stack and why each vendor beat its alternatives |
 | [`docs/implementation-plan.md`](docs/implementation-plan.md) | The phased plan, gates, and what "done" means each time |
@@ -53,18 +57,19 @@ functional with Notebook unavailable.
 
 | Layer | Choice |
 |---|---|
-| App + API | Next.js on Cloudflare Workers (`@opennextjs/cloudflare`) |
+| App + API | Next.js on Vercel Hobby (or Cloudflare Workers) |
 | Database | Supabase / PostgreSQL |
-| Voice | OpenAI Realtime (`gpt-realtime-2.1-mini`), browser WebRTC |
+| Voice | **optional** — OpenAI Realtime (`gpt-realtime-2.1-mini`), browser WebRTC |
 | Secondary inference | Provider registry, OpenRouter-first, hard-capped |
 | Notebook | `notebooklm-py`, master-token auth, behind an adapter |
-| Channels | Slack (HTTP Events API), Telegram Bot API |
-| Worker | Python on an always-free ARM VM |
-| Scheduler | Cloudflare Cron Triggers |
+| Channels | Slack — **one shared app** (HTTP Events API), Telegram Bot API |
+| Notebook sync | Python serverless function — **no VM** |
+| Scheduler | external free trigger → app route |
 | Backups | Nightly `pg_dump` → Cloudflare R2 |
 
-Running cost: **~$54/month** (voice ~$24, Google AI Pro ~$20, inference ~$10),
-with infrastructure at $0 and a ~$32/month fallback if the free tiers give way.
+Running cost: **$0/month mandatory.** No required subscription exists.
+Recommended configuration ~**$3/month** plus a $10 one-off. See
+[`docs/cost-and-hosting-decisions.md`](docs/cost-and-hosting-decisions.md).
 
 ---
 
@@ -73,15 +78,16 @@ with infrastructure at $0 and a ~$32/month fallback if the free tiers give way.
 Each is explained in full in the feasibility document.
 
 1. **iOS cannot keep a PWA microphone alive when backgrounded or screen-locked.**
-   Foreground voice works. Locked-screen conversation needs a native shell.
-   Open decision **D1**.
+   ✅ **Resolved** — foreground/screen-on accepted; no native iOS app.
 2. **Free-only inference fails on data terms, not cost.** Providers may train on
-   or human-review free-tier traffic, and the paid floor is only ~$3–9/month.
-   Open decision **D2**.
-3. **The Gemini Notebook free tier cannot run this team** — 50 chats/day and
-   Deep Research 10 per *month*. Google AI Pro is a functional prerequisite.
+   or human-review free-tier traffic; the paid floor is ~$3–9/month.
+   ⏳ Open decision **D2** — three configs offered, defaulting to $0.
+3. **The Notebook free tier is sufficient** once you stop treating Notebook as
+   the inference engine: cache source text once, reason locally. Google AI Pro
+   is **optional and deferred**.
 4. **Supabase Free has no backups at all**, so the nightly offsite dump is
    mandatory infrastructure rather than prudence.
+5. **No always-on VM is required.** The Notebook sync is pure HTTP.
 
 ---
 
