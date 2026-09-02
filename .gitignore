@@ -1,0 +1,128 @@
+# ---------------------------------------------------------------------------
+# Secrets — defensive backstop.
+#
+# The operating rule for this repository is that NO secret-bearing file should
+# exist here at all. Bootstrap credentials live in the Claude Code cloud
+# environment's Environment variables / API credentials; production runtime
+# secrets live in the application's own encrypted store (Settings ->
+# Connections & Secrets). This section exists only to catch mistakes.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+.secrets
+.secrets.*
+secrets.json
+credentials.json
+client_secret*.json
+service-account*.json
+*service_account*.json
+token.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Gemini Notebook automation auth material — never commit.
+master_token.json
+cookies.json
+*cookies*.json
+.notebooklm/
+notebooklm_auth/
+
+# Supabase local state / linked project refs that can carry keys
+.supabase/
+supabase/.temp/
+supabase/.branches/
+
+# ---------------------------------------------------------------------------
+# Node / Next.js
+# ---------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+.wrangler/
+.open-next/
+
+# Package manager noise (lockfiles ARE committed)
+.pnpm-store/
+.yarn/cache/
+.yarn/install-state.gz
+
+# ---------------------------------------------------------------------------
+# Python (Notebook worker)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+.eggs/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.tox/
+.python-version
+uv.lock.bak
+
+# ---------------------------------------------------------------------------
+# Test / coverage / evidence artifacts
+# ---------------------------------------------------------------------------
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+/playwright/.cache/
+
+# Test evidence is committed under docs/test-evidence/, but raw large
+# captures (video, traces, full DB dumps) are not.
+docs/test-evidence/**/*.webm
+docs/test-evidence/**/*.zip
+docs/test-evidence/**/*.trace
+
+# ---------------------------------------------------------------------------
+# Backups / dumps — must never land in git (see docs/backup-restore guide)
+# ---------------------------------------------------------------------------
+*.dump
+*.sql.gz
+backups/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# ---------------------------------------------------------------------------
+# Logs / scratch
+# ---------------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+logs/
+tmp/
+.scratch/
