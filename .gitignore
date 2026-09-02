@@ -26,6 +26,12 @@ token.json
 id_rsa*
 id_ed25519*
 
+# Slack: local-only dev override for per-app credentials. Per the credential
+# storage architecture, Slack per-app credentials live in Supabase, encrypted.
+# This file is an explicit opt-in override for local debugging only and must
+# never become a default expectation.
+.slack-dev-override.local
+
 # Gemini Notebook automation auth material — never commit.
 master_token.json
 cookies.json
