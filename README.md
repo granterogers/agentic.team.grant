@@ -73,7 +73,7 @@ Recommended configuration ~**$3/month** plus a $10 one-off. See
 
 ---
 
-## Four things worth knowing up front
+## Five things worth knowing up front
 
 Each is explained in full in the feasibility document.
 
