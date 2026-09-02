@@ -1,0 +1,21 @@
+{
+  "display_information": {
+    "name": "AI Team HQ",
+    "description": "Your AI executive team - research, strategy, finance, marketing and operations.",
+    "background_color": "#1a1d29"
+  },
+  "features": {
+    "bot_user": { "display_name": "AI Team HQ", "always_online": true },
+    "app_home": { "home_tab_enabled": true, "messages_tab_enabled": true, "messages_tab_read_only_enabled": false }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["chat:write","chat:write.customize","channels:read","channels:manage","channels:history","groups:read","groups:history","im:read","im:write","im:history","mpim:read","mpim:history","reactions:read","reactions:write","users:read","team:read","files:write"]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
