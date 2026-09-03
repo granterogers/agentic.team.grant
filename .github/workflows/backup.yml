@@ -1,0 +1,244 @@
+name: Backup and restore rehearsal
+
+# Supabase Free provides NO backups at all, so this is not a nicety — it is the
+# only copy. And per §16 a backup feature is incomplete until restoration is
+# tested, so the rehearsal runs on the same schedule as the dump rather than
+# once by hand.
+#
+# This lives in Actions because it is the only place it CAN live: pg_dump speaks
+# the Postgres wire protocol and has no HTTPS mode, while a Claude Code session
+# has no non-443 TCP egress at all (ADR-0007).
+
+on:
+  schedule:
+    # 03:17 UTC. Off the hour because every cron on the hour contends with
+    # every other cron on the hour.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Dump and rehearse the restore without uploading'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+env:
+  PGVERSION: '17'
+
+jobs:
+  backup:
+    name: dump and upload
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.dump.outputs.name }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      # ubuntu-latest ships postgresql-client 16, and pg_dump refuses a server
+      # newer than itself. Supabase runs 17.6, so the matching client is not
+      # optional.
+      - name: Install postgresql-client ${{ env.PGVERSION }}
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-${PGVERSION}
+          pg_dump --version
+
+      - name: Resolve the session-pooler connection
+        id: conn
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          URI="$(npm run --silent backup:connection)"
+          # Mask before the value is used anywhere, so a later failure cannot
+          # print it. Actions masks it in every subsequent log line.
+          echo "::add-mask::$URI"
+          echo "uri=$URI" >> "$GITHUB_OUTPUT"
+
+      - name: Capture a manifest of the source
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          npm run --silent backup:manifest > manifest.json
+          cat manifest.json
+
+      - name: pg_dump
+        id: dump
+        run: |
+          NAME="aiteamhq-$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+          # Only our own schemas. Supabase owns auth, storage, realtime and
+          # extensions; dumping them produces a restore that fails on roles and
+          # extensions this project does not control, and none of it is ours to
+          # back up.
+          #
+          # Privileges and owners are KEPT deliberately: the restore rehearsal
+          # has to prove the REVOKEs and RLS came back, and --no-privileges
+          # would quietly throw away the thing being tested.
+          pg_dump "${{ steps.conn.outputs.uri }}" \
+            --schema=public \
+            --schema=app \
+            --format=plain \
+            --no-comments \
+            --quote-all-identifiers \
+            --file="$NAME.sql"
+
+          gzip -9 "$NAME.sql"
+          sha256sum "$NAME.sql.gz" | tee "$NAME.sha256"
+          ls -lh "$NAME.sql.gz"
+
+          # A dump far smaller than expected is a dump of nothing. Failing here
+          # is much better than discovering it during a real restore.
+          SIZE=$(stat -c%s "$NAME.sql.gz")
+          if [ "$SIZE" -lt 2048 ]; then
+            echo "::error::dump is only $SIZE bytes — refusing to treat this as a backup"
+            exit 1
+          fi
+
+      # Handed to the rehearsal job. This is also a second, independent copy for
+      # 90 days, which costs nothing.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dump.outputs.name }}
+          path: |
+            ${{ steps.dump.outputs.name }}.sql.gz
+            ${{ steps.dump.outputs.name }}.sha256
+            manifest.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload to offsite storage
+        if: inputs.skip_upload != true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
+          ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          NAME: ${{ steps.dump.outputs.name }}
+        run: |
+          for f in "$NAME.sql.gz" "$NAME.sha256" manifest.json; do
+            dest="$BUCKET/$(date -u +%Y/%m)/$NAME/$(basename "$f")"
+            aws s3 cp "$f" "s3://$dest" --endpoint-url "$ENDPOINT" --only-show-errors
+            echo "uploaded s3://$dest"
+          done
+
+      - name: Prune backups older than 30 days
+        if: inputs.skip_upload != true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
+          ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+        run: |
+          # The free tier is 10 GB and the bucket keeps all versions by default,
+          # so unbounded nightly accumulation would eventually fill it and
+          # backups would start failing quietly — the worst way for a backup to
+          # break. Pruning here is the code half; a bucket lifecycle rule is the
+          # belt to this braces.
+          CUTOFF=$(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "pruning objects last modified before $CUTOFF"
+          aws s3api list-objects-v2 --bucket "$BUCKET" --endpoint-url "$ENDPOINT" \
+            --query "Contents[?LastModified<'$CUTOFF'].Key" --output text \
+            | tr '\t' '\n' | grep -v '^$' > to-delete.txt || true
+          COUNT=$(wc -l < to-delete.txt)
+          echo "$COUNT object(s) to delete"
+          while read -r key; do
+            [ -z "$key" ] && continue
+            aws s3 rm "s3://$BUCKET/$key" --endpoint-url "$ENDPOINT" --only-show-errors
+          done < to-delete.txt
+
+  restore-rehearsal:
+    name: restore into a fresh database and verify
+    needs: backup
+    runs-on: ubuntu-latest
+
+    # A real, empty PostgreSQL 17 — the "fresh project" §16 asks for, except
+    # ephemeral and free. Restoring into the source project would prove nothing
+    # and risk everything.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: rehearsal
+          POSTGRES_DB: rehearsal
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.backup.outputs.artifact }}
+
+      - name: Verify the dump's checksum before trusting it
+        run: |
+          sha256sum -c "${{ needs.backup.outputs.artifact }}.sha256"
+
+      - run: sudo apt-get install -y -qq postgresql-client
+
+      - name: Create the roles the dump's grants refer to
+        env:
+          PGPASSWORD: rehearsal
+        run: |
+          # A fresh database has none of these. A real restore into a
+          # replacement project needs exactly this step, which is why it is
+          # here rather than being engineered away: the rehearsal should
+          # rehearse the real procedure, including its prerequisites.
+          psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 <<'SQL'
+            create role ai_team_app nologin;
+            create role authenticated nologin;
+            create role anon nologin;
+            create role service_role nologin;
+            grant ai_team_app to postgres;
+          SQL
+
+      - name: Restore
+        env:
+          PGPASSWORD: rehearsal
+        run: |
+          gunzip -c "${{ needs.backup.outputs.artifact }}.sql.gz" > restore.sql
+          wc -l restore.sql
+          # ON_ERROR_STOP so a half-restore cannot be mistaken for a restore.
+          psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 -q -f restore.sql
+
+      - name: Verify the restore
+        env:
+          RESTORE_URL: postgres://postgres:rehearsal@localhost:5432/rehearsal
+          MANIFEST: manifest.json
+        run: npm run --silent verify:restore | tee restore-report.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: restore-report-${{ needs.backup.outputs.artifact }}
+          path: restore-report.md
+          retention-days: 90
