@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same ref makes the older run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.check.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Every check reports independently. One failure must not hide the others,
+      # because "lint failed so we never learned whether tests pass" costs a
+      # whole cycle.
+      fail-fast: false
+      matrix:
+        check:
+          - { name: lint, run: npm run lint }
+          - { name: typecheck, run: npm run typecheck }
+          - { name: test, run: npm run test }
+          - { name: migrations, run: npm run check:migrations }
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: ${{ matrix.check.run }}
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Deliberately not given any secrets. The scan compares tracked files
+      # against the environment it runs in, so handing it credentials would be
+      # the one way to make it leak them.
+      - run: python3 scripts/secret-scan.py
