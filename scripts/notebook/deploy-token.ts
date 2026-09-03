@@ -211,12 +211,16 @@ let status = ''
 let tokenFetch: boolean | null = null
 let email = ''
 try {
-  const jsonLine = check.out
-    .trim()
-    .split('\n')
-    .reverse()
-    .find((l) => l.trim().startsWith('{'))
-  const parsed = JSON.parse(String(jsonLine)) as {
+  // The whole object, not "the last line starting with {". `auth check --json`
+  // pretty-prints, so its last line is `}` and its first is `{` - a line-based
+  // heuristic finds the opening brace and tries to parse one character. That
+  // is what "unparseable" meant on the first run, while the output it had just
+  // discarded said notebook_count: 3.
+  const text = check.out
+  const first = text.indexOf('{')
+  const last = text.lastIndexOf('}')
+  const jsonText = first !== -1 && last > first ? text.slice(first, last + 1) : ''
+  const parsed = JSON.parse(jsonText) as {
     status?: string
     checks?: { token_fetch?: boolean }
     account?: { email?: string }
