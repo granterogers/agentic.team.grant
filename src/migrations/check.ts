@@ -33,36 +33,49 @@ export interface Finding {
  * dismantles a guarantee the specification requires be enforced by the
  * database rather than by convention.
  *
- * Every pattern is anchored on the `events` ledger. A future table with the
- * same requirements should be added here rather than trusted to review.
+ * Each rule is matched against a **single statement**, not the whole file.
+ * Matching across the file was the first implementation and it was wrong: a
+ * legitimate `GRANT SELECT, INSERT ON events` followed by the very
+ * `REVOKE UPDATE, DELETE, TRUNCATE ON events` the specification demands read as
+ * one "grant … update … on … events" match. A checker that fires on correct
+ * code is a checker someone switches off.
+ *
+ * So every pattern is anchored on the statement's leading keyword. `TRUNCATE`
+ * as the verb of a statement is forbidden; `truncate` as a privilege being
+ * revoked is required.
  */
-const FORBIDDEN: ReadonlyArray<{ rule: string; pattern: RegExp; why: string }> = [
+const FORBIDDEN: ReadonlyArray<{
+  rule: string
+  matches: (statement: string) => boolean
+  why: string
+}> = [
   {
     rule: 'ledger/no-regrant-write',
-    pattern:
-      /\bgrant\b[\s\S]{0,200}?\b(update|delete|truncate)\b[\s\S]{0,200}?\bon\b[\s\S]{0,80}?\bevents\b/i,
+    matches: (s) =>
+      /^grant\b/.test(s) && /\bevents\b/.test(s) && /\b(update|delete|truncate)\b/.test(s),
     why:
       'master spec §6 requires UPDATE/DELETE on events to be revoked from the ' +
       'application role. Granting it back makes the ledger mutable.',
   },
   {
     rule: 'ledger/no-drop',
-    pattern: /\bdrop\s+table\b[\s\S]{0,40}?\bevents\b/i,
+    matches: (s) => /^drop\s+table\b/.test(s) && /\bevents\b/.test(s),
     why: 'the event ledger is append-only history and is never dropped by a migration.',
   },
   {
     rule: 'ledger/no-truncate',
-    pattern: /\btruncate\b[\s\S]{0,40}?\bevents\b/i,
+    // The verb, not the privilege. REVOKE ... TRUNCATE ... is required, not forbidden.
+    matches: (s) => /^truncate\b/.test(s) && /\bevents\b/.test(s),
     why: 'TRUNCATE erases history and bypasses the DELETE revoke entirely.',
   },
   {
     rule: 'rls/no-disable',
-    pattern: /\balter\s+table\b[\s\S]{0,120}?\bdisable\s+row\s+level\s+security\b/i,
+    matches: (s) => /^alter\s+table\b/.test(s) && /\bdisable\s+row\s+level\s+security\b/.test(s),
     why: 'master spec §6 requires row-level security throughout.',
   },
   {
     rule: 'security/no-superuser-grant',
-    pattern: /\bgrant\b[\s\S]{0,80}?\b(postgres|supabase_admin)\b[\s\S]{0,40}?\bto\b/i,
+    matches: (s) => /^grant\s+(postgres|supabase_admin)\s+to\b/.test(s),
     why: 'granting a superuser role to an application role defeats every other check.',
   },
 ]
@@ -145,10 +158,15 @@ export function checkMigrations(
 
   // --- forbidden statements ------------------------------------------------
   for (const file of sorted) {
-    const sql = stripComments(file.sql)
-    for (const { rule, pattern, why } of FORBIDDEN) {
-      if (pattern.test(sql)) {
-        err(file.name, rule, why)
+    const reported = new Set<string>()
+    for (const statement of splitStatements(file.sql)) {
+      for (const { rule, matches, why } of FORBIDDEN) {
+        // One finding per rule per file. Ten offending statements are one
+        // mistake to fix, not ten.
+        if (!reported.has(rule) && matches(statement)) {
+          reported.add(rule)
+          err(file.name, rule, why)
+        }
       }
     }
   }
@@ -186,4 +204,72 @@ export function checkMigrations(
  */
 export function stripComments(sql: string): string {
   return sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ')
+}
+
+/**
+ * Split SQL into individual statements, lowercased and whitespace-normalised.
+ *
+ * Dollar-quote aware, which is not optional here: this project's migrations
+ * define plpgsql functions whose bodies are full of semicolons. Splitting
+ * naively on `;` would shred `$$ ... $$` bodies into fragments and match
+ * patterns against nonsense.
+ *
+ * Single-quoted literals are tracked for the same reason — a semicolon inside a
+ * comment string is not a statement boundary.
+ *
+ * This is not a SQL parser and does not need to be. It needs to find statement
+ * boundaries well enough that a leading-keyword anchor means what it says.
+ */
+export function splitStatements(sql: string): string[] {
+  const source = stripComments(sql)
+  const statements: string[] = []
+  let current = ''
+  let index = 0
+
+  while (index < source.length) {
+    const rest = source.slice(index)
+
+    // Dollar-quoted string: $tag$ ... $tag$
+    const dollarOpen = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(rest)
+    if (dollarOpen) {
+      const tag = dollarOpen[0]
+      const closeAt = source.indexOf(tag, index + tag.length)
+      const end = closeAt === -1 ? source.length : closeAt + tag.length
+      current += source.slice(index, end)
+      index = end
+      continue
+    }
+
+    const char = source[index] as string
+
+    // Single-quoted literal, with '' as an escaped quote.
+    if (char === "'") {
+      let cursor = index + 1
+      while (cursor < source.length) {
+        if (source[cursor] === "'") {
+          if (source[cursor + 1] === "'") cursor += 2
+          else {
+            cursor += 1
+            break
+          }
+        } else cursor += 1
+      }
+      current += source.slice(index, cursor)
+      index = cursor
+      continue
+    }
+
+    if (char === ';') {
+      statements.push(current)
+      current = ''
+      index += 1
+      continue
+    }
+
+    current += char
+    index += 1
+  }
+  statements.push(current)
+
+  return statements.map((s) => s.replace(/\s+/g, ' ').trim().toLowerCase()).filter((s) => s !== '')
 }

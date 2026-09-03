@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MigrationFile } from '../../src/migrations/check.ts'
-import { checkMigrations, stripComments } from '../../src/migrations/check.ts'
+import { checkMigrations, splitStatements, stripComments } from '../../src/migrations/check.ts'
 
 /** Deterministic stand-in for a real content hash. */
 const hash = (content: string): string => `h:${content.length}:${content.trim().slice(0, 8)}`
@@ -78,6 +78,17 @@ describe('forbidden statements', () => {
     expect(rules([file('0001_x.sql', sql)])).toContain('ledger/no-regrant-write')
   })
 
+  it('reports each rule at most once per file', () => {
+    // Ten offending statements are one mistake to fix, not ten findings.
+    const sql = [
+      'grant update on public.events to authenticated;',
+      'grant delete on public.events to anon;',
+      'grant truncate on public.events to authenticated;',
+    ].join('\n')
+    const found = rules([file('0001_x.sql', sql)])
+    expect(found.filter((r) => r === 'ledger/no-regrant-write')).toHaveLength(1)
+  })
+
   it('rejects dropping the ledger', () => {
     expect(rules([file('0001_x.sql', 'drop table public.events;')])).toContain('ledger/no-drop')
   })
@@ -118,6 +129,90 @@ describe('forbidden statements', () => {
       'create table public.events (event_id uuid primary key);',
     ].join('\n')
     expect(checkMigrations([file('0001_x.sql', sql)], {}, hash)).toEqual([])
+  })
+})
+
+describe('statement boundaries — regression, 2026-09-03', () => {
+  // The first implementation matched patterns against the whole file, so the
+  // real 0003 migration failed its own check twice. Both cases below are
+  // correct SQL that the specification actually requires.
+
+  it('allows GRANT SELECT, INSERT followed by the required REVOKE', () => {
+    // These two statements together read as "grant ... update ... on ... events"
+    // when matched across the file. They are exactly what §6 demands.
+    const sql = [
+      'grant select, insert on public.events to ai_team_app;',
+      'revoke update, delete, truncate on public.events from ai_team_app;',
+    ].join('\n')
+    expect(checkMigrations([file('0001_x.sql', sql)], {}, hash)).toEqual([])
+  })
+
+  it('distinguishes TRUNCATE the verb from TRUNCATE the privilege', () => {
+    const revoking = 'revoke update, delete, truncate on public.events from anon;'
+    expect(checkMigrations([file('0001_x.sql', revoking)], {}, hash)).toEqual([])
+
+    const truncating = 'truncate table public.events;'
+    expect(rules([file('0001_y.sql', truncating)])).toContain('ledger/no-truncate')
+  })
+
+  it('is not fooled by a semicolon inside a plpgsql function body', () => {
+    // A naive split would shred this body into fragments, and one of those
+    // fragments would start with a keyword it never really started with.
+    const sql = [
+      'create or replace function app.f() returns trigger language plpgsql as $$',
+      'begin',
+      "  raise exception 'events is append-only';",
+      '  return null;',
+      'end',
+      '$$;',
+      'grant select on public.events to ai_team_app;',
+    ].join('\n')
+    expect(checkMigrations([file('0001_x.sql', sql)], {}, hash)).toEqual([])
+  })
+
+  it('still catches a forbidden statement after a function body', () => {
+    // The splitter must not swallow the rest of the file with an unbalanced tag.
+    const sql = [
+      'create function app.f() returns int language sql as $$ select 1; $$;',
+      'drop table public.events;',
+    ].join('\n')
+    expect(rules([file('0001_x.sql', sql)])).toContain('ledger/no-drop')
+  })
+
+  it('does not treat a semicolon inside a string literal as a boundary', () => {
+    const sql =
+      "insert into public.system_config (key, value, description) values ('a.b', '1'::jsonb, 'drop table events; not really');"
+    expect(checkMigrations([file('0001_x.sql', sql)], {}, hash)).toEqual([])
+  })
+})
+
+describe('splitStatements', () => {
+  it('splits on semicolons and normalises', () => {
+    expect(splitStatements('SELECT 1;\n\n  select   2 ;')).toEqual(['select 1', 'select 2'])
+  })
+
+  it('keeps a dollar-quoted body intact', () => {
+    const parts = splitStatements('create function f() as $$ a; b; c $$; select 1;')
+    expect(parts).toHaveLength(2)
+    expect(parts[0]).toContain('a; b; c')
+  })
+
+  it('handles a tagged dollar quote', () => {
+    const parts = splitStatements('do $body$ x; y $body$; select 1;')
+    expect(parts).toHaveLength(2)
+  })
+
+  it('handles a doubled single quote inside a literal', () => {
+    const parts = splitStatements("select 'it''s fine; really'; select 2;")
+    expect(parts).toHaveLength(2)
+  })
+
+  it('drops empty statements from trailing semicolons', () => {
+    expect(splitStatements('select 1;;;')).toEqual(['select 1'])
+  })
+
+  it('tolerates an unterminated dollar quote without hanging', () => {
+    expect(() => splitStatements('do $$ never closed')).not.toThrow()
   })
 })
 
