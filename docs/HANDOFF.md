@@ -110,6 +110,16 @@ failing quietly.
 
 ---
 
+## Parked, at Grant's request — do not start these
+
+| What | Where |
+|---|---|
+| **Obsidian vault sync** — `granterogers/obsidian-vault`, for syncing outputs "later" | [`docs/parked/obsidian-vault-sync.md`](parked/obsidian-vault-sync.md) |
+
+Parked means recorded, not scheduled. Read the note before touching it: there is
+a real architectural question in it (delivery surface vs. second knowledge
+adapter) and it connects to Gate 2's stop condition.
+
 ## Where to start
 
 `docs/implementation-plan.md` is authoritative on scope. The ordering constraint
