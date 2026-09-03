@@ -70,7 +70,7 @@ Then from <https://api.slack.com/apps/A0BUFRVSSLD>, add to the environment:
 
 ---
 
-## 🔁 Standing reminder — OpenRouter card
+## ✅ Resolved — OpenRouter card and spend cap
 
 *Grant asked to be reminded until confirmed done. Raised at the start of each
 working session.*
@@ -78,7 +78,18 @@ working session.*
 Two items at [openrouter.ai/settings/credits](https://openrouter.ai/settings/credits)
 and the Keys page:
 
-- [ ] **Confirm Auto Top-Up is OFF, then remove the saved card.**
+- [x] ✅ **DONE 2026-09-03 — card removed, Auto Top-Up off.** (Reported by Grant;
+      not API-verifiable, since payment methods are not exposed by the key
+      endpoint.)
+- [x] ✅ **DONE — per-key spend limit set.** Verified live: `limit: 5`,
+      `limit_remaining: 5`. ⚠️ `limit_reset: None` means this is a **lifetime**
+      $5 cap, not monthly. Config B runs ~$3/month, so the key will stop around
+      mid-October and will look like an outage. Either set it to reset monthly
+      or plan to raise it.
+
+<details><summary>Original reminder (kept for the record)</summary>
+
+- **Confirm Auto Top-Up is OFF, then remove the saved card.**
       Auto Top-Up is opt-in — a toggle where you set "when credits are below X,
       purchase Y". If it was never enabled, the $10 was a one-off and nothing
       recurs. **Removing the card keeps the $10 balance** — disabling or removing
@@ -91,6 +102,8 @@ and the Keys page:
       `limit: None`. A per-key cap is **enforcement layer 2** in
       `docs/adr/0005-inference-cost-posture.md`, and it is absent — so a bug in
       our own code could currently drain the whole balance.
+
+</details>
 
 ---
 
