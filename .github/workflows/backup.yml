@@ -248,7 +248,7 @@ jobs:
 
       - run: sudo apt-get install -y -qq postgresql-client
 
-      - name: Create the roles the dump's grants refer to
+      - name: Prepare the target as a genuinely empty database
         env:
           PGPASSWORD: rehearsal
         run: |
@@ -257,6 +257,17 @@ jobs:
           # here rather than being engineered away: the rehearsal should
           # rehearse the real procedure, including its prerequisites.
           psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 <<'SQL'
+            -- The dump contains CREATE SCHEMA public, because PostgreSQL 15+
+            -- dumps it explicitly. A stock container already has one, so the
+            -- restore failed with `schema "public" already exists`.
+            --
+            -- Dropping it is the right fix rather than making the restore
+            -- tolerate collisions: a disaster recovery restores into an EMPTY
+            -- database, and a rehearsal that quietly merges into pre-existing
+            -- objects is not rehearsing that. It also means the row counts the
+            -- verification compares can only have come from the dump.
+            drop schema if exists public cascade;
+
             create role ai_team_app nologin;
             create role authenticated nologin;
             create role anon nologin;
