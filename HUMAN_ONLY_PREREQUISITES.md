@@ -176,7 +176,7 @@ now rather than later.
 | **Phase 4** | **Dedicated Google account** + one test Notebook shared to it. ⚠️ Do **not** browse Notebook signed in as that account while the worker runs — it rotates the worker's session out from under it. |
 | **Phase 4** | One interactive Google sign-in to mint the Notebook master token (then good for months). |
 | **Phase 7** | Google Cloud project for TTS — only once exact scopes are known. |
-| **Phase 9** | Google OAuth consent screens, least-privilege. |
+| **Phase 9** | Google OAuth consent screens, least-privilege. ⚠️ **And the client credentials themselves**: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` exist as **empty** environment variables. `docs/credential-status.md` recorded them as "present" for a full day, because presence was read as working. Nothing is blocked yet — Phase 9 is far off — but they will need creating, not just consenting to. |
 | **Gate 1** | **Personally use the voice POC for 20+ minutes.** Mandatory and cannot be delegated — I must not mark subjective acceptance passed on your behalf. |
 | *if needed* | Groq key is invalid (401). Low priority — its 8,000 TPM ceiling makes it marginal anyway. |
 
