@@ -136,6 +136,21 @@ ask them. One paragraph settles it permanently.
 
 ---
 
+## 📋 Everything else, up front
+
+**→ [`docs/credential-shopping-list.md`](docs/credential-shopping-list.md)** —
+every credential the build will ever need, by phase, with exact URLs and steps.
+
+Grab **Batches 1–3** together (~15 min) and a single restart covers Phases 1
+through 3. Batches 4 and 5 genuinely cannot be done early: they need the
+deployed URL and the final scope list.
+
+Most urgent: **Batch 1 (Cloudflare R2)** — Phase 1 includes a *tested* backup
+restore, and Supabase Free has no backups at all, so offsite storage is needed
+now rather than later.
+
+---
+
 ## 🟢 Later — not needed yet
 
 | When | What |
