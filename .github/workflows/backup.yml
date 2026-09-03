@@ -38,39 +38,29 @@ jobs:
     outputs:
       artifact: ${{ steps.dump.outputs.name }}
     steps:
-      # Check every required secret up front and name ALL the missing ones.
-      # Failing on the first absent secret costs a round trip per secret, and
-      # the first run of this workflow cost exactly one that way.
-      - name: Check required secrets are present
+      # ONE Actions secret, not seven.
+      #
+      # The session's egress policy refuses the GitHub Actions secrets API
+      # (403), so Claude cannot write repository secrets and every one is a
+      # manual step — three runs failed on the same six names. The credentials
+      # now live in Supabase Vault instead, which is where §15 puts credentials
+      # for the deployed runtime anyway. `npm run bootstrap:backup-credentials`
+      # loads them; this reads them back.
+      - name: Check the one required secret is present
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
-          BACKUP_S3_REGION: ${{ secrets.BACKUP_S3_REGION }}
-          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
-          BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
-          BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
         run: |
-          missing=()
-          for name in SUPABASE_DB_URL SUPABASE_ACCESS_TOKEN \
-                      BACKUP_S3_ENDPOINT BACKUP_S3_REGION BACKUP_S3_BUCKET \
-                      BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
-            [ -z "${!name}" ] && missing+=("$name")
-          done
-          if [ ${#missing[@]} -gt 0 ]; then
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
             {
-              echo "### Missing Actions secrets"
+              echo "### Missing Actions secret"
               echo
-              for m in "${missing[@]}"; do echo "- \`$m\`"; done
-              echo
-              echo "Add them at Settings → Secrets and variables → Actions."
-              echo "\`SUPABASE_DB_URL\` supplies the database password that pg_dump needs;"
-              echo "the host and user are read from the Management API at runtime."
+              echo 'Add \`SUPABASE_ACCESS_TOKEN\` under Settings → Secrets and variables → Actions.'
+              echo "Every other credential is read from Supabase Vault at runtime."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::missing Actions secrets: ${missing[*]}"
+            echo "::error::SUPABASE_ACCESS_TOKEN is not set"
             exit 1
           fi
-          echo "all 7 required secrets present"
+          echo "SUPABASE_ACCESS_TOKEN present; everything else comes from the vault"
 
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -78,6 +68,11 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+
+      - name: Load backup credentials from the vault
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: npm run --silent backup:credentials
 
       # ubuntu-latest ships postgresql-client 16, and pg_dump refuses a server
       # newer than itself. Supabase runs 17.6, so the matching client is not
@@ -97,7 +92,7 @@ jobs:
       - name: Resolve the session-pooler connection
         id: conn
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # SUPABASE_DB_PASSWORD was put into the environment by the vault step.
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           URI="$(npm run --silent backup:connection)"
@@ -162,11 +157,11 @@ jobs:
       - name: Upload to offsite storage
         if: inputs.skip_upload != true
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
-          ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
-          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ env.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.BACKUP_S3_REGION }}
+          ENDPOINT: ${{ env.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ env.BACKUP_S3_BUCKET }}
           NAME: ${{ steps.dump.outputs.name }}
         run: |
           for f in "$NAME.sql.gz" "$NAME.sha256" manifest.json; do
@@ -178,11 +173,11 @@ jobs:
       - name: Prune backups older than 30 days
         if: inputs.skip_upload != true
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
-          ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
-          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ env.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.BACKUP_S3_REGION }}
+          ENDPOINT: ${{ env.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ env.BACKUP_S3_BUCKET }}
         run: |
           # The free tier is 10 GB and the bucket keeps all versions by default,
           # so unbounded nightly accumulation would eventually fill it and
