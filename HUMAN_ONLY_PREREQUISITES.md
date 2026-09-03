@@ -7,24 +7,18 @@ automated or is queued to be. Each item was tested against the addendum §40
 filter — CLI? API? browser automation? inspect existing config? — before landing
 here.
 
-**Current state: 3 things block progress. Two are 60-second fixes.**
+**Current state: 2 blockers left.** Telegram ✅ resolved 2026-09-03. D2 ✅ decided: **Option B**.
 
 ---
 
 ## 🔴 Blocking now
 
-### 1. Re-paste the Telegram bot token · *2 minutes*
+### ~~1. Re-paste the Telegram bot token~~ ✅ DONE
 
 `TELEGRAM_CHIEF_BOT_TOKEN` is **invalid** — `getMe` returns
 `404 Not Found`.
 
-The value is **35 characters**, but a Telegram token looks like
-`<digits>:<~35 chars>` (~46 total). It appears **only the half after the colon
-was pasted** — the numeric bot ID and colon are missing.
-
-**Fix:** re-copy the whole token from BotFather and update the environment
-variable.
-**Blocks:** all Telegram work, Gate 3.
+Verified working: **@agenticteamgrantbot** (id 8967954396). Gate 3 unblocked.
 
 ### 2. Supabase database access · *2 minutes*
 
@@ -34,9 +28,17 @@ management token is present.
 
 **Fix — either one:**
 
-- **Preferred:** Supabase → Project Settings → **Database** → **Connection
-  string** (URI form, with password). This is what a normal migration toolchain
-  needs and what Phase 1 requires anyway.
+- **Preferred**, on
+  [the Database Settings page](https://supabase.com/dashboard/project/baujwlzcziasnfhhkchg/settings/database):
+  1. **Reset password** → **copy it immediately**; Supabase states it *"isn't
+     viewable after creation"*.
+  2. Click **`Connect`** in the top bar (the connection string is no longer in
+     the page body) → **Session pooler** tab → copy the URI → substitute the
+     password.
+
+  **Session pooler, not Direct connection:** Direct is IPv6-only on Free and this
+  build container needs IPv4; Session mode (unlike Transaction mode) supports the
+  DDL migrations require. Set it as `SUPABASE_DB_URL`.
 - Or: Account → **Access Tokens** → a personal access token for the Management
   API.
 
@@ -49,7 +51,14 @@ somewhere durable, and there is nowhere yet.
 The app was **created programmatically** — you do not need to build it.
 Installation is the one step only you can authorize.
 
-**→ [Install AI Team HQ](https://slack.com/oauth/v2/authorize?client_id=11964614685523.11967879910693&scope=chat:write,chat:write.customize,channels:read,channels:manage,channels:history,groups:read,groups:history,im:read,im:write,im:history,mpim:read,mpim:history,reactions:read,reactions:write,users:read,team:read,files:write)**
+> ⚠️ **Do not search the Slack marketplace for it — it will never appear there.**
+> This is a *private* app in your workspace, and it must stay unlisted: public
+> distribution would silently cut our API throughput roughly 50×.
+>
+> Most reliable route: **[api.slack.com/apps/A0BUFRVSSLD/oauth](https://api.slack.com/apps/A0BUFRVSSLD/oauth)**
+> → green **Install to Workspace** button.
+
+**→ [Or use the direct install link](https://slack.com/oauth/v2/authorize?client_id=11964614685523.11967879910693&scope=chat:write,chat:write.customize,channels:read,channels:manage,channels:history,groups:read,groups:history,im:read,im:write,im:history,mpim:read,mpim:history,reactions:read,reactions:write,users:read,team:read,files:write)**
 
 Then from <https://api.slack.com/apps/A0BUFRVSSLD>, add to the environment:
 
@@ -73,8 +82,10 @@ Then from <https://api.slack.com/apps/A0BUFRVSSLD>, add to the environment:
 | **B** ⭐ | **~$3** + $10 one-off | 1,000 req/day (20× headroom) **and** `data_collection: deny`. Best value in the analysis. |
 | **C** | ~$8–32 | stronger models, optionally plus voice. |
 
-**Defaults to A until you choose**, so nothing can spend without your say-so.
-Full analysis: `docs/cost-and-hosting-decisions.md` §4.
+✅ **DECIDED 2026-09-03: Option B.** Remaining step —
+[add $10 credit at OpenRouter](https://openrouter.ai/settings/credits), which
+flips the key from 50 to 1,000 requests/day. I will verify `is_free_tier`
+becomes `false` afterwards.
 
 ### D3. Voice for V1?
 

@@ -20,7 +20,7 @@ these are exactly the fields that registry must carry.
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | ⚠️ **partial** | REST → 200, but **no DDL path** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | present | not yet exercised |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | present | not yet exercised — Phase 9 |
-| `TELEGRAM_CHIEF_BOT_TOKEN` | ❌ **invalid** | `getMe` → **404 Not Found** |
+| `TELEGRAM_CHIEF_BOT_TOKEN` | ✅ **works** (fixed 2026-09-03) | `getMe` → `@agenticteamgrantbot`, id 8967954396 |
 | `GROQ_API_KEY` | ❌ **invalid** | `GET /models` → **401 Invalid API Key** |
 | `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` / `SLACK_APP_TOKEN` | ⬜ **placeholders** | expected — issued on install |
 
@@ -28,17 +28,23 @@ these are exactly the fields that registry must carry.
 
 ## Two credentials need your attention
 
-### ❌ `TELEGRAM_CHIEF_BOT_TOKEN` — invalid
+### ✅ `TELEGRAM_CHIEF_BOT_TOKEN` — RESOLVED 2026-09-03
 
-`getMe` returns `{"ok":false,"error_code":404,"description":"Not Found"}`.
+Previously invalid: the value was 35 characters with no colon — only the half
+*after* the colon had been pasted, so `getMe` returned `404 Not Found`.
 
-The value is **35 characters** and does not match Telegram's token shape, which
-is `<digits>:<~35 chars>` (typically ~46 characters total). It looks like only
-the second half was pasted — the numeric bot ID and colon prefix appear to be
-missing.
+Re-pasted in full (46 chars, colon present) and verified:
 
-**Fix:** re-copy the whole token from BotFather, including the digits before the
-colon. Blocks all Telegram work, including Gate 3.
+```
+ok: true
+id: 8967954396
+first_name: Agentic Team Grant
+username: @agenticteamgrantbot
+can_join_groups: true
+```
+
+Gate 3 is unblocked. Webhook is not yet configured — that needs a deployed
+URL.
 
 ### ❌ `GROQ_API_KEY` — invalid
 
