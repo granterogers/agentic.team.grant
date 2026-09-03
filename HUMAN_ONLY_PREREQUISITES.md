@@ -47,6 +47,26 @@ BACKUP_S3_REGION=eu-central-003
 BACKUP_S3_BUCKET=ai-team-hq-backups
 ```
 
+### …and the same five as GitHub Actions secrets
+
+**Two stores, both manual.** The nightly `pg_dump` and its restore rehearsal run
+in GitHub Actions, because `pg_dump` cannot run in a build session
+([ADR-0007](docs/adr/0007-ddl-over-management-api.md)). Actions secrets are a
+separate store from this environment's variables — master spec §15 lists them
+separately on purpose, so a build session cannot read CI's credentials.
+
+> **[github.com/granterogers/agentic.team.grant/settings/secrets/actions](https://github.com/granterogers/agentic.team.grant/settings/secrets/actions)**
+> → **New repository secret**, once per value.
+
+Also add `SUPABASE_ACCESS_TOKEN` there, so the restore rehearsal can create and
+tear down its own scratch database.
+
+⚠️ **Correction:** I previously said I could add these repository secrets
+myself. **I cannot** — the session proxy refuses the Actions API outright
+(`403 Access to this GitHub Actions path is not permitted through this proxy`).
+Tested. This is a genuine human-only action, so it belongs here rather than
+being assumed away.
+
 **Blocks:** closing Phase 1, whose acceptance includes a real backup restored
 into a fresh database. Not starting it.
 

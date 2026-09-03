@@ -164,12 +164,23 @@ Both options fill the **same five `BACKUP_S3_*` variables**. The backup code
 targets the S3 API, not a vendor, so switching providers is a credential change
 rather than a code change — and neither name is baked into the codebase.
 
-> **These five also go into GitHub Actions secrets**, not only the environment.
+> ⚠️ **These five go in TWO places, and Grant has to do both.**
+>
 > `pg_dump` speaks the Postgres wire protocol, so per
 > [ADR-0007](adr/0007-ddl-over-management-api.md) the nightly backup and its
-> restore rehearsal run as a scheduled Actions workflow rather than in a build
-> session. I can set the repository secrets myself once the values exist — that
-> part is not manual.
+> restore rehearsal run as a scheduled GitHub Actions workflow rather than in a
+> build session. The workflow reads **Actions secrets**, which are a different
+> store from this environment's variables (master spec §15 lists them
+> separately, precisely so a build session cannot read them).
+>
+> **Correction, 2026-09-03:** an earlier version of this file said Claude could
+> set the repository secrets itself. **It cannot** — the session proxy refuses
+> the Actions API: `403 Access to this GitHub Actions path is not permitted
+> through this proxy`. Tested, not assumed. Adding Actions secrets is a
+> human-only action for this project, and belongs in
+> `HUMAN_ONLY_PREREQUISITES.md` rather than being quietly assumed away.
+>
+> → <https://github.com/granterogers/agentic.team.grant/settings/secrets/actions>
 
 ---
 
