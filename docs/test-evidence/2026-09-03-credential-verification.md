@@ -178,3 +178,98 @@ now actually present.
 Config B's ~$3/month the key stops around mid-October and will present as an
 outage rather than a billing event. Unchanged from the previous session's note;
 repeated because it has a date attached to it.
+
+---
+
+# Second run — same day, after Grant supplied the remaining credentials
+
+**Correction to the first run.** The first run asserted that environment
+variables are read only at container start and that a session restart was
+required. **That is wrong for this environment.** `SUPABASE_ACCESS_TOKEN`,
+`SLACK_SIGNING_SECRET`, `SLACK_CLIENT_SECRET`, `SLACK_CLIENT_ID` and
+`SLACK_APP_ID` were all added mid-session and became visible to the **running**
+container with no restart.
+
+Worth stating plainly because the belief cost the *previous* session entirely —
+it was restarted on the assumption it was blind, when it may not have needed to
+be. The rule going forward: **re-read the environment before concluding a
+credential is absent.**
+
+## ✅ `SUPABASE_ACCESS_TOKEN` — DDL genuinely works
+
+Token shape: `sbp_` prefix, 44 chars. Every statement below ran through
+`POST https://api.supabase.com/v1/projects/{ref}/database/query`, over HTTPS,
+from inside this container — the transport the first run proved was the only one
+available.
+
+| # | Statement | Result |
+|---|---|---|
+| 1 | `select current_user, current_database(), version()` | `postgres` / `postgres` / **PostgreSQL 17.6** · `201` |
+| 2 | `create table public._ddl_scratch_20260903 (...)` | `201` — **real DDL executes** |
+| 3 | `insert … returning id, note` | `201`, returned ids 1 and 2 |
+| 4 | `select count(*)` | `201`, `rows: 2` |
+| 5 | `revoke update, delete … from authenticated` | `201` |
+| 6 | `alter table … enable row level security; create policy …` | `201` |
+| 7 | `set local role authenticated; update … set note='tampered'` | **`400` — `42501: permission denied for table`** |
+| 8 | `drop table … cascade` | `201` |
+| 9 | `select to_regclass(...) is null` | `201`, `cleaned_up: true` |
+
+**Step 7 is the important one.** The task asked for create/insert/select/drop.
+That proves DDL runs. It does not prove the thing Phase 1 actually depends on:
+that `REVOKE` is *enforced*, not merely accepted. So the scratch table was used
+to attempt a forbidden `UPDATE` as the application role, and Postgres refused it
+with `42501`.
+
+That is master spec §6's core requirement — *"append-only … enforced at the
+database level by revoking UPDATE/DELETE from the application role"* —
+**demonstrated rather than asserted**, before a single line of schema exists.
+Every capability Phase 1 needs is confirmed available over HTTPS: DDL, `REVOKE`,
+`ALTER TABLE … ENABLE ROW LEVEL SECURITY`, `CREATE POLICY`, role impersonation
+for testing, and `DROP`.
+
+Scratch table dropped; `to_regclass` confirms nothing was left behind.
+
+**ADR-0007 moves from Proposed to Accepted.**
+
+## ✅ Slack — both missing values supplied and correctly shaped
+
+| Variable | Check | Result |
+|---|---|---|
+| `SLACK_SIGNING_SECRET` | 32 lowercase hex | ✅ matches |
+| `SLACK_CLIENT_SECRET` | 32 lowercase hex | ✅ matches |
+| `SLACK_APP_ID` | equals `A0BUFRVSSLD` | ✅ |
+| `SLACK_CLIENT_ID` | equals the id in the install URL | ✅ |
+
+The signing secret still cannot be *functionally* tested without a real inbound
+signed request — that happens in Phase 2 when the events endpoint exists. Shape
+is verified and it is no longer empty, which is what was actually wrong.
+
+## ⬜ Backup storage — bucket exists, credentials not yet supplied
+
+Grant chose **Backblaze B2** (no card required; see the shopping list for why
+that mattered) and created the bucket:
+
+```
+bucket    ai-team-hq-backups
+endpoint  s3.eu-central-003.backblazeb2.com
+region    eu-central-003        (not a separate field in B2 — read off the endpoint)
+type      Private
+encryption Enabled
+object lock Disabled
+```
+
+None of the five `BACKUP_S3_*` variables are set yet, under any name — the
+Application Key pair is still outstanding.
+
+**This does not block starting Phase 1.** It blocks *finishing* it: the
+acceptance criterion is a real backup restored into a fresh database, which
+needs somewhere to put the dump. CI, schema, ledger and job engine all come
+first.
+
+## Net state
+
+| | |
+|---|---|
+| ⛔ Blocked | nothing |
+| ✅ Phase 1 can begin | yes — the ledger's enforcement mechanism is proven |
+| ⬜ Needed before Phase 1 closes | `BACKUP_S3_ACCESS_KEY_ID` + `BACKUP_S3_SECRET_ACCESS_KEY` |

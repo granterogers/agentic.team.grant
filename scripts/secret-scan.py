@@ -30,6 +30,13 @@ NON_SECRET_VARS = {
     # Public by design: the Supabase URL and publishable/anon key are meant to
     # reach browser code. The *secret* key is not, and is deliberately absent.
     "NEXT_PUBLIC_SUPABASE_URL",
+    # Public Slack identifiers. The client ID is published in the install URL
+    # and the app ID in every dashboard link, so both legitimately appear in
+    # documentation. SLACK_CLIENT_SECRET and SLACK_SIGNING_SECRET are NOT here.
+    "SLACK_CLIENT_ID", "SLACK_APP_ID", "SLACK_TEAM_ID",
+    # Non-secret halves of the backup target: the S3 endpoint, region and bucket
+    # name are configuration. The key id and secret are not listed.
+    "BACKUP_S3_ENDPOINT", "BACKUP_S3_REGION", "BACKUP_S3_BUCKET",
 }
 
 # Values shorter than this are too collision-prone to scan for.

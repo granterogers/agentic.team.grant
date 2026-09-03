@@ -7,80 +7,66 @@ automated or is queued to be. Each item was tested against the addendum §40
 filter — CLI? API? browser automation? inspect existing config? — before landing
 here.
 
-**Current state: 2 blockers left.** Slack install ✅ resolved 2026-09-03 —
-the token works and all 17 scopes are granted. Telegram ✅. D2 ✅ Option B, credit landed.
+**Current state: 1 item left, and it does not block Phase 1 starting.**
 
-⚠️ **The Supabase ask has changed.** For two sessions this document asked you for
-a *database connection string*. That was the wrong request — measurement on
-2026-09-03 proved **no** connection string can work from a Claude Code cloud
-session, because the session blocks all non-443 outbound TCP. Port 443 to the
-Supabase pooler connects; ports 5432 and 6543 to the same host time out. So the
-string you supplied fails, and the Session pooler string would have failed too.
-See [ADR-0007](docs/adr/0007-ddl-over-management-api.md). What is needed instead
-is an **access token**, which works over HTTPS.
+✅ Resolved 2026-09-03: Telegram · Slack install · Slack signing + client secret ·
+D2 Option B with credit landed · **Supabase access token, with DDL proven to
+actually work** — including a `REVOKE` verified to be *enforced*, not merely
+accepted. Phase 1 is unblocked.
+
+⬜ Outstanding: the **Backblaze B2 Application Key pair**. Needed to *finish*
+Phase 1 (the tested backup restore), not to start it.
 
 ---
 
-## 🔴 Blocking now — 2 left
+## 🟠 One item left · *2 minutes*
 
-### 1. Supabase **personal access token** · *1 minute* · ⛔ blocks all of Phase 1
+### Backblaze B2 Application Key
 
-Not a connection string. A token.
+The bucket is done — `ai-team-hq-backups`, `eu-central-003`, private, encrypted.
+What is missing is the key pair.
 
-> **[supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)**
-> → **Generate new token** → name it `ai-team-hq-migrations` → **copy it
-> immediately**, it is shown once → add to the environment as
-> `SUPABASE_ACCESS_TOKEN`.
+> **B2 sidebar → Application Keys → Add a New Application Key**
+> - Name: `ai-team-hq-backup-writer`
+> - Allow access to Bucket: **`ai-team-hq-backups`** — the bucket, not "All"
+> - Type of Access: **Read and Write**
+> - Leave file name prefix and duration blank
 
-Why this and not the connection string: Supabase's Management API executes SQL —
-including the DDL, the `REVOKE UPDATE, DELETE ON events` that makes the ledger
-genuinely append-only, and the RLS policies — over **HTTPS**, which this
-environment permits. It is already confirmed reachable: the endpoint answers
-`401 Unauthorized` rather than timing out, so the transport works and only the
-credential is missing.
+It shows two values **once**:
 
-**Keep `SUPABASE_DB_URL` where it is.** It is the wrong shape for *this*
-container but the deployed app on Vercel needs a pooler URI, and that is where it
-belongs. One note for when you get there: the value currently set is the
-**Direct connection**, which is IPv6-only on Free. Vercel will want the
-**Session pooler** string instead — `Connect` → **Session pooler** tab.
+| Variable | B2 calls it |
+|---|---|
+| `BACKUP_S3_ACCESS_KEY_ID` | **keyID** |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | **applicationKey** |
 
-**Blocks:** the Phase 1 schema, the append-only event ledger, the job engine, the
-`slack_app_credentials` table, and Slack config-token rotation.
+Plus the three non-secret ones, if they are not in yet:
 
-### 2. Slack signing secret · *1 minute*
+```
+BACKUP_S3_ENDPOINT=https://s3.eu-central-003.backblazeb2.com
+BACKUP_S3_REGION=eu-central-003
+BACKUP_S3_BUCKET=ai-team-hq-backups
+```
 
-`SLACK_BOT_TOKEN` came through and works. But `SLACK_SIGNING_SECRET` arrived as
-an **empty value** — the variable exists with nothing in it — and
-`SLACK_CLIENT_SECRET` is missing entirely.
+**Blocks:** closing Phase 1, whose acceptance includes a real backup restored
+into a fresh database. Not starting it.
 
-> From **[api.slack.com/apps/A0BUFRVSSLD](https://api.slack.com/apps/A0BUFRVSSLD)**
-> → **Basic Information** → **App Credentials** → **Show** next to each:
+### ~~Supabase database access~~ ✅ DONE 2026-09-03
 
-| Variable | Field | State |
-|---|---|---|
-| `SLACK_SIGNING_SECRET` | Signing Secret | ❌ empty — needed |
-| `SLACK_CLIENT_SECRET` | Client Secret | ❌ absent — needed |
-
-Without the signing secret, no inbound Slack request can be proven to have come
-from Slack, so no Slack event may be trusted. Leave `SLACK_APP_TOKEN` blank —
-that one is only for Socket Mode, which §4 rejects.
-
-**Blocks:** Gate 4. Not Phase 1.
+The ask was wrong for two sessions — a connection string was requested when no
+connection string could ever work from this environment. The access token you
+supplied works, and DDL was exercised end to end over HTTPS: create, insert,
+select, `REVOKE`, RLS, policy, drop, and a forbidden `UPDATE` correctly refused
+with `42501`. [ADR-0007](docs/adr/0007-ddl-over-management-api.md), now Accepted.
 
 ### ~~Install the Slack app~~ ✅ DONE 2026-09-03
 
-Verified live: workspace **Agentic Team Grant** (`T0BUCJ2L5FD`), bot
-`ai_team_hq` (`U0BUG0RPZ8B`), and **all 17 requested scopes granted, none
-missing**. `is_enterprise_install: false` confirms it is still a private
-internal app, which is what preserves our rate-limit exemption.
+Workspace **Agentic Team Grant** (`T0BUCJ2L5FD`), bot `ai_team_hq`, **17/17
+scopes**, still a private internal app. Signing secret and client secret since
+supplied and correctly shaped.
 
 ### ~~Re-paste the Telegram bot token~~ ✅ DONE 2026-09-03
 
-Verified working: **@agenticteamgrantbot** (id 8967954396). Gate 3 unblocked.
-Webhook still needs a deployed URL — not your problem, it's automated.
-
----
+**@agenticteamgrantbot** (id 8967954396). Gate 3 unblocked.
 
 ## ✅ Resolved — OpenRouter card and spend cap
 
@@ -207,12 +193,13 @@ Not eligible: the Notebook master token (a *file*), and the Slack config pair
 
 ---
 
-## The fastest path to unblocking Phase 1
+## What happens next
 
-1. ~~Telegram token~~ ✅ done
-2. ~~Answer D2~~ ✅ Option B, and the $10 credit has landed (`is_free_tier: false`)
-3. ~~Install the Slack app~~ ✅ done, token verified, 17/17 scopes
-4. **Supabase personal access token** — the one thing Phase 1 waits on
-5. Slack signing secret + client secret — needed for Gate 4, not for Phase 1
+Phase 1 starts now — CI first, then the schema, the append-only ledger and the
+job engine. The B2 key pair is the only thing still owed, and it is needed at the
+*end* of Phase 1 rather than the beginning.
 
-**Item 4 alone unblocks Phase 1.** Everything else can follow.
+One correction worth recording: this document twice told you a session restart
+was needed for new variables to be seen. That turned out to be false — the
+Supabase and Slack values reached a **running** session with no restart. Handing
+over between sessions is still sometimes necessary, but not for that reason.

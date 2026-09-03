@@ -1,7 +1,10 @@
 # ADR-0007 — Migrations run over the Supabase Management API, and backups run in GitHub Actions
 
-**Status:** Proposed — needs a Supabase personal access token before it can be
-accepted · **Date:** 2026-09-03
+**Status:** **Accepted 2026-09-03** — the token was supplied and every capability
+Phase 1 needs was exercised over HTTPS, including a `REVOKE` proven to be
+*enforced* and not merely accepted. Evidence:
+[`docs/test-evidence/2026-09-03-credential-verification.md`](../test-evidence/2026-09-03-credential-verification.md),
+second run · **Date:** 2026-09-03
 
 **Amends** the master spec's implicit assumption that a Claude Code cloud session
 can reach Postgres directly, and `docs/implementation-plan.md` Phase 1's

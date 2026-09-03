@@ -15,4 +15,4 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0004](0004-one-shared-slack-app.md) | One shared Slack app for V1 | Accepted |
 | [0005](0005-inference-cost-posture.md) | Inference cost posture: configurable, Grant chooses | Proposed |
 | [0006](0006-foreground-only-voice.md) | Foreground-only voice; no native iOS app | Accepted |
-| [0007](0007-ddl-over-management-api.md) | Migrations over the Supabase Management API; backups in GitHub Actions | Proposed |
+| [0007](0007-ddl-over-management-api.md) | Migrations over the Supabase Management API; backups in GitHub Actions | Accepted |

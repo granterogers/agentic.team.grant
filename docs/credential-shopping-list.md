@@ -113,11 +113,25 @@ external dependency. This is that field, doing its job.
 
 | Variable | Where it appears |
 |---|---|
-| `BACKUP_S3_ENDPOINT` | bucket's **Endpoint** row, prefixed `https://` — e.g. `https://s3.us-west-004.backblazeb2.com` |
-| `BACKUP_S3_REGION` | the region inside that endpoint — e.g. `us-west-004` |
+| `BACKUP_S3_ENDPOINT` | bucket's **Endpoint** row, prefixed `https://` |
+| `BACKUP_S3_REGION` | **not shown as its own field** — read it out of the endpoint. `s3.eu-central-003.backblazeb2.com` → `eu-central-003` |
 | `BACKUP_S3_ACCESS_KEY_ID` | **keyID** |
 | `BACKUP_S3_SECRET_ACCESS_KEY` | **applicationKey** — shown once only |
 | `BACKUP_S3_BUCKET` | the bucket name |
+
+The **Bucket ID** is not needed — that belongs to B2's native API, and we use the
+S3-compatible one.
+
+**Chosen 2026-09-03:** Option A. Bucket `ai-team-hq-backups` created in
+`eu-central-003`, Private, encryption enabled, Object Lock disabled.
+
+⚠️ **Retention is not configured yet, and the free tier is 10 GB.** The bucket
+defaults to *Keep all versions*. The backup job writes a uniquely-keyed object
+per night rather than overwriting, so versioning is not the exposure — unbounded
+*accumulation* is. Phase 1's backup workflow must therefore set an explicit
+retention policy (a B2 Lifecycle Rule, plus pruning in the job itself), or the
+bucket silently fills and nightly backups begin failing. Tracked as part of the
+Phase 1 backup deliverable.
 
 #### Option B — Cloudflare R2 · card required
 
