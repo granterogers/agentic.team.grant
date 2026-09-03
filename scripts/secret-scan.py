@@ -39,6 +39,28 @@ NON_SECRET_VARS = {
     "BACKUP_S3_ENDPOINT", "BACKUP_S3_REGION", "BACKUP_S3_BUCKET",
 }
 
+# CI runners inject their own metadata: GITHUB_REPOSITORY, GITHUB_SERVER_URL,
+# GITHUB_ACTOR and friends. Those values are public by definition and appear
+# legitimately in documentation, so scanning for them verbatim produces nothing
+# but false positives.
+#
+# Rather than enumerate them — a list that goes stale the moment GitHub adds a
+# variable — exclude these namespaces EXCEPT where the name looks credential-
+# bearing. That fails safe in the direction that matters: a newly added public
+# variable is ignored, while GITHUB_TOKEN, ACTIONS_RUNTIME_TOKEN and
+# ACTIONS_ID_TOKEN_REQUEST_TOKEN stay scanned. The prefixes are deliberately
+# narrow so this can never swallow an application credential.
+CI_METADATA_PREFIXES = ("GITHUB_", "RUNNER_", "ACTIONS_")
+CREDENTIAL_WORDS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH")
+
+
+def is_ci_metadata(name: str) -> bool:
+    """True for a CI-injected variable whose value is public by definition."""
+    if not name.startswith(CI_METADATA_PREFIXES):
+        return False
+    return not any(word in name for word in CREDENTIAL_WORDS)
+
+
 # Values shorter than this are too collision-prone to scan for.
 MIN_VALUE_LEN = 12
 
@@ -75,8 +97,9 @@ def main() -> int:
     files = tracked_files()
 
     env = {
-        k: v for k, v in os.environ.items()
-        if k not in NON_SECRET_VARS and len(v) >= MIN_VALUE_LEN
+        k: v
+        for k, v in os.environ.items()
+        if k not in NON_SECRET_VARS and not is_ci_metadata(k) and len(v) >= MIN_VALUE_LEN
     }
 
     for path in files:
