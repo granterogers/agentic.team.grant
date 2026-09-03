@@ -87,3 +87,77 @@ each surfacing later inside a job as an unexplained provider error.
 - ⬜ Layer 2 — the per-key cap is set (`limit: 5`) but has never been *hit*; an untested backstop is a belief
 - ⬜ Layer 4 — post-response breaker on `usage.cost > 0`, needs the HTTP wrapper
 - ⬜ Router with no ad-hoc provider calls anywhere else in the codebase
+
+---
+
+# Second pass — the router, live
+
+**Date:** 2026-09-03 · **Reproduce:** `npm run verify:router`
+
+The unit tests drive a fake executor and a fake `fetch`, which is right for
+branch coverage and proves nothing about the real registry, the real breaker
+functions or the real provider. This closes that gap.
+
+| check | outcome | |
+|---|---|---|
+| a real completion through all four layers | model=cohere/north-mini-code:free cost=0 tokens=7+52 content="ready" | ✅ |
+| a paid model is refused: openai/gpt-4o-mini | refused before any request: refusing to call openai/gpt-4o-mini: not in the measured allow-list —  | ✅ |
+| a paid model is refused: anthropic/claude-3.5-sonnet | refused before any request: refusing to call anthropic/claude-3.5-sonnet: not in the measured allo | ✅ |
+| a paid model is refused: openrouter/auto | refused before any request: refusing to call openrouter/auto: this identifier is dynamically price | ✅ |
+| the registry records why each candidate is unusable, not just that it is | usable=5 data_policy=8 harness_gated=2 rate_limited=4 provider_error=2 | ✅ |
+| no model is marked usable without a recorded successful probe | 0 such rows (the CHECK constraint makes this impossible) | ✅ |
+| disabling a provider empties its allow-list without touching a model row (§8) | usable: 5 -> 0 -> 5 | ✅ |
+| and the router refuses while it is disabled | NoUsableModelError | ✅ |
+| no money was spent by any of the above | usage 0 -> 0 | ✅ |
+
+9/9 checks passed
+
+## Layer 3, now measured rather than described
+
+```
+usable=5  data_policy=8  rate_limited=4  harness_gated=2  provider_error=2   (= 21)
+```
+
+The registry records **why** each candidate is unusable, not merely that it is,
+and `provider_models_usable_was_probed` is a database CHECK: a row cannot claim
+`usable` without a recorded successful probe. A configured allow-list is
+therefore impossible, not just discouraged.
+
+## A finding worth its own section: every free model here is a reasoning model
+
+The first run returned **empty content at zero cost** with 8 completion tokens.
+The raw response:
+
+```
+finish_reason: length   native: max_tokens
+message.content: null
+message.reasoning: "The user asks: \"Reply with the"
+usage.completion_tokens_details.reasoning_tokens: 8
+```
+
+All eight tokens went to **hidden reasoning**, drawn from the same completion
+budget, leaving nothing for output. Two consequences, both structural:
+
+**1. An empty completion is now an explicit failure.** The router raised
+`EmptyCompletionError` naming the reasoning budget as the cause. Returning `''`
+would have produced blank outputs that passed quality review as vacuous content
+— §10 requires an explicit failure state precisely here. It does *not* trip the
+circuit breaker: the call succeeded and cost nothing, so the provider did its
+job and the breaker must stay honest about availability.
+
+**2. `reasoning` is chain-of-thought, and §6 forbids storing or exposing it.**
+The router's response type declares no `reasoning` or `reasoning_details` field
+at all — a property that does not exist cannot be forwarded by accident. A test
+plants `SECRET CHAIN OF THOUGHT` in a response and asserts it appears nowhere in
+the result.
+
+**Capacity implication for §17.** Token budgets must exceed the reasoning
+budget, not the visible answer. `max_tokens: 8` yields nothing; 512 yielded
+`"ready"` at 33 completion tokens. Any budget tuned to expected *output* length
+will silently return nothing on this tier.
+
+## Still open in Phase 2
+
+- ⬜ Layer 2 — the per-key cap is set (`limit: 5`) but has never been hit; an untested backstop is a belief
+- ⬜ Slack config-token rotation across a real 12-hour expiry and a restart
+- ⬜ Telegram webhook with secret-token verification

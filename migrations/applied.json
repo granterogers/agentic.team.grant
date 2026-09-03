@@ -6,5 +6,6 @@
   "0005_job_engine.sql": "1ce678cdd9779ac68e27007f2fe5807e8952965fc8649c6dd272a3b67f3d66b5",
   "0006_dequeue_capacity_breakers.sql": "b25daf2f0a9ec9bbc1f1c637e46a32faf40322db9ce77e5b140c5615e38c59ca",
   "0007_slack_app_credentials.sql": "b6acc4fd788e53537653cc6cec7f3ffdbfc282af8817ef7de09174c16aa4aadb",
-  "0008_name_the_right_table.sql": "0629e044a9a6432575601a05fe80931bb5b62a2c92a0e8215f03f9a881f2c56d"
+  "0008_name_the_right_table.sql": "0629e044a9a6432575601a05fe80931bb5b62a2c92a0e8215f03f9a881f2c56d",
+  "0009_provider_registry.sql": "996840063e472b84260466c68e944057c4471a6464c0c44ba87ad6e6d55ea97b"
 }
