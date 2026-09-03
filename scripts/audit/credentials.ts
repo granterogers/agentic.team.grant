@@ -34,7 +34,30 @@
 // without which top-level await is a syntax error.
 export {}
 
-type State = 'ABSENT' | 'EMPTY' | 'UNVERIFIED' | 'WORKING' | 'BROKEN'
+/**
+ * `NO_QUOTA` is the fourth instance of this file's own thesis, found on
+ * 2026-09-03 by Grant trying Gate 1.
+ *
+ * `OPENAI_API_KEY` was recorded ✅ WORKING with the detail "124 models, 10
+ * realtime-capable". Every word of that was true. The key authenticates, and
+ * listing models is a real call that really succeeded. But the account has no
+ * credits, so every call that *transacts* returns 429
+ * `credit_balance_exhausted` — and OpenAI Realtime has no free tier, so for
+ * the only purpose this key serves, "WORKING" was wrong.
+ *
+ * "Present" read as "working" three times. This is "authenticates" read as
+ * "can pay", which is the same error one level in: a probe that only reads
+ * cannot speak for a capability that only writes.
+ */
+type State = 'ABSENT' | 'EMPTY' | 'UNVERIFIED' | 'NO_QUOTA' | 'WORKING' | 'BROKEN'
+
+/** Thrown by a probe that authenticated but found the account cannot transact. */
+class NoQuotaError extends Error {
+  constructor(detail: string) {
+    super(detail)
+    this.name = 'NoQuotaError'
+  }
+}
 
 interface Result {
   readonly name: string
@@ -79,8 +102,10 @@ async function check(
   } catch (error) {
     results.push({
       name,
-      state: 'BROKEN',
-      detail: (error as Error).message.slice(0, 90),
+      // A quota problem is not a broken credential, and conflating them sends
+      // someone to rotate a key that is fine when the fix is a payment.
+      state: error instanceof NoQuotaError ? 'NO_QUOTA' : 'BROKEN',
+      detail: (error as Error).message.slice(0, 120),
       neededNow,
     })
   }
@@ -159,7 +184,45 @@ await check('OPENAI_API_KEY', false, async (key) => {
   )
   const models = (d.data as unknown[] | undefined) ?? []
   const realtime = models.filter((m) => String((m as { id: string }).id).includes('realtime'))
-  return `${String(models.length)} models, ${String(realtime.length)} realtime-capable`
+  const listed = `${String(models.length)} models, ${String(realtime.length)} realtime-capable`
+
+  // Listing models does not transact, so it says nothing about whether the
+  // account can pay — and OpenAI is used here *only* for Realtime voice, which
+  // has no free tier. A read-only probe therefore cannot speak for the only
+  // capability this key exists to provide.
+  //
+  // Cost of this probe: nothing while the account has no credits, because the
+  // 429 arrives before any work is done. Once credits exist it is roughly
+  // $0.000001 — two input tokens and one output token on the cheapest model.
+  // Stated rather than hidden, because a paid call from an automated audit
+  // should be a deliberate, quantified decision.
+  const probe = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 1,
+    }),
+  })
+  if (probe.status === 429) {
+    const body = (await probe.json()) as { error?: { code?: string; message?: string } }
+    const code = body.error?.code ?? 'unknown'
+    // `insufficient_quota` / `credit_balance_exhausted` is an empty wallet.
+    // `rate_limit_exceeded` is the opposite situation — a working account being
+    // throttled — and must not be reported as unfunded.
+    if (code === 'credit_balance_exhausted' || code === 'insufficient_quota') {
+      throw new NoQuotaError(
+        `authenticates (${listed}) but the account has no credits: ${code}. ` +
+          'Realtime voice has no free tier, so voice cannot work until it is funded (D3).',
+      )
+    }
+    return `${listed}; rate-limited at probe time, so quota is presumed fine`
+  }
+  if (!probe.ok) {
+    throw new Error(`${listed}; but a transacting call returned http ${String(probe.status)}`)
+  }
+  return `${listed}; a transacting call succeeded`
 })
 
 await check('GEMINI_API_KEY', false, async (key) => {
@@ -274,6 +337,9 @@ const ICON: Record<State, string> = {
   EMPTY: '❌',
   ABSENT: '⬜',
   BROKEN: '❌',
+  // Deliberately not ❌. The credential is fine; the wallet is empty, and the
+  // fix is a payment rather than a rotation.
+  NO_QUOTA: '💳',
 }
 
 console.log('| credential | state | detail |')

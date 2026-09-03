@@ -1,6 +1,73 @@
-# Gate 1 — voice POC, prepared and awaiting Grant
+# Gate 1 — voice POC
 
-**Prepared:** 2026-09-03 · **Status:** ⏸ **awaiting subjective acceptance**
+**Prepared:** 2026-09-03 · **Status:** ⛔ **BLOCKED on funding (D3)**
+
+> ## The account has no OpenAI credits
+>
+> Grant ran the POC on 2026-09-03 at 19:08. It got further than any automated
+> check could:
+>
+> ```
+> minted ephemeral credential for gpt-realtime-2.1-mini   (token mint 1689 ms)
+> Error: SDP exchange failed: 429
+>   "You have no credits remaining. Add credits to continue using the API"
+> ```
+>
+> **Everything on our side worked.** The page served, the microphone was
+> requested, the server minted a real ephemeral credential in 1.7 s, and the
+> browser reached OpenAI. OpenAI refused at the point where the session would
+> begin costing money.
+>
+> Confirmed independently of voice: a plain `chat/completions` call with
+> `max_tokens: 1` returns the same `429 insufficient_quota` /
+> `credit_balance_exhausted`. So this is an **account billing state**, not a
+> Realtime problem, not an SDP problem, and not a bug in the page.
+>
+> **This is decision D3** — *"Voice for V1: skip, or fund ~$24/mo"* — arriving
+> as a bill rather than as a question. Gate 1 cannot run at all until the
+> account is funded at https://platform.openai.com/settings/organization/billing/.
+> Nothing else is blocked by it: voice is the only thing in this build that
+> uses OpenAI.
+
+## What this cost the credential audit, and the lesson
+
+`docs/credential-status.md` recorded `OPENAI_API_KEY` as **✅ WORKING**, with
+the detail *"124 models, 10 realtime-capable"*. Every word was true. The key
+authenticates, and listing models is a real call that really succeeded.
+
+But listing does not **transact**, and Realtime voice has **no free tier** — so
+for the only purpose this key serves, "WORKING" was wrong.
+
+This is the **fourth** time this build has recorded a credential as fine when
+it was not, and it is the same error one level deeper:
+
+| # | what was recorded | what was true |
+|---|---|---|
+| 1 | `GOOGLE_CLIENT_ID` "present" | an empty string |
+| 2 | `SUPABASE_DB_URL` "set" | its password had never authenticated |
+| 3 | `SLACK_SIGNING_SECRET` "placeholder" | empty |
+| 4 | `OPENAI_API_KEY` "WORKING" | authenticates, but cannot pay |
+
+The first three were *presence* read as *working*. This one is *authenticates*
+read as *can transact*. The general form: **a probe that only reads cannot
+speak for a capability that only writes.**
+
+The audit now has a fifth state, `💳 NO_QUOTA`, and probes OpenAI with a
+one-token transacting call. It is deliberately not `❌` — the credential is
+fine, the wallet is empty, and the fix is a payment rather than a rotation.
+Sending someone to rotate a working key is its own kind of wasted afternoon.
+
+The probe costs **nothing** while the account is unfunded, because the 429
+arrives before any work is done. Once funded it is about **$0.000001** per run —
+stated in the code rather than hidden, because a paid call from an automated
+audit should be a quantified decision.
+
+---
+
+## When the account is funded
+
+Everything below was verified before handing the POC over and still stands.
+Press *Start talking* again; no redeploy is needed.
 
 > §13: *"Claude must prepare the test but must never mark subjective acceptance
 > PASS before Grant has actually performed it."*

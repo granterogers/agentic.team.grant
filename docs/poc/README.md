@@ -11,7 +11,7 @@
 
 | gate | subject | verdict | evidence |
 |---|---|---|---|
-| 1 | Voice | ⏸ **awaiting Grant** — 20+ minutes of personal use | [prep](gate-1-voice/00-preparation.md) |
+| 1 | Voice | ⛔ **BLOCKED** — OpenAI account has no credits (D3) | [prep](gate-1-voice/00-preparation.md) |
 | 2 | Notebook | ⛔ **BLOCKED** — 17 proven, 16 need a Google account | [evidence](gate-2-notebook/00-evidence.md) |
 | 3 | Telegram | ✅ **PASS** — 12/12 | [evidence](gate-3-telegram/00-evidence.md) |
 | 4 | Slack | ✅ **PASS** — 19/19 | [evidence](gate-4-slack/01-evidence.md) |
@@ -26,9 +26,14 @@ npm run poc:gate-5
 
 ## What each of the two unfinished gates needs
 
-**Gate 1** needs 20+ minutes of Grant's time, and nothing else. The page is live
-at `https://ai-team-hq-voice-agentic-team-grant.vercel.app`. §13 is explicit
-that this cannot be delegated:
+**Gate 1** needs the OpenAI account funded, and *then* 20+ minutes of Grant's
+time. The page is live at
+`https://ai-team-hq-voice-agentic-team-grant.vercel.app` and works: it minted a
+real ephemeral credential in 1.7 s and reached OpenAI, which refused with
+`credit_balance_exhausted` at the point the session would start costing money.
+That is decision **D3** — *"Voice for V1: skip, or fund ~$24/mo"* — arriving as
+a bill rather than a question. §13 is explicit that the judgement itself cannot
+be delegated:
 
 > Claude must prepare the test but must never mark subjective acceptance PASS
 > before Grant has actually performed it.
