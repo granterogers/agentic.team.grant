@@ -80,29 +80,81 @@ Direct connection currently stored.)
 Needed for Gate 4, not for Phase 1 — but it is the same 60 seconds, so collect
 it in this batch.
 
-### Cloudflare R2 · free (10 GB, no egress charge)
+### Offsite backup storage · ⚠️ **a choice, because of one detail**
 
-1. Sign up / log in: <https://dash.cloudflare.com>
-2. **R2** in the sidebar → **Create bucket** → name it `ai-team-hq-backups`
-3. **R2** → **Manage R2 API Tokens** → **Create API Token**
-   → permission **Object Read & Write**, scoped to that bucket
-4. Copy the three values it shows **once**
+Phase 1's acceptance includes restoring a real backup, and Supabase Free
+provides no backups at all, so offsite storage is a Phase 1 dependency.
 
-| Variable | Where |
+**Researched 2026-09-03: Cloudflare R2 requires a linked payment method to
+enable, even for the free tier.** This matters here specifically because Grant
+removed the OpenRouter card on purpose, so that an automatic charge would be
+*physically impossible* rather than merely disabled. R2 reintroduces a card.
+Backblaze B2 does not require one. Both are recorded so the choice is explicit
+rather than discovered later.
+
+Master spec §11 requires documenting *"whether a card is required"* for every
+external dependency. This is that field, doing its job.
+
+#### Option A — Backblaze B2 · **no card required** ⭐ recommended
+
+10 GB free, free egress up to 3× average monthly storage, S3-compatible API.
+
+1. <https://www.backblaze.com/sign-up/cloud-storage> — email + password, no card
+2. **B2 Cloud Storage → Buckets → Create a Bucket**
+   - Name: `ai-team-hq-backups` (must be globally unique — add a suffix if taken)
+   - Files in Bucket: **Private**
+   - Default Encryption: **Enable**
+   - Object Lock: **Disable**
+3. **Application Keys → Add a New Application Key**
+   - Name: `ai-team-hq-backup-writer`
+   - Allow access to Bucket: **the bucket just created**, not "All"
+   - Type of Access: **Read and Write**
+4. Copy the values shown **once**
+
+| Variable | Where it appears |
 |---|---|
-| `R2_ACCOUNT_ID` | R2 overview page, right sidebar |
-| `R2_ACCESS_KEY_ID` | shown on token creation |
-| `R2_SECRET_ACCESS_KEY` | shown on token creation — **once only** |
-| `R2_BUCKET` | `ai-team-hq-backups` |
+| `BACKUP_S3_ENDPOINT` | bucket's **Endpoint** row, prefixed `https://` — e.g. `https://s3.us-west-004.backblazeb2.com` |
+| `BACKUP_S3_REGION` | the region inside that endpoint — e.g. `us-west-004` |
+| `BACKUP_S3_ACCESS_KEY_ID` | **keyID** |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | **applicationKey** — shown once only |
+| `BACKUP_S3_BUCKET` | the bucket name |
 
-**Alternative if you'd rather not:** Backblaze B2 (10 GB free) works identically
-via the S3 API. R2 is preferred for free egress, which matters when restoring.
+#### Option B — Cloudflare R2 · card required
 
-> **These four also go into GitHub Actions secrets**, not only the environment.
+10 GB free, 1M Class A + 10M Class B operations/month, egress always free.
+Better free allowance and better restore economics; costs the no-card guarantee.
+
+1. <https://dash.cloudflare.com> → **R2 Object Storage** → add a payment method
+   when prompted
+2. **Create bucket** → `ai-team-hq-backups`, **Standard** storage class
+3. **R2 → API → Manage API tokens → Create Account API token**
+   - Permission: **Object Read & Write** (not Admin)
+   - Specify bucket: **the one just created**
+4. Copy the values shown once
+
+| Variable | Value |
+|---|---|
+| `BACKUP_S3_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
+| `BACKUP_S3_REGION` | `auto` |
+| `BACKUP_S3_ACCESS_KEY_ID` | **Access Key ID** |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | **Secret Access Key** — shown once only |
+| `BACKUP_S3_BUCKET` | `ai-team-hq-backups` |
+
+⚠️ If the payment method later fails, Cloudflare suspends bucket **access** —
+requests error, though stored data is retained. A backup target that can be
+switched off by a billing failure is a poor place for the only copy.
+
+#### Provider-neutral variable names, deliberately
+
+Both options fill the **same five `BACKUP_S3_*` variables**. The backup code
+targets the S3 API, not a vendor, so switching providers is a credential change
+rather than a code change — and neither name is baked into the codebase.
+
+> **These five also go into GitHub Actions secrets**, not only the environment.
 > `pg_dump` speaks the Postgres wire protocol, so per
 > [ADR-0007](adr/0007-ddl-over-management-api.md) the nightly backup and its
 > restore rehearsal run as a scheduled Actions workflow rather than in a build
-> session. I can add repository secrets myself once you supply the values — that
+> session. I can set the repository secrets myself once the values exist — that
 > part is not manual.
 
 ---
@@ -223,7 +275,7 @@ Recorded so nobody adds them "just in case":
 |---|---|
 | **Batch 1a** (Supabase token, ~1 min) | ⛔ **Phase 1 cannot start without this** |
 | **Batch 1b** (Slack secrets, ~1 min) | Gate 4 ready |
-| **Batch 1c** (R2, ~5 min) | Phase 1 runs start to finish uninterrupted |
+| **Batch 1c** (backup storage, ~5 min) | Phase 1 runs start to finish uninterrupted |
 | **Batch 2** (Vercel token, ~2 min) | deployment ready before Gate 1 |
 | **Batch 3** (Google account + test notebook, ~10 min) | Gate 2 ready |
 
