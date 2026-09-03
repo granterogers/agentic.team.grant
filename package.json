@@ -41,7 +41,8 @@
     "poc:gate-3": "tsx scripts/poc/gate-3.ts",
     "deploy:slack": "tsx scripts/deploy/slack-events.ts",
     "slack:configure-events": "tsx scripts/slack/configure-events.ts",
-    "poc:gate-4": "tsx scripts/poc/gate-4.ts"
+    "poc:gate-4": "tsx scripts/poc/gate-4.ts",
+    "poc:gate-2": "tsx scripts/poc/gate-2.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
