@@ -1,0 +1,81 @@
+name: DB doctor
+
+# Diagnostic only. Tries every plausible pooler connection shape and reports
+# which authenticate. Never prints a password.
+#
+# Exists because pg_dump fails with `FATAL: password authentication failed for
+# user "postgres"` against a freshly reset password, so the password is not the
+# variable. One run testing six shapes beats six runs testing one.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get install -y -qq postgresql-client
+
+      - name: Load credentials from the vault
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: npm run --silent backup:credentials
+
+      - name: Try every connection shape
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PGCONNECT_TIMEOUT: '10'
+        run: |
+          REF=baujwlzcziasnfhhkchg
+          POOLER=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/config/database/pooler" \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin)[0]; print(d["db_host"])')
+          echo "pooler host: $POOLER"
+          echo "password length: ${#SUPABASE_DB_PASSWORD}"
+
+          {
+            echo "| user | host | port | result |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          try() {
+            local user="$1" host="$2" port="$3"
+            local out
+            if out=$(PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
+                  -h "$host" -p "$port" -U "$user" -d postgres \
+                  -Atc "select 'AUTH_OK ' || current_user || ' ' || version()" 2>&1); then
+              echo "✅ $user@$host:$port -> ${out:0:70}"
+              echo "| \`$user\` | ${host%%.*}… | $port | ✅ ${out:0:40} |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              # psql echoes the connection error, which contains no password.
+              local reason
+              reason=$(echo "$out" | head -1 | sed 's/psql: error: //')
+              echo "❌ $user@$host:$port -> ${reason:0:90}"
+              echo "| \`$user\` | ${host%%.*}… | $port | ❌ ${reason:0:60} |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          # Session pooler, tenant-qualified — what the API advertises and what
+          # the backup workflow currently uses.
+          try "postgres.$REF" "$POOLER" 5432
+          # Session pooler, bare username — in case the pooler does not want
+          # the tenant suffix on the dedicated hostname.
+          try "postgres" "$POOLER" 5432
+          # Transaction pooler. Unusable by pg_dump, but if auth succeeds here
+          # and not on 5432 the problem is session mode, not the credential.
+          try "postgres.$REF" "$POOLER" 6543
+          try "postgres" "$POOLER" 6543
+
+          echo "---"
+          echo "Note: a 'Tenant or user not found' error means the USERNAME shape is"
+          echo "wrong. 'password authentication failed' means the username was accepted"
+          echo "and the credential was rejected."
