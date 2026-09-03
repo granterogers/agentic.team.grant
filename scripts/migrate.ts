@@ -9,11 +9,11 @@
  * enforce that applied history is never edited.
  */
 import { createHash } from 'node:crypto'
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
-import { ledgerExists, readApplied, runMigrations } from '../src/migrations/runner.ts'
 import type { MigrationFile } from '../src/migrations/check.ts'
+import { ledgerExists, readApplied, runMigrations } from '../src/migrations/runner.ts'
 
 const MIGRATIONS_DIR = 'migrations'
 const APPLIED_LEDGER = join(MIGRATIONS_DIR, 'applied.json')

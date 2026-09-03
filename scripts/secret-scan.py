@@ -39,26 +39,40 @@ NON_SECRET_VARS = {
     "BACKUP_S3_ENDPOINT", "BACKUP_S3_REGION", "BACKUP_S3_BUCKET",
 }
 
-# CI runners inject their own metadata: GITHUB_REPOSITORY, GITHUB_SERVER_URL,
-# GITHUB_ACTOR and friends. Those values are public by definition and appear
-# legitimately in documentation, so scanning for them verbatim produces nothing
-# but false positives.
+# Tooling injects its own metadata, and those values legitimately appear in
+# tracked files:
 #
-# Rather than enumerate them — a list that goes stale the moment GitHub adds a
+# - CI runners set GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_ACTOR — public
+#   by definition, and all over the documentation.
+# - npm sets npm_package_scripts_* and npm_lifecycle_script to the literal text
+#   of package.json's scripts, so every one of them "appears verbatim" in
+#   package.json. Found the hard way: running this via `npm run` reported four
+#   findings that running it directly did not.
+#
+# Rather than enumerate them — a list that goes stale the moment a tool adds a
 # variable — exclude these namespaces EXCEPT where the name looks credential-
 # bearing. That fails safe in the direction that matters: a newly added public
-# variable is ignored, while GITHUB_TOKEN, ACTIONS_RUNTIME_TOKEN and
-# ACTIONS_ID_TOKEN_REQUEST_TOKEN stay scanned. The prefixes are deliberately
-# narrow so this can never swallow an application credential.
-CI_METADATA_PREFIXES = ("GITHUB_", "RUNNER_", "ACTIONS_")
+# variable is ignored automatically, while GITHUB_TOKEN, ACTIONS_RUNTIME_TOKEN,
+# ACTIONS_ID_TOKEN_REQUEST_TOKEN and NPM_TOKEN stay scanned. The prefixes are
+# deliberately narrow so this can never swallow an application credential.
+CI_METADATA_PREFIXES = (
+    "GITHUB_",
+    "RUNNER_",
+    "ACTIONS_",
+    "npm_",
+    "NPM_",
+    "YARN_",
+    "PNPM_",
+    "VITEST_",
+)
 CREDENTIAL_WORDS = ("TOKEN", "SECRET", "KEY", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH")
 
 
 def is_ci_metadata(name: str) -> bool:
-    """True for a CI-injected variable whose value is public by definition."""
+    """True for a tool-injected variable whose value is public by definition."""
     if not name.startswith(CI_METADATA_PREFIXES):
         return False
-    return not any(word in name for word in CREDENTIAL_WORDS)
+    return not any(word in name.upper() for word in CREDENTIAL_WORDS)
 
 
 # Values shorter than this are too collision-prone to scan for.

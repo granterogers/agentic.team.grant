@@ -13,9 +13,9 @@
  * leaves behind, and the ledger is append-only so nothing can be cleaned up
  * anyway — which is itself the point.
  */
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import { SqlExecutionError } from '../../src/db/executor.ts'
+
 import type { SqlExecutor } from '../../src/db/executor.ts'
+import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -84,7 +84,12 @@ async function failsWith(
     const phraseMatched = message.toLowerCase().includes(expectedPhrase.toLowerCase())
 
     if (codeMatched && phraseMatched) {
-      checks.push({ layer, what, outcome: `refused with ${sqlstate}: ${firstLine.slice(0, 105)}`, passed: true })
+      checks.push({
+        layer,
+        what,
+        outcome: `refused with ${sqlstate}: ${firstLine.slice(0, 105)}`,
+        passed: true,
+      })
     } else if (!codeMatched) {
       checks.push({
         layer,
