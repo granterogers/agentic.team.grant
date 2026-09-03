@@ -11,14 +11,12 @@ here.
 
 ---
 
-## 🔴 Blocking now
+## 🔴 Blocking now — 2 left
 
-### ~~1. Re-paste the Telegram bot token~~ ✅ DONE
-
-`TELEGRAM_CHIEF_BOT_TOKEN` is **invalid** — `getMe` returns
-`404 Not Found`.
+### ~~1. Re-paste the Telegram bot token~~ ✅ DONE 2026-09-03
 
 Verified working: **@agenticteamgrantbot** (id 8967954396). Gate 3 unblocked.
+Webhook still needs a deployed URL — not your problem, it's automated.
 
 ### 2. Supabase database access · *2 minutes*
 
@@ -147,10 +145,10 @@ Not eligible: the Notebook master token (a *file*), and the Slack config pair
 
 ## The fastest path to unblocking Phase 1
 
-1. Re-paste the Telegram token *(2 min)*
-2. Add the Supabase connection string *(2 min)*
-3. Install the Slack app and hand over its three values *(1 min)*
-4. Answer **D2** *(no work)*
+1. ~~Telegram token~~ ✅ done
+2. **Supabase `SUPABASE_DB_URL`** — reset password, then `Connect` → Session pooler
+3. Install the Slack app, hand over its three values
+4. ~~Answer D2~~ ✅ Option B — just add the $10 OpenRouter credit
 
-Items 2 and 4 alone unblock Phase 1 — the schema, ledger, job engine, and the
-tested backup restore.
+**Item 2 alone unblocks Phase 1** — schema, ledger, job engine, and the tested
+backup restore. Everything else can follow.
