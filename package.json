@@ -42,7 +42,9 @@
     "deploy:slack": "tsx scripts/deploy/slack-events.ts",
     "slack:configure-events": "tsx scripts/slack/configure-events.ts",
     "poc:gate-4": "tsx scripts/poc/gate-4.ts",
-    "poc:gate-2": "tsx scripts/poc/gate-2.ts"
+    "poc:gate-2": "tsx scripts/poc/gate-2.ts",
+    "notebook:import": "tsx scripts/notebook/import-credential.ts",
+    "notebook:probe": "tsx scripts/notebook/probe.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

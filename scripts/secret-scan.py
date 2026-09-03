@@ -13,7 +13,7 @@ Exit 1 on any finding. Never prints a secret value — findings report the
 variable name and file only.
 """
 from __future__ import annotations
-import os, re, subprocess, sys
+import json, os, re, subprocess, sys
 
 # Environment variables whose values are not secrets and legitimately appear in
 # documentation: branch names, paths, hostnames, public identifiers.
@@ -91,6 +91,11 @@ PATTERNS = {
     "postgres url password":  r"postgres(?:ql)?://[^:\s/@]+:[^@\s]+@",
     "aws access key id":      r"\bAKIA[0-9A-Z]{16}\b",
     "private key block":      r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
+    # Google session cookies (Gate 2). Distinct from an API key in kind, not
+    # just in value: these authenticate as the signed-in human across Google,
+    # so a leak is a different category of incident from a leaked key.
+    "google session cookie":  r"\bsidts-[A-Za-z0-9_\-]{20,}",
+    "google psid cookie":     r"\bg\.a[0-9]{3}[A-Za-z0-9_\-]{40,}",
 }
 
 # Documentation and test fixtures must be able to state a credential's *shape*
@@ -137,6 +142,33 @@ def main() -> int:
         for k, v in os.environ.items()
         if k not in NON_SECRET_VARS and not is_ci_metadata(k) and len(v) >= MIN_VALUE_LEN
     }
+
+    # A credential that is itself a JSON document needs its *contents* scanned,
+    # not just the whole blob. NOTEBOOK_COOKIES is a cookie export: the whole
+    # document appearing verbatim in a file is unlikely, while one cookie value
+    # copied into a debug line or a test fixture is exactly the plausible leak —
+    # and the full-blob comparison would sail straight past it.
+    #
+    # Each cookie value is registered as its own secret, so the existing
+    # exact-value scan covers it with no further special-casing.
+    for container in ("NOTEBOOK_COOKIES", "NOTEBOOK_STORAGE_STATE"):
+        raw = os.environ.get(container, "")
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            continue
+        cookies = parsed.get("cookies", []) if isinstance(parsed, dict) else parsed
+        if not isinstance(cookies, list):
+            continue
+        for cookie in cookies:
+            if not isinstance(cookie, dict):
+                continue
+            value = cookie.get("value")
+            name = cookie.get("name", "?")
+            if isinstance(value, str) and len(value) >= MIN_VALUE_LEN:
+                env[f"{container}[{name}]"] = value
 
     for path in files:
         try:
