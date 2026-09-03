@@ -1,6 +1,6 @@
 # Gate 2 — the part only Grant can do
 
-> ## ⚠️ These instructions were wrong the first time
+> ## ⚠️ Third version. The first two mechanisms were both wrong
 >
 > The first version asked for a **browser cookie export**. It cannot work for a
 > remote worker, and it failed within the hour: `__Secure-1PSIDTS` rotates on a
@@ -14,10 +14,17 @@
 > work for Grant cost a round trip and produced a credential that could never
 > have survived rotation. **The spec was right and I second-guessed it.**
 >
-> What follows is the master-token path. Roughly the same effort, and it lasts
-> months instead of an hour.
+> The second version relayed a single-use `oauth_token` to me and let me do the
+> exchange. That mechanism worked and I destroyed the result twice — details
+> below. Each failure cost Grant another sign-in.
+>
+> This third version uses the flow the library's own `SKILL.md` documents, and
+> its advantage is not correctness but **cheapness of failure**: the artifact
+> Grant sends is durable, so my next mistake costs a re-paste rather than a
+> re-authentication.
 
-**Time: about 12 minutes.** Needs a computer with a browser, not the iPhone.
+**Time: about 4 minutes** if the account and notebook already exist, 12 from
+scratch. Needs a computer with a browser and Python, not the iPhone.
 Everything after step 4 is automated.
 
 ---
@@ -52,79 +59,110 @@ Signed in as the **new** account:
    fulltext-retrieval test means something
 4. Wait for it to finish processing
 
-## 3. Get the one-time sign-in token — 3 min
+## 3. Mint the durable token on your own machine — 3 min
 
-This is the Android sign-in flow. It hands over a **single-use** token, not your
-password, and the token is consumed by the exchange.
+This replaces the `oauth_token` step, which was a bad idea twice over. See
+below.
 
-1. Open a **private / incognito window** — this matters, so the flow does not
-   pick up an existing session
-2. Go to **https://accounts.google.com/EmbeddedSetup**
-3. Sign in as the **new** account and accept the prompts
-4. When the page settles, open **DevTools → Application → Cookies →
-   `https://accounts.google.com`**
-5. Copy the value of the cookie named **`oauth_token`** — it starts with
-   `oauth2_4/`
+On your **own computer**, with Python available:
 
-If you do not see `oauth_token`, the sign-in has not completed; finish the
-prompts and look again.
-
-## 4. Give me two things — 1 min
-
-```
-NOTEBOOK_ACCOUNT_EMAIL = the new account's address
-NOTEBOOK_OAUTH_TOKEN   = the oauth2_4/... value
+```bash
+pip install "notebooklm-py[headless,browser]"
+notebooklm login --master-token --account agentic.team.grant@gmail.com
 ```
 
-Then tell me. **The token is single-use and short-lived, so do this promptly
-after step 3** — if it expires, repeat step 3 for a fresh one, which takes a
-minute.
+A browser window opens; sign in as the **new** account. When it finishes it
+writes:
 
-I never see your password. I will not print either value.
+```
+~/.notebooklm/profiles/default/master_token.json
+```
+
+## 4. Send me that file's contents — 1 min
+
+```
+NOTEBOOK_MASTER_TOKEN_JSON = the entire contents of master_token.json
+```
+
+It is a small JSON object containing an `aas_et/...` token. Paste the whole
+thing, braces included.
+
+**Keep the file.** If anything goes wrong on my side you re-paste the same
+value — no new sign-in. That is the entire reason for this approach.
+
+---
+
+## Why this replaced the oauth_token relay
+
+The relay worked. I destroyed the result twice:
+
+1. The exchange succeeded, my next line called `read_master_token()` with a
+   *directory* instead of the file and threw, and a `finally:` block deleted
+   the minted credential on the way out.
+2. The exchange succeeded again, and a liveness check I had written badly
+   declared the fresh credential dead — it treated "redirects to
+   accounts.google.com" as proof of failure, which is wrong, because a bare
+   `GET notebooklm.google.com` redirects for a *valid* session too. The
+   bootstrap threw the credential away on that verdict. The library's own
+   `verify=True` had already passed, by listing notebooks.
+
+Both cost Grant a fresh interactive sign-in, because an EmbeddedSetup
+`oauth_token` is **single-use**.
+
+Grant then asked whether the upstream repo documented a way to do this. It
+does — `notebooklm-py` ships a `SKILL.md` that says exactly what to do:
+
+> For unattended or headless work, prefer durable profile-backed master-token
+> auth over a copied cookie snapshot. On a trusted workstation run
+> `notebooklm login --master-token --account <email>`, then deploy
+> `master_token.json`, not `storage_state.json`.
+>
+> In CI, `NOTEBOOKLM_MASTER_TOKEN_JSON` is a secret-transport convention.
+> Write its exact value to the selected profile's `master_token.json` with mode
+> `0600`, unset it, then run `notebooklm auth refresh` to mint
+> `storage_state.json`.
+
+The decisive property is not that it is documented. It is that
+**`master_token.json` is durable.** A mistake on my side now costs a re-paste
+of a file you already have, not another sign-in.
+
+That is the real lesson from two burned tokens, and it is not "be more careful":
+**when a step is expensive to repeat, find the version of it that is cheap to
+repeat.** Being careful is not a control; making failure cheap is.
+
+Two further corrections came out of it:
+
+- **The credential is vaulted the instant it exists**, before anything is
+  allowed to judge it. Both losses happened because something was minted and
+  then stored only after another check approved of it.
+- **Verification uses the library's own check**, `notebooklm auth check --test
+  --json`, with SKILL.md's stated criteria (`.status == "ok"` and
+  `.checks.token_fetch == true`). When a dependency ships a way to answer a
+  question about itself, a hand-rolled approximation alongside it is not a
+  second opinion — it is a worse first one, and mine cost a credential to
+  learn that.
 
 ---
 
 ## What happens next, automatically
 
 ```
-npm run notebook:bootstrap   # oauth_token -> master token -> cookie jar, vaulted
-npm run notebook:probe       # a real NotebookLM call; promotes the state only if it works
-npm run poc:gate-2           # the 16 blocked items
+npm run notebook:deploy   # writes master_token.json, mints the jar, verifies, vaults both
+npm run notebook:probe    # a real NotebookLM call; promotes the state only if it works
+npm run poc:gate-2        # the 16 blocked items
 ```
 
-The exchange, as the library documents it:
+The chain, as the library documents it:
 
 ```
-oauth_token (single-use, one EmbeddedSetup sign-in)
-  --exchange-->  aas_et/ master token   (durable, months)
-  --mint-->      SID / SAPISID / __Secure-1PSID / ... cookie jar
+one interactive sign-in on Grant's machine
+  --> aas_et/ master token  (durable, months; the file he keeps)
+  --> SID / SAPISID / __Secure-1PSID / ... cookie jar  (re-minted on demand)
 ```
 
 **The master token re-mints the cookie jar with no browser** whenever
 `1PSIDTS` rotates. That is the property a cookie export lacks, and the whole
 reason this path is worth the extra step.
-
-## Two things that are now checked, because they were not before
-
-**A credential is not stored unless it authenticates.** Both
-`notebook:bootstrap` and `notebook:import` make a real request to two Google
-surfaces first and refuse anything that redirects to a sign-in page. The first
-version of the import validated the *shape* of the export — required cookie
-names present, expiries parsed — and vaulted a dead jar with a confident tick.
-That is the fifth time in this build that a shape check has been mistaken for a
-working check, and the first time in code written while documenting that exact
-lesson elsewhere.
-
-**Expiry is reported for the cookies that do the authenticating**, not the
-minimum across the jar. The old check announced *"under a day — the session will
-need re-minting almost immediately"* on a jar whose auth cookies were good for a
-year, because a Google export always carries some short-lived analytics cookie
-that has already lapsed. An alarm that fires on every healthy input is an alarm
-nobody reads.
-
-Neither check would have saved the first attempt from failing — the cookies were
-always going to rotate — but both would have told us *why*, in seconds, instead
-of after a detour.
 
 ## What to expect
 
@@ -150,5 +188,9 @@ depends on Notebook — no job, event, blocker or config table references a
 Notebook table, and CI enforces it in both directions. If the sixteen tests go
 badly we drop the adapter, not the system.
 
-Worth saying plainly: the credential mechanism needing two attempts is itself
-evidence for §7's premise. The Google protocol has not even been reached yet.
+Worth saying plainly: the credential mechanism took three attempts and the
+Google protocol has not been reached yet. Two of those attempts failed on my
+mistakes rather than on the dependency, so they are not evidence about
+Notebook. The first one is: a supported product does not authenticate with a
+credential that dies in under an hour and whose stated expiry is off by a
+factor of nine thousand. That part is §7's premise arriving early.
