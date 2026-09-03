@@ -1,0 +1,76 @@
+name: Slack config-token rotation
+
+# The config token pair expires roughly every twelve hours (§15), so everything
+# Slack depends on a credential that turns over twice a day. Rotation cannot be
+# a manual step, and it cannot be a build-session step either — a build session
+# only exists while someone is working.
+#
+# Confirmed 2026-09-03: the token issued the previous day returned
+# `token_expired`, and the refresh token recovered it. That is the normal state
+# of affairs rather than a fault.
+#
+# Every four hours, not every twelve. A twelve-hour credential rotated on a
+# twelve-hour schedule has zero margin, and the first missed run is an outage.
+# Four hours means two consecutive runs can fail and the credential still
+# rotates in time — and the script itself no-ops unless within an hour of
+# expiry, so the extra runs cost a few seconds each.
+#
+# This also happens to be how the implementation plan's "survives a full
+# 12-hour expiry window and a restart" acceptance criterion gets satisfied:
+# by elapsed time, across separate runners with nothing in common but the
+# database. Evidence accrues rather than being asserted.
+
+on:
+  schedule:
+    - cron: '23 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rotate even if not near expiry'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two rotations at once. The refresh token is single-use, so a
+  # concurrent pair of rotations would have one of them consume a token the
+  # other is about to use.
+  group: slack-rotation
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - name: Report rotation health before
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: npm run --silent slack:rotate -- --status
+
+      - name: Rotate if due
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            npm run --silent slack:rotate -- --force
+          else
+            npm run --silent slack:rotate
+          fi
+
+      - name: Summarise
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          # Reads the health view rather than re-deriving state, so the summary
+          # and the health page cannot disagree.
+          npm run --silent slack:rotate -- --status >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
