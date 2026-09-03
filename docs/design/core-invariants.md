@@ -165,8 +165,21 @@ the original. Consequences:
 
 ## 4. Job engine
 
-States, per §22: `queued → running → output_created → quality_review →
-committed → notified → complete`, plus `failed` and `retrying`.
+> ⚠️ **Corrected 2026-09-03.** This section previously described **nine**
+> states. The master spec §6 lists **fourteen**, and the spec is canonical. The
+> nine-state paraphrase below was not merely smaller — it could not express
+> §18's "crash after commit but before notification" test, nor §6's
+> waiting-on-provider versus waiting-on-Grant distinction. See
+> [ADR-0008](../adr/0008-fourteen-job-states.md); the authoritative list and the
+> transition allow-list live in `src/jobs/states.ts`.
+
+States, per master spec §6 — **fourteen**:
+
+```
+queued · running · waiting_external · waiting_user · output_created
+quality_review · committing · committed · notifying · complete
+retrying · paused · cancelled · failed
+```
 
 The critical property is **resumability**: the container will restart, and it
 must be safe.

@@ -47,9 +47,11 @@ model credits.
 
 - ⬜ **Decisions D1 (iOS voice) and D2 (inference budget)** — Grant's
 - ⬜ Dedicated Google account (**P1**) — blocks everything Notebook-shaped
-- ⬜ Supabase + Cloudflare accounts (**P5**, **P6**) — unblock Phase 1
-- ⬜ CI: lint, typecheck, test, migration check on every PR
-- ⬜ Test harness skeleton and `docs/test-evidence/` structure
+- ✅ Supabase access proven (DDL over the Management API — ADR-0007)
+- ⬜ Offsite backup credentials (**P6**) — Backblaze B2 chosen; bucket created,
+  key pair outstanding. Blocks closing Phase 1, not starting it
+- ✅ CI: lint, typecheck, test, migration check, secret scan on every push
+- ✅ Test harness skeleton and `docs/test-evidence/` structure
 
 **Exit:** D1 and D2 answered; P1, P5, P6 exist; CI green on an empty test suite.
 
@@ -67,8 +69,10 @@ no agents, no UI beyond what proves it works.**
 - **`events` append-only, enforced by revoking `UPDATE`/`DELETE`** from the
   application role
 - RLS throughout
-- Job engine: the nine states, idempotency keys, `SKIP LOCKED` dequeue,
-  **capacity limits enforced at dequeue**, per-provider circuit breakers
+- Job engine: **the fourteen states of master spec §6** (this plan previously
+  said nine — see [ADR-0008](adr/0008-fourteen-job-states.md)), idempotency keys,
+  `SKIP LOCKED` dequeue, **capacity limits enforced at dequeue**, per-provider
+  circuit breakers
 - **Boot recovery sweep** reconciling jobs left in transient states
 - Compensating-action rollback, keyed on original `event_id`
 - Health page and connector-health model
@@ -77,7 +81,9 @@ no agents, no UI beyond what proves it works.**
 
 **Acceptance:**
 
-- A job survives a hard kill at every one of its nine states and resumes correctly
+- A job survives a hard kill at every one of its **fourteen** states and resumes
+  correctly — including, specifically, a kill between `committed` and
+  `notifying`, which is the case nine states could not express
 - Re-enqueueing identical logical work collides instead of duplicating
 - `UPDATE`/`DELETE` on `events` **fails at the database level**
 - Undo twice is a no-op — proven by concurrent duplicate invocation, not

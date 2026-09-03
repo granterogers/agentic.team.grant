@@ -40,27 +40,42 @@ export type JobState = (typeof JOB_STATES)[number]
  * States from which no transition is legal. A job here is finished forever;
  * further work needs a new job with a new idempotency key.
  */
-export const TERMINAL_STATES = ['complete', 'cancelled', 'failed'] as const satisfies readonly JobState[]
+export const TERMINAL_STATES = [
+  'complete',
+  'cancelled',
+  'failed',
+] as const satisfies readonly JobState[]
 export type TerminalState = (typeof TERMINAL_STATES)[number]
 
 /**
- * States that imply a worker is actively holding the job. Finding one of these
- * at boot means a worker died mid-flight, because nothing else can leave a job
- * here — so the recovery sweep (§6) must reconcile every one.
+ * States the boot recovery sweep (§6) must reconcile.
+ *
+ * A job is here only because a worker was mid-flight, so finding one at boot
+ * means that worker died. Each is either resumed or moved to `retrying`.
+ *
+ * `committed` is in this set deliberately, and it is the subtle one. Work in
+ * `committed` is *durable* — nothing needs redoing — but delivery has not
+ * happened, so the sweep must still pick it up and carry it to `notifying`.
+ * That is precisely §18's "crash after commit but before notification": if
+ * `committed` were treated as stable, the work would be correct and Grant would
+ * never hear about it, which is the quietest possible failure.
  */
-export const TRANSIENT_STATES = [
+export const IN_FLIGHT_STATES = [
   'running',
   'output_created',
   'quality_review',
   'committing',
+  'committed',
   'notifying',
 ] as const satisfies readonly JobState[]
-export type TransientState = (typeof TRANSIENT_STATES)[number]
+export type InFlightState = (typeof IN_FLIGHT_STATES)[number]
 
 /**
- * States in which the job is deliberately not progressing and no worker holds
- * it. These are stable — the recovery sweep must leave them alone, or a paused
- * job would silently resume on every restart.
+ * States where no worker holds the job and it is waiting for something outside
+ * itself — a dequeue, a provider callback, Grant, or a resume.
+ *
+ * These are stable. The recovery sweep must leave them alone, or every restart
+ * would silently un-pause a paused job and re-run work Grant told it to stop.
  */
 export const DORMANT_STATES = [
   'queued',
@@ -131,8 +146,9 @@ export function isTerminal(state: JobState): state is TerminalState {
   return (TERMINAL_STATES as readonly JobState[]).includes(state)
 }
 
-export function isTransient(state: JobState): state is TransientState {
-  return (TRANSIENT_STATES as readonly JobState[]).includes(state)
+/** True for a state the boot recovery sweep must reconcile. */
+export function needsRecovery(state: JobState): state is InFlightState {
+  return (IN_FLIGHT_STATES as readonly JobState[]).includes(state)
 }
 
 export function canTransition(from: JobState, to: JobState): boolean {
