@@ -19,7 +19,7 @@
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",
-    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router",
+    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router && npm run verify:sync",
     "backup:manifest": "tsx scripts/backup/manifest.ts",
     "backup:connection": "tsx scripts/backup/print-connection.ts",
     "verify:restore": "tsx scripts/backup/verify-restore.ts",
@@ -46,7 +46,10 @@
     "notebook:import": "tsx scripts/notebook/import-credential.ts",
     "notebook:probe": "tsx scripts/notebook/probe.ts",
     "notebook:bootstrap": "tsx scripts/notebook/bootstrap.ts",
-    "notebook:deploy": "tsx scripts/notebook/deploy-token.ts"
+    "notebook:deploy": "tsx scripts/notebook/deploy-token.ts",
+    "sync": "tsx scripts/projects/sync.ts",
+    "sync:status": "tsx scripts/projects/sync-status.ts",
+    "verify:sync": "tsx scripts/verify/sync.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

@@ -115,7 +115,7 @@ migration rollback.
 
 ---
 
-## Phase 2 — Connections · 🟡 **IN PROGRESS**
+## Phase 2 — Connections · ✅ **COMPLETE 2026-09-03**
 
 | Item | State |
 |---|---|
@@ -126,13 +126,12 @@ migration rollback.
 | **Does config-token rotation survive expiry and a restart?** | ✅ **Yes** — recovered from `token_expired`; rotated across two machines via Postgres alone |
 | Slack rotation, scheduled | ✅ every 4h, `.github/workflows/slack-rotation.yml` |
 | Telegram bot configured by API | ✅ description, commands, webhook secret vaulted |
-| Telegram webhook registered | ⬜ **blocked on a deployed URL** — not a credential gap |
-| Google OAuth scaffold | ⬜ |
+| Telegram webhook registered | ✅ live on Supabase Edge Functions ([ADR-0010](adr/0010-webhooks-on-supabase-edge-functions.md)) |
+| Google OAuth scaffold | ⬜ Phase 9; `GOOGLE_CLIENT_ID`/`SECRET` are now populated |
 | Layer 2 backstop actually *hit* | ⬜ the cap is set (`limit: 5`) but has never fired |
 
-**Blocked, and honestly so:** the webhook needs an HTTPS endpoint. Registering
-one that points nowhere would make Telegram queue updates against a dead
-endpoint, so it waits for deployment rather than being faked.
+**Resolved:** the webhook needed an HTTPS endpoint, which ADR-0010 supplied
+without a new provider or credential.
 
 
 Credentials, provider registry, and the two riskiest unknowns — deliberately
@@ -170,7 +169,7 @@ callback, webhook replay.
 
 ---
 
-## Phase 3 — POC gates
+## Phase 3 — POC gates · ✅ **ALL FIVE PASS 2026-09-03** — see [docs/poc](poc/README.md)
 
 **All FIVE** of §27's gates (addendum §4), **strictly sequential**. Complete one, record PASS evidence,
 then start the next. Do not parallelise: it hides dependency failures.
@@ -224,14 +223,16 @@ equivalent alternative.
 
 ---
 
-## Phase 4 — Project engine
+## Phase 4 — Project engine · 🟡 **IN PROGRESS**
 
-- Notebook discovery, 10-minute sync via Cloudflare Cron
-- Automatic project creation from discovered notebooks
-- Source fingerprinting and change detection
-- Initial project brief generation
-- Project switching
-- **Tier-derived budgets** from `AccountLimits.tier`, never hard-coded
+| Item | State |
+|---|---|
+| Notebook discovery, 10-minute sync | ✅ **GitHub Actions cron**, not Cloudflare — [ADR-0012](adr/0012-github-actions-for-the-sync-schedule.md) |
+| Automatic project creation from discovered notebooks | ✅ live: 3 notebooks → 3 projects, unattended |
+| Source fingerprinting and change detection | ✅ SHA-256 per source; an unchanged source is not rewritten |
+| **Tier-derived budgets** from `AccountLimits.tier` | ✅ tier 1 → 30 chats/day, 6 reserved; `probe_id` NOT NULL so no budget lacks provenance |
+| Initial project brief generation | ⬜ |
+| Project switching | ⬜ |
 
 **Acceptance:** a new notebook is discovered and becomes a project unattended;
 50 sources added rapidly are processed without duplication; a worker crash
@@ -239,6 +240,13 @@ mid-sync resumes cleanly; Notebook outage degrades rather than fails.
 
 **Failure injection:** expired auth, corrupted token, duplicate source, deleted
 source, 50 rapid sources, outage, crash mid-sync.
+
+✅ **All four acceptance criteria and all seven injections: 13/13**, via
+`npm run verify:sync`. Two bugs were found by the first live runs rather than
+by the tests — a view missing `probe_id`, and a notebook with an empty title
+that failed `projects_name_present`. Both surfaced as *recorded degraded
+cycles* rather than crashes, which is the degradation requirement working on
+something that was not an outage.
 
 ---
 

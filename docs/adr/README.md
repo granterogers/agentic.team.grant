@@ -20,3 +20,4 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0009](0009-free-allowlist-from-probes.md) | The free-model allow-list is built from probes, not pricing | Accepted |
 | [0010](0010-webhooks-on-supabase-edge-functions.md) | Webhooks run on Supabase Edge Functions, not Vercel | Accepted |
 | [0011](0011-supabase-cannot-serve-html.md) | Supabase cannot serve a web page; pages go to Vercel | Accepted |
+| [0012](0012-github-actions-for-the-sync-schedule.md) | GitHub Actions cron for the ten-minute sync | accepted |

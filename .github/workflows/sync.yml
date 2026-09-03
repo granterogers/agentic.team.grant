@@ -1,0 +1,66 @@
+name: Notebook sync
+
+# Every ten minutes, per Phase 4.
+#
+# GitHub Actions rather than Cloudflare Workers Cron. ADR-0012 records why in
+# full; the short version is that Actions cron already runs two scheduled jobs
+# in this repository and needs no new provider or credential.
+#
+# Actions cron is best-effort and can be delayed under load. That is acceptable
+# here and would not be for a tighter interval: the sync is idempotent, a
+# skipped tick is picked up by the next one, and a run that overlaps its
+# successor collides at `sync_runs_one_at_a_time` rather than racing.
+on:
+  schedule:
+    # :07 and :37 rather than :00 and :30. Every cron on the hour contends with
+    # every other cron on the hour, and GitHub delays the losers.
+    - cron: '7,17,27,37,47,57 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  # A queued run is pointless: the next tick is ten minutes away and the state
+  # it would sync is the state that tick will see. Cancelling the *pending* one
+  # rather than the running one keeps a slow cycle from being killed mid-write.
+  group: notebook-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Longer than the lease in `notebook.sync_lease_minutes` (15) so the runner
+    # is never killed while still holding a lease the database thinks is live.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          npm ci
+          # Pinned: the adapter is the highest-risk dependency in the system
+          # (§7), and an unattended job silently upgrading it is how an
+          # undocumented RPC change arrives at 3am instead of in a diff.
+          pip install --quiet "notebooklm-py==0.8.2"
+
+      - name: Sync
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: npm run sync
+
+      - name: Report the run
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: npx tsx scripts/projects/sync-status.ts
