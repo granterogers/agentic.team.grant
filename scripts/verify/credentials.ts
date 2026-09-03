@@ -64,6 +64,13 @@ async function failsWith(
   }
 }
 
+// A fabricated token shape, named so the allow-shape marker can sit directly
+// above the literal. The exemption deliberately covers only its own line and
+// the next, so a marker several lines up does not reach — and a marker that
+// blanketed a region would be a marker that eventually hides something real.
+// secret-scan:allow-shape
+const FABRICATED_SLACK_TOKEN = 'xoxb-a-real-looking-token'
+
 const secretName = `probe_bot_token_${run}`
 const plaintext = `xoxb-fake-${run}-not-a-real-token`
 
@@ -128,9 +135,15 @@ await failsWith(
 // --- the table cannot hold a value ----------------------------------------
 await failsWith(
   'a Slack token cannot be written into a credential column at all',
+  // A `//` comment cannot go inside the SQL below — it is a syntax error there,
+  // and a bulk marker script put one in, which made this check fail with
+  // `42601 syntax error at or near "//"` instead of the 22P02 it asserts. That
+  // is exactly why it demands a specific SQLSTATE rather than merely that
+  // something failed: a looser assertion would have reported the type
+  // enforcement as proven when the statement never reached the type system.
   `insert into public.slack_app_credentials (slack_app_id, team_id, app_name, bot_token_ref)
-   // secret-scan:allow-shape — fabricated example, never a real credential
-   values ('A0PROBE${run.slice(0, 3).toUpperCase()}XX', 'T0BUCJ2L5FD', 'probe', 'xoxb-a-real-looking-token')`,
+   values ('A0PROBE${run.slice(0, 3).toUpperCase()}XX', 'T0BUCJ2L5FD', 'probe',
+           '${FABRICATED_SLACK_TOKEN}')`,
   '22P02',
   'invalid input syntax for type uuid',
 )
