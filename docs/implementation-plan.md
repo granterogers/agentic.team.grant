@@ -60,7 +60,24 @@ model credits.
 
 ---
 
-## Phase 1 — Foundation
+## Phase 1 — Foundation · ✅ **COMPLETE 2026-09-03**
+
+All acceptance criteria demonstrated against the live database, not asserted.
+Evidence in `docs/test-evidence/`:
+
+| Criterion | Result |
+|---|---|
+| `UPDATE`/`DELETE` on `events` fails at the database level | ✅ 15/15 — four layers |
+| A job survives a hard kill at every one of its fourteen states | ✅ 34/34 |
+| Re-enqueueing identical logical work collides | ✅ `23505` on the idempotency index |
+| Undo twice is a no-op, by construction | ✅ partial unique index, `23505` |
+| Capacity limits hold across a restart | ✅ 3 of 5 dequeues served across 5 connections |
+| Slack credentials encrypted at rest, one row per app | ✅ 18/18 — storing a value is a type error |
+| A backup restored into a fresh database and verified | ✅ 16/16, nightly |
+
+`npm run verify` gates every commit; `npm run verify:db` re-runs all 83 live
+database checks.
+
 
 The core from `core-invariants.md`, built as one coherent unit. **No channels,
 no agents, no UI beyond what proves it works.**

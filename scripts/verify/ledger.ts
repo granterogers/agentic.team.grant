@@ -184,14 +184,14 @@ await failsWith(
   'UPDATE as the table owner (postgres)',
   `update public.events set actor = 'tampered' where event_id = '${eventId}'`,
   '42501',
-  'append-only',
+  'is append-only',
 )
 await failsWith(
   'layer 2: row trigger',
   'DELETE as the table owner (postgres)',
   `delete from public.events where event_id = '${eventId}'`,
   '42501',
-  'append-only',
+  'is append-only',
 )
 
 // ---------------------------------------------------------------------------
@@ -202,7 +202,7 @@ await failsWith(
   'TRUNCATE as the table owner',
   'truncate table public.events',
   '42501',
-  'append-only',
+  'is append-only',
 )
 
 // ---------------------------------------------------------------------------

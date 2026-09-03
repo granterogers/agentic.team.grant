@@ -119,22 +119,27 @@ async function mustFail(what: string, sql: string, expect: string): Promise<void
 await mustFail(
   'the restored ledger still refuses UPDATE',
   `update public.events set actor = 'tampered' where true`,
-  'append-only',
+  'public.events is append-only',
 )
 await mustFail(
   'the restored ledger still refuses DELETE',
   'delete from public.events where true',
-  'append-only',
+  'public.events is append-only',
 )
 await mustFail(
   'the restored ledger still refuses TRUNCATE',
   'truncate table public.events',
-  'append-only',
+  'public.events is append-only',
 )
 await mustFail(
   'the restored transition history is still append-only',
   `update public.job_state_transitions set to_state = 'failed' where true`,
-  'append-only',
+  // Asserts the TABLE NAME, not just "append-only". The looser assertion
+  // passed while the shared trigger function reported "public.events" for a
+  // blocked write to this table — the guarantee held, the message lied, and
+  // only reading the rehearsal's own output caught it. Migration 0008 fixed
+  // the message; this stops it regressing.
+  'public.job_state_transitions is append-only',
 )
 await mustFail(
   'the restored job engine still refuses an illegal transition',
