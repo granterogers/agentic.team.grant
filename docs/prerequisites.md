@@ -54,7 +54,7 @@ zero balance cannot be the guarantee.
 ### P1. Dedicated Google account — **required, Phase 0** ⚠️
 
 Create a **new Google account solely for AI Team HQ**. Do not use Grant's
-personal or Innergy Gmail. Spec §4 requires this, and research added a second
+personal or INNERGY Gmail. Spec §4 requires this, and research added a second
 reason: the automation's session gets rotated out from under it if the same
 account is used interactively in a browser.
 
