@@ -38,6 +38,40 @@ jobs:
     outputs:
       artifact: ${{ steps.dump.outputs.name }}
     steps:
+      # Check every required secret up front and name ALL the missing ones.
+      # Failing on the first absent secret costs a round trip per secret, and
+      # the first run of this workflow cost exactly one that way.
+      - name: Check required secrets are present
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_REGION: ${{ secrets.BACKUP_S3_REGION }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+        run: |
+          missing=()
+          for name in SUPABASE_DB_URL SUPABASE_ACCESS_TOKEN \
+                      BACKUP_S3_ENDPOINT BACKUP_S3_REGION BACKUP_S3_BUCKET \
+                      BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY; do
+            [ -z "${!name}" ] && missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            {
+              echo "### Missing Actions secrets"
+              echo
+              for m in "${missing[@]}"; do echo "- \`$m\`"; done
+              echo
+              echo "Add them at Settings → Secrets and variables → Actions."
+              echo "\`SUPABASE_DB_URL\` supplies the database password that pg_dump needs;"
+              echo "the host and user are read from the Management API at runtime."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::missing Actions secrets: ${missing[*]}"
+            exit 1
+          fi
+          echo "all 7 required secrets present"
+
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
@@ -233,7 +267,11 @@ jobs:
 
       - name: Verify the restore
         env:
-          RESTORE_URL: postgres://postgres:rehearsal@localhost:5432/rehearsal
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGDATABASE: rehearsal
+          PGPASSWORD: rehearsal
           MANIFEST: manifest.json
         run: npm run --silent verify:restore | tee restore-report.md
 

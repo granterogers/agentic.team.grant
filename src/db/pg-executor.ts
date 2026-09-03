@@ -14,8 +14,15 @@ export class PgExecutor implements SqlExecutor {
   readonly kind = 'postgres-wire'
   private readonly client: pg.Client
 
-  constructor(connectionString: string) {
-    this.client = new pg.Client({ connectionString })
+  /**
+   * @param connectionString Omit to use the standard PG* environment variables
+   *   (PGHOST, PGPORT, PGUSER, PGDATABASE, PGPASSWORD), which node-postgres
+   *   reads natively. Preferred where possible: it keeps password-bearing
+   *   connection strings out of code, config and logs entirely.
+   */
+  constructor(connectionString?: string) {
+    this.client =
+      connectionString === undefined ? new pg.Client() : new pg.Client({ connectionString })
   }
 
   async connect(): Promise<void> {

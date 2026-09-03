@@ -6,6 +6,7 @@ const pooler = {
   db_host: 'aws-0-eu-central-1.pooler.supabase.com',
   db_name: 'postgres',
 }
+// secret-scan:allow-shape — fabricated example, not a credential
 const direct = 'postgresql://postgres:pw123456@db.x.supabase.co:5432/postgres'
 
 describe('buildPoolerUri', () => {
@@ -31,6 +32,7 @@ describe('buildPoolerUri', () => {
 
   it('percent-encodes the password exactly once', () => {
     const uri = buildPoolerUri(
+      // secret-scan:allow-shape — fabricated example, not a credential
       'postgresql://postgres:p%40ss@db.x.supabase.co:5432/postgres',
       pooler,
     )
@@ -43,6 +45,7 @@ describe('buildPoolerUri', () => {
     // unescaped % reaches libpq as a malformed escape, and the symptom is
     // authentication refused with a correct password.
     const uri = buildPoolerUri(
+      // secret-scan:allow-shape — fabricated example, not a credential
       `postgresql://postgres:${encodeURIComponent('50%off')}@db.x.supabase.co:5432/postgres`,
       pooler,
     )
@@ -54,6 +57,7 @@ describe('buildPoolerUri', () => {
     // Supabase-generated passwords can contain @ : / ? # and %. Getting this
     // wrong produces a connection failure that looks like a wrong password.
     const raw = 'p@ss:w/rd?#%&=+ x'
+    // secret-scan:allow-shape — fabricated example, not a credential
     const url = `postgresql://postgres:${encodeURIComponent(raw)}@db.x.supabase.co:5432/postgres`
     // libpq percent-decodes the URI, so the stored form is encoded once and
     // decoding it must return exactly what went in.

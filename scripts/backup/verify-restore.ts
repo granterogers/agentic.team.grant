@@ -1,7 +1,8 @@
 /**
  * Verify a restored database.
  *
- *   RESTORE_URL=postgres://... MANIFEST=manifest.json npm run verify:restore
+ *   PGHOST=localhost PGUSER=postgres PGDATABASE=rehearsal PGPASSWORD=... \
+ *     MANIFEST=manifest.json npm run verify:restore
  *
  * §16 requires testing restoration of "the project registry, event ledger, job
  * state, staff settings, encrypted-secret reference behaviour, and
@@ -17,10 +18,16 @@ import { readFileSync } from 'node:fs'
 import { PgExecutor } from '../../src/db/pg-executor.ts'
 import { JOB_STATES } from '../../src/jobs/states.ts'
 
-const url = process.env.RESTORE_URL
+// Connection comes from the standard PG* variables (PGHOST, PGUSER, PGDATABASE,
+// PGPASSWORD) rather than a single URL. node-postgres reads them natively, and
+// it means no password-bearing connection string exists anywhere in this
+// repository — not even a throwaway one for an ephemeral container. The secret
+// scanner flagged the URL form, and it was right to: a scanner that has to be
+// taught to ignore password-shaped strings gradually learns to ignore all of
+// them.
 const manifestPath = process.env.MANIFEST
-if (url === undefined || url === '' || manifestPath === undefined) {
-  console.error('RESTORE_URL and MANIFEST are required')
+if (manifestPath === undefined || process.env.PGHOST === undefined) {
+  console.error('PGHOST (with the usual PG* companions) and MANIFEST are required')
   process.exit(2)
 }
 
@@ -30,7 +37,7 @@ interface Manifest {
 }
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
 
-const db = new PgExecutor(url)
+const db = new PgExecutor()
 await db.connect()
 
 interface Check {

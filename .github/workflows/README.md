@@ -28,7 +28,7 @@ set them: the session proxy refuses the Actions API outright.
 | Secret | Used by |
 |---|---|
 | `SUPABASE_ACCESS_TOKEN` | migrations, and the restore rehearsal's scratch database |
-| `SUPABASE_DB_URL` | `pg_dump` — needs the **Session pooler** URI, not the IPv6-only direct one |
+| `SUPABASE_DB_URL` | `pg_dump` — **the password only** is taken from it; the host and user are read from the Management API at runtime and the port forced to 5432, so the direct/pooler distinction does not matter here |
 | `BACKUP_S3_ENDPOINT` · `BACKUP_S3_REGION` · `BACKUP_S3_BUCKET` | dump upload and restore download |
 | `BACKUP_S3_ACCESS_KEY_ID` · `BACKUP_S3_SECRET_ACCESS_KEY` | ditto |
 

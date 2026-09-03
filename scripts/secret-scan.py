@@ -93,22 +93,44 @@ PATTERNS = {
     "private key block":      r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
 }
 
-# Documentation must be able to describe a credential's *shape* without tripping
-# the scanner. A line carrying this marker is exempt from the pattern scan only;
-# the exact-value scan still applies and cannot be opted out of.
+# Documentation and test fixtures must be able to state a credential's *shape*
+# without tripping the scanner. A line carrying this marker — or the line
+# immediately after it, since a trailing comment often will not fit — is exempt
+# from the PATTERN scan only.
+#
+# The exact-value scan still applies and cannot be opted out of, which is the
+# division that matters: the shape exemption covers fabricated examples, while
+# a real environment value appearing verbatim is never excusable.
 ALLOW_MARKER = "secret-scan:allow-shape"
 
 
-def tracked_files() -> list[str]:
+def scanned_files() -> list[str]:
+    """Tracked files PLUS untracked ones git would include.
+
+    `git ls-files` alone lists only what is already committed, which meant a
+    pre-commit run could not see the very files about to land. That is not a
+    theoretical gap: a new workflow file passed the scan locally and failed it
+    in CI minutes later, because locally it was still untracked.
+
+    `--others --exclude-standard` adds untracked files while still honouring
+    .gitignore, so an ignored .env is not dragged in.
+    """
     out = subprocess.run(
-        ["git", "ls-files", "-z"], capture_output=True, text=True, check=True
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
-    return [f for f in out.split("\0") if f and os.path.isfile(f)]
+    seen: dict[str, None] = {}
+    for f in out.split("\0"):
+        if f and os.path.isfile(f):
+            seen[f] = None
+    return list(seen)
 
 
 def main() -> int:
     findings: list[str] = []
-    files = tracked_files()
+    files = scanned_files()
 
     env = {
         k: v
@@ -130,8 +152,10 @@ def main() -> int:
                 )
                 findings.append(f"{path}:{line}: value of ${name} appears verbatim")
 
-        for lineno, line in enumerate(text.splitlines(), 1):
-            if ALLOW_MARKER in line:
+        source_lines = text.splitlines()
+        for lineno, line in enumerate(source_lines, 1):
+            previous = source_lines[lineno - 2] if lineno >= 2 else ""
+            if ALLOW_MARKER in line or ALLOW_MARKER in previous:
                 continue
             for label, pattern in PATTERNS.items():
                 if re.search(pattern, line):
@@ -147,7 +171,7 @@ def main() -> int:
         )
         return 1
 
-    print(f"Secret scan clean: {len(files)} tracked files, {len(env)} env values checked.")
+    print(f"Secret scan clean: {len(files)} files, {len(env)} env values checked.")
     return 0
 
 

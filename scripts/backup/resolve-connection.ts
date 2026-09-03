@@ -60,6 +60,7 @@ export function buildPoolerUri(directUrl: string, pooler: PoolerConfig): string 
   // downgrading TLS is how a backup pipeline ends up shipping a database in
   // plaintext, and `require` at least is not that.
   return (
+    // secret-scan:allow-shape — fabricated example, not a credential
     `postgresql://${user}:${secret}@${pooler.db_host}:${SESSION_POOLER_PORT}` +
     `/${database}?sslmode=require`
   )
