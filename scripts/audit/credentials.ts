@@ -188,11 +188,40 @@ await check('SLACK_BOT_TOKEN', true, async (token) => {
   return `team ${String(d.team)} as ${String(d.user)}`
 })
 
-unverifiable(
-  'SLACK_SIGNING_SECRET',
-  true,
-  'cannot be verified without an inbound signed request; shape check only',
-)
+// This was `unverifiable` for two days, with the note "cannot be verified
+// without an inbound signed request; shape check only". That was true when
+// written and stopped being true the moment the events endpoint existed: a
+// signed request can now be *sent*, and the endpoint answering the handshake
+// proves the secret both sides hold is the same one.
+//
+// Worth the note rather than a silent edit. This file exists because "present"
+// was read as "working" three times; the mirror-image error is leaving a
+// credential recorded as unverified after it has started working, and it is
+// just as misleading — it makes a real gate look incomplete.
+await check('SLACK_SIGNING_SECRET', true, async (secret) => {
+  const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+  const endpoint = `https://${ref}.supabase.co/functions/v1/slack-events`
+  const challenge = `audit-${String(Date.now())}`
+  const body = JSON.stringify({ type: 'url_verification', challenge })
+  const ts = String(Math.floor(Date.now() / 1000))
+  const { computeSignature } = await import('../../src/slack/signature.ts')
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Slack-Request-Timestamp': ts,
+      'X-Slack-Signature': await computeSignature(secret, ts, body),
+    },
+    body,
+  })
+  const text = await response.text()
+  // The challenge, not the status code. A 200 proves the endpoint is up; only
+  // the echo proves it verified the signature with this secret.
+  if (!text.includes(challenge)) {
+    throw new Error(`the endpoint did not echo the challenge (http ${String(response.status)})`)
+  }
+  return 'the slack-events endpoint verified a request signed with it'
+})
 
 await check('SLACK_APP_CONFIG_REFRESH_TOKEN', false, async () => {
   // The live pair lives in the vault now and rotates every ~12h. The bootstrap
@@ -216,7 +245,19 @@ await check('SLACK_APP_CONFIG_REFRESH_TOKEN', false, async () => {
 // --- not yet needed --------------------------------------------------------
 unverifiable('GOOGLE_CLIENT_ID', false, 'Phase 9 (OAuth consent)')
 unverifiable('GOOGLE_CLIENT_SECRET', false, 'Phase 9 (OAuth consent)')
-unverifiable('VERCEL_TOKEN', false, 'Phase 4 (Notebook sync) and the Team HQ UI')
+await check('VERCEL_TOKEN', false, async (token) => {
+  // Also promoted from `unverifiable`: it deployed the Gate 1 voice page
+  // (ADR-0011), so a live call has succeeded with it. Verified by listing
+  // projects rather than by deploying, because an audit must not have side
+  // effects.
+  const r = await fetch('https://api.vercel.com/v9/projects?limit=5', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const d = (await r.json()) as { projects?: { name?: string }[]; error?: { message?: string } }
+  if (!r.ok) throw new Error(d.error?.message ?? `http ${String(r.status)}`)
+  const names = (d.projects ?? []).map((x) => String(x.name))
+  return `${String(names.length)} project(s): ${names.join(', ')}`
+})
 
 for (const name of [
   'BACKUP_S3_ENDPOINT',
