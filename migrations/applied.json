@@ -15,5 +15,7 @@
   "0014_slack_channel_map.sql": "861f6b5643b1c9414c92e30c1aa41ac03d890ca9bfb09ca25426df84e056f7ed",
   "0015_notebook_boundary.sql": "ee1bb70624ce92c15555802f3cf9e4141869e2b7c1c083501df60e4021943cef",
   "0016_project_sync.sql": "a3d5126452a71a3eb748b3bbdc32e8e24956d8241ad59508d36353540b70e72f",
-  "0017_capability_view_probe_id.sql": "293d7e4acac520beeced948377b94b7147a948f0096cb2af243c2ef260ef1343"
+  "0017_capability_view_probe_id.sql": "293d7e4acac520beeced948377b94b7147a948f0096cb2af243c2ef260ef1343",
+  "0018_agent_engine.sql": "ee4977a2cc94d60f7eda8aa93bc18f851a2cbd9bdded56134b5821e3426fc2f7",
+  "0019_the_eight_roles.sql": "f97782f32da49bd4344fcb8a5fe8e00dff8114a5a4db3c88d2b496aa4b299042"
 }

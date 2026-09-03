@@ -253,6 +253,7 @@ something that was not an outage.
 ## Phase 5 — Agent engine
 
 - Eight permanent roles (§7) on the product's own provider abstraction
+- **Staff avatars: a distinct visual identity per role** (Grant, 2026-09-03)
 - Chief of Staff, router, delegation
 - **Intent classification, biased downward** on ambiguity
 - Quality pipeline with the structured metadata of §16
@@ -290,6 +291,20 @@ alone today" persists as structured preference; Needs Me stays small.
 Slack office (channels, threads, tiered staff identities, **≥3 app slots
 reserved**), remaining seven Telegram bots, feedback capture, voice notes via
 Chirp 3: HD with text fallback, Undo surfaces, notification learning.
+
+**Staff avatars land here**, where `chat:write.customize` and the per-bot
+Telegram profile photos actually consume them. §9 lists "name, title, avatar"
+as the presentation, and eight identically-iconed staff are eight staff nobody
+can tell apart at a glance.
+
+One judgement to make explicitly rather than by default: **photorealistic
+faces are the wrong call.** Grant knows the team is AI, but a synthetic human
+photograph is a claim about a person who does not exist, it would look like a
+stock-photo deepfake in a Slack sidebar, and §21's honesty posture sits badly
+with it. Distinct, characterful, obviously-illustrated avatars give the same
+at-a-glance recognition without asserting a person. Generated as SVG so they
+are versioned in the repository, deterministic per role, and need no image
+service or credential.
 
 **Acceptance:** results reach the right thread with correct identity
 presentation; TTS degrades to text rather than incurring cost; Undo is
