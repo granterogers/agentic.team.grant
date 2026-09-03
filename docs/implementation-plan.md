@@ -231,7 +231,7 @@ equivalent alternative.
 | Automatic project creation from discovered notebooks | ✅ live: 3 notebooks → 3 projects, unattended |
 | Source fingerprinting and change detection | ✅ SHA-256 per source; an unchanged source is not rewritten |
 | **Tier-derived budgets** from `AccountLimits.tier` | ✅ tier 1 → 30 chats/day, 6 reserved; `probe_id` NOT NULL so no budget lacks provenance |
-| Initial project brief generation | ⬜ |
+| Initial project brief generation | ✅ from the Postgres cache on a free model — **zero Notebook quota, $0** — regenerated only when source fingerprints change |
 | Project switching | ⬜ |
 
 **Acceptance:** a new notebook is discovered and becomes a project unattended;
