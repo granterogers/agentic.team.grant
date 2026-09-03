@@ -17,3 +17,4 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0006](0006-foreground-only-voice.md) | Foreground-only voice; no native iOS app | Accepted |
 | [0007](0007-ddl-over-management-api.md) | Migrations over the Supabase Management API; backups in GitHub Actions | Accepted |
 | [0008](0008-fourteen-job-states.md) | The job state machine has fourteen states, not nine | Accepted |
+| [0009](0009-free-allowlist-from-probes.md) | The free-model allow-list is built from probes, not pricing | Accepted |
