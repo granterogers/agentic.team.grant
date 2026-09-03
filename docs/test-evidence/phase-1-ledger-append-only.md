@@ -19,6 +19,38 @@ a message naming the thing under test.
 | `TRUNCATE` bypasses row triggers entirely and is not `DELETE` | layer 3, a statement-level `BEFORE TRUNCATE` trigger |
 | A future migration could re-`GRANT` by accident | layer 4 (no UPDATE/DELETE policy exists) and CI's `ledger/no-regrant-write` rule |
 
+### ⚠️ Correction, 2026-09-03: what layer 4 does and does not buy
+
+An earlier version of this document said `FORCE ROW LEVEL SECURITY` "subjects
+the owner to the policies as well". **That is not true on this database.**
+Measured:
+
+```
+rolname          rolsuper  rolbypassrls
+postgres         false     TRUE
+service_role     false     TRUE
+supabase_admin   TRUE      TRUE
+authenticator    false     false
+```
+
+`BYPASSRLS` overrides `FORCE`, so `postgres` reads every row regardless of
+policy — confirmed directly with `SET LOCAL row_security = on`, which still
+returned all 8 rows. Supabase grants `BYPASSRLS` to `postgres` and to
+`service_role`, which is the concrete reason §15 calls the service-role key the
+highest-blast-radius credential in the system.
+
+**The append-only guarantee is unaffected**, and this is why the layering
+matters rather than being belt-and-braces theatre: **layer 2, the row trigger,
+is what actually restrains the owner**, and the table above shows it doing so —
+`postgres` was refused with `42501: events is append-only`. Triggers are not
+subject to `BYPASSRLS`.
+
+So layer 4's real contribution is narrower than claimed: RLS constrains
+`ai_team_app` and any future non-bypassing role, and the absence of an
+UPDATE/DELETE policy means a mistaken re-`GRANT` still would not help them. It
+is not what stops the owner. Stated precisely because a security control
+credited with a property it does not have is worse than one honestly scoped.
+
 ## Result
 
 | layer | attempt | outcome | |
