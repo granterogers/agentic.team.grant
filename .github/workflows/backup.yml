@@ -114,12 +114,21 @@ jobs:
           echo "::add-mask::$URI"
           echo "uri=$URI" >> "$GITHUB_OUTPUT"
 
-      - name: Capture a manifest of the source
+      - name: Capture a manifest and the role list of the source
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           npm run --silent backup:manifest > manifest.json
           cat manifest.json
+
+          # The dump's GRANT statements name roles, and psql aborts on the first
+          # one missing from the target. Deriving the list from the source beats
+          # enumerating it: there are 15, the set changes as Supabase evolves,
+          # and each omission costs a whole run to find. Learned the slow way —
+          # this restore failed on `public` existing, then on supabase_admin
+          # not existing, one role per run.
+          npm run --silent backup:roles > roles.sql
+          wc -l roles.sql
 
       - name: pg_dump
         id: dump
@@ -164,6 +173,7 @@ jobs:
             ${{ steps.dump.outputs.name }}.sql.gz
             ${{ steps.dump.outputs.name }}.sha256
             manifest.json
+            roles.sql
           retention-days: 90
           if-no-files-found: error
 
@@ -177,7 +187,7 @@ jobs:
           BUCKET: ${{ env.BACKUP_S3_BUCKET }}
           NAME: ${{ steps.dump.outputs.name }}
         run: |
-          for f in "$NAME.sql.gz" "$NAME.sha256" manifest.json; do
+          for f in "$NAME.sql.gz" "$NAME.sha256" manifest.json roles.sql; do
             dest="$BUCKET/$(date -u +%Y/%m)/$NAME/$(basename "$f")"
             aws s3 cp "$f" "s3://$dest" --endpoint-url "$ENDPOINT" --only-show-errors
             echo "uploaded s3://$dest"
@@ -252,28 +262,19 @@ jobs:
         env:
           PGPASSWORD: rehearsal
         run: |
-          # A fresh database has none of these. A real restore into a
-          # replacement project needs exactly this step, which is why it is
-          # here rather than being engineered away: the rehearsal should
-          # rehearse the real procedure, including its prerequisites.
-          psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 <<'SQL'
-            -- The dump contains CREATE SCHEMA public, because PostgreSQL 15+
-            -- dumps it explicitly. A stock container already has one, so the
-            -- restore failed with `schema "public" already exists`.
-            --
-            -- Dropping it is the right fix rather than making the restore
-            -- tolerate collisions: a disaster recovery restores into an EMPTY
-            -- database, and a rehearsal that quietly merges into pre-existing
-            -- objects is not rehearsing that. It also means the row counts the
-            -- verification compares can only have come from the dump.
-            drop schema if exists public cascade;
+          # A real disaster recovery restores into an EMPTY database. A
+          # rehearsal that merges into pre-existing objects is not rehearsing
+          # that, and its row counts would no longer prove they came from the
+          # dump. PostgreSQL 15+ dumps CREATE SCHEMA public explicitly, so the
+          # stock container's own public schema has to go first.
+          psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 \
+            -c 'drop schema if exists public cascade'
 
-            create role ai_team_app nologin;
-            create role authenticated nologin;
-            create role anon nologin;
-            create role service_role nologin;
-            grant ai_team_app to postgres;
-          SQL
+          # Roles, generated from the source rather than guessed. This step is
+          # kept rather than engineered away: a real restore into a replacement
+          # project needs exactly it, so the rehearsal should include it.
+          psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 -q -f roles.sql
+          echo "roles created"
 
       - name: Restore
         env:

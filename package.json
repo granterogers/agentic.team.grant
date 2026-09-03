@@ -26,7 +26,8 @@
     "verify:credentials": "tsx scripts/verify/credentials.ts",
     "bootstrap:backup-credentials": "tsx scripts/bootstrap/store-backup-credentials.ts",
     "backup:credentials": "tsx scripts/backup/load-credentials.ts",
-    "bootstrap:db-password": "tsx scripts/bootstrap/reset-db-password.ts"
+    "bootstrap:db-password": "tsx scripts/bootstrap/reset-db-password.ts",
+    "backup:roles": "tsx scripts/backup/emit-roles.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
