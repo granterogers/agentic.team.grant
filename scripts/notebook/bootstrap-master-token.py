@@ -24,7 +24,24 @@ The library documents the flow it implements:
       --mint-->     SID/SAPISID/__Secure-1PSID/... cookie jar
 
 and the master token re-mints the jar whenever it rotates, with no browser.
-That is the property cookies lack and the reason this is worth the extra step.
+
+## The rule this file is built around: NEVER DESTROY A SPENT CREDENTIAL
+
+The first version of this script burned Grant's token. The exchange succeeded
+and wrote `master_token.json` and `storage_state.json`; the next line called
+`read_master_token()` with a *directory* instead of the file and raised; and a
+`finally:` block then deleted both files on the way out. The oauth_token is
+single-use, so the credential it had just bought was destroyed and Grant had to
+go and get another one.
+
+The lesson is not "be careful with paths". It is that **cleanup of a
+single-use credential must never run on an error path**, because the error path
+is exactly when you still need what you just paid for. So:
+
+  - Files are read into memory and emitted BEFORE anything is unlinked.
+  - Cleanup happens only after a successful emit, never in `finally`.
+  - If anything goes wrong after the exchange, the paths are reported so the
+    credential can be recovered by hand rather than silently lost.
 
 ## What Grant hands over, and what he does not
 
@@ -53,6 +70,21 @@ def emit(payload: dict[str, object]) -> None:
     sys.stdout.flush()
 
 
+def scrub(paths: list[Path], directory: Path) -> None:
+    """Remove the minted files. Called ONLY after a successful emit."""
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    try:
+        for leftover in directory.iterdir():
+            leftover.unlink(missing_ok=True)
+        directory.rmdir()
+    except OSError:
+        pass
+
+
 async def main() -> None:
     email = os.environ.get("NOTEBOOK_ACCOUNT_EMAIL", "").strip()
     oauth_token = os.environ.get("NOTEBOOK_OAUTH_TOKEN", "").strip()
@@ -65,7 +97,8 @@ async def main() -> None:
         return
     # The EmbeddedSetup token is an `oauth2_4/...` value. Checked because the
     # likeliest mistake is pasting a different cookie from the same page, and
-    # the resulting failure from Google is opaque.
+    # the resulting failure from Google is opaque. Checked BEFORE the exchange,
+    # because a wrong value that reaches Google may still spend the real one.
     if not oauth_token.startswith("oauth2_4/"):
         emit(
             {
@@ -85,73 +118,96 @@ async def main() -> None:
         emit({"ok": False, "detail": f"notebooklm is not importable: {exc}"})
         return
 
-    # A private temp file: the library's bootstrap writes the session and the
-    # token to disk, and neither should land in a real profile or survive this
-    # process. Read back, returned to the caller for vaulting, then unlinked.
-    tmpdir = Path(tempfile.mkdtemp(prefix="nlm-bootstrap-"))
-    storage_path = tmpdir / "storage_state.json"
-    token_path = tmpdir / "master_token.json"
+    # A private temp dir: the library's bootstrap writes the session and the
+    # token to disk. Both are read back and returned to the caller for
+    # vaulting, and only then removed.
+    directory = Path(tempfile.mkdtemp(prefix="nlm-bootstrap-"))
+    storage_path = directory / "storage_state.json"
+    # `master_token.json`, beside `storage_state.json` - the library's own
+    # convention, and the path `read_master_token` expects. Passing the
+    # directory instead is what burned the first token.
+    token_path = directory / "master_token.json"
 
     try:
-        try:
-            await auth.master_token_bootstrap(
-                email=email,
-                oauth_token=oauth_token,
-                storage_path=storage_path,
-                verify=True,
-            )
-        except Exception as exc:
-            detail = f"{type(exc).__name__}: {exc}"
-            # The single-use token being spent is the one failure worth naming
-            # precisely, because the remedy is "get a fresh one", not "retry".
-            if "used" in str(exc).lower() or "invalid_grant" in str(exc).lower():
-                detail += (
-                    " - the oauth_token is single-use and appears to be spent. "
-                    "Sign in at accounts.google.com/EmbeddedSetup again for a fresh one."
-                )
-            emit({"ok": False, "detail": detail[:400]})
-            return
-
-        stored = auth.read_master_token(storage_path.parent) or auth.read_master_token(token_path)
-        master_token = None
-        android_id = None
-        if isinstance(stored, dict):
-            master_token = stored.get("master_token")
-            android_id = stored.get("android_id")
-
-        storage_state = storage_path.read_text() if storage_path.exists() else None
-
-        emit(
-            {
-                "ok": storage_state is not None,
-                "detail": (
-                    f"minted a cookie jar ({len(storage_state)} chars)"
-                    if storage_state
-                    else "the bootstrap reported success but wrote no storage state"
-                )
-                + (
-                    f"; master token persisted ({len(master_token)} chars)"
-                    if isinstance(master_token, str)
-                    else "; NO master token was persisted - the jar will not re-mint"
-                ),
-                "master_token": master_token,
-                "android_id": android_id,
-                "storage_state": storage_state,
-                "account": email,
-            }
+        await auth.master_token_bootstrap(
+            email=email,
+            oauth_token=oauth_token,
+            storage_path=storage_path,
+            verify=True,
         )
-    finally:
-        for path in (storage_path, token_path):
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                pass
-        try:
-            for leftover in tmpdir.iterdir():
-                leftover.unlink(missing_ok=True)
-            tmpdir.rmdir()
-        except OSError:
-            pass
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+        # The single-use token being spent is the one failure worth naming
+        # precisely, because the remedy is "get a fresh one", not "retry".
+        lowered = str(exc).lower()
+        if "used" in lowered or "invalid_grant" in lowered or "expired" in lowered:
+            detail += (
+                " - the oauth_token is single-use and appears to be spent. "
+                "Sign in at accounts.google.com/EmbeddedSetup again for a fresh one."
+            )
+        emit({"ok": False, "detail": detail[:400], "spent": True})
+        # Nothing was minted, so there is nothing to preserve.
+        scrub([storage_path, token_path], directory)
+        return
+
+    # --- from here the token IS spent, so nothing may be destroyed on error ---
+    # Everything is read into memory first. Any failure below reports the paths
+    # instead of cleaning up, so a credential that has been paid for can always
+    # be recovered by hand.
+    master_token: str | None = None
+    android_id: str | None = None
+    storage_state: str | None = None
+    problems: list[str] = []
+
+    try:
+        if storage_path.exists():
+            storage_state = storage_path.read_text()
+        else:
+            problems.append("no storage_state.json was written")
+    except OSError as exc:
+        problems.append(f"could not read storage_state.json: {exc}")
+
+    try:
+        record = auth.read_master_token(token_path)
+        if isinstance(record, dict):
+            value = record.get("master_token")
+            device = record.get("android_id")
+            master_token = value if isinstance(value, str) else None
+            android_id = device if isinstance(device, str) else None
+        else:
+            problems.append("no master_token.json was written")
+    except Exception as exc:  # noqa: BLE001 - a bad read must not lose the jar
+        problems.append(f"could not read master_token.json: {type(exc).__name__}: {exc}")
+
+    ok = storage_state is not None
+    detail_parts: list[str] = []
+    if storage_state is not None:
+        detail_parts.append(f"minted a cookie jar ({len(storage_state)} chars)")
+    if master_token is not None:
+        detail_parts.append(f"master token persisted ({len(master_token)} chars)")
+    else:
+        detail_parts.append("NO master token - the jar will not be able to re-mint")
+    detail_parts.extend(problems)
+
+    emit(
+        {
+            "ok": ok,
+            "detail": "; ".join(detail_parts),
+            "master_token": master_token,
+            "android_id": android_id,
+            "storage_state": storage_state,
+            "account": email,
+            # Reported so a partial failure is recoverable rather than lost.
+            # Only populated when something went wrong; the files are gone
+            # otherwise.
+            "recovery_dir": str(directory) if problems else None,
+        }
+    )
+
+    # Cleanup only after a clean emit. If anything went wrong the files stay on
+    # disk, because the token that bought them cannot be spent twice.
+    if not problems:
+        scrub([storage_path, token_path], directory)
 
 
 asyncio.run(main())

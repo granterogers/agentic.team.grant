@@ -46,6 +46,12 @@ interface BootstrapOutput {
   android_id?: string | null
   storage_state?: string | null
   account?: string | null
+  /** Set when the exchange succeeded but a read-back failed: the minted files
+   *  are still on disk at this path rather than cleaned up, because the
+   *  oauth_token that bought them is single-use and cannot be spent twice. */
+  recovery_dir?: string | null
+  /** Set when the exchange itself failed because the token was already used. */
+  spent?: boolean
 }
 
 console.log(`exchanging the one-time token for ${email}...`)
@@ -71,8 +77,21 @@ try {
 
 console.log(`  ${output.detail ?? ''}`)
 
+if (typeof output.recovery_dir === 'string' && output.recovery_dir !== '') {
+  // The exchange succeeded and something after it did not. The files have
+  // deliberately NOT been cleaned up: the token that paid for them is spent.
+  console.log(
+    `\n⚠ the minted credential is still on disk at ${output.recovery_dir}\n` +
+      '  It was NOT deleted, because the oauth_token that bought it is single-use.',
+  )
+}
+
 if (output.ok !== true || typeof output.storage_state !== 'string') {
-  console.error('\nnothing was stored.')
+  console.error(
+    output.spent === true
+      ? '\nnothing was minted; the token needs replacing before retrying.'
+      : '\nnothing was stored.',
+  )
   process.exit(1)
 }
 
