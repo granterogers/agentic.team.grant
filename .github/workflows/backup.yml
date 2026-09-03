@@ -87,7 +87,20 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-${PGVERSION}
-          pg_dump --version
+
+          # Use the VERSIONED binary, not whatever /usr/bin/pg_dump resolves to.
+          # ubuntu-latest already ships postgresql-client-16, and installing 17
+          # alongside it does not repoint /usr/bin/pg_dump — which is a wrapper
+          # that picks the default cluster version. The install step succeeded
+          # and pg_dump still aborted with "server version mismatch: server 17.6,
+          # pg_dump 16.15".
+          PGBIN="/usr/lib/postgresql/${PGVERSION}/bin"
+          if [ ! -x "$PGBIN/pg_dump" ]; then
+            echo "::error::$PGBIN/pg_dump is missing after installing postgresql-client-${PGVERSION}"
+            exit 1
+          fi
+          echo "PGBIN=$PGBIN" >> "$GITHUB_ENV"
+          "$PGBIN/pg_dump" --version
 
       - name: Resolve the session-pooler connection
         id: conn
@@ -122,7 +135,7 @@ jobs:
           # Privileges and owners are KEPT deliberately: the restore rehearsal
           # has to prove the REVOKEs and RLS came back, and --no-privileges
           # would quietly throw away the thing being tested.
-          pg_dump "${{ steps.conn.outputs.uri }}" \
+          "$PGBIN/pg_dump" "${{ steps.conn.outputs.uri }}" \
             --schema=public \
             --schema=app \
             --format=plain \
