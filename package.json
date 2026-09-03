@@ -19,10 +19,11 @@
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",
-    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs",
+    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials",
     "backup:manifest": "tsx scripts/backup/manifest.ts",
     "backup:connection": "tsx scripts/backup/print-connection.ts",
-    "verify:restore": "tsx scripts/backup/verify-restore.ts"
+    "verify:restore": "tsx scripts/backup/verify-restore.ts",
+    "verify:credentials": "tsx scripts/verify/credentials.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
