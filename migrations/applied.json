@@ -11,5 +11,6 @@
   "0010_credential_health.sql": "65eec694f60efb4622e369f587d55106a868c38f8ac1ad61a34a9e0db042b8ae",
   "0011_inbound_commands.sql": "22c36439cdcf715e53d01573a58b80c1ccbda7cb84e3d36be0ca0121c4acdbdd",
   "0012_blockers_and_usage.sql": "d25bb67266918e4b115bea87de597fb778311ca2ca6931f7b0b2da5ac982d45d",
-  "0013_notification_preferences.sql": "1b4414c7190e8030d8a147cf7f2d12c05fd9b95d7ebee04dc996c6eb95b48689"
+  "0013_notification_preferences.sql": "1b4414c7190e8030d8a147cf7f2d12c05fd9b95d7ebee04dc996c6eb95b48689",
+  "0014_slack_channel_map.sql": "861f6b5643b1c9414c92e30c1aa41ac03d890ca9bfb09ca25426df84e056f7ed"
 }

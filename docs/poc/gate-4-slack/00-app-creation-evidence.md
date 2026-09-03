@@ -1,6 +1,10 @@
 # Gate 4 evidence — app creation (partial)
 
-**Gate 4 is NOT passed.** This records only the automated app-creation step,
+> **Superseded.** Gate 4 now **PASSES** — see
+> [`01-evidence.md`](01-evidence.md), 19/19 checks on 2026-09-03. This file is
+> kept as the record of the app-creation step it describes.
+
+**Gate 4 was not passed at the time this was written.** This records only the automated app-creation step,
 completed ahead of the gate because the config token was near expiry. The gate
 itself runs in Phase 3 and requires everything in
 `AI_TEAM_HQ_MASTER_SPEC.md` §13.

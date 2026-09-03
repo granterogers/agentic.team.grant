@@ -38,7 +38,10 @@
     "deploy:voice": "tsx scripts/deploy/voice.ts",
     "deploy:page": "tsx scripts/deploy/vercel.ts",
     "poc:gate-5": "tsx scripts/poc/gate-5.ts",
-    "poc:gate-3": "tsx scripts/poc/gate-3.ts"
+    "poc:gate-3": "tsx scripts/poc/gate-3.ts",
+    "deploy:slack": "tsx scripts/deploy/slack-events.ts",
+    "slack:configure-events": "tsx scripts/slack/configure-events.ts",
+    "poc:gate-4": "tsx scripts/poc/gate-4.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
