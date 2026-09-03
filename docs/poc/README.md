@@ -12,7 +12,7 @@
 | gate | subject | verdict | evidence |
 |---|---|---|---|
 | 1 | Voice | ⛔ **BLOCKED** — OpenAI account has no credits (D3) | [prep](gate-1-voice/00-preparation.md) |
-| 2 | Notebook | ⛔ **BLOCKED** — 17 proven, 16 need a Google account | [evidence](gate-2-notebook/00-evidence.md) |
+| 2 | Notebook | ✅ **PASS** — 34/34 | [evidence](gate-2-notebook/00-evidence.md) |
 | 3 | Telegram | ✅ **PASS** — 12/12 | [evidence](gate-3-telegram/00-evidence.md) |
 | 4 | Slack | ✅ **PASS** — 19/19 | [evidence](gate-4-slack/01-evidence.md) |
 | 5 | Inference failover | ✅ **PASS** — 17/17 | [evidence](gate-5-inference-failover/00-evidence.md) |
@@ -38,9 +38,9 @@ be delegated:
 > Claude must prepare the test but must never mark subjective acceptance PASS
 > before Grant has actually performed it.
 
-**Gate 2** needs a dedicated Google account and one interactive sign-in to mint
-the Notebook master token. Both are human-only. Nothing else about Gate 2 is
-Grant's; the sixteen blocked items are all automatable once the token exists.
+**Gate 2** is done. It took three credential mechanisms and cost two burned
+sign-ins to get there; the evidence records why in full, because the process
+failure is more instructive than the result.
 
 ## The thing worth reading these for
 

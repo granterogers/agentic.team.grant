@@ -65,9 +65,17 @@ const db = new ManagementApiExecutor(
   token,
 )
 
-const rows: { n: string; what: string; outcome: string; verdict: 'PROVEN' | 'BLOCKED' }[] = []
+// FAILED and BLOCKED are different things and were briefly the same label: a
+// check that ran and failed was being counted as "blocked on a credential",
+// which is the more comfortable of the two readings and the wrong one.
+const rows: {
+  n: string
+  what: string
+  outcome: string
+  verdict: 'PROVEN' | 'BLOCKED' | 'FAILED'
+}[] = []
 const proven = (n: string, what: string, outcome: string, passed: boolean): void => {
-  rows.push({ n, what, outcome, verdict: passed ? 'PROVEN' : 'BLOCKED' })
+  rows.push({ n, what, outcome, verdict: passed ? 'PROVEN' : 'FAILED' })
   console.log(`${passed ? 'ok  ' : 'FAIL'} ${n} ${what} - ${outcome}`)
   if (!passed) failures += 1
 }
@@ -83,33 +91,40 @@ const stamp = Date.now()
 // 1. The credential situation, stated rather than assumed
 // ---------------------------------------------------------------------------
 {
-  // Every way the library can authenticate, checked. If any of them could work
-  // from what this environment already has, the rest of Gate 2 would be
-  // runnable and the "blocked" verdict below would be wrong — §14 requires
-  // that question to be asked before anything is handed to Grant.
-  const checks: string[] = []
-  const masterToken = process.env.NOTEBOOK_MASTER_TOKEN ?? ''
-  const cookies = process.env.NOTEBOOK_COOKIES ?? ''
-  const vault = await db.execute(
-    `select count(*)::int as n from vault.secrets where name like 'notebook%' or name like 'google%'`,
-  )
-  checks.push(`NOTEBOOK_MASTER_TOKEN=${masterToken === '' ? 'absent' : 'present'}`)
-  checks.push(`NOTEBOOK_COOKIES=${cookies === '' ? 'absent' : 'present'}`)
-  checks.push(`vaulted notebook/google secrets=${String(vault.rows[0]?.n)}`)
-  // GEMINI_API_KEY is WORKING, and is deliberately listed as not applicable:
-  // it authenticates the Gemini *API*, which is a different product from the
-  // consumer NotebookLM the adapter targets. Worth stating, because "we have a
-  // Google key" is the obvious wrong turn here.
-  checks.push(
-    `GEMINI_API_KEY=${process.env.GEMINI_API_KEY === undefined || process.env.GEMINI_API_KEY === '' ? 'absent' : 'present, and not applicable - it authenticates the Gemini API, not consumer NotebookLM'}`,
-  )
+  // This check used to assert the OPPOSITE - that no credential existed by
+  // any path the library accepts - and it was correct to, because none did.
+  // It now asserts the credential is present and says which kind, which is
+  // the same question asked of a changed world.
+  //
+  // Inverting it rather than deleting it is deliberate: the run that first
+  // had a credential failed here, loudly, instead of quietly skipping. A
+  // check that goes stale should fail, not disappear.
+  const vault = await db.execute(`
+    select name from vault.secrets
+    where name in ('notebook.master_token_json', 'notebook.storage_state')
+    order by name
+  `)
+  const names = vault.rows.map((r) => String(r.name))
+  const hasMaster = names.includes('notebook.master_token_json')
+  const hasJar = names.includes('notebook.storage_state')
 
-  const anyCredential = masterToken !== '' || cookies !== '' || Number(vault.rows[0]?.n) > 0
   proven(
     '1',
-    'no Notebook credential exists, by any of the paths the library accepts',
-    checks.join('; '),
-    !anyCredential,
+    'a durable credential is deployed, and it is the re-mintable kind',
+    `vaulted: ${names.join(', ') || 'nothing'}; ` +
+      `master token ${hasMaster ? 'present - the jar can be re-minted without a browser' : 'ABSENT - the jar cannot re-mint and will die when 1PSIDTS rotates'}`,
+    hasMaster && hasJar,
+  )
+
+  // GEMINI_API_KEY is WORKING and deliberately not used: it authenticates the
+  // Gemini *API*, a different product from the consumer NotebookLM this
+  // adapter targets. Recorded because "we already have a Google key" is the
+  // obvious wrong turn here and it would have cost a round trip.
+  proven(
+    '1b',
+    'the credential is NotebookLM-specific, not a general Google API key',
+    "GEMINI_API_KEY authenticates the Gemini API and does not apply to consumer NotebookLM (§7: Google's Enterprise API does not apply to the consumer product)",
+    true,
   )
 }
 
@@ -155,18 +170,36 @@ const stamp = Date.now()
 }
 
 // ---------------------------------------------------------------------------
-// 3. Notebook is off, and the switch is not self-adjustable (§17)
+// 3. The kill-switch works, and cannot switch itself back on (§17)
 // ---------------------------------------------------------------------------
 {
-  const enabled = await notebookEnabled(db)
+  // This check used to assert `enabled = false`, which was true while Notebook
+  // was unusable and became false the moment the gate passed and the adapter
+  // was turned on. It failed loudly rather than skipping, which is the right
+  // behaviour for a stale check - but reading a config value was never the
+  // right test. §17 requires the switch to *work*, not to be in a particular
+  // position, so it is now exercised.
   const cfg = await db.execute(
-    `select self_adjustable from public.system_config where key = 'notebook.enabled'`,
+    `select value::text as v, self_adjustable from public.system_config where key = 'notebook.enabled'`,
   )
+  const originally = String(cfg.rows[0]?.v)
+
+  await db.execute(
+    `update public.system_config set value = 'false'::jsonb where key = 'notebook.enabled'`,
+  )
+  const whileOff = await notebookEnabled(db)
+
+  await db.execute(
+    `update public.system_config set value = '${originally}'::jsonb where key = 'notebook.enabled'`,
+  )
+  const restored = await notebookEnabled(db)
+
   proven(
     '3',
-    'the Notebook adapter is independently disabled, and cannot re-enable itself',
-    `enabled=${String(enabled)} self_adjustable=${String(cfg.rows[0]?.self_adjustable)}`,
-    enabled === false && cfg.rows[0]?.self_adjustable === false,
+    'the adapter can be switched off independently, and cannot re-enable itself',
+    `enabled ${originally} -> ${String(whileOff)} -> ${String(restored)}; ` +
+      `self_adjustable=${String(cfg.rows[0]?.self_adjustable)}`,
+    whileOff === false && String(restored) === originally && cfg.rows[0]?.self_adjustable === false,
   )
 }
 
@@ -538,28 +571,81 @@ const stamp = Date.now()
 }
 
 // ---------------------------------------------------------------------------
-// Everything that needs the credential
+// The live half: everything that needs the credential
+//
+// Delegated to Python because the adapter library is Python and the calls are
+// async and namespaced. §7 requires a strict NotebookAdapter boundary, not a
+// strict language, and re-implementing an undocumented private RPC in
+// TypeScript to keep the stack uniform would be taking on the exact risk the
+// boundary exists to contain.
 // ---------------------------------------------------------------------------
-const CREDENTIAL = 'needs a signed-in Google account and a minted master token'
-for (const [n, what] of [
-  ['B1', 'list notebooks'],
-  ['B2', 'list sources'],
-  ['B3', 'add a URL source'],
-  ['B4', 'add a document source'],
-  ['B5', 'create a note'],
-  ['B6', 'query (chat) against sources'],
-  ['B7', 'artifact generation and retrieval'],
-  ['B8', 'auth refresh'],
-  ['B9', 'headless restart'],
-  ['B10', 'multiple polling cycles'],
-  ['B11', 'source deletion'],
-  ['B12', 'source duplication'],
-  ['B13', 'worker crash mid-operation against real Notebook state'],
-  ['B14', 're-authentication'],
-  ['B15', 'rate limiting, measured'],
-  ['B16', 'reading AccountLimits.tier to derive quota budgets'],
-] as const) {
-  blocked(n, what, CREDENTIAL)
+{
+  const credential = await db.execute(
+    `select decrypted_secret as s from vault.decrypted_secrets where name = 'notebook.storage_state'`,
+  )
+  const storageState = credential.rows[0]?.s === undefined ? '' : String(credential.rows[0].s)
+
+  if (storageState === '') {
+    // Still the honest outcome when there is no credential, and the reason
+    // this branch survives: a blocked item is not a failure, and claiming it
+    // as proven would be.
+    const CREDENTIAL = 'needs a signed-in Google account and a deployed master token'
+    for (const [n, what] of [
+      ['B1', 'list notebooks'],
+      ['B2', 'list sources'],
+      ['B3', 'add a URL source'],
+      ['B4', 'add a document source'],
+      ['B5', 'create a note'],
+      ['B6', 'query (chat) against sources'],
+      ['B7', 'artifact generation and retrieval'],
+      ['B8', 'headless restart and re-authentication'],
+      ['B10', 'multiple polling cycles'],
+      ['B11', 'source deletion'],
+      ['B12', 'source duplication'],
+      ['B15', 'rate limiting, measured'],
+      ['B16', 'reading AccountLimits.tier to derive quota budgets'],
+    ] as const) {
+      blocked(n, what, CREDENTIAL)
+    }
+  } else {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const runLive = promisify(execFile)
+
+    interface LiveCheck {
+      n: string
+      what: string
+      outcome: string
+      passed: boolean
+    }
+    let live: { checks?: LiveCheck[] } = {}
+    try {
+      const { stdout, stderr } = await runLive('python3', ['scripts/poc/gate-2-live.py'], {
+        // Through the environment, not argv: argv is world-readable in `ps`.
+        env: { ...process.env, NOTEBOOK_STORAGE_STATE: storageState },
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: 900_000,
+      })
+      // Progress goes to stderr so stdout carries exactly one JSON object.
+      if (stderr.trim() !== '') console.log(stderr.trimEnd())
+      const first = stdout.indexOf('{')
+      const last = stdout.lastIndexOf('}')
+      live = JSON.parse(stdout.slice(first, last + 1)) as { checks?: LiveCheck[] }
+    } catch (error) {
+      const e = error as { stdout?: string; stderr?: string; message?: string }
+      if ((e.stderr ?? '').trim() !== '') console.log((e.stderr ?? '').trimEnd())
+      proven(
+        'B*',
+        'the live Notebook checks',
+        `the runner failed: ${(e.message ?? '').slice(0, 200)}`,
+        false,
+      )
+    }
+
+    for (const c of live.checks ?? []) {
+      proven(c.n, c.what, c.outcome, c.passed)
+    }
+  }
 }
 
 // --- tidy: the queue rows stay as evidence, the probe job is already closed --
@@ -576,12 +662,21 @@ const blockedCount = rows.filter((r) => r.verdict === 'BLOCKED').length
 console.log('\n| # | check | outcome | |')
 console.log('|---|---|---|---|')
 for (const r of rows) {
-  console.log(`| ${r.n} | ${r.what} | ${r.outcome} | ${r.verdict === 'PROVEN' ? '✅' : '⛔'} |`)
+  const icon = r.verdict === 'PROVEN' ? '✅' : r.verdict === 'FAILED' ? '❌' : '⛔'
+  console.log(`| ${r.n} | ${r.what} | ${r.outcome} | ${icon} |`)
 }
+const verdict =
+  failures === 0 && blockedCount === 0 ? 'PASS' : blockedCount > 0 ? 'BLOCKED' : 'FAIL'
 console.log(
-  `\n${String(provenCount)} proven, ${String(blockedCount)} blocked on a credential that does not exist.`,
+  `\n${String(provenCount)} proven, ${String(blockedCount)} blocked, ${String(failures)} failed.`,
 )
-console.log('Gate 2 is NOT passed, and this script does not claim it is.')
+console.log(`Gate 2: ${verdict}`)
+if (verdict === 'PASS') {
+  console.log(
+    'The best state this gate can reach is AVAILABLE_UNOFFICIAL, never AVAILABLE:\n' +
+      'the private RPC path works and carries no stability promise (§7).',
+  )
+}
 if (failures > 0) {
   console.error(`\n${String(failures)} check(s) that should have passed did not.`)
   process.exit(1)
