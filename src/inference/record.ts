@@ -1,0 +1,101 @@
+/**
+ * Writing usage and blockers to the database.
+ *
+ * Separate from `policy.ts` on purpose: the decision is pure and heavily
+ * tested, the writing is I/O. Mixing them would mean every policy test needed
+ * a database.
+ *
+ * §11 requires usage to be tracked "for every provider even where provider-side
+ * metrics exist", and classified. The classification is decided here, once,
+ * from what the provider actually returned — not by each caller.
+ */
+import type { SqlExecutor } from '../db/executor.ts'
+import type { BlockerDraft, UsageOutcome } from './policy.ts'
+
+/** Single-quote escaping for SQL literals. Values here are never secrets. */
+const lit = (value: string): string => `'${value.replace(/'/g, "''")}'`
+const nullableLit = (value: string | undefined): string =>
+  value === undefined ? 'null' : lit(value)
+
+export interface UsageRecord {
+  readonly provider: string
+  readonly modelId: string
+  readonly correlationId: string
+  readonly jobId?: string | undefined
+  readonly outcome: UsageOutcome
+  readonly promptTokens?: number
+  readonly completionTokens?: number
+  /**
+   * What the provider said the cost was. `null` means it reported nothing,
+   * `undefined` is not accepted — the distinction is the whole point, because
+   * `null` is precisely when the figure must not be called authoritative.
+   */
+  readonly providerReportedCost: number | null
+}
+
+/**
+ * Classify per §11.
+ *
+ * AUTHORITATIVE only when the provider reported a cost. Otherwise ESTIMATED:
+ * CALCULATED would require "a known quota plus complete local accounting", and
+ * OpenRouter's free tier publishes no per-model quota, so claiming CALCULATED
+ * here would be the exact error §11 warns about.
+ */
+const provenanceFor = (reported: number | null): 'authoritative' | 'estimated' =>
+  reported === null ? 'estimated' : 'authoritative'
+
+export const recordUsage = async (db: SqlExecutor, record: UsageRecord): Promise<void> => {
+  const reported = record.providerReportedCost
+  await db.execute(`
+    insert into public.inference_usage
+      (provider, model_id, correlation_id, job_id, outcome,
+       prompt_tokens, completion_tokens, cost_usd, provider_reported_cost, provenance)
+    values
+      (${lit(record.provider)}, ${lit(record.modelId)}, ${lit(record.correlationId)},
+       ${nullableLit(record.jobId)}::uuid, ${lit(record.outcome)},
+       ${String(record.promptTokens ?? 0)}, ${String(record.completionTokens ?? 0)},
+       ${String(reported ?? 0)}, ${reported === null ? 'null' : String(reported)},
+       ${lit(provenanceFor(reported))}::public.usage_provenance)
+  `)
+}
+
+/** Returns the new blocker's id, so the caller can put it in the ledger. */
+export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promise<string> => {
+  const options = draft.approvalOptions.map((o) => lit(o)).join(', ')
+  const { rows } = await db.execute(`
+    insert into public.blockers
+      (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+       approval_options, originating_agent, work_can_continue)
+    values
+      (${nullableLit(draft.projectId)}::uuid, ${lit(draft.jobId)}::uuid,
+       ${lit(draft.requestedAction)}, ${lit(draft.whyNeeded)},
+       ${lit(draft.consequencesOfDelay)},
+       array[${options}]::text[], ${lit(draft.originatingAgent)},
+       ${draft.workCanContinue ? 'true' : 'false'})
+    returning blocker_id::text as blocker_id
+  `)
+  const id = rows[0]?.blocker_id
+  if (typeof id !== 'string') throw new Error('blocker insert returned no id')
+  return id
+}
+
+/**
+ * The urgency boundary, from configuration rather than a constant (§4).
+ *
+ * A missing key is a fault, not a reason to fall back to a default. A silent
+ * default here would decide who gets paged, and would do it invisibly.
+ */
+export const urgentPriorityMax = async (db: SqlExecutor): Promise<number> => {
+  const { rows } = await db.execute(
+    `select value::text as value from public.system_config where key = 'jobs.urgent_priority_max'`,
+  )
+  const raw = rows[0]?.value
+  if (typeof raw !== 'string') {
+    throw new Error('system_config key jobs.urgent_priority_max is missing')
+  }
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`jobs.urgent_priority_max is not an integer: ${raw}`)
+  }
+  return parsed
+}
