@@ -1,33 +1,61 @@
 # Gate 1 — voice POC
 
-**Prepared:** 2026-09-03 · **Status:** ⛔ **BLOCKED on funding (D3)**
+**Verdict: PASS** · accepted by Grant on 2026-09-03
 
-> ## The account has no OpenAI credits
+> §13: *"Automated tests are insufficient. Grant must personally use the iPhone
+> voice POC and judge naturalness, latency, interruption, voice quality and
+> overall feel. Claude must prepare the test but must never mark subjective
+> acceptance PASS before Grant has actually performed it."*
 >
-> Grant ran the POC on 2026-09-03 at 19:08. It got further than any automated
-> check could:
+> **Grant performed it and accepted it.** His words: *"i already did the voice
+> test.. its good"*, and earlier *"voice test is done and looks good"*.
 >
-> ```
-> minted ephemeral credential for gpt-realtime-2.1-mini   (token mint 1689 ms)
-> Error: SDP exchange failed: 429
->   "You have no credits remaining. Add credits to continue using the API"
-> ```
->
-> **Everything on our side worked.** The page served, the microphone was
-> requested, the server minted a real ephemeral credential in 1.7 s, and the
-> browser reached OpenAI. OpenAI refused at the point where the session would
-> begin costing money.
->
-> Confirmed independently of voice: a plain `chat/completions` call with
-> `max_tokens: 1` returns the same `429 insufficient_quota` /
-> `credit_balance_exhausted`. So this is an **account billing state**, not a
-> Realtime problem, not an SDP problem, and not a bug in the page.
->
-> **This is decision D3** — *"Voice for V1: skip, or fund ~$24/mo"* — arriving
-> as a bill rather than as a question. Gate 1 cannot run at all until the
-> account is funded at https://platform.openai.com/settings/organization/billing/.
-> Nothing else is blocked by it: voice is the only thing in this build that
-> uses OpenAI.
+> Recorded exactly as given. He did not report the five dimensions separately,
+> and they are not invented here — an evidence file that fabricates a latency
+> impression is worse than one that says none was offered. The judgement is
+> his to make and he has made it; the detail simply was not itemised.
+
+| | |
+|---|---|
+| POC | `https://ai-team-hq-voice-agentic-team-grant.vercel.app` |
+| Model | `gpt-realtime-2.1-mini` |
+| Device | iPhone, Safari, foreground and screen-on (D1) |
+| Accepted | 2026-09-03, by Grant |
+| Funding | OpenAI account funded by Grant (decision **D3** resolved: fund, not skip) |
+
+## The technical path, re-confirmed after acceptance
+
+Verified 2026-09-03, after the account was funded:
+
+| | |
+|---|---|
+| Page | `200`, `text/html`, 8,353 bytes, page marker present |
+| Mint endpoint | `200`, model `gpt-realtime-2.1-mini` |
+| Ephemeral credential | a real `ek_…` token, with an expiry |
+| Transacting OpenAI call | succeeds — `credit_balance_exhausted` is gone |
+
+The browser never receives the permanent API key: the server mints a
+short-lived credential per session, which is §12's requirement.
+
+## The failed run before this one
+
+Grant's first attempt, at 19:08 on 2026-09-03, got further than any automated
+check could and then stopped dead:
+
+```
+minted ephemeral credential for gpt-realtime-2.1-mini   (token mint 1689 ms)
+Error: SDP exchange failed: 429
+  "You have no credits remaining. Add credits to continue using the API"
+```
+
+Everything on our side worked — page served, microphone requested, credential
+minted in 1.7 s, browser reached OpenAI. OpenAI refused at exactly the point
+the session would begin costing money. Confirmed independent of voice: a plain
+`chat/completions` call with `max_tokens: 1` returned the same
+`insufficient_quota` / `credit_balance_exhausted`.
+
+That was **D3 arriving as a bill rather than as a question**. Grant funded the
+account, re-ran the test, and accepted it.
 
 ## What this cost the credential audit, and the lesson
 
@@ -64,10 +92,9 @@ audit should be a quantified decision.
 
 ---
 
-## When the account is funded
+## Verified before the POC was handed over
 
-Everything below was verified before handing the POC over and still stands.
-Press *Start talking* again; no redeploy is needed.
+Everything below still stands.
 
 > §13: *"Claude must prepare the test but must never mark subjective acceptance
 > PASS before Grant has actually performed it."*

@@ -885,10 +885,14 @@ authorization.
 | # | Decision | Blocks |
 |---|---|---|
 | **D2** | Inference config **A** ($0) / **B** (~$3 + $10 one-off) / **C** (~$8–32) | Phase 2 registry defaults |
-| **D3** | Voice for V1: skip, or fund ~$24/mo | Gate 1 scheduling |
 | **D4** | Email Vercel Support to settle the Hobby ambiguity | nothing — recommended hygiene |
 
 **Resolved:** D1 — foreground/screen-on voice accepted, no native iOS app.
+
+**Resolved:** D3 — **fund**. Grant funded the OpenAI account on 2026-09-03 and
+accepted Gate 1. The decision arrived as a bill rather than as a question: the
+first POC run reached OpenAI and was refused with `credit_balance_exhausted` at
+the exact point a session starts costing money.
 
 ## Known-unverified
 

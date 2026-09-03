@@ -11,7 +11,7 @@
 
 | gate | subject | verdict | evidence |
 |---|---|---|---|
-| 1 | Voice | ⛔ **BLOCKED** — OpenAI account has no credits (D3) | [prep](gate-1-voice/00-preparation.md) |
+| 1 | Voice | ✅ **PASS** — accepted by Grant | [evidence](gate-1-voice/00-preparation.md) |
 | 2 | Notebook | ✅ **PASS** — 34/34 | [evidence](gate-2-notebook/00-evidence.md) |
 | 3 | Telegram | ✅ **PASS** — 12/12 | [evidence](gate-3-telegram/00-evidence.md) |
 | 4 | Slack | ✅ **PASS** — 19/19 | [evidence](gate-4-slack/01-evidence.md) |
@@ -24,28 +24,22 @@ npm run poc:gate-4
 npm run poc:gate-5
 ```
 
-## What each of the two unfinished gates needs
+## All five gates pass
 
-**Gate 1** needs the OpenAI account funded, and *then* 20+ minutes of Grant's
-time. The page is live at
-`https://ai-team-hq-voice-agentic-team-grant.vercel.app` and works: it minted a
-real ephemeral credential in 1.7 s and reached OpenAI, which refused with
-`credit_balance_exhausted` at the point the session would start costing money.
-That is decision **D3** — *"Voice for V1: skip, or fund ~$24/mo"* — arriving as
-a bill rather than a question. §13 is explicit that the judgement itself cannot
-be delegated:
+Gate 1 rests on Grant's own judgement, which §13 requires and which no
+automated check can supply. The other four are reproducible:
 
-> Claude must prepare the test but must never mark subjective acceptance PASS
-> before Grant has actually performed it.
-
-**Gate 2** is done. It took three credential mechanisms and cost two burned
-sign-ins to get there; the evidence records why in full, because the process
-failure is more instructive than the result.
+```
+npm run poc:gate-2    # 34/34, live against NotebookLM
+npm run poc:gate-3    # 12/12, live Telegram webhook and bot
+npm run poc:gate-4    # 19/19, live Slack workspace
+npm run poc:gate-5    # 17/17, $0.00 spent
+```
 
 ## The thing worth reading these for
 
-Between them, the three passing gates found **eight defects and five checks that
-passed for the wrong reason**. The false passes are recorded in the evidence
+Between them, the gates found **eleven defects and seven checks that passed for
+the wrong reason**. The false passes are recorded in the evidence
 documents alongside the real results, because the recurring failure in this
 build has not been code that does not work — it has been *checks that reported
 success without having tested anything*:
@@ -56,6 +50,10 @@ success without having tested anything*:
   replies do not appear in channel history
 - `ok: false` from an API read, whose absent `messages` key made `.length` zero
   and satisfied a "no error thrown" assertion
+- a Notebook liveness check that declared a freshly minted, library-verified
+  credential dead — and cost a burned single-use token to learn it
+- a failed check labelled BLOCKED rather than FAILED, conflating "we could not
+  test this" with "this test failed"
 - earlier in the build, a `SET ROLE` failure returning the same SQLSTATE as the
   refusal it was meant to be testing
 
