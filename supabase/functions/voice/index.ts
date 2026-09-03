@@ -1,0 +1,221 @@
+/**
+ * Gate 1 voice POC page.
+ *
+ * §13 amends Gate 1 for D1: **foreground, screen-on, iPhone Safari.** No
+ * background operation, no native app. So this is one page, served over HTTPS,
+ * that Grant opens on his phone.
+ *
+ * §13 also says: *"Claude must prepare the test but must never mark subjective
+ * acceptance PASS before Grant has actually performed it."* This page therefore
+ * measures what can be measured — latency, session duration, interruption
+ * behaviour — and asks Grant for the judgements that cannot be automated.
+ *
+ * WebRTC rather than WebSocket, per §12 and the research: it gets automatic
+ * echo cancellation and jitter buffering from the browser's audio stack, which
+ * matters because barge-in is the make-or-break behaviour and echo cancellation
+ * on iOS is listed as UNVERIFIED in the master spec's known-unknowns.
+ */
+const PAGE = String.raw`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Team HQ — Voice POC (Gate 1)</title>
+<style>
+  :root { color-scheme: dark; --ok:#34d399; --bad:#f87171; --dim:#94a3b8; --line:#1e293b; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:#0b1120; color:#e2e8f0; font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+         padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+  h1 { font-size:17px; margin:0 0 2px; letter-spacing:-0.01em; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:18px; }
+  button { width:100%; padding:17px; font-size:17px; font-weight:600; border:0; border-radius:14px;
+           background:#2563eb; color:#fff; margin-bottom:10px; }
+  button:disabled { opacity:.4; }
+  button.stop { background:#b91c1c; }
+  .card { border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:5px 0; font-variant-numeric:tabular-nums; }
+  .row span:first-child { color:var(--dim); }
+  .k { font-weight:600; }
+  #log { font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--dim);
+         max-height:34vh; overflow-y:auto; white-space:pre-wrap; }
+  .said { color:#e2e8f0; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  details { border:1px solid var(--line); border-radius:14px; padding:12px 14px; }
+  summary { cursor:pointer; font-weight:600; }
+  li { margin:8px 0; color:var(--dim); }
+</style>
+</head>
+<body>
+<h1>Voice POC — Gate 1</h1>
+<div class="sub">Foreground, screen-on, iPhone Safari. Headphones recommended for the interruption test.</div>
+
+<button id="go">Start talking</button>
+<button id="stop" class="stop" disabled>Stop</button>
+
+<div class="card">
+  <div class="row"><span>Status</span><span class="k" id="status">idle</span></div>
+  <div class="row"><span>Model</span><span class="k" id="model">—</span></div>
+  <div class="row"><span>Token mint</span><span class="k" id="mint">—</span></div>
+  <div class="row"><span>Time to first audio</span><span class="k" id="ttfa">—</span></div>
+  <div class="row"><span>Reply latency (last / median)</span><span class="k" id="lat">—</span></div>
+  <div class="row"><span>Interruptions</span><span class="k" id="barge">0</span></div>
+  <div class="row"><span>Session length</span><span class="k" id="dur">0:00</span></div>
+</div>
+
+<div class="card"><div id="log">Press “Start talking”. Safari will ask for the microphone.</div></div>
+
+<details>
+  <summary>What Grant is judging (§13 — cannot be automated)</summary>
+  <ul>
+    <li><b>Naturalness</b> — does it feel like talking to someone, or like dictating to a machine?</li>
+    <li><b>Latency</b> — the number above is measured; what matters is whether it <i>feels</i> like a pause.</li>
+    <li><b>Interruption</b> — talk over it mid-sentence. Does it stop cleanly, or talk through you?</li>
+    <li><b>Echo</b> — try it once on speaker. Does it hear itself? (Listed UNVERIFIED in the spec.)</li>
+    <li><b>Voice quality</b> — pleasant for 20 minutes, or grating after two?</li>
+  </ul>
+  <ul><li>20+ minutes is the requirement, and it cannot be delegated.</li></ul>
+</details>
+
+<script type="module">
+const $ = (id) => document.getElementById(id)
+const log = (msg, cls='') => {
+  const el = $('log')
+  el.innerHTML += '\n' + (cls ? '<span class="'+cls+'">'+msg+'</span>' : msg)
+  el.scrollTop = el.scrollHeight
+}
+
+let pc, stream, startedAt, timer
+let spokeAt = null, ttfaShown = false
+const latencies = []
+
+const median = (a) => {
+  if (!a.length) return null
+  const s = [...a].sort((x,y)=>x-y)
+  const m = s.length >> 1
+  return s.length % 2 ? s[m] : Math.round((s[m-1]+s[m])/2)
+}
+
+$('go').onclick = async () => {
+  $('go').disabled = true
+  try {
+    $('status').textContent = 'minting'
+    const t0 = performance.now()
+    // The permanent key never reaches this page (§12). This endpoint mints an
+    // ephemeral credential that expires in about a minute.
+    const res = await fetch('../voice-token', { method: 'POST' })
+    if (!res.ok) throw new Error('mint failed: ' + res.status)
+    const { client_secret, model } = await res.json()
+    $('mint').textContent = Math.round(performance.now()-t0) + ' ms'
+    $('model').textContent = model
+    log('minted ephemeral credential for ' + model, 'ok')
+
+    $('status').textContent = 'microphone'
+    stream = await navigator.mediaDevices.getUserMedia({
+      // Echo cancellation is the make-or-break for barge-in and is UNVERIFIED
+      // on iOS in the spec's own known-unknowns. Asked for explicitly so the
+      // test is of the browser doing its best, not of a default.
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    })
+
+    pc = new RTCPeerConnection()
+    const audio = new Audio()
+    audio.autoplay = true
+    pc.ontrack = (e) => {
+      audio.srcObject = e.streams[0]
+      if (!ttfaShown) {
+        ttfaShown = true
+        $('ttfa').textContent = Math.round(performance.now()-t0) + ' ms'
+      }
+    }
+    pc.addTrack(stream.getTracks()[0])
+
+    // A data channel carries session events: transcripts, speech start/stop.
+    const channel = pc.createDataChannel('oai-events')
+    channel.onmessage = (e) => {
+      const ev = JSON.parse(e.data)
+      switch (ev.type) {
+        case 'input_audio_buffer.speech_started':
+          spokeAt = performance.now()
+          // Speech starting while output is still playing IS an interruption.
+          if (!audio.paused && audio.currentTime > 0) {
+            $('barge').textContent = String(Number($('barge').textContent) + 1)
+            log('— interrupted it —', 'ok')
+          }
+          break
+        case 'response.audio_transcript.done':
+          log('AI: ' + ev.transcript, 'said')
+          break
+        case 'conversation.item.input_audio_transcription.completed':
+          log('You: ' + ev.transcript, 'said')
+          break
+        case 'response.audio.delta':
+          if (spokeAt !== null) {
+            const ms = Math.round(performance.now() - spokeAt)
+            latencies.push(ms)
+            $('lat').textContent = ms + ' / ' + median(latencies) + ' ms'
+            spokeAt = null
+          }
+          break
+        case 'error':
+          log('error: ' + JSON.stringify(ev.error), 'bad')
+          break
+      }
+    }
+
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+
+    // SDP exchange at /v1/realtime/calls. Anything citing /v1/realtime/sessions
+    // for this is stale (§4).
+    const sdp = await fetch('https://api.openai.com/v1/realtime/calls?model=' + encodeURIComponent(model), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + client_secret, 'Content-Type': 'application/sdp' },
+      body: offer.sdp,
+    })
+    if (!sdp.ok) throw new Error('SDP exchange failed: ' + sdp.status + ' ' + (await sdp.text()).slice(0,120))
+    await pc.setRemoteDescription({ type: 'answer', sdp: await sdp.text() })
+
+    startedAt = Date.now()
+    timer = setInterval(() => {
+      const s = Math.floor((Date.now()-startedAt)/1000)
+      $('dur').textContent = Math.floor(s/60) + ':' + String(s%60).padStart(2,'0')
+    }, 1000)
+
+    $('status').textContent = 'connected'
+    $('stop').disabled = false
+    log('connected — just start speaking', 'ok')
+  } catch (err) {
+    $('status').textContent = 'failed'
+    log(String(err), 'bad')
+    $('go').disabled = false
+  }
+}
+
+$('stop').onclick = () => {
+  clearInterval(timer)
+  pc?.close()
+  stream?.getTracks().forEach(t => t.stop())
+  $('status').textContent = 'stopped'
+  $('stop').disabled = true
+  $('go').disabled = false
+  log('session ended after ' + $('dur').textContent +
+      ' — replies: ' + latencies.length +
+      ', median latency: ' + (median(latencies) ?? '—') + ' ms' +
+      ', interruptions: ' + $('barge').textContent)
+}
+</script>
+</body>
+</html>`
+
+Deno.serve(
+  () =>
+    new Response(PAGE, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        // The page holds no secret, but it does request microphone access, so
+        // it should not be framed by anything else.
+        'x-frame-options': 'DENY',
+        'referrer-policy': 'no-referrer',
+      },
+    }),
+)

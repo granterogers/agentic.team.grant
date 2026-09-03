@@ -92,3 +92,25 @@ verification. But it is more than the job requires.
 The fix comes with item 4 — once `ai_team_app` has a password in the vault, the
 function connects as that role instead and RLS applies. Recorded now so it is
 not discovered later as a surprise.
+
+## 7. The voice POC endpoints are unauthenticated
+
+`voice` and `voice-token` are deployed with `verify_jwt: false`, because Grant
+opens the page in Safari with no Supabase session. Anyone with the URL can mint
+a Realtime credential and spend money.
+
+Bounded for now: the URL is unadvertised, the ephemeral credential expires in
+about a minute, and the OpenRouter-style spend guards do not apply here because
+Realtime has no free tier — which is exactly why D3 is a funding decision.
+
+Not acceptable past the POC. Options, in preference order:
+
+1. A short-lived signed link — Grant opens a URL carrying an HMAC over an
+   expiry, verified by the function. No session needed, nothing to log in to,
+   and a leaked link stops working.
+2. A shared secret in a header, which means a bookmark cannot carry it.
+3. Supabase auth with a real session, which is the right answer once Team HQ
+   exists and Grant is logged into it anyway.
+
+Whichever is chosen, the mint endpoint also wants a per-hour cap, so a leaked
+URL costs a bounded amount rather than an unbounded one.

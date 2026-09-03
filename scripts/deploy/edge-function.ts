@@ -1,7 +1,8 @@
 /**
- * Deploy a Supabase Edge Function, and set the Telegram webhook to point at it.
+ * Deploy a Supabase Edge Function.
  *
- *   npm run deploy:telegram
+ *   npm run deploy:telegram   telegram-webhook, then register it with Telegram
+ *   npm run deploy:voice      voice-token + voice (Gate 1 POC)
  *
  * ADR-0010: webhooks live on Supabase Edge Functions rather than Vercel,
  * because the Management API can deploy them with the token this project

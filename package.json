@@ -34,7 +34,8 @@
     "telegram:configure": "tsx scripts/telegram/configure.ts",
     "deploy:telegram": "tsx scripts/deploy/edge-function.ts",
     "audit:credentials": "tsx scripts/audit/credentials.ts",
-    "verify:all": "npm run verify && npm run audit:credentials && npm run verify:db"
+    "verify:all": "npm run verify && npm run audit:credentials && npm run verify:db",
+    "deploy:voice": "tsx scripts/deploy/voice.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
