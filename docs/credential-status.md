@@ -1,6 +1,7 @@
 # Credential status
 
-**Verified:** 2026-09-02 22:10 UTC, by live API call against each credential.
+**Verified:** 2026-09-03, by live API call against each credential.
+**Latest run:** [`docs/test-evidence/2026-09-03-credential-verification.md`](test-evidence/2026-09-03-credential-verification.md)
 **No secret values appear in this file or anywhere in this repository.**
 
 This doubles as the first real data for the addendum §6 capability registry —
@@ -15,18 +16,23 @@ these are exactly the fields that registry must carry.
 | `OPENAI_API_KEY` | ✅ **works** | `GET /v1/models` → 200, 124 models |
 | `SLACK_APP_CONFIG_TOKEN` | ✅ **works** | `apps.manifest.validate` → `ok:true`, then app created |
 | `SLACK_APP_CONFIG_REFRESH_TOKEN` | ⚠️ present, **unused** | rotation deliberately deferred — see below |
-| `OPENROUTER_API_KEY` | ✅ **works, credited** | `is_free_tier: false` (2026-09-03) = **1,000 req/day**. ⚠️ `limit: None` — no per-key cap |
+| `OPENROUTER_API_KEY` | ✅ **works, credited, capped** | `is_free_tier: false`, `limit: 5`, `usage: 0` (2026-09-03) |
 | `GEMINI_API_KEY` | ✅ **works** | `models?key=` → 200, 50 models |
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | ⚠️ **partial** | REST → 200, but **no DDL path** |
+| `SUPABASE_DB_URL` | ❌ **unusable from a build session** | Direct connection (IPv6-only) *and* all non-443 TCP egress blocked — see below |
+| `SUPABASE_ACCESS_TOKEN` | ⬜ **absent — the one Phase 1 blocker** | Management API → `401`, i.e. reachable, credential missing |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | present | not yet exercised |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | present | not yet exercised — Phase 9 |
 | `TELEGRAM_CHIEF_BOT_TOKEN` | ✅ **works** (fixed 2026-09-03) | `getMe` → `@agenticteamgrantbot`, id 8967954396 |
-| `GROQ_API_KEY` | ❌ **invalid** | `GET /models` → **401 Invalid API Key** |
-| `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` / `SLACK_APP_TOKEN` | ⬜ **placeholders** | expected — issued on install |
+| `GROQ_API_KEY` | ⬜ **no longer set** | previously `401`; now absent from the environment. Nothing depends on it |
+| `SLACK_BOT_TOKEN` | ✅ **works** (2026-09-03) | `auth.test` → `ok:true`, team `T0BUCJ2L5FD`, bot `ai_team_hq`, **17/17 scopes** |
+| `SLACK_SIGNING_SECRET` | ❌ **empty string** | variable exists, value length 0. Needed for Gate 4 |
+| `SLACK_CLIENT_SECRET` | ⬜ **absent** | needed for Gate 4 |
+| `SLACK_APP_TOKEN` | ⬜ empty — **correctly so** | Socket Mode only, which §4 rejects |
 
 ---
 
-## Two credentials need your attention
+## Resolved since the last run
 
 ### ✅ `TELEGRAM_CHIEF_BOT_TOKEN` — RESOLVED 2026-09-03
 
@@ -46,9 +52,22 @@ can_join_groups: true
 Gate 3 is unblocked. Webhook is not yet configured — that needs a deployed
 URL.
 
-### ❌ `GROQ_API_KEY` — invalid
+### ✅ `SLACK_BOT_TOKEN` — RESOLVED 2026-09-03
 
-Returns `401 Invalid API Key`. Either expired, revoked, or mis-pasted.
+The app is installed. `auth.test` returns `ok: true` for workspace **Agentic Team
+Grant** (`T0BUCJ2L5FD`), bot user `ai_team_hq` (`U0BUG0RPZ8B`), bot id
+`B0BUN78DELS`. The `x-oauth-scopes` header lists **all 17 requested scopes,
+none missing and none extra**, and `is_enterprise_install: false` confirms the
+app remains a private internal install — which is what preserves the rate-limit
+exemption ADR-0004 relies on.
+
+Still outstanding for Gate 4: `SLACK_SIGNING_SECRET` (currently an empty string)
+and `SLACK_CLIENT_SECRET` (absent).
+
+### ⬜ `GROQ_API_KEY` — no longer present
+
+Previously returned `401 Invalid API Key`; it is now absent from the environment
+altogether.
 
 **Not urgent.** Groq is a marginal provider in the researched plan — its free
 tier carries an **8,000 TPM ceiling that makes a single 35k-token summarization
@@ -56,29 +75,40 @@ impossible at any volume**. Fix it if convenient; nothing depends on it.
 
 ---
 
-## ⚠️ Supabase — works for data, cannot create tables
+## ❌ Supabase — no wire-protocol path exists from a build session
 
-REST responds `200`, so the URL and service-role key are valid. But **schema
-creation is not possible** with what is available:
+Superseded finding. The previous version of this section concluded that a
+**database connection string** would unblock migrations. Measurement on
+2026-09-03 disproved that.
 
-- PostgREST does not execute DDL by design
-- No `exec_sql`-style RPC exists on the project (`PGRST202`, checked)
-- No database password / connection string is present
-- No Supabase personal access token for the Management API
+`SUPABASE_DB_URL` is now set, and it fails for two independent reasons:
 
-**Consequence:** the `slack_app_credentials` table — and every Phase 1 table —
-cannot be created yet. This is what blocks Slack config-token rotation, since
-rotation produces a new pair that must be persisted somewhere durable.
+1. It is the **Direct connection** (`postgres@db.<ref>.supabase.co:5432`), which
+   publishes AAAA records only. This container does not support the IPv6 address
+   family at all — `socket(AF_INET6)` raises `OSError 97`. Supabase Free offers
+   no IPv4 for Direct connections.
+2. **All non-443 outbound TCP is blocked.** Against the *IPv4* Session-pooler
+   host: port 443 connects, ports 5432 and 6543 time out. The session's egress
+   proxy documents `raw-TCP databases` as not supported.
 
-**To unblock, either:**
+Reason 2 subsumes reason 1: **no connection string of any kind — Direct, Session
+pooler, or Transaction pooler — can work from a Claude Code cloud session.**
+Asking Grant for a better string, which this document did twice, cannot help.
 
-1. **Database connection string** (Supabase → Project Settings → Database →
-   Connection string), which lets migrations run directly with `psql`; **or**
-2. **Supabase personal access token** (Account → Access Tokens) for the
-   Management API.
+**The path that does work:** the Supabase **Management API** executes SQL,
+including DDL, `REVOKE` and `CREATE POLICY`, over HTTPS.
+`POST /v1/projects/{ref}/database/query` returns `401 Unauthorized` — reachable
+through the proxy, credential missing. It needs a **personal access token**
+(`sbp_…`), which is a genuine §14 human-only action.
 
-Option 1 is the better fit — it is what a normal migration toolchain expects and
-what Phase 1 needs regardless.
+Recorded as [ADR-0007](adr/0007-ddl-over-management-api.md), which also moves
+`pg_dump` and the mandatory restore test into a scheduled GitHub Actions
+workflow, since `pg_dump` has no HTTPS mode and therefore can never run in a
+build session.
+
+Escape hatches re-confirmed closed: PostgREST executes no DDL by design; no
+`exec_sql` RPC exists (`PGRST202`) and creating one is itself the DDL we lack a
+path for; the Supabase CLI wraps the same wire protocol.
 
 ### Also worth noting: key naming
 
@@ -126,21 +156,26 @@ is dated and does not substitute for that one.
 
 ## ✅ OpenRouter — free tier confirmed, which decides a cost question
 
-`GET /api/v1/key` returns:
+`GET /api/v1/key` on 2026-09-03 returns:
 
 ```
-is_free_tier: true
-usage: 0
-limit: null
+is_free_tier:        false
+is_provisioning_key: false
+usage:               0
+limit:               5
+limit_remaining:     5
+limit_reset:         None
 ```
 
-`is_free_tier: true` means **no credit has been purchased**, which puts the key
-on the **50 requests/day** tier rather than 1,000. That independently confirms
-the research finding, and it is the concrete reason Config A in
-`docs/cost-and-hosting-decisions.md` is request-starved.
+`is_free_tier: false` confirms the $10 credit landed, moving the key from **50
+to 1,000 requests/day** — the 20× increase that makes D2 Option B viable. And
+`limit: 5` means **enforcement layer 2 of ADR-0005 — a hard per-key spend cap —
+is now actually in place**, where before it was absent.
 
-A one-off **$10** purchase moves this to 1,000/day — a 20× increase for a
-non-recurring cost.
+⚠️ `limit_reset: None` means the $5 cap is **lifetime, not monthly**. At Config
+B's ~$3/month the key will stop around mid-October, and it will present as an
+outage rather than as a billing event. Either set the cap to reset monthly or
+plan to raise it.
 
 ---
 

@@ -49,7 +49,10 @@ exactly what is being spent.
 
 1. Frontend simplicity, backend sophistication.
 2. **Cloud-first.** No local development machine. Every Claude Code session runs
-   in a cloud environment against the GitHub repository.
+   in a cloud environment against the GitHub repository. **Measured constraint
+   (2026-09-03):** that environment permits outbound **HTTPS on 443 only** — no
+   raw-TCP database connections, no IPv6. Anything needing the Postgres wire
+   protocol at build time runs in GitHub Actions instead (ADR-0007).
 3. One permanent core team, adapting across projects.
 4. Gemini Notebook defines project identity and knowledge — **as a replaceable,
    high-risk adapter** (§7).
@@ -110,7 +113,8 @@ Every row verified against current official documentation or a live API call on
 | Slack | **ONE shared app**, HTTP Events API | app `A0BUFRVSSLD` created |
 | Telegram | Bot API, HTTP webhooks | one bot for V1 |
 | TTS | **Google Cloud Chirp 3: HD** | 1M chars/month free, native OGG/Opus |
-| Backups | nightly `pg_dump` → **Cloudflare R2** | mandatory: Supabase Free has none |
+| Backups | nightly `pg_dump` → **Cloudflare R2**, run in **GitHub Actions** | mandatory: Supabase Free has none. `pg_dump` cannot run in a build session — ADR-0007 |
+| Migrations | versioned SQL in `migrations/`, applied over the **Supabase Management API** | build sessions have no raw-TCP egress — ADR-0007 |
 
 ### Explicitly rejected
 
@@ -746,6 +750,13 @@ references; only the connector invocation layer receives decrypted credentials.
 
 Supabase Free provides **no backups at all**. Nightly `pg_dump` to R2 is
 mandatory infrastructure.
+
+`pg_dump` speaks the Postgres wire protocol and has no HTTPS mode, so it can
+never run in a Claude Code build session (§2.2). It runs as a **scheduled GitHub
+Actions workflow**, whose credentials live in Actions secrets — a store §15
+already designates as unreadable by build sessions. The restore rehearsal runs
+on the same schedule, which makes the tested restore below **continuous evidence
+rather than a one-off**. See ADR-0007.
 
 **A backup feature is incomplete until restoration is tested.** Test: fresh
 database restore, project registry, event ledger, job state, staff settings,

@@ -1,72 +1,84 @@
 # HUMAN-ONLY PREREQUISITES FOR GRANT
 
-**Updated:** 2026-09-02 22:30 UTC · Required by addendum §56.5
+**Updated:** 2026-09-03 · Required by addendum §56.5
 
 Only actions you genuinely have to perform. Everything automatable has been
 automated or is queued to be. Each item was tested against the addendum §40
 filter — CLI? API? browser automation? inspect existing config? — before landing
 here.
 
-**Current state: 2 blockers left.** Telegram ✅ resolved 2026-09-03. D2 ✅ decided: **Option B**.
+**Current state: 2 blockers left.** Slack install ✅ resolved 2026-09-03 —
+the token works and all 17 scopes are granted. Telegram ✅. D2 ✅ Option B, credit landed.
+
+⚠️ **The Supabase ask has changed.** For two sessions this document asked you for
+a *database connection string*. That was the wrong request — measurement on
+2026-09-03 proved **no** connection string can work from a Claude Code cloud
+session, because the session blocks all non-443 outbound TCP. Port 443 to the
+Supabase pooler connects; ports 5432 and 6543 to the same host time out. So the
+string you supplied fails, and the Session pooler string would have failed too.
+See [ADR-0007](docs/adr/0007-ddl-over-management-api.md). What is needed instead
+is an **access token**, which works over HTTPS.
 
 ---
 
 ## 🔴 Blocking now — 2 left
 
-### ~~1. Re-paste the Telegram bot token~~ ✅ DONE 2026-09-03
+### 1. Supabase **personal access token** · *1 minute* · ⛔ blocks all of Phase 1
+
+Not a connection string. A token.
+
+> **[supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)**
+> → **Generate new token** → name it `ai-team-hq-migrations` → **copy it
+> immediately**, it is shown once → add to the environment as
+> `SUPABASE_ACCESS_TOKEN`.
+
+Why this and not the connection string: Supabase's Management API executes SQL —
+including the DDL, the `REVOKE UPDATE, DELETE ON events` that makes the ledger
+genuinely append-only, and the RLS policies — over **HTTPS**, which this
+environment permits. It is already confirmed reachable: the endpoint answers
+`401 Unauthorized` rather than timing out, so the transport works and only the
+credential is missing.
+
+**Keep `SUPABASE_DB_URL` where it is.** It is the wrong shape for *this*
+container but the deployed app on Vercel needs a pooler URI, and that is where it
+belongs. One note for when you get there: the value currently set is the
+**Direct connection**, which is IPv6-only on Free. Vercel will want the
+**Session pooler** string instead — `Connect` → **Session pooler** tab.
+
+**Blocks:** the Phase 1 schema, the append-only event ledger, the job engine, the
+`slack_app_credentials` table, and Slack config-token rotation.
+
+### 2. Slack signing secret · *1 minute*
+
+`SLACK_BOT_TOKEN` came through and works. But `SLACK_SIGNING_SECRET` arrived as
+an **empty value** — the variable exists with nothing in it — and
+`SLACK_CLIENT_SECRET` is missing entirely.
+
+> From **[api.slack.com/apps/A0BUFRVSSLD](https://api.slack.com/apps/A0BUFRVSSLD)**
+> → **Basic Information** → **App Credentials** → **Show** next to each:
+
+| Variable | Field | State |
+|---|---|---|
+| `SLACK_SIGNING_SECRET` | Signing Secret | ❌ empty — needed |
+| `SLACK_CLIENT_SECRET` | Client Secret | ❌ absent — needed |
+
+Without the signing secret, no inbound Slack request can be proven to have come
+from Slack, so no Slack event may be trusted. Leave `SLACK_APP_TOKEN` blank —
+that one is only for Socket Mode, which §4 rejects.
+
+**Blocks:** Gate 4. Not Phase 1.
+
+### ~~Install the Slack app~~ ✅ DONE 2026-09-03
+
+Verified live: workspace **Agentic Team Grant** (`T0BUCJ2L5FD`), bot
+`ai_team_hq` (`U0BUG0RPZ8B`), and **all 17 requested scopes granted, none
+missing**. `is_enterprise_install: false` confirms it is still a private
+internal app, which is what preserves our rate-limit exemption.
+
+### ~~Re-paste the Telegram bot token~~ ✅ DONE 2026-09-03
 
 Verified working: **@agenticteamgrantbot** (id 8967954396). Gate 3 unblocked.
 Webhook still needs a deployed URL — not your problem, it's automated.
-
-### 2. Supabase database access · *2 minutes*
-
-REST works, but **no table can be created**. Verified: PostgREST does not execute
-DDL, no `exec_sql` RPC exists (`PGRST202`), and neither a database password nor a
-management token is present.
-
-**Fix — either one:**
-
-- **Preferred**, on
-  [the Database Settings page](https://supabase.com/dashboard/project/baujwlzcziasnfhhkchg/settings/database):
-  1. **Reset password** → **copy it immediately**; Supabase states it *"isn't
-     viewable after creation"*.
-  2. Click **`Connect`** in the top bar (the connection string is no longer in
-     the page body) → **Session pooler** tab → copy the URI → substitute the
-     password.
-
-  **Session pooler, not Direct connection:** Direct is IPv6-only on Free and this
-  build container needs IPv4; Session mode (unlike Transaction mode) supports the
-  DDL migrations require. Set it as `SUPABASE_DB_URL`.
-- Or: Account → **Access Tokens** → a personal access token for the Management
-  API.
-
-**Blocks:** the entire Phase 1 schema, the `slack_app_credentials` table, and
-Slack config-token rotation — rotation produces a new pair that must be persisted
-somewhere durable, and there is nowhere yet.
-
-### 3. Install the Slack app · *1 minute*
-
-The app was **created programmatically** — you do not need to build it.
-Installation is the one step only you can authorize.
-
-> ⚠️ **Do not search the Slack marketplace for it — it will never appear there.**
-> This is a *private* app in your workspace, and it must stay unlisted: public
-> distribution would silently cut our API throughput roughly 50×.
->
-> Most reliable route: **[api.slack.com/apps/A0BUFRVSSLD/oauth](https://api.slack.com/apps/A0BUFRVSSLD/oauth)**
-> → green **Install to Workspace** button.
-
-**→ [Or use the direct install link](https://slack.com/oauth/v2/authorize?client_id=11964614685523.11967879910693&scope=chat:write,chat:write.customize,channels:read,channels:manage,channels:history,groups:read,groups:history,im:read,im:write,im:history,mpim:read,mpim:history,reactions:read,reactions:write,users:read,team:read,files:write)**
-
-Then from <https://api.slack.com/apps/A0BUFRVSSLD>, add to the environment:
-
-| Variable | Location |
-|---|---|
-| `SLACK_BOT_TOKEN` | OAuth & Permissions → Bot User OAuth Token |
-| `SLACK_SIGNING_SECRET` | Basic Information → App Credentials |
-| `SLACK_CLIENT_SECRET` | Basic Information → App Credentials |
-
-**Blocks:** Gate 4.
 
 ---
 
@@ -183,9 +195,9 @@ Not eligible: the Notebook master token (a *file*), and the Slack config pair
 ## The fastest path to unblocking Phase 1
 
 1. ~~Telegram token~~ ✅ done
-2. **Supabase `SUPABASE_DB_URL`** — reset password, then `Connect` → Session pooler
-3. Install the Slack app, hand over its three values
-4. ~~Answer D2~~ ✅ Option B — just add the $10 OpenRouter credit
+2. ~~Answer D2~~ ✅ Option B, and the $10 credit has landed (`is_free_tier: false`)
+3. ~~Install the Slack app~~ ✅ done, token verified, 17/17 scopes
+4. **Supabase personal access token** — the one thing Phase 1 waits on
+5. Slack signing secret + client secret — needed for Gate 4, not for Phase 1
 
-**Item 2 alone unblocks Phase 1** — schema, ledger, job engine, and the tested
-backup restore. Everything else can follow.
+**Item 4 alone unblocks Phase 1.** Everything else can follow.
