@@ -10,7 +10,13 @@ states plainly what cannot.
 
 ## The POC
 
-**→ `https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/voice`**
+**→ `https://ai-team-hq-voice-agentic-team-grant.vercel.app`**
+
+> ⚠️ **The first URL handed over was broken**, and Grant found it: it served
+> `content-type: text/plain`, so Safari showed the page source as a text file.
+> Supabase forces `text/plain` on every response it serves —
+> [ADR-0011](../../adr/0011-supabase-cannot-serve-html.md). The page now lives
+> on Vercel; the mint endpoint stays on Supabase, where JSON is unaffected.
 
 Open it in **Safari on the iPhone**. Press *Start talking*, allow the
 microphone, and speak. Headphones are recommended for the interruption test;

@@ -1,21 +1,4 @@
-/**
- * Gate 1 voice POC page.
- *
- * §13 amends Gate 1 for D1: **foreground, screen-on, iPhone Safari.** No
- * background operation, no native app. So this is one page, served over HTTPS,
- * that Grant opens on his phone.
- *
- * §13 also says: *"Claude must prepare the test but must never mark subjective
- * acceptance PASS before Grant has actually performed it."* This page therefore
- * measures what can be measured — latency, session duration, interruption
- * behaviour — and asks Grant for the judgements that cannot be automated.
- *
- * WebRTC rather than WebSocket, per §12 and the research: it gets automatic
- * echo cancellation and jitter buffering from the browser's audio stack, which
- * matters because barge-in is the make-or-break behaviour and echo cancellation
- * on iOS is listed as UNVERIFIED in the master spec's known-unknowns.
- */
-const PAGE = String.raw`<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -77,6 +60,10 @@ const PAGE = String.raw`<!doctype html>
 </details>
 
 <script type="module">
+// The mint endpoint stays on Supabase Edge Functions, which serve JSON
+// correctly. Only the PAGE had to move: Supabase forces content-type
+// text/plain on every response, by design (see ADR-0011).
+const MINT_URL = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/voice-token'
 const $ = (id) => document.getElementById(id)
 const log = (msg, cls='') => {
   const el = $('log')
@@ -102,7 +89,7 @@ $('go').onclick = async () => {
     const t0 = performance.now()
     // The permanent key never reaches this page (§12). This endpoint mints an
     // ephemeral credential that expires in about a minute.
-    const res = await fetch('../voice-token', { method: 'POST' })
+    const res = await fetch(MINT_URL, { method: 'POST' })
     if (!res.ok) throw new Error('mint failed: ' + res.status)
     const { client_secret, model } = await res.json()
     $('mint').textContent = Math.round(performance.now()-t0) + ' ms'
@@ -205,17 +192,4 @@ $('stop').onclick = () => {
 }
 </script>
 </body>
-</html>`
-
-Deno.serve(
-  () =>
-    new Response(PAGE, {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        // The page holds no secret, but it does request microphone access, so
-        // it should not be framed by anything else.
-        'x-frame-options': 'DENY',
-        'referrer-policy': 'no-referrer',
-      },
-    }),
-)
+</html>
