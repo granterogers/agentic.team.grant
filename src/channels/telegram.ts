@@ -21,6 +21,22 @@
 import { timingSafeEqual } from 'node:crypto'
 
 /**
+ * Encode to bytes with `TextEncoder`, not `Buffer`.
+ *
+ * `Buffer` is a Node global but NOT a Deno one, and this module runs in both:
+ * Vitest under Node, and the Telegram webhook under Deno on Supabase Edge
+ * Functions. The first version used `Buffer.from()`, passed every unit test,
+ * and threw `Buffer is not defined` on every authenticated request in
+ * production — visible only because the live round trip returned 500 where the
+ * unauthenticated case correctly returned 401, which is exactly the shape of a
+ * crash after the early return.
+ *
+ * `TextEncoder` and `Uint8Array` are web standards present in both runtimes,
+ * and `timingSafeEqual` accepts any ArrayBufferView.
+ */
+const toBytes = (value: string): Uint8Array => new TextEncoder().encode(value)
+
+/**
  * Compare a presented secret against the expected one without leaking length
  * or content through timing.
  *
@@ -32,8 +48,8 @@ export function secretMatches(presented: string | null | undefined, expected: st
   if (expected === '') return false
   if (presented === null || presented === undefined || presented === '') return false
 
-  const a = Buffer.from(presented, 'utf8')
-  const b = Buffer.from(expected, 'utf8')
+  const a = toBytes(presented)
+  const b = toBytes(expected)
   if (a.length !== b.length) {
     // Still do a comparison of equal length, so a wrong-length secret costs the
     // same as a wrong-content one.

@@ -132,3 +132,6 @@ yarn-error.log*
 logs/
 tmp/
 .scratch/
+
+# Generated at deploy time from src/channels/ — never edited here, never committed.
+supabase/functions/*/telegram.ts

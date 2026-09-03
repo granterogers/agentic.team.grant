@@ -78,3 +78,17 @@ rotates yet. `docs/implementation-plan.md` already front-loads this into Phase 2
 for the right reason: everything Slack depends on a credential that turns over
 roughly twice a day, so it must be observed rotating across a genuine 12-hour
 expiry **and** a restart before anything is built on top of it.
+
+## 6. The Telegram Edge Function writes as `service_role`
+
+`service_role` has `BYPASSRLS`, so the webhook currently writes to
+`inbound_commands` with more privilege than it needs. §15 names it the
+highest-blast-radius credential in the system.
+
+Not urgent, because the blast radius is bounded by the endpoint itself: it can
+only insert one shape of row, and only after passing constant-time secret
+verification. But it is more than the job requires.
+
+The fix comes with item 4 — once `ai_team_app` has a password in the vault, the
+function connects as that role instead and RLS applies. Recorded now so it is
+not discovered later as a surprise.
