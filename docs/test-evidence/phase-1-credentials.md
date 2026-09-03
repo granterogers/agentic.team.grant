@@ -15,6 +15,7 @@ Not that we remembered to store a reference. That storing a value is
 domain over `uuid`, so a Slack token is rejected by the type system:
 
 ```
+<!-- secret-scan:allow-shape — fabricated example -->
 22P02: invalid input syntax for type uuid: "xoxb-a-real-looking-token"
 ```
 
@@ -30,6 +31,7 @@ eventually lose.
 | resolve_secret returns the original plaintext | round_trips=true | ✅ |
 | rotation reuses the same reference and updates the value behind it | same_ref=true new_value_visible=true | ✅ |
 | storing an empty secret is refused | refused with 22023: 22023: refusing to store an empty secret as probe_empty_mtle06cm | ✅ |
+<!-- secret-scan:allow-shape — fabricated example -->
 | a Slack token cannot be written into a credential column at all | refused with 22P02: 22P02: invalid input syntax for type uuid: "xoxb-a-real-looking-token" | ✅ |
 | a dangling reference is refused rather than stored | refused with 23503: 23503: slack_app_credentials.bot_token_ref references vault secret 00b492d2-9f72-498e-af63-36226d2d5 | ✅ |
 | a row with a valid reference is accepted | succeeded, as required | ✅ |

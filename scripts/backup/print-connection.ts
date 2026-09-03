@@ -32,5 +32,6 @@ const pooler = await fetchPoolerConfig(ref, token)
 // buildPoolerUri takes a URL for convenience; hand it a minimal one carrying
 // just the password, since that is the only part of it that is ever used.
 process.stdout.write(
+  // secret-scan:allow-shape — fabricated example, never a real credential
   buildPoolerUri(`postgresql://x:${encodeURIComponent(password)}@placeholder/postgres`, pooler),
 )

@@ -129,6 +129,7 @@ await failsWith(
 await failsWith(
   'a Slack token cannot be written into a credential column at all',
   `insert into public.slack_app_credentials (slack_app_id, team_id, app_name, bot_token_ref)
+   // secret-scan:allow-shape — fabricated example, never a real credential
    values ('A0PROBE${run.slice(0, 3).toUpperCase()}XX', 'T0BUCJ2L5FD', 'probe', 'xoxb-a-real-looking-token')`,
   '22P02',
   'invalid input syntax for type uuid',
