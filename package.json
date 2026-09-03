@@ -16,7 +16,10 @@
     "check:secrets": "python3 scripts/secret-scan.py",
     "verify": "npm run lint && npm run typecheck && npm run check:migrations && npm run test && npm run check:secrets",
     "migrate": "tsx scripts/migrate.ts",
-    "verify:ledger": "tsx scripts/verify/ledger.ts"
+    "verify:ledger": "tsx scripts/verify/ledger.ts",
+    "verify:jobs": "tsx scripts/verify/jobs.ts",
+    "verify:transitions": "tsx scripts/verify/transitions.ts",
+    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
