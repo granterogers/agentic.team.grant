@@ -115,7 +115,25 @@ migration rollback.
 
 ---
 
-## Phase 2 — Connections
+## Phase 2 — Connections · 🟡 **IN PROGRESS**
+
+| Item | State |
+|---|---|
+| Encrypted secret storage (vault + references) | ✅ migration 0007, 18/18 |
+| Provider registry with health, priority, free-only | ✅ migration 0009, live discovery |
+| All four inference enforcement layers | ✅ 9/9 live, spend $0 |
+| **Does `data_collection: "deny"` empty the free registry?** | ✅ **No** — but it costs 8 of 21 models ([ADR-0009](adr/0009-free-allowlist-from-probes.md)) |
+| **Does config-token rotation survive expiry and a restart?** | ✅ **Yes** — recovered from `token_expired`; rotated across two machines via Postgres alone |
+| Slack rotation, scheduled | ✅ every 4h, `.github/workflows/slack-rotation.yml` |
+| Telegram bot configured by API | ✅ description, commands, webhook secret vaulted |
+| Telegram webhook registered | ⬜ **blocked on a deployed URL** — not a credential gap |
+| Google OAuth scaffold | ⬜ |
+| Layer 2 backstop actually *hit* | ⬜ the cap is set (`limit: 5`) but has never fired |
+
+**Blocked, and honestly so:** the webhook needs an HTTPS endpoint. Registering
+one that points nowhere would make Telegram queue updates against a dead
+endpoint, so it waits for deployment rather than being faked.
+
 
 Credentials, provider registry, and the two riskiest unknowns — deliberately
 front-loaded.
