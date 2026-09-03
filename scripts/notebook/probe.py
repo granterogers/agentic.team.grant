@@ -16,10 +16,26 @@ The state this reports is `available_unofficial` at best, never `available`.
 §7 lists them as different states for a reason: the private RPC path working
 today carries no stability promise, and calling that `available` would hide
 the exact risk the adapter boundary exists to contain.
+
+## The API this is written against
+
+The first version of this file was written against a *guessed* API -
+`client.list_notebooks()`, synchronous - and every call failed. The real
+library is **async** and namespaced: an async context manager yielding
+`client.notebooks.list()`, `client.sources.list(id)`,
+`client.settings.get_account_limits()`.
+
+That is worth a note rather than a silent correction. §7 calls this adapter
+high-risk *because* its behaviour is undocumented, and the first thing that
+went wrong was not the undocumented Google protocol - it was assuming the
+shape of the Python wrapper without reading it. The lesson generalises: for a
+dependency whose whole risk profile is "we cannot rely on documentation",
+reading the source is the cheap step, not the thorough one.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -45,8 +61,7 @@ if not storage_raw:
 
 try:
     import notebooklm
-    from notebooklm import auth as nl_auth
-    from notebooklm import NotebookLMClient
+    from notebooklm import AuthTokens, NotebookLMClient
 except ImportError as exc:  # pragma: no cover - environment problem, not logic
     fail("unavailable", f"notebooklm is not importable: {exc}")
 
@@ -60,76 +75,97 @@ storage_path.parent.mkdir(parents=True, exist_ok=True)
 storage_path.write_text(storage_raw)
 storage_path.chmod(0o600)
 
-started = time.monotonic()
-capabilities: list[str] = []
-tier: int | None = None
-notebook_limit: int | None = None
-source_limit: int | None = None
 
-try:
+async def probe() -> dict[str, object]:
+    started = time.monotonic()
+    capabilities: list[str] = []
+    tier: int | None = None
+    notebook_limit: int | None = None
+    source_limit: int | None = None
+
     try:
-        tokens = nl_auth.load_auth_from_storage(storage_path)
+        # `AuthTokens.from_storage`, not `auth.load_auth_from_storage`. The
+        # latter returns a flat name->value dict of cookies, which the client
+        # accepts without complaint and then fails on deep inside with
+        # "'dict' object has no attribute 'storage_path'" - an error message
+        # that names a symptom three layers from the cause. It is also a
+        # coroutine, so it must be awaited; without the await the same
+        # attribute error reappears naming 'coroutine' instead of 'dict',
+        # which is the same lesson arriving twice.
+        tokens = await AuthTokens.from_storage(storage_path)
     except Exception as exc:
-        fail(
-            "auth_required",
-            f"the credential did not load: {type(exc).__name__}: {exc}"[:300],
-            adapter_version=version,
-        )
+        return {
+            "state": "auth_required",
+            "capabilities": [],
+            "adapter_version": version,
+            "detail": f"the credential did not load: {type(exc).__name__}: {exc}"[:300],
+        }
 
-    client = NotebookLMClient(tokens, storage_path=storage_path)
-
-    # Capability 1: can we list at all? This is the cheapest real call and the
-    # one that distinguishes "signed in" from "has a cookie file".
-    try:
-        notebooks = client.list_notebooks()
-        capabilities.append("list_notebooks")
-    except Exception as exc:
-        name = type(exc).__name__
-        # An auth failure and an outage need different responses, so they are
-        # reported as different states rather than one generic failure.
-        state = "auth_required" if "Auth" in name or "401" in str(exc) else "unavailable"
-        fail(
-            state,
-            f"list_notebooks failed: {name}: {exc}"[:300],
-            adapter_version=version,
-            latency_ms=int((time.monotonic() - started) * 1000),
-        )
-
-    # Capability 2: the account's real limits. §11 is explicit that these are
-    # read, never hard-coded - "Google changes them without updating its own
-    # published tables". A failure here is DEGRADED, not fatal: we can work
-    # without knowing the tier, we just cannot budget against it.
-    try:
-        limits = client.get_account_limits()
-        tier = getattr(limits, "tier", None)
-        notebook_limit = getattr(limits, "notebook_limit", None)
-        source_limit = getattr(limits, "source_limit", None)
-        capabilities.append("account_limits")
-    except Exception:
-        pass
-
-    # Capability 3: reading a notebook's sources, which is what the whole
-    # quota design depends on - pull each source's text once, cache it, and
-    # reason over the cache at zero Notebook quota.
-    first = notebooks[0] if notebooks else None
-    if first is not None:
+    async with NotebookLMClient(tokens, storage_path=storage_path) as client:
+        account = None
         try:
-            client.list_sources(first.id)
-            capabilities.append("list_sources")
+            account = await client.get_account_email()
         except Exception:
             pass
 
-    latency_ms = int((time.monotonic() - started) * 1000)
+        # Capability 1: can we list at all? The cheapest real call, and the one
+        # that distinguishes "signed in" from "has a cookie file".
+        try:
+            notebooks = await client.notebooks.list()
+            capabilities.append("list_notebooks")
+        except Exception as exc:
+            name = type(exc).__name__
+            # An auth failure and an outage need different responses, so they
+            # are reported as different states rather than one generic failure.
+            text = str(exc)
+            state = "auth_required" if "Auth" in name or "401" in text else "unavailable"
+            return {
+                "state": state,
+                "capabilities": [],
+                "adapter_version": version,
+                "account": account,
+                "detail": f"notebooks.list failed: {name}: {text}"[:300],
+                "latency_ms": int((time.monotonic() - started) * 1000),
+            }
 
-    # DEGRADED when the basics work but something expected did not. Reporting
-    # `available_unofficial` while a capability is missing would be the same
-    # error as calling a stored credential a working one.
-    state = "available_unofficial" if "list_notebooks" in capabilities else "degraded"
-    if first is not None and "list_sources" not in capabilities:
-        state = "degraded"
+        # Capability 2: the account's real limits. §11 is explicit that these
+        # are read, never hard-coded - "Google changes them without updating
+        # its own published tables". A failure here is DEGRADED, not fatal: we
+        # can work without knowing the tier, we just cannot budget against it.
+        try:
+            limits = await client.settings.get_account_limits()
+            tier = getattr(limits, "tier", None)
+            notebook_limit = getattr(limits, "notebook_limit", None)
+            source_limit = getattr(limits, "source_limit", None)
+            capabilities.append("account_limits")
+        except Exception:
+            pass
 
-    emit(
-        {
+        # Capability 3: reading a notebook's sources, which is what the whole
+        # quota design depends on - pull each source's text once, cache it, and
+        # reason over the cache at zero Notebook quota.
+        source_count = None
+        first = notebooks[0] if notebooks else None
+        if first is not None:
+            try:
+                sources = await client.sources.list(first.id)
+                source_count = len(sources)
+                capabilities.append("list_sources")
+            except Exception:
+                pass
+
+        latency_ms = int((time.monotonic() - started) * 1000)
+
+        # DEGRADED when the basics work but something expected did not.
+        # Reporting `available_unofficial` while a capability is missing would
+        # be the same error as calling a stored credential a working one.
+        state = "available_unofficial"
+        if first is not None and "list_sources" not in capabilities:
+            state = "degraded"
+        if "account_limits" not in capabilities:
+            state = "degraded"
+
+        return {
             "state": state,
             "capabilities": capabilities,
             "adapter_version": version,
@@ -137,15 +173,24 @@ try:
             "notebook_limit": notebook_limit,
             "source_limit": source_limit,
             "notebook_count": len(notebooks),
+            "source_count": source_count,
             # The account, so it is obvious in the probe history if a personal
             # account was used by mistake. An email address, never a token.
-            "account": getattr(tokens, "account_email", None),
+            "account": account,
             "detail": (
-                f"{len(notebooks)} notebook(s); capabilities: {', '.join(capabilities)}"
+                f"{len(notebooks)} notebook(s)"
+                + (f", {source_count} source(s) in the first" if source_count is not None else "")
+                + f"; capabilities: {', '.join(capabilities) or 'none'}"
             ),
             "latency_ms": latency_ms,
         }
-    )
+
+
+try:
+    emit(asyncio.run(probe()))
+except Exception as exc:  # noqa: BLE001 - any failure must still report a state
+    fail("unavailable", f"the probe raised {type(exc).__name__}: {exc}"[:300],
+         adapter_version=version)
 finally:
     # The credential does not stay on disk after the probe.
     try:

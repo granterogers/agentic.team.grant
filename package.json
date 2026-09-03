@@ -44,7 +44,8 @@
     "poc:gate-4": "tsx scripts/poc/gate-4.ts",
     "poc:gate-2": "tsx scripts/poc/gate-2.ts",
     "notebook:import": "tsx scripts/notebook/import-credential.ts",
-    "notebook:probe": "tsx scripts/notebook/probe.ts"
+    "notebook:probe": "tsx scripts/notebook/probe.ts",
+    "notebook:bootstrap": "tsx scripts/notebook/bootstrap.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

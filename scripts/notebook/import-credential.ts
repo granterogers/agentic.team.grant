@@ -125,24 +125,80 @@ if (alsoMissing.length > 0) {
 
 // Expiry, so "it stopped working in a week" is predicted rather than
 // discovered. §11's posture applied to a credential: measured, not assumed.
-const expiries = cookies
+//
+// Reported for the cookies that actually authenticate, NOT the minimum across
+// the whole jar. The first version took the minimum and announced "under a
+// day - the session will need re-minting almost immediately" on a jar whose
+// auth cookies were good for a year: a Google export always carries some
+// short-lived analytics cookie that had already lapsed. An alarm that fires on
+// every healthy input is an alarm nobody reads.
+const AUTH_COOKIES = new Set([...REQUIRED, ...EXPECTED_TOO])
+const authExpiries = cookies
+  .filter((c) => AUTH_COOKIES.has(String(c.name ?? '')))
   .map((c) => c.expirationDate ?? c.expires)
   .filter((e): e is number => typeof e === 'number' && e > 0)
-if (expiries.length > 0) {
-  const soonest = Math.min(...expiries)
+if (authExpiries.length > 0) {
+  const soonest = Math.min(...authExpiries)
   const days = (soonest * 1000 - Date.now()) / 86_400_000
   console.log(
-    `  soonest expiry: ${new Date(soonest * 1000).toISOString()} (${days.toFixed(1)} days)`,
+    `  soonest auth-cookie expiry: ${new Date(soonest * 1000).toISOString()} (${days.toFixed(0)} days)`,
   )
-  if (days < 1) {
-    console.log('  ⚠ under a day. The session will need re-minting almost immediately.')
-  }
+  // The stated expiry is the optimistic figure and worth saying so.
+  // `__Secure-1PSIDTS` rotates on a cycle of minutes to hours regardless of
+  // the date it advertises, and once the browser rotates it the exported copy
+  // is dead. That is what killed the first import, and no expiry field
+  // predicts it.
+  console.log('  note: __Secure-1PSIDTS rotates in minutes-to-hours whatever its stated')
+  console.log('  expiry says, so a cookie export is short-lived in practice.')
 }
 
 // --- store, without ever producing the value as a string we log -------------
 // Normalised to Playwright's storage_state shape on the way in, so the adapter
 // has one format to read regardless of which tool produced the export.
 const storageState = JSON.stringify({ cookies, origins: [] })
+
+// --- does it actually authenticate? ---------------------------------------
+// Checked BEFORE storing. The first version of this script validated the
+// export's shape and vaulted it with a confident tick; the jar was dead, and
+// every Google surface redirected to a sign-in page. The failure surfaced one
+// step later in the probe, which is a worse place to learn it.
+//
+// This is the fifth time in this build that a shape check has been mistaken
+// for a working check, and the first time in code written while documenting
+// that exact lesson. Hence a real request, here, before anything is stored.
+{
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const run = promisify(execFile)
+  let alive = false
+  let detail = ''
+  try {
+    const { stdout } = await run('python3', ['scripts/notebook/liveness.py'], {
+      // Through the environment, not argv: argv is world-readable in `ps`.
+      env: { ...process.env, NOTEBOOK_CANDIDATE_STATE: storageState },
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 90_000,
+    })
+    const parsed = JSON.parse(stdout.trim()) as { alive?: boolean; detail?: string }
+    alive = parsed.alive === true
+    detail = String(parsed.detail ?? '')
+  } catch (error) {
+    detail = `the liveness check could not run: ${(error as Error).message.slice(0, 150)}`
+  }
+
+  console.log(`  liveness: ${detail}`)
+  if (!alive) {
+    console.error(
+      '\nthis cookie jar does not authenticate to Google, so it has NOT been stored.\n' +
+        '  Cookie exports die quickly: __Secure-1PSIDTS rotates in minutes to hours,\n' +
+        '  and once the browser rotates it the exported copy is dead.\n\n' +
+        '  Use the master-token path instead - it lasts months and re-mints the\n' +
+        '  cookie jar itself whenever it rotates:\n' +
+        '    docs/poc/gate-2-notebook/01-what-grant-does.md',
+    )
+    process.exit(1)
+  }
+}
 
 await db.execute(`
   select app.store_secret(

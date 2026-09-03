@@ -96,6 +96,11 @@ PATTERNS = {
     # so a leak is a different category of incident from a leaked key.
     "google session cookie":  r"\bsidts-[A-Za-z0-9_\-]{20,}",
     "google psid cookie":     r"\bg\.a[0-9]{3}[A-Za-z0-9_\-]{40,}",
+    # Gate 2's durable credentials. The master token is full-account and
+    # long-lived, so it is the single most damaging string in this system.
+    "google master token":    r"\baas_et/[A-Za-z0-9_\-]{20,}",
+    "google embeddedsetup token": r"\boauth2_4/[A-Za-z0-9_\-]{20,}",
+    "google oauth access token":  r"\bya29\.[A-Za-z0-9_\-]{20,}",
 }
 
 # Documentation and test fixtures must be able to state a credential's *shape*
@@ -151,7 +156,7 @@ def main() -> int:
     #
     # Each cookie value is registered as its own secret, so the existing
     # exact-value scan covers it with no further special-casing.
-    for container in ("NOTEBOOK_COOKIES", "NOTEBOOK_STORAGE_STATE"):
+    for container in ("NOTEBOOK_COOKIES", "NOTEBOOK_STORAGE_STATE", "NOTEBOOK_CANDIDATE_STATE"):
         raw = os.environ.get(container, "")
         if not raw:
             continue
