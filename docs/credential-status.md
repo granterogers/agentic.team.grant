@@ -15,7 +15,7 @@ these are exactly the fields that registry must carry.
 | `OPENAI_API_KEY` | ✅ **works** | `GET /v1/models` → 200, 124 models |
 | `SLACK_APP_CONFIG_TOKEN` | ✅ **works** | `apps.manifest.validate` → `ok:true`, then app created |
 | `SLACK_APP_CONFIG_REFRESH_TOKEN` | ⚠️ present, **unused** | rotation deliberately deferred — see below |
-| `OPENROUTER_API_KEY` | ✅ **works**, free tier | `GET /api/v1/key` → `is_free_tier: true`, usage 0 |
+| `OPENROUTER_API_KEY` | ✅ **works, credited** | `is_free_tier: false` (2026-09-03) = **1,000 req/day**. ⚠️ `limit: None` — no per-key cap |
 | `GEMINI_API_KEY` | ✅ **works** | `models?key=` → 200, 50 models |
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | ⚠️ **partial** | REST → 200, but **no DDL path** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | present | not yet exercised |

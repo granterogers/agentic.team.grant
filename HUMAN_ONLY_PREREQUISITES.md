@@ -70,6 +70,30 @@ Then from <https://api.slack.com/apps/A0BUFRVSSLD>, add to the environment:
 
 ---
 
+## 🔁 Standing reminder — OpenRouter card
+
+*Grant asked to be reminded until confirmed done. Raised at the start of each
+working session.*
+
+Two items at [openrouter.ai/settings/credits](https://openrouter.ai/settings/credits)
+and the Keys page:
+
+- [ ] **Confirm Auto Top-Up is OFF, then remove the saved card.**
+      Auto Top-Up is opt-in — a toggle where you set "when credits are below X,
+      purchase Y". If it was never enabled, the $10 was a one-off and nothing
+      recurs. **Removing the card keeps the $10 balance** — disabling or removing
+      a payment method does not refund or revoke credits already purchased.
+      Worth doing anyway: with no card, an automatic charge is *physically
+      impossible* rather than merely switched off, and when the balance runs
+      down requests fail cleanly with a payment error — precisely the
+      "never silently paid" behaviour the design requires.
+- [ ] **Set a hard per-key spend limit (~$5/month).** The key currently reports
+      `limit: None`. A per-key cap is **enforcement layer 2** in
+      `docs/adr/0005-inference-cost-posture.md`, and it is absent — so a bug in
+      our own code could currently drain the whole balance.
+
+---
+
 ## 🟡 Decisions (no setup work — just answers)
 
 ### D2. Inference cost posture
@@ -121,7 +145,7 @@ Google AI Pro · any monthly subscription.
 |---|---|
 | `OPENAI_API_KEY` | 124 models; `gpt-realtime-2.1` and `-2.1-mini` both present |
 | `SLACK_APP_CONFIG_TOKEN` | app created with it |
-| `OPENROUTER_API_KEY` | works, free tier |
+| `OPENROUTER_API_KEY` | ✅ **$10 credit landed** — `is_free_tier: false` = 1,000 req/day |
 | `GEMINI_API_KEY` | 50 models |
 | Supabase REST | responds 200 |
 
