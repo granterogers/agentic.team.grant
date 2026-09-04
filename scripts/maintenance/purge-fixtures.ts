@@ -62,6 +62,9 @@ const predicate = FIXTURE_PREFIXES.map((p) => `slug like '${p}%'`).join(' or ')
 
 const found = await db.execute(`
   select p.slug, p.name, p.status,
+         (select count(*)::int from public.jobs j
+           where j.project_id = p.project_id
+             and j.state not in ('complete', 'cancelled', 'failed')) as live_jobs,
          (select count(*)::int from public.notebook_sources s where s.project_id = p.project_id) as sources,
          (select count(*)::int from public.project_briefs b where b.project_id = p.project_id) as briefs
   from public.projects p
@@ -75,7 +78,8 @@ if (found.rows.length === 0) {
   console.log(`${String(found.rows.length)} active fixture project(s):`)
   for (const r of found.rows) {
     console.log(
-      `  ${String(r.slug)} — ${String(r.sources)} source(s), ${String(r.briefs)} brief(s)`,
+      `  ${String(r.slug)} — ${String(r.sources)} source(s), ${String(r.briefs)} brief(s), ` +
+        `${String(r.live_jobs)} live job(s)`,
     )
   }
 }
@@ -103,6 +107,23 @@ if (found.rows.length > 0) {
       select project_id from public.projects where (${predicate})
     )
   `)
+  // Jobs first, and this was missing until it mattered. Archiving a project
+  // left its jobs LIVE, so every verification run added a few more to a set
+  // that only ever grew: by the time the briefing generator ran for real it
+  // reported 63 jobs in flight, all of them debris. Today, Needs Me and the
+  // briefings all read live jobs, so fixture leakage does not just clutter a
+  // table - it makes every summary in the system wrong.
+  //
+  // Terminated along legal transitions. `failed` is reachable from every
+  // non-terminal state and is the honest label for work abandoned mid-flight;
+  // `cancelled` is not reachable from `committing`, which is how the first
+  // version of this discovered the transition guard the hard way.
+  await db.execute(`
+    update public.jobs set state = 'failed', finished_at = app.now_utc(),
+      state_reason = 'fixture project retired by purge:fixtures'
+    where state not in ('complete', 'cancelled', 'failed')
+      and project_id in (select project_id from public.projects where (${predicate}))
+  `)
   await db.execute(`
     update public.projects set status = 'archived', notebook_ref = null
     where (${predicate}) and status = 'active'
@@ -124,6 +145,20 @@ if (staffLeft.rows.length > 0) {
     `\nretired ${String(staffLeft.rows.length)} leftover specialist(s): ` +
       staffLeft.rows.map((r) => String(r.slug)).join(', '),
   )
+}
+
+// Orphans: fixture jobs whose project was archived by an earlier run that did
+// not know to terminate them. Matched by the project's slug, so a real
+// project's jobs are never in scope.
+const orphans = await db.execute(`
+  update public.jobs set state = 'failed', finished_at = app.now_utc(),
+    state_reason = 'orphaned fixture job retired by purge:fixtures'
+  where state not in ('complete', 'cancelled', 'failed')
+    and project_id in (select project_id from public.projects where (${predicate}))
+  returning job_id
+`)
+if (orphans.rows.length > 0) {
+  console.log(`\nretired ${String(orphans.rows.length)} orphaned fixture job(s).`)
 }
 
 const remaining = await db.execute(`

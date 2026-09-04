@@ -1100,9 +1100,12 @@ try {
     update public.staff set active = false
     where not permanent and slug like 'fixture-%' and active
   `)
+  // `active = false` requires `archived_at`, by constraint - the pair is the
+  // schema refusing to let "inactive" mean two different things. Setting one
+  // without the other fails, which is the constraint working.
   await db.execute(`
-    update public.slack_channel_map set active = false
-    where channel_name = 'fixture-channel'
+    update public.slack_channel_map set active = false, archived_at = app.now_utc()
+    where channel_name = 'fixture-channel' and active
   `)
   console.log('\nfixtures retired.')
 } catch (error) {

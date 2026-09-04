@@ -17,6 +17,7 @@
  * Everything created is prefixed `fixture-` for `npm run purge:fixtures`.
  */
 
+import { generateBriefing, localDate } from '../../src/briefings/compose.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
 
@@ -380,6 +381,137 @@ record(
 )
 
 // ===========================================================================
+// 5. Briefings — the property is "never twice"
+// ===========================================================================
+
+const scope = `fixture-brief-${run}`
+const forDate = localDate(new Date(), 'Europe/London')
+
+const first = await generateBriefing(db, 'morning', forDate, scope)
+record(
+  'briefings',
+  'a morning briefing is generated from live counts',
+  first === null
+    ? 'none generated'
+    : `${String(first.body.split('\n').length)} lines, ${String(first.inputs.liveJobs)} live job(s)`,
+  first?.body.includes(forDate) === true,
+)
+
+// The one that matters. A duty that crashed after sending and before recording
+// WILL be re-attempted - "read state, continue" guarantees it - and a second
+// morning briefing is the failure most likely to make a person stop reading
+// them.
+const second = await generateBriefing(db, 'morning', forDate, scope)
+const count = await one(`
+  select count(*)::int as n from public.briefings
+  where scope_ref = ${lit(scope)} and kind = 'morning' and for_date = ${lit(forDate)}::date
+`)
+record(
+  'briefings',
+  'a re-attempted duty does NOT send a second morning briefing',
+  `second attempt returned ${second === null ? 'null (already exists)' : 'A NEW BRIEFING'}, ${String(count?.n)} row(s) stored`,
+  second === null && Number(count?.n) === 1,
+)
+
+// Evening is a different briefing, not a duplicate.
+const evening = await generateBriefing(db, 'evening', forDate, scope)
+record(
+  'briefings',
+  'the evening briefing on the same day is not blocked by the morning one',
+  evening === null ? 'blocked' : 'generated',
+  evening !== null,
+)
+
+// And tomorrow's morning is not blocked by today's.
+const tomorrow = localDate(new Date(Date.now() + 86_400_000), 'Europe/London')
+const nextDay = await generateBriefing(db, 'morning', tomorrow, scope)
+record(
+  'briefings',
+  "tomorrow's morning briefing is not blocked by today's",
+  nextDay === null ? 'blocked' : `generated for ${tomorrow}`,
+  nextDay !== null,
+)
+
+// Generated but not delivered is a legitimate state - "leave me alone today"
+// mutes delivery, not generation - and must be distinguishable from a crash.
+await db.execute(`
+  update public.briefings set suppressed_reason = 'quiet_until is in the future (leave me alone today)'
+  where scope_ref = ${lit(scope)} and kind = 'evening'
+`)
+const suppressed = await one(`
+  select delivered_at, suppressed_reason from public.briefings
+  where scope_ref = ${lit(scope)} and kind = 'evening'
+`)
+record(
+  'briefings',
+  'a muted briefing is generated-and-suppressed, distinguishable from a crash',
+  `delivered_at=${String(suppressed?.delivered_at ?? 'null')} reason=${String(suppressed?.suppressed_reason).slice(0, 40)}`,
+  suppressed?.delivered_at === null && String(suppressed?.suppressed_reason).length > 0,
+)
+
+const rewriteBody = await mustRefuse(`
+  update public.briefings set body = 'Actually everything was fine.'
+  where scope_ref = ${lit(scope)} and kind = 'morning' and for_date = ${lit(forDate)}::date
+`)
+record(
+  'briefings',
+  'what a briefing said cannot be changed after the fact',
+  rewriteBody.slice(0, 130),
+  rewriteBody.includes('cannot be changed after it is generated'),
+)
+
+// Delivery fields, by contrast, must remain updatable.
+let delivery = 'threw'
+try {
+  await db.execute(`
+    update public.briefings
+    set delivered_at = app.now_utc(), delivered_to = array['telegram']::text[]
+    where scope_ref = ${lit(scope)} and kind = 'morning' and for_date = ${lit(forDate)}::date
+  `)
+  delivery = String(
+    (
+      await one(`
+    select array_to_string(delivered_to, ',') as d from public.briefings
+    where scope_ref = ${lit(scope)} and kind = 'morning' and for_date = ${lit(forDate)}::date
+  `)
+    )?.d,
+  )
+} catch (error) {
+  delivery = `refused: ${(error as Error).message.slice(0, 100)}`
+}
+record(
+  'briefings',
+  'delivery CAN be recorded afterwards, so the body rule is a gate not a wall',
+  `delivered_to=${delivery}`,
+  delivery === 'telegram',
+)
+
+// ===========================================================================
+// 6. Project monitoring
+// ===========================================================================
+
+const attention = await db.execute(`
+  select slug, open_blockers, live_jobs, stalled_jobs, has_brief, brief_is_stale
+  from app.project_attention()
+`)
+record(
+  'monitoring',
+  'project_attention reports facts per active project, not a score',
+  `${String(attention.rows.length)} active project(s); columns: ${Object.keys(attention.rows[0] ?? {}).join(', ')}`,
+  attention.rows.length > 0 && 'open_blockers' in (attention.rows[0] ?? {}),
+)
+
+const mine = attention.rows.find((r) => String(r.slug) === `fixture-autonomy-${run}`)
+record(
+  'monitoring',
+  'a project with live work and no brief is reported as exactly that',
+  mine === undefined
+    ? 'fixture project not found'
+    : `live_jobs=${String(mine.live_jobs)} has_brief=${String(mine.has_brief)} open_blockers=${String(mine.open_blockers)}`,
+  mine !== undefined && Number(mine.live_jobs) >= 1 && mine.has_brief === false,
+)
+
+// ===========================================================================
 // Report, then clean up
 // ===========================================================================
 console.log('| group | check | outcome | |')
@@ -391,6 +523,7 @@ const failed = checks.filter((c) => !c.passed)
 console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`)
 
 try {
+  await db.execute(`delete from public.briefings where scope_ref like 'fixture-%'`)
   await db.execute(`delete from public.responsibilities where slug like 'fixture-duty-%'`)
   await db.execute(`
     update public.staff set active = false
