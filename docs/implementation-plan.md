@@ -294,7 +294,7 @@ delegation attempt, duplicate task, forbidden destructive operation.
 
 ---
 
-## Phase 6 — Autonomy · 🟡 **IN PROGRESS**
+## Phase 6 — Autonomy ✅
 
 | Item | State |
 |---|---|
@@ -303,13 +303,13 @@ delegation attempt, duplicate task, forbidden destructive operation.
 | Responsibilities | ✅ 0027 — recurring duties owned by a role; the idempotency key is derived in one place |
 | Needs Me | ✅ 0027 — overdue first, then work actually stopped; overflow **reported**, never truncated |
 | Today | ✅ 0027 — live work with computed staleness, waiting-on-Grant first |
-| Project monitoring | ⬜ |
-| Morning/evening briefings | ⬜ |
+| Project monitoring | ✅ 0028 — `app.project_attention()` returns facts per project, never a score |
+| Morning/evening briefings | ✅ 0028 — unique per (kind, scope, **local** date); composed from counts, no model call |
 
 **Acceptance:** limits hold under concurrent load and across restarts; "leave me
 alone today" persists as structured preference; Needs Me stays small.
 
-✅ **18/18** via `npm run verify:autonomy`, idempotent across runs.
+✅ **27/27** via `npm run verify:autonomy`, idempotent across runs.
 
 Two decisions worth stating. **Autonomy is not authority:** a project at `act`
 still cannot reach a policy-disabled tool or commit unreviewed output, and that
@@ -317,6 +317,12 @@ is asserted rather than assumed. **Needs Me reports its overflow instead of
 truncating:** a list that silently shows 7 of 40 looks healthy at exactly the
 moment it stops being useful, so `app.needs_me_pressure()` returns the
 suppressed count and the view itself returns everything.
+
+A third, added with the briefings: **a restart must not send a second morning
+briefing.** Uniqueness is `(kind, scope_ref, for_date)` on an index rather than
+a pre-check, because a SELECT-then-INSERT loses exactly the race that happens
+here. `for_date` is stored rather than derived — a briefing generated at 23:40
+UTC may be tomorrow's.
 
 ---
 
@@ -326,19 +332,24 @@ Slack office (channels, threads, tiered staff identities, **≥3 app slots
 reserved**), remaining seven Telegram bots, feedback capture, voice notes via
 Chirp 3: HD with text fallback, Undo surfaces, notification learning.
 
-**Staff avatars land here**, where `chat:write.customize` and the per-bot
-Telegram profile photos actually consume them. §9 lists "name, title, avatar"
+**Staff avatars: ✅ done early** (2026-09-04, `npm run avatars`,
+`assets/avatars/`). They land *here* in the sense that
+`chat:write.customize` and the per-bot Telegram profile photos are what
+consume them; the artwork and the generator exist already. §9 lists "name, title, avatar"
 as the presentation, and eight identically-iconed staff are eight staff nobody
 can tell apart at a glance.
 
-One judgement to make explicitly rather than by default: **photorealistic
-faces are the wrong call.** Grant knows the team is AI, but a synthetic human
+The judgement below was made explicitly, and the implementation followed it:
+**photorealistic faces are the wrong call.** Grant knows the team is AI, but a synthetic human
 photograph is a claim about a person who does not exist, it would look like a
 stock-photo deepfake in a Slack sidebar, and §21's honesty posture sits badly
 with it. Distinct, characterful, obviously-illustrated avatars give the same
 at-a-glance recognition without asserting a person. Generated as SVG so they
 are versioned in the repository, deterministic per role, and need no image
-service or credential.
+service or credential. Built exactly that way — and the generator reports
+feature collisions rather than reseeding until the spread looks right, because
+two of the eight landed on the same face and reseeding would have hidden which
+two.
 
 **Acceptance:** results reach the right thread with correct identity
 presentation; TTS degrades to text rather than incurring cost; Undo is
