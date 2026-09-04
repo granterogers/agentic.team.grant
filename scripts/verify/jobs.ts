@@ -483,4 +483,35 @@ console.log(
   `\nStates exercised: ${JOB_STATES.length} (${IN_FLIGHT_STATES.length} in-flight, ` +
     `${DORMANT_STATES.length} dormant, ${TERMINAL_STATES.length} terminal)`,
 )
+
+// ---------------------------------------------------------------------------
+// Retire this run's jobs.
+//
+// Absent until it mattered. These jobs carry no project, so `purge:fixtures` -
+// which finds debris by project slug - could not see them, and the capacity
+// probes accumulated as LIVE jobs against a global limit of three. The queue
+// eventually held three permanently-running jobs with expired leases, and the
+// next thing that tried to dequeue simply got nothing, which looks like a bug
+// in the dequeue rather than a leak here.
+//
+// That is the sharper version of the fixture-leak lesson: a leaked row
+// distorts a summary, but a leaked LEASE stops the queue and misattributes the
+// fault to whatever runs next.
+//
+// `failed` is reachable from every non-terminal state and is the honest label
+// for a probe abandoned mid-flight.
+// ---------------------------------------------------------------------------
+try {
+  const retired = await db.execute(`
+    update public.jobs set state = 'failed', finished_at = now(),
+      state_reason = 'verification probe retired by verify:jobs'
+    where idempotency_key like '%-${run}'
+      and state not in ('complete', 'cancelled', 'failed')
+    returning job_id
+  `)
+  console.log(`Retired ${retired.rows.length} probe job(s) from this run.`)
+} catch (error) {
+  console.log(`Cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
+}
+
 if (failedChecks.length > 0) process.exit(1)

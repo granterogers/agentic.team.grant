@@ -11,6 +11,8 @@
  * substitution.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import type { UsageOutcome } from '../inference/policy.ts'
+import { recordUsage } from '../inference/record.ts'
 import type { AllowedModel } from './guards.ts'
 import {
   assertModelAllowed,
@@ -196,6 +198,12 @@ export class ProviderRouter {
     if (payload.error !== undefined) {
       const message = `${String(payload.error.code)} ${payload.error.message ?? ''}`
       await this.recordFailure(provider.provider, message)
+      await this.account(
+        provider.provider,
+        model,
+        String(payload.error.code) === '429' ? 'rate_limited' : 'provider_error',
+        request.correlationId,
+      )
       throw new Error(`provider ${provider.provider} refused: ${message}`)
     }
 
@@ -209,6 +217,7 @@ export class ProviderRouter {
         provider.provider,
         (error as PaidCallPreventedError).message.slice(0, 400),
       )
+      await this.account(provider.provider, model, 'refused_paid', request.correlationId)
       throw error
     }
 
@@ -220,6 +229,16 @@ export class ProviderRouter {
       // and must not trip the breaker — the provider did its job. Recording
       // success keeps the breaker honest about availability.
       await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
+      await this.account(
+        provider.provider,
+        payload.model ?? model,
+        'empty_completion',
+        request.correlationId,
+        {
+          prompt: payload.usage?.prompt_tokens ?? 0,
+          completion: payload.usage?.completion_tokens ?? 0,
+        },
+      )
       throw new EmptyCompletionError(
         payload.model ?? model,
         choice?.finish_reason ?? 'unknown',
@@ -228,6 +247,10 @@ export class ProviderRouter {
     }
 
     await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
+    await this.account(provider.provider, payload.model ?? model, 'ok', request.correlationId, {
+      prompt: payload.usage?.prompt_tokens ?? 0,
+      completion: payload.usage?.completion_tokens ?? 0,
+    })
 
     return {
       model: payload.model ?? model,
@@ -235,6 +258,49 @@ export class ProviderRouter {
       promptTokens: payload.usage?.prompt_tokens ?? 0,
       completionTokens: payload.usage?.completion_tokens ?? 0,
       cost: 0,
+    }
+  }
+
+  /**
+   * Write the §11 usage row.
+   *
+   * This was missing entirely until a worker running a real job through the
+   * whole pipeline reported zero recorded calls. §11 requires every inference
+   * attempt to be accounted for, failures included - and the router is the one
+   * place every call passes through, so anywhere else is the wrong place. The
+   * only caller of `recordUsage` was a POC script doing it by hand, which is
+   * how a rule that reads as enforced becomes a rule one script happens to
+   * follow.
+   *
+   * Never throws. A usage row that fails to write must not turn a successful
+   * completion into an error - the accounting is important, and it is not more
+   * important than the work.
+   */
+  private async account(
+    provider: string,
+    modelId: string,
+    outcome: UsageOutcome,
+    correlationId: string | undefined,
+    tokens: { prompt: number; completion: number } = { prompt: 0, completion: 0 },
+  ): Promise<void> {
+    // No correlation id means no job to attribute this to. Recorded anyway,
+    // under a generated one: an unattributed call is still a call, and
+    // dropping it would make the totals quietly wrong in the direction of
+    // "we used less than we did".
+    try {
+      await recordUsage(this.db, {
+        provider,
+        modelId,
+        correlationId: correlationId ?? crypto.randomUUID(),
+        outcome,
+        promptTokens: tokens.prompt,
+        completionTokens: tokens.completion,
+        // OpenRouter's free tier reports no cost, and §11 says that is exactly
+        // when a figure must not be called authoritative. `null` carries that.
+        providerReportedCost: null,
+      })
+    } catch {
+      // Deliberately swallowed. See the note above.
     }
   }
 
