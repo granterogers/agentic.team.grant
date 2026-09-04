@@ -250,16 +250,32 @@ something that was not an outage.
 
 ---
 
-## Phase 5 — Agent engine
+## Phase 5 — Agent engine ✅
 
-- Eight permanent roles (§7) on the product's own provider abstraction
-- **Staff avatars: a distinct visual identity per role** (Grant, 2026-09-03)
-- Chief of Staff, router, delegation
-- **Intent classification, biased downward** on ambiguity
-- Quality pipeline with the structured metadata of §16
-- Temporary specialists
-- Staff Builder (§8)
-- Prompt versioning
+**Evidence:** [`docs/test-evidence/phase-5-agent-engine.md`](test-evidence/phase-5-agent-engine.md)
+· `npm run verify:agents` — **45/45**, idempotent across consecutive runs.
+
+- ✅ Eight permanent roles (§7) on the product's own provider abstraction —
+  seeded by 0019; `staff` deliberately has no provider or model column
+- ✅ **Staff avatars: a distinct visual identity per role** (Grant, 2026-09-03)
+  — `npm run avatars`; illustrated, not photorealistic, and a test asserts no
+  two roles share a face
+- ✅ Chief of Staff, router, delegation — `src/agents/router.ts`, 0020;
+  delegation depth capped in a trigger
+- ✅ **Intent classification, biased downward** on ambiguity —
+  `src/agents/intent.ts`; deterministic rules, no model call
+- ✅ Quality pipeline with the structured metadata of §16 —
+  `src/agents/quality.ts`; the exemption is provable (0023), not claimed
+- ✅ Temporary specialists — 0024; must expire, must be justified, capped at
+  three, cannot be promoted
+- ✅ Staff Builder (§8) — 0024; the app role reaches `staff` only through a
+  function with `permanent` hard-coded false
+- ✅ Prompt versioning — 0024; append-only text, pointer moves forward only
+
+**Still open from this phase:** nothing blocking. Two notes carried forward —
+the duplicate scan is blind to jobs that never went through the router (it
+reports how many), and consultation economics (`consultations.changed_outcome`)
+has the schema but no accumulated data until agents actually run.
 
 **Acceptance:** an output without `reviewer_status` **cannot reach
 `committed`**; material disagreement is surfaced rather than averaged away;
