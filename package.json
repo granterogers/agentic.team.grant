@@ -53,7 +53,8 @@
     "brief": "tsx scripts/projects/brief.ts",
     "purge:fixtures": "tsx scripts/maintenance/purge-fixtures.ts",
     "verify:agents": "tsx scripts/verify/agents.ts",
-    "avatars": "tsx scripts/staff/generate-avatars.ts"
+    "avatars": "tsx scripts/staff/generate-avatars.ts",
+    "verify:autonomy": "tsx scripts/verify/autonomy.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

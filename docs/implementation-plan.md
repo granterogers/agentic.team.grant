@@ -294,17 +294,29 @@ delegation attempt, duplicate task, forbidden destructive operation.
 
 ---
 
-## Phase 6 — Autonomy
+## Phase 6 — Autonomy · 🟡 **IN PROGRESS**
 
-Responsibilities, queue scheduling, capacity limits, project monitoring, Today,
-Needs Me, morning/evening briefings, natural-language autonomy controls.
-
-Start at the spec's conservative V1 defaults: 3 simultaneous jobs, 3 specialist
-consultations/job, 5 investigations/project/day, 3 immediate alerts/agent/day,
-everything else batched.
+| Item | State |
+|---|---|
+| Queue scheduling and capacity limits | ✅ 0006 — enforced **at dequeue** under an advisory lock, which is what makes it survive a restart; `verify:jobs` |
+| Natural-language autonomy controls | ✅ 0013 (notifications) + 0027 (autonomy level per scope) |
+| Responsibilities | ✅ 0027 — recurring duties owned by a role; the idempotency key is derived in one place |
+| Needs Me | ✅ 0027 — overdue first, then work actually stopped; overflow **reported**, never truncated |
+| Today | ✅ 0027 — live work with computed staleness, waiting-on-Grant first |
+| Project monitoring | ⬜ |
+| Morning/evening briefings | ⬜ |
 
 **Acceptance:** limits hold under concurrent load and across restarts; "leave me
 alone today" persists as structured preference; Needs Me stays small.
+
+✅ **18/18** via `npm run verify:autonomy`, idempotent across runs.
+
+Two decisions worth stating. **Autonomy is not authority:** a project at `act`
+still cannot reach a policy-disabled tool or commit unreviewed output, and that
+is asserted rather than assumed. **Needs Me reports its overflow instead of
+truncating:** a list that silently shows 7 of 40 looks healthy at exactly the
+moment it stops being useful, so `app.needs_me_pressure()` returns the
+suppressed count and the view itself returns everything.
 
 ---
 
