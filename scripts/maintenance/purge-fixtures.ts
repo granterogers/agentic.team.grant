@@ -110,6 +110,22 @@ if (found.rows.length > 0) {
   console.log(`\nretired ${String(found.rows.length)} fixture project(s).`)
 }
 
+// Temporary specialists occupy a small global cap, so one left behind by a
+// crashed verification script blocks the next run rather than merely
+// cluttering. Deactivated, never deleted: their outputs and consultations
+// reference them, and a dangling author is worse than an inactive one.
+const staffLeft = await db.execute(`
+  update public.staff set active = false
+  where not permanent and slug like 'fixture-%' and active
+  returning slug
+`)
+if (staffLeft.rows.length > 0) {
+  console.log(
+    `\nretired ${String(staffLeft.rows.length)} leftover specialist(s): ` +
+      staffLeft.rows.map((r) => String(r.slug)).join(', '),
+  )
+}
+
 const remaining = await db.execute(`
   select p.slug, p.name,
          (select count(*)::int from public.notebook_sources s where s.project_id = p.project_id) as sources

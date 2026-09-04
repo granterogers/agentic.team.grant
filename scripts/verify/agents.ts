@@ -85,6 +85,34 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 // Fixtures
 // ===========================================================================
 
+/**
+ * Retire any temporary specialists a previous run left behind.
+ *
+ * The specialist cap is global and small (3), so a run that leaves one alive
+ * makes the NEXT run fail at "create a temporary specialist" - which is what
+ * happened. A script that verifies a scarce resource has to release it, and
+ * has to tolerate a predecessor that crashed before it could.
+ */
+await db.execute(`
+  update public.staff set active = false
+  where not permanent and slug like 'fixture-%' and active
+`)
+
+/**
+ * Snapshot of the permanent roster, taken before anything runs.
+ *
+ * The property worth asserting is not "every role is on version 1" - a
+ * legitimate prompt revision moves one, and 0025 already did. It is that THIS
+ * SCRIPT changes none of them. A literal expected value would have started
+ * failing the moment a real revision landed, which is how a check gets
+ * loosened until it means nothing.
+ */
+const rosterBefore = (
+  await db.execute(`select slug, prompt_version from public.staff where permanent order by slug`)
+).rows
+  .map((r) => `${String(r.slug)}=${String(r.prompt_version)}`)
+  .join(',')
+
 const project = await one(`
   insert into public.projects (slug, name, status)
   values (${lit(`fixture-agents-${run}`)}, 'Fixture: agent engine', 'active')
@@ -622,6 +650,264 @@ record(
 )
 
 // ===========================================================================
+// 6. The Staff Builder, temporary specialists, prompt versioning (§8, §9, §21)
+// ===========================================================================
+
+const specSlug = `fixture-specialist-${run}`
+const made = await one(`
+  select app.create_temporary_specialist(
+    ${lit(specSlug)},
+    'Pricing Specialist (temporary)',
+    'Pricing Specialist',
+    'Advises on price architecture for the enterprise tier for the duration of one piece of work.',
+    array['pricing', 'packaging']::text[],
+    'Concrete about numbers and explicit about which are modelled.',
+    'None of the eight permanent roles owns price architecture; finance owns unit economics, not packaging.',
+    app.now_utc() + interval '2 hours',
+    null
+  )::text as id
+`)
+record(
+  'staff builder',
+  'the app role CAN create a temporary specialist',
+  `staff_id=${String(made?.id).slice(0, 8)}`,
+  String(made?.id).length === 36,
+)
+
+const noJustification = await mustRefuse(`
+  select app.create_temporary_specialist(
+    ${lit(`${specSlug}-b`)}, 'Someone', 'Someone', 'Does some things for a while on this job.',
+    '{}'::text[], 'Plainly.', 'we needed someone', app.now_utc() + interval '1 hour', null)
+`)
+record(
+  'staff builder',
+  'a specialist with a non-reason for existing is refused',
+  noJustification.slice(0, 120),
+  noJustification.includes('staff_temporary_is_justified'),
+)
+
+const noExpiry = await mustRefuse(`
+  select app.create_temporary_specialist(
+    ${lit(`${specSlug}-c`)}, 'Someone', 'Someone',
+    'Does some things indefinitely, which is the problem.',
+    '{}'::text[], 'Plainly.',
+    'A genuine gap in the permanent roster that this specialist is meant to fill.',
+    null, null)
+`)
+record(
+  'staff builder',
+  'a specialist with no expiry is refused - that is a ninth permanent role',
+  noExpiry.slice(0, 130),
+  noExpiry.includes('must expire in the future'),
+)
+
+// The route that matters: the app role must not be able to add PERMANENT staff
+// at all. The function hard-codes false, so the only way round is the table.
+const directPermanent = await mustRefuse(`
+  set local role ai_team_app;
+  insert into public.staff (slug, name, title, permanent, responsibilities, communication_style)
+  values (${lit(`${specSlug}-d`)}, 'Ninth Director', 'Ninth Director', true,
+          'A permanent role the application decided to award itself.', 'Plainly.')
+`)
+record(
+  'staff builder',
+  'the app role cannot insert PERMANENT staff directly',
+  directPermanent.slice(0, 120),
+  directPermanent.includes('permission denied'),
+)
+
+const promote = await mustRefuse(`
+  update public.staff set permanent = true, expires_at = null where slug = ${lit(specSlug)}
+`)
+record(
+  'staff builder',
+  'a temporary specialist cannot be promoted to permanent',
+  promote.slice(0, 130),
+  promote.includes('cannot be promoted from temporary to permanent'),
+)
+
+// The cap. Three slots; one is used, so two more succeed and the fourth must not.
+const capSlots = Number((await one(`select app.temporary_specialist_slots() as n`))?.n)
+for (let i = 0; i < capSlots - 1; i++) {
+  await db.execute(`
+    select app.create_temporary_specialist(
+      ${lit(`${specSlug}-fill`)} || ${String(i)}, 'Filler', 'Filler',
+      'Occupies a specialist slot so that the cap can be demonstrated.',
+      '{}'::text[], 'Plainly.',
+      'Exists only to occupy a slot while the specialist cap is being demonstrated.',
+      app.now_utc() + interval '1 hour', null)
+  `)
+}
+const overCap = await mustRefuse(`
+  select app.create_temporary_specialist(
+    ${lit(`${specSlug}-over`)}, 'One Too Many', 'One Too Many',
+    'The specialist that should not fit within the configured cap.',
+    '{}'::text[], 'Plainly.',
+    'Exists only to prove that the specialist cap refuses the one past the limit.',
+    app.now_utc() + interval '1 hour', null)
+`)
+record(
+  'staff builder',
+  `the specialist cap refuses the one past ${String(capSlots)}`,
+  overCap.slice(0, 130),
+  overCap.includes('slots are already in use'),
+)
+
+// Expiry sweeps rather than filters.
+await db.execute(`
+  update public.staff set expires_at = app.now_utc() - interval '1 minute'
+  where slug like ${lit(`${specSlug}%`)}
+`)
+const expired = await one(`select app.expire_temporary_staff() as n`)
+const stillActive = await one(
+  `select count(*)::int as n from public.staff where slug like ${lit(`${specSlug}%`)} and active`,
+)
+record(
+  'staff builder',
+  'expired specialists are swept inactive, not left for each caller to filter',
+  `expired ${String(expired?.n)}, still active ${String(stillActive?.n)}`,
+  Number(expired?.n) >= 1 && Number(stillActive?.n) === 0,
+)
+
+// --- prompt versioning ------------------------------------------------------
+
+// Counted the join at first, which returned 10 once a role legitimately had
+// three versions - the question is not how many prompts exist but whether each
+// role's CURRENT pointer resolves to text.
+const dangling0 = await db.execute(`
+  select s.slug from public.staff s
+  left join public.staff_prompts p
+    on p.staff_id = s.staff_id and p.version = s.prompt_version
+  where s.permanent and p.prompt_id is null
+`)
+record(
+  'prompt versioning',
+  "every permanent role's prompt_version resolves to real text",
+  dangling0.rows.length === 0
+    ? 'all 8 pointers resolve'
+    : `DANGLING: ${dangling0.rows.map((r) => String(r.slug)).join(', ')}`,
+  dangling0.rows.length === 0,
+)
+
+// And that text was written by a migration, not by a test. This is the check
+// that would have caught a verification script rewriting a real role.
+const foreignAuthor = await db.execute(`
+  select s.slug, p.authored_by from public.staff s
+  join public.staff_prompts p on p.staff_id = s.staff_id and p.version = s.prompt_version
+  where s.permanent and p.authored_by not like 'migration:%'
+`)
+record(
+  'prompt versioning',
+  'every permanent role runs a prompt authored by a migration, not by a test',
+  foreignAuthor.rows.length === 0
+    ? 'all 8 authored by migrations'
+    : `FOREIGN: ${foreignAuthor.rows.map((r) => `${String(r.slug)} by ${String(r.authored_by)}`).join(', ')}`,
+  foreignAuthor.rows.length === 0,
+)
+
+// Versioning is exercised on a FIXTURE specialist, not on one of the eight.
+//
+// The first version of this used `research-director`, and it worked - which
+// was the problem. It left a real permanent role pointing at a prompt written
+// by a test, and since the pointer cannot go backwards by design, the damage
+// could only be repaired by publishing yet another version (0025). Verifying a
+// safety property must not require changing the thing being protected. This is
+// the same mistake as the gmail.send one earlier in this file, in a different
+// table.
+const subject = `fixture-promptsubject-${run}`
+await db.execute(`
+  select app.create_temporary_specialist(
+    ${lit(subject)}, 'Prompt Version Subject', 'Prompt Version Subject',
+    'Exists so that prompt versioning can be exercised without touching a permanent role.',
+    '{}'::text[], 'Plainly.',
+    'Prompt versioning must be provable without editing one of the eight permanent identities.',
+    app.now_utc() + interval '1 hour', null)
+`)
+await db.execute(`
+  insert into public.staff_prompts (staff_id, version, body, rationale, authored_by)
+  select staff_id, 1,
+    'You are the prompt-version subject. Version one exists so that the pointer has somewhere legitimate to start from.',
+    'Version 1 for the fixture specialist used to demonstrate prompt versioning.',
+    'verify:agents'
+  from public.staff where slug = ${lit(subject)}
+`)
+
+const dangling = await mustRefuse(`
+  update public.staff set prompt_version = 7 where slug = ${lit(subject)}
+`)
+record(
+  'prompt versioning',
+  'pointing at a prompt version that does not exist is refused',
+  dangling.slice(0, 130),
+  dangling.includes('no such version exists'),
+)
+
+// A real version 2, then the pointer moves - proving the check above is a gate
+// rather than a wall.
+await db.execute(`
+  insert into public.staff_prompts (staff_id, version, body, rationale, authored_by)
+  select staff_id, 2,
+    'You are the prompt-version subject. This second version exists to prove that the pointer moves only to text that exists.',
+    'Written by verify:agents to demonstrate that the pointer moves only to text that exists.',
+    'verify:agents'
+  from public.staff where slug = ${lit(subject)}
+`)
+let moved = 'threw'
+try {
+  await db.execute(`update public.staff set prompt_version = 2 where slug = ${lit(subject)}`)
+  moved = String(
+    (await one(`select prompt_version from public.staff where slug = ${lit(subject)}`))
+      ?.prompt_version,
+  )
+} catch (error) {
+  moved = `refused: ${(error as Error).message.slice(0, 100)}`
+}
+record(
+  'prompt versioning',
+  'the pointer moves once the version exists',
+  `prompt_version=${moved}`,
+  moved === '2',
+)
+
+const backwards = await mustRefuse(`
+  update public.staff set prompt_version = 1 where slug = ${lit(subject)}
+`)
+record(
+  'prompt versioning',
+  'the pointer cannot go backwards - a pinned version must mean one thing',
+  backwards.slice(0, 130),
+  backwards.includes('cannot go backwards'),
+)
+
+const rewritePrompt = await mustRefuse(`
+  update public.staff_prompts set body = 'quietly different text now'
+  where staff_id = (select staff_id from public.staff where slug = ${lit(subject)})
+    and version = 2
+`)
+record(
+  'prompt versioning',
+  'a published prompt version cannot be rewritten',
+  rewritePrompt.slice(0, 120),
+  rewritePrompt.includes('append-only'),
+)
+
+// The eight are untouched by any of the above. Asserted, not assumed - that is
+// the whole point of moving the subject.
+const rosterAfter = (
+  await db.execute(`select slug, prompt_version from public.staff where permanent order by slug`)
+).rows
+  .map((r) => `${String(r.slug)}=${String(r.prompt_version)}`)
+  .join(',')
+record(
+  'prompt versioning',
+  'this run left every permanent role exactly as it found it',
+  rosterBefore === rosterAfter
+    ? `unchanged: ${rosterAfter}`
+    : `BEFORE ${rosterBefore} AFTER ${rosterAfter}`,
+  rosterBefore === rosterAfter,
+)
+
+// ===========================================================================
 // Report FIRST, then clean up
 //
 // Written the other way round to begin with, and the first run proved why not:
@@ -669,6 +955,10 @@ try {
   `)
   await db.execute(`
     update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid
+  `)
+  await db.execute(`
+    update public.staff set active = false
+    where not permanent and slug like 'fixture-%' and active
   `)
   console.log('\nfixtures retired.')
 } catch (error) {
