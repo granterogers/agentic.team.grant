@@ -228,6 +228,98 @@ record(
     String(surfaced?.contradictions ?? '').includes('disagree'),
 )
 
+// ---------------------------------------------------------------------------
+// The exemption must be PROVABLE, not claimed
+//
+// 0018 built the gate and left a hole: `outputs.deterministic` skips review,
+// and nothing checked it. An agent writing `deterministic => true` on an
+// inferred conclusion exempted its own work - the caller bypass §16 rules out,
+// reached through the field meant to make the exemption checkable. 0023 checks
+// it, and these prove it bites.
+// ---------------------------------------------------------------------------
+
+const detJob = await mkJob(`fixture-det-${run}`)
+
+const claimedWithModel = await mustRefuse(`
+  insert into public.outputs (job_id, body, confidence, evidence, deterministic, model)
+  values (${lit(detJob)}::uuid, 'A conclusion that names the model that wrote it.',
+          'high', 'inferred', true, 'some/free-model')
+`)
+record(
+  'review gate',
+  'an output claiming determinism while naming a model is refused',
+  claimedWithModel.slice(0, 150),
+  claimedWithModel.includes('cannot be marked deterministic') &&
+    claimedWithModel.includes('does not have a model'),
+)
+
+// A genuinely mechanical output on a job with no inference: permitted, so the
+// check above is a gate and not a wall.
+await db.execute(`
+  insert into public.outputs (job_id, body, confidence, evidence, deterministic)
+  values (${lit(detJob)}::uuid, 'Three jobs are queued and one is running.',
+          'high', 'verified', true)
+`)
+const permitted = await one(
+  `select count(*)::int as n from public.outputs where job_id = ${lit(detJob)}::uuid and deterministic`,
+)
+record(
+  'review gate',
+  'a genuinely mechanical output IS allowed the exemption',
+  `deterministic outputs on a no-inference job: ${String(permitted?.n)}`,
+  Number(permitted?.n) === 1,
+)
+
+// Now record an inference attempt against the job's correlation id, exactly as
+// §11 requires, and the same claim becomes uncheckable and is refused.
+const corr = await one(
+  `select correlation_id::text as c from public.jobs where job_id = ${lit(detJob)}::uuid`,
+)
+await db.execute(`
+  insert into public.inference_usage
+    (provider, model_id, job_id, correlation_id, outcome, provenance)
+  values ('openrouter', 'fixture/free-model', ${lit(detJob)}::uuid,
+          ${lit(String(corr?.c))}::uuid, 'ok', 'calculated')
+`)
+const afterInference = await mustRefuse(`
+  insert into public.outputs (job_id, body, confidence, evidence, deterministic)
+  values (${lit(detJob)}::uuid, 'Another supposedly mechanical line.', 'high', 'verified', true)
+`)
+record(
+  'review gate',
+  'the same claim is refused once the job has recorded inference usage',
+  afterInference.slice(0, 170),
+  afterInference.includes('recorded inference') && afterInference.includes('deterministic'),
+)
+
+// And the exemption cannot be granted retroactively by an UPDATE, which is the
+// obvious way round a check that only ran on INSERT.
+//
+// The first version of this ran the UPDATE with no eligible row to update: by
+// that point every non-deterministic output on the job had been refused, so it
+// matched nothing, succeeded trivially, and reported "(no error)". A zero-row
+// UPDATE always succeeds - so a "must be refused" check needs something to
+// actually refuse, and needs to confirm the row afterwards.
+const flipTarget = await one(`
+  insert into public.outputs (job_id, body, confidence, evidence, deterministic)
+  values (${lit(detJob)}::uuid, 'An inferred conclusion, correctly not exempt.',
+          'medium', 'inferred', false)
+  returning output_id::text as id
+`)
+const retroactive = await mustRefuse(`
+  update public.outputs set deterministic = true
+  where output_id = ${lit(String(flipTarget?.id))}::uuid
+`)
+const stillNotExempt = await one(
+  `select deterministic from public.outputs where output_id = ${lit(String(flipTarget?.id))}::uuid`,
+)
+record(
+  'review gate',
+  'the exemption cannot be granted retroactively by an update',
+  `${retroactive.slice(0, 110)} | still deterministic=${String(stillNotExempt?.deterministic)}`,
+  retroactive.includes('recorded inference') && stillNotExempt?.deterministic === false,
+)
+
 // ===========================================================================
 // 2. The required duplicate query
 // ===========================================================================
