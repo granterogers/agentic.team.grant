@@ -39,7 +39,11 @@
     <circle cx="144" cy="125" r="4" fill="#2a2118"/>
 
     <!-- Beard before the mouth, so the mouth stays visible. The other way
-         round, a beard swallowed the whole lower face. -->
+         round, a beard swallowed the whole lower face.
+         Two small sideburn accents were removed after rasterising at 512px:
+         they read as connected shading at 150px and as floating dark shards at
+         full size. Worth the note because it is the second time these have
+         only been wrong at a size nobody was looking at. -->
     
 
     <!-- nose and mouth -->

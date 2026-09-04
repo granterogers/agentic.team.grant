@@ -230,10 +230,14 @@ export const renderAvatar = (slug: string, overrides: Partial<AvatarChoices> = {
     <circle cx="144" cy="125" r="4" fill="#2a2118"/>
 
     <!-- Beard before the mouth, so the mouth stays visible. The other way
-         round, a beard swallowed the whole lower face. -->
+         round, a beard swallowed the whole lower face.
+         Two small sideburn accents were removed after rasterising at 512px:
+         they read as connected shading at 150px and as floating dark shards at
+         full size. Worth the note because it is the second time these have
+         only been wrong at a size nobody was looking at. -->
     ${
       f.beard
-        ? `<path fill="${hair}" fill-opacity="0.95" d="M92 154c2 8 4 14 7 19 7 14 18 22 29 22s22-8 29-22c3-5 5-11 7-19 1 12 0 21-4 29-7 15-19 24-32 24s-25-9-32-24c-4-8-5-17-4-29z"/><path fill="${hair}" fill-opacity="0.95" d="M116 146c-2 4-5 7-9 8 2-5 5-8 9-8zm24 0c4 0 7 3 9 8-4-1-7-4-9-8z"/>`
+        ? `<path fill="${hair}" fill-opacity="0.95" d="M92 154c2 8 4 14 7 19 7 14 18 22 29 22s22-8 29-22c3-5 5-11 7-19 1 12 0 21-4 29-7 15-19 24-32 24s-25-9-32-24c-4-8-5-17-4-29z"/>`
         : ''
     }
 
