@@ -17,5 +17,8 @@
   "0016_project_sync.sql": "a3d5126452a71a3eb748b3bbdc32e8e24956d8241ad59508d36353540b70e72f",
   "0017_capability_view_probe_id.sql": "293d7e4acac520beeced948377b94b7147a948f0096cb2af243c2ef260ef1343",
   "0018_agent_engine.sql": "ee4977a2cc94d60f7eda8aa93bc18f851a2cbd9bdded56134b5821e3426fc2f7",
-  "0019_the_eight_roles.sql": "f97782f32da49bd4344fcb8a5fe8e00dff8114a5a4db3c88d2b496aa4b299042"
+  "0019_the_eight_roles.sql": "f97782f32da49bd4344fcb8a5fe8e00dff8114a5a4db3c88d2b496aa4b299042",
+  "0020_routing.sql": "5e489f37496779ef7235abd6699d61aa6257c38090e9bfd8926db1b14d5c1d31",
+  "0021_subject_terms.sql": "2933f7909845f0f5adcd3e8739f208433a1a54052946cc46c872d61c6ff37425",
+  "0022_restore_gmail_send_policy.sql": "7117cbec8157166f246fae5a200f55a412e03c1f37235fa42c48daef1682f615"
 }

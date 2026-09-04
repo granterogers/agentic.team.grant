@@ -51,7 +51,8 @@
     "sync:status": "tsx scripts/projects/sync-status.ts",
     "verify:sync": "tsx scripts/verify/sync.ts",
     "brief": "tsx scripts/projects/brief.ts",
-    "purge:fixtures": "tsx scripts/maintenance/purge-fixtures.ts"
+    "purge:fixtures": "tsx scripts/maintenance/purge-fixtures.ts",
+    "verify:agents": "tsx scripts/verify/agents.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
