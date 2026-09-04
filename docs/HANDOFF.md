@@ -1,3 +1,8 @@
+> **Superseded.** See [`HANDOFF-2026-09-04.md`](HANDOFF-2026-09-04.md) for the
+> current state — Phases 4, 5 and 6 are complete since this was written. The
+> environment facts below (no raw TCP to Postgres, use the Management API) are
+> still true and still the first thing to know.
+
 # Session handoff — 2026-09-03
 
 **For:** the next Claude Code session · **Branch:** `claude/new-session-o2oklu`
