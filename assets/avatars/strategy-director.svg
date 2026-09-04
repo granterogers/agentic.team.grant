@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Illustrated portrait for strategy-director">
+  <defs>
+    <radialGradient id="bgstrategydirector" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#efeaf6"/><stop offset="100%" stop-color="#d6cbe9"/>
+    </radialGradient>
+    <clipPath id="clipstrategydirector"><circle cx="128" cy="128" r="128"/></clipPath>
+  </defs>
+  <g clip-path="url(#clipstrategydirector)">
+    <rect width="256" height="256" fill="url(#bgstrategydirector)"/>
+
+    <!-- neck first, then body, then collar. The reverse order put the collar
+         under the neck and produced a pale wedge where clothing should be. -->
+    <path fill="#ac7248" d="M110 164h36v40c0 9-8 14-18 14s-18-5-18-14z"/>
+    <path fill="#5b5f43" d="M40 256c0-44 34-64 88-64s88 20 88 64z"/>
+    <path fill="#000000" fill-opacity="0.09" d="M40 256c0-44 34-64 88-64v64z"/>
+    <path fill="#000000" fill-opacity="0.13" d="M104 200c8 14 16 22 24 26 8-4 16-12 24-26l6 4c-9 18-19 28-30 33-11-5-21-15-30-33z"/><path fill="#efe9e0" fill-opacity="0.85" d="M110 199l18 22 18-22 9 6-27 30-27-30z"/><path fill="#000000" fill-opacity="0.16" d="M108 196l20 24-5 6-24-24z"/>
+
+    <!-- head -->
+    <ellipse cx="128" cy="120" rx="49" ry="57" fill="#c98d61"/>
+    <!-- Soft edge shading. Written first as a filled half-ellipse over the
+         right side of the face, which rendered as a hard vertical seam down
+         the middle of every portrait - the kind of thing that is invisible in
+         the path data and unmissable in a contact sheet. -->
+    <ellipse cx="152" cy="126" rx="30" ry="52" fill="#ac7248" fill-opacity="0.22"/>
+    <ellipse cx="128" cy="168" rx="30" ry="14" fill="#ac7248" fill-opacity="0.16"/>
+    <!-- ears -->
+    <ellipse cx="79" cy="124" rx="9" ry="13" fill="#c98d61"/>
+    <ellipse cx="177" cy="124" rx="9" ry="13" fill="#ac7248"/>
+
+    <g fill="#a8642c"><circle cx="128" cy="62" r="17"/><circle cx="103" cy="70" r="16"/><circle cx="153" cy="70" r="16"/><circle cx="87" cy="88" r="15"/><circle cx="169" cy="88" r="15"/><circle cx="82" cy="109" r="13"/><circle cx="174" cy="109" r="13"/><circle cx="128" cy="76" r="16"/></g>
+
+    <!-- brows -->
+    <path stroke="#a8642c" stroke-width="5" stroke-linecap="round" fill="none" d="M104 110c5-4 14-4 19 0"/>
+    <path stroke="#a8642c" stroke-width="5" stroke-linecap="round" fill="none" d="M133 110c5-4 14-4 19 0"/>
+    <!-- eyes -->
+    <ellipse cx="113" cy="124" rx="7" ry="8" fill="#ffffff"/>
+    <ellipse cx="143" cy="124" rx="7" ry="8" fill="#ffffff"/>
+    <circle cx="114" cy="125" r="4" fill="#2a2118"/>
+    <circle cx="144" cy="125" r="4" fill="#2a2118"/>
+
+    <!-- Beard before the mouth, so the mouth stays visible. The other way
+         round, a beard swallowed the whole lower face. -->
+    
+
+    <!-- nose and mouth -->
+    <path stroke="#ac7248" stroke-width="4" stroke-linecap="round" fill="none" d="M128 130v12l-6 4"/>
+    <path stroke="#8d4f43" stroke-width="4" stroke-linecap="round" fill="none" d="M117 158c7 6 15 6 22 0"/>
+
+    
+  </g>
+</svg>

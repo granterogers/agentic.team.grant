@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Illustrated portrait for communications-director">
+  <defs>
+    <radialGradient id="bgcommunicationsdirector" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#eceaf0"/><stop offset="100%" stop-color="#d2cdd9"/>
+    </radialGradient>
+    <clipPath id="clipcommunicationsdirector"><circle cx="128" cy="128" r="128"/></clipPath>
+  </defs>
+  <g clip-path="url(#clipcommunicationsdirector)">
+    <rect width="256" height="256" fill="url(#bgcommunicationsdirector)"/>
+
+    <!-- neck first, then body, then collar. The reverse order put the collar
+         under the neck and produced a pale wedge where clothing should be. -->
+    <path fill="#c9926a" d="M110 164h36v40c0 9-8 14-18 14s-18-5-18-14z"/>
+    <path fill="#6b3f52" d="M40 256c0-44 34-64 88-64s88 20 88 64z"/>
+    <path fill="#000000" fill-opacity="0.09" d="M40 256c0-44 34-64 88-64v64z"/>
+    <path fill="#000000" fill-opacity="0.13" d="M104 200c8 14 16 22 24 26 8-4 16-12 24-26l6 4c-9 18-19 28-30 33-11-5-21-15-30-33z"/><path fill="#efe9e0" fill-opacity="0.85" d="M108 200l20 24 20-24 8 5-28 31-28-31z"/><path fill="#6b3f52" d="M112 196l16 19 16-19 5 3-21 25-21-25z"/>
+
+    <!-- head -->
+    <ellipse cx="128" cy="120" rx="49" ry="57" fill="#e3b088"/>
+    <!-- Soft edge shading. Written first as a filled half-ellipse over the
+         right side of the face, which rendered as a hard vertical seam down
+         the middle of every portrait - the kind of thing that is invisible in
+         the path data and unmissable in a contact sheet. -->
+    <ellipse cx="152" cy="126" rx="30" ry="52" fill="#c9926a" fill-opacity="0.22"/>
+    <ellipse cx="128" cy="168" rx="30" ry="14" fill="#c9926a" fill-opacity="0.16"/>
+    <!-- ears -->
+    <ellipse cx="79" cy="124" rx="9" ry="13" fill="#e3b088"/>
+    <ellipse cx="177" cy="124" rx="9" ry="13" fill="#c9926a"/>
+
+    <path fill="#8a8f96" d="M72 120c0-36 25-62 56-62s56 26 56 62c0 34-2 62-6 78-6-4-10-14-11-30-2-22-2-44-3-56-13 10-24 14-36 14s-23-4-36-14c-1 12-1 34-3 56-1 16-5 26-11 30-4-16-6-44-6-78z"/>
+
+    <!-- brows -->
+    <path stroke="#8a8f96" stroke-width="5" stroke-linecap="round" fill="none" d="M104 110c5-4 14-4 19 0"/>
+    <path stroke="#8a8f96" stroke-width="5" stroke-linecap="round" fill="none" d="M133 110c5-4 14-4 19 0"/>
+    <!-- eyes -->
+    <ellipse cx="113" cy="124" rx="7" ry="8" fill="#ffffff"/>
+    <ellipse cx="143" cy="124" rx="7" ry="8" fill="#ffffff"/>
+    <circle cx="114" cy="125" r="4" fill="#2a2118"/>
+    <circle cx="144" cy="125" r="4" fill="#2a2118"/>
+
+    <!-- Beard before the mouth, so the mouth stays visible. The other way
+         round, a beard swallowed the whole lower face. -->
+    
+
+    <!-- nose and mouth -->
+    <path stroke="#c9926a" stroke-width="4" stroke-linecap="round" fill="none" d="M128 130v12l-6 4"/>
+    <path stroke="#8d4f43" stroke-width="4" stroke-linecap="round" fill="none" d="M117 158c7 6 15 6 22 0"/>
+
+    <g fill="none" stroke="#3a3a3a" stroke-width="4" stroke-opacity="0.85">
+             <rect x="98" y="112" width="30" height="24" rx="9"/>
+             <rect x="130" y="112" width="30" height="24" rx="9"/>
+             <path d="M128 122h2"/><path d="M98 120l-14 4"/><path d="M160 120l14 4"/>
+           </g>
+  </g>
+</svg>
