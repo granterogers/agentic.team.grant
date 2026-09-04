@@ -223,7 +223,7 @@ equivalent alternative.
 
 ---
 
-## Phase 4 — Project engine · 🟡 **IN PROGRESS**
+## Phase 4 — Project engine ✅
 
 | Item | State |
 |---|---|
@@ -232,7 +232,7 @@ equivalent alternative.
 | Source fingerprinting and change detection | ✅ SHA-256 per source; an unchanged source is not rewritten |
 | **Tier-derived budgets** from `AccountLimits.tier` | ✅ tier 1 → 30 chats/day, 6 reserved; `probe_id` NOT NULL so no budget lacks provenance |
 | Initial project brief generation | ✅ from the Postgres cache on a free model — **zero Notebook quota, $0** — regenerated only when source fingerprints change |
-| Project switching | ⬜ |
+| Project switching | ✅ 0026 — append-only switch log; explicit > permanent channel map > scope context > **ask** |
 
 **Acceptance:** a new notebook is discovered and becomes a project unattended;
 50 sources added rapidly are processed without duplication; a worker crash
@@ -242,7 +242,13 @@ mid-sync resumes cleanly; Notebook outage degrades rather than fails.
 source, 50 rapid sources, outage, crash mid-sync.
 
 ✅ **All four acceptance criteria and all seven injections: 13/13**, via
-`npm run verify:sync`. Two bugs were found by the first live runs rather than
+`npm run verify:sync`. Project switching adds 8 more in `npm run verify:agents`.
+
+The one design decision worth stating: an ambiguous project name resolves to
+**ask**, never to the nearest match or the most recently touched project. A
+wrong project context is uniquely bad — everything afterwards looks completely
+normal and is filed in the wrong place, and nothing surfaces it until someone
+goes looking for work that is not where they left it. Asking costs a message. Two bugs were found by the first live runs rather than
 by the tests — a view missing `probe_id`, and a notebook with an empty title
 that failed `projects_name_present`. Both surfaced as *recorded degraded
 cycles* rather than crashes, which is the degradation requirement working on

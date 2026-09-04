@@ -23,5 +23,6 @@
   "0022_restore_gmail_send_policy.sql": "7117cbec8157166f246fae5a200f55a412e03c1f37235fa42c48daef1682f615",
   "0023_deterministic_is_provable.sql": "f82470e8ce3e1196f8e0e6b1394ad8f9d7f87dd81f4e7580f975956314672663",
   "0024_staff_builder.sql": "20b23a67135250fc0f3e596f9fb955f1a73a06639eb96e06e3be4aa157ba1175",
-  "0025_restore_research_director_prompt.sql": "f3af2bac51df5fec851c565962f5f790337a4148c0768ebf9617631048340482"
+  "0025_restore_research_director_prompt.sql": "f3af2bac51df5fec851c565962f5f790337a4148c0768ebf9617631048340482",
+  "0026_project_switching.sql": "0fbb8bd1d1d1acc5a55387d062d3a1e2db0e6a3cb5a807d5fc63a505c6f6a7f2"
 }

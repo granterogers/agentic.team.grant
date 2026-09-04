@@ -908,6 +908,146 @@ record(
 )
 
 // ===========================================================================
+// 7. Project switching (Phase 4's last item)
+// ===========================================================================
+
+const scopeRef = `fixture-chat-${run}`
+const otherProject = await one(`
+  insert into public.projects (slug, name, status)
+  values (${lit(`fixture-other-${run}`)}, 'Fixture: the other project', 'active')
+  returning project_id::text as id
+`)
+const otherId = String(otherProject?.id)
+
+const unresolved = await one(`
+  select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p
+`)
+record(
+  'project switching',
+  'an unknown scope resolves to NULL - ask, never "the most recent project"',
+  `resolved=${String(unresolved?.p ?? 'null')}`,
+  unresolved?.p === null || unresolved?.p === undefined,
+)
+
+await db.execute(`
+  insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+  values ('telegram_chat', ${lit(scopeRef)}, ${lit(projectId)}::uuid, 'verify:agents',
+          'Switching to the fixture project to demonstrate scoped context.')
+`)
+const afterSwitch = await one(
+  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+)
+record(
+  'project switching',
+  'a switch scopes that surface and survives as durable state',
+  `resolved=${String(afterSwitch?.p).slice(0, 8)}`,
+  afterSwitch?.p === projectId,
+)
+
+// The latest switch wins, and the earlier one is still on the record - which
+// is the reason this is a log and not a mutable row.
+await db.execute(`
+  insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+  values ('telegram_chat', ${lit(scopeRef)}, ${lit(otherId)}::uuid, 'verify:agents',
+          'Switching again, to show that the latest wins and the first survives.')
+`)
+const latest = await one(
+  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+)
+const history = await one(`
+  select count(*)::int as n from public.project_switches where scope_ref = ${lit(scopeRef)}
+`)
+record(
+  'project switching',
+  'the latest switch wins and the previous one survives in history',
+  `resolved=${String(latest?.p).slice(0, 8)}, ${String(history?.n)} switch(es) on record`,
+  latest?.p === otherId && Number(history?.n) === 2,
+)
+
+// Un-scoping is an event, not a deletion.
+await db.execute(`
+  insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+  values ('telegram_chat', ${lit(scopeRef)}, null, 'verify:agents',
+          'Explicitly clearing the project context for this scope.')
+`)
+const cleared = await one(
+  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+)
+const historyAfter = await one(`
+  select count(*)::int as n from public.project_switches where scope_ref = ${lit(scopeRef)}
+`)
+record(
+  'project switching',
+  'clearing the context is a recorded event, not a deleted row',
+  `resolved=${String(cleared?.p ?? 'null')}, ${String(historyAfter?.n)} switch(es) still on record`,
+  (cleared?.p === null || cleared?.p === undefined) && Number(historyAfter?.n) === 3,
+)
+
+// Explicit beats everything.
+const explicit = await one(`
+  select app.resolve_project('telegram_chat', ${lit(scopeRef)}, ${lit(projectId)}::uuid)::text as p
+`)
+record(
+  'project switching',
+  'a project named in the message outranks the scope context',
+  `resolved=${String(explicit?.p).slice(0, 8)}`,
+  explicit?.p === projectId,
+)
+
+// A permanent channel mapping outranks a switch made in that channel.
+const chan = `C${run.toUpperCase()}`
+await db.execute(`
+  insert into public.slack_workspaces (team_id, team_name, bot_user_id)
+  values (${lit(`T${run.toUpperCase()}`)}, 'Fixture workspace', ${lit(`U${run.toUpperCase()}`)})
+  on conflict (team_id) do nothing
+`)
+await db.execute(`
+  insert into public.slack_channel_map (team_id, channel_id, channel_name, project_id, active)
+  values (${lit(`T${run.toUpperCase()}`)}, ${lit(chan)}, 'fixture-channel', ${lit(projectId)}::uuid, true)
+`)
+await db.execute(`
+  insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+  values ('slack_channel', ${lit(chan)}, ${lit(otherId)}::uuid, 'verify:agents',
+          'A passing switch inside a channel that is permanently mapped elsewhere.')
+`)
+const mapped = await one(
+  `select app.resolve_project('slack_channel', ${lit(chan)}, null)::text as p`,
+)
+record(
+  'project switching',
+  'a permanent channel mapping outranks a passing switch made in it',
+  `resolved=${String(mapped?.p).slice(0, 8)} (map=${projectId.slice(0, 8)}, switch=${otherId.slice(0, 8)})`,
+  mapped?.p === projectId,
+)
+
+// Switching into an archived project would file work where nobody looks.
+await db.execute(`
+  update public.projects set status = 'archived' where project_id = ${lit(otherId)}::uuid
+`)
+const intoArchived = await mustRefuse(`
+  insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+  values ('telegram_chat', ${lit(scopeRef)}, ${lit(otherId)}::uuid, 'verify:agents',
+          'Attempting to switch into an archived project.')
+`)
+record(
+  'project switching',
+  'switching into an archived project is refused',
+  intoArchived.slice(0, 130),
+  intoArchived.includes('nobody is looking'),
+)
+
+const rewriteSwitch = await mustRefuse(`
+  update public.project_switches set reason = 'a different reason'
+  where scope_ref = ${lit(scopeRef)}
+`)
+record(
+  'project switching',
+  'the switch log cannot be rewritten',
+  rewriteSwitch.slice(0, 120),
+  rewriteSwitch.includes('append-only'),
+)
+
+// ===========================================================================
 // Report FIRST, then clean up
 //
 // Written the other way round to begin with, and the first run proved why not:
@@ -959,6 +1099,10 @@ try {
   await db.execute(`
     update public.staff set active = false
     where not permanent and slug like 'fixture-%' and active
+  `)
+  await db.execute(`
+    update public.slack_channel_map set active = false
+    where channel_name = 'fixture-channel'
   `)
   console.log('\nfixtures retired.')
 } catch (error) {
