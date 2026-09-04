@@ -26,5 +26,7 @@
   "0025_restore_research_director_prompt.sql": "f3af2bac51df5fec851c565962f5f790337a4148c0768ebf9617631048340482",
   "0026_project_switching.sql": "0fbb8bd1d1d1acc5a55387d062d3a1e2db0e6a3cb5a807d5fc63a505c6f6a7f2",
   "0027_autonomy.sql": "37a219820113c296bc6e36568415908540b2a5c61ddc0b0545954fcf01706a4a",
-  "0028_briefings_and_monitoring.sql": "c9a9dfc13034868f175e7cae4160127aea282bb1a9c3d4a43d41177096c7b95c"
+  "0028_briefings_and_monitoring.sql": "c9a9dfc13034868f175e7cae4160127aea282bb1a9c3d4a43d41177096c7b95c",
+  "0029_undo.sql": "89e4e5d47deab375c411e51c659b00498e2ab09cc0dba3cc15a58a7fc2a90015",
+  "0030_undo_without_deleting_its_own_record.sql": "c255b955d18646b6a960ff112e0b7ede00b713cd0ed14daa52f3df548b24a2cb"
 }

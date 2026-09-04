@@ -197,13 +197,53 @@ await failsWith(
 // ---------------------------------------------------------------------------
 // Layer 3 — TRUNCATE, which bypasses row triggers entirely
 // ---------------------------------------------------------------------------
+// Two checks, not one, because two independent mechanisms now refuse this and
+// only one of them is the layer under test.
+//
+// A plain TRUNCATE has been refused with 0A000 - "cannot truncate a table
+// referenced in a foreign key constraint" - ever since 0011 gave
+// `inbound_commands` a reference to `events`. The refusal is real, so the
+// property held; but Postgres rejects BEFORE the statement trigger runs, so
+// the trigger stopped being exercised and nobody noticed. The check reported a
+// wrong SQLSTATE, which is how it was eventually found.
+//
+// That is worth stating plainly: a second mechanism arriving in front of the
+// one under test silently retires the test, while the suite stays green on the
+// property. Layers are good; a layered test that cannot tell which layer
+// answered is not.
 await failsWith(
   'layer 3: truncate trigger',
-  'TRUNCATE as the table owner',
+  'TRUNCATE as the table owner (refused by the FK reference, before the trigger)',
   'truncate table public.events',
+  '0A000',
+  'cannot truncate a table referenced in a foreign key constraint',
+)
+
+// And now the trigger itself, with CASCADE to get past the foreign key so the
+// BEFORE TRUNCATE trigger is actually reached.
+//
+// Wrapped in a transaction that ROLLS BACK. If the trigger fires, the
+// statement raises and the transaction aborts - the normal path. If the
+// trigger were broken, CASCADE would truncate the ledger and everything
+// referencing it, and the rollback is what stops a test of a safety property
+// from being the thing that destroys the data. Verified beforehand that this
+// executor honours an explicit rollback.
+await failsWith(
+  'layer 3: truncate trigger',
+  'TRUNCATE ... CASCADE, inside a rolled-back transaction, so the trigger is reached',
+  'begin; truncate table public.events cascade; rollback;',
   '42501',
   'is append-only',
 )
+
+// The rollback did what it says: the ledger is still there.
+const ledgerIntact = await db.execute('select count(*)::int as n from public.events')
+checks.push({
+  layer: 'layer 3: truncate trigger',
+  what: 'the ledger still exists after the CASCADE attempt',
+  outcome: `${String(ledgerIntact.rows[0]?.n)} event(s) present`,
+  passed: Number(ledgerIntact.rows[0]?.n) > 0,
+})
 
 // ---------------------------------------------------------------------------
 // Layer 4 — RLS enabled AND forced
