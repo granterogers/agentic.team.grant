@@ -19,7 +19,7 @@
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",
-    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router && npm run verify:sync && npm run verify:agents && npm run verify:autonomy && npm run verify:undo && npm run verify:learning && npm run purge:fixtures -- --go && npm run verify:worker && npm run purge:fixtures -- --go",
+    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router && npm run verify:sync && npm run verify:agents && npm run verify:autonomy && npm run verify:undo && npm run verify:learning && npm run purge:fixtures -- --go && npm run verify:slack && npm run verify:worker && npm run purge:fixtures -- --go",
     "backup:manifest": "tsx scripts/backup/manifest.ts",
     "backup:connection": "tsx scripts/backup/print-connection.ts",
     "verify:restore": "tsx scripts/backup/verify-restore.ts",
@@ -58,7 +58,8 @@
     "verify:undo": "tsx scripts/verify/undo.ts",
     "verify:learning": "tsx scripts/verify/learning.ts",
     "avatars:png": "tsx scripts/staff/render-png.ts",
-    "verify:worker": "tsx scripts/verify/worker.ts"
+    "verify:worker": "tsx scripts/verify/worker.ts",
+    "verify:slack": "tsx scripts/verify/slack.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
