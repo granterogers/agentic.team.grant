@@ -14,40 +14,12 @@ better than having half-done 1.
 Work through my logged-in browser. Where a step needs me to type a password, a
 2FA code or a login PIN, **stop and ask me** rather than guessing — I am here.
 
-**About secrets.** Jobs 1 and 2 produce credentials. When you have them, put
+**About secrets.** Both jobs produce credentials. When you have them, put
 each one in a clearly labelled block at the very end of your reply, on its own
 line, and do not repeat it anywhere else in the conversation. Do not put a
 credential in a page title, a filename, a search box, or a note to yourself. I
 will treat everything created in this session as needing rotation later, so
 don't worry about perfection — just don't scatter them.
-
----
-
-## JOB 3 (do this first): turn on Slack interactivity
-
-**Why:** the buttons on Slack messages currently look clickable and do nothing,
-because Slack has nowhere to send the click.
-
-1. Go to <https://api.slack.com/apps/A0BUFRVSSLD/interactive-messages>
-   (If that 404s, go to <https://api.slack.com/apps>, open the app called
-   **AI Team HQ**, and choose **Interactivity & Shortcuts** in the left sidebar.)
-2. Turn the **Interactivity** toggle **On**.
-3. In **Request URL**, paste exactly:
-
-   ```
-   https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/slack-events
-   ```
-
-4. Press **Save Changes** at the bottom right.
-
-**How to know it worked:** the page reloads and shows the URL saved, with no red
-error under the field. Slack does *not* send a verification request for this URL,
-so a green tick is the only feedback — if the field shows the URL after a reload,
-it is done.
-
-**Do not change anything else on that page** — no shortcuts, no select menus.
-
-**Report back:** "Slack interactivity: saved" or the exact error text.
 
 ---
 
@@ -106,7 +78,20 @@ number and username, in the credentials block at the end. Like this:
 **Why:** the system can turn short results into spoken voice notes. It needs one
 narrow credential to do it. Everything else about the feature is already built.
 
-This is on my Google account. If a login or 2FA is needed, stop and ask me.
+**⚠️ Read this before you start.** Use **my ordinary personal Google account**.
+
+Do **not** use, and do not try to log in as, `agentic.team.grant@gmail.com` —
+Google disabled that account on 2026-09-04 for having been "created or used with
+multiple other accounts to violate Google's policies". Anything attempted on it
+will fail, and attempting it repeatedly is not helpful.
+
+Do **not** create a new Google account for this. Creating fresh accounts to run
+things programmatically is what got the last one banned. A service account
+inside my normal account's own Cloud project is an ordinary, supported thing and
+is what we want.
+
+If you are not sure which account the browser is signed in as, **stop and ask
+me** before creating anything.
 
 ### Step 1 — a project
 
@@ -165,12 +150,12 @@ Give me, in this order:
 
 1. **A short status line per job** — done, partly done, or blocked, and if
    blocked, exactly what stopped you.
+   For job 2, also tell me **which Google account** you used.
 2. **Anything you changed that I did not ask for**, however small.
 3. **The credentials block**, last, with nothing after it:
 
 ```
 === CREDENTIALS ===
-slack_interactivity: saved | not saved
 telegram_bots:
 1 atg_research_bot   <token>
 2 atg_strategy_bot   <token>

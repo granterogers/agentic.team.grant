@@ -10,7 +10,7 @@ third is dead.
 
 | Variable | State | Why it cannot do text-to-speech |
 |---|---|---|
-| `GEMINI_API_KEY` | ❌ **dead** | `401 UNAUTHENTICATED — the bound service account is deleted or disabled`. Verified today. It would not have worked anyway: it is a key for `generativelanguage.googleapis.com`, a different product from Cloud Text-to-Speech |
+| `GEMINI_API_KEY` | ❌ **dead, and now explained** | `401 UNAUTHENTICATED — the bound service account is deleted or disabled`. It was bound to `agentic.team.grant@gmail.com`, which **Google disabled on 2026-09-04**. It would not have worked anyway: it is a key for `generativelanguage.googleapis.com`, a different product from Cloud Text-to-Speech |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✅ valid, wrong type | An **OAuth client**, for asking a human to grant access to *their own* Gmail or Calendar. There is no human to consent, and no consent grants access to your Cloud project's TTS quota |
 | Notebook master token | ✅ valid, wrong scope | Authenticates to NotebookLM, which is not a Google Cloud API |
 
@@ -25,6 +25,14 @@ September. **If you were relying on Gemini anywhere else, it has been failing.**
 
 One **service account key** (a JSON file) for a Google Cloud project that has
 the Text-to-Speech API enabled. Five steps, about four minutes.
+
+### 0. Use your ordinary Google account
+
+**Not `agentic.team.grant@gmail.com`** — Google disabled it on 2026-09-04. And
+not a newly created account either: creating accounts to run things
+programmatically is exactly what got that one banned. A service account inside
+your own Cloud project is an ordinary, supported thing and carries none of that
+risk.
 
 ### 1. A project with billing attached
 
