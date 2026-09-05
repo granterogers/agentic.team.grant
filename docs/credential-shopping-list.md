@@ -1,3 +1,16 @@
+> **Superseded by `npm run inventory`.** This document was written on
+> 2026-09-03 to "stop asking Grant for credentials one at a time", and it did
+> not work — because a document is a snapshot and this information changes
+> underneath it. Keys die, accounts get banned, and a list that was right on
+> Tuesday is quietly wrong by Friday with no way to tell.
+>
+> `npm run inventory` asks every service whether its credential still works and
+> prints the answer, including **which account each one hangs off** — the column
+> this document never had, and the omission that turned one Google ban into a
+> week of discoveries.
+>
+> Kept for its per-phase reasoning about *why* each credential is needed.
+
 # Credential shopping list — everything, up front
 
 **Created:** 2026-09-03 · **Purpose:** stop asking Grant for credentials one at a time.
