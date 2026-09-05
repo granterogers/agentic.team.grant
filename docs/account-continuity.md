@@ -59,32 +59,50 @@ Each with a `.sha256`, a `manifest.json` and `roles.sql`. They run from GitHub
 Actions — a different account — to Backblaze — a different provider. Neither
 touches Google.
 
-And per §16 the workflow does not just dump: **it rehearses the restore on the
-same schedule**, which is why the next section is a procedure rather than a
-hope.
+And per §16 the workflow does not just dump: it rehearses the restore on the
+same schedule.
+
+**Correction, made an hour after this document was first written.** That
+rehearsal had never once passed. Twelve runs, twelve failures, including last
+night's — the dumps were landing, so nothing was visibly wrong, and no one was
+told. The cause was the rehearsal container: `public.credential_health` is a
+view over `vault.secrets`, stock PostgreSQL has no vault, and the restore
+aborted there before the verification ran. A real restore goes into a new
+Supabase project, which *does* have the extension, so this was the rehearsal
+failing to represent the target rather than a fault in the dump — but "probably
+restorable" is exactly what a rehearsal exists to replace with "restored, last
+night, and here is the report". Fixed, and the workflow now pages on failure.
 
 ---
 
-## Re-homing is a rehearsed operation, not a leap
+## Re-homing: a rehearsed operation, minus the credentials
 
-This is the part worth understanding. Moving the Supabase project to a new
-account is *exactly* the restore that runs every night and is tested every
-night:
+Moving the Supabase project to a new account is the restore the workflow
+performs — now that the rehearsal actually completes:
 
 1. Create a new Supabase project on a live email.
 2. Restore the latest dump into it (`roles.sql`, then the `.sql.gz`) — the same
    two steps the rehearsal performs.
-3. Update `SUPABASE_URL`, the keys, and `SUPABASE_PROJECT_REF`.
-4. Re-deploy the three Edge Functions (`npm run deploy:slack`,
+3. **Re-enter every secret by hand.** The dump is `--schema=public --schema=app`
+   and Supabase Vault lives in `vault`, so **no credential is in the backup and
+   none ever was.** A restored project comes up working, with an empty vault.
+   That is the right design — a backup carrying decryptable credentials offsite
+   would be a much worse problem — but it means the recovery has a manual step,
+   and that step is now printed by the rehearsal every night with the list of
+   what to re-enter and where each comes from.
+4. Update `SUPABASE_URL`, the keys, and `SUPABASE_PROJECT_REF`.
+5. Re-deploy the three Edge Functions (`npm run deploy:slack`,
    `deploy:telegram`, `deploy:hq`) — each is one command and each verifies
    itself by what it serves.
 
 Vercel is simpler still: `npm run deploy:hq` against a new account, and the
 stable URL changes.
 
-**This is what §16 bought.** A nightly dump nobody had ever restored would make
-the paragraph above a gamble. A nightly dump with a nightly restore rehearsal
-makes it a checklist.
+**This is what §16 bought, and what it nearly failed to buy.** The dump was
+sound; the evidence that it was sound had been broken since the day it was
+written, and it took an unrelated investigation to notice. The lesson is not
+about backups: **a failing check that notifies nobody is indistinguishable from
+a passing one.** Everything red in this project now has to reach a human.
 
 ---
 
@@ -113,9 +131,9 @@ Backblaze was signed up with that Gmail.**
 1. **Check which email Backblaze B2 is under.** If it is the dead one, create B2
    keys on a live account today and update the vault — while the current keys
    still work to migrate anything needed.
-2. **Copy the vault into a password manager**, once, by hand. Not because it is
-   likely to be lost, but because it costs ten minutes and removes the whole
-   category of worry.
+2. **Copy the vault into a password manager**, once, by hand. This is no longer
+   optional housekeeping: the backup does not contain the credentials, so the
+   password manager *is* the credential backup. Ten minutes.
 3. **Decide: re-home, or fight for the accounts.** Supabase and Vercel support
    can change an account's email with proof of ownership, and that is worth an
    email. But it depends on them replying, and re-homing does not. Given that
