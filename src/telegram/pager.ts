@@ -1,0 +1,218 @@
+/**
+ * The pager: notifying Grant on Telegram when a job finishes.
+ *
+ * §12 divides the surfaces by what they are FOR — *"Slack = office · Telegram =
+ * pager"* — and this file is where that division stops being a slogan. The
+ * Slack notifier and this one deliver the same result and deliberately do not
+ * deliver the same message: Slack gets the finding, the provenance line, the
+ * unresolved disagreement and six buttons; the pager gets a trimmed summary and
+ * the same six buttons, because deciding whether to look IS the pager's whole
+ * job.
+ *
+ * ## The rule that keeps this from becoming spam
+ *
+ * A result that already reached Grant in Slack does not need to also buzz his
+ * phone. Paging is therefore **not** the default: it happens when the
+ * notification is important enough to interrupt, which is a decision
+ * `app.notification_allowed` already owns for every channel. Asking it per
+ * channel is the entire mechanism — no second severity rule, no "and also send
+ * to Telegram" flag that drifts from the first.
+ *
+ * ## Where to page, and why it can be nowhere
+ *
+ * Telegram forbids a bot messaging anyone who has not messaged it first, so the
+ * chat id cannot be configured, seeded or guessed — it appears in
+ * `telegram_chats` (0041) the moment Grant says anything to the bot. Until then
+ * the honest outcome is `no chat registered`, reported rather than logged and
+ * forgotten, because "the pager never pages" is otherwise invisible: an absence
+ * looks exactly like a quiet week.
+ */
+
+import { DeliveryService } from '../channels/delivery.ts'
+import type { SqlExecutor } from '../db/executor.ts'
+import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
+import type { ActionId } from '../slack/blocks.ts'
+import type { TelegramClient } from './api.ts'
+import { inlineKeyboard, type PagerMessage, pagerText } from './message.ts'
+import { TelegramTransport } from './transport.ts'
+
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+export type PagerSeverity = 'trivial' | 'routine' | 'important' | 'urgent' | 'blocker'
+
+export interface PagerOptions {
+  /** The bot these chats belong to. A chat id means nothing without it. */
+  readonly botId: string
+  readonly subject?: string
+  readonly projectUrlBase?: string | null
+  /**
+   * Below this, nothing pages regardless of preferences.
+   *
+   * A floor, not a preference: §12 makes Telegram the interrupting surface, and
+   * a routine result that buzzes a phone teaches Grant to ignore the phone.
+   * Preferences can make the pager quieter than this; they cannot make it
+   * louder.
+   */
+  readonly floor?: PagerSeverity
+}
+
+const RANK: Readonly<Record<PagerSeverity, number>> = {
+  trivial: 0,
+  routine: 1,
+  important: 2,
+  urgent: 3,
+  blocker: 4,
+}
+
+export interface PagerResult extends NotifyOutcome {
+  readonly chatId: string | null
+}
+
+export class TelegramPager {
+  private readonly delivery: DeliveryService
+
+  constructor(
+    private readonly db: SqlExecutor,
+    telegram: TelegramClient,
+    private readonly options: PagerOptions,
+  ) {
+    this.delivery = new DeliveryService(db, new TelegramTransport(telegram))
+  }
+
+  /** The registered chat for this subject, or null if nobody has spoken yet. */
+  async chatFor(subject?: string): Promise<string | null> {
+    const { rows } = await this.db.execute(
+      `select app.telegram_chat_for(${lit(subject ?? this.options.subject ?? 'grant')}, ${lit(this.options.botId)}) as chat_id`,
+    )
+    const chatId = (rows[0] as { chat_id?: string | null } | undefined)?.chat_id
+    return chatId === undefined ? null : chatId
+  }
+
+  /**
+   * Page about a finished job.
+   *
+   * Returns rather than throws for every ordinary reason not to page. A pager
+   * that raises when there is nobody to page turns "nobody has set this up yet"
+   * into a job failure.
+   */
+  async page(input: {
+    readonly job: Job
+    readonly output: HandlerOutput
+    readonly outputId: string
+    readonly staffName: string | null
+    readonly staffTitle: string | null
+    readonly reviewed: boolean
+    readonly severity: PagerSeverity
+    readonly actions: readonly ActionId[]
+  }): Promise<PagerResult> {
+    const floor = this.options.floor ?? 'important'
+    if (RANK[input.severity] < RANK[floor]) {
+      return {
+        delivered: false,
+        note: `not paged: ${input.severity} is below the pager floor (${floor})`,
+        chatId: null,
+      }
+    }
+
+    const subject = this.options.subject ?? 'grant'
+    const chatId = await this.chatFor(subject)
+    if (chatId === null) {
+      return {
+        delivered: false,
+        note: 'not paged: no telegram chat registered — Grant has not messaged the bot',
+        chatId: null,
+      }
+    }
+
+    // The same rule Slack asks, asked for this channel. One implementation of
+    // "should Grant be told", consulted twice.
+    const { rows } = await this.db.execute(`
+      select app.notification_allowed(${lit(subject)}, 'telegram',
+        ${lit(input.severity)}::public.notify_severity,
+        ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`}) as allowed
+    `)
+    if ((rows[0] as { allowed?: boolean } | undefined)?.allowed !== true) {
+      await this.recordNotification(input, 'suppressed')
+      return { delivered: false, note: 'not paged: suppressed by preferences', chatId }
+    }
+
+    const projectUrl =
+      this.options.projectUrlBase === null ||
+      this.options.projectUrlBase === undefined ||
+      input.job.projectId === null
+        ? null
+        : `${this.options.projectUrlBase.replace(/\/+$/, '')}/projects/${input.job.projectId}`
+
+    const message: PagerMessage = {
+      staffName: input.staffName,
+      staffTitle: input.staffTitle,
+      body: input.output.body,
+      metadata: {
+        confidence: input.output.confidence,
+        evidence: input.output.evidence,
+        reviewed: input.reviewed,
+      },
+      correlationId: input.job.correlationId,
+      actions: input.actions,
+      projectUrl,
+    }
+
+    const result = await this.delivery.deliver({
+      // A different key from the Slack delivery of the same result: they are
+      // two messages, and one key would mean the second channel silently
+      // deduplicated against the first.
+      dedupeKey: `job:${input.job.jobId}:pager`,
+      accountRef: this.options.botId,
+      targetRef: chatId,
+      purpose: 'result',
+      correlationId: input.job.correlationId,
+      jobId: input.job.jobId,
+      body: {
+        text: pagerText(message),
+        keyboard: inlineKeyboard(input.actions, input.job.correlationId, projectUrl),
+        // An `important` result may arrive at 3am. Anything short of urgent
+        // goes in silently: it is on the phone when he looks, without the
+        // phone asking to be looked at.
+        silent: RANK[input.severity] < RANK.urgent,
+      },
+    })
+
+    if (result.outcome === 'sent' || result.outcome === 'already_sent') {
+      await this.recordNotification(input, 'delivered')
+      return { delivered: true, note: `paged on telegram (${input.severity})`, chatId }
+    }
+
+    // Telegram telling us the chat is unreachable is durable information, not a
+    // transient failure: every future page to it would fail the same way, and
+    // the registry is where that belongs.
+    if (
+      result.errorCode === 'blocked_by_user' ||
+      result.errorCode === 'kicked_from_chat' ||
+      result.errorCode === 'user_deactivated' ||
+      result.errorCode === 'chat_not_found'
+    ) {
+      await this.db.execute(
+        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}) as marked`,
+      )
+    }
+
+    return {
+      delivered: false,
+      note: `pager ${result.outcome}${result.errorCode === null ? '' : `: ${result.errorCode}`}`,
+      chatId,
+    }
+  }
+
+  private async recordNotification(
+    input: { readonly job: Job; readonly outputId: string; readonly severity: PagerSeverity },
+    outcome: 'delivered' | 'suppressed',
+  ): Promise<void> {
+    await this.db.execute(`
+      insert into public.notification_events
+        (channel, severity, project_id, subject_kind, subject_ref, outcome)
+      values ('telegram', ${lit(input.severity)}::public.notify_severity,
+              ${input.job.projectId === null ? 'null' : `${lit(input.job.projectId)}::uuid`},
+              'output', ${lit(input.outputId)}::uuid, ${lit(outcome)})
+    `)
+  }
+}

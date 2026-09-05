@@ -99,8 +99,16 @@ const IDEMPOTENT_METHODS: ReadonlySet<string> = new Set([
   'answerCallbackQuery',
 ])
 
-/** The token is a path segment in Telegram's URLs, so it leaks through logs. */
-const TOKEN_IN_URL = /\/bot\d+:[A-Za-z0-9_-]+/g
+/**
+ * The token is a path segment in Telegram's URLs, so it leaks through logs.
+ *
+ * The character class deliberately includes `:` even though a real token has
+ * exactly one. Over-redacting costs a slightly less readable log line;
+ * under-redacting puts a live credential in one, and the pattern that assumed
+ * one colon left the tail of a test token visible. `/` is excluded, so the
+ * match still stops at the method name.
+ */
+const TOKEN_IN_URL = /\/bot[0-9]+:[A-Za-z0-9_:-]+/g
 
 export function redact(value: string): string {
   return value.replace(TOKEN_IN_URL, '/bot[redacted]')

@@ -73,7 +73,7 @@ export interface TelegramUpdate {
     id: string
     data?: string
     from: { id: number; username?: string }
-    message?: { message_id: number; chat: { id: number } }
+    message?: { message_id: number; chat: { id: number; type?: string } }
   }
 }
 

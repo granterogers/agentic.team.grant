@@ -38,5 +38,7 @@
   "0037_a_delivery_is_about_a_job.sql": "df356fefc702a8225911064d4276d6b24bbbc90f2995b449d7be3864e82960ed",
   "0038_tts_usage.sql": "ff674b88c54b5d9d69ad5ea8012c68520888436158bc21b25b277edaa1135b91",
   "0039_deliveries_are_not_a_slack_idea.sql": "71f2a612166ad7cc32a352b1517827f4552b7885f54bfdef2a163994821ab658",
-  "0040_delivery_functions.sql": "4c4836229f998c9e4ca7cb27e931caa61b8f95ccb7339bad6ec2a7f051727e41"
+  "0040_delivery_functions.sql": "4c4836229f998c9e4ca7cb27e931caa61b8f95ccb7339bad6ec2a7f051727e41",
+  "0041_telegram_chats.sql": "ae80557e8a6edf31349886aea20059b23042f1b7eb6e244872019bf55601516a",
+  "0042_chat_registration_over_postgrest.sql": "2201f05bd1bd621eb052bafca6876d84959170216e9e0c599919fbffd8630706"
 }

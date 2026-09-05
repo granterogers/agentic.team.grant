@@ -27,6 +27,10 @@ import type { TelegramUpdate } from './telegram.ts'
 import { secretMatches, toCanonicalCommand, UnsupportedUpdateError } from './telegram.ts'
 
 const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
+/** Which bot this webhook belongs to. A chat id is only meaningful against one. */
+const BOT_ID = Deno.env.get('TELEGRAM_BOT_ID') ?? ''
+/** Who the private chats reaching this bot belong to. One human, for V1. */
+const SUBJECT = Deno.env.get('TELEGRAM_SUBJECT') ?? 'grant'
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
@@ -57,6 +61,50 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return new Response('bad request', { status: 400 })
   }
 
+  // Register the chat BEFORE normalizing, and outside the try that drops
+  // unsupported updates.
+  //
+  // This is the only moment the chat id exists: Telegram forbids a bot
+  // messaging anyone who has not messaged it, so there is no other way to learn
+  // where to page (0041). An update we cannot turn into an instruction — a
+  // sticker, a join notice — still proves the chat is reachable, and dropping
+  // it inside the normalizer's catch would throw that away.
+  const chat = update.message?.chat ?? update.callback_query?.message?.chat
+  //
+  // Best effort in the RESPONSE sense only: failing to register must not make
+  // Telegram retry an update that was otherwise handled. The first version
+  // implemented that as `.catch(() => undefined)` and returned 200 having
+  // silently done nothing — "must not fail the request" is not the same as
+  // "must not be noticed". The outcome is now carried in the response body, so
+  // a probe can see it and the check that found this can keep finding it.
+  let registration = 'skipped'
+  if (chat !== undefined && BOT_ID !== '') {
+    try {
+      // `public`, not `app`: PostgREST exposes only the schemas it is
+      // configured for, and exposing the internal one to fix a single call
+      // would put every function in it behind nothing but the anon key (0042).
+      const response = await fetch(`${DB_URL}/rest/v1/rpc/record_telegram_chat`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_chat_id: String(chat.id),
+          p_chat_type: String(chat.type ?? 'private'),
+          p_bot_id: BOT_ID,
+          // Attributed only for a private chat. A group is not one person, and
+          // saying it is would page a room.
+          p_subject: chat.type === 'private' ? SUBJECT : null,
+        }),
+      })
+      registration = response.ok ? 'ok' : `http_${String(response.status)}`
+    } catch {
+      registration = 'unreachable'
+    }
+  }
+
   let command: ReturnType<typeof toCanonicalCommand>
   try {
     command = toCanonicalCommand(update)
@@ -64,7 +112,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (error instanceof UnsupportedUpdateError) {
       // 200, not 4xx. Telegram retries non-2xx, and an update we will never
       // understand would be retried forever. Acknowledged and dropped.
-      return Response.json({ ok: true, ignored: error.message })
+      return Response.json({ ok: true, ignored: error.message, registration })
     }
     throw error
   }
@@ -98,5 +146,5 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return new Response('storage failed', { status: 503 })
   }
 
-  return Response.json({ ok: true, dedupe_key: command.dedupe_key })
+  return Response.json({ ok: true, dedupe_key: command.dedupe_key, registration })
 })

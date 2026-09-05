@@ -1,9 +1,9 @@
-# Phase 7 — the Slack office, and voice notes that stay silent
+# Phase 7 — the Slack office, the Telegram pager, and voice notes that stay silent
 
 **Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (54 checks, all live)
 **Unit:** 532 tests overall; 107 of them new here across 8 files
-**Also:** `npm run verify:tts` (14 checks, live)
-**Migrations:** 0032 – 0038
+**Also:** `npm run verify:telegram` (25 checks, live) · `npm run verify:tts` (14 checks, live)
+**Migrations:** 0032 – 0042
 
 This document records what the checks **found by failing**, not a list of what
 passed. The passes are in the suite output; the failures are the part worth
@@ -27,6 +27,8 @@ reading, and there were five.
 | `src/slack/interactions.ts` | the six buttons coming back |
 | `src/channels/callbacks.ts` | what a press actually does, for every channel |
 | `src/voice/notes.ts` + `migrations/0038` | voice notes, the character ledger, and the decision not to speak |
+| `src/channels/delivery.ts` + `migrations/0039–0040` | exactly-once delivery, for any channel |
+| `src/telegram/*` + `migrations/0041–0042` | the pager: client, composer, transport, chat registry |
 | `scripts/verify/slack.ts` | the 38 live checks |
 
 Seven of Phase 7's eight named Slack failure injections are performed for real
@@ -34,7 +36,7 @@ against the real workspace. The eighth is discussed below rather than faked.
 
 ---
 
-## The seven defects the checks found
+## The nine defects the checks found
 
 ### 1. The worker said "delivered" and delivered nothing
 
@@ -110,6 +112,32 @@ permissions check, `research-director` running a prompt written by a test) and
 the pattern is now clear enough to name: **a check that exercises real
 configuration must restore it, and "kept as evidence" is not a reason to leave
 live configuration changed.**
+
+### 8. The webhook returned 200 and registered nothing
+
+The chat registration was written as an RPC into the `app` schema, which
+PostgREST does not expose, so the call failed on every update. It failed
+*silently*, because the handler wrapped it in `.catch(() => undefined)` —
+deliberately, since failing to register must not make Telegram retry an update
+that was otherwise handled. But "must not fail the request" had been implemented
+as "must not be noticed".
+
+The check caught it by asserting the consequence — a row exists afterwards —
+rather than the status code, which was 200 and meaningless. 0042 adds a narrow
+`public` wrapper (exposing the whole internal schema to fix one call was the
+alternative, and it is not one), and the handler now reports the registration
+outcome in its response body so the same check keeps working.
+
+### 9. A verification suite that believed its own leftovers
+
+The Telegram pager checks asked for Grant's chat, found a chat left behind by an
+earlier crashed run of the same suite, and reported the resulting delivery
+failure as though the pager were broken. Two changes: the pager checks now use
+their own fixture subject, so they are independent of whether a real chat exists
+*and* exercise the whole path instead of stopping at "nobody to page"; and
+`purge:fixtures` sweeps delivery and chat debris, which had reached 81 rows and
+was making `delivery_health` unreadable — the same way leaked fixture jobs once
+made every "how busy are we" summary wrong.
 
 ---
 
@@ -287,6 +315,49 @@ different table.
 
 ---
 
+## The pager
+
+§12 divides the surfaces by what they are for — *"Slack = office · Telegram =
+pager"* — and until now Telegram had an inbound webhook and no outbound path at
+all. Nothing had ever paged Grant.
+
+**The delivery table was generalised rather than copied.** A
+`telegram_deliveries` table would have been quicker and would have been a second
+implementation of one invariant: *a message is sent at most once, and we can
+always say whether it was.* That is a property of delivery, not of Slack. 0039
+and 0040 move the table and its five functions, carrying the reasoning behind
+the four corrections 0033–0037 made, because all four are easy to reintroduce.
+Slack behaviour is unchanged and its 54 checks prove it.
+
+**The one place the channels genuinely differ is reconciliation, and it is not
+symmetric.** After an indeterminate send, Slack can be asked whether the message
+landed: a bot can read channel history and every post carries its dedupe key in
+Slack's metadata. A Telegram bot **cannot read its own sent messages back** —
+there is no history endpoint, `getUpdates` returns incoming updates only, and a
+sent message carries no field to search on. So `Transport.reconcile` is optional
+and `TelegramTransport` does not implement it. The delivery stays parked as
+`failed` forever and the service reports `unreconcilable`.
+
+That is the correct outcome rather than a gap. A page that did not arrive is a
+page Grant does not get; a page sent twice at 3am is worse, and a system that
+resends on a guess would do the second one every time.
+
+**The pager does not page for everything.** A floor of `important` sits under
+the preference check: preferences can make it quieter, never louder. Anything
+below urgent is sent silently — on the phone when he looks, without the phone
+asking to be looked at.
+
+### Four Telegram-specific traps, each tested
+
+| | |
+|---|---|
+| `retry_after` is in the JSON body, not a header | the habit every other API teaches gets nothing and retries immediately |
+| Errors are English prose, not codes | there is no `chat_not_found` field, only `"Bad Request: chat not found"` — matched in one place, with an explicit fallback |
+| `callback_data` is capped at 64 **bytes** | an action name plus a uuid does not fit, so the action goes as a one-character code and the correlation goes whole. An over-long payload is a silently dead button |
+| MarkdownV2 needs eighteen characters escaped | HTML needs three. That is the entire reason HTML mode was chosen: the text is model output, and a missed escape is a message Telegram refuses to send |
+
+---
+
 ## Known limitations
 
 1. **No avatars in Slack yet.** `staff.avatar_ref` holds a repository path, not
@@ -305,3 +376,10 @@ different table.
 5. **The lockout check costs a channel per run**, as above.
 6. **No voice note has ever been synthesised.** Everything up to the call is
    built and checked; the call itself needs a Google Cloud credential.
+7. **No Telegram message has ever reached a person.** Telegram forbids a bot
+   messaging anyone who has not messaged it first, so there is no chat id and
+   none can be configured or guessed. The registry, the lookup, the send, the
+   error classification and the deployed webhook's registration path are all
+   exercised for real — the send against a chat that does not exist, which
+   proves everything except a human receiving something. One message from Grant
+   to @agenticteamgrantbot closes it.
