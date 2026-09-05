@@ -138,7 +138,8 @@ though the first million characters each month are free.
 4. A `.json` file downloads.
 
 **Report back:** the full contents of that JSON file, in the credentials block
-at the end. It is a single JSON object beginning `{"type": "service_account"`.
+at the end. It is a single JSON object whose first field declares the type as a service
+account, and which contains a private key.
 If you cannot read the downloaded file, say so and tell me where it saved to —
 I will read it myself.
 
