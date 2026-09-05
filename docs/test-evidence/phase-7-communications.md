@@ -2,7 +2,7 @@
 
 **Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (54 checks, all live)
 **Unit:** 532 tests overall; 107 of them new here across 8 files
-**Also:** `npm run verify:telegram` (25 checks, live) · `npm run verify:tts` (14 checks, live)
+**Slack suite is now 55 checks** · **Also:** `npm run verify:telegram` (25 checks, live) · `npm run verify:tts` (14 checks, live)
 **Migrations:** 0032 – 0042
 
 This document records what the checks **found by failing**, not a list of what
@@ -341,6 +341,27 @@ and `TelegramTransport` does not implement it. The delivery stays parked as
 That is the correct outcome rather than a gap. A page that did not arrive is a
 page Grant does not get; a page sent twice at 3am is worse, and a system that
 resends on a guess would do the second one every time.
+
+**One notifier, two channels.** The worker has one `notifying` state, so "also
+send to Telegram" is not a flag — it is the same `app.notification_allowed`
+question asked for a second channel, plus a severity floor. A second severity
+rule for Telegram was the alternative and is the wrong shape for the reason
+0013's own comment gives about that function: a filter applied in one of two
+call paths drifts from the one in the other.
+
+The context both channels need — who produced the output, whether it was
+reviewed, which buttons to offer — is resolved once. Two resolvers reading the
+same three tables would eventually disagree about who produced a finding, and
+the disagreement would surface as one channel attributing it to the wrong
+specialist. A channel that throws does not stop the next one: a Slack outage
+that also silenced the pager would take out the surface that exists to work when
+the other does not.
+
+The job's state reason names every channel's outcome, including the boring
+ones — `delivered to slack via thread; not paged: no telegram chat registered`.
+A note that says only what succeeded is how a channel stops working unnoticed,
+because the symptom of a pager that never pages is silence, and so is the
+symptom of a quiet week.
 
 **The pager does not page for everything.** A floor of `important` sits under
 the preference check: preferences can make it quieter, never louder. Anything

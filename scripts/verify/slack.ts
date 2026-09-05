@@ -26,6 +26,7 @@
  */
 
 import { processCallbacks } from '../../src/channels/callbacks.ts'
+import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import type { Handler, HandlerOutput } from '../../src/jobs/worker.ts'
@@ -33,10 +34,12 @@ import { dequeue, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
 import type { ResultMessage } from '../../src/slack/blocks.ts'
 import { ACTIONS } from '../../src/slack/blocks.ts'
-import { slackNotifier } from '../../src/slack/notifier.ts'
+import { slackChannel } from '../../src/slack/notifier.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
+import { TelegramClient } from '../../src/telegram/api.ts'
+import { TelegramPager } from '../../src/telegram/pager.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 const botToken = process.env.SLACK_BOT_TOKEN
@@ -481,7 +484,25 @@ await db.execute(`
   values ('grant', ${lit(PROJECT_ID)}::uuid, '{}'::text[], 'trivial', true)
 `)
 
-const notifier = slackNotifier(db, office, { teamId: TEAM_ID })
+// Both channels, through the one notifier the worker calls. Running the pager
+// here as well as in `verify:telegram` is not duplication: this is the only
+// check that a job finishing reaches BOTH surfaces, and the failure it is
+// looking for — one channel's failure swallowing the other's — cannot happen in
+// a suite that only has one channel in it.
+const telegramToken = process.env.TELEGRAM_CHIEF_BOT_TOKEN
+const channels = [slackChannel(db, office, { teamId: TEAM_ID })]
+if (telegramToken !== undefined && telegramToken !== '') {
+  channels.push(
+    pagerChannel(
+      new TelegramPager(db, new TelegramClient(telegramToken), {
+        botId: process.env.TELEGRAM_BOT_ID ?? '8967954396',
+        subject: 'nobody-registered-here',
+      }),
+      'important',
+    ),
+  )
+}
+const notifier = combinedNotifier(channels, db)
 const dequeued = await dequeue(db, `verify-slack-${stamp}`)
 const jobResult =
   dequeued === null
@@ -496,8 +517,15 @@ const jobResult =
 
 record(
   'a finished job actually delivers — `notifying` does something now',
-  `state=${String(jobResult?.finalState)} note=${String(jobResult?.note).slice(0, 90)}`,
+  `state=${String(jobResult?.finalState)} note=${String(jobResult?.note).slice(0, 120)}`,
   jobResult?.finalState === 'complete' && jobResult.note.includes('delivered to slack via thread'),
+)
+record(
+  'and the state reason reports EVERY channel, including the one that did nothing',
+  String(jobResult?.note).slice(0, 140),
+  telegramToken === undefined ||
+    telegramToken === '' ||
+    String(jobResult?.note).includes('no telegram chat registered'),
 )
 
 const inThreadNow = await countInSlack(`job:${E2E_JOB}:result`, String(first.messageTs))

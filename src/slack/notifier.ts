@@ -31,10 +31,10 @@
  *    (`reviewed: false`), which is what lets a reader discount it.
  */
 
+import type { ResultContext } from '../channels/notify.ts'
+import { combinedNotifier } from '../channels/notify.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { HandlerOutput, Job, Notifier, NotifyOutcome } from '../jobs/worker.ts'
-import { ACTIONS, type ActionId } from './blocks.ts'
-import type { StaffPresentation } from './identity.ts'
 import type { SlackOffice } from './office.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -98,141 +98,108 @@ export async function resolveTarget(db: SqlExecutor, job: Job): Promise<Target |
 }
 
 /**
- * Which buttons make sense for this result.
+ * The Slack half of the worker's notifier.
  *
- * Undo is offered only when there is something to undo — an offer that does
- * nothing is worse than no offer, because it teaches that Undo does nothing.
+ * Takes the resolved context rather than resolving it, so the office and the
+ * pager cannot disagree about who produced an output — see
+ * `src/channels/notify.ts`.
  */
-export async function offeredActions(
+export function slackChannel(
   db: SqlExecutor,
-  job: Job,
-  hasProjectUrl: boolean,
-): Promise<readonly ActionId[]> {
-  const { rows } = await db.execute(`
-    select count(*)::int as n from public.undo_offers
-    where correlation_id = ${lit(job.correlationId)}::uuid
-  `)
-  const undoable = Number((rows[0] as { n?: number } | undefined)?.n ?? 0) > 0
-  return ACTIONS.filter(
-    (action) => (action !== 'undo' || undoable) && (action !== 'open_project' || hasProjectUrl),
-  )
+  office: SlackOffice,
+  options: NotifierOptions,
+): {
+  readonly name: string
+  readonly notify: (
+    job: Job,
+    output: HandlerOutput,
+    outputId: string,
+    context: ResultContext,
+  ) => Promise<NotifyOutcome>
+} {
+  const severity = options.severity ?? 'routine'
+  const subject = options.subject ?? 'grant'
+
+  return {
+    name: 'slack',
+    notify: async (job, output, outputId, context): Promise<NotifyOutcome> => {
+      const target = await resolveTarget(db, job)
+      if (target === null) {
+        return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
+      }
+
+      const allowed = await db.execute(`
+        select app.notification_allowed(${lit(subject)}, 'slack', ${lit(severity)}::public.notify_severity,
+          ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`}) as allowed
+      `)
+      if ((allowed.rows[0] as { allowed?: boolean } | undefined)?.allowed !== true) {
+        await db.execute(`
+          insert into public.notification_events
+            (channel, severity, project_id, subject_kind, subject_ref, outcome)
+          values ('slack', ${lit(severity)}::public.notify_severity,
+                  ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
+                  'output', ${lit(outputId)}::uuid, 'suppressed')
+        `)
+        return { delivered: false, note: 'suppressed by notification preferences' }
+      }
+
+      const result = await office.deliver({
+        dedupeKey: `job:${job.jobId}:result`,
+        teamId: options.teamId,
+        channelId: target.channelId,
+        threadTs: target.threadTs,
+        purpose: 'result',
+        staff: context.staff,
+        staffId: null,
+        correlationId: job.correlationId,
+        jobId: job.jobId,
+        message: {
+          staffTitle: context.staff?.title ?? null,
+          body: output.body,
+          metadata: {
+            confidence: output.confidence,
+            evidence: output.evidence,
+            sources: output.sources,
+            contradictions: output.contradictions,
+            reviewed: context.reviewed,
+          },
+          correlationId: job.correlationId,
+          actions: context.actions,
+          projectUrl: context.projectUrl,
+        },
+      })
+
+      if (result.outcome === 'sent' || result.outcome === 'already_sent') {
+        await db.execute(`
+          insert into public.notification_events
+            (channel, severity, project_id, subject_kind, subject_ref, outcome)
+          values ('slack', ${lit(severity)}::public.notify_severity,
+                  ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
+                  'output', ${lit(outputId)}::uuid, 'delivered')
+        `)
+        return { delivered: true, note: `delivered to slack via ${target.via}` }
+      }
+
+      return {
+        delivered: false,
+        note: `slack delivery ${result.outcome}${result.errorCode === null ? '' : `: ${result.errorCode}`}`,
+      }
+    },
+  }
 }
 
-/** Build the worker's notifier. */
+/**
+ * The worker's notifier, Slack only.
+ *
+ * Kept because most callers want exactly this, and because a caller that has to
+ * assemble a one-element array to send to one channel will assemble it wrong.
+ */
 export function slackNotifier(
   db: SqlExecutor,
   office: SlackOffice,
   options: NotifierOptions,
 ): Notifier {
-  const severity = options.severity ?? 'routine'
-  const subject = options.subject ?? 'grant'
-
-  return async (job: Job, output: HandlerOutput, outputId: string): Promise<NotifyOutcome> => {
-    const target = await resolveTarget(db, job)
-    if (target === null) {
-      return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
-    }
-
-    const allowed = await db.execute(`
-      select app.notification_allowed(${lit(subject)}, 'slack', ${lit(severity)}::public.notify_severity,
-        ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`}) as allowed
-    `)
-    if ((allowed.rows[0] as { allowed?: boolean } | undefined)?.allowed !== true) {
-      await db.execute(`
-        insert into public.notification_events
-          (channel, severity, project_id, subject_kind, subject_ref, outcome)
-        values ('slack', ${lit(severity)}::public.notify_severity,
-                ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
-                'output', ${lit(outputId)}::uuid, 'suppressed')
-      `)
-      return { delivered: false, note: 'suppressed by notification preferences' }
-    }
-
-    // Who to present as. There is no assignment table and deliberately so —
-    // §9's roster IS the record of who was convened, and `routing_decisions`
-    // holds it as slugs. An empty roster is a real answer ("trivial work spawns
-    // no subagents"), and the message then comes from no one in particular
-    // rather than from an invented author.
-    const staffRow = await db.execute(`
-      select st.slug, st.name, st.title, st.avatar_ref
-      from public.routing_decisions r
-      join public.staff st on st.slug = r.roster[1]
-      where r.job_id = ${lit(job.jobId)}::uuid
-      order by r.decided_at desc
-      limit 1
-    `)
-    const raw = staffRow.rows[0] as
-      | { slug: string; name: string; title: string; avatar_ref: string | null }
-      | undefined
-    const staff: StaffPresentation | null =
-      raw === undefined
-        ? null
-        : { slug: raw.slug, name: raw.name, title: raw.title, avatarRef: raw.avatar_ref }
-
-    const reviewRow = await db.execute(`
-      select reviewer_status::text as status, deterministic
-      from public.outputs where output_id = ${lit(outputId)}::uuid
-    `)
-    const review = reviewRow.rows[0] as
-      | { status: string | null; deterministic: boolean }
-      | undefined
-    const reviewed =
-      review?.deterministic === true ||
-      review?.status === 'approved' ||
-      review?.status === 'approved_with_reservations'
-
-    const projectUrl =
-      options.projectUrlBase === null ||
-      options.projectUrlBase === undefined ||
-      job.projectId === null
-        ? null
-        : `${options.projectUrlBase.replace(/\/+$/, '')}/projects/${job.projectId}`
-
-    const result = await office.deliver({
-      dedupeKey: `job:${job.jobId}:result`,
-      teamId: options.teamId,
-      channelId: target.channelId,
-      threadTs: target.threadTs,
-      purpose: 'result',
-      staff,
-      staffId: null,
-      correlationId: job.correlationId,
-      jobId: job.jobId,
-      message: {
-        staffTitle: staff?.title ?? null,
-        body: output.body,
-        metadata: {
-          confidence: output.confidence,
-          evidence: output.evidence,
-          sources: output.sources,
-          contradictions: output.contradictions,
-          // Read from the output row rather than inferred from the path. §16
-          // exempts a deterministic output from review, which is not the same
-          // as it being unreviewed — saying "not reviewed" about a mechanical
-          // retrieval would cry wolf — and an inference output that somehow
-          // reached here unreviewed must be labelled. The row knows which.
-          reviewed,
-        },
-        correlationId: job.correlationId,
-        actions: await offeredActions(db, job, projectUrl !== null),
-        projectUrl,
-      },
-    })
-
-    if (result.outcome === 'sent' || result.outcome === 'already_sent') {
-      await db.execute(`
-        insert into public.notification_events
-          (channel, severity, project_id, subject_kind, subject_ref, outcome)
-        values ('slack', ${lit(severity)}::public.notify_severity,
-                ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
-                'output', ${lit(outputId)}::uuid, 'delivered')
-      `)
-      return { delivered: true, note: `delivered to slack via ${target.via}` }
-    }
-
-    return {
-      delivered: false,
-      note: `slack delivery ${result.outcome}${result.errorCode === null ? '' : `: ${result.errorCode}`}`,
-    }
-  }
+  return combinedNotifier([slackChannel(db, office, options)], db, {
+    projectUrlBase: options.projectUrlBase ?? null,
+  })
 }
