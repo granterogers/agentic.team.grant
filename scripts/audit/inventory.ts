@@ -28,7 +28,10 @@
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
-const db = new ManagementApiExecutor(process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg', supabaseToken)
+const db = new ManagementApiExecutor(
+  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
+  supabaseToken,
+)
 
 type State = 'ok' | 'dead' | 'missing' | 'unknown'
 interface Row {
@@ -53,8 +56,12 @@ const check = async (
     rows.push({ service, what, state: ok ? 'ok' : 'dead', owner, detail, action })
   } catch (error) {
     rows.push({
-      service, what, state: 'unknown', owner,
-      detail: (error as Error).message.slice(0, 60), action,
+      service,
+      what,
+      state: 'unknown',
+      owner,
+      detail: (error as Error).message.slice(0, 60),
+      action,
     })
   }
 }
@@ -63,47 +70,81 @@ const env = (name: string): string => process.env[name] ?? ''
 
 // --- the ones we can actually ask -------------------------------------------
 
-await check('Supabase', 'management token', '⚠️ dead Google account', 'Re-home or change the account email', async () => {
-  const r = await fetch('https://api.supabase.com/v1/projects', {
-    headers: { Authorization: `Bearer ${supabaseToken}` },
-  })
-  const list = (await r.json()) as { id?: string; status?: string }[]
-  const p = Array.isArray(list) ? list[0] : undefined
-  return { ok: r.ok, detail: `project ${String(p?.status ?? r.status)}` }
-})
+await check(
+  'Supabase',
+  'management token',
+  '⚠️ dead Google account',
+  'Re-home or change the account email',
+  async () => {
+    const r = await fetch('https://api.supabase.com/v1/projects', {
+      headers: { Authorization: `Bearer ${supabaseToken}` },
+    })
+    const list = (await r.json()) as { id?: string; status?: string }[]
+    const p = Array.isArray(list) ? list[0] : undefined
+    return { ok: r.ok, detail: `project ${String(p?.status ?? r.status)}` }
+  },
+)
 
 await check('Slack', 'bot token', '✅ grant.e.rogers', '—', async () => {
-  const r = await (await fetch('https://slack.com/api/auth.test', {
-    method: 'POST', headers: { Authorization: `Bearer ${env('SLACK_BOT_TOKEN')}` },
-  })).json() as { ok?: boolean; team?: string; error?: string }
+  const r = (await (
+    await fetch('https://slack.com/api/auth.test', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env('SLACK_BOT_TOKEN')}` },
+    })
+  ).json()) as { ok?: boolean; team?: string; error?: string }
   return { ok: r.ok === true, detail: r.ok === true ? String(r.team) : String(r.error) }
 })
 
-await check('Slack', 'config token (12h)', '✅ grant.e.rogers', 'npm run slack:rotate', async () => {
-  const r = await (await fetch(`https://slack.com/api/apps.manifest.export?app_id=${env('SLACK_APP_ID')}`, {
-    headers: { Authorization: `Bearer ${env('SLACK_APP_CONFIG_TOKEN')}` },
-  })).json() as { ok?: boolean; error?: string }
-  return { ok: r.ok === true, detail: r.ok === true ? 'valid' : String(r.error) }
-})
+await check(
+  'Slack',
+  'config token (12h)',
+  '✅ grant.e.rogers',
+  'npm run slack:rotate',
+  async () => {
+    const r = (await (
+      await fetch(`https://slack.com/api/apps.manifest.export?app_id=${env('SLACK_APP_ID')}`, {
+        headers: { Authorization: `Bearer ${env('SLACK_APP_CONFIG_TOKEN')}` },
+      })
+    ).json()) as { ok?: boolean; error?: string }
+    return { ok: r.ok === true, detail: r.ok === true ? 'valid' : String(r.error) }
+  },
+)
 
 await check('Telegram', 'chief bot token', '✅ phone number', '—', async () => {
-  const r = await (await fetch(`https://api.telegram.org/bot${env('TELEGRAM_CHIEF_BOT_TOKEN')}/getMe`)).json() as
-    { ok?: boolean; result?: { username?: string }; description?: string }
-  return { ok: r.ok === true, detail: r.ok === true ? `@${String(r.result?.username)}` : String(r.description) }
+  const r = (await (
+    await fetch(`https://api.telegram.org/bot${env('TELEGRAM_CHIEF_BOT_TOKEN')}/getMe`)
+  ).json()) as { ok?: boolean; result?: { username?: string }; description?: string }
+  return {
+    ok: r.ok === true,
+    detail: r.ok === true ? `@${String(r.result?.username)}` : String(r.description),
+  }
 })
 
-await check('Vercel', 'deploy token', '⚠️ dead Google account', 'Re-home or change the account email', async () => {
-  const r = await (await fetch('https://api.vercel.com/v2/user', {
-    headers: { Authorization: `Bearer ${env('VERCEL_TOKEN')}` },
-  })).json() as { user?: { email?: string }; error?: unknown }
-  return { ok: r.user !== undefined, detail: String(r.user?.email ?? 'rejected') }
-})
+await check(
+  'Vercel',
+  'deploy token',
+  '⚠️ dead Google account',
+  'Re-home or change the account email',
+  async () => {
+    const r = (await (
+      await fetch('https://api.vercel.com/v2/user', {
+        headers: { Authorization: `Bearer ${env('VERCEL_TOKEN')}` },
+      })
+    ).json()) as { user?: { email?: string }; error?: unknown }
+    return { ok: r.user !== undefined, detail: String(r.user?.email ?? 'rejected') }
+  },
+)
 
 await check('OpenRouter', 'inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = await (await fetch('https://openrouter.ai/api/v1/key', {
-    headers: { Authorization: `Bearer ${env('OPENROUTER_API_KEY')}` },
-  })).json() as { data?: { limit_remaining?: number }; error?: unknown }
-  return { ok: r.data !== undefined, detail: r.data ? `${String(r.data.limit_remaining)} credits left` : 'rejected' }
+  const r = (await (
+    await fetch('https://openrouter.ai/api/v1/key', {
+      headers: { Authorization: `Bearer ${env('OPENROUTER_API_KEY')}` },
+    })
+  ).json()) as { data?: { limit_remaining?: number }; error?: unknown }
+  return {
+    ok: r.data !== undefined,
+    detail: r.data ? `${String(r.data.limit_remaining)} credits left` : 'rejected',
+  }
 })
 
 await check('OpenAI', 'image/inference key', '❓ unknown', 'Confirm which email', async () => {
@@ -120,37 +161,72 @@ await check('Groq', 'inference key', '❓ unknown', 'Confirm which email', async
   return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
 })
 
-await check('Google', 'Gemini API key', '⛔ dead Google account', 'Delete the variable — it misleads', async () => {
-  const r = await (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${env('GEMINI_API_KEY')}`)).json() as
-    { error?: { message?: string } }
-  return { ok: r.error === undefined, detail: r.error ? String(r.error.message).slice(0, 44) : 'valid' }
-})
+await check(
+  'Google',
+  'Gemini API key',
+  '⛔ dead Google account',
+  'Delete the variable — it misleads',
+  async () => {
+    const r = (await (
+      await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${env('GEMINI_API_KEY')}`,
+      )
+    ).json()) as { error?: { message?: string } }
+    return {
+      ok: r.error === undefined,
+      detail: r.error ? String(r.error.message).slice(0, 44) : 'valid',
+    }
+  },
+)
 
-await check('Google', 'NotebookLM master token', '⛔ dead Google account', 'Retired in migration 0048', async () => {
-  const raw = (await db.execute(
-    `select decrypted_secret as v from vault.decrypted_secrets where name='notebook.master_token_json'`,
-  )).rows[0]?.v
-  const t = JSON.parse(String(raw)) as { email: string; android_id: string; master_token: string }
-  const r = await fetch('https://android.googleapis.com/auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      androidId: t.android_id, app: 'com.google.android.apps.docs',
-      client_sig: '38918a453d07199354f8b19af05ec6562ced5788',
-      service: 'oauth2:https://www.googleapis.com/auth/drive',
-      Token: t.master_token, Email: t.email,
-    }),
-  })
-  const text = await r.text()
-  return { ok: text.includes('Auth='), detail: text.includes('Auth=') ? 'valid' : 'BadAuthentication' }
-})
+await check(
+  'Google',
+  'NotebookLM master token',
+  '⛔ dead Google account',
+  'Retired in migration 0048',
+  async () => {
+    const raw = (
+      await db.execute(
+        `select decrypted_secret as v from vault.decrypted_secrets where name='notebook.master_token_json'`,
+      )
+    ).rows[0]?.v
+    const t = JSON.parse(String(raw)) as { email: string; android_id: string; master_token: string }
+    const r = await fetch('https://android.googleapis.com/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        androidId: t.android_id,
+        app: 'com.google.android.apps.docs',
+        client_sig: '38918a453d07199354f8b19af05ec6562ced5788',
+        service: 'oauth2:https://www.googleapis.com/auth/drive',
+        Token: t.master_token,
+        Email: t.email,
+      }),
+    })
+    const text = await r.text()
+    return {
+      ok: text.includes('Auth='),
+      detail: text.includes('Auth=') ? 'valid' : 'BadAuthentication',
+    }
+  },
+)
 
 // --- the ones only Grant can answer -----------------------------------------
 
 for (const [service, what, owner, action] of [
-  ['Backblaze B2', 'backup bucket + keys', '⚠️ dead Google account (login still works)', '🔴 CHANGE THE ACCOUNT EMAIL WHILE YOU CAN'],
+  [
+    'Backblaze B2',
+    'backup bucket + keys',
+    '⚠️ dead Google account (login still works)',
+    '🔴 CHANGE THE ACCOUNT EMAIL WHILE YOU CAN',
+  ],
   ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—'],
-  ['Google', 'Cloud TTS service account', '— not created', 'Create on a LIVE account (docs/google-cloud-tts-credential.md)'],
+  [
+    'Google',
+    'Cloud TTS service account',
+    '— not created',
+    'Create on a LIVE account (docs/google-cloud-tts-credential.md)',
+  ],
   ['Telegram', '7 staff bot tokens', '— not created', 'BotFather (docs/telegram-bot-roster.md)'],
 ] as const) {
   rows.push({ service, what, state: 'missing', owner, detail: 'not machine-checkable', action })
@@ -173,7 +249,9 @@ const dead = rows.filter((r) => r.state === 'dead')
 const missing = rows.filter((r) => r.state === 'missing' && r.action !== '—')
 const unknown = rows.filter((r) => r.owner.startsWith('❓'))
 
-console.log(`\n**${String(rows.filter((r) => r.state === 'ok').length)} working · ${String(dead.length)} dead · ${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership**\n`)
+console.log(
+  `\n**${String(rows.filter((r) => r.state === 'ok').length)} working · ${String(dead.length)} dead · ${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership**\n`,
+)
 if (dead.length > 0) {
   console.log('## Dead\n')
   for (const r of dead) console.log(`- **${r.service} ${r.what}** — ${r.detail}. ${r.action}`)

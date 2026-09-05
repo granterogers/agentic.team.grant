@@ -30,9 +30,9 @@
  * than the one it solves. The manifest lists what would need re-entering.
  */
 
-import { gzipSync } from 'node:zlib'
-import { writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { writeFile } from 'node:fs/promises'
+import { gzipSync } from 'node:zlib'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -115,6 +115,8 @@ await writeFile(`${name}.sha256`, `${sha}  ${name}\n`)
 
 console.log(`\n${name}`)
 console.log(`  ${String(rows)} rows across ${String(tables.length)} tables`)
-console.log(`  ${String(Math.round(json.length / 1024))}KB raw → ${String(Math.round(gz.length / 1024))}KB gzipped`)
+console.log(
+  `  ${String(Math.round(json.length / 1024))}KB raw → ${String(Math.round(gz.length / 1024))}KB gzipped`,
+)
 console.log(`  sha256 ${sha.slice(0, 16)}…`)
 console.log(`  latest migration: ${String(migrations[migrations.length - 1])}`)
