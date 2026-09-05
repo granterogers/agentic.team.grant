@@ -7,9 +7,11 @@
  * visible until a real person presses something that does nothing.
  */
 import { describe, expect, it } from 'vitest'
+import { toCanonicalCommand } from '../../src/channels/telegram.ts'
 import { ACTIONS } from '../../src/slack/blocks.ts'
 import {
   BUTTONS_PER_ROW,
+  CALLBACK_ACTIONS,
   CALLBACK_DATA_MAX_BYTES,
   CallbackDataTooLongError,
   callbackData,
@@ -18,7 +20,6 @@ import {
   PAGER_BODY_LIMIT,
   pagerText,
   trimForPager,
-  WIRE_TO_ACTION,
 } from '../../src/telegram/message.ts'
 
 const CORR = '11111111-2222-3333-4444-555555555555'
@@ -84,10 +85,24 @@ describe('callback data', () => {
     }
   })
 
-  it('round-trips through the wire codes', () => {
+  it('round-trips through the adapter that will actually receive it', () => {
+    // The check that would have caught the wire-code mistake: both sides of the
+    // wire, in one test. Unit tests on each side passed while the two disagreed
+    // about the format entirely.
     for (const action of ACTIONS) {
-      const [code] = callbackData(action, CORR).split(':')
-      expect(WIRE_TO_ACTION[String(code)]).toBe(action)
+      const command = toCanonicalCommand(
+        {
+          update_id: 1,
+          callback_query: {
+            id: 'cb-1',
+            data: callbackData(action, CORR),
+            from: { id: 4242 },
+            message: { message_id: 7, chat: { id: -100123, type: 'private' } },
+          },
+        },
+        new Date('2026-09-05T09:00:00Z'),
+      )
+      expect(command.callback_action).toBe(CALLBACK_ACTIONS[action])
     }
   })
 

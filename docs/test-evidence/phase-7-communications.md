@@ -36,7 +36,7 @@ against the real workspace. The eighth is discussed below rather than faked.
 
 ---
 
-## The nine defects the checks found
+## The eleven defects the checks found
 
 ### 1. The worker said "delivered" and delivered nothing
 
@@ -138,6 +138,36 @@ their own fixture subject, so they are independent of whether a real chat exists
 `purge:fixtures` sweeps delivery and chat debris, which had reached 81 rows and
 was making `delivery_health` unreadable — the same way leaked fixture jobs once
 made every "how busy are we" summary wrong.
+
+### 10. Six dead buttons, with every unit test passing
+
+The pager composer invented one-character wire codes for `callback_data`, to
+save space against Telegram's 64-byte limit. The inbound adapter has parsed
+`<action>:<payload>` since Phase 3. Every button would have arrived
+unrecognised and done nothing — and the unit tests on both sides passed,
+because neither side had ever been tested against the other.
+
+The limit did not bind anyway: the longest canonical action is `open_project`,
+which with a colon and a uuid is 49 bytes. An optimisation for a constraint that
+was not there, breaking an interface that was.
+
+There are now two checks that could not have been fooled: a unit test that feeds
+the composer's output straight into the adapter, and a live one that sends a
+composed press to the **deployed** webhook and reads the row back.
+
+### 11. A correlation, in a column that references events
+
+The Telegram adapter wrote the Undo button's payload into
+`compensates_event_id`, which has a foreign key to `events`. The payload a
+button carries is a **correlation** — that is what identifies the work, and
+what `undo_offers` is grouped by. Storing it there would satisfy the type,
+point at the wrong table, and fail the insert; the webhook answers a failed
+insert with a 503, and Telegram retries a 503 forever.
+
+It had never fired because no button had ever existed to press.
+`src/slack/interactions.ts` had already reached the opposite conclusion for the
+same reason, independently — the two agreeing is the point, and the disagreement
+was the bug.
 
 ---
 

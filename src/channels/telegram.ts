@@ -146,10 +146,9 @@ export function toCanonicalCommand(
     }
 
     // Only a well-formed uuid is carried through. §10: never allow free-form
-    // input to reach a tool call, and this payload is used to look up an event.
-    const compensates =
-      action === 'undo' && payload !== undefined && UUID.test(payload) ? payload : null
-    if (action === 'undo' && compensates === null) {
+    // input to reach a tool call, and this payload goes into a lookup.
+    const carried = payload !== undefined && UUID.test(payload) ? payload : null
+    if (action === 'undo' && carried === null) {
       throw new UnsupportedUpdateError(update.update_id)
     }
 
@@ -164,7 +163,21 @@ export function toCanonicalCommand(
       dedupe_key: `telegram:callback:${query.id}`,
       received_at,
       callback_action: action,
-      compensates_event_id: compensates,
+      // Deliberately null, including for Undo, and this changed after the
+      // button composer existed.
+      //
+      // The column references `events(event_id)` (0011). The payload a button
+      // actually carries is a CORRELATION — that is what identifies the work a
+      // message was about, and it is what `undo_offers` is grouped by. Writing
+      // it here would satisfy the type, point at the wrong table, and fail the
+      // insert with a foreign-key violation — which the webhook would answer
+      // with a 503, which Telegram would retry, forever.
+      //
+      // Nothing is lost: the callback processor resolves the work from the
+      // message the button is attached to, via `deliveries`, which is both more
+      // reliable and not client-supplied. `src/slack/interactions.ts` reached
+      // the same conclusion independently, and the two agreeing is the point.
+      compensates_event_id: null,
     }
   }
 

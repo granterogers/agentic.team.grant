@@ -137,12 +137,23 @@ describe('callback queries', () => {
   })
 })
 
-describe('undo carries the original event id (§6)', () => {
-  const eventId = '3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b'
+describe('undo carries a uuid, and it is NOT an event id', () => {
+  const correlationId = '3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b'
 
-  it('extracts a well-formed uuid', () => {
-    const command = toCanonicalCommand(callback(`undo:${eventId}`), NOW)
-    expect(command.compensates_event_id).toBe(eventId)
+  it('requires a well-formed uuid', () => {
+    // Still validated, still refused when malformed: the payload goes into a
+    // lookup and §10 forbids free-form input reaching one.
+    expect(() => toCanonicalCommand(callback(`undo:${correlationId}`), NOW)).not.toThrow()
+  })
+
+  it('but does not write it to compensates_event_id, which references events', () => {
+    // The button carries a CORRELATION. That column has a foreign key to
+    // `events`, so storing a correlation there fails the insert, which the
+    // webhook answers with a 503, which Telegram retries forever. The work is
+    // resolved from the message instead — see the comment in the adapter.
+    expect(
+      toCanonicalCommand(callback(`undo:${correlationId}`), NOW).compensates_event_id,
+    ).toBeNull()
   })
 
   it.each([

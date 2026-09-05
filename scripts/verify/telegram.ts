@@ -31,7 +31,7 @@ import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import type { HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { ACTIONS } from '../../src/slack/blocks.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
-import { inlineKeyboard, pagerText } from '../../src/telegram/message.ts'
+import { callbackData, inlineKeyboard, pagerText } from '../../src/telegram/message.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
 
@@ -267,6 +267,66 @@ record(
   'an unauthenticated update registers nothing — anyone could POST a chat id otherwise',
   `http ${String(unauthenticated.status)} registered=${String(unauthenticatedChat?.n)}`,
   unauthenticated.status === 401 && Number(unauthenticatedChat?.n) === 0,
+)
+
+// A button press, all the way through the deployed adapter.
+//
+// This is the check that would have caught the worst bug in this file's
+// history. The composer originally invented one-character wire codes for
+// `callback_data`, and the adapter has parsed `<action>:<payload>` since Phase
+// 3 — so every button would have arrived unrecognised and done nothing, with
+// the unit tests on both sides passing, because neither side had ever been
+// tested against the other.
+const pressUpdate = await deliverUpdate({
+  update_id: Number(stamp) + 3,
+  callback_query: {
+    id: `cb-${stamp}`,
+    data: callbackData('feedback.useful', '00000000-0000-0000-0000-0000000000ff'),
+    from: { id: 4242, username: 'grant' },
+    message: { message_id: 9, chat: { id: Number(WEBHOOK_CHAT), type: 'private' } },
+  },
+})
+const pressRow = await one<{ action: string; compensates: string | null }>(`
+  select callback_action as action, compensates_event_id::text as compensates
+  from public.inbound_commands where dedupe_key = ${lit(`telegram:callback:cb-${stamp}`)}
+`)
+record(
+  'a button press composed here is understood by the deployed adapter',
+  `http ${String(pressUpdate.status)} action=${String(pressRow?.action)}`,
+  pressUpdate.status === 200 && pressRow?.action === 'useful',
+)
+
+const undoUpdate = await deliverUpdate({
+  update_id: Number(stamp) + 4,
+  callback_query: {
+    id: `cb-undo-${stamp}`,
+    data: callbackData('undo', '00000000-0000-0000-0000-0000000000ff'),
+    from: { id: 4242 },
+    message: { message_id: 10, chat: { id: Number(WEBHOOK_CHAT), type: 'private' } },
+  },
+})
+const undoRow = await one<{ action: string; compensates: string | null }>(`
+  select callback_action as action, compensates_event_id::text as compensates
+  from public.inbound_commands where dedupe_key = ${lit(`telegram:callback:cb-undo-${stamp}`)}
+`)
+record(
+  'an Undo press stores WITHOUT writing a correlation into the events foreign key',
+  `http ${String(undoUpdate.status)} action=${String(undoRow?.action)} compensates=${String(undoRow?.compensates)}`,
+  undoUpdate.status === 200 && undoRow?.action === 'undo' && undoRow.compensates === null,
+)
+
+// And the processor acts on it — the same one Slack presses go through, which
+// is the payoff from the generalised deliveries table: one implementation of
+// "what does a press mean", for both channels.
+const { processCallbacks } = await import('../../src/channels/callbacks.ts')
+const acted = (await processCallbacks(db, { subject: 'grant' })).filter(
+  (p) => p.commandId !== undefined,
+)
+const usefulPress = acted.find((p) => p.action === 'useful')
+record(
+  'and the SAME processor Slack presses go through acts on it',
+  `${String(acted.length)} press(es) processed; useful=${String(usefulPress?.outcome)}`,
+  usefulPress !== undefined,
 )
 
 // Retired immediately, not at the end. The webhook attributes a private chat to
@@ -571,6 +631,7 @@ try {
     delete from public.deliveries where dedupe_key like ${lit(`verify:tg:${stamp}:%`)};
     delete from public.telegram_chats
      where chat_id in (${lit(FIXTURE_CHAT)}, ${lit(GROUP_CHAT)}, ${lit(WEBHOOK_CHAT)}, ${lit(STICKER_CHAT)});
+    delete from public.feedback where given_by = '4242';
     delete from public.inbound_commands where actor in ('4242', 'telegram:4242');
     delete from public.notification_events where project_id = ${lit(String(fixtureProject?.id))}::uuid;
     -- The job before the project, and explicitly: a fixture job left live holds

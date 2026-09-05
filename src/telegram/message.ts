@@ -21,7 +21,7 @@
  */
 
 import type { Confidence, Evidence } from '../agents/quality.ts'
-import { ACTIONS, type ActionId } from '../slack/blocks.ts'
+import type { ActionId } from '../slack/blocks.ts'
 
 /** Telegram's hard limit. Ours is far below it, on purpose. */
 export const TELEGRAM_MAX_TEXT = 4096
@@ -83,28 +83,31 @@ export function trimForPager(body: string, limit = PAGER_BODY_LIMIT): string {
 /**
  * Callback data for a button.
  *
- * Telegram's limit is 64 BYTES, not characters, and a uuid plus an action name
- * does not fit — `feedback.not_useful` and a uuid alone is 55 characters before
- * any structure. So the action is sent as a short code and the correlation is
- * sent whole, because the correlation is what cannot be reconstructed.
+ * The format is `<action>:<correlation>`, which is exactly what
+ * `src/channels/telegram.ts` has parsed since Phase 3. That sounds obvious and
+ * was not: the first version of this file invented one-character wire codes to
+ * save space against Telegram's 64-BYTE limit, and would have produced buttons
+ * the deployed webhook rejected as unrecognised — a keyboard of six dead
+ * buttons, with every unit test on both sides passing, because neither side was
+ * ever tested against the other.
  *
- * The short codes are an internal encoding, mapped back on receipt. They are
- * NOT the canonical vocabulary: §12's six words stay the vocabulary everywhere
- * else, and a wire format leaking into the domain is how a UI rename rewrites
- * history.
+ * The limit turned out not to bind anyway: the longest canonical action is
+ * `open_project` at twelve characters, plus a colon and a 36-character uuid,
+ * is 49 bytes. The check below stays, because "it fits today" is not the same
+ * as "it fits".
+ *
+ * Treated as untrusted on the way back in even though we wrote it: it
+ * round-trips through a client, and §10 forbids free-form input reaching a
+ * lookup.
  */
-const WIRE_CODES: Readonly<Record<ActionId, string>> = {
-  'feedback.useful': 'u',
-  'feedback.not_useful': 'n',
-  undo: 'z',
-  open_project: 'p',
-  mute_24h: 'm',
-  more_detail: 'd',
+export const CALLBACK_ACTIONS: Readonly<Record<ActionId, string>> = {
+  'feedback.useful': 'useful',
+  'feedback.not_useful': 'not_useful',
+  undo: 'undo',
+  open_project: 'open_project',
+  mute_24h: 'mute_24h',
+  more_detail: 'more_detail',
 }
-
-export const WIRE_TO_ACTION: Readonly<Record<string, ActionId>> = Object.fromEntries(
-  ACTIONS.map((action) => [WIRE_CODES[action], action]),
-)
 
 export class CallbackDataTooLongError extends Error {
   constructor(readonly bytes: number) {
@@ -116,7 +119,7 @@ export class CallbackDataTooLongError extends Error {
 }
 
 export function callbackData(action: ActionId, correlationId: string): string {
-  const data = `${WIRE_CODES[action]}:${correlationId}`
+  const data = `${CALLBACK_ACTIONS[action]}:${correlationId}`
   const bytes = new TextEncoder().encode(data).length
   if (bytes > CALLBACK_DATA_MAX_BYTES) throw new CallbackDataTooLongError(bytes)
   return data
