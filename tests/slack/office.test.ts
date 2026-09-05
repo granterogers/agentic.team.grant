@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
 import { SlackClient } from '../../src/slack/api.ts'
-import type { DeliveryRequest } from '../../src/slack/office.ts'
+import type { SlackDeliveryRequest } from '../../src/slack/office.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 
 const DELIVERY = '33333333-3333-3333-3333-333333333333'
@@ -32,19 +32,19 @@ class ScriptedDb implements SqlExecutor {
   ) {}
   async execute(sql: string): Promise<SqlResult> {
     this.statements.push(sql)
-    if (sql.includes('claim_slack_delivery')) {
+    if (sql.includes('claim_delivery')) {
       return {
         rows: [
           {
             delivery_id: DELIVERY,
             outcome: this.claimOutcome,
-            message_ts: this.messageTs,
+            message_ref: this.messageTs,
             attempt: 1,
           },
         ],
       }
     }
-    if (sql.includes('record_slack_sent')) return { rows: [{ outcome: this.recordOutcome }] }
+    if (sql.includes('record_delivery_sent')) return { rows: [{ outcome: this.recordOutcome }] }
     return { rows: [{ outcome: 'recorded' }] }
   }
 }
@@ -72,7 +72,7 @@ const capturingSlack = (
   return new SlackClient('xoxb-test', { fetchImpl, sleep: async () => {} })
 }
 
-const request = (over: Partial<DeliveryRequest> = {}): DeliveryRequest => ({
+const request = (over: Partial<SlackDeliveryRequest> = {}): SlackDeliveryRequest => ({
   dedupeKey: 'job:abc:result',
   teamId: 'T0BUCJ2L5FD',
   channelId: 'C0BUNF6NKHA',
@@ -101,7 +101,7 @@ describe('the order of operations', () => {
     const posts: Posted[] = []
     const db = new ScriptedDb('claimed')
     await new SlackOffice(db, capturingSlack(posts)).deliver(request())
-    expect(db.statements[0]).toContain('claim_slack_delivery')
+    expect(db.statements[0]).toContain('claim_delivery')
     expect(posts).toHaveLength(1)
   })
 
@@ -208,7 +208,7 @@ describe('failures', () => {
     const slack = capturingSlack([], new TypeError('socket hang up'))
     const result = await new SlackOffice(db, slack).deliver(request())
     expect(result.outcome).toBe('indeterminate')
-    const recorded = db.statements.find((s) => s.includes('record_slack_failure'))
+    const recorded = db.statements.find((s) => s.includes('record_delivery_failure'))
     expect(recorded).toContain('false')
   })
 
@@ -225,7 +225,7 @@ describe('failures', () => {
     })
     const result = await new SlackOffice(db, rateLimited).deliver(request())
     expect(result).toMatchObject({ outcome: 'failed', errorCode: 'ratelimited' })
-    expect(db.statements.find((s) => s.includes('record_slack_failure'))).toContain('true')
+    expect(db.statements.find((s) => s.includes('record_delivery_failure'))).toContain('true')
   })
 
   it('does not throw a Slack failure into the caller — a lost delivery is a fact, not an exception', async () => {

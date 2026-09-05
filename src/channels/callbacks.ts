@@ -96,10 +96,13 @@ const PENDING = (limit: number): string => `
     j.project_id::text            as project_id,
     o.output_id::text             as output_id
   from press
-  left join public.slack_deliveries d
-    on press.origin_channel = 'slack'
-   and d.channel_id = split_part(press.origin_ref, ':', 1)
-   and d.message_ts = split_part(press.origin_ref, ':', 2)
+  -- One join for every channel, which is the practical reason 0039
+  -- generalised the table. origin_ref is target:message on both Slack and
+  -- Telegram, because both adapters were written to the same envelope.
+  left join public.deliveries d
+    on d.channel = press.origin_channel
+   and d.target_ref = split_part(press.origin_ref, ':', 1)
+   and d.message_ref = split_part(press.origin_ref, ':', 2)
   left join public.jobs j on j.job_id = d.job_id
   left join lateral (
     -- Through the delivery's JOB, not through its correlation. A correlation

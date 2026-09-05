@@ -36,5 +36,7 @@
   "0035_claim_reclaim_ambiguous_column.sql": "0ed91ad1ce6f0777534e1ef749e375eb166844a944afe5978c86666975c91cdc",
   "0036_clear_the_leaked_global_mute.sql": "b66dc49119ac3b3bd71bd25e7990c52b14a319d80e5f31c8b54501e3610cc505",
   "0037_a_delivery_is_about_a_job.sql": "df356fefc702a8225911064d4276d6b24bbbc90f2995b449d7be3864e82960ed",
-  "0038_tts_usage.sql": "ff674b88c54b5d9d69ad5ea8012c68520888436158bc21b25b277edaa1135b91"
+  "0038_tts_usage.sql": "ff674b88c54b5d9d69ad5ea8012c68520888436158bc21b25b277edaa1135b91",
+  "0039_deliveries_are_not_a_slack_idea.sql": "71f2a612166ad7cc32a352b1517827f4552b7885f54bfdef2a163994821ab658",
+  "0040_delivery_functions.sql": "4c4836229f998c9e4ca7cb27e931caa61b8f95ccb7339bad6ec2a7f051727e41"
 }

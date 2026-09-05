@@ -282,7 +282,7 @@ record(
 
 const earlyKey = `verify:${stamp}:suppressed-early`
 const tombstone = await one<{ r: string }>(
-  `select app.suppress_slack_delivery(${lit(earlyKey)}, 'undo arrived first', ${lit(TEAM_ID)}, ${lit(CHANNEL)}) as r`,
+  `select app.suppress_delivery(${lit(earlyKey)}, 'undo arrived first', 'slack', ${lit(TEAM_ID)}, ${lit(CHANNEL)}) as r`,
 )
 const afterSuppression = await office.deliver(
   deliverOpts(earlyKey, CHANNEL, 'This must never be posted.'),
@@ -300,7 +300,7 @@ const sentThenSuppressed = await office.deliver(
   deliverOpts(lateKey, CHANNEL, 'Posted, then undone. It must be deleted, not forgotten.'),
 )
 const tooLate = await one<{ r: string }>(
-  `select app.suppress_slack_delivery(${lit(lateKey)}, 'undo arrived after the post') as r`,
+  `select app.suppress_delivery(${lit(lateKey)}, 'undo arrived after the post') as r`,
 )
 record(
   'an undo that loses the race is told so, rather than silently succeeding',
@@ -659,7 +659,7 @@ const pressButton = async (
 // report it as if it were the ordinary one. The first attempt at these checks
 // pressed the fixture message and passed its own weaker assertion.
 const resultDelivery = await one<{ ts: string }>(`
-  select message_ts as ts from public.slack_deliveries
+  select message_ref as ts from public.deliveries
   where dedupe_key = ${lit(`job:${E2E_JOB}:result`)}
 `)
 const PRESS_TS = String(resultDelivery?.ts)
@@ -716,14 +716,14 @@ record(
 
 // The message the press is attached to identifies the work, and it does so from
 // OUR record rather than from the value the client sent back. A button value is
-// visible to anyone who can inspect the message; a `slack_deliveries` row is not.
+// visible to anyone who can inspect the message; a `deliveries` row is not.
 const fromDelivery = await one<{ correlation_id: string | null }>(`
-  select correlation_id::text as correlation_id from public.slack_deliveries
-  where message_ts = ${lit(PRESS_TS)} and channel_id = ${lit(CHANNEL)}
+  select correlation_id::text as correlation_id from public.deliveries
+  where message_ref = ${lit(PRESS_TS)} and target_ref = ${lit(CHANNEL)} and channel = 'slack'
 `)
 record(
   'the work a press is about is resolvable from our own record of the message, not from the click',
-  `correlation from slack_deliveries=${String(fromDelivery?.correlation_id === E2E_CORRELATION)}`,
+  `correlation from deliveries=${String(fromDelivery?.correlation_id === E2E_CORRELATION)}`,
   fromDelivery?.correlation_id === E2E_CORRELATION,
 )
 
@@ -889,7 +889,7 @@ record(
     (await countInSlack(revokedKey)) === 0,
 )
 const revokedRow = await one<{ state: string; error_code: string }>(
-  `select state::text as state, error_code from public.slack_deliveries where dedupe_key = ${lit(revokedKey)}`,
+  `select state::text as state, error_code from public.deliveries where dedupe_key = ${lit(revokedKey)}`,
 )
 record(
   'and it is parked terminally, so nothing loops on a credential that cannot work',
@@ -979,12 +979,13 @@ if (rejoin === 'rejoined') {
 
 const leaseKey = `verify:${stamp}:lease`
 const held = await one<{ outcome: string }>(`
-  select outcome from app.claim_slack_delivery(
-    ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result', null, null, null, interval '0 seconds')
+  select outcome from app.claim_delivery(
+    'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result', null, null, null, null,
+    interval '0 seconds')
 `)
 const reclaimed = await one<{ outcome: string; attempt: number }>(`
-  select outcome, attempt from app.claim_slack_delivery(
-    ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
+  select outcome, attempt from app.claim_delivery(
+    'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
 `)
 record(
   'an expired claim is reclaimed by the claim function itself, with the attempt counted',
@@ -992,8 +993,8 @@ record(
   held?.outcome === 'claimed' && reclaimed?.outcome === 'reclaimed' && reclaimed.attempt === 2,
 )
 const stillHeld = await one<{ outcome: string }>(`
-  select outcome from app.claim_slack_delivery(
-    ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
+  select outcome from app.claim_delivery(
+    'slack', ${lit(leaseKey)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'result')
 `)
 record(
   'CONTROL: a live lease is NOT reclaimable, so the check above is measuring expiry',
@@ -1014,21 +1015,21 @@ const asApp = async (sql: string): Promise<string> => {
   }
 }
 const directUpdate = await asApp(
-  `update public.slack_deliveries set state = 'sent', message_ts = '1.1', sent_at = now() where dedupe_key = ${lit(leaseKey)}`,
+  `update public.deliveries set state = 'sent', message_ref = '1.1', sent_at = now() where dedupe_key = ${lit(leaseKey)}`,
 )
 record(
   'the app role cannot mark a delivery sent directly — that is a claim about the outside world',
   directUpdate.slice(0, 120),
   directUpdate.includes('permission denied'),
 )
-const canRead = await asApp(`select count(*) from public.slack_deliveries`)
+const canRead = await asApp(`select count(*) from public.deliveries`)
 record(
   'CONTROL: the same role CAN read the table, so the refusal above is about writing',
   canRead.slice(0, 80),
   canRead.includes('no error'),
 )
 const canClaim = await asApp(
-  `select * from app.claim_slack_delivery(${lit(`verify:${stamp}:asapp`)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'notice')`,
+  `select * from app.claim_delivery('slack', ${lit(`verify:${stamp}:asapp`)}, ${lit(TEAM_ID)}, ${lit(CHANNEL)}, 'notice')`,
 )
 record(
   'CONTROL: and it CAN claim through the function, so the office is not locked out',
@@ -1081,7 +1082,7 @@ if (rateLimit !== null) {
 // Report, then clean up
 // ===========================================================================
 
-const health = await db.execute(`select * from public.slack_delivery_health order by state`)
+const health = await db.execute(`select * from public.delivery_health order by channel, state`)
 console.log('\ndelivery health:')
 for (const row of health.rows) console.log(`  ${JSON.stringify(row)}`)
 
@@ -1114,7 +1115,7 @@ try {
     update public.slack_channel_map
        set active = false, archived_at = app.now_utc()
      where channel_id = ${lit(CHANNEL)};
-    delete from public.slack_deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
+    delete from public.deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
     delete from public.preference_instructions where command_id in (
       select command_id from public.inbound_commands where actor = 'U0GRANTVERIFY');
     delete from public.inbound_commands where actor = 'U0GRANTVERIFY';
