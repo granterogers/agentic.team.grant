@@ -65,7 +65,8 @@
     "avatars:photo": "tsx scripts/staff/generate-photo-avatars.ts",
     "deploy:hq": "tsx scripts/deploy/hq.ts",
     "hq:token": "tsx scripts/deploy/hq-token.ts",
-    "verify:hq": "tsx scripts/verify/hq.ts"
+    "verify:hq": "tsx scripts/verify/hq.ts",
+    "backup:notify": "tsx scripts/backup/notify-failure.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

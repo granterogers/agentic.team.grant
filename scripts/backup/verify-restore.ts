@@ -177,6 +177,46 @@ checks.push({
   passed: Number(leaked.n) === 0,
 })
 
+// ---------------------------------------------------------------------------
+// What this backup does NOT contain
+// ---------------------------------------------------------------------------
+//
+// Not a check — a statement, printed every night so it cannot be forgotten at
+// the moment it matters.
+//
+// The dump is `--schema=public --schema=app`. Supabase Vault lives in `vault`,
+// so **no credential is in this backup and none ever was**. A restore into a
+// replacement project comes up with an empty vault and every secret has to be
+// re-entered by hand.
+//
+// That is the right design — a backup that carried decryptable credentials
+// offsite would be a far worse problem — but it is only safe if somebody knows.
+// Discovering it during a real recovery, at the worst possible moment, is what
+// this paragraph exists to prevent.
+const vaultRows = await one(`
+  select count(*)::int as n from information_schema.tables
+  where table_schema = 'vault' and table_name = 'secrets'
+`)
+console.log('## What is NOT in this backup\n')
+console.log(
+  'Credentials. The dump covers `public` and `app`; Supabase Vault lives in ' +
+    '`vault` and is deliberately excluded, so a restore produces a working ' +
+    'database with an EMPTY vault.\n',
+)
+console.log('Re-entered by hand after a real restore:\n')
+for (const name of [
+  'slack.signing_secret, slack.config_token, slack.config_refresh_token — from api.slack.com',
+  'telegram.webhook_secret — regenerate, then `npm run deploy:telegram`',
+  'hq.api_token — regenerate with `npm run deploy:hq -- --rotate-token`',
+  'backup.s3_* — from the Backblaze dashboard',
+  'supabase.db_password — reset on the new project',
+]) {
+  console.log(`  - ${name}`)
+}
+console.log(
+  `\n(vault schema present in this rehearsal target: ${vaultRows.n === 1 ? 'yes, as a stand-in' : 'no'})\n`,
+)
+
 await db.end()
 
 console.log('| check | outcome | |')
