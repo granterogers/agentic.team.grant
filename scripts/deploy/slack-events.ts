@@ -115,9 +115,10 @@ const setSecrets = await fetch(`${api}/secrets`, {
 console.log(`function secrets set: http ${String(setSecrets.status)}`)
 
 // --- deploy ----------------------------------------------------------------
-const [entrypoint, events, signature] = await Promise.all([
+const [entrypoint, events, interactions, signature] = await Promise.all([
   readFile('supabase/functions/slack-events/index.ts', 'utf8'),
   readFile('src/slack/events.ts', 'utf8'),
+  readFile('src/slack/interactions.ts', 'utf8'),
   readFile('src/slack/signature.ts', 'utf8'),
 ])
 
@@ -128,6 +129,7 @@ form.append(
 )
 form.append('file', new File([entrypoint], 'index.ts', { type: 'application/typescript' }))
 form.append('file', new File([events], 'events.ts', { type: 'application/typescript' }))
+form.append('file', new File([interactions], 'interactions.ts', { type: 'application/typescript' }))
 form.append('file', new File([signature], 'signature.ts', { type: 'application/typescript' }))
 
 const deployed = await fetch(`${api}/functions/deploy?slug=${SLUG}`, {
@@ -179,4 +181,43 @@ if (unsigned.status !== 401) {
   console.error('an unsigned request was not rejected')
   process.exit(1)
 }
-console.log('\n✅ slack-events deployed and verified')
+// --- and the interactivity path, which is a different content type --------
+// Worth probing separately rather than trusting that "the endpoint is up":
+// interactivity arrives form-encoded, has no verification handshake of its own,
+// and a broken one is discovered by a button silently not working. A press of a
+// button we do not recognise must come back 200 — Slack shows the clicker an
+// error otherwise, for something they cannot fix.
+const pressBody = `payload=${encodeURIComponent(
+  JSON.stringify({
+    type: 'block_actions',
+    team: { id: teamId },
+    user: { id: 'UDEPLOYCHECK' },
+    channel: { id: 'CDEPLOYCHECK' },
+    container: { channel_id: 'CDEPLOYCHECK', message_ts: '0.0' },
+    actions: [{ action_id: 'deploy_check_not_a_real_action', value: '{}' }],
+  }),
+)}`
+const pressTs = String(Math.floor(Date.now() / 1000))
+const press = await fetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'X-Slack-Request-Timestamp': pressTs,
+    'X-Slack-Signature': await computeSignature(signingSecret, pressTs, pressBody),
+  },
+  body: pressBody,
+})
+const pressText = await press.text()
+console.log(
+  `signed button press: http ${String(press.status)} body=${JSON.stringify(pressText.slice(0, 80))}`,
+)
+if (press.status !== 200) {
+  console.error('the interactivity path did not return 200')
+  process.exit(1)
+}
+if (!pressText.includes('unrecognised interaction')) {
+  console.error(`unexpected interactivity response: ${pressText.slice(0, 200)}`)
+  process.exit(1)
+}
+
+console.log('\n✅ slack-events deployed and verified (events + interactivity)')

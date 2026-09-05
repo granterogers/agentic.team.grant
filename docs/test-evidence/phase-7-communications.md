@@ -1,7 +1,7 @@
 # Phase 7 — the Slack office
 
-**Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (38 checks, all live)
-**Unit:** `npx vitest run tests/slack` — 78 tests across 6 files
+**Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (45 checks, all live)
+**Unit:** `npx vitest run tests/slack` — 94 tests across 7 files
 **Migrations:** 0032, 0033, 0034, 0035, 0036
 
 This document records what the checks **found by failing**, not a list of what
@@ -23,6 +23,7 @@ reading, and there were five.
 | `src/slack/office.ts` | claim → post → record, reconciliation, retraction, channel life |
 | `src/slack/provision.ts` | a channel per project, and the `name_taken` question |
 | `src/slack/notifier.ts` | the worker's `notifying` state, made real |
+| `src/slack/interactions.ts` | the six buttons coming back |
 | `scripts/verify/slack.ts` | the 38 live checks |
 
 Seven of Phase 7's eight named Slack failure injections are performed for real
@@ -109,6 +110,34 @@ live configuration changed.**
 
 ---
 
+## Interactivity, and the three ways it differs from events
+
+Added after the office, on the same endpoint, and each difference is a way to
+get it wrong:
+
+1. **The payload is form-encoded, not JSON** — `payload=<json>`. A handler that
+   calls `request.json()` produces a 400 for every button press. The signature
+   is still verified over the raw body, which is the only correct place either
+   way, and the interactivity branch is checked BEFORE the JSON parse.
+2. **There is no verification handshake.** An interactivity URL is configured
+   and simply starts receiving traffic, so a broken endpoint is not discovered
+   at configuration time — it is discovered by a button not working. The deploy
+   therefore probes it separately with a signed press rather than trusting that
+   "the endpoint is up".
+3. **A response body REPLACES the message.** Returning something chatty would
+   overwrite the result the button is attached to, so the handler returns an
+   empty 200 — asserted by a check, because it is invisible until it happens.
+
+The button value is treated as untrusted even though we wrote it: it
+round-trips through a client and is visible to anyone who can inspect the
+message. The action comes from `action_id`; the correlation is validated as a
+uuid before it is believed; and the authoritative answer to "what work is this
+about" comes from `slack_deliveries`, which recorded the `message_ts` and the
+correlation together at post time. A check asserts that lookup works, so the
+system never has to rely on the click.
+
+---
+
 ## The finding that needs Grant
 
 **A bot removed from a public channel cannot let itself back in.** Both remedies
@@ -167,10 +196,11 @@ app limit. What is true and checkable is recorded instead:
    `avatarBaseUrl` switches it, and `iconSource` will say so.
 2. **One workspace, one user.** Multi-workspace is not structurally blocked but
    is not exercised.
-3. **Interactivity is not wired.** The six §12 buttons are composed, posted and
-   carry their correlation id, but nothing yet receives the click: that needs
-   an interactivity request URL on a deployed endpoint. The inbound half of
-   Gate 4 covers the transport; the button payloads are shaped for it.
+3. **Interactivity is built and deployed, but Slack is not yet configured to
+   use it.** The endpoint handles button presses and seven live checks press
+   one for real — signed, form-encoded, at the deployed URL. What is missing is
+   one manifest field (the interactivity request URL), which needs a
+   config-token rotation. Until that is set, Slack has nowhere to send a click.
 4. **DMs are not exercised outbound.** `im:write` is installed and the code path
    is identical (a DM channel id is just a channel id), but no check posts one.
 5. **The lockout check costs a channel per run**, as above.

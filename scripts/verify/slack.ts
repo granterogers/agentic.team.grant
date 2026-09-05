@@ -35,6 +35,7 @@ import { ACTIONS } from '../../src/slack/blocks.ts'
 import { slackNotifier } from '../../src/slack/notifier.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
+import { computeSignature } from '../../src/slack/signature.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
 const botToken = process.env.SLACK_BOT_TOKEN
@@ -602,6 +603,121 @@ await db.execute(`
 `)
 
 // ===========================================================================
+// Interactivity: a button press, signed, arriving at the deployed endpoint
+// ===========================================================================
+//
+// The six §12 buttons are on every message the office posts. Until something
+// receives the click they are decoration, and a button that does nothing is
+// worse than no button.
+//
+// These checks press one for real: a correctly signed, form-encoded
+// `block_actions` payload at the live endpoint. What they cannot prove is that
+// SLACK will send one — that needs an interactivity request URL on the app
+// manifest, which needs a config-token rotation and is listed in the handoff.
+// Everything on this side of that is exercised here.
+
+const signingSecret = String(
+  (
+    await one<{ v: string }>(
+      `select decrypted_secret as v from vault.decrypted_secrets where name = 'slack.signing_secret'`,
+    )
+  )?.v ?? '',
+)
+const ENDPOINT = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/slack-events`
+
+const pressButton = async (
+  actionId: string,
+  messageTs: string,
+  sign = true,
+): Promise<{ status: number; body: string }> => {
+  const body = `payload=${encodeURIComponent(
+    JSON.stringify({
+      type: 'block_actions',
+      team: { id: TEAM_ID },
+      user: { id: 'U0GRANTVERIFY' },
+      channel: { id: CHANNEL },
+      container: { channel_id: CHANNEL, message_ts: messageTs },
+      actions: [{ action_id: actionId, value: JSON.stringify({ a: actionId, c: CORRELATION }) }],
+    }),
+  )}`
+  const ts = String(Math.floor(Date.now() / 1000))
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  }
+  if (sign) {
+    headers['X-Slack-Request-Timestamp'] = ts
+    headers['X-Slack-Signature'] = await computeSignature(signingSecret, ts, body)
+  }
+  const response = await fetch(ENDPOINT, { method: 'POST', headers, body })
+  return { status: response.status, body: (await response.text()).slice(0, 120) }
+}
+
+const PRESS_TS = String(first.messageTs)
+const pressed = await pressButton('feedback.useful', PRESS_TS)
+const pressedRow = await one<{ action: string; key: string; instruction: string }>(`
+  select callback_action as action, dedupe_key as key, instruction
+  from public.inbound_commands
+  where dedupe_key = ${lit(`slack:action:${CHANNEL}:${PRESS_TS}:U0GRANTVERIFY:useful`)}
+`)
+record(
+  'a signed button press reaches the deployed endpoint and is recorded as a signal',
+  `http ${String(pressed.status)} action=${String(pressedRow?.action)}`,
+  pressed.status === 200 && pressedRow?.action === 'useful',
+)
+record(
+  'the press carries no instruction — it is a signal, not something Grant typed',
+  `instruction=${JSON.stringify(pressedRow?.instruction ?? null)}`,
+  pressedRow?.instruction === '',
+)
+record(
+  'and the response body is empty, because Slack treats a body as a REPLACEMENT message',
+  `body=${JSON.stringify(pressed.body)}`,
+  pressed.body === '',
+)
+
+await pressButton('feedback.useful', PRESS_TS)
+const pressCount = await one<{ n: number }>(`
+  select count(*)::int as n from public.inbound_commands
+  where dedupe_key = ${lit(`slack:action:${CHANNEL}:${PRESS_TS}:U0GRANTVERIFY:useful`)}
+`)
+record(
+  'a double tap on one button is one signal',
+  `${String(pressCount?.n)} row(s) after two presses`,
+  Number(pressCount?.n) === 1,
+)
+
+const otherButton = await pressButton('more_detail', PRESS_TS)
+const otherRow = await one<{ n: number }>(`
+  select count(*)::int as n from public.inbound_commands
+  where dedupe_key = ${lit(`slack:action:${CHANNEL}:${PRESS_TS}:U0GRANTVERIFY:more_detail`)}
+`)
+record(
+  'CONTROL: a DIFFERENT button on the same message is a second signal, so the dedupe is not blanket',
+  `http ${String(otherButton.status)} ${String(otherRow?.n)} row(s)`,
+  Number(otherRow?.n) === 1,
+)
+
+const unsigned = await pressButton('feedback.useful', PRESS_TS, false)
+record(
+  'an unsigned press is refused — the signature is the whole of the authentication',
+  `http ${String(unsigned.status)}`,
+  unsigned.status === 401,
+)
+
+// The message the press is attached to identifies the work, and it does so from
+// OUR record rather than from the value the client sent back. A button value is
+// visible to anyone who can inspect the message; a `slack_deliveries` row is not.
+const fromDelivery = await one<{ correlation_id: string | null }>(`
+  select correlation_id::text as correlation_id from public.slack_deliveries
+  where message_ts = ${lit(PRESS_TS)} and channel_id = ${lit(CHANNEL)}
+`)
+record(
+  'the work a press is about is resolvable from our own record of the message, not from the click',
+  `correlation from slack_deliveries=${String(fromDelivery?.correlation_id === CORRELATION)}`,
+  fromDelivery?.correlation_id === CORRELATION,
+)
+
+// ===========================================================================
 // Token revoked
 // ===========================================================================
 
@@ -845,6 +961,7 @@ try {
        set active = false, archived_at = app.now_utc()
      where channel_id = ${lit(CHANNEL)};
     delete from public.slack_deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
+    delete from public.inbound_commands where actor = 'U0GRANTVERIFY';
     -- Jobs before the project, and explicitly: a fixture job left live holds
     -- queue capacity, and the queue is global and small. purge:fixtures would
     -- catch these eventually, but "eventually" is after the next suite has
