@@ -57,7 +57,11 @@ const db: SqlExecutor = new ManagementApiExecutor(
   supabaseToken,
 )
 const slack = new SlackClient(botToken)
-const office = new SlackOffice(db, slack)
+// `configured`, not the constructor: it reads the avatar base from
+// `system_config`, which is what the running system does. Constructing it bare
+// here would test a presentation nothing else uses — and would have gone on
+// reporting `emoji_fallback` after the photographs were hosted.
+const office = await SlackOffice.configured(db, slack)
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const one = async <T>(sql: string): Promise<T | undefined> =>
@@ -222,9 +226,9 @@ record(
   (await countInSlack(firstKey)) === 1,
 )
 record(
-  'the avatar degradation is visible rather than silent',
-  `iconSource=${String(first.iconSource)} (avatar_url once the PNGs are hosted; emoji until then)`,
-  first.iconSource === 'emoji_fallback' || first.iconSource === 'avatar_url',
+  'the staff photograph is used, and which source was used is always reported',
+  `iconSource=${String(first.iconSource)}`,
+  first.iconSource === 'avatar_url',
 )
 
 const threadKey = `verify:${stamp}:thread`
@@ -990,9 +994,9 @@ record(
 // human action is required instead of retrying something that cannot work.
 const rejoin = await office.rejoin(CHANNEL)
 record(
-  'a bot that was removed reports WHICH human action would let it back, rather than looping',
+  'a bot removed from a channel gets itself back in — the scope Grant installed on 2026-09-05',
   `rejoin=${rejoin}`,
-  rejoin === 'rejoined' || rejoin === 'needs_reinstall' || rejoin === 'needs_invite',
+  rejoin === 'rejoined',
 )
 if (rejoin === 'rejoined') {
   const backIn = await office.deliver(

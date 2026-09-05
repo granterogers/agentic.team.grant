@@ -40,5 +40,7 @@
   "0039_deliveries_are_not_a_slack_idea.sql": "71f2a612166ad7cc32a352b1517827f4552b7885f54bfdef2a163994821ab658",
   "0040_delivery_functions.sql": "4c4836229f998c9e4ca7cb27e931caa61b8f95ccb7339bad6ec2a7f051727e41",
   "0041_telegram_chats.sql": "ae80557e8a6edf31349886aea20059b23042f1b7eb6e244872019bf55601516a",
-  "0042_chat_registration_over_postgrest.sql": "2201f05bd1bd621eb052bafca6876d84959170216e9e0c599919fbffd8630706"
+  "0042_chat_registration_over_postgrest.sql": "2201f05bd1bd621eb052bafca6876d84959170216e9e0c599919fbffd8630706",
+  "0043_grants_timezone_and_avatar_host.sql": "4e09015e77834d4f851a87db077d2a7ef8713879f32502126d0091434f5b97f8",
+  "0044_photorealistic_avatars.sql": "db7b41031f98b3b43d875573f69ba86e6d93edf78ac54a51d84704d1aff24c65"
 }

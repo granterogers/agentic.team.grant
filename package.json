@@ -61,7 +61,8 @@
     "verify:worker": "tsx scripts/verify/worker.ts",
     "verify:slack": "tsx scripts/verify/slack.ts",
     "verify:tts": "tsx scripts/verify/tts.ts",
-    "verify:telegram": "tsx scripts/verify/telegram.ts"
+    "verify:telegram": "tsx scripts/verify/telegram.ts",
+    "avatars:photo": "tsx scripts/staff/generate-photo-avatars.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

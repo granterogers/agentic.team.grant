@@ -14,6 +14,7 @@
 
 import { type DeliveryPurpose, type DeliveryResult, DeliveryService } from '../channels/delivery.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { avatarBaseUrl } from '../staff/presentation.ts'
 import { SlackApiError, type SlackClient } from './api.ts'
 import type { ResultMessage } from './blocks.ts'
 import { fallbackText, resultBlocks } from './blocks.ts'
@@ -71,6 +72,22 @@ export class SlackOffice {
     this.delivery = new DeliveryService(db, new SlackTransport(slack))
   }
 
+  /**
+   * Build an office that reads the avatar base from configuration.
+   *
+   * Preferred over the constructor for anything long-lived. A caller that
+   * forgets to pass the base gets a working office that silently shows emoji,
+   * which is the failure mode this factory exists to remove.
+   */
+  static async configured(
+    db: SqlExecutor,
+    slack: SlackClient,
+    overrides: IdentityOptions = {},
+  ): Promise<SlackOffice> {
+    const base = await avatarBaseUrl(db)
+    return new SlackOffice(db, slack, { avatarBaseUrl: base, ...overrides })
+  }
+
   async deliver(request: SlackDeliveryRequest): Promise<SlackDeliveryResult> {
     const identity =
       request.staff === null ? null : identityFor(request.staff, this.identityOptions)
@@ -123,17 +140,18 @@ export class SlackOffice {
    * Try to get back into a channel the bot was removed from.
    *
    * This looked like a one-liner and is not, which the live suite established
-   * rather than reasoning: **with the app's current scopes the bot cannot
-   * rejoin a public channel it has left.** `conversations.join` needs
-   * `channels:join`, which the installed app does not have;
-   * `conversations.invite` — which `channels:manage` does cover — returns
-   * `not_in_channel` when the inviter is the absent bot itself. Both were tried
-   * against the real workspace. So the only remedy is a human inviting the app
-   * back, or a reinstall carrying the extra scope.
+   * rather than reasoning. For three days the app was installed without
+   * `channels:join`, and in that state a bot removed from a public channel
+   * could not get back in at all: `conversations.join` returned
+   * `missing_scope`, and `conversations.invite` — which `channels:manage` does
+   * cover — returns `not_in_channel` when the inviter is the absent bot itself.
    *
-   * It reports which of those rather than returning false: a bare false reads
-   * as "transient, try later", and a caller retrying it forever would never
-   * surface the one fact that matters.
+   * The scope is installed now and the ordinary path works. The three failure
+   * outcomes stay, because the situations they name are all still reachable —
+   * a future reinstall could drop the scope, a private channel still needs an
+   * invitation, and both are "a human must act" by different humans. Reporting
+   * which one beats returning false, which reads as "transient, try later" and
+   * would have a caller retrying something that cannot work.
    */
   async rejoin(channelId: string): Promise<RejoinOutcome> {
     try {
