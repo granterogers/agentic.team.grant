@@ -15,7 +15,7 @@ pushed. **Date of this handoff:** 2026-09-05.
 | 0–6 | ✅ complete |
 | 7 — Communications | ✅ complete **except** six more Telegram bots (tokens only Grant can make) |
 | 8 — Full UI | ✅ built and deployed. One acceptance criterion is deliberately unclaimed — see below |
-| 9 — Google ecosystem | ⬜ next |
+| 9 — Google ecosystem | ⬜ next, and now partly moot — see ADR-0012 |
 | 10 — Hardening | ⬜ |
 
 **47 migrations. 583 unit tests. 14 live suites, ~300 checks, all green.**
@@ -28,6 +28,23 @@ npm run verify:db     # every live suite in order — takes ~25 minutes
 `verify:slack` and `verify:worker` each need the queue to themselves and refuse
 to start otherwise, rather than producing a wall of misleading red.
 `npm run purge:fixtures -- --go` clears debris.
+
+---
+
+## Before anything else: read ADR-0012
+
+Google disabled `agentic.team.grant@gmail.com` on 2026-09-04. NotebookLM is gone
+— the master token returns `403 BadAuthentication`, and the same account owned
+the Cloud project behind the dead `GEMINI_API_KEY`.
+
+The cost was small (3 of 118 projects had a `notebook_ref`; 1 source) because
+Notebook was a replaceable adapter and Postgres was always canonical. Migration
+0048 turned the integration off with the reason recorded.
+
+**Do not re-enable it, and do not create another Google account to run it.**
+Creating accounts to drive things programmatically is what the ban names.
+ADR-0012 lays out the options and recommends moving the knowledge layer to
+pgvector in the Postgres we already run. That decision is Grant's and is open.
 
 ---
 
@@ -112,22 +129,30 @@ He has a browser-agent prompt for the first three:
 2. **A Google Cloud service-account JSON** for Chirp 3. Instructions in
    `docs/google-cloud-tts-credential.md`. When it arrives it goes in the vault
    and `decideVoiceNote` starts returning `speak: true`.
-3. **The Slack interactivity request URL.** One field. Until it is set, Slack
-   buttons look clickable and do nothing.
-4. **Revoking old Google cookies** — needs an interactive sign-in nobody but he
-   has. The scanner already prevents a recurrence.
-5. **His judgement on whether Team HQ feels right on a phone.** §13's Gate 1
+3. **A decision on the knowledge layer** — ADR-0012.
+4. **His judgement on whether Team HQ feels right on a phone.** §13's Gate 1
    precedent: a subjective acceptance is never marked passed before the human
    has performed it.
+
+Done since the last handoff: the Slack interactivity URL is set. The old Google
+cookies are moot — the account they belonged to is disabled.
+
+**Unproven rather than unbuilt:** no human has pressed a button on either
+channel. One tap on any Slack or Telegram message would turn the whole
+interaction path from "checked with synthetic presses" into "observed".
 
 ---
 
 ## Dead credentials, so you do not trust them
 
-- **`GEMINI_API_KEY` is dead** — `401, the bound service account is deleted or
-  disabled`. It is *present* in the environment, so anything checking whether
-  the variable is set believes it has a credential. Same shape as the
-  `GOOGLE_CLIENT_ID` that was an empty string in September.
+- **`GEMINI_API_KEY` is dead**, and now explained: it belonged to the disabled
+  account. It is *present* in the environment, so anything checking whether the
+  variable is set believes it has a credential.
+- **`notebook.master_token_json` and `notebook.storage_state` are dead.** Kept
+  in the vault as evidence of what was configured, not deleted.
+- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`** are valid but belong to a
+  project under the disabled account — **assume they are dead too** and check
+  before building Phase 9 on them.
 - **`SLACK_APP_CONFIG_TOKEN` expires every ~12 hours.** `npm run slack:rotate`
   handles it; the refresh token is single-use, so persist before verifying.
 
@@ -135,11 +160,11 @@ He has a browser-agent prompt for the first three:
 
 ## What I would do next, and why
 
-**Phase 9 (Google ecosystem) is the natural next step and is partly blocked.**
-Calendar and Gmail need an OAuth consent flow, and `GOOGLE_CLIENT_ID` /
-`GOOGLE_CLIENT_SECRET` exist and are valid — but the flow needs a human to
-consent once, in a browser. Design the token exchange and the refresh handling
-first; that part needs nobody.
+**Phase 9 (Google ecosystem) should wait.** Its OAuth client belongs to a
+project under the account Google just disabled, so the first task would be
+re-creating it, and the second would be asking whether this system should depend
+on Google at all — which is ADR-0012's question. Do not start it before that is
+settled.
 
 **Phase 10 (Hardening) has work available immediately** and does not need Grant
 at all: full failure injection across every integration, a backup restore
