@@ -197,6 +197,7 @@ export function slackNotifier(
       staff,
       staffId: null,
       correlationId: job.correlationId,
+      jobId: job.jobId,
       message: {
         staffTitle: staff?.title ?? null,
         body: output.body,

@@ -25,6 +25,7 @@
  * know. A stub that fails before sending would exercise the easy half.
  */
 
+import { processCallbacks } from '../../src/channels/callbacks.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import type { Handler, HandlerOutput } from '../../src/jobs/worker.ts'
@@ -652,7 +653,16 @@ const pressButton = async (
   return { status: response.status, body: (await response.text()).slice(0, 120) }
 }
 
-const PRESS_TS = String(first.messageTs)
+// The message pressed is the END-TO-END RESULT, not the first fixture message.
+// That matters: only the result has a job, an output and a notification behind
+// it, so pressing anything else would exercise the "no subject" branch and
+// report it as if it were the ordinary one. The first attempt at these checks
+// pressed the fixture message and passed its own weaker assertion.
+const resultDelivery = await one<{ ts: string }>(`
+  select message_ts as ts from public.slack_deliveries
+  where dedupe_key = ${lit(`job:${E2E_JOB}:result`)}
+`)
+const PRESS_TS = String(resultDelivery?.ts)
 const pressed = await pressButton('feedback.useful', PRESS_TS)
 const pressedRow = await one<{ action: string; key: string; instruction: string }>(`
   select callback_action as action, dedupe_key as key, instruction
@@ -713,8 +723,152 @@ const fromDelivery = await one<{ correlation_id: string | null }>(`
 `)
 record(
   'the work a press is about is resolvable from our own record of the message, not from the click',
-  `correlation from slack_deliveries=${String(fromDelivery?.correlation_id === CORRELATION)}`,
-  fromDelivery?.correlation_id === CORRELATION,
+  `correlation from slack_deliveries=${String(fromDelivery?.correlation_id === E2E_CORRELATION)}`,
+  fromDelivery?.correlation_id === E2E_CORRELATION,
+)
+
+// ===========================================================================
+// Acting on the press — the other half of the button
+// ===========================================================================
+//
+// Storing a press is not responding to one. Two mechanisms met here for the
+// first time, each of which had been half-built: `inbound_commands.callback_action`
+// has been constrained to §12's six words since 0011 and had never been read,
+// and `notification_events` has an outcome column that 0031's learning weighs
+// and that nothing outside its own fixtures had ever moved past `delivered`.
+
+const processed = await processCallbacks(db, { subject: 'grant' })
+const usefulPress = processed.find((p) => p.action === 'useful')
+record(
+  'a 👍 press becomes a feedback row against the output it was about',
+  `outcome=${String(usefulPress?.outcome)} note=${String(usefulPress?.note).slice(0, 70)}`,
+  usefulPress?.outcome === 'acted' && String(usefulPress.note).includes('recorded against output'),
+)
+
+// Scoped to THIS run's output rather than counted globally. Counting by
+// `given_by` alone made this check depend on whether an earlier run's cleanup
+// had completed — and one had not, so it reported 2 and looked like a
+// double-processing bug.
+const e2eOutput = await one<{ id: string }>(`
+  select output_id::text as id from public.outputs where job_id = ${lit(E2E_JOB)}::uuid
+`)
+const feedbackRow = await one<{ n: number; kind: string }>(`
+  select count(*)::int as n, max(subject_kind::text) as kind from public.feedback
+  where signal = 'positive' and subject_ref = ${lit(String(e2eOutput?.id))}::uuid
+`)
+record(
+  'and the feedback names the RIGHT output — the job the message reported on, not the correlation',
+  `${String(feedbackRow?.n)} row(s) against the end-to-end output, subject_kind=${String(feedbackRow?.kind)}`,
+  Number(feedbackRow?.n) === 1 && feedbackRow?.kind === 'output',
+)
+
+const acted = await one<{ n: number }>(`
+  select count(*)::int as n from public.notification_events
+  where project_id = ${lit(PROJECT_ID)}::uuid and outcome = 'acted' and resolved_at is not null
+`)
+record(
+  'the notification moves past `delivered`, which is what learning reads and nothing wrote',
+  `${String(acted?.n)} notification(s) now acted`,
+  Number(acted?.n) === 1,
+)
+
+const secondPass = await processCallbacks(db, { subject: 'grant' })
+record(
+  'processing again does nothing — the claim is the UPDATE, not a read-then-write',
+  `${String(secondPass.length)} press(es) processed on the second pass`,
+  secondPass.filter((p) => p.commandId === usefulPress?.commandId).length === 0,
+)
+
+// Undo with nothing to undo. Expected rather than exceptional: an offer can
+// lapse between the message being posted and the button being pressed, and a
+// posted message cannot un-draw its own button.
+await pressButton('undo', PRESS_TS)
+const staleUndo = (await processCallbacks(db, { subject: 'grant' })).find(
+  (p) => p.action === 'undo',
+)
+record(
+  'a stale Undo says there is nothing left to undo rather than silently succeeding',
+  `outcome=${String(staleUndo?.outcome)} note=${String(staleUndo?.note).slice(0, 60)}`,
+  staleUndo?.outcome === 'nothing_to_undo',
+)
+
+// Undo with a live offer. The offer is created the way the system creates them.
+await db.execute(`
+  insert into public.undoable_actions
+    (correlation_id, kind, description, reversal, status, undo_deadline)
+  values (${lit(CORRELATION)}::uuid, 'slack.post',
+          'A fixture action offered for undo by verify:slack.',
+          ${lit(JSON.stringify({ channel: CHANNEL, ts: PRESS_TS }))}::jsonb,
+          'available', app.now_utc() + interval '1 hour')
+`)
+// A different message, so the press is a different signal rather than a
+// duplicate of the stale one.
+const secondTs = String(inThread.messageTs)
+await pressButton('undo', secondTs)
+const realUndo = (await processCallbacks(db, { subject: 'grant' })).find((p) => p.action === 'undo')
+const undone = await one<{ status: string }>(`
+  select status::text as status from public.undoable_actions
+  where correlation_id = ${lit(CORRELATION)}::uuid
+`)
+record(
+  'an Undo with a live offer actually undoes it, through the same function every caller uses',
+  `outcome=${String(realUndo?.outcome)} action status=${String(undone?.status)}`,
+  realUndo?.outcome === 'acted' && undone?.status === 'undone',
+)
+
+// Mute goes through the same parse and the same store as a typed instruction,
+// so there is one implementation of what a mute means.
+await pressButton('mute_24h', secondTs)
+const muted = (await processCallbacks(db, { subject: 'grant' })).find(
+  (p) => p.action === 'mute_24h',
+)
+// Global, not project-scoped, and the check says so rather than accepting
+// either. A button whose scope depends on what our records happen to contain
+// means two different things on two different days.
+const quiet = await one<{ quiet_until: string | null }>(`
+  select quiet_until::text as quiet_until from public.notification_preferences
+  where subject = 'grant' and project_id is null
+`)
+record(
+  'Mute 24h writes a real GLOBAL preference, by the same route a typed instruction takes',
+  `outcome=${String(muted?.outcome)} quiet_until=${quiet === undefined ? 'NO ROW' : String(quiet.quiet_until)}`,
+  muted?.outcome === 'acted' && quiet !== undefined && quiet.quiet_until !== null,
+)
+
+// Cleared immediately, and checked. A verification run that leaves a live
+// global mute behind is precisely what migration 0036 had to undo three days
+// after gate-3 did it, and this suite is not going to be the second instance.
+await db.execute(`
+  delete from public.preference_instructions where instruction like 'mute 24h (button)%';
+  delete from public.notification_preferences where subject = 'grant' and project_id is null;
+`)
+const stillMuted = await one<{ n: number }>(`
+  select count(*)::int as n from public.notification_preferences
+  where subject = 'grant' and project_id is null
+`)
+record(
+  'and this suite clears its own global mute — a test must not leave the system quiet',
+  `${String(stillMuted?.n)} global preference row(s) remain`,
+  Number(stillMuted?.n) === 0,
+)
+
+// The `dismissed` outcome is NOT checked here, and the reason is worth stating
+// rather than leaving as a gap. Only a notification still sitting at
+// `delivered` can move, and the only such notification in this run was resolved
+// to `acted` by the 👍 press three checks ago. A mute pressed on a message with
+// no notification behind it therefore changes nothing — so a check here would
+// pass on an absence, which is the failure mode this suite exists to avoid.
+// `tests/channels/callbacks.test.ts` asserts the mapping directly instead.
+
+// `more_detail` creates work, and creating work is the router's decision.
+await pressButton('more_detail', secondTs)
+const detail = (await processCallbacks(db, { subject: 'grant' })).find(
+  (p) => p.action === 'more_detail',
+)
+record(
+  'More detail is recorded and NOT acted on — enqueuing work here would bypass the router',
+  `outcome=${String(detail?.outcome)}`,
+  detail?.outcome === 'not_routed',
 )
 
 // ===========================================================================
@@ -961,7 +1115,18 @@ try {
        set active = false, archived_at = app.now_utc()
      where channel_id = ${lit(CHANNEL)};
     delete from public.slack_deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
+    delete from public.preference_instructions where command_id in (
+      select command_id from public.inbound_commands where actor = 'U0GRANTVERIFY');
     delete from public.inbound_commands where actor = 'U0GRANTVERIFY';
+    delete from public.feedback where given_by = 'U0GRANTVERIFY';
+    delete from public.feedback where subject_ref in (
+      select output_id from public.outputs o join public.jobs j on j.job_id = o.job_id
+      where j.project_id = ${lit(PROJECT_ID)}::uuid);
+    delete from public.notification_events where project_id = ${lit(PROJECT_ID)}::uuid;
+    delete from public.undo_requests where action_id in (
+      select action_id from public.undoable_actions
+      where correlation_id = ${lit(CORRELATION)}::uuid);
+    delete from public.undoable_actions where correlation_id = ${lit(CORRELATION)}::uuid;
     -- Jobs before the project, and explicitly: a fixture job left live holds
     -- queue capacity, and the queue is global and small. purge:fixtures would
     -- catch these eventually, but "eventually" is after the next suite has

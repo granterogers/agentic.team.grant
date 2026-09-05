@@ -1,8 +1,8 @@
 # Phase 7 — the Slack office
 
-**Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (45 checks, all live)
-**Unit:** `npx vitest run tests/slack` — 94 tests across 7 files
-**Migrations:** 0032, 0033, 0034, 0035, 0036
+**Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (54 checks, all live)
+**Unit:** 532 tests overall; 107 of them new here across 8 files
+**Migrations:** 0032, 0033, 0034, 0035, 0036, 0037
 
 This document records what the checks **found by failing**, not a list of what
 passed. The passes are in the suite output; the failures are the part worth
@@ -24,6 +24,7 @@ reading, and there were five.
 | `src/slack/provision.ts` | a channel per project, and the `name_taken` question |
 | `src/slack/notifier.ts` | the worker's `notifying` state, made real |
 | `src/slack/interactions.ts` | the six buttons coming back |
+| `src/channels/callbacks.ts` | what a press actually does, for every channel |
 | `scripts/verify/slack.ts` | the 38 live checks |
 
 Seven of Phase 7's eight named Slack failure injections are performed for real
@@ -31,7 +32,7 @@ against the real workspace. The eighth is discussed below rather than faked.
 
 ---
 
-## The five defects the checks found
+## The seven defects the checks found
 
 ### 1. The worker said "delivered" and delivered nothing
 
@@ -135,6 +136,61 @@ uuid before it is believed; and the authoritative answer to "what work is this
 about" comes from `slack_deliveries`, which recorded the `message_ts` and the
 correlation together at post time. A check asserts that lookup works, so the
 system never has to rely on the click.
+
+### 6. A 👍 landed on the wrong output
+
+The callback processor answered "which output is this feedback about?" by
+correlation → jobs → most recent output. That is right exactly while one
+correlation has one job, and a correlation is *designed* to span several: it is
+what ties an instruction to every job it spawned.
+
+The verification run created two jobs under one correlation and pressed 👍 on
+the first one's result. The feedback was recorded against the second job's
+output. Nothing errored. A real signal, attached to the wrong work, silently —
+and the only symptom was a count in a neighbouring check reading zero.
+
+0037 records the job on the delivery. `correlation_id` stays: it is the right
+key for "everything about this conversation" and is what undo offers are grouped
+by. The defect was using one key for two questions.
+
+### 7. Two of the new checks were passing on absence
+
+Both caught while writing them, and both the same shape as the recurring
+pattern:
+
+- the feedback count was scoped by `given_by` alone, so it depended on whether
+  an *earlier run's* cleanup had completed — one had not, and the check reported
+  a stale row as a double-processing bug. Now scoped to this run's output.
+- a check for the `dismissed` outcome would have passed on nothing happening:
+  only a notification still at `delivered` can move, and the only one in the run
+  had already been resolved to `acted` three checks earlier. It was **removed**
+  rather than weakened, and the mapping is asserted in the unit tests instead.
+  A comment in the suite says why, so it does not get "helpfully" added back.
+
+---
+
+## What a press does now
+
+`inbound_commands.callback_action` had been constrained to §12's six words since
+0011 and had never been read; `notification_events.outcome` is what 0031's
+learning weighs and nothing outside its own fixtures had ever moved a row past
+`delivered`. Both halves met here.
+
+| Press | What happens |
+|---|---|
+| 👍 / 👎 | a `feedback` row against the output the message reported on; the notification moves to `acted` |
+| ↩ Undo | `app.request_undo` on the live offer — or `nothing_to_undo`, which is expected rather than exceptional: an offer lapses and a posted message cannot un-draw its own button |
+| Mute 24h | the same parse and the same store a typed *"leave me alone today"* uses. **Global, not project-scoped** — a button whose scope depends on what our records happen to contain means two different things on two different days |
+| Open project | recorded as a signal; opening something is not a request |
+| More detail | recorded and **not acted on**. Acting means creating work, and creating work is the router's decision (§5, §9). A processor that quietly enqueued a job would be a second, unaudited entry point into the work system. It is marked processed anyway, because an unprocessable row left pending is a loop |
+
+The processor is channel-agnostic: Slack buttons, Slack reactions and Telegram
+buttons all produce the same six words, and three handlers for one intention
+would diverge.
+
+One thing it does that is easy to miss: **it clears its own global mute**, and
+checks that it did. A verification run that leaves the system quiet is exactly
+what defect 5 was.
 
 ---
 

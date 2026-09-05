@@ -69,6 +69,15 @@ export interface DeliveryRequest {
   readonly staff: StaffPresentation | null
   readonly staffId: string | null
   readonly correlationId: string | null
+  /**
+   * The job this message reports on, when it reports on one.
+   *
+   * Distinct from the correlation, and 0037 explains why at length: a
+   * correlation spans every job an instruction spawned, so using it to say
+   * WHICH work a message is about attributes a 👍 to whichever job finished
+   * last. Null for a briefing or a notice, which are about no job.
+   */
+  readonly jobId?: string | null
   readonly message: ResultMessage
 }
 
@@ -321,7 +330,9 @@ export class SlackOffice {
         ${lit(request.purpose)},
         ${litOrNull(request.threadTs)},
         ${request.staffId === null ? 'null' : `${lit(request.staffId)}::uuid`},
-        ${request.correlationId === null ? 'null' : `${lit(request.correlationId)}::uuid`}
+        ${request.correlationId === null ? 'null' : `${lit(request.correlationId)}::uuid`},
+        interval '2 minutes',
+        ${request.jobId === null || request.jobId === undefined ? 'null' : `${lit(request.jobId)}::uuid`}
       )
     `)
     if (row === undefined) throw new Error('claim_slack_delivery returned no row')
