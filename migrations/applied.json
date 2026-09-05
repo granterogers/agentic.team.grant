@@ -44,5 +44,6 @@
   "0043_grants_timezone_and_avatar_host.sql": "4e09015e77834d4f851a87db077d2a7ef8713879f32502126d0091434f5b97f8",
   "0044_photorealistic_avatars.sql": "db7b41031f98b3b43d875573f69ba86e6d93edf78ac54a51d84704d1aff24c65",
   "0045_team_hq_read_api.sql": "e94ee201276ddc1b43cbae1eaa861a0121da56f56e6444e3c8f7f76e90d8f54c",
-  "0046_hq_api_exposure.sql": "82adadf8b1e4a8a1e4d1461ae099febbe32443fb3ac1488a29662b65343c95b6"
+  "0046_hq_api_exposure.sql": "82adadf8b1e4a8a1e4d1461ae099febbe32443fb3ac1488a29662b65343c95b6",
+  "0047_hq_daily_series.sql": "34cc286ef7ce159958188b14b5c159a077ed46cd56b9d148c1c2847635f3a724"
 }

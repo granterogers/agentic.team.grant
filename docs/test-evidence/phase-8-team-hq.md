@@ -1,7 +1,7 @@
 # Phase 8 — Team HQ
 
-**Run:** 2026-09-05 · **Suite:** `npm run verify:hq` (17 checks, live)
-**Migrations:** 0045, 0046
+**Run:** 2026-09-05 · **Suite:** `npm run verify:hq` (24 checks, live)
+**Migrations:** 0045, 0046, 0047
 **Page:** <https://ai-team-hq.vercel.app> · **API:** `…/functions/v1/hq-api`
 
 ---
@@ -102,6 +102,50 @@ one had already been paid for. 0046 adds four narrow `public` wrappers.
 
 ---
 
+## The charts, and what rendering them found
+
+Four sparklines over 30 days: jobs completed, model calls, inference spend,
+messages delivered. Inline SVG, no library — §2's first principle is "frontend
+simplicity, backend sophistication", and a build pipeline for four fetches and
+some DOM is the tail wagging the dog.
+
+**Colour was computed, not chosen.** The palette validator failed the dark-mode
+UI accent (`#6f9bff`, L 0.703, outside the dark lightness band), so the dark
+series colour is a different value from the dark link colour — a chart colour
+and a UI accent answer to different checks and are allowed to differ. Light mode
+passes on the UI accent unchanged.
+
+**Three things were only visible once it was rendered**, which is the step in
+the method easiest to skip and the reason it exists:
+
+1. **Every load of the Trends tab was a 400.** The tab is called `trends` and
+   the API section is called `series`, and the first version passed the tab name
+   straight through. Nothing in the source looks wrong; the browser console says
+   it immediately.
+2. **The stroke was stretched.** `preserveAspectRatio="none"` scales the 300-unit
+   viewBox to whatever the card is wide and takes the stroke width with it, so a
+   2px line renders thin and uneven. Fixed with `vector-effect`.
+3. **A flat line pretending to be data.** Inference spend is £0 for all 30 days,
+   and a sparkline of constant zero draws a confident horizontal line along the
+   baseline — it *looks* like a measurement. It now says "Nothing in the last 30
+   days" instead.
+
+A fourth was visible but not a bug: with `auto-fit`, five stat tiles stretched
+across a 1900px row and gave a single digit 300px to itself, which is the
+opposite of the density §25 asks for. `auto-fill` with a bounded track fixes it.
+
+**The series is dense, not sparse.** `generate_series` produces every day and the
+counts are left-joined on, so a quiet day is a zero. Drawing from sparse rows
+would run a straight line across a quiet week and make it look busy — the shape
+would lie, and lie in the reassuring direction.
+
+Each chart carries a crosshair with a tooltip (pointer events, so a finger works
+as well as a mouse) and a `<details>` table of the numbers, because a shape you
+cannot interrogate is decoration. One series each, so no legend: the heading
+names it.
+
+---
+
 ## Known limitations
 
 1. **Read-only.** No actions, deliberately for now: an action needs a
@@ -111,10 +155,7 @@ one had already been paid for. 0046 adds four narrow `public` wrappers.
    and the page says so in its footer.
 2. **One token, no per-device revocation.** Rotating it locks out every device.
    Acceptable for one user; it would not be for two.
-3. **No charts.** §25 asks for them. The numbers are all there and rendered as
-   tiles; a sparkline over 30 days of inference cost is a small addition and is
-   not done.
-4. **No remembered collapse/reorder.** Also §25, also not done. It needs a place
-   to keep per-device preferences, which is a decision (localStorage or the
-   database) rather than an afternoon.
-5. **The mobile judgement is unmade**, as above.
+3. **Reorder is "move up", not drag-and-drop.** Dragging on a phone fights the
+   scroll gesture, and a control that only works with a mouse is not a
+   mobile-first control. Tap the chevron to promote a card.
+4. **The mobile judgement is unmade**, as above.

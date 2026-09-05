@@ -19,6 +19,12 @@
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --ink: #14161a; --muted: #5b6270;
   --line: #e3e6ec; --accent: #2f6df6; --warn: #b8541b; --bad: #b3261e;
+  /* Validated against the light surface: inside the lightness band, above the
+     chroma floor, over 3:1 contrast. Not eyeballed — the palette validator was
+     run, and #6f9bff (the UI accent's dark step) FAILED the dark band at
+     L 0.703, which is why the dark series colour below is a different value
+     from the dark UI accent. */
+  --series: #2f6df6;
   --good: #1f7a4d; --radius: 14px;
   --pad: 16px;
   font-synthesis-weight: none;
@@ -28,6 +34,10 @@
     --bg: #0f1115; --panel: #171a20; --ink: #e7e9ee; --muted: #9aa2b1;
     --line: #262b34; --accent: #6f9bff; --warn: #e8a06a; --bad: #ef7a72;
     --good: #64c79a;
+    /* #5c8cf5, not the #6f9bff used for links: the lighter step is outside the
+       dark lightness band. A chart colour and a UI accent answer to different
+       checks and are allowed to differ. */
+    --series: #5c8cf5;
   }
 }
 * { box-sizing: border-box; }
@@ -68,7 +78,11 @@ main { padding: var(--pad); display: grid; gap: 12px; }
 }
 .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--muted); margin: 0 0 10px; font-weight: 600; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+/* auto-FILL, not auto-fit. With auto-fit five tiles stretch to fill a 1900px
+   row and a single digit gets 300px of card to itself, which is the opposite of
+   the "desktop information density" §25 asks for. */
+@media (min-width: 760px) { .tiles { grid-template-columns: repeat(auto-fill, minmax(112px, 0.2fr)); } }
 .tile { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
 .tile b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .tile span { color: var(--muted); font-size: 12px; }
@@ -99,6 +113,37 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
   border-radius: 10px; border: 0; background: var(--ink); color: var(--panel); min-height: 46px; }
 .err { color: var(--bad); font-size: 13px; margin-top: 10px; }
 footer { color: var(--muted); font-size: 12px; padding: 4px var(--pad) 28px; }
+
+/* --- charts ------------------------------------------------------------
+   A sparkline, not a chart with axes: the tile's big number IS the last
+   value's direct label, so the line only has to carry shape. That also
+   sidesteps an end-marker, which at this height could not meet the 8px
+   minimum without dominating the plot.
+   One series, so no legend — the heading names it.                        */
+.spark { display: block; width: 100%; height: 44px; overflow: visible; touch-action: pan-y; }
+.spark path.line { fill: none; stroke: var(--series); stroke-width: 2;
+  stroke-linejoin: round; stroke-linecap: round; }
+.spark path.area { fill: color-mix(in srgb, var(--series) 14%, transparent); stroke: none; }
+.spark .cross { stroke: var(--muted); stroke-width: 1; opacity: 0; }
+.spark .dot { fill: var(--series); stroke: var(--panel); stroke-width: 2; opacity: 0; }
+.spark.on .cross, .spark.on .dot { opacity: 1; }
+.sparkwrap { position: relative; }
+.tip { position: absolute; pointer-events: none; opacity: 0; transform: translate(-50%, -120%);
+  background: var(--ink); color: var(--panel); font-size: 12px; padding: 4px 8px;
+  border-radius: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tip.on { opacity: 1; }
+.chartrow { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.chartrow b { font-size: 24px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.chartrow span { color: var(--muted); font-size: 12.5px; }
+details.values { margin-top: 8px; }
+details.values summary { color: var(--muted); font-size: 12px; cursor: pointer; min-height: 24px; }
+details.values table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12.5px; }
+details.values td { padding: 2px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+details.values td:last-child { text-align: right; }
+.card > .drag { float: right; color: var(--muted); cursor: grab; font-size: 15px; line-height: 1;
+  padding: 0 2px; user-select: none; }
+.card.collapsed .body { display: none; }
+.card h2 { cursor: pointer; user-select: none; }
 </style>
 </head>
 <body>
@@ -134,7 +179,17 @@ const ago = (iso) => {
   return Math.round(h / 24) + 'd ago'
 }
 
-async function load(section) {
+/*
+  A tab is not a section. "Trends" is what the tab says and `series` is what the
+  API calls it, and the first version passed the tab name straight through and
+  got a 400 on every load of that tab — caught by screenshotting the page and
+  reading the console, which is the step the method calls "render it and look at
+  it" and the step that is easiest to skip.
+*/
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage' }
+
+async function load(tab) {
+  const section = SECTION_FOR[tab] ?? tab
   const token = localStorage.getItem(KEY) || ''
   const r = await fetch(API + '?section=' + encodeURIComponent(section), {
     headers: { Authorization: 'Bearer ' + token },
@@ -166,6 +221,7 @@ function gate(message) {
 
 const TABS = [
   ['overview', 'Today'],
+  ['trends', 'Trends'],
   ['staff', 'Staff'],
   ['activity', 'Activity'],
   ['usage', 'Usage'],
@@ -229,28 +285,28 @@ function overview(d) {
     total > shown ? `<div class="meta" style="margin-top:8px">Showing ${shown} of ${total} ${what}.</div>` : ''
 
   return `
-    <section class="card wide">
+    <section class="card wide" data-card="glance">
       <h2>At a glance</h2>
-      <div class="tiles">
+      <div class="body"><div class="tiles">
         ${tile(c.needs_me, 'need you', c.needs_me ? 'warn' : '')}
         ${tile(c.needs_me_overdue, 'overdue', c.needs_me_overdue ? 'bad' : '')}
         ${tile(c.live_jobs, 'jobs live')}
         ${tile(c.active_projects, 'projects')}
         ${tile(c.undo_offers, 'undoable')}
-      </div>
+      </div></div>
     </section>
-    <section class="card wide">
+    <section class="card wide" data-card="needs"><span class="drag" title="Move up">⌃</span>
       <h2>Needs you</h2>
-      ${needs ? `<ul>${needs}</ul>${overflow(d.needs_me.length, c.needs_me, 'blockers')}`
-              : '<div class="empty">Nothing is waiting on you.</div>'}
+      <div class="body">${needs ? `<ul>${needs}</ul>${overflow(d.needs_me.length, c.needs_me, 'blockers')}`
+              : '<div class="empty">Nothing is waiting on you.</div>'}</div>
     </section>
-    <section class="card">
+    <section class="card" data-card="projects"><span class="drag" title="Move up">⌃</span>
       <h2>Projects</h2>
-      ${projects ? `<ul>${projects}</ul>` : '<div class="empty">No active projects.</div>'}
+      <div class="body">${projects ? `<ul>${projects}</ul>` : '<div class="empty">No active projects.</div>'}</div>
     </section>
-    <section class="card">
+    <section class="card" data-card="inflight"><span class="drag" title="Move up">⌃</span>
       <h2>In flight</h2>
-      ${jobs ? `<ul>${jobs}</ul>` : '<div class="empty">The queue is empty.</div>'}
+      <div class="body">${jobs ? `<ul>${jobs}</ul>` : '<div class="empty">The queue is empty.</div>'}</div>
     </section>`
 }
 
@@ -268,7 +324,7 @@ function staff(d) {
       </div>
     </div>`
   }).join('')
-  return `<section class="card wide"><h2>The team</h2><div class="staff">${people}</div></section>`
+  return `<section class="card wide" data-card="team"><h2>The team</h2><div class="body"><div class="staff">${people}</div></div></section>`
 }
 
 function activity(rows) {
@@ -283,7 +339,7 @@ function activity(rows) {
       ${r.reason ? `<div class="m">${esc(r.reason)}</div>` : ''}
       ${r.project_name ? `<div class="m">${esc(r.project_name)}</div>` : ''}
     </li>`).join('')
-  return `<section class="card wide"><h2>Recent activity</h2><ul>${items}</ul></section>`
+  return `<section class="card wide" data-card="recent"><h2>Recent activity</h2><div class="body"><ul>${items}</ul></div></section>`
 }
 
 function usage(d) {
@@ -294,10 +350,13 @@ function usage(d) {
   */
   const badge = (p) => p === 'estimated' ? '<span class="est">ESTIMATED</span>' : ''
   const block = (title, prov, note, rows) => `
-    <section class="card">
+    <section class="card" data-card="${esc(title.toLowerCase().replace(/\s+/g, '-'))}">
+      <span class="drag" title="Move up">⌃</span>
       <h2>${esc(title)}${badge(prov)}</h2>
-      <div class="tiles">${rows}</div>
-      ${note ? `<div class="meta" style="margin-top:10px">${esc(note)}</div>` : ''}
+      <div class="body">
+        <div class="tiles">${rows}</div>
+        ${note ? `<div class="meta" style="margin-top:10px">${esc(note)}</div>` : ''}
+      </div>
     </section>`
   const t = (n, label) => `<div class="tile"><b>${n}</b><span>${esc(label)}</span></div>`
 
@@ -328,11 +387,190 @@ function usage(d) {
     ${block('Notebook', nb.provenance, nb.note,
       t(esc(nb.detected_tier ?? '—'), 'tier') + t(nb.notebook_limit ?? '—', 'notebooks') +
       t(nb.source_limit ?? '—', 'sources') + t(nb.daily_chat_budget ?? '—', 'chats/day'))}
-    <section class="card"><h2>Free models</h2>${models ? `<ul>${models}</ul>` : '<div class="empty">None registered.</div>'}</section>
-    <section class="card"><h2>Message delivery</h2>${delivery ? `<ul>${delivery}</ul>` : '<div class="empty">Nothing sent yet.</div>'}</section>`
+    <section class="card" data-card="models"><span class="drag" title="Move up">⌃</span><h2>Free models</h2>
+      <div class="body">${models ? `<ul>${models}</ul>` : '<div class="empty">None registered.</div>'}</div></section>
+    <section class="card" data-card="delivery"><span class="drag" title="Move up">⌃</span><h2>Message delivery</h2>
+      <div class="body">${delivery ? `<ul>${delivery}</ul>` : '<div class="empty">Nothing sent yet.</div>'}</div></section>`
 }
 
-const VIEWS = { overview, staff, activity, usage }
+/* --- sparklines ---------------------------------------------------------
+   Inline SVG, no library. A single series, so: no legend (the heading names
+   it), no end-marker (the headline number is the direct label), 2px stroke,
+   recessive everything else.
+
+   The hover layer is not optional — an SVG chart on a page IS interactive, and
+   a shape with no way to ask "what was that day" is a decoration. Pointer
+   events cover mouse and touch alike, which is why this uses `pointermove`
+   rather than `mousemove`: on a phone the second one never fires.
+*/
+function sparkline(points, format) {
+  const W = 300, H = 44, PADY = 4
+  if (!points.length) return '<div class="empty">No data yet.</div>'
+  const values = points.map((p) => Number(p[1]))
+  // A series that is entirely zero has no shape, and drawing it as a flat line
+  // along the baseline is worse than drawing nothing: it looks like data. Say
+  // what is true instead.
+  if (values.every((v) => v === 0)) {
+    return `<div class="meta" style="padding:12px 0 4px">Nothing in the last ${points.length} days.</div>`
+  }
+  const max = Math.max(...values, 0)
+  const min = Math.min(...values, 0)
+  const span = max - min || 1
+  const x = (i) => (points.length === 1 ? W / 2 : (i / (points.length - 1)) * W)
+  const y = (v) => H - PADY - ((v - min) / span) * (H - PADY * 2)
+
+  const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('')
+  const area = `${line}L${W},${H}L0,${H}Z`
+  const last = values[values.length - 1]
+  const total = values.reduce((a, b) => a + b, 0)
+
+  // A <title> makes the shape available to a screen reader, and the <details>
+  // below is the table view the same reader can actually work with.
+  const summary = `${points.length} days, ${format(min)} to ${format(max)}, latest ${format(last)}`
+
+  const rows = points
+    .slice()
+    .reverse()
+    .map((p) => `<tr><td>${esc(p[0])}</td><td>${esc(format(Number(p[1])))}</td></tr>`)
+    .join('')
+
+  return `
+    <div class="sparkwrap">
+      <svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+           role="img" aria-label="${esc(summary)}"
+           data-points='${esc(JSON.stringify(points))}' data-fmt="${esc(format.name || 'plain')}">
+        <title>${esc(summary)}</title>
+        <path class="area" d="${area}"></path>
+        <!-- vector-effect, because preserveAspectRatio="none" stretches the
+             viewBox horizontally and takes the stroke width with it: the line
+             renders thin and uneven without this. Visible only once rendered,
+             which is why the method says to look at it. -->
+        <path class="line" d="${line}" vector-effect="non-scaling-stroke"></path>
+        <line class="cross" x1="0" y1="0" x2="0" y2="${H}"></line>
+        <circle class="dot" r="4" cx="0" cy="0"></circle>
+      </svg>
+      <div class="tip"></div>
+    </div>
+    <details class="values"><summary>Show the numbers (${points.length} days, ${format(total)} total)</summary>
+      <table><tbody>${rows}</tbody></table></details>`
+}
+
+const FORMATS = {
+  money: (v) => '$' + Number(v).toFixed(2),
+  plain: (v) => String(Math.round(Number(v))),
+}
+
+/** Wire the crosshair. Pointer events, so a finger works as well as a mouse. */
+function armSparklines(root) {
+  for (const svg of root.querySelectorAll('svg.spark')) {
+    const points = JSON.parse(svg.dataset.points)
+    const fmt = FORMATS[svg.dataset.fmt] || FORMATS.plain
+    const tip = svg.parentElement.querySelector('.tip')
+    const cross = svg.querySelector('.cross')
+    const dot = svg.querySelector('.dot')
+    const W = 300, H = 44, PADY = 4
+    const values = points.map((p) => Number(p[1]))
+    const max = Math.max(...values, 0), min = Math.min(...values, 0)
+    const span = max - min || 1
+
+    const move = (event) => {
+      const box = svg.getBoundingClientRect()
+      const ratio = Math.min(Math.max((event.clientX - box.left) / box.width, 0), 1)
+      const i = Math.round(ratio * (points.length - 1))
+      const vx = points.length === 1 ? W / 2 : (i / (points.length - 1)) * W
+      const vy = H - PADY - ((values[i] - min) / span) * (H - PADY * 2)
+      cross.setAttribute('x1', vx); cross.setAttribute('x2', vx)
+      dot.setAttribute('cx', vx); dot.setAttribute('cy', vy)
+      svg.classList.add('on')
+      tip.textContent = points[i][0] + ' · ' + fmt(values[i])
+      tip.style.left = (ratio * box.width) + 'px'
+      tip.style.top = ((vy / H) * box.height) + 'px'
+      tip.classList.add('on')
+    }
+    const clear = () => { svg.classList.remove('on'); tip.classList.remove('on') }
+    svg.addEventListener('pointermove', move)
+    svg.addEventListener('pointerdown', move)
+    svg.addEventListener('pointerleave', clear)
+    svg.addEventListener('pointercancel', clear)
+  }
+}
+
+/* --- remembered layout --------------------------------------------------
+   §25 asks for collapse and reorder to be remembered. Kept in localStorage
+   rather than in Postgres, deliberately: this is a per-DEVICE preference — the
+   phone wants Needs You first and the desktop wants everything visible — and
+   syncing it would make one device's tidy-up change the other's.
+*/
+const LAYOUT = 'hq.layout'
+const layout = () => { try { return JSON.parse(localStorage.getItem(LAYOUT) || '{}') } catch { return {} } }
+const saveLayout = (l) => { try { localStorage.setItem(LAYOUT, JSON.stringify(l)) } catch { /* private mode */ } }
+
+function applyLayout(main, view) {
+  const state = layout()[view] || {}
+  const cards = [...main.querySelectorAll('.card[data-card]')]
+  // Order first, then collapse: reordering a collapsed card must not expand it.
+  const order = state.order || []
+  for (const key of [...order].reverse()) {
+    const card = cards.find((c) => c.dataset.card === key)
+    if (card) main.prepend(card)
+  }
+  for (const card of cards) {
+    if ((state.collapsed || []).includes(card.dataset.card)) card.classList.add('collapsed')
+  }
+}
+
+function armLayout(main, view) {
+  const persist = () => {
+    const all = layout()
+    all[view] = {
+      order: [...main.querySelectorAll('.card[data-card]')].map((c) => c.dataset.card),
+      collapsed: [...main.querySelectorAll('.card.collapsed[data-card]')].map((c) => c.dataset.card),
+    }
+    saveLayout(all)
+  }
+  for (const card of main.querySelectorAll('.card[data-card]')) {
+    const heading = card.querySelector('h2')
+    if (heading) {
+      heading.title = 'Tap to collapse'
+      heading.onclick = () => { card.classList.toggle('collapsed'); persist() }
+    }
+    const handle = card.querySelector('.drag')
+    if (!handle) continue
+    handle.onclick = (e) => {
+      // Move up on tap. Drag-and-drop on a phone fights the scroll gesture, and
+      // a control that only works with a mouse is not a mobile-first control.
+      e.stopPropagation()
+      const previous = card.previousElementSibling
+      if (previous && previous.classList.contains('card')) { main.insertBefore(card, previous); persist() }
+    }
+  }
+}
+
+function trends(d) {
+  const chart = (key, title, series, format, unit) => {
+    const values = series.map((p) => Number(p[1]))
+    const latest = values[values.length - 1] ?? 0
+    const total = values.reduce((a, b) => a + b, 0)
+    return `<section class="card" data-card="${key}"><span class="drag" title="Move up">⌃</span>
+      <h2>${esc(title)}</h2>
+      <div class="body">
+        <div class="chartrow"><b>${esc(format(latest))}</b><span>today · ${esc(format(total))} over ${series.length} days</span></div>
+        ${sparkline(series, format)}
+      </div>
+    </section>`
+  }
+  return `
+    <section class="card wide" data-card="trends-note">
+      <h2>Last ${d.days} days</h2>
+      <div class="body"><div class="meta">Days are counted in ${esc(d.timezone)}, not UTC — a chart of days has to agree with you about where a day ends.</div></div>
+    </section>
+    ${chart('t-jobs', 'Jobs completed', d.jobs_completed, FORMATS.plain)}
+    ${chart('t-calls', 'Model calls', d.inference_calls, FORMATS.plain)}
+    ${chart('t-cost', 'Inference spend', d.inference_cost_usd, FORMATS.money)}
+    ${chart('t-msgs', 'Messages delivered', d.messages_sent, FORMATS.plain)}`
+}
+
+const VIEWS = { overview, trends, staff, activity, usage }
 
 async function show(section) {
   for (const b of document.querySelectorAll('nav button')) {
@@ -343,6 +581,9 @@ async function show(section) {
   try {
     const data = await load(section)
     main.innerHTML = VIEWS[section](data)
+    armSparklines(main)
+    applyLayout(main, section)
+    armLayout(main, section)
     document.getElementById('stamp').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   } catch (e) {
     if (e.message === 'unauthorized') return

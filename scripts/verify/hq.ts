@@ -122,7 +122,7 @@ record(
 // §25: no token or debug detail
 // ===========================================================================
 
-const sections = ['overview', 'staff', 'usage', 'activity']
+const sections = ['overview', 'staff', 'usage', 'activity', 'series']
 const bodies: Record<string, string> = {}
 for (const section of sections) {
   const r = await get(`?section=${section}`)
@@ -206,6 +206,56 @@ record(
   'the page ships no token of its own — it asks for one and keeps it on the device',
   SHAPES.some((p) => p.test(html)) ? 'SOMETHING TOKEN-SHAPED IS IN THE PAGE' : 'clean',
   !SHAPES.some((p) => p.test(html)) && html.includes('localStorage'),
+)
+
+// ===========================================================================
+// The charts
+// ===========================================================================
+
+const series = JSON.parse(bodies.series ?? '{}') as {
+  data?: { timezone?: string; days?: number; jobs_completed?: [string, number][] }
+}
+const days = series.data?.jobs_completed ?? []
+record(
+  'the daily series is DENSE — a quiet day is a zero, not a missing point',
+  `${String(days.length)} points for ${String(series.data?.days)} days`,
+  days.length === series.data?.days,
+)
+record(
+  "and it is counted in Grant's timezone, because a chart of days has to agree about where a day ends",
+  `timezone=${String(series.data?.timezone)}`,
+  series.data?.timezone === 'Europe/Athens',
+)
+
+record(
+  'a series that is entirely zero renders a sentence, not a flat line pretending to be data',
+  html.includes('Nothing in the last') ? 'handled' : 'NOT HANDLED',
+  html.includes('Nothing in the last'),
+)
+record(
+  'the sparkline stroke does not stretch with the viewBox',
+  // preserveAspectRatio="none" scales the stroke horizontally too. Invisible in
+  // the source, obvious the moment it is rendered.
+  html.includes('vector-effect="non-scaling-stroke"') ? 'non-scaling-stroke set' : 'MISSING',
+  html.includes('vector-effect="non-scaling-stroke"'),
+)
+record(
+  'every chart has a hover layer and a table view — a shape you cannot interrogate is decoration',
+  html.includes('pointermove') && html.includes('details class="values"')
+    ? 'crosshair + numbers'
+    : 'MISSING',
+  html.includes('pointermove') && html.includes('details class="values"'),
+)
+const described = html.includes('aria-label=') && html.includes('role="img"')
+record(
+  'one series, so no legend — and an aria-label carries the shape for a screen reader',
+  described ? 'role=img with a described shape' : 'NOT DESCRIBED',
+  described,
+)
+record(
+  'collapse and reorder are remembered per DEVICE, which is what a phone and a desktop each want',
+  html.includes('hq.layout') && html.includes('localStorage') ? 'localStorage' : 'MISSING',
+  html.includes('hq.layout'),
 )
 
 // ===========================================================================
