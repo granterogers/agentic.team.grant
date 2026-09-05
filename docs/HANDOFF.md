@@ -1,167 +1,151 @@
-> **Superseded.** See [`HANDOFF-2026-09-04.md`](HANDOFF-2026-09-04.md) for the
-> current state — Phases 4, 5 and 6 are complete since this was written. The
-> environment facts below (no raw TCP to Postgres, use the Management API) are
-> still true and still the first thing to know.
+# Start here
 
-# Session handoff — 2026-09-03
+**For the next Claude Code session.** This replaces every earlier handoff; the
+dated ones are kept as history and you do not need them.
 
-**For:** the next Claude Code session · **Branch:** `claude/new-session-o2oklu`
-
-Phase 0 is complete and **Phase 1 is unblocked**. This session verified
-credentials only; it deliberately wrote no Phase 1 code, because the stop
-condition in its brief said to halt if the database was unreachable — and it was,
-for reasons that turned out to be more fundamental than a bad connection string.
-That is now solved. Read this, then start Phase 1.
+**Branch:** `claude/phase-7-communications-kh8ow8` — everything is committed and
+pushed. **Date of this handoff:** 2026-09-05.
 
 ---
 
-## Read in this order
+## Where the project is
 
-1. `AI_TEAM_HQ_MASTER_SPEC.md` — canonical. Supersedes everything else.
-2. `docs/adr/` — **seven** ADRs. Do not re-litigate them; ADR-0007 is new and
-   load-bearing for how you talk to the database at all.
-3. `docs/design/core-invariants.md` — the provider-independent core.
-4. `docs/implementation-plan.md` — Phase 1 scope and acceptance criteria.
-5. `docs/test-evidence/2026-09-03-credential-verification.md` — what is actually
-   proven to work, with the exact calls.
-
----
-
-## Three things that will waste your time if you don't know them
-
-### 1. You cannot reach Postgres. Do not try.
-
-All non-443 outbound TCP is blocked in this environment. Ports 5432 and 6543
-time out; 443 to the same host connects. The direct database host is IPv6-only
-and the container has **no IPv6 address family at all** (`OSError 97`). The
-egress proxy's own documentation lists `raw-TCP databases` as unsupported.
-
-`psql` fails with a **bare, empty error message** (`psql: error:` and nothing
-else), which is why this is not self-diagnosing. If you find yourself debugging
-a connection string, stop and read ADR-0007.
-
-**Use `scripts/db-query.sh` instead.** It runs SQL through the Supabase
-Management API over HTTPS and is verified working:
-
-```bash
-scripts/db-query.sh "select current_user;"
-scripts/db-query.sh --file migrations/0001_whatever.sql
-```
-
-`pg_dump` and `psql` have no HTTPS mode, so anything needing the wire protocol —
-the nightly backup and the restore rehearsal — runs in **GitHub Actions**, where
-egress is unrestricted. That is ADR-0007's second half.
-
-### 2. Environment variables *do* reach a running session. Re-read before concluding one is absent.
-
-This session's first run asserted the opposite and told Grant a restart was
-required. It was wrong: `SUPABASE_ACCESS_TOKEN` and four Slack values were added
-mid-session and appeared in the **running** container without a restart. The
-previous session was restarted on that same false belief.
-
-Propagation is not instant and not guaranteed — the `BACKUP_S3_*` variables had
-still not arrived when this session ended. So: **re-read `os.environ` before
-reporting a credential missing**, and don't ask for a restart until you have.
-
-### 3. Run the secret scan before every commit
-
-```bash
-python3 scripts/secret-scan.py
-```
-
-It checks tracked files for every environment value verbatim *and* for known
-credential shapes. Public identifiers (Slack client/app id, the S3 endpoint,
-region and bucket) are allowlisted; real secrets are not. It is currently clean.
-
----
-
-## Credential state
-
-| Credential | State |
+| Phase | State |
 |---|---|
-| `SUPABASE_ACCESS_TOKEN` | ✅ **DDL proven** — create, insert, select, revoke, RLS, policy, drop |
-| `SLACK_BOT_TOKEN` | ✅ works, app installed, 17/17 scopes |
-| `SLACK_SIGNING_SECRET` | ✅ present, 32 hex — functional test needs Phase 2's endpoint |
-| `SLACK_CLIENT_SECRET` / `_CLIENT_ID` / `_APP_ID` | ✅ present and correctly shaped |
-| `OPENROUTER_API_KEY` | ✅ `is_free_tier: false`, `limit: 5` ⚠️ **lifetime** cap, not monthly |
-| `OPENAI_API_KEY`, `GEMINI_API_KEY`, `TELEGRAM_CHIEF_BOT_TOKEN` | ✅ verified earlier |
-| `SUPABASE_DB_URL` | ⚠️ set, unusable here by design — it is for Vercel, and it is the *Direct* string where Vercel wants the *Session pooler* one |
-| `BACKUP_S3_*` (5 vars) | ⬜ **outstanding** — see below |
-| `SLACK_APP_TOKEN` | ⬜ empty, **correctly** — Socket Mode is rejected (§4) |
+| 0–6 | ✅ complete |
+| 7 — Communications | ✅ complete **except** six more Telegram bots (tokens only Grant can make) |
+| 8 — Full UI | ✅ built and deployed. One acceptance criterion is deliberately unclaimed — see below |
+| 9 — Google ecosystem | ⬜ next |
+| 10 — Hardening | ⬜ |
 
-### The one outstanding item
-
-Grant chose **Backblaze B2** (no card required, unlike R2 — the reasoning is in
-`docs/credential-shopping-list.md` and it matters, because he removed the
-OpenRouter card deliberately). The bucket exists:
+**47 migrations. 583 unit tests. 14 live suites, ~300 checks, all green.**
 
 ```
-bucket      ai-team-hq-backups
-endpoint    s3.eu-central-003.backblazeb2.com
-region      eu-central-003     (B2 shows no region field — it is inside the endpoint)
-private · encrypted · object lock disabled
+npm run verify        # lint, typecheck, migrations, unit tests, secret scan
+npm run verify:db     # every live suite in order — takes ~25 minutes
 ```
 
-Still needed: the Application Key pair, as `BACKUP_S3_ACCESS_KEY_ID` and
-`BACKUP_S3_SECRET_ACCESS_KEY` (B2 calls them *keyID* and *applicationKey*).
-**Check the environment first** — they may have landed since.
-
-This blocks *finishing* Phase 1, not starting it. And note: **retention is
-unconfigured on a 10 GB free tier.** The bucket defaults to "keep all versions";
-since the job writes a uniquely-keyed object per night rather than overwriting,
-accumulation — not versioning — is the exposure. A lifecycle rule plus pruning in
-the job is part of the backup deliverable, or backups fill the bucket and start
-failing quietly.
+`verify:slack` and `verify:worker` each need the queue to themselves and refuse
+to start otherwise, rather than producing a wall of misleading red.
+`npm run purge:fixtures -- --go` clears debris.
 
 ---
 
-## Parked, at Grant's request — do not start these
+## Read these three things first
 
-| What | Where |
-|---|---|
-| **Obsidian vault sync** — `granterogers/obsidian-vault`, for syncing outputs "later" | [`docs/parked/obsidian-vault-sync.md`](parked/obsidian-vault-sync.md) |
-
-Parked means recorded, not scheduled. Read the note before touching it: there is
-a real architectural question in it (delivery surface vs. second knowledge
-adapter) and it connects to Gate 2's stop condition.
-
-## Where to start
-
-`docs/implementation-plan.md` is authoritative on scope. The ordering constraint
-worth restating, because it is easy to get backwards:
-
-> **CI before schema.** A test harness added after the schema is a harness
-> shaped by the schema. Lint, typecheck, test and a migration check must be green
-> on an empty suite *first*.
-
-Then, per Phase 1: migrations as versioned SQL under `migrations/`, `events`
-append-only enforced by `REVOKE` (proven to hold — a forbidden `UPDATE` returns
-`42501`), RLS throughout, the job engine with the full §6 state machine,
-idempotency keys from semantic inputs, `SELECT … FOR UPDATE SKIP LOCKED`
-dequeue, capacity limits enforced **at dequeue**, database-backed per-provider
-circuit breakers, the boot recovery sweep, and undo as a compensating event
-keyed on the original `event_id`.
-
-Nothing beyond that. No channels, no agents, no UI past what proves the core
-works. Phase 1 closes only when its acceptance criteria are **demonstrated** —
-a job surviving a hard kill in each state, and a real backup restored into a
-fresh database.
-
-One precedent worth copying: the credential brief asked for
-create/insert/select/drop to prove DDL. That proves DDL *runs*. It does not
-prove the property Phase 1 depends on — that `REVOKE` is **enforced** rather than
-merely accepted — so this session additionally impersonated the application role
-and confirmed Postgres refuses the write. Prefer that shape of test throughout:
-**assert the property, not the syntax.**
+1. **`AI_TEAM_HQ_MASTER_SPEC.md`** — canonical, supersedes everything else.
+2. **`docs/test-evidence/`** — one document per phase. They record what the
+   checks found **by failing**, not what passed. The failures are the part worth
+   reading, and there are now eleven in Phase 7 alone.
+3. **`src/jobs/worker.ts`** — its header states the rule the whole system is
+   built on: *it takes no shortcut that the database would have allowed.*
 
 ---
 
-## Known-good facts, so you don't re-derive them
+## The one thing to understand about this codebase
 
-- Postgres **17.6**; Management API runs as `postgres` on database `postgres`.
-- Project ref `baujwlzcziasnfhhkchg`; Slack app `A0BUFRVSSLD`; workspace
-  `T0BUCJ2L5FD`; bot `ai_team_hq` / `U0BUG0RPZ8B`.
-- Management API returns **`201`** on success, `400` with a Postgres `SQLSTATE`
-  in the message on failure. `[]` is a successful statement returning no rows.
-- Another session pushed `docs/credential-shopping-list.md` to this branch
-  concurrently. Expect company; fetch before you push.
+Every phase has produced the same defect in a new costume: **a check whose
+result does not depend on the thing under test.** The list so far —
+
+- a hardcoded literal
+- a query against the wrong column
+- a test running as the wrong role
+- an over-broad pass condition
+- an `UPDATE` matching zero rows
+- a second safety mechanism arriving in front of the one under test
+- a fixture blocked by an earlier gate
+- a check asserting a function's return value rather than its consequence
+- a check scoped so loosely it read a previous run's leftovers as a bug
+- a check that could only ever have measured nothing
+- **a component tested only against its own expectations** (a button composer
+  and its adapter, each green, disagreeing about the wire format entirely)
+
+There is a sibling rule, learned three times the hard way: **a test that changes
+real configuration must restore it.** `gmail.send` was left enabled by a
+permissions check; `research-director` ran a prompt written by a test; and a
+gate-3 fixture left a global mute in place that silenced every routine
+notification for three days. "Kept as evidence" is not a reason to leave live
+configuration changed — that is what the append-only audit tables are for.
+
+**When you write a check, ask what it would do if the feature were deleted.** If
+it would still pass, it is not a check. Add a CONTROL that proves it
+discriminates; the live suites are full of them and they have earned their place.
+
+---
+
+## What exists now, by surface
+
+**Slack — the office.** Results reach a channel or a thread, presented as the
+staff member who produced them, exactly once. Six §12 buttons, received and
+acted on. The bot recovers itself from being removed from a channel.
+`verify:slack`, 56 checks.
+
+**Telegram — the pager.** One bot live and registered to Grant. Pages only for
+`important` and above; silent below urgent. An interrupted send can never be
+reconciled (a bot cannot read its own sent messages back), so it parks forever
+rather than risk sending twice. `verify:telegram`, 28 checks.
+
+**Team HQ — <https://ai-team-hq.vercel.app>.** Read-only dashboard, five views,
+four sparklines. The token is in the vault as `hq.api_token`; `npm run hq:token`
+sends it to Grant on Telegram. **Never print it.** `verify:hq`, 24 checks.
+
+**Voice notes.** Everything up to the API call is built. Without a Google
+credential every note degrades to text and says `no_credential`, which is the
+acceptance criterion working rather than a gap.
+
+**Delivery is channel-agnostic.** `public.deliveries` and `app.claim_delivery`
+serve both Slack and Telegram. If you add a third surface, add a `Transport` —
+do not add a third table.
+
+---
+
+## Waiting on Grant
+
+He has a browser-agent prompt for the first three:
+**`docs/offload/setup-prompt.md`**.
+
+1. **Six or seven Telegram bot tokens.** Roster in
+   `docs/telegram-bot-roster.md`. When they arrive: store each in the vault (§15
+   — one row per app, never a flat env var), set name/description/commands/photo
+   over the API, register a webhook each with its own secret, and tell Grant he
+   must send one message to each new bot before it can page him.
+2. **A Google Cloud service-account JSON** for Chirp 3. Instructions in
+   `docs/google-cloud-tts-credential.md`. When it arrives it goes in the vault
+   and `decideVoiceNote` starts returning `speak: true`.
+3. **The Slack interactivity request URL.** One field. Until it is set, Slack
+   buttons look clickable and do nothing.
+4. **Revoking old Google cookies** — needs an interactive sign-in nobody but he
+   has. The scanner already prevents a recurrence.
+5. **His judgement on whether Team HQ feels right on a phone.** §13's Gate 1
+   precedent: a subjective acceptance is never marked passed before the human
+   has performed it.
+
+---
+
+## Dead credentials, so you do not trust them
+
+- **`GEMINI_API_KEY` is dead** — `401, the bound service account is deleted or
+  disabled`. It is *present* in the environment, so anything checking whether
+  the variable is set believes it has a credential. Same shape as the
+  `GOOGLE_CLIENT_ID` that was an empty string in September.
+- **`SLACK_APP_CONFIG_TOKEN` expires every ~12 hours.** `npm run slack:rotate`
+  handles it; the refresh token is single-use, so persist before verifying.
+
+---
+
+## What I would do next, and why
+
+**Phase 9 (Google ecosystem) is the natural next step and is partly blocked.**
+Calendar and Gmail need an OAuth consent flow, and `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` exist and are valid — but the flow needs a human to
+consent once, in a browser. Design the token exchange and the refresh handling
+first; that part needs nobody.
+
+**Phase 10 (Hardening) has work available immediately** and does not need Grant
+at all: full failure injection across every integration, a backup restore
+rehearsal, provider failover, and the §30 documentation set. If you want
+something to do that is unambiguously unblocked, start there.
+
+**Two known gaps in what exists**, both mine and both small: Team HQ is
+read-only by design (actions need a confirmation model per §21 first), and the
+`docs/parked/` items have not been revisited since Phase 4.
