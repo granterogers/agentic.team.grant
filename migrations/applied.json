@@ -35,5 +35,6 @@
   "0034_indeterminate_retry_is_actually_retryable.sql": "b78e7882c1fa748248d4f0d6682eb1f0904c85e877329e945fab35e0577bf900",
   "0035_claim_reclaim_ambiguous_column.sql": "0ed91ad1ce6f0777534e1ef749e375eb166844a944afe5978c86666975c91cdc",
   "0036_clear_the_leaked_global_mute.sql": "b66dc49119ac3b3bd71bd25e7990c52b14a319d80e5f31c8b54501e3610cc505",
-  "0037_a_delivery_is_about_a_job.sql": "df356fefc702a8225911064d4276d6b24bbbc90f2995b449d7be3864e82960ed"
+  "0037_a_delivery_is_about_a_job.sql": "df356fefc702a8225911064d4276d6b24bbbc90f2995b449d7be3864e82960ed",
+  "0038_tts_usage.sql": "ff674b88c54b5d9d69ad5ea8012c68520888436158bc21b25b277edaa1135b91"
 }

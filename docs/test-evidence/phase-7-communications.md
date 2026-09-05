@@ -1,8 +1,9 @@
-# Phase 7 — the Slack office
+# Phase 7 — the Slack office, and voice notes that stay silent
 
 **Run:** 2026-09-05 · **Suite:** `npm run verify:slack` (54 checks, all live)
 **Unit:** 532 tests overall; 107 of them new here across 8 files
-**Migrations:** 0032, 0033, 0034, 0035, 0036, 0037
+**Also:** `npm run verify:tts` (14 checks, live)
+**Migrations:** 0032 – 0038
 
 This document records what the checks **found by failing**, not a list of what
 passed. The passes are in the suite output; the failures are the part worth
@@ -25,6 +26,7 @@ reading, and there were five.
 | `src/slack/notifier.ts` | the worker's `notifying` state, made real |
 | `src/slack/interactions.ts` | the six buttons coming back |
 | `src/channels/callbacks.ts` | what a press actually does, for every channel |
+| `src/voice/notes.ts` + `migrations/0038` | voice notes, the character ledger, and the decision not to speak |
 | `scripts/verify/slack.ts` | the 38 live checks |
 
 Seven of Phase 7's eight named Slack failure injections are performed for real
@@ -244,6 +246,47 @@ app limit. What is true and checkable is recorded instead:
 
 ---
 
+## Voice notes — the feature is the refusal
+
+Phase 7's acceptance is one sentence: *"TTS degrades to text rather than
+incurring cost."* Chirp 3: HD needs a Google Cloud credential this project does
+not have, so **no synthesis happens and none is faked**. What is built and
+proven is everything that decides whether it should.
+
+**There is no fallback path, deliberately.** A fallback is a second path taken
+when the first fails; second paths run rarely, are tested rarely, and are wrong
+on the day they matter. So the text is not the consolation prize — it is the
+deliverable, always produced and always sent, and audio would be an addition
+that sometimes accompanies it. Nothing downstream reads a different field when
+synthesis did not happen. A test asserts the text survives every one of the six
+refusals, because a refusal that returns no text turns a degraded voice note
+into a lost message.
+
+The six reasons to stay silent, each about correctness rather than taste:
+
+| | |
+|---|---|
+| `no_credential` | nothing to call. Its own reason, because "not configured" and "it broke" need different people to do different things |
+| `over_budget` | the free tier is a budget, and 0038 is the only counter that exists — Google exposes none |
+| `too_long` | §12 calls Telegram the pager. A pager that talks for ninety seconds is already generous |
+| `unreviewed` | §16's label is printed where a reader can see it. Audio has no margin, and a spoken caveat is the first thing heard and the last thing remembered accurately |
+| `not_speakable` | a table, a code block, or a paragraph that is mostly figures. Speech makes these worse, not merely no better — and it sounds authoritative while being unusable |
+| `caller_asked_for_text` | Grant said so |
+
+`verify:tts` proves the ledger, including the property a single-session test
+cannot show: **eight concurrent reservations against room for three grant
+exactly three**, and the five refused callers get null rather than an error. An
+advisory lock rather than a row lock, because what needs protecting is a SUM and
+there is no row to lock until after the decision.
+
+It reserves against a fixture provider name, never against `google.chirp3-hd`.
+Reserving against the real budget and cleaning up would put a test's characters
+in the ledger that decides real spending, and a cleanup that fails would leave
+it wrong in the expensive direction — which is what defect 5 above was, in a
+different table.
+
+---
+
 ## Known limitations
 
 1. **No avatars in Slack yet.** `staff.avatar_ref` holds a repository path, not
@@ -260,3 +303,5 @@ app limit. What is true and checkable is recorded instead:
 4. **DMs are not exercised outbound.** `im:write` is installed and the code path
    is identical (a DM channel id is just a channel id), but no check posts one.
 5. **The lockout check costs a channel per run**, as above.
+6. **No voice note has ever been synthesised.** Everything up to the call is
+   built and checked; the call itself needs a Google Cloud credential.
