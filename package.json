@@ -85,7 +85,9 @@
     "setup:python": "tsx scripts/setup/python.ts",
     "deploy:mcp": "tsx scripts/deploy/mcp.ts",
     "mcp:revoke": "tsx scripts/mcp/revoke.ts",
-    "verify:mcp": "tsx scripts/verify/mcp.ts"
+    "verify:mcp": "tsx scripts/verify/mcp.ts",
+    "work": "tsx scripts/work.ts",
+    "vault:export": "tsx scripts/vault/export.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

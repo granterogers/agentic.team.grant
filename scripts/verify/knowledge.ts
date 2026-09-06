@@ -50,16 +50,36 @@ const all = async (sql: string): Promise<Record<string, unknown>[]> =>
 const TOKEN = `zarquon${run}`
 
 const project = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-knowledge-${run}`)}, 'Fixture: knowledge', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-knowledge-${run}`)}, 'Fixture: knowledge', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const projectId = String(project?.id)
 
 const other = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-knowledge-other-${run}`)}, 'Fixture: knowledge (other)', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-knowledge-other-${run}`)}, 'Fixture: knowledge (other)', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const otherId = String(other?.id)
 

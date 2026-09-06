@@ -57,9 +57,19 @@ const mustRefuse = async (sql: string): Promise<string> => {
 }
 
 const project = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-autonomy-${run}`)}, 'Fixture: autonomy', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-autonomy-${run}`)}, 'Fixture: autonomy', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const projectId = String(project?.id)
 

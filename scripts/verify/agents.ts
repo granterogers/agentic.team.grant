@@ -114,9 +114,19 @@ const rosterBefore = (
   .join(',')
 
 const project = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-agents-${run}`)}, 'Fixture: agent engine', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-agents-${run}`)}, 'Fixture: agent engine', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const projectId = String(project?.id)
 
@@ -913,9 +923,19 @@ record(
 
 const scopeRef = `fixture-chat-${run}`
 const otherProject = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-other-${run}`)}, 'Fixture: the other project', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-other-${run}`)}, 'Fixture: the other project', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const otherId = String(otherProject?.id)
 

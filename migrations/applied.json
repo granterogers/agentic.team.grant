@@ -64,5 +64,8 @@
   "0063_a_light_nobody_checked.sql": "8203fbc3bf821097d69d6f63a295dff73bda76ec4f9541b779a5dccd61113041",
   "0064_mcp_clients.sql": "b70f95109935f196345e56ceb4620f7356a93f6823fa6992855176e9a4c9bf26",
   "0065_what_mcp_can_see.sql": "e89c3e0e2f5e1832159d700ac6b2b4d679aa19301d9890884a8a0fdae695e4e5",
-  "0066_mcp_over_postgrest.sql": "38af9ca2639ad25b0b49312add815610c5f4a720415c14181bbbdc8b79d1d8e9"
+  "0066_mcp_over_postgrest.sql": "38af9ca2639ad25b0b49312add815610c5f4a720415c14181bbbdc8b79d1d8e9",
+  "0067_projects_attach_to_sources.sql": "05aa280b44cf000136200322338aedec5b009de4076f425516bf829877306b8f",
+  "0068_mcp_can_write.sql": "4284721f01333da1445d3876b90926ddeddf566b491db9c5b2d98981d9569b07",
+  "0069_fingerprint_without_an_extension.sql": "4079dbb67db2d3d9a465cac40ab7c7b6d7d06a07424dd408faa8bf44dd60a9fd"
 }

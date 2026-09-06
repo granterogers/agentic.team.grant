@@ -116,9 +116,19 @@ await db.execute(`
 `)
 
 const project = await one<{ id: string }>(`
-  insert into public.projects (slug, name)
-  values (${lit(PROJECT_SLUG)}, ${lit(PROJECT_NAME)})
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name)
+    values (${lit(PROJECT_SLUG)}, ${lit(PROJECT_NAME)})
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const PROJECT_ID = String(project?.id)
 const CORRELATION = PROJECT_ID

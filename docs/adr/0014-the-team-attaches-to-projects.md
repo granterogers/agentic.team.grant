@@ -1,6 +1,7 @@
 # ADR-0014 — The team attaches to projects; it does not own them
 
-**Date:** 2026-09-06 · **Status:** proposed — the decision is Grant's
+**Date:** 2026-09-06 · **Status:** accepted, with three corrections from Grant
+the same day (marked ▸ below)
 **Extends ADR-0013. Scopes what Team HQ becomes.**
 
 ---
@@ -114,6 +115,32 @@ it hands a general-purpose model a door into the system:
 It is not project management. No Gantt charts, no task board, no notion of
 "done". The team reads the project, contributes to it, and records what it did.
 If Grant wants a task board he should keep using one and attach it.
+
+## Consequences
+
+### ▸ Grant's corrections
+
+**1. Notion and NotebookLM are not symmetrical.** *"Notion doesn't really need
+to push anything out. Notion just kind of stores stuff and we grab things from
+Notion. Notebook generates things."* Sharper than this ADR had it, and it makes
+the defaults obvious: Notion is a source and the home for **documents**;
+NotebookLM is a source and the home for **artifacts**. Neither is the home for
+the other's kind, which is why `artifact_kind` is a column on the attachment
+rather than a property of the connector.
+
+**2. Obsidian is not synced at all.** *"Don't bother syncing to Obsidian by
+default. Just have it there at the front end as an option to push the current
+database to Obsidian."* So it is a `mirror`, manual, one-way, on a button. Not
+built yet, and correctly the last thing on the list.
+
+**3. Read-only was the wrong default for MCP.** *"It's not really great if the
+MCP has read-only access. It needs to be able to write as well."* Right, and it
+was chosen by a bad analogy with Team HQ — a dashboard is for looking at; an MCP
+client is a working surface, and a conversation that cannot leave anything
+behind is one you transcribe by hand afterwards. Writing shipped the same day:
+three verbs (add a document, enqueue notebook work, nothing else), scoped per
+client, every call recorded. A client still cannot edit or delete, because
+adding is recoverable by a human in one statement and the other two are not.
 
 ## Consequences
 

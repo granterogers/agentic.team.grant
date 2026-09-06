@@ -160,11 +160,34 @@ export const ensureProject = async (
   const base = slugify(name)
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const slug = attempt === 0 ? base : `${base}-${String(attempt + 1)}`
+    // The project AND its attachment, in one statement.
+    //
+    // 0067 requires an active project to be attached to something real, checked
+    // by a deferred constraint trigger — so a project inserted alone fails at
+    // commit, which is exactly what happened the first time this ran after that
+    // migration: the sync reported "created 0 projects" and every downstream
+    // check in `verify:sync` went red at once.
+    //
+    // The right fix is not to exempt the sync. A project discovered by syncing
+    // a notebook IS attached to that notebook; it simply was not saying so.
+    // Writing both here makes the constraint true rather than tolerated, and a
+    // CTE keeps them one transaction without the caller having to remember.
     const inserted = await db.execute(`
-      insert into public.projects (slug, name, notebook_ref, status)
-      values (${lit(slug)}, ${lit(name)}, ${lit(notebook.id)}, 'active')
-      on conflict do nothing
-      returning project_id::text as project_id
+      with created as (
+        insert into public.projects (slug, name, notebook_ref, status)
+        values (${lit(slug)}, ${lit(name)}, ${lit(notebook.id)}, 'active')
+        on conflict do nothing
+        returning project_id
+      ),
+      attached as (
+        insert into public.project_attachments
+          (project_id, connector, external_ref, display_name, role)
+        select project_id, 'notebooklm', ${lit(notebook.id)}, ${lit(name)}, 'source'
+          from created
+        on conflict do nothing
+        returning project_id
+      )
+      select project_id::text as project_id from created
     `)
     const id = inserted.rows[0]?.project_id
     if (typeof id === 'string') return { projectId: id, created: true }

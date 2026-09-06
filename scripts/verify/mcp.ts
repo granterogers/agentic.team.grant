@@ -40,9 +40,9 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const token = `mcp_${randomBytes(24).toString('base64url')}`
 await db.execute(`
-  insert into public.mcp_clients (client_id, display_name, token_sha256)
+  insert into public.mcp_clients (client_id, display_name, token_sha256, scopes)
   values (${lit(CLIENT)}, 'Verification client',
-          ${lit(createHash('sha256').update(token).digest('hex'))})
+          ${lit(createHash('sha256').update(token).digest('hex'))}, array['read'])
 `)
 
 const call = async (
@@ -88,7 +88,7 @@ const tools = ((listed.body.result as { tools?: { name: string }[] } | undefined
 record(
   'CONTROL: the verification token IS accepted, so the refusals above are about the token',
   `http ${String(listed.status)}, tools: ${tools.join(', ')}`,
-  listed.status === 200 && tools.length === 5,
+  listed.status === 200 && tools.length === 10,
 )
 
 // --- the handshake a client actually performs ---------------------------------
@@ -100,12 +100,16 @@ record(
   `name=${String(serverInfo?.serverInfo?.name)} instructions=${String((serverInfo?.instructions ?? '').length)} chars`,
   serverInfo?.serverInfo?.name === 'ai-team-hq' && (serverInfo.instructions ?? '').length > 100,
 )
-// The instructions must say read-only, or a client will try to write and be
-// confused by the refusal rather than never attempting it.
+// The instructions must say what a client may and may not do. They said
+// "read-only" until writing was added, and this check caught the stale
+// sentence — which is the whole reason to assert on the content of a prompt
+// rather than only on its length: an instruction that is out of date is worse
+// than a short one, because a model believes it.
+const instructions = serverInfo?.instructions ?? ''
 record(
-  'and those instructions say the corpus is read-only',
-  /read-only/i.test(serverInfo?.instructions ?? '') ? 'says read-only' : 'does NOT say read-only',
-  /read-only/i.test(serverInfo?.instructions ?? ''),
+  'the instructions say what a client may do, and what it may not',
+  instructions.slice(0, 90),
+  /add/i.test(instructions) && /cannot (edit|delete)|not edit|not delete/i.test(instructions),
 )
 
 // --- the tool list is fixed ---------------------------------------------------
@@ -154,6 +158,116 @@ record(
   "no tool exposes Grant's own messages",
   commandTool === undefined ? 'none' : `EXPOSED BY: ${commandTool}`,
   commandTool === undefined,
+)
+
+// --- write is a scope, not a default -------------------------------------------
+//
+// The verification client is deliberately read-only, so every write tool must
+// refuse it. The check that matters is that it refuses BEFORE doing anything —
+// a client that can make the attempt and fail is a client that got a turn at
+// the database.
+
+for (const [tool, args] of [
+  ['add_to_project', { project: 'ai-team-hq-test', title: 'should not exist', content: 'no' }],
+  ['notebook_generate', { project: 'ai-team-hq-test', kind: 'audio' }],
+  [
+    'push_to_notebook',
+    { project: 'ai-team-hq-test', document_id: '00000000-0000-4000-8000-000000000000' },
+  ],
+  ['ask_notebook', { project: 'ai-team-hq-test', question: 'anything' }],
+] as const) {
+  const r = await call('tools/call', { name: tool, arguments: args })
+  const message = (r.body.error as { message?: string } | undefined)?.message ?? ''
+  record(
+    `${tool} refuses a read-only client`,
+    message === '' ? 'NOT REFUSED' : message.slice(0, 60),
+    message.includes('write scope'),
+  )
+}
+
+// And nothing was written by the attempts.
+const leftBehind = (
+  await db.execute(
+    `select count(*)::int as n from public.documents where added_by = ${lit(CLIENT)}`,
+  )
+).rows[0] as { n: number }
+record(
+  'and the refused writes wrote nothing',
+  `${String(leftBehind.n)} document(s) attributable to this client`,
+  leftBehind.n === 0,
+)
+
+// The inverse, on a client that DOES have the scope. Without it, every refusal
+// above would pass equally against a write path that is simply broken.
+const writeToken = `mcp_${randomBytes(24).toString('base64url')}`
+const WRITER = `${CLIENT}-w`
+await db.execute(`
+  insert into public.mcp_clients (client_id, display_name, token_sha256, scopes)
+  values (${lit(WRITER)}, 'Verification writer',
+          ${lit(createHash('sha256').update(writeToken).digest('hex'))}, array['read','write'])
+`)
+const written = await call(
+  'tools/call',
+  {
+    name: 'add_to_project',
+    arguments: {
+      project: 'ai-team-hq-test',
+      title: `Verification note ${run}`,
+      content: `Written by verify:mcp, run ${run}. Safe to delete.`,
+    },
+  },
+  writeToken,
+)
+const writtenText = String(
+  ((written.body.result as { content?: { text?: string }[] } | undefined)?.content ?? [])[0]
+    ?.text ?? '',
+)
+record(
+  'CONTROL: a client WITH the write scope can add a document',
+  writtenText.includes('document_id') ? 'added' : writtenText.slice(0, 80),
+  writtenText.includes('document_id') && !writtenText.includes('"duplicate": true'),
+)
+
+// The same content twice is one document. A model asked to "add the summary"
+// twice in one conversation would otherwise add it twice, and no-duplicates is
+// the requirement Grant stated first.
+const again = await call(
+  'tools/call',
+  {
+    name: 'add_to_project',
+    arguments: {
+      project: 'ai-team-hq-test',
+      title: `Verification note ${run}`,
+      content: `Written by verify:mcp, run ${run}. Safe to delete.`,
+    },
+  },
+  writeToken,
+)
+const againText = String(
+  ((again.body.result as { content?: { text?: string }[] } | undefined)?.content ?? [])[0]?.text ??
+    '',
+)
+record(
+  'the same content added twice is one document, not two',
+  againText.includes('"duplicate": true') ? 'refused as duplicate' : againText.slice(0, 80),
+  againText.includes('"duplicate": true'),
+)
+
+// A write tool must not accept a project that does not exist, and must say so
+// rather than inventing one.
+const nowhere = await call(
+  'tools/call',
+  { name: 'add_to_project', arguments: { project: 'no-such-project', title: 'x', content: 'y' } },
+  writeToken,
+)
+const nowhereText = String(
+  ((nowhere.body.result as { content?: { text?: string }[] } | undefined)?.content ?? [])[0]
+    ?.text ?? '',
+)
+record(
+  'adding to a project that does not exist is refused, not invented',
+  nowhereText.slice(0, 70),
+  nowhereText.includes('no active project'),
 )
 
 // --- every call is recorded (§11) ---------------------------------------------
@@ -210,8 +324,9 @@ const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 
 await db.execute(`
-  delete from public.mcp_calls where client_id = ${lit(CLIENT)};
-  delete from public.mcp_clients where client_id = ${lit(CLIENT)};
+  delete from public.documents where added_by = ${lit(WRITER)};
+  delete from public.mcp_calls where client_id in (${lit(CLIENT)}, ${lit(WRITER)});
+  delete from public.mcp_clients where client_id in (${lit(CLIENT)}, ${lit(WRITER)});
 `)
 console.log('verification client removed.')
 

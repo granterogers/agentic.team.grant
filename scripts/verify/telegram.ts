@@ -484,9 +484,19 @@ const pager = new TelegramPager(db, telegram, { botId: BOT_ID, subject: 'fixture
 // fails the insert. Worth the two extra statements: a fixture that cannot be
 // stored is a fixture that proves the delivery path was never reached.
 const fixtureProject = await one<{ id: string }>(`
-  insert into public.projects (slug, name)
-  values (${lit(`fixture-telegram-${stamp}`)}, 'Telegram pager verification fixture')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name)
+    values (${lit(`fixture-telegram-${stamp}`)}, 'Telegram pager verification fixture')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const fixtureJob = await one<{ id: string; correlation_id: string }>(`
   insert into public.jobs

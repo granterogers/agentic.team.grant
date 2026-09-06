@@ -70,6 +70,13 @@ if (clientArg !== undefined) {
       .filter((a) => !a.startsWith('--'))
       .slice(2)
       .join(' ') || clientId
+  // Read AND write by default. Read-only was the original choice, by analogy
+  // with Team HQ, where it is right because a dashboard is for looking at. An
+  // MCP client is a working surface: a conversation that cannot leave anything
+  // behind is one you transcribe by hand afterwards, which is the job this
+  // system exists to remove. `--read-only` is there for a client that should
+  // not write.
+  const scopes = process.argv.includes('--read-only') ? "array['read']" : "array['read','write']"
   // 32 bytes of urandom, base64url. `mcp_` so a leaked one is recognisable in a
   // log and the secret scanner can be taught its shape.
   token = `mcp_${randomBytes(32).toString('base64url')}`
@@ -77,14 +84,18 @@ if (clientArg !== undefined) {
 
   await db.execute(`
     insert into public.mcp_clients (client_id, display_name, token_sha256, scopes)
-    values (${lit(clientId)}, ${lit(displayName)}, ${lit(hash)}, array['read'])
+    values (${lit(clientId)}, ${lit(displayName)}, ${lit(hash)}, ${scopes})
     on conflict (client_id) do update
       set token_sha256 = excluded.token_sha256,
           display_name = excluded.display_name,
+          scopes = excluded.scopes,
           enabled = true,
           disabled_reason = null
   `)
-  console.log(`client "${clientId}" registered (rotates the token if it existed)`)
+  console.log(
+    `client "${clientId}" registered ${scopes.includes('write') ? 'read+write' : 'read-only'} ` +
+      '(rotates the token if it existed)',
+  )
 }
 
 // --- verify, by its answers ---------------------------------------------------
@@ -141,8 +152,9 @@ if (token !== null) {
         `<b>MCP · ${escapeHtml(clientId)}</b>\n\nAdd this as a remote MCP server:\n\n` +
         `URL\n<code>${escapeHtml(endpoint)}</code>\n\n` +
         `Authorization header\n<code>Bearer ${escapeHtml(token)}</code>\n\n` +
-        `<i>Read-only: ${String(toolCount)} tools over the projects, the corpus, the ` +
-        `staff and recent work. Delete this message once it is set up. Revoke with ` +
+        `<i>${String(toolCount)} tools: read the projects, the corpus, the staff and ` +
+        `recent work; add documents; ask the notebook to generate things. Delete this ` +
+        `message once it is set up. Revoke with ` +
         `npm run mcp:revoke -- --client=${escapeHtml(clientId)}.</i>`,
       silent: false,
     },

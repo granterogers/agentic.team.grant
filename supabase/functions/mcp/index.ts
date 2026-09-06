@@ -47,7 +47,13 @@ interface ToolSpec {
   readonly description: string
   readonly fn: string
   readonly schema: Record<string, unknown>
-  readonly args: (input: Record<string, unknown>) => Record<string, unknown>
+  /**
+   * `write` tools require the scope. Declared per tool rather than inferred
+   * from the name, because "does this change anything" is the one property
+   * that must never be a guess about a string.
+   */
+  readonly write?: boolean
+  readonly args: (input: Record<string, unknown>, clientId: string) => Record<string, unknown>
 }
 
 /**
@@ -128,6 +134,143 @@ const TOOLS: Readonly<Record<string, ToolSpec>> = {
     },
     args: (i) => ({ p_limit: i.limit === undefined ? 20 : Number(i.limit) }),
   },
+
+  // --- writing -------------------------------------------------------------
+  //
+  // Three verbs and no more. A client cannot delete, cannot edit an existing
+  // document, and cannot change a project's configuration. Adding is
+  // recoverable in one statement by a human; editing and deleting are not, and
+  // a general-purpose model's judgement about what is irreversible is worse
+  // than its reach.
+
+  add_to_project: {
+    description:
+      'Save text into a project as a document — a decision, a summary, a set ' +
+      'of notes from this conversation. It becomes searchable immediately and ' +
+      'is attributed to this client. Identical content is not added twice. Use ' +
+      'this when the user says to put something in the project.',
+    fn: 'mcp_add_document',
+    write: true,
+    schema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project slug, from list_projects.' },
+        title: { type: 'string', description: 'A short descriptive title.' },
+        content: { type: 'string', description: 'The text to save, in full.' },
+      },
+      required: ['project', 'title', 'content'],
+    },
+    args: (i, clientId) => ({
+      p_client_id: clientId,
+      p_project: String(i.project ?? ''),
+      p_title: String(i.title ?? ''),
+      p_content: String(i.content ?? ''),
+    }),
+  },
+
+  notebook_generate: {
+    description:
+      "Ask NotebookLM to generate something from a project's notebook: an " +
+      'audio overview, slide deck, video, mind map, report, infographic, quiz, ' +
+      'flashcards or study guide. These take minutes, so this returns a job id ' +
+      'immediately — call check_job with it. Requires the project to have a ' +
+      'notebook attached.',
+    fn: 'mcp_enqueue',
+    write: true,
+    schema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project slug, from list_projects.' },
+        kind: {
+          type: 'string',
+          enum: [
+            'audio',
+            'slides',
+            'video',
+            'mindmap',
+            'report',
+            'infographic',
+            'quiz',
+            'flashcards',
+            'study_guide',
+          ],
+        },
+        instructions: {
+          type: 'string',
+          description: 'Optional steer, e.g. "two minutes, focus on the risks".',
+        },
+      },
+      required: ['project', 'kind'],
+    },
+    args: (i, clientId) => ({
+      p_client_id: clientId,
+      p_project: String(i.project ?? ''),
+      p_kind: 'notebook.generate',
+      p_payload: {
+        kind: String(i.kind ?? ''),
+        instructions: i.instructions === undefined ? null : String(i.instructions),
+      },
+    }),
+  },
+
+  push_to_notebook: {
+    description:
+      "Copy a document from the project's corpus into its NotebookLM notebook, " +
+      'so the notebook can generate from it. Returns a job id; call check_job.',
+    fn: 'mcp_enqueue',
+    write: true,
+    schema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string' },
+        document_id: { type: 'string', description: 'From search_documents.' },
+      },
+      required: ['project', 'document_id'],
+    },
+    args: (i, clientId) => ({
+      p_client_id: clientId,
+      p_project: String(i.project ?? ''),
+      p_kind: 'notebook.push_document',
+      p_payload: { document_id: String(i.document_id ?? '') },
+    }),
+  },
+
+  ask_notebook: {
+    description:
+      "Ask NotebookLM a question about a project's notebook sources. It answers " +
+      'with citations into those sources, which is different from ' +
+      'search_documents — that searches our own cached copies. Returns a job ' +
+      'id; call check_job.',
+    fn: 'mcp_enqueue',
+    write: true,
+    schema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string' },
+        question: { type: 'string' },
+      },
+      required: ['project', 'question'],
+    },
+    args: (i, clientId) => ({
+      p_client_id: clientId,
+      p_project: String(i.project ?? ''),
+      p_kind: 'notebook.ask',
+      p_payload: { question: String(i.question ?? '') },
+    }),
+  },
+
+  check_job: {
+    description:
+      'The state of a job started by notebook_generate, push_to_notebook or ' +
+      'ask_notebook, and its output when it has finished.',
+    fn: 'mcp_job_status',
+    schema: {
+      type: 'object',
+      properties: { job_id: { type: 'string' } },
+      required: ['job_id'],
+    },
+    args: (i) => ({ p_job_id: String(i.job_id ?? '') }),
+  },
 }
 
 const sha256 = async (v: string): Promise<string> => {
@@ -206,10 +349,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
         // corpus is one team's and read-only will not try to write to it.
         instructions:
           "This is one person's private AI team. It holds their projects, the " +
-          'documents attached to them, and the work the team has produced. It is ' +
-          'read-only. Search before answering questions about the projects, and ' +
-          'cite the documents you use. Output marked evidence "inferred" was ' +
-          'written by a model and is not established fact.',
+          'documents attached to them, and the work the team has produced. ' +
+          'Search before answering questions about the projects, and cite the ' +
+          'documents you use. Output marked evidence "inferred" was written by a ' +
+          'model and is not established fact. You may add documents to a project ' +
+          'and ask its notebook to generate things; you cannot edit or delete ' +
+          'anything, so add rather than replace.',
       },
     })
   }
@@ -251,7 +396,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     try {
-      const result = await rpc(spec.fn, spec.args(input))
+      // The scope check, before the call rather than inside the projection: a
+      // read-only client must not be able to make the attempt, not merely fail
+      // at it.
+      if (spec.write === true && !(client.scopes ?? []).includes('write')) {
+        await rpc('mcp_record_call', {
+          p_client_id: client.client_id,
+          p_tool: name,
+          p_arguments: input,
+          p_outcome: 'refused',
+        }).catch(() => undefined)
+        return rpcError(id, -32_602, `${name} needs the write scope; this client is read-only`)
+      }
+
+      const result = await rpc(spec.fn, spec.args(input, client.client_id))
       const rows = Array.isArray(result) ? result.length : 1
       await rpc('mcp_record_call', {
         p_client_id: client.client_id,

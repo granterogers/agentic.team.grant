@@ -1,0 +1,197 @@
+/**
+ * NotebookLM write actions, from TypeScript.
+ *
+ * The read side is `live-adapter.ts`; this is separate because the two carry
+ * different risk. A read that fails costs a retry. A write that half-succeeds
+ * leaves something in Grant's notebook that nothing in Postgres knows about,
+ * and a notebook has no transaction to roll it back with.
+ *
+ * ## What this is FOR
+ *
+ * Grant's reason for the Python binding, in his words: *"so that through Claude
+ * you can tell it to generate an audio overview, a presentation, all the stuff
+ * that the notebook does."* NotebookLM's value here is that it **produces** —
+ * Notion stores, the notebook generates — so these are the productive actions
+ * plus what is needed to feed them.
+ *
+ * ## Generation does not wait, on purpose
+ *
+ * An audio overview takes minutes. Blocking a tool call for four minutes is a
+ * tool call that times out in every MCP client, so `generate` starts the work
+ * and returns an id, and `poll` reports on it. Two calls is a worse interface
+ * than one and it is the honest one: the alternative appears to work and fails
+ * on the first real artifact.
+ */
+
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import type { SqlExecutor } from '../db/executor.ts'
+
+const run = promisify(execFile)
+
+/** Generous: adding a URL source makes Google fetch and process the page. */
+const ACTION_TIMEOUT_MS = 120_000
+
+export type ArtifactKind =
+  | 'audio'
+  | 'slides'
+  | 'video'
+  | 'mindmap'
+  | 'report'
+  | 'infographic'
+  | 'quiz'
+  | 'flashcards'
+  | 'study_guide'
+
+export const ARTIFACT_KINDS: readonly ArtifactKind[] = [
+  'audio',
+  'slides',
+  'video',
+  'mindmap',
+  'report',
+  'infographic',
+  'quiz',
+  'flashcards',
+  'study_guide',
+]
+
+export class NotebookActionError extends Error {
+  constructor(
+    readonly action: string,
+    readonly detail: string,
+  ) {
+    super(`notebook ${action} failed: ${detail}`)
+    this.name = 'NotebookActionError'
+  }
+}
+
+export class NotebookActions {
+  private constructor(private readonly storageState: string) {}
+
+  /**
+   * Build from the vault, or null when there is no credential.
+   *
+   * Null rather than throwing: no credential is a normal state — the
+   * integration is §17-disableable and was off for two days this week — and a
+   * caller that must handle "off" anyway should not also handle an exception.
+   */
+  static async fromVault(db: SqlExecutor): Promise<NotebookActions | null> {
+    const { rows } = await db.execute(
+      `select decrypted_secret as s from vault.decrypted_secrets
+        where name = 'notebook.storage_state'`,
+    )
+    const state = rows[0]?.s === undefined ? '' : String(rows[0].s)
+    return state === '' ? null : new NotebookActions(state)
+  }
+
+  private async act(
+    action: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    let stdout: string
+    try {
+      const result = await run(
+        'python3',
+        ['scripts/notebook/act.py', action, JSON.stringify(args)],
+        {
+          // Through the environment, not argv: argv is world-readable in `ps`,
+          // and this is a Google session cookie.
+          env: { ...process.env, NOTEBOOK_STORAGE_STATE: this.storageState },
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: ACTION_TIMEOUT_MS,
+        },
+      )
+      stdout = result.stdout
+    } catch (error) {
+      const e = error as { stdout?: string; message?: string }
+      // The runner prints `{"ok":false,…}` and exits 1 for a handled failure,
+      // so its stdout is worth reading even on a non-zero exit.
+      const text = (e.stdout ?? '').trim()
+      if (text !== '') {
+        try {
+          const parsed = JSON.parse(text.slice(text.indexOf('{'))) as { error?: string }
+          throw new NotebookActionError(action, String(parsed.error ?? text).slice(0, 300))
+        } catch (parseError) {
+          if (parseError instanceof NotebookActionError) throw parseError
+        }
+      }
+      throw new NotebookActionError(action, (e.message ?? 'no output').slice(0, 300))
+    }
+
+    const start = stdout.indexOf('{')
+    if (start === -1) throw new NotebookActionError(action, 'the runner produced no JSON')
+    const parsed = JSON.parse(stdout.slice(start)) as Record<string, unknown>
+    if (parsed.ok !== true) {
+      throw new NotebookActionError(action, String(parsed.error ?? 'unknown failure').slice(0, 300))
+    }
+    return parsed
+  }
+
+  /** Put text into a notebook as a source. */
+  async addText(notebookId: string, text: string, title?: string): Promise<string | null> {
+    const r = await this.act('add_text', { notebook_id: notebookId, text, title })
+    return r.source_id === undefined || r.source_id === null ? null : String(r.source_id)
+  }
+
+  /** Put a URL into a notebook as a source; Google fetches and processes it. */
+  async addUrl(notebookId: string, url: string): Promise<string | null> {
+    const r = await this.act('add_url', { notebook_id: notebookId, url })
+    return r.source_id === undefined || r.source_id === null ? null : String(r.source_id)
+  }
+
+  /** Write a note — a conclusion, back where Grant will read it. */
+  async createNote(notebookId: string, content: string, title?: string): Promise<string | null> {
+    const r = await this.act('create_note', { notebook_id: notebookId, content, title })
+    return r.note_id === undefined || r.note_id === null ? null : String(r.note_id)
+  }
+
+  /**
+   * Start an artifact. Returns immediately with a task id.
+   *
+   * A generator returns `GenerationStatus` — `task_id`, `status`, `url` — and
+   * not an Artifact. Reading `.id` off it returned null, and the caller
+   * cheerfully reported "generation started" with nothing to follow up: a
+   * plausible success that could never be checked. Follow it with `artifacts`.
+   */
+  async generate(
+    notebookId: string,
+    kind: ArtifactKind,
+    instructions?: string,
+  ): Promise<{ taskId: string | null; state: string }> {
+    const r = await this.act('generate', { notebook_id: notebookId, kind, instructions })
+    return {
+      taskId: r.task_id === undefined || r.task_id === null ? null : String(r.task_id),
+      state: String(r.state ?? 'generating'),
+    }
+  }
+
+  /** What the notebook holds now. How a started generation is followed. */
+  async artifacts(
+    notebookId: string,
+  ): Promise<readonly { artifactId: string; title: string | null; status: string }[]> {
+    const r = await this.act('artifacts', { notebook_id: notebookId })
+    return ((r.artifacts ?? []) as Record<string, unknown>[]).map((a) => ({
+      artifactId: String(a.artifact_id),
+      title: a.title === undefined || a.title === null ? null : String(a.title),
+      status: String(a.status ?? ''),
+    }))
+  }
+
+  async poll(
+    notebookId: string,
+    artifactId: string,
+  ): Promise<{ state: string; title: string | null; url: string | null }> {
+    const r = await this.act('poll', { notebook_id: notebookId, artifact_id: artifactId })
+    return {
+      state: String(r.state ?? 'unknown'),
+      title: r.title === undefined || r.title === null ? null : String(r.title),
+      url: r.url === undefined || r.url === null ? null : String(r.url),
+    }
+  }
+
+  /** Ask the notebook about its own sources. */
+  async ask(notebookId: string, question: string): Promise<string> {
+    const r = await this.act('ask', { notebook_id: notebookId, question })
+    return String(r.answer ?? '')
+  }
+}

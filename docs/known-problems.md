@@ -14,20 +14,22 @@ shapes recur. Nothing there is outstanding.
 
 ## 🔴 Serious — act on these
 
-### 1. Credentials are not in the backup
+### 1. The vault export is a manual habit, not a schedule
 
-The nightly dump is `--schema=public --schema=app`. Supabase Vault lives in
-`vault` and is excluded — correctly, since a backup carrying decryptable secrets
-offsite would be a worse problem — but it means **a restore produces a working
-database with an empty vault**, and every secret must be re-entered by hand.
+`npm run vault:export` now exists: it reads all twenty-two secrets, writes a
+Bitwarden-format JSON, encrypts it with AES-256 and a random passphrase, and
+sends the file and the passphrase as **two separate Telegram messages**. Nothing
+is printed and nothing is written outside a temp directory that is removed even
+on failure. First run was 2026-09-06.
 
-There are now twenty-two of them, including six Telegram bot tokens and a Notion
-token that only exists in the vault. The rehearsal prints the list every night.
+That closes the acute problem — a restore no longer means re-entering
+twenty-two secrets from memory — and leaves a smaller one: it runs when someone
+remembers. The nightly backup still excludes `vault` and still should, so until
+this is on the same schedule as the dump, a secret added on Tuesday is not in
+any export until someone runs the command.
 
-**What has to happen:** copy the vault contents into a password manager. Until
-that exists, the password-manager gap *is* the credential backup gap, and it is
-the one thing on this page that could turn a recoverable incident into a lost
-weekend.
+**What has to happen:** put it on the backup cron, and import the file Grant
+already has.
 
 ---
 
