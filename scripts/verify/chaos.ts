@@ -324,7 +324,211 @@ const output = (): HandlerOutput =>
 }
 
 // ---------------------------------------------------------------------------
-// 5. CONTROL: the injection is real
+// 5. §18: a channel DISABLED is not the same as a channel down
+// ---------------------------------------------------------------------------
+
+// An outage is something that happened to us; a kill switch is a decision we
+// made. §17 requires the second to be possible without collateral damage, and
+// the two paths through the code are different — one throws at the transport,
+// the other never reaches it.
+{
+  await db.execute(`
+    update public.slack_app_credentials
+       set enabled = false, disabled_reason = 'verify:chaos — deliberately switched off'
+     where enabled and revoked_at is null
+  `)
+  const stillPaging = await one(`
+    select count(*)::int as n from public.telegram_bots where is_pager and enabled
+  `)
+  const slackOff = await one(`
+    select count(*)::int as n from public.slack_app_credentials where enabled
+  `)
+  record(
+    'Slack switched off (§17): the pager is untouched by the decision',
+    `enabled slack installs=${String(slackOff?.n)}, enabled pagers=${String(stillPaging?.n)}`,
+    Number(slackOff?.n) === 0 && Number(stillPaging?.n) === 1,
+  )
+
+  // And the corpus, the jobs and the registry are all still there. Turning off
+  // a surface must not touch anything behind it.
+  const behind = await one(`
+    select (select count(*)::int from public.documents) as docs,
+           (select count(*)::int from public.usable_models) as models,
+           (select count(*)::int from public.projects where status = 'active') as projects
+  `)
+  record(
+    'Slack switched off: nothing behind the surface was affected',
+    `documents=${String(behind?.docs)} models=${String(behind?.models)} active projects=${String(behind?.projects)}`,
+    Number(behind?.docs) >= 1 && Number(behind?.models) >= 1,
+  )
+
+  await db.execute(`
+    update public.slack_app_credentials
+       set enabled = true, disabled_reason = null
+     where disabled_reason = 'verify:chaos — deliberately switched off'
+  `)
+  const restored = await one(
+    `select count(*)::int as n from public.slack_app_credentials where enabled`,
+  )
+  record(
+    'and Slack is switched back on, exactly as it was found',
+    `enabled installs=${String(restored?.n)}`,
+    Number(restored?.n) >= 1,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 6. §18: crash after commit, before notification
+// ---------------------------------------------------------------------------
+
+// The named case, and the one with the most expensive wrong answer: a worker
+// dies between committing an output and delivering it. Recovery must not
+// re-run the work — the output exists — and must not silently drop the job.
+{
+  const crashed = await one(`
+    insert into public.jobs
+      (correlation_id, project_id, idempotency_key, kind, requested_by, priority,
+       state, leased_by, leased_until, started_at)
+    values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(`chaos-crash-${run}`)},
+            'chaos.probe', 'verify:chaos', 100, 'queued', 'worker-that-died',
+            app.now_utc() - interval '1 hour', app.now_utc() - interval '1 hour')
+    returning job_id::text as id
+  `)
+  const crashedId = String(crashed?.id)
+  // Walk it to `notifying` the way the worker does, then abandon it there.
+  // The real path through the fourteen-state machine (ADR-0008), not invented
+  // names — a first pass used 'claimed', 'planning', 'working' and the enum
+  // rejected all three, which is the constraint doing its job on a test that
+  // guessed at the states it was meant to be exercising.
+  for (const state of [
+    'running',
+    'output_created',
+    'quality_review',
+    'committing',
+    'committed',
+    'notifying',
+  ]) {
+    await db.execute(`
+      update public.jobs set state = ${lit(state)}::public.job_state, updated_at = app.now_utc() - interval '1 hour'
+       where job_id = ${lit(crashedId)}::uuid
+    `)
+  }
+  await db.execute(`
+    insert into public.outputs
+      (job_id, body, confidence, evidence, sources, contradictions, deterministic,
+       reviewer_status, reviewed_by, reviewed_at, model)
+    values (${lit(crashedId)}::uuid, ${lit(`Committed before the crash ${run}.`)}, 'medium',
+            'inferred', '[]'::jsonb, null, false, 'approved',
+            (select staff_id from public.staff where slug = 'quality-director'),
+            app.now_utc(), 'fixture')
+  `)
+
+  const { recoverStalled, deliverPending } = await import('../../src/jobs/worker.ts')
+  const recovered = await recoverStalled(db)
+  const after = await one(`
+    select state::text as state, state_reason,
+           (select count(*)::int from public.outputs o where o.job_id = j.job_id) as outputs
+      from public.jobs j where j.job_id = ${lit(crashedId)}::uuid
+  `)
+  record(
+    'crash after commit: recovery resumes DELIVERY rather than retrying the work',
+    `${String(recovered.length)} recovered; state=${String(after?.state)} reason=${String(after?.state_reason).slice(0, 70)}`,
+    after?.state === 'notifying' && String(after?.state_reason).includes('delivery outstanding'),
+  )
+
+  // The half that makes it real. Before 0058 nothing read `notifying`, so a
+  // correctly-recovered job would have parked there forever — the same "sweep
+  // to nowhere" as the requeue 0006 was written to close, one layer up.
+  const handlerRuns = 0
+  let deliveries = 0
+  const resumed = await deliverPending(db, `chaos-${run}`, async () => {
+    deliveries += 1
+    return { delivered: true, note: 'delivered on resume' }
+  })
+  const settled = await one(`
+    select state::text as state, state_reason,
+           (select count(*)::int from public.outputs o where o.job_id = j.job_id) as outputs
+      from public.jobs j where j.job_id = ${lit(crashedId)}::uuid
+  `)
+  record(
+    'the outstanding delivery is picked up and the job finishes',
+    `${String(resumed.length)} resumed, ${String(deliveries)} delivered; state=${String(settled?.state)}`,
+    deliveries === 1 && settled?.state === 'complete',
+  )
+  record(
+    'and the committed output is NOT duplicated — §18: no duplicate substantive work',
+    `${String(settled?.outputs)} output row(s); the handler ran ${String(handlerRuns)} more time(s)`,
+    Number(settled?.outputs) === 1 && handlerRuns === 0,
+  )
+  void handlerRuns
+}
+
+// ---------------------------------------------------------------------------
+// 7. §18: the same instruction through two interfaces, near-simultaneously
+// ---------------------------------------------------------------------------
+
+// §18 names this one specifically, and §22's rule is that the source interface
+// must not change the organisation's behaviour. Two channels, one instruction,
+// sent together: both must be recorded (they are genuinely two events from one
+// person) and both must resolve to the same person and the same text, so
+// nothing downstream can tell them apart on anything that matters.
+{
+  const instruction = `Simultaneous probe ${run}`
+  const [slackStored, telegramStored] = await Promise.all([
+    one(`
+      insert into public.inbound_commands
+        (origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values ('slack', ${lit(`C0BVD21Q9S5:sim-${run}`)}, 'U0BUNF6AALC',
+              ${lit(instruction)}, ${lit(`verify:chaos:sim-slack-${run}`)})
+      returning subject, instruction
+    `),
+    one(`
+      insert into public.inbound_commands
+        (origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values ('telegram', ${lit(`1386648496:sim-${run}`)}, '1386648496',
+              ${lit(instruction)}, ${lit(`verify:chaos:sim-telegram-${run}`)})
+      returning subject, instruction
+    `),
+  ])
+  record(
+    'the same instruction through two interfaces at once: both recorded, one person, one text',
+    `slack subject=${String(slackStored?.subject)} telegram subject=${String(telegramStored?.subject)}`,
+    slackStored?.subject === 'grant' &&
+      telegramStored?.subject === 'grant' &&
+      slackStored?.instruction === telegramStored?.instruction,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 8. §18: a transaction failure mid-job leaves no half-state
+// ---------------------------------------------------------------------------
+
+{
+  // A statement that does real work and then fails. Postgres rolls the whole
+  // thing back; the claim under test is that nothing in our schema defeats
+  // that with a trigger that writes outside the transaction.
+  const before = await one(`select count(*)::int as n from public.projects`)
+  let failedAs = 'nothing was refused'
+  try {
+    await db.execute(`
+      insert into public.projects (slug, name, status)
+        values (${lit(`fixture-chaos-rollback-${run}`)}, 'Rollback probe', 'active');
+      insert into public.projects (slug, name, status)
+        values (${lit(`fixture-chaos-rollback-${run}`)}, 'The same slug again', 'active');
+    `)
+  } catch (error) {
+    failedAs = (error as Error).message.match(/\b\d{5}\b/)?.[0] ?? 'unknown'
+  }
+  const after = await one(`select count(*)::int as n from public.projects`)
+  record(
+    'a transaction that fails part-way leaves NO half-state behind',
+    `refused with ${failedAs}; projects ${String(before?.n)} -> ${String(after?.n)}`,
+    failedAs === '23505' && Number(after?.n) === Number(before?.n),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 9. CONTROL: the injection is real
 // ---------------------------------------------------------------------------
 
 {
@@ -362,6 +566,7 @@ console.log(`provider breaker reset: available=${String(restored?.ok)}`)
 
 await db.execute(`
   delete from public.slack_channel_map where channel_id = ${lit(CHAOS_CHANNEL)};
+  delete from public.inbound_commands where dedupe_key like ${lit(`verify:chaos:%${run}`)};
   delete from public.deliveries where dedupe_key like ${lit(`chaos:${run}:%`)};
   delete from public.deliveries where job_id = ${lit(String(jobRow?.id))}::uuid;
   delete from public.outputs where job_id = ${lit(String(jobRow?.id))}::uuid;

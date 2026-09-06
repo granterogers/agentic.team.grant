@@ -55,5 +55,7 @@
   "0054_staff_have_their_own_bots.sql": "2a0cb821ddba88b8c4c32466c1302e042082783f615c94d693c748d3e8e1e658",
   "0055_the_chief_bots_real_username.sql": "a8ad6ded78d52d5cf7e5c5ff3c3ea24f1b02954b0dc4fa83a2afbbe1594c0680",
   "0056_one_person_across_every_interface.sql": "3d09afd740cfe0423bfc4be5843f1454866bd8db3228e58966372e8d9ea480b5",
-  "0057_subject_is_resolved_by_the_table.sql": "db255b77b6614b60371d7d32f3c71e3ea72ca806d3299fac4e6c040a10dba40d"
+  "0057_subject_is_resolved_by_the_table.sql": "db255b77b6614b60371d7d32f3c71e3ea72ca806d3299fac4e6c040a10dba40d",
+  "0058_committed_work_is_never_redone.sql": "65786b64296b250731d5dd9dbd3ec09aa8b5757bcfb0d649e1578227333f9c99",
+  "0059_the_rule_needs_both_halves.sql": "2400a683da8418de75dc30b54b9226fc17e497ee08b13d9903aed5bebf1601e4"
 }
