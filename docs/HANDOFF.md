@@ -42,7 +42,7 @@ Then run `npm run inventory` before trusting any credential.
 | · knowledge layer | ✅ ADR-0013 decided and built: `documents`, a connector registry, Postgres full-text search. Notion connected and waiting only on shared pages |
 | 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, a security pass over the live public surface, and **all but one** of §18's degradation cases — see [`degradation-coverage.md`](degradation-coverage.md). Remaining: §22's scenario A end to end |
 
-60 migrations · 657 unit tests · 21 live suites, 422 checks, all green (plus
+66 migrations · 657 unit tests · 22 live suites, 442 checks, all green (plus
 `verify:transitions`, which compares the two state machines rather than counting).
 
 **What Phase 10 has cost so far, which is the argument for doing it:** three
@@ -122,15 +122,21 @@ Do not add to this list in chat. It lives in
 reason is that surfacing needs one per turn is exactly what went wrong this
 week.
 
-1. **Share some Notion pages with the integration.** In Notion: open a page →
+1. **Add the MCP server to Claude.** The token is on your phone. Settings →
+   Connectors → Add custom connector, paste the URL and the `Authorization:
+   Bearer …` header. Five read-only tools over the projects, the corpus, the
+   staff and recent work — see
+   [`adr/0014`](adr/0014-the-team-attaches-to-projects.md). ChatGPT gets its own
+   token with `npm run deploy:mcp -- --client=chatgpt "ChatGPT"`.
+2. **Share some Notion pages with the integration.** In Notion: open a page →
    ⋯ → Connections → add **Agentic Team Grant**. Child pages come with it; a
    database has to be shared itself. Then `npm run notion:sync`. This is the
    only thing the connector waits on — the token is in the vault and works.
-2. **Two Telegram bots left** — Quality and Comms. Five arrived on 2026-09-06
+3. **Two Telegram bots left** — Quality and Comms. Five arrived on 2026-09-06
    and are registered, configured and answering. Roster and the one manual
    cosmetic step (BotFather `/setuserpic`) at
    [`telegram-bot-roster.md`](telegram-bot-roster.md).
-3. **Rotate the Notion token when convenient.** It was pasted into a chat
+4. **Rotate the Notion token when convenient.** It was pasted into a chat
    transcript on 2026-09-06, which is durable and searchable. Nothing is known
    to have leaked and the integration is scoped to what you share with it, so
    this is hygiene rather than an incident.

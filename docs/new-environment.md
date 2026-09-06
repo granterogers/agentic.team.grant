@@ -19,7 +19,7 @@ npm ci                    # ~40s
 npm run setup:python      # the NotebookLM adapter — one pip package, and nothing else installs it
 npm run check:secrets     # must print clean; if it does not, stop and read it
 npm run inventory         # which credentials are alive, and whose account each is on
-npm run verify:db         # the full live suite, ~25 minutes, 422 checks
+npm run verify:db         # the full live suite, ~30 minutes, 442 checks
 ```
 
 `npm run inventory` is the one that replaces conversation. It probes every

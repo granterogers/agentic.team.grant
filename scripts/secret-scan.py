@@ -90,6 +90,11 @@ PATTERNS = {
     "telegram bot token":     r"\b\d{8,12}:[A-Za-z0-9_\-]{30,}\b",
     "postgres url password":  r"postgres(?:ql)?://[^:\s/@]+:[^@\s]+@",
     "aws access key id":      r"\bAKIA[0-9A-Z]{16}\b",
+    # This project's own MCP client tokens (ADR-0014). Prefixed `mcp_` for
+    # exactly this reason: a credential shape we mint is a credential shape we
+    # can teach the scanner, and one that only ever exists in a vault-adjacent
+    # table and a Telegram message should never appear in a file.
+    "mcp client token":       r"\bmcp_[A-Za-z0-9_\-]{32,}",
     "private key block":      r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
     # Google session cookies (Gate 2). Distinct from an API key in kind, not
     # just in value: these authenticate as the signed-in human across Google,

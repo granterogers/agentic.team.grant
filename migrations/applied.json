@@ -61,5 +61,8 @@
   "0060_a_question_is_not_a_search_box.sql": "b20e08667ac4533adcc85e4b5bd08a18d7b9ff2ab1c39cb2d413ec126030d6d3",
   "0061_notebook_back_on.sql": "df3edec3edfc8c566c3ed56c9260f87ee79bf4d848498eb45c3d2aa2dd9cec92",
   "0062_connection_health.sql": "989918d11b42494645ae866e3136b557523d3a773c9e97588b8e9939963dd2b2",
-  "0063_a_light_nobody_checked.sql": "8203fbc3bf821097d69d6f63a295dff73bda76ec4f9541b779a5dccd61113041"
+  "0063_a_light_nobody_checked.sql": "8203fbc3bf821097d69d6f63a295dff73bda76ec4f9541b779a5dccd61113041",
+  "0064_mcp_clients.sql": "b70f95109935f196345e56ceb4620f7356a93f6823fa6992855176e9a4c9bf26",
+  "0065_what_mcp_can_see.sql": "e89c3e0e2f5e1832159d700ac6b2b4d679aa19301d9890884a8a0fdae695e4e5",
+  "0066_mcp_over_postgrest.sql": "38af9ca2639ad25b0b49312add815610c5f4a720415c14181bbbdc8b79d1d8e9"
 }
