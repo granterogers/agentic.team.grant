@@ -47,6 +47,8 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 }
 
 const AT = new Date()
+const MESSAGE_ID = 900_000 + (Date.now() % 90_000)
+const SLACK_TS = `${String(Math.floor(Date.now() / 1000))}.${String(Date.now() % 1000).padStart(3, '0')}100`
 const INSTRUCTION = `Research the trade-offs in storing a project canonically (${run})`
 
 // Real wire shapes, not shapes we invented — normalizing a fixture we wrote
@@ -61,7 +63,12 @@ const fromSlack = slackCommand(
       user: 'U0BUNF6AALC',
       channel: 'C0BVD21Q9S5',
       text: INSTRUCTION,
-      ts: `17887${run.slice(0, 5)}.000100`,
+      // A Slack ts is `seconds.microseconds`, and it is what the dedupe key is
+      // derived from. Built from the full clock rather than a truncated run
+      // stamp: the first five base-36 characters of a millisecond clock only
+      // change every forty seconds, so two runs in the same minute collided on
+      // `inbound_commands_dedupe` and it read as a product defect.
+      ts: SLACK_TS,
     },
   },
   'U0BUG0RPZ8B',
@@ -71,7 +78,11 @@ const fromTelegram = telegramCommand(
   {
     update_id: Number.parseInt(run.slice(-6), 36),
     message: {
-      message_id: 990_001,
+      // Unique per run. Telegram's dedupe key is derived from chat and message
+      // id, not from anything this suite chooses, so a constant message_id
+      // makes the suite passable exactly once — the second run collides on
+      // `inbound_commands_dedupe` and looks like a product defect.
+      message_id: MESSAGE_ID,
       date: Math.floor(AT.getTime() / 1000),
       chat: { id: 1_386_648_496, type: 'private' },
       from: { id: 1_386_648_496, is_bot: false },
@@ -165,9 +176,15 @@ for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 
+// Deleted by every identity the rows can carry, not just the run stamp: the
+// Telegram dedupe key is derived from chat and message id and contains no
+// stamp at all, so a cleanup that only matched the stamp left it behind.
 await db.execute(
-  `delete from public.inbound_commands where dedupe_key like ${lit(`%${run}%`)}
-     or origin_ref like ${lit(`%${run}%`)}`,
+  `delete from public.inbound_commands
+     where dedupe_key like ${lit(`%${run}%`)}
+        or origin_ref like ${lit(`%${run}%`)}
+        or dedupe_key = ${lit(fromTelegram.dedupe_key)}
+        or dedupe_key = ${lit(fromSlack.dedupe_key)}`,
 )
 console.log('fixtures removed.')
 

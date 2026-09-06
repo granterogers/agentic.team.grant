@@ -35,13 +35,22 @@ Then run `npm run inventory` before trusting any credential.
 | Phase | |
 |---|---|
 | 0–6 | ✅ complete |
-| 7 · communications | ✅ complete bar six Telegram bots (tokens only Grant can make) |
+| 7 · communications | ✅ complete. Five of seven staff bots exist and answer; the other two are BotFather clicks and nothing waits on them |
 | 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
 | 9 · Google ecosystem | 🟡 **unblocked but not scheduled** — ADR-0013 re-bases it: Calendar/Gmail/Drive read Grant's own data on his own account, which was always the supported path |
-| 10 · hardening | ⬜ **the obvious next move**, and it needs nobody |
+| · knowledge layer | ✅ ADR-0013 decided and built: `documents`, a connector registry, Postgres full-text search. Notion connected and waiting only on shared pages |
+| 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, and failure injection over seven of §18's twenty named cases. Remaining: the rest of §18, a security pass, and scenario A end to end |
 
-48 migrations · 583 unit tests · 15 live suites, ~300 checks, all green as of
-this evening.
+59 migrations · 642 unit tests · 20 live suites, 396 checks, all green (plus
+`verify:transitions`, which compares the two state machines rather than counting).
+
+**What Phase 10 has cost so far, which is the argument for doing it:** three
+real defects, none of which any existing suite could see. The router made one
+attempt at one model, so a single 429 failed a whole job. §31's exit criterion
+could not hold as written, because `actor` is channel-native. And a job that
+crashed after committing was re-run from scratch and produced a second
+output — the exact duplicate substantive work §18 forbids. Each was found by
+writing the test the spec asked for, not by reading the code.
 
 ---
 
