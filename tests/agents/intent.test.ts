@@ -28,6 +28,17 @@ describe('the classes it gets right outright', () => {
     ['I need you to draft the announcement', 'assignment'],
     ['Do the migration right now', 'direct_command'],
     ['Random thought, the onboarding feels long', 'thought'],
+    // A bare imperative. Before the `bare-imperative` rule these matched
+    // nothing and fell through to an unconfident `thought`, which convenes
+    // nobody — so the commonest way to delegate work was the one shape the
+    // router could not read. They are `light_investigation` and not
+    // `assignment` because §6 resolves an unbounded verb downward.
+    ['Research the trade-offs between Postgres and an external tool', 'light_investigation'],
+    ['Draft a plan for the knowledge layer', 'light_investigation'],
+    ['Compare the two hosting options', 'light_investigation'],
+    // CONTROL: the same verbs where they are not the instruction's imperative.
+    // Without the start-anchor these would read as work.
+    ['Review of the quarter is attached, no action needed', 'thought'],
   ])('%s -> %s', (text, expected) => {
     expect(classifyIntent(text).intent).toBe(expected)
   })

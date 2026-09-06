@@ -61,7 +61,18 @@ export interface ProvisionResult {
   readonly channelId: string | null
   readonly channelName: string
   readonly errorCode: string | null
+  /**
+   * What happened to the human invitation, for a channel we just created.
+   *
+   * Reported rather than silent because the first real project channel was
+   * created, posted into, and read by nobody: the bot was its only member, and
+   * every delivery check passed because each asks whether the message arrived
+   * and none asks whether it arrived to anyone.
+   */
+  readonly invited?: InviteOutcome
 }
+
+export type InviteOutcome = 'invited' | 'already_in_channel' | 'no_subject_configured' | 'failed'
 
 export class ChannelProvisioner {
   constructor(
@@ -100,13 +111,49 @@ export class ChannelProvisioner {
       const channel = body.channel as { id?: string; name?: string } | undefined
       const channelId = channel?.id ?? ''
       await this.map(channelId, channel?.name ?? name, projectId, true)
-      return { outcome: 'created', channelId, channelName: channel?.name ?? name, errorCode: null }
+      const invited = await this.inviteSubject(channelId)
+      return {
+        outcome: 'created',
+        channelId,
+        channelName: channel?.name ?? name,
+        errorCode: null,
+        invited,
+      }
     } catch (error) {
       if (!(error instanceof SlackApiError)) throw error
       if (error.code !== 'name_taken') {
         return { outcome: 'failed', channelId: null, channelName: name, errorCode: error.code }
       }
       return this.resolveNameTaken(projectId, name)
+    }
+  }
+
+  /**
+   * Invite the human this workspace exists for.
+   *
+   * Failure is reported, never thrown. A channel that exists and has the wrong
+   * membership is recoverable by one click; a provisioning call that throws
+   * because of an invitation leaves the project with no channel at all, which
+   * is the worse of the two by a distance.
+   */
+  private async inviteSubject(channelId: string): Promise<InviteOutcome> {
+    if (channelId === '') return 'failed'
+    const row = await this.one<{ user_id: string | null }>(
+      `select value #>> '{}' as user_id from public.system_config
+        where key = 'slack.subject_user_id'`,
+    )
+    const userId = row?.user_id
+    if (userId === undefined || userId === null || userId.trim() === '') {
+      return 'no_subject_configured'
+    }
+    try {
+      await this.slack.call('conversations.invite', { channel: channelId, users: userId })
+      return 'invited'
+    } catch (error) {
+      if (error instanceof SlackApiError && error.code === 'already_in_channel') {
+        return 'already_in_channel'
+      }
+      return 'failed'
     }
   }
 

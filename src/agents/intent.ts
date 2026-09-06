@@ -130,6 +130,23 @@ const RULES: readonly Rule[] = [
     pattern:
       /\b(?:quick(?:ly)?|briefly|rough(?:ly)?)\b.{0,30}\b(?:research|investigate|compare|review)\b/i,
   },
+  {
+    // A bare imperative opening the instruction — "Research the trade-offs",
+    // "Draft the announcement", "Compare the two options". The commonest way
+    // anyone actually delegates, and until this rule existed it matched
+    // nothing at all: it fell through to `thought`, unconfident, which
+    // convenes nobody and asks Grant to rephrase work he had already phrased.
+    //
+    // Deliberately `light_investigation` and not `assignment`, on §6's
+    // downward rule: an imperative says what to do, not how much of it, and
+    // the cheap reading of an unbounded verb is a bounded look. An explicit
+    // "I need you to …" still reads as an assignment, because that rule is
+    // about the delegation and not about the verb.
+    name: 'bare-imperative',
+    intent: 'light_investigation',
+    pattern:
+      /^(?:research|investigate|compare|review|draft|write|summari[sz]e|analy[sz]e|outline|assess|evaluate|audit)\s+(?!of\b)/i,
+  },
 
   // --- suggestion: an idea offered, not an instruction given.
   {

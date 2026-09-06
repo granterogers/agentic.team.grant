@@ -177,6 +177,22 @@ record(
   again.outcome === 'existing' && again.channelId === CHANNEL,
 )
 
+// The check this suite did not have. Fifty-six of them established that a
+// message reaches the channel; none established that the channel reaches a
+// person, and the first real project channel was therefore created, posted
+// into, and read by nobody — the bot was its only member. "Delivered" and
+// "delivered to somebody" are different claims and only the second is §12's.
+const members = await slack.call('conversations.members', { channel: CHANNEL, limit: 200 })
+const memberIds = Array.isArray(members.body.members) ? (members.body.members as string[]) : []
+const subject = await one<{ user_id: string | null }>(
+  `select value #>> '{}' as user_id from public.system_config where key = 'slack.subject_user_id'`,
+)
+record(
+  'the human is IN the channel the app created — a room with only a bot in it is not delivery',
+  `invited=${String(created.invited)} members=${String(memberIds.length)} subject_present=${String(memberIds.includes(String(subject?.user_id)))}`,
+  created.invited === 'invited' && memberIds.includes(String(subject?.user_id)),
+)
+
 record(
   'the proposed name is derived deterministically from the project slug',
   `${channelNameFor(PROJECT_SLUG)} == ${created.channelName}`,

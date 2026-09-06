@@ -112,6 +112,12 @@ const QUERY_METHODS: ReadonlySet<string> = new Set([
   'conversations.info',
   'conversations.history',
   'conversations.replies',
+  // Added after `conversations.members` returned `invalid_arguments` to a JSON
+  // body, exactly as `conversations.replies` had. The list is discovered one
+  // method at a time because Slack's tolerance for JSON is per-method and
+  // undocumented; a read added here is a read that will not fail this way.
+  'conversations.members',
+  'users.list',
   'users.info',
   'team.info',
   'chat.getPermalink',
@@ -124,6 +130,8 @@ const IDEMPOTENT_METHODS: ReadonlySet<string> = new Set([
   'conversations.info',
   'conversations.history',
   'conversations.replies',
+  'conversations.members',
+  'users.list',
   'conversations.join',
   'users.info',
   'team.info',

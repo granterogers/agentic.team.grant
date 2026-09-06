@@ -54,13 +54,21 @@ if (token === undefined) {
   process.exit(1)
 }
 
+// `--resend` asks for the same token again. The dedupe key below is deliberate
+// — it stops a re-run from sending a second copy of a token that is already in
+// the chat — but "I cannot find that message" is a real reason to want another,
+// and the alternative (deleting a delivery row by hand) is worse than a flag.
+const resend = process.argv.includes('--resend')
+
 const service = new DeliveryService(db, new TelegramTransport(telegram))
 const result = await service.deliver({
   // Keyed on the token itself, so re-running this does not send a second copy
   // of the same token — but a ROTATED token is a different message and does
   // send. The key is a hash rather than the token, because a dedupe key is
   // stored in the clear.
-  dedupeKey: `hq-token:${Buffer.from(String(token)).toString('base64url').slice(0, 24)}`,
+  dedupeKey:
+    `hq-token:${Buffer.from(String(token)).toString('base64url').slice(0, 24)}` +
+    (resend ? `:resend:${new Date().toISOString().slice(0, 16)}` : ''),
   accountRef: botId,
   targetRef: String(chat),
   purpose: 'notice',
