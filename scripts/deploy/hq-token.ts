@@ -18,16 +18,12 @@ import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { escapeHtml } from '../../src/telegram/message.ts'
+import { pagerBot } from '../../src/telegram/roster.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
-const botToken = process.env.TELEGRAM_CHIEF_BOT_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
   console.error('SUPABASE_ACCESS_TOKEN is required')
-  process.exit(2)
-}
-if (botToken === undefined || botToken === '') {
-  console.error('TELEGRAM_CHIEF_BOT_TOKEN is required — this is how the token is delivered')
   process.exit(2)
 }
 
@@ -35,8 +31,16 @@ const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   supabaseToken,
 )
-const telegram = new TelegramClient(botToken)
-const botId = String(((await telegram.call('getMe')).result as { id: number }).id)
+// The pager, from the registry (0054). Both its id and its token come from
+// the database, so this script no longer needs a second credential in its
+// environment to deliver the first one.
+const pager = await pagerBot(db)
+if (pager === null) {
+  console.error('no enabled pager bot with a resolvable token — see npm run telegram:roster')
+  process.exit(1)
+}
+const telegram = new TelegramClient(pager.token)
+const botId = pager.botId
 
 const chat = (await db.execute(`select app.telegram_chat_for('grant', '${botId}') as c`)).rows[0]?.c
 if (chat === null || chat === undefined) {

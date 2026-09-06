@@ -29,6 +29,7 @@
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { escapeHtml } from '../../src/telegram/message.ts'
+import { pagerBot } from '../../src/telegram/roster.ts'
 
 const [what, runUrl] = process.argv.slice(2)
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -41,16 +42,12 @@ const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
-const secret = async (name: string): Promise<string> =>
-  String(
-    (
-      await db.execute(
-        `select decrypted_secret as v from vault.decrypted_secrets where name = '${name.replace(/'/g, "''")}'`,
-      )
-    ).rows[0]?.v ?? '',
-  )
-
-const botToken = process.env.TELEGRAM_CHIEF_BOT_TOKEN ?? (await secret('telegram.chief_bot_token'))
+// The registry (0054) is where the pager's identity lives now, and the vault
+// is where its token lives. The environment is a fallback for a runner that
+// has one and no database reachable — not the source of truth, because a copy
+// of a rotating credential is a stale copy waiting to be believed.
+const pager = await pagerBot(db)
+const botToken = pager?.token ?? process.env.TELEGRAM_CHIEF_BOT_TOKEN ?? ''
 if (botToken === '') {
   // Say so on stdout and exit 0. A notifier that fails the build it is
   // reporting on turns one problem into two, and the build has already failed.

@@ -22,9 +22,25 @@ messaged. It stays as it is. Seven more, one per remaining role.
 | 6 | Quality & Risk Director | Quality · AI Team | `@atg_quality_bot` | Reviews substantive output before it commits. Can say no |
 | 7 | Communications & Creative Director | Comms · AI Team | `@atg_comms_bot` | How things are said to people outside the team |
 
-Usernames are suggestions — Telegram requires them to be globally unique and to
-end in `bot`, so if one is taken, any variation works. Tell me what you actually
-got and I will use those.
+**Five of the seven exist as of 2026-09-06** — research, strategy, growth,
+finance and operations. Their tokens are in the vault under
+`telegram.<slug>.bot_token`, the registry is `public.telegram_bots` (migration
+0054), and each one's name, short description and description have been set
+from the `staff` table by `npm run telegram:configure-staff`.
+
+Quality and Comms are still to make. Nothing waits on them: a staff member with
+no bot resolves to null and falls back to the pager, and there is a check that
+proves it does.
+
+**One thing the API cannot do: the profile photo.** `setUserProfilePhotos` is
+BotFather-only, so each bot's avatar has to be set by hand — message
+@BotFather → `/setuserpic` → pick the bot → send the image. The photorealistic
+avatars are at
+`https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public/avatars/<slug>.jpg`.
+Entirely cosmetic; the office already shows these faces in Slack.
+
+Check any time with `npm run telegram:roster`, which probes each token against
+`getMe` rather than reporting what a table says.
 
 ---
 

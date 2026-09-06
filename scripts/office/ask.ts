@@ -42,6 +42,7 @@ import { SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner } from '../../src/slack/provision.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
+import { pagerBot } from '../../src/telegram/roster.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -184,13 +185,15 @@ const reviewer: Reviewer = () =>
 // --- §12: both surfaces, one notifier, the same one the worker uses --------
 const office = await SlackOffice.configured(db, slack)
 const channels = [slackChannel(db, office, { teamId })]
-const telegramToken = process.env.TELEGRAM_CHIEF_BOT_TOKEN
-if (telegramToken !== undefined && telegramToken !== '') {
-  const telegram = new TelegramClient(telegramToken)
-  const botId = String(((await telegram.call('getMe')).result as { id: number }).id)
+// From the registry (0054), not the environment: the pager's identity is a
+// fact the database holds, and `getMe` was only ever asked because there was
+// nowhere else to learn the bot's id.
+const pager = await pagerBot(db)
+if (pager !== null) {
+  const telegram = new TelegramClient(pager.token)
   channels.push(
     pagerChannel(
-      new TelegramPager(db, telegram, { botId, subject: 'grant' }),
+      new TelegramPager(db, telegram, { botId: pager.botId, subject: 'grant' }),
       // Above the pager floor, because the point of running this is that the
       // phone buzzes. A routine result deliberately would not.
       'important',

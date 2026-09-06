@@ -27,12 +27,13 @@
 
 import { DeliveryService } from '../../src/channels/delivery.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
 import type { HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { ACTIONS } from '../../src/slack/blocks.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { callbackData, inlineKeyboard, pagerText } from '../../src/telegram/message.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
+import { botForStaff, pagerBot, roster } from '../../src/telegram/roster.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
@@ -611,6 +612,115 @@ record(
 )
 
 // ===========================================================================
+// The bot roster (0054): seven voices, not one
+// ===========================================================================
+
+const entries = await roster(db)
+record(
+  'the roster holds every bot the design names, existing or not',
+  `${String(entries.length)} entr(ies): ${String(entries.filter((e) => e.hasToken).length)} with a token`,
+  entries.length === 8,
+)
+
+// §12 gives Telegram ONE interrupting voice. This is the constraint, not a
+// convention: the second pager would be added by someone who had not read §12,
+// and the symptom would be Grant's phone buzzing seven times.
+let secondPagerCode = 'nothing was refused'
+try {
+  await db.execute(`
+    update public.telegram_bots set is_pager = true
+     where staff_slug = 'research-director'
+  `)
+} catch (error) {
+  secondPagerCode =
+    error instanceof SqlExecutionError
+      ? (error.message.match(/\b\d{5}\b/)?.[0] ?? 'unknown')
+      : 'wrong error type'
+}
+record(
+  'a SECOND pager is impossible — §12 gives Telegram one interrupting voice',
+  `refused with ${secondPagerCode}`,
+  secondPagerCode === '23505',
+)
+
+// A bot with no token cannot send, so calling it enabled would be a promise
+// the system cannot keep.
+let tokenlessCode = 'nothing was refused'
+try {
+  await db.execute(`
+    update public.telegram_bots set enabled = true, disabled_reason = null
+     where bot_id = 'pending:quality-director'
+  `)
+} catch (error) {
+  tokenlessCode =
+    error instanceof SqlExecutionError
+      ? (error.message.match(/\b\d{5}\b/)?.[0] ?? 'unknown')
+      : 'wrong error type'
+}
+record(
+  'a bot with no token cannot be enabled — an enabled bot is a promise to send',
+  `refused with ${tokenlessCode}`,
+  tokenlessCode === '23514',
+)
+
+const research = await botForStaff(db, 'research-director')
+record(
+  'a staff member resolves to their own bot, with its token from the vault',
+  research === null
+    ? 'no bot resolved'
+    : `@${research.username} id=${research.botId}, token resolved (${String(research.token.length)} chars)`,
+  research !== null && research.botId === '8842154625',
+)
+
+// The negative that matters: two of seven bots do not exist, and a resolver
+// that threw would make "Grant has not made that bot" indistinguishable from
+// "the database is broken".
+const missing = await botForStaff(db, 'quality-director')
+record(
+  'a staff member with no bot resolves to null rather than raising',
+  missing === null ? 'null, as required' : 'resolved something that should not exist',
+  missing === null,
+)
+
+const registryPager = await pagerBot(db)
+record(
+  'the pager resolves from the registry, so no sender needs the token in its environment',
+  registryPager === null ? 'no pager' : `@${registryPager.username} id=${registryPager.botId}`,
+  registryPager !== null && registryPager.botId === BOT_ID,
+)
+
+// Every staff bot answers Telegram. A registry row is a claim; getMe is the
+// evidence, and a token that was pasted into a chat can be revoked between
+// being stored and being used.
+const answering: string[] = []
+for (const entry of entries) {
+  if (!entry.enabled || !entry.hasToken) continue
+  const bot = entry.staffSlug === null ? registryPager : await botForStaff(db, entry.staffSlug)
+  if (bot === null) continue
+  const probe = (await (await fetch(`https://api.telegram.org/bot${bot.token}/getMe`)).json()) as {
+    ok?: boolean
+    result?: { username?: string }
+  }
+  if (probe.ok === true && probe.result?.username === entry.username) answering.push(entry.username)
+}
+record(
+  'every registered bot authenticates, and is the bot the registry says it is',
+  `${String(answering.length)} of ${String(entries.filter((e) => e.enabled && e.hasToken).length)} answering`,
+  answering.length === entries.filter((e) => e.enabled && e.hasToken).length,
+)
+
+// Restored: a check that changes real configuration must put it back. Both
+// updates above were refused, so nothing changed — asserted rather than
+// assumed, because "the constraint held" and "I forgot to clean up" look the
+// same until someone looks.
+const stillOnePager = await one<{ n: number }>(
+  `select count(*)::int as n from public.telegram_bots where is_pager`,
+)
+record(
+  'and the registry is left exactly as it was found',
+  `${String(stillOnePager?.n)} pager(s)`,
+  Number(stillOnePager?.n) === 1,
+)
 
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')

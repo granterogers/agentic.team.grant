@@ -76,7 +76,9 @@
     "verify:schema": "tsx scripts/verify/schema.ts",
     "slack:rename-channels": "tsx scripts/slack/rename-channels.ts",
     "notion:sync": "tsx scripts/notion/sync.ts",
-    "verify:notion": "tsx scripts/verify/notion.ts"
+    "verify:notion": "tsx scripts/verify/notion.ts",
+    "telegram:roster": "tsx scripts/telegram/roster.ts",
+    "telegram:configure-staff": "tsx scripts/telegram/configure-staff.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

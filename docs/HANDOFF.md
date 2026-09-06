@@ -116,9 +116,10 @@ week.
    ⋯ → Connections → add **Agentic Team Grant**. Child pages come with it; a
    database has to be shared itself. Then `npm run notion:sync`. This is the
    only thing the connector waits on — the token is in the vault and works.
-2. **Seven Telegram bot tokens**, when you want the staff to have their own
-   voices. Roster at [`telegram-bot-roster.md`](telegram-bot-roster.md);
-   browser-agent prompt at [`offload/setup-prompt.md`](offload/setup-prompt.md).
+2. **Two Telegram bots left** — Quality and Comms. Five arrived on 2026-09-06
+   and are registered, configured and answering. Roster and the one manual
+   cosmetic step (BotFather `/setuserpic`) at
+   [`telegram-bot-roster.md`](telegram-bot-roster.md).
 3. **Rotate the Notion token when convenient.** It was pasted into a chat
    transcript on 2026-09-06, which is durable and searchable. Nothing is known
    to have leaked and the integration is scoped to what you share with it, so
