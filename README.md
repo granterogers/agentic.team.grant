@@ -10,8 +10,8 @@ place, and undoable. Every inference attempt is recorded, and paid inference is
 prevented by deterministic code rather than by a prompt.
 
 ```
-10,370 lines of TypeScript · 59 migrations · 642 unit tests
-21 live verification suites, 416 checks against real services
+10,370 lines of TypeScript · 59 migrations · 649 unit tests
+21 live verification suites, 419 checks against real services
 ```
 
 ---
@@ -25,7 +25,7 @@ prevented by deterministic code rather than by a prompt.
 | 8 · Team HQ web app | ✅ built and deployed; one criterion unclaimed¹ |
 | · knowledge layer | ✅ ADR-0013 decided and built: connector-agnostic `documents`, a connector registry, Postgres full-text search, Notion connected |
 | 9 · Google ecosystem | 🟡 unblocked but unscheduled — ADR-0013 re-based it onto Grant's own account, which was always the supported path |
-| 10 · hardening | 🟡 **in progress** — provider failover, §31's cross-interface equality, and failure injection over 7 of §18's 20 named cases |
+| 10 · hardening | 🟡 **in progress** — provider failover, §31's cross-interface equality, a security pass over the live endpoints, and every §18 degradation case bar one |
 
 ¹ Whether it *feels* right on a phone. A script can check the viewport and the
 touch targets; it cannot check that. §13's precedent is that a subjective
@@ -59,6 +59,7 @@ any vendor account is safe.
 | **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Everything currently wrong**, with severity and owner |
 | [`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md) | The canonical specification. Supersedes everything else |
 | [`docs/defects-fixed.md`](docs/defects-fixed.md) | The 25 defects found and closed, and the one shape of mistake that keeps recurring |
+| [`docs/degradation-coverage.md`](docs/degradation-coverage.md) | §18's twenty degradation cases mapped to the checks that cover them, and the three that do not |
 | [`docs/test-evidence/`](docs/test-evidence/) | What the checks found **by failing** — the best reading in the repo |
 | [`docs/adr/`](docs/adr/) | 14 decisions, with the reasoning that produced them |
 | [`docs/new-environment.md`](docs/new-environment.md) | Four commands and two variables, to start a fresh session without rediscovering anything |
@@ -98,7 +99,7 @@ cost three project references and one document rather than the project.
 ## Running it
 
 ```bash
-npm run verify        # lint, typecheck, migrations, 642 unit tests, secret scan
+npm run verify        # lint, typecheck, migrations, 649 unit tests, secret scan
 npm run verify:db     # every live suite in order — ~25 minutes
 npm run inventory     # which credentials work, and which account each hangs off
 npm run export:portable   # a copy of everything that needs no vendor login

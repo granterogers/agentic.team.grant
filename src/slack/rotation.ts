@@ -141,3 +141,88 @@ export function secondsUntilExpiry(
 ): number {
   return expiresAt - now
 }
+
+// ---------------------------------------------------------------------------
+// Orchestration
+// ---------------------------------------------------------------------------
+
+/**
+ * One rotation, end to end, against a database.
+ *
+ * ## Why this is a module and not just the script
+ *
+ * The sequence used to live only in `scripts/slack/rotate.ts`, which meant its
+ * most important property could not be tested: **a failed rotation must not
+ * destroy the credential it still holds.** That is §18's *invalid refresh
+ * token* case, and it is the one path in this codebase that can lock us out of
+ * Slack entirely — the config token is how the app is administered, and a
+ * rotation that overwrote a working pair with nothing would need a human at
+ * api.slack.com to recover.
+ *
+ * `rotateTokens` was well covered; the sequence around it was not covered at
+ * all, and the sequence is where the danger is.
+ *
+ * ## The order, and why each step is where it is
+ *
+ * 1. **Persist the current refresh token first.** It is single-use: the moment
+ *    Slack accepts it, it is gone. A crash between "sent" and "stored the
+ *    reply" would otherwise leave nothing on either side.
+ * 2. **Rotate.**
+ * 3. **On failure, write only the failure.** No credential is touched, so the
+ *    existing access token keeps working until it expires — which buys hours,
+ *    and hours are the difference between a retry and a human.
+ * 4. **On success, persist the new pair before anything else** — before the
+ *    row update, before verification. A verification that fails must not lose
+ *    a pair Slack has already issued and already invalidated the old one for.
+ */
+export interface RotationDeps {
+  readonly execute: (sql: string) => Promise<{ readonly rows: readonly Record<string, unknown>[] }>
+  readonly fetchImpl?: typeof fetch
+}
+
+export type RotationOutcome =
+  | { readonly kind: 'rotated'; readonly expiresAt: number }
+  | { readonly kind: 'failed'; readonly error: string; readonly needsHuman: boolean }
+
+const sqlLit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+export async function rotateAndPersist(
+  deps: RotationDeps,
+  appId: string,
+  refreshToken: string,
+): Promise<RotationOutcome> {
+  const store = async (name: string, value: string, description: string): Promise<void> => {
+    await deps.execute(
+      `select app.store_secret(${sqlLit(name)}, ${sqlLit(value)}, ${sqlLit(description)})`,
+    )
+  }
+
+  // 1. Durable copy before consuming a single-use credential. Costs nothing.
+  await store(
+    'slack.config_refresh_token',
+    refreshToken,
+    'Slack config refresh token (pre-rotation copy)',
+  )
+
+  let pair: TokenPair
+  try {
+    pair = await rotateTokens(refreshToken, deps.fetchImpl ?? fetch)
+  } catch (error) {
+    const rotation = error as RotationError
+    // 3. Only the failure is written. `slack.config_token` is deliberately
+    // untouched: the access token in the vault still works until it expires.
+    await deps.execute(`
+      update public.slack_app_credentials
+      set rotation_failures = rotation_failures + 1,
+          last_rotation_error = ${sqlLit(rotation.message.slice(0, 400))}
+      where slack_app_id = ${sqlLit(appId)}
+    `)
+    return { kind: 'failed', error: rotation.message, needsHuman: rotation.needsHuman === true }
+  }
+
+  // 4. The new pair, immediately.
+  await store('slack.config_token', pair.accessToken, 'Slack config access token (rotates ~12h)')
+  await store('slack.config_refresh_token', pair.refreshToken, 'Slack config refresh token')
+
+  return { kind: 'rotated', expiresAt: pair.expiresAt }
+}

@@ -40,9 +40,9 @@ Then run `npm run inventory` before trusting any credential.
 | 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
 | 9 · Google ecosystem | 🟡 **unblocked but not scheduled** — ADR-0013 re-bases it: Calendar/Gmail/Drive read Grant's own data on his own account, which was always the supported path |
 | · knowledge layer | ✅ ADR-0013 decided and built: `documents`, a connector registry, Postgres full-text search. Notion connected and waiting only on shared pages |
-| 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, and failure injection over seven of §18's twenty named cases. Remaining: the rest of §18, a security pass, and scenario A end to end |
+| 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, a security pass over the live public surface, and **all but one** of §18's degradation cases — see [`degradation-coverage.md`](degradation-coverage.md). Remaining: §22's scenario A end to end |
 
-59 migrations · 642 unit tests · 21 live suites, 416 checks, all green (plus
+59 migrations · 649 unit tests · 21 live suites, 419 checks, all green (plus
 `verify:transitions`, which compares the two state machines rather than counting).
 
 **What Phase 10 has cost so far, which is the argument for doing it:** three

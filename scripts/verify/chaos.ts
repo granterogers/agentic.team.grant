@@ -378,6 +378,50 @@ const output = (): HandlerOutput =>
 }
 
 // ---------------------------------------------------------------------------
+// 5b. §18: Telegram DISABLED, the mirror of the Slack case
+// ---------------------------------------------------------------------------
+
+// Written because the coverage map (docs/degradation-coverage.md) showed the
+// Slack half existed and this one did not. The mirror matters: §12 makes
+// Telegram the interrupting surface and Slack the office, so "the pager is off"
+// and "the office is off" are different failures with different consequences,
+// and only one of them had ever been exercised.
+{
+  await db.execute(`
+    update public.telegram_bots
+       set enabled = false, disabled_reason = 'verify:chaos — deliberately switched off'
+     where is_pager
+  `)
+  const { pagerBot: resolvePager } = await import('../../src/telegram/roster.ts')
+  const gone = await resolvePager(db)
+  record(
+    'Telegram switched off (§17): the pager stops resolving, so nothing tries to page',
+    gone === null ? 'no pager resolves' : `still resolved @${gone.username}`,
+    gone === null,
+  )
+
+  // And the office is untouched by the decision — a live Slack call, made while
+  // the pager is switched off.
+  const duringOutage = await new SlackClient(realSlackToken).call('auth.test', {})
+  record(
+    'Telegram switched off: Slack still delivers — the decision was about one surface',
+    `auth.test ok=${String(duringOutage.body.ok)}`,
+    duringOutage.body.ok === true,
+  )
+
+  await db.execute(`
+    update public.telegram_bots set enabled = true, disabled_reason = null
+     where disabled_reason = 'verify:chaos — deliberately switched off'
+  `)
+  const back = await resolvePager(db)
+  record(
+    'and the pager is switched back on, exactly as it was found',
+    back === null ? 'STILL OFF' : `@${back.username}`,
+    back !== null,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // 6. §18: crash after commit, before notification
 // ---------------------------------------------------------------------------
 
