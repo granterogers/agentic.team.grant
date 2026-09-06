@@ -101,9 +101,26 @@ await check(
   '✅ grant.e.rogers',
   'npm run slack:rotate',
   async () => {
+    // From the vault, not from `SLACK_APP_CONFIG_TOKEN`. This token rotates
+    // every twelve hours and `slack:rotate` writes the new one to the vault —
+    // so an environment copy is stale within a day and stays stale forever.
+    // Probing it reported `token_expired` minutes after a rotation that had
+    // just succeeded: a check reporting on a copy rather than on the credential
+    // the system actually uses, which is this project's recurring defect in
+    // its twelfth costume.
+    const token = String(
+      (
+        await db.execute(
+          `select app.resolve_secret(config_token_ref) as t
+             from public.slack_app_credentials
+            where slack_app_id = '${env('SLACK_APP_ID')}'`,
+        )
+      ).rows[0]?.t ?? '',
+    )
+    if (token === '') return { ok: false, detail: 'no config token in the vault' }
     const r = (await (
       await fetch(`https://slack.com/api/apps.manifest.export?app_id=${env('SLACK_APP_ID')}`, {
-        headers: { Authorization: `Bearer ${env('SLACK_APP_CONFIG_TOKEN')}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
     ).json()) as { ok?: boolean; error?: string }
     return { ok: r.ok === true, detail: r.ok === true ? 'valid' : String(r.error) }

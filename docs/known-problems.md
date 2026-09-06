@@ -132,5 +132,6 @@ Without a Google credential every note degrades to text and says
 | A correlation written into a column with a **foreign key to `events`** | left null; the work is resolved from the message instead |
 | The HQ deploy script **printed its token into a transcript** | rotated; the script can no longer print it — `npm run hq:token` sends it to Telegram |
 | `verify:credentials` **broke the live Slack install every run**: it upserted the production row with its probe secret reference, then deleted that secret at cleanup. Nothing failed until `slack:rotate` refused, days later | the lifecycle checks run against a probe row (`A0PROBELIFE`) and never touch the install; a 19th check fails the suite if any reference is DANGLING; `npm run slack:repair-refs` repairs one |
+| `npm run inventory` reported the Slack config token dead **minutes after a successful rotation** — it probed the environment copy, which rotation never updates | it resolves the token from the vault, where rotation writes it |
 
 Full accounts, with the reasoning, in [`test-evidence/`](test-evidence/).
