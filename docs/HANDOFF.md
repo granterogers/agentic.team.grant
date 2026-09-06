@@ -23,7 +23,7 @@ rather than rediscovery.
    touching `documents`, and do not revive the NotebookLM sync.
 3. **[`../AI_TEAM_HQ_MASTER_SPEC.md`](../AI_TEAM_HQ_MASTER_SPEC.md)** — canonical,
    supersedes everything.
-4. **[`defects-fixed.md`](defects-fixed.md)** — the 25 defects found and closed,
+4. **[`defects-fixed.md`](defects-fixed.md)** — the 26 defects found and closed,
    and the one shape of mistake that has now appeared in fifteen costumes.
    [`test-evidence/`](test-evidence/) has the twelve long-form accounts.
 
@@ -42,7 +42,7 @@ Then run `npm run inventory` before trusting any credential.
 | · knowledge layer | ✅ ADR-0013 decided and built: `documents`, a connector registry, Postgres full-text search. Notion connected and waiting only on shared pages |
 | 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, a security pass over the live public surface, and **all but one** of §18's degradation cases — see [`degradation-coverage.md`](degradation-coverage.md). Remaining: §22's scenario A end to end |
 
-59 migrations · 649 unit tests · 21 live suites, 419 checks, all green (plus
+60 migrations · 657 unit tests · 21 live suites, 422 checks, all green (plus
 `verify:transitions`, which compares the two state machines rather than counting).
 
 **What Phase 10 has cost so far, which is the argument for doing it:** three

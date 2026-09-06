@@ -1,7 +1,7 @@
 # Defects found and fixed
 
 **What this is.** Every defect this project has found in itself, with what was
-wrong and what closed it. Twenty-five so far.
+wrong and what closed it. Twenty-six so far.
 
 **Why it is kept.** Not as a trophy cabinet. This project's method is that a
 check earns its place by failing, and the failures are the part worth reading —
@@ -55,6 +55,7 @@ history; nothing here is outstanding.
 | The same partial index then broke the sync's `on conflict` target — one run stored **zero rows** and said nothing | the conflict target carries the index predicate |
 
 | Team HQ's endpoint documented a fixed list of sections and did not have one: `SECTIONS['constructor']` and `SECTIONS['__proto__']` are truthy through the prototype chain, so three inherited names passed the guard and reached a fetch of `/rpc/undefined` with the service key | `Object.hasOwn`. Nothing leaked — the value came back undefined — but the endpoint's own comment claimed a property it did not have, and `verify:security` now probes all three against the deployed function |
+| Retrieval ANDed every word of a question. Asking *"what does our material say about the difference between coaching and mentoring?"* returned nothing from a corpus whose one document is a long article about coaching and mentoring — because "material" and "say" appear in neither | 0060 adds `p_match`: `'all'` for a deliberate search, `'any'` for a question, with `ts_rank` sorting so more matches win. Both semantics are asserted against the same corpus, because each is wrong in the other's place |
 
 ---
 

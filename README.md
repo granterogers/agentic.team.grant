@@ -10,8 +10,8 @@ place, and undoable. Every inference attempt is recorded, and paid inference is
 prevented by deterministic code rather than by a prompt.
 
 ```
-10,370 lines of TypeScript · 59 migrations · 649 unit tests
-21 live verification suites, 419 checks against real services
+10,540 lines of TypeScript · 60 migrations · 657 unit tests
+21 live verification suites, 422 checks against real services
 ```
 
 ---
@@ -58,7 +58,7 @@ any vendor account is safe.
 | **[`docs/HANDOFF.md`](docs/HANDOFF.md)** | ⭐ **Starting a session.** Where things are, what to read, what is waiting |
 | **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Everything currently wrong**, with severity and owner |
 | [`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md) | The canonical specification. Supersedes everything else |
-| [`docs/defects-fixed.md`](docs/defects-fixed.md) | The 25 defects found and closed, and the one shape of mistake that keeps recurring |
+| [`docs/defects-fixed.md`](docs/defects-fixed.md) | The 26 defects found and closed, and the one shape of mistake that keeps recurring |
 | [`docs/degradation-coverage.md`](docs/degradation-coverage.md) | §18's twenty degradation cases mapped to the checks that cover them, and the three that do not |
 | [`docs/test-evidence/`](docs/test-evidence/) | What the checks found **by failing** — the best reading in the repo |
 | [`docs/adr/`](docs/adr/) | 14 decisions, with the reasoning that produced them |
@@ -99,7 +99,7 @@ cost three project references and one document rather than the project.
 ## Running it
 
 ```bash
-npm run verify        # lint, typecheck, migrations, 649 unit tests, secret scan
+npm run verify        # lint, typecheck, migrations, 657 unit tests, secret scan
 npm run verify:db     # every live suite in order — ~25 minutes
 npm run inventory     # which credentials work, and which account each hangs off
 npm run export:portable   # a copy of everything that needs no vendor login

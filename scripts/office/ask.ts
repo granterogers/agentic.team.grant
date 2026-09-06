@@ -35,6 +35,7 @@ import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import type { Handler, HandlerOutput, Job, Reviewer } from '../../src/jobs/worker.ts'
 import { dequeue, runJob } from '../../src/jobs/worker.ts'
+import { contextBlock, retrieve, sourceRefs } from '../../src/knowledge/retrieval.ts'
 import { ProviderRouter } from '../../src/providers/router.ts'
 import { SlackClient } from '../../src/slack/api.ts'
 import { slackChannel } from '../../src/slack/notifier.ts'
@@ -140,6 +141,21 @@ console.log(
 )
 
 // --- §11: the answer, from a real model, on the free allow-list ------------
+// The knowledge layer, actually used. Until this existed the corpus was
+// something nothing read: `ask` sent every question to a model with no context
+// from the documents at all, which made ADR-0013's "retrieval plus a model
+// call" half a sentence.
+const hits = await retrieve(db, question, projectId)
+const context = contextBlock(hits)
+console.log(
+  hits.length === 0
+    ? 'retrieval: nothing in the corpus matched — the answer will be ungrounded, and says so'
+    : `retrieval: ${String(hits.length)} document(s) — ${hits
+        .map((h) => h.title)
+        .join(', ')
+        .slice(0, 80)}`,
+)
+
 const providerRouter = new ProviderRouter(db, need('OPENROUTER_API_KEY'))
 const handler: Handler = {
   kind: 'office.ask',
@@ -151,8 +167,17 @@ const handler: Handler = {
           content:
             'You are a director on a small research team. Answer in plain prose, ' +
             'no preamble, no bullet points, no more than 150 words. If you are ' +
-            'inferring rather than reporting a fact, say so in the answer.',
+            'inferring rather than reporting a fact, say so in the answer.' +
+            (context === ''
+              ? ' No documents in our own records matched this question, so answer ' +
+                'from general knowledge and OPEN by saying that our records had nothing on it.'
+              : ' Numbered excerpts from our own documents follow. Prefer them over ' +
+                'general knowledge, cite them as [1], [2] where you use them, and say ' +
+                'plainly when they do not answer the question rather than filling the gap.'),
         },
+        ...(context === ''
+          ? []
+          : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
         { role: 'user', content: question },
       ],
       maxTokens: 2_000,
@@ -161,11 +186,18 @@ const handler: Handler = {
     return {
       body: completion.content.trim(),
       confidence: 'medium',
-      // §10: this came from a model, not from a source that was read. Saying
-      // `verified` here would be the single most consequential lie the system
-      // could tell about its own output.
+      // `inferred` even when it is grounded, and the sources beside it.
+      //
+      // §10 makes `verified` mean a reader can go and check. Giving a model
+      // documents makes an answer *grounded*, not *checked* — nothing here
+      // reads the answer to see whether the documents support it, so marking
+      // it verified because sources now exist would be the exact lie §10 is
+      // written to prevent. Sources with `inferred` is the honest pair: a
+      // model wrote this, and here is what it was given.
       evidence: 'inferred',
-      sources: [],
+      // What was RETRIEVED, never what the model says it used. A model's
+      // citation list is a claim; this is a record.
+      sources: sourceRefs(hits),
       contradictions: null,
       path: 'inference',
       model: completion.model,

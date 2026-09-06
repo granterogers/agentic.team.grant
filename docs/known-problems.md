@@ -7,7 +7,7 @@ Ordered by what would hurt most. `npm run inventory` regenerates the credential
 half of this live, and is the thing to trust when this file and it disagree.
 
 Defects already found and fixed are in
-[`defects-fixed.md`](defects-fixed.md) — twenty-five of them, kept because the
+[`defects-fixed.md`](defects-fixed.md) — twenty-six of them, kept because the
 shapes recur. Nothing there is outstanding.
 
 ---
@@ -83,11 +83,13 @@ The Google Cloud TTS credential is **parked at Grant's request**. Without one,
 every note degrades to text and says `no_credential` — the acceptance criterion
 working, not a gap.
 
-### 7. Notion is connected but has nothing to read
+### 7. The corpus is one document
 
-The token authenticates and the connector is built and checked. Nothing has been
-shared with the integration yet, so the corpus it can see is empty. Three clicks
-in Notion (⋯ → Connections → *Agentic Team Grant*), then `npm run notion:sync`.
+The knowledge layer is built and used — `npm run ask` retrieves before it asks,
+and records what it retrieved as the output's sources. But the whole corpus is a
+single cached Wikipedia article, so the retrieval is exercised rather than
+useful. Notion authenticates and has nothing shared with it; three clicks in
+Notion (⋯ → Connections → *Agentic Team Grant*), then `npm run notion:sync`.
 
 ---
 

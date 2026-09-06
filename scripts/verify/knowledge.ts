@@ -298,6 +298,50 @@ record(
 )
 
 // ---------------------------------------------------------------------------
+// 7b. A question is not a search box (0060)
+// ---------------------------------------------------------------------------
+
+// The default ANDs every term, which is right for a deliberate search and
+// useless for retrieval: a natural question includes words like "material" and
+// "say" that appear in no document, and ten conditions match nothing. Both
+// semantics are asserted here, against the same corpus, because each is wrong
+// in the other's place.
+{
+  const question = `What does our note say about the subject of ${SUBJECT}?`
+  const anded = await all(
+    `select * from app.search_documents(${lit(question)}, ${lit(projectId)}::uuid, 10, 'all')`,
+  )
+  const ored = await all(
+    `select * from app.search_documents(${lit(question)}, ${lit(projectId)}::uuid, 10, 'any')`,
+  )
+  record(
+    "a whole question finds nothing under 'all' and finds the documents under 'any'",
+    `all=${String(anded.length)} hit(s), any=${String(ored.length)} hit(s)`,
+    anded.length === 0 && ored.length >= 2,
+  )
+
+  // And ranking still discriminates under OR — otherwise "any" would be a
+  // synonym for "every document that shares a stop word", which is the failure
+  // people complain about in search boxes.
+  record(
+    "under 'any', the document titled for the subject still ranks first",
+    `first=${String(ored[0]?.title)}`,
+    String(ored[0]?.title).startsWith(SUBJECT),
+  )
+
+  // CONTROL: a question with nothing but stop words yields no tsquery at all,
+  // and must return nothing rather than everything.
+  const stopWords = await all(
+    `select * from app.search_documents('the and of it', ${lit(projectId)}::uuid, 10, 'any')`,
+  )
+  record(
+    "CONTROL: a query of only stop words returns nothing under 'any', not everything",
+    `${String(stopWords.length)} hit(s)`,
+    stopWords.length === 0,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // 8. A person's query syntax is understood, not raised as an error
 // ---------------------------------------------------------------------------
 
