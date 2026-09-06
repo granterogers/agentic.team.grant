@@ -25,25 +25,33 @@ import { SlackApiError, type SlackClient } from './api.ts'
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 export const CHANNEL_NAME_MAX = 80
-/** Prefix so a project channel is recognisable in a workspace full of them. */
-export const PROJECT_CHANNEL_PREFIX = 'proj-'
 
 /**
- * Turn a project slug into a legal Slack channel name.
+ * Turn a project's NAME into a legal Slack channel name.
  *
- * Deterministic: the same project always proposes the same name, which is what
- * makes `name_taken` informative rather than a coin flip. Truncation is from
- * the END and keeps the prefix, because the discriminating part of a project
- * slug is usually its start.
+ * Plain English, no prefix. It used to be `proj-` plus the slug — technically
+ * unambiguous and, in Grant's words, "a bit strange". A workspace is read by a
+ * person scanning a sidebar, and `#proj-ai-team-hq-test` costs that person a
+ * beat of decoding for a distinction (project channel vs. other channel) that
+ * a one-human workspace does not need to draw. `#ai-team-hq-test` is the same
+ * information with none of the tax.
+ *
+ * Still deterministic: the same project always proposes the same name, which is
+ * what makes `name_taken` informative rather than a coin flip. Truncation is
+ * from the end, because the discriminating part of a project name is its start.
+ *
+ * Slack's own rules, all enforced here rather than discovered in an error:
+ * lowercase, no spaces or periods, only letters/digits/hyphens/underscores, at
+ * most 80 characters, and not empty.
  */
-export function channelNameFor(slug: string): string {
-  const cleaned = slug
+export function channelNameFor(nameOrSlug: string): string {
+  const cleaned = nameOrSlug
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '')
-  const name = `${PROJECT_CHANNEL_PREFIX}${cleaned === '' ? 'unnamed' : cleaned}`
-  return name.length <= CHANNEL_NAME_MAX ? name : name.slice(0, CHANNEL_NAME_MAX)
+  const name = cleaned === '' ? 'untitled-project' : cleaned
+  return name.length <= CHANNEL_NAME_MAX ? name : name.slice(0, CHANNEL_NAME_MAX).replace(/-+$/, '')
 }
 
 export type ProvisionOutcome =
@@ -89,8 +97,15 @@ export class ChannelProvisioner {
    * make the mapping depend on a `conversations.list` page we might not have
    * read, and 0014 exists precisely so that it does not.
    */
-  async ensureChannel(projectId: string, projectSlug: string): Promise<ProvisionResult> {
-    const name = channelNameFor(projectSlug)
+  async ensureChannel(projectId: string, projectLabel: string): Promise<ProvisionResult> {
+    // The project's own name if it has one, and the caller's label otherwise.
+    // A slug is a machine's name for a project; a person reading a sidebar
+    // wants the name they gave it.
+    const named = await this.one<{ name: string | null }>(
+      `select name from public.projects where project_id = ${lit(projectId)}::uuid`,
+    )
+    const label = named?.name ?? null
+    const name = channelNameFor(label === null || label.trim() === '' ? projectLabel : label)
 
     const mapped = await this.one<{ channel_id: string; channel_name: string }>(`
       select channel_id, channel_name from public.slack_channel_map

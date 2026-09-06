@@ -17,7 +17,7 @@ Legend: ✅ safe · ⚠️ on the disabled Google account · ❓ unknown · ⛔ 
 
 | | Service | What it does here | Sign-in | How I know |
 |---|---|---|---|---|
-| 🔴 | **Backblaze B2** | the **only** offsite backup of the database | ⚠️ dead Gmail, login still works | you told me |
+| ✅ | **Backblaze B2** | the **only** offsite backup of the database | Google address, **its own password — no Google SSO** | confirmed by Grant 2026-09-06 |
 | ⚠️ | **Supabase** | Postgres, Edge Functions, the vault, avatar storage — the system itself | ⚠️ dead Gmail | you told me |
 | ⚠️ | **Vercel** | hosts Team HQ and the voice page | ⚠️ dead Gmail | **confirmed** — the API returns `agentic.team.grant@gmail.com` |
 | ✅ | **GitHub** | the code, and Actions runs backups, CI, sync and Slack token rotation | ✅ `granterogers` | confirmed from the remote and run history |
@@ -28,7 +28,14 @@ Legend: ✅ safe · ⚠️ on the disabled Google account · ❓ unknown · ⛔ 
 | ❓ | **Groq** | secondary inference | ❓ unknown — **and the key is dead (401)** | `npm run inventory` |
 | ⛔ | **Google** | NotebookLM, Gemini API, Cloud project, OAuth client | ⛔ disabled 2026-09-04 | verified: `403 BadAuthentication` |
 
-**Order to work through:** Backblaze first — its login window may close and it
+**Superseded on 2026-09-05:** the Google account was reinstated, and on
+2026-09-06 Backblaze turned out never to have been at risk — it uses the Google
+address as a username with its own password, not Google sign-in. The re-homing
+work below is no longer urgent. It is kept because the exposure it describes is
+real and will be real again: an account that can be suspended by one vendor
+should not be the recovery path for five others.
+
+**Original order to work through:** Backblaze first — its login window may close and it
 holds the only backup. Then the three unknowns, because an unknown on the dead
 account is a Backblaze waiting to happen. Supabase and Vercel are safe to leave
 running while you decide between changing the email and re-homing.

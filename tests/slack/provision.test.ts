@@ -41,12 +41,12 @@ const slackReturning = (responses: unknown[]): SlackClient => {
 
 describe('channel names', () => {
   it('is deterministic, which is what makes name_taken informative', () => {
-    expect(channelNameFor('website-rebuild')).toBe('proj-website-rebuild')
-    expect(channelNameFor('website-rebuild')).toBe(channelNameFor('website-rebuild'))
+    expect(channelNameFor('Website Rebuild')).toBe('website-rebuild')
+    expect(channelNameFor('Website Rebuild')).toBe(channelNameFor('Website Rebuild'))
   })
 
   it('strips what Slack will not accept rather than letting the API reject it', () => {
-    expect(channelNameFor('Q3 Pricing! (draft)')).toBe('proj-q3-pricing-draft')
+    expect(channelNameFor('Q3 Pricing! (draft)')).toBe('q3-pricing-draft')
   })
 
   it('never exceeds Slack ceiling', () => {
@@ -54,7 +54,7 @@ describe('channel names', () => {
   })
 
   it('produces something legal even from a slug that reduces to nothing', () => {
-    expect(channelNameFor('!!!')).toBe('proj-unnamed')
+    expect(channelNameFor('!!!')).toBe('untitled-project')
   })
 })
 

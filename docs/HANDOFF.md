@@ -112,13 +112,21 @@ Do not add to this list in chat. It lives in
 reason is that surfacing needs one per turn is exactly what went wrong this
 week.
 
-1. 🔴 **Change the Backblaze account email** while that login still works.
-2. **Which email are OpenRouter, OpenAI and Groq under?**
-3. **A Notion integration token**, when you want that connector built. It is
-   the one thing Notion waits on; the registry row is already there.
-4. Six Telegram bot tokens; a Google Cloud service account on a live account.
-   Browser-agent prompt ready at [`offload/setup-prompt.md`](offload/setup-prompt.md).
-5. One button press, and a look at Team HQ on a phone.
+1. **Share some Notion pages with the integration.** In Notion: open a page →
+   ⋯ → Connections → add **Agentic Team Grant**. Child pages come with it; a
+   database has to be shared itself. Then `npm run notion:sync`. This is the
+   only thing the connector waits on — the token is in the vault and works.
+2. **Seven Telegram bot tokens**, when you want the staff to have their own
+   voices. Roster at [`telegram-bot-roster.md`](telegram-bot-roster.md);
+   browser-agent prompt at [`offload/setup-prompt.md`](offload/setup-prompt.md).
+3. **Rotate the Notion token when convenient.** It was pasted into a chat
+   transcript on 2026-09-06, which is durable and searchable. Nothing is known
+   to have leaked and the integration is scoped to what you share with it, so
+   this is hygiene rather than an incident.
+
+**Settled on 2026-09-06, recorded so they are not re-asked:** Backblaze is safe
+(its own password, no Google SSO); Google Cloud TTS is parked; the ownership of
+the OpenRouter, OpenAI and Groq accounts is parked.
 
 ---
 

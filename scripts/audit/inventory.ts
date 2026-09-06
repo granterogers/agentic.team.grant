@@ -33,7 +33,20 @@ const db = new ManagementApiExecutor(
   supabaseToken,
 )
 
-type State = 'ok' | 'dead' | 'missing' | 'unknown'
+type State =
+  | 'ok'
+  | 'dead'
+  | 'missing'
+  | 'unknown'
+  /**
+   * Deliberately not being pursued, and not a gap.
+   *
+   * Added because two rows sat under "needs Grant" after Grant had answered
+   * them — Backblaze was confirmed safe and TTS was parked — and a list of
+   * outstanding items that includes settled ones is a list nobody finishes
+   * reading.
+   */
+  | 'parked'
 interface Row {
   service: string
   what: string
@@ -152,31 +165,49 @@ await check(
   },
 )
 
-await check('OpenRouter', 'inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = (await (
-    await fetch('https://openrouter.ai/api/v1/key', {
-      headers: { Authorization: `Bearer ${env('OPENROUTER_API_KEY')}` },
+await check(
+  'OpenRouter',
+  'inference key',
+  '⏸ parked',
+  'parked 2026-09-06 — Grant asked to leave this',
+  async () => {
+    const r = (await (
+      await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { Authorization: `Bearer ${env('OPENROUTER_API_KEY')}` },
+      })
+    ).json()) as { data?: { limit_remaining?: number }; error?: unknown }
+    return {
+      ok: r.data !== undefined,
+      detail: r.data ? `${String(r.data.limit_remaining)} credits left` : 'rejected',
+    }
+  },
+)
+
+await check(
+  'OpenAI',
+  'image/inference key',
+  '⏸ parked',
+  'parked 2026-09-06 — Grant asked to leave this',
+  async () => {
+    const r = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${env('OPENAI_API_KEY')}` },
     })
-  ).json()) as { data?: { limit_remaining?: number }; error?: unknown }
-  return {
-    ok: r.data !== undefined,
-    detail: r.data ? `${String(r.data.limit_remaining)} credits left` : 'rejected',
-  }
-})
+    return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
+  },
+)
 
-await check('OpenAI', 'image/inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = await fetch('https://api.openai.com/v1/models', {
-    headers: { Authorization: `Bearer ${env('OPENAI_API_KEY')}` },
-  })
-  return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
-})
-
-await check('Groq', 'inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = await fetch('https://api.groq.com/openai/v1/models', {
-    headers: { Authorization: `Bearer ${env('GROQ_API_KEY')}` },
-  })
-  return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
-})
+await check(
+  'Groq',
+  'inference key',
+  '⏸ parked',
+  'parked 2026-09-06 — Grant asked to leave this',
+  async () => {
+    const r = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${env('GROQ_API_KEY')}` },
+    })
+    return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
+  },
+)
 
 await check(
   'Google',
@@ -228,30 +259,74 @@ await check(
   },
 )
 
+await check(
+  'Notion',
+  'integration token',
+  '✅ Grant Rogers’s Space',
+  'Share pages with the "Agentic Team Grant" connection',
+  async () => {
+    const t = String(
+      (
+        await db.execute(
+          `select app.resolve_secret(
+             (select id from vault.secrets where name = 'notion.integration_token')::app.vault_secret_ref
+           ) as t`,
+        )
+      ).rows[0]?.t ?? '',
+    )
+    if (t === '') return { ok: false, detail: 'not in the vault' }
+    const r = (await (
+      await fetch('https://api.notion.com/v1/search', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${t}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ page_size: 1 }),
+      })
+    ).json()) as { results?: unknown[]; code?: string }
+    if (r.code !== undefined) return { ok: false, detail: r.code }
+    // A working token with nothing shared is a working token. Reported as the
+    // real state rather than as a failure, because the fix is Grant clicking
+    // Connections in Notion and no amount of retrying is that.
+    const n = (r.results ?? []).length
+    return { ok: true, detail: n === 0 ? 'valid; nothing shared yet' : 'valid; pages shared' }
+  },
+)
+
 // --- the ones only Grant can answer -----------------------------------------
 
-for (const [service, what, owner, action] of [
+for (const [service, what, owner, action, state] of [
   [
     'Backblaze B2',
     'backup bucket + keys',
-    '⚠️ dead Google account (login still works)',
-    '🔴 CHANGE THE ACCOUNT EMAIL WHILE YOU CAN',
+    '✅ Google address, but its OWN password',
+    'nothing — confirmed 2026-09-06: no Google SSO, so a Google suspension cannot lock it',
+    'ok' as const,
   ],
-  ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—'],
+  ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—', 'ok' as const],
   [
     'Google',
     'Cloud TTS service account',
-    '— not created',
-    'Create on a LIVE account (docs/google-cloud-tts-credential.md)',
+    '⏸ parked',
+    "parked 2026-09-06 at Grant's request — voice notes degrade to text and say no_credential, which is the criterion working",
+    'parked' as const,
   ],
-  ['Telegram', '7 staff bot tokens', '— not created', 'BotFather (docs/telegram-bot-roster.md)'],
+  [
+    'Telegram',
+    '7 staff bot tokens',
+    '— not created',
+    'BotFather (docs/telegram-bot-roster.md)',
+    'missing' as const,
+  ],
 ] as const) {
-  rows.push({ service, what, state: 'missing', owner, detail: 'not machine-checkable', action })
+  rows.push({ service, what, state, owner, detail: 'not machine-checkable', action })
 }
 
 // --- report ------------------------------------------------------------------
 
-const icon = { ok: '✅', dead: '⛔', missing: '⬜', unknown: '❓' }
+const icon = { ok: '✅', dead: '⛔', missing: '⬜', unknown: '❓', parked: '⏸' }
 console.log('# Credential and account inventory\n')
 console.log(`Generated ${new Date().toISOString()} — every line above the fold was checked live.\n`)
 console.log('| | Service | Credential | Owner / login | State | Action |')
@@ -262,12 +337,22 @@ for (const r of rows) {
   )
 }
 
+// A row Grant has parked is not a gap and must not be counted as one. The
+// whole value of this script is that its bottom line can be read in one
+// glance; a bottom line that keeps counting settled items is one that gets
+// skimmed, which is how the credential document it replaced failed.
+// Parking the QUESTION about a row does not park the row. Groq's key is
+// genuinely dead and stays under Dead; what Grant parked was the question of
+// whose account it is, and that is the list it leaves.
+const parked = rows.filter((r) => r.state === 'parked')
 const dead = rows.filter((r) => r.state === 'dead')
 const missing = rows.filter((r) => r.state === 'missing' && r.action !== '—')
 const unknown = rows.filter((r) => r.owner.startsWith('❓'))
 
 console.log(
-  `\n**${String(rows.filter((r) => r.state === 'ok').length)} working · ${String(dead.length)} dead · ${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership**\n`,
+  `\n**${String(rows.filter((r) => r.state === 'ok').length)} working · ${String(dead.length)} dead · ` +
+    `${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership · ` +
+    `${String(parked.length)} parked**\n`,
 )
 if (dead.length > 0) {
   console.log('## Dead\n')
@@ -280,4 +365,8 @@ if (missing.length > 0) {
 if (unknown.length > 0) {
   console.log('\n## Ownership unknown — one question each\n')
   for (const r of unknown) console.log(`- **${r.service}** — which email is this account under?`)
+}
+if (parked.length > 0) {
+  console.log('\n## Parked — deliberately not being pursued\n')
+  for (const r of parked) console.log(`- **${r.service} ${r.what}** — ${r.action}`)
 }

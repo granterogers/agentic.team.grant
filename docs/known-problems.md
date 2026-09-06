@@ -12,27 +12,31 @@ half of this live.
 
 ### 1. Four vendors sign in with a Google account that no longer exists
 
-Google disabled `agentic.team.grant@gmail.com` on 2026-09-04 ("created or used
-with multiple other accounts... might have been created by a computer program").
-Deletion scheduled 2027-07-31.
+Google disabled `agentic.team.grant@gmail.com` on 2026-09-04 and **reinstated
+it on 2026-09-05** after an appeal (migration 0049; verified, not assumed — the
+NotebookLM token mints again and the Gemini key lists models again).
 
-| Vendor | Effect |
+**Everything held.** A disabled Google account breaks the login button, not the
+service, and API tokens are independent of how you signed up. What the week
+actually cost was an audit, and the audit's findings are the rows below.
+
+| Vendor | Where it stands |
 |---|---|
-| **Backblaze B2** | holds the only offsite backup. Login still works — **this window may close** |
-| **Supabase** | dashboard locked out. Project runs, tokens work |
-| **Vercel** | dashboard locked out. Site serves, token works |
-| **Google Cloud / Gemini** | gone with the account |
+| **Backblaze B2** | ✅ **safe.** Registered to the Google address but with its own password — no Google SSO, so a Google suspension cannot lock it. Confirmed 2026-09-06 |
+| **Supabase** | dashboard access restored with the account |
+| **Vercel** | dashboard access restored with the account |
+| **Google Cloud / Gemini** | back, and the Gemini key works |
 
-**Nothing is down.** A disabled Google account breaks the login button, not the
-service, and API tokens are independent of how you signed up.
+**The lesson stands even though the penalty was reversed.** The appeal did not
+change the policy: NotebookLM has no public API, so any unattended client has
+to impersonate a browser session, which is what the ban named.
+[ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) settles what replaces
+it — the project is the source of truth, knowledge tools are connectors, and
+Notion (official API, OAuth, no policy exposure) is the first-class one.
 
-**What has to happen:** change the Backblaze account email while login still
-works — password resets and 2FA recovery go to a dead mailbox, so losing that
-session is permanent. Then decide whether to re-home Supabase and Vercel or
-petition support. Re-homing is now a rehearsed operation; support is a hope.
-
-See [`account-continuity.md`](account-continuity.md) and
-[`adr/0012`](adr/0012-notebook-account-disabled.md).
+See [`account-continuity.md`](account-continuity.md), which is now a rehearsed
+re-homing procedure rather than an emergency plan, and
+[`adr/0013`](adr/0013-the-project-is-the-source-of-truth.md).
 
 ### 2. The knowledge layer is gone and its replacement is undecided
 
@@ -133,6 +137,8 @@ Without a Google credential every note degrades to text and says
 | The HQ deploy script **printed its token into a transcript** | rotated; the script can no longer print it — `npm run hq:token` sends it to Telegram |
 | `verify:credentials` **broke the live Slack install every run**: it upserted the production row with its probe secret reference, then deleted that secret at cleanup. Nothing failed until `slack:rotate` refused, days later | the lifecycle checks run against a probe row (`A0PROBELIFE`) and never touch the install; a 19th check fails the suite if any reference is DANGLING; `npm run slack:repair-refs` repairs one |
 | `npm run inventory` reported the Slack config token dead **minutes after a successful rotation** — it probed the environment copy, which rotation never updates | it resolves the token from the vault, where rotation writes it |
+| Slack channels were named `proj-<slug>` — unambiguous, and in Grant's words "a bit strange". A sidebar is read by a person | plain English from the project's name: `#ai-team-hq-test`. `slack:rename-channels` migrates the ones that already exist |
+| `slack_channel_map` claimed nine channels were live that Slack had archived — every run whose cleanup was interrupted left one. A mapping that names an archived destination is worse than none | the rename script reconciles against Slack, which is the authority on archived |
 | A **channel with only the bot in it**: the office provisioned its first real project channel, posted into it, and Grant saw nothing. 56 Slack checks passed because each asks whether the message arrived, none whether it arrived to anyone | the provisioner invites the human (0050); a 57th check reads the membership back |
 | The intent classifier could not read a **bare imperative** — "Research X", "Draft Y" matched no rule and fell through to an unconfident `thought`, which convenes nobody | a `bare-imperative` signal at `light_investigation`, with a CONTROL for the same verbs used as nouns |
 | Renaming `notebook_sources` broke `app.project_attention()` and surfaced as a **502 from Team HQ**: a function body is stored as text, so it does not follow a rename the way a view does | 0053 recreates it; `verify:schema` now fails on any function naming a relation that does not exist, and was itself proven to discriminate |

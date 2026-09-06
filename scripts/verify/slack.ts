@@ -80,6 +80,9 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const stamp = String(Date.now()).slice(-8)
 const PROJECT_SLUG = `fixture-slack-office-${stamp}`
+// Unique per run: a channel name is claimed for good once used, archived or
+// not, so a constant fixture name would collide with yesterday's channel.
+const PROJECT_NAME = `Slack office verification fixture ${stamp}`
 const message = (body: string): ResultMessage => ({
   staffTitle: 'Research Director',
   body,
@@ -114,7 +117,7 @@ await db.execute(`
 
 const project = await one<{ id: string }>(`
   insert into public.projects (slug, name)
-  values (${lit(PROJECT_SLUG)}, 'Slack office verification fixture')
+  values (${lit(PROJECT_SLUG)}, ${lit(PROJECT_NAME)})
   returning project_id::text as id
 `)
 const PROJECT_ID = String(project?.id)
@@ -194,9 +197,9 @@ record(
 )
 
 record(
-  'the proposed name is derived deterministically from the project slug',
-  `${channelNameFor(PROJECT_SLUG)} == ${created.channelName}`,
-  channelNameFor(PROJECT_SLUG) === created.channelName,
+  'the proposed name is plain English, derived deterministically from the project NAME',
+  `${channelNameFor(PROJECT_NAME)} == ${created.channelName}`,
+  channelNameFor(PROJECT_NAME) === created.channelName,
 )
 
 // ===========================================================================
