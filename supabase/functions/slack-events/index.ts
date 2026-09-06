@@ -24,6 +24,7 @@
 
 import type { SlackEnvelope } from './events.ts'
 import { asUrlVerification, toCanonicalCommand, UnsupportedSlackEventError } from './events.ts'
+import { parseInteractionBody, toCanonicalInteraction } from './interactions.ts'
 import { verifySlackRequest } from './signature.ts'
 
 const SIGNING_SECRET = Deno.env.get('SLACK_SIGNING_SECRET') ?? ''
@@ -49,6 +50,62 @@ const rest = async (
     },
     body: JSON.stringify(body),
   })
+
+/**
+ * Persist a canonical command and its Slack routing.
+ *
+ * Shared by the events path and the interactivity path, because they differ
+ * only in how the command was derived — and two copies of an insert is how the
+ * two paths start disagreeing about what a duplicate is.
+ *
+ * Returns the outcome rather than a Response: the two callers owe Slack
+ * different replies (an event wants JSON, a button press wants an empty body
+ * or the message is replaced).
+ */
+const storeCommand = async (
+  command: ReturnType<typeof toCanonicalCommand>,
+): Promise<'stored' | 'duplicate' | 'failed'> => {
+  const stored = await rest(
+    'inbound_commands',
+    {
+      origin_channel: command.origin_channel,
+      origin_ref: command.origin_ref,
+      actor: command.actor,
+      instruction: command.instruction,
+      dedupe_key: command.dedupe_key,
+      callback_action: command.callback_action,
+      compensates_event_id: command.compensates_event_id,
+      received_at: command.received_at,
+    },
+    'resolution=merge-duplicates,return=representation',
+  )
+
+  // A duplicate is not a failure. `merge-duplicates` returns the existing row,
+  // but *concurrent* duplicates can still surface as 409 from the unique index
+  // — which is the index doing its job. The Gate 4 run produced exactly that:
+  // one of five simultaneous redeliveries came back 409, the handler returned
+  // 503, and Slack was told to retry an event that had already been stored
+  // correctly. 409 is success.
+  if (!stored.ok && stored.status !== 409) return 'failed'
+  if (stored.status === 409) return 'duplicate'
+
+  const returned = (await stored.json()) as { command_id?: string }[]
+  const commandId = returned[0]?.command_id
+  if (commandId !== undefined) {
+    // The Slack-specific half. Best effort *in the response sense only*: if it
+    // fails the canonical command is still stored, which is the row that must
+    // never be lost. Slack routing can be re-derived; an instruction cannot.
+    await rest('inbound_commands_slack', {
+      command_id: commandId,
+      team_id: command.slack.team_id,
+      channel_id: command.slack.channel_id,
+      thread_ts: command.slack.thread_ts,
+      is_dm: command.slack.is_dm,
+      reaction: command.slack.reaction,
+    })
+  }
+  return 'stored'
+}
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'GET') {
@@ -80,6 +137,31 @@ Deno.serve(async (request: Request): Promise<Response> => {
     rawBody,
   )
   if (!verified.ok) return unauthorized()
+
+  // Interactivity arrives at the SAME URL as events and is not JSON: Slack
+  // form-encodes it as `payload=<json>`. Checked before the JSON parse, because
+  // otherwise every button press is a 400 — and a 400 here is shown to the
+  // person who clicked, not quietly retried.
+  //
+  // The signature was already verified over the raw body above, which is the
+  // only correct place to do it either way.
+  const interaction = parseInteractionBody(rawBody)
+  if (interaction !== null) {
+    let pressed: ReturnType<typeof toCanonicalInteraction>
+    try {
+      pressed = toCanonicalInteraction(interaction)
+    } catch {
+      // An unknown action id is our own older message meeting our newer code.
+      // 200 and nothing, so Slack does not show the clicker an error for
+      // something they cannot fix.
+      return Response.json({ ok: true, ignored: 'unrecognised interaction' })
+    }
+    await storeCommand(pressed)
+    // An empty 200 leaves the message exactly as it is. Slack treats a body
+    // here as a REPLACEMENT for the message, so returning anything chatty would
+    // overwrite the result the button is attached to.
+    return new Response('', { status: 200 })
+  }
 
   let envelope: SlackEnvelope
   try {
@@ -130,52 +212,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     throw error
   }
 
-  // `return=representation` on this one insert, because the side table needs the
-  // command_id and a second round trip to look it up would double the latency
-  // inside Slack's 3-second budget.
-  const stored = await rest(
-    'inbound_commands',
-    {
-      origin_channel: command.origin_channel,
-      origin_ref: command.origin_ref,
-      actor: command.actor,
-      instruction: command.instruction,
-      dedupe_key: command.dedupe_key,
-      callback_action: command.callback_action,
-      compensates_event_id: command.compensates_event_id,
-      received_at: command.received_at,
-    },
-    'resolution=merge-duplicates,return=representation',
-  )
-
-  // A duplicate is not a failure. `merge-duplicates` returns the existing row,
-  // but *concurrent* duplicates can still surface as 409 from the unique index
-  // — which is the index doing its job. The Gate 4 run produced exactly that:
-  // one of five simultaneous redeliveries came back 409, the handler returned
-  // 503, and Slack was told to retry an event that had already been stored
-  // correctly. 409 is success.
-  if (!stored.ok && stored.status !== 409) {
-    return new Response('storage failed', { status: 503 })
-  }
-  if (stored.status === 409) {
+  const outcome = await storeCommand(command)
+  if (outcome === 'failed') return new Response('storage failed', { status: 503 })
+  if (outcome === 'duplicate') {
     return Response.json({ ok: true, dedupe_key: command.dedupe_key, duplicate: true })
-  }
-
-  const returned = (await stored.json()) as { command_id?: string }[]
-  const commandId = returned[0]?.command_id
-
-  if (commandId !== undefined) {
-    // The Slack-specific half. Best effort *in the response sense only*: if it
-    // fails the canonical command is still stored, which is the row that must
-    // never be lost. Slack routing can be re-derived; an instruction cannot.
-    await rest('inbound_commands_slack', {
-      command_id: commandId,
-      team_id: command.slack.team_id,
-      channel_id: command.slack.channel_id,
-      thread_ts: command.slack.thread_ts,
-      is_dm: command.slack.is_dm,
-      reaction: command.slack.reaction,
-    })
   }
 
   return Response.json({ ok: true, dedupe_key: command.dedupe_key })

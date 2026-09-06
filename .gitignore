@@ -135,3 +135,7 @@ tmp/
 
 # Generated at deploy time from src/channels/ — never edited here, never committed.
 supabase/functions/*/telegram.ts
+
+# Portable exports — generated on demand, never committed
+aiteamhq-portable-*.json.gz
+aiteamhq-portable-*.sha256

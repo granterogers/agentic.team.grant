@@ -67,6 +67,28 @@ export interface Handler {
   handle(job: Job, db: SqlExecutor): Promise<HandlerOutput>
 }
 
+/**
+ * What actually happens in the `notifying` state.
+ *
+ * Added because the worker was moving `committed → notifying → complete` with
+ * `state_reason = 'delivered'` while delivering nothing at all. That is the
+ * same defect the rest of this file is written against, in its politest form:
+ * a state that names an action, a reason that asserts it happened, and no code
+ * that does it. Nothing was wrong with the state machine — it was telling the
+ * truth about which state it was in and a lie about what that state meant.
+ *
+ * Kept as a function type rather than a Slack import so the worker still knows
+ * nothing about channels (§5). A worker with no notifier now says so in the
+ * state reason instead of claiming a delivery.
+ */
+export interface NotifyOutcome {
+  readonly delivered: boolean
+  /** Recorded verbatim as the job's final `state_reason`. Keep it short. */
+  readonly note: string
+}
+
+export type Notifier = (job: Job, output: HandlerOutput, outputId: string) => Promise<NotifyOutcome>
+
 export type Reviewer = (
   output: HandlerOutput,
   job: Job,
@@ -189,6 +211,7 @@ export const runJob = async (
   job: Job,
   handlers: readonly Handler[],
   review: Reviewer,
+  notify?: Notifier,
 ): Promise<WorkerResult> => {
   const handler = handlers.find((h) => h.kind === job.kind)
   if (handler === undefined) {
@@ -302,12 +325,37 @@ export const runJob = async (
   await moveTo(db, job.jobId, 'committing')
   await moveTo(db, job.jobId, 'committed')
   await moveTo(db, job.jobId, 'notifying')
-  await moveTo(db, job.jobId, 'complete', 'delivered')
 
+  // Delivery failing does NOT fail the job. The work is done and committed —
+  // that is what `committed` means, and it is already true. A failed delivery
+  // is its own fact with its own record (`slack_deliveries`), and rolling the
+  // job back would discard finished work because a message did not send.
+  //
+  // What it must never do is claim delivery anyway. The state reason carries
+  // what actually happened.
+  let notified: NotifyOutcome
+  if (notify === undefined) {
+    notified = { delivered: false, note: 'no notifier configured; nothing was delivered' }
+  } else {
+    try {
+      notified = await notify(job, output, outputId)
+    } catch (error) {
+      notified = {
+        delivered: false,
+        note: `notifier threw: ${(error as Error).message.slice(0, 120)}`,
+      }
+    }
+  }
+
+  await moveTo(db, job.jobId, 'complete', notified.note.slice(0, 200))
+
+  const reviewNote = gate.exempt
+    ? 'committed without review (deterministic path)'
+    : 'committed after review'
   return {
     jobId: job.jobId,
     finalState: 'complete',
-    note: gate.exempt ? 'committed without review (deterministic path)' : 'committed after review',
+    note: `${reviewNote}; ${notified.note}`,
   }
 }
 
@@ -324,7 +372,7 @@ export const drain = async (
   handlers: readonly Handler[],
   review: Reviewer,
   max = 25,
-  options: { readonly recover?: boolean } = {},
+  options: { readonly recover?: boolean; readonly notify?: Notifier } = {},
 ): Promise<WorkerResult[]> => {
   // Sweep first. A job held by a dead worker counts against capacity, so
   // skipping this makes a worker unable to dequeue for reasons that look
@@ -336,7 +384,7 @@ export const drain = async (
     const job = await dequeue(db, workerId)
     if (job === null) break
     try {
-      done.push(await runJob(db, job, handlers, review))
+      done.push(await runJob(db, job, handlers, review, options.notify))
     } catch (error) {
       done.push({
         jobId: job.jobId,

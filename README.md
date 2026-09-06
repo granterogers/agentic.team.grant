@@ -1,124 +1,140 @@
 # AI Team HQ
 
-A private, cloud-first, project-agnostic agentic operating system — a persistent
-business think tank that works across projects, reachable by voice, Slack,
-Telegram, or the web app.
+A private, cloud-first agentic operating system: a persistent business think
+tank of eight AI staff that works across projects, reachable from Slack,
+Telegram, or the web.
 
-**Status: Phase 0 (bootstrap). No application code yet, by design.**
+**Not a chatbot.** Work is queued, routed to the smallest justified set of
+specialists, reviewed before it commits, delivered exactly once to the right
+place, and undoable. Every inference attempt is recorded, and paid inference is
+prevented by deterministic code rather than by a prompt.
 
-The build follows a strict sequential gate: one phase at a time, each proven by
-tests, failure injection and restart-recovery before the next begins. Phase 0 is
-research and design.
+```
+9,476 lines of TypeScript · 48 migrations · 583 unit tests
+15 live verification suites, ~300 checks against real services
+```
+
+---
+
+## State, honestly
+
+| Phase | |
+|---|---|
+| 0–6 · foundations, ledger, job engine, projects, agents, autonomy | ✅ complete |
+| 7 · communications | ✅ complete except six more Telegram bots |
+| 8 · Team HQ web app | ✅ built and deployed; one criterion unclaimed¹ |
+| 9 · Google ecosystem | ⛔ **blocked and being reconsidered** — see below |
+| 10 · hardening | ⬜ |
+
+¹ Whether it *feels* right on a phone. A script can check the viewport and the
+touch targets; it cannot check that. §13's precedent is that a subjective
+acceptance waits for the human.
+
+### The thing to know before anything else
+
+On **2026-09-04 Google disabled the account** this project used for NotebookLM.
+It also owned the Cloud project behind the Gemini key, and it is the sign-in
+identity for Supabase, Vercel and Backblaze.
+
+Nothing is down — a disabled Google account breaks the login button, not the
+service — but it forces a decision about the knowledge layer and about account
+ownership generally. Read **[`docs/adr/0012`](docs/adr/0012-notebook-account-disabled.md)**
+and **[`docs/account-continuity.md`](docs/account-continuity.md)** before
+touching anything.
 
 ---
 
 ## Start here
 
-| Read this | For |
+| Read | For |
 |---|---|
-| **[`HUMAN_ONLY_PREREQUISITES.md`](HUMAN_ONLY_PREREQUISITES.md)** | ⭐ **What Grant needs to do.** 3 blockers, two of them 60-second fixes. Start here. |
-| **[`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md)** | ⭐ **CANONICAL specification.** Consolidates the original prompt, the audit addendum, and verified corrections. |
-| [`docs/adr/`](docs/adr/) | Why each material decision was made |
-| [`docs/cost-and-hosting-decisions.md`](docs/cost-and-hosting-decisions.md) | Cost classes, three inference configs, corrected verdicts |
-| [`docs/prerequisites.md`](docs/prerequisites.md) | Longer-form prerequisites (superseded in part) |
-| [`docs/feasibility-validation.md`](docs/feasibility-validation.md) | Which assumptions survived contact with current reality, and which did not |
-| [`docs/architecture.md`](docs/architecture.md) | The chosen stack and why each vendor beat its alternatives |
-| [`docs/implementation-plan.md`](docs/implementation-plan.md) | The phased plan, gates, and what "done" means each time |
-| [`docs/design/core-invariants.md`](docs/design/core-invariants.md) | The provider-independent core — command layer, ledger, jobs, quality gate |
+| **[`docs/HANDOFF.md`](docs/HANDOFF.md)** | ⭐ **Starting a session.** Where things are, what to read, what is waiting |
+| **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Everything currently wrong**, with severity and owner |
+| [`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md) | The canonical specification. Supersedes everything else |
+| [`docs/test-evidence/`](docs/test-evidence/) | What the checks found **by failing** — the best reading in the repo |
+| [`docs/adr/`](docs/adr/) | 14 decisions, with the reasoning that produced them |
+| [`src/jobs/worker.ts`](src/jobs/worker.ts) | The rule the system is built on, in its header |
 
 ---
 
-## The shape of it
+## How it fits together
 
 ```
-   Slack ──┐
-   Voice ──┤                                                 ┌──► Slack
-Telegram ──┼──► Canonical Command Layer ──► Router ──► Jobs ──┼──► Telegram
- Team HQ ──┘         (normalize only)      (Chief of      │   ├──► Team HQ
-                                            Staff)        │   └──► Notebook
-                                                          │
-                              ┌───────────────────────────┴──────┐
-                              │  Quality gate ──► Ledger commit  │
-                              └──────────────────────────────────┘
+Slack ─┐                                   ┌─ Slack  (the office: full detail)
+       ├─ adapters ─→ inbound_commands ─→ router ─→ jobs ─→ worker ─→ delivery ─┤
+Telegram┘   (translate only,              (dedupe    (state    (gates)   (once) ├─ Telegram (the pager)
+             never decide)                 required)  machine)                  └─ Team HQ (read-only)
+                          │                                │
+                          └──────── Postgres ──────────────┘
+                              canonical for everything
 ```
 
-**The central invariant:** four surfaces, one organisation. The surface an
-instruction arrives on affects only authentication, the reply address, and
-delivery policy — never what the organisation does. Channel adapters may
-translate; they may never decide.
+**Postgres is the system.** Not a cache, not a projection — the ledger, the
+queue, the state machine, the enforcement. Adapters translate and never decide;
+the database refuses illegal transitions rather than trusting callers not to
+attempt them. Every vendor above it is replaceable, which is why an account ban
+cost three project references and one document rather than the project.
 
-Two sources of truth: **Gemini Notebook** owns project knowledge and rich
-artifacts; **Postgres** owns everything operational. The system stays fully
-functional with Notebook unavailable.
+### The surfaces
 
----
-
-## Stack
-
-| Layer | Choice |
+| | What it is for |
 |---|---|
-| App + API | Next.js on Vercel Hobby (or Cloudflare Workers) |
-| Database | Supabase / PostgreSQL |
-| Voice | **optional** — OpenAI Realtime (`gpt-realtime-2.1-mini`), browser WebRTC |
-| Secondary inference | Provider registry, OpenRouter-first, hard-capped |
-| Notebook | `notebooklm-py`, master-token auth, behind an adapter |
-| Channels | Slack — **one shared app** (HTTP Events API), Telegram Bot API |
-| Notebook sync | Python serverless function — **no VM** |
-| Scheduler | external free trigger → app route |
-| Backups | Nightly `pg_dump` → Cloudflare R2 |
-
-Running cost: **$0/month mandatory.** No required subscription exists.
-Recommended configuration ~**$3/month** plus a $10 one-off. See
-[`docs/cost-and-hosting-decisions.md`](docs/cost-and-hosting-decisions.md).
+| **Slack** | the office — results in the thread that asked, presented as the staff member who produced them |
+| **Telegram** | the pager — important and above only, silent below urgent |
+| **Team HQ** | [ai-team-hq.vercel.app](https://ai-team-hq.vercel.app) — read-only dashboards, five views, sparklines |
+| **Voice** | built, degrades to text without a credential |
 
 ---
 
-## Five things worth knowing up front
+## Running it
 
-Each is explained in full in the feasibility document.
+```bash
+npm run verify        # lint, typecheck, migrations, 583 unit tests, secret scan
+npm run verify:db     # every live suite in order — ~25 minutes
+npm run inventory     # which credentials work, and which account each hangs off
+npm run export:portable   # a copy of everything that needs no vendor login
+```
 
-1. **iOS cannot keep a PWA microphone alive when backgrounded or screen-locked.**
-   ✅ **Resolved** — foreground/screen-on accepted; no native iOS app.
-2. **Free-only inference fails on data terms, not cost.** Providers may train on
-   or human-review free-tier traffic; the paid floor is ~$3–9/month.
-   ⏳ Open decision **D2** — three configs offered, defaulting to $0.
-3. **The Notebook free tier is sufficient** once you stop treating Notebook as
-   the inference engine: cache source text once, reason locally. Google AI Pro
-   is **optional and deferred**.
-4. **Supabase Free has no backups at all**, so the nightly offsite dump is
-   mandatory infrastructure rather than prudence.
-5. **No always-on VM is required.** The Notebook sync is pure HTTP.
+Individual live suites: `verify:slack` (56 checks) · `verify:telegram` (28) ·
+`verify:hq` (24) · `verify:worker` (19) · `verify:agents` (53) · and ten more.
 
----
+`verify:slack` and `verify:worker` each need the job queue to themselves and
+refuse to start rather than produce misleading red.
+`npm run purge:fixtures -- --go` clears debris.
 
-## Secrets
-
-No secret-bearing file should exist in this repository at all. `.gitignore` is a
-backstop for mistakes, not the mechanism.
-
-Four stores, non-overlapping:
-
-| Store | Serves |
-|---|---|
-| Cloud env **Environment variables** | Claude Code build sessions — bootstrap values |
-| Cloud env **API credentials** | same, for sensitive keys the session must never see |
-| **GitHub Actions secrets** | CI only — not readable by build sessions |
-| **App's encrypted store** | the deployed runtime |
-
-Production secrets are never inherited from the build environment. There is no
-`.secrets.local` in this project.
-
-Slack per-app credentials live in Postgres, one row per app — **never** in an
-environment variable. With eight bot identities there is no correct value for a
-single `SLACK_BOT_TOKEN`. See the Slack section of the architecture document
-before changing this.
+**You cannot reach Postgres directly from a build session** — no non-TCP egress.
+Everything goes over the Supabase Management API (ADR-0007). This is not a
+workaround to remove; it is the environment.
 
 ---
 
-## Development
+## The one lesson this codebase keeps teaching
 
-Every session runs in a Claude Code cloud environment against this repository.
-There is no local development machine.
+Every phase has produced the same defect wearing a new costume: **a check whose
+result does not depend on the thing under test.** A hardcoded literal. A query
+against the wrong column. A test running as the wrong role. A fixture blocked by
+an earlier gate. A check asserting a function's return value rather than its
+consequence. A component tested only against its own expectations, green on both
+sides of an interface they disagreed about.
 
-Claude Code is the **development agent only**. Nothing in the product depends on
-Anthropic, Claude Code, or this session's tooling at runtime.
+And the two siblings, each learned the hard way:
+
+- **A test that changes real configuration must restore it.** Three instances: a
+  permissions check left `gmail.send` enabled, a prompt-versioning test rewrote a
+  real role's prompt, and a gate fixture left a global mute that silenced every
+  routine notification for three days.
+- **A failing check that notifies nobody is indistinguishable from a passing
+  one.** The backup rehearsal failed twelve nights running, correctly and
+  loudly, in a place no human looked.
+
+So: **when you write a check, ask what it would do if the feature were deleted.**
+If it would still pass, it is not a check. The live suites are full of explicit
+CONTROL assertions for exactly this reason, and they have all earned their place.
+
+---
+
+## Cost
+
+$0.09, total, for eight avatar images — the only money this project has ever
+spent. Inference runs on verified-free models behind four enforcement layers,
+and a paid call is prevented by code, not by intention.

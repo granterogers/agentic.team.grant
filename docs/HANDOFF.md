@@ -1,167 +1,130 @@
-> **Superseded.** See [`HANDOFF-2026-09-04.md`](HANDOFF-2026-09-04.md) for the
-> current state — Phases 4, 5 and 6 are complete since this was written. The
-> environment facts below (no raw TCP to Postgres, use the Management API) are
-> still true and still the first thing to know.
+# Start here
 
-# Session handoff — 2026-09-03
+**For the next session, human or otherwise.** This replaces every earlier
+handoff; the dated ones remain as history and you do not need them.
 
-**For:** the next Claude Code session · **Branch:** `claude/new-session-o2oklu`
-
-Phase 0 is complete and **Phase 1 is unblocked**. This session verified
-credentials only; it deliberately wrote no Phase 1 code, because the stop
-condition in its brief said to halt if the database was unreachable — and it was,
-for reasons that turned out to be more fundamental than a bad connection string.
-That is now solved. Read this, then start Phase 1.
+**Branch:** `claude/phase-7-communications-kh8ow8` — everything committed and
+pushed. **Written:** 2026-09-05, end of day.
 
 ---
 
-## Read in this order
+## Read these four, in this order
 
-1. `AI_TEAM_HQ_MASTER_SPEC.md` — canonical. Supersedes everything else.
-2. `docs/adr/` — **seven** ADRs. Do not re-litigate them; ADR-0007 is new and
-   load-bearing for how you talk to the database at all.
-3. `docs/design/core-invariants.md` — the provider-independent core.
-4. `docs/implementation-plan.md` — Phase 1 scope and acceptance criteria.
-5. `docs/test-evidence/2026-09-03-credential-verification.md` — what is actually
-   proven to work, with the exact calls.
+1. **[`known-problems.md`](known-problems.md)** — everything currently wrong.
+   Start here, not with the code.
+2. **[`adr/0012`](adr/0012-notebook-account-disabled.md)** — the open decision.
+   Do not re-enable Notebook and do not create a Google account before reading it.
+3. **[`../AI_TEAM_HQ_MASTER_SPEC.md`](../AI_TEAM_HQ_MASTER_SPEC.md)** — canonical,
+   supersedes everything.
+4. **[`test-evidence/`](test-evidence/)** — twelve documents recording what the
+   checks found *by failing*. The failures are the part worth reading.
 
----
-
-## Three things that will waste your time if you don't know them
-
-### 1. You cannot reach Postgres. Do not try.
-
-All non-443 outbound TCP is blocked in this environment. Ports 5432 and 6543
-time out; 443 to the same host connects. The direct database host is IPv6-only
-and the container has **no IPv6 address family at all** (`OSError 97`). The
-egress proxy's own documentation lists `raw-TCP databases` as unsupported.
-
-`psql` fails with a **bare, empty error message** (`psql: error:` and nothing
-else), which is why this is not self-diagnosing. If you find yourself debugging
-a connection string, stop and read ADR-0007.
-
-**Use `scripts/db-query.sh` instead.** It runs SQL through the Supabase
-Management API over HTTPS and is verified working:
-
-```bash
-scripts/db-query.sh "select current_user;"
-scripts/db-query.sh --file migrations/0001_whatever.sql
-```
-
-`pg_dump` and `psql` have no HTTPS mode, so anything needing the wire protocol —
-the nightly backup and the restore rehearsal — runs in **GitHub Actions**, where
-egress is unrestricted. That is ADR-0007's second half.
-
-### 2. Environment variables *do* reach a running session. Re-read before concluding one is absent.
-
-This session's first run asserted the opposite and told Grant a restart was
-required. It was wrong: `SUPABASE_ACCESS_TOKEN` and four Slack values were added
-mid-session and appeared in the **running** container without a restart. The
-previous session was restarted on that same false belief.
-
-Propagation is not instant and not guaranteed — the `BACKUP_S3_*` variables had
-still not arrived when this session ended. So: **re-read `os.environ` before
-reporting a credential missing**, and don't ask for a restart until you have.
-
-### 3. Run the secret scan before every commit
-
-```bash
-python3 scripts/secret-scan.py
-```
-
-It checks tracked files for every environment value verbatim *and* for known
-credential shapes. Public identifiers (Slack client/app id, the S3 endpoint,
-region and bucket) are allowlisted; real secrets are not. It is currently clean.
+Then run `npm run inventory` before trusting any credential.
 
 ---
 
-## Credential state
+## Where it stands
 
-| Credential | State |
+| Phase | |
 |---|---|
-| `SUPABASE_ACCESS_TOKEN` | ✅ **DDL proven** — create, insert, select, revoke, RLS, policy, drop |
-| `SLACK_BOT_TOKEN` | ✅ works, app installed, 17/17 scopes |
-| `SLACK_SIGNING_SECRET` | ✅ present, 32 hex — functional test needs Phase 2's endpoint |
-| `SLACK_CLIENT_SECRET` / `_CLIENT_ID` / `_APP_ID` | ✅ present and correctly shaped |
-| `OPENROUTER_API_KEY` | ✅ `is_free_tier: false`, `limit: 5` ⚠️ **lifetime** cap, not monthly |
-| `OPENAI_API_KEY`, `GEMINI_API_KEY`, `TELEGRAM_CHIEF_BOT_TOKEN` | ✅ verified earlier |
-| `SUPABASE_DB_URL` | ⚠️ set, unusable here by design — it is for Vercel, and it is the *Direct* string where Vercel wants the *Session pooler* one |
-| `BACKUP_S3_*` (5 vars) | ⬜ **outstanding** — see below |
-| `SLACK_APP_TOKEN` | ⬜ empty, **correctly** — Socket Mode is rejected (§4) |
+| 0–6 | ✅ complete |
+| 7 · communications | ✅ complete bar six Telegram bots (tokens only Grant can make) |
+| 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
+| 9 · Google ecosystem | ⛔ **do not start** — its OAuth client is under a disabled account, and ADR-0012 questions the premise |
+| 10 · hardening | ⬜ **the obvious next move**, and it needs nobody |
 
-### The one outstanding item
-
-Grant chose **Backblaze B2** (no card required, unlike R2 — the reasoning is in
-`docs/credential-shopping-list.md` and it matters, because he removed the
-OpenRouter card deliberately). The bucket exists:
-
-```
-bucket      ai-team-hq-backups
-endpoint    s3.eu-central-003.backblazeb2.com
-region      eu-central-003     (B2 shows no region field — it is inside the endpoint)
-private · encrypted · object lock disabled
-```
-
-Still needed: the Application Key pair, as `BACKUP_S3_ACCESS_KEY_ID` and
-`BACKUP_S3_SECRET_ACCESS_KEY` (B2 calls them *keyID* and *applicationKey*).
-**Check the environment first** — they may have landed since.
-
-This blocks *finishing* Phase 1, not starting it. And note: **retention is
-unconfigured on a 10 GB free tier.** The bucket defaults to "keep all versions";
-since the job writes a uniquely-keyed object per night rather than overwriting,
-accumulation — not versioning — is the exposure. A lifecycle rule plus pruning in
-the job is part of the backup deliverable, or backups fill the bucket and start
-failing quietly.
+48 migrations · 583 unit tests · 15 live suites, ~300 checks, all green as of
+this evening.
 
 ---
 
-## Parked, at Grant's request — do not start these
+## What happened today, in one paragraph
 
-| What | Where |
-|---|---|
-| **Obsidian vault sync** — `granterogers/obsidian-vault`, for syncing outputs "later" | [`docs/parked/obsidian-vault-sync.md`](parked/obsidian-vault-sync.md) |
-
-Parked means recorded, not scheduled. Read the note before touching it: there is
-a real architectural question in it (delivery surface vs. second knowledge
-adapter) and it connects to Gate 2's stop condition.
-
-## Where to start
-
-`docs/implementation-plan.md` is authoritative on scope. The ordering constraint
-worth restating, because it is easy to get backwards:
-
-> **CI before schema.** A test harness added after the schema is a harness
-> shaped by the schema. Lint, typecheck, test and a migration check must be green
-> on an empty suite *first*.
-
-Then, per Phase 1: migrations as versioned SQL under `migrations/`, `events`
-append-only enforced by `REVOKE` (proven to hold — a forbidden `UPDATE` returns
-`42501`), RLS throughout, the job engine with the full §6 state machine,
-idempotency keys from semantic inputs, `SELECT … FOR UPDATE SKIP LOCKED`
-dequeue, capacity limits enforced **at dequeue**, database-backed per-provider
-circuit breakers, the boot recovery sweep, and undo as a compensating event
-keyed on the original `event_id`.
-
-Nothing beyond that. No channels, no agents, no UI past what proves the core
-works. Phase 1 closes only when its acceptance criteria are **demonstrated** —
-a job surviving a hard kill in each state, and a real backup restored into a
-fresh database.
-
-One precedent worth copying: the credential brief asked for
-create/insert/select/drop to prove DDL. That proves DDL *runs*. It does not
-prove the property Phase 1 depends on — that `REVOKE` is **enforced** rather than
-merely accepted — so this session additionally impersonated the application role
-and confirmed Postgres refuses the write. Prefer that shape of test throughout:
-**assert the property, not the syntax.**
+Grant reinstalled Slack with `channels:join` and set the interactivity URL, so
+the office is complete. Photorealistic avatars were generated, hosted and are
+live. Team HQ was built and deployed. Then Google disabled the account four
+vendors sign in with, which turned the day into an audit: NotebookLM is gone,
+the Gemini key was already dead of the same cause, Groq turned out to be dead
+too, and the backup rehearsal turned out to have failed every night since it was
+written without telling anyone. All of that is fixed or recorded; none of it is
+still bleeding.
 
 ---
 
-## Known-good facts, so you don't re-derive them
+## The rule the codebase is built on
 
-- Postgres **17.6**; Management API runs as `postgres` on database `postgres`.
-- Project ref `baujwlzcziasnfhhkchg`; Slack app `A0BUFRVSSLD`; workspace
-  `T0BUCJ2L5FD`; bot `ai_team_hq` / `U0BUG0RPZ8B`.
-- Management API returns **`201`** on success, `400` with a Postgres `SQLSTATE`
-  in the message on failure. `[]` is a successful statement returning no rows.
-- Another session pushed `docs/credential-shopping-list.md` to this branch
-  concurrently. Expect company; fetch before you push.
+From `src/jobs/worker.ts`: **it takes no shortcut that the database would have
+allowed.** A worker knows what it is doing — it wrote the output, so why re-read
+`reviewer_status`? Every such shortcut turns an enforced invariant into an
+honour-system one, and the enforcement stays green because nothing exercises it.
+
+And the defect this project keeps meeting, in eleven costumes so far: **a check
+whose result does not depend on the thing under test.** When you write one, ask
+what it would do if the feature were deleted. If it would still pass, it is not
+a check — add a CONTROL that proves it discriminates.
+
+Two siblings, each learned the hard way:
+
+- a test that changes real configuration must restore it;
+- **a failing check that notifies nobody is indistinguishable from a passing
+  one.**
+
+---
+
+## What exists, by surface
+
+**Slack — the office.** Results reach the thread that asked, presented as the
+staff member who produced them, exactly once. Six §12 buttons, received and
+acted on. The bot recovers itself from being removed from a channel.
+`verify:slack`, 56 checks.
+
+**Telegram — the pager.** One bot, registered to Grant. Pages at `important`
+and above, silent below urgent. An interrupted send can never be reconciled — a
+bot cannot read its own sent messages back — so it parks forever rather than
+risk sending twice. `verify:telegram`, 28 checks.
+
+**Team HQ — <https://ai-team-hq.vercel.app>.** Read-only, five views, four
+sparklines, per-device layout memory. The token is in the vault as
+`hq.api_token`; `npm run hq:token` sends it to Grant's phone. **Never print it**
+— the deploy script did once, which is why it now cannot. `verify:hq`, 24 checks.
+
+**Delivery is channel-agnostic.** `public.deliveries` and `app.claim_delivery`
+serve both surfaces. Adding a third means adding a `Transport`, not a third
+table.
+
+**Voice notes.** Everything up to the API call. Without a credential every note
+degrades to text and says `no_credential`, which is the acceptance criterion
+working.
+
+---
+
+## Waiting on Grant
+
+Do not add to this list in chat. It lives in
+[`known-problems.md`](known-problems.md) and in `npm run inventory`, and the
+reason is that surfacing needs one per turn is exactly what went wrong this
+week.
+
+1. 🔴 **Change the Backblaze account email** while that login still works.
+2. **Which email are OpenRouter, OpenAI and Groq under?**
+3. **A decision on the knowledge layer** — ADR-0012.
+4. Six Telegram bot tokens; a Google Cloud service account on a live account.
+   Browser-agent prompt ready at [`offload/setup-prompt.md`](offload/setup-prompt.md).
+5. One button press, and a look at Team HQ on a phone.
+
+---
+
+## What I would do next
+
+**Phase 10 (hardening) is unblocked and needs nobody.** Failure injection across
+every integration, provider failover, the §30 documentation set. The backup
+restore rehearsal is already done — it now passes for the first time, and pages
+on failure.
+
+**The knowledge layer spike** is the highest-value thing after that, and it can
+start the moment ADR-0012 is settled. Postgres full-text search needs no
+provider, no quota and no credential; the content is already in
+`notebook_sources.content`.
+
+**Do not start Phase 9.** Its foundation is a credential under a disabled
+account, and ADR-0012 asks whether the system should depend on Google at all.

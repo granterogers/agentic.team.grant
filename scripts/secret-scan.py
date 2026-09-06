@@ -99,6 +99,12 @@ PATTERNS = {
     # Gate 2's durable credentials. The master token is full-account and
     # long-lived, so it is the single most damaging string in this system.
     "google master token":    r"\baas_et/[A-Za-z0-9_\-]{20,}",
+    # A service-account key file, which is what Cloud Text-to-Speech needs.
+    # Matched on the two fields that only appear together in one: a leaked one
+    # authenticates as the account with whatever roles it holds, and unlike a
+    # session cookie it does not expire on its own.
+    "google service account": r'"type"\s*:\s*"service_account"',
+    "google private key id":  r'"private_key_id"\s*:\s*"[a-f0-9]{20,}"',
     "google embeddedsetup token": r"\boauth2_4/[A-Za-z0-9_\-]{20,}",
     "google oauth access token":  r"\bya29\.[A-Za-z0-9_\-]{20,}",
 }

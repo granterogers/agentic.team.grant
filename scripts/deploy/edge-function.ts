@@ -42,10 +42,36 @@ if (webhookSecret === null) {
 // --- give the function its secret ------------------------------------------
 // Edge Functions receive SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
 // automatically; anything else has to be set explicitly.
+// The bot's own id, so a chat id is recorded against the bot that holds it
+// (0041). Read from the live API rather than configured: a hand-copied id that
+// disagrees with the token would register chats nothing can ever page.
+let botId = ''
+if (botToken !== undefined && botToken !== '') {
+  const me = (await (await fetch(`https://api.telegram.org/bot${botToken}/getMe`)).json()) as {
+    ok?: boolean
+    result?: { id?: number; username?: string }
+  }
+  if (me.ok === true && me.result?.id !== undefined) {
+    botId = String(me.result.id)
+    console.log(`bot: @${String(me.result.username)} (${botId})`)
+  }
+}
+if (botId === '') {
+  // Refuse rather than deploy a webhook that silently registers nothing: the
+  // failure would surface weeks later as "the pager never pages".
+  console.error(
+    'cannot determine the bot id — refusing to deploy a webhook that cannot register chats',
+  )
+  process.exit(1)
+}
+
 const setSecret = await fetch(`${api}/secrets`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify([{ name: 'TELEGRAM_WEBHOOK_SECRET', value: webhookSecret }]),
+  body: JSON.stringify([
+    { name: 'TELEGRAM_WEBHOOK_SECRET', value: webhookSecret },
+    { name: 'TELEGRAM_BOT_ID', value: botId },
+  ]),
 })
 console.log(`function secret set: http ${setSecret.status}`)
 

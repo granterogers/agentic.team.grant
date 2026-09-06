@@ -276,6 +276,37 @@ jobs:
           psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 -q -f roles.sql
           echo "roles created"
 
+          # A stand-in for Supabase Vault.
+          #
+          # THIS IS WHY EVERY RUN OF THIS WORKFLOW FAILED FOR TWELVE NIGHTS.
+          # `public.credential_health` is a view over `vault.secrets`, the dump
+          # faithfully contains it, and stock PostgreSQL has no vault — so the
+          # restore aborted on that one statement and the verification below
+          # never ran at all.
+          #
+          # This is not a stub that makes a check pass on a fake. The real
+          # target of a restore is a NEW SUPABASE PROJECT, which has the vault
+          # extension; the rehearsal container did not, so it was failing to
+          # represent the target rather than finding a fault in the dump. The
+          # row-count assertions afterwards are untouched.
+          #
+          # What it deliberately does NOT do is fake vault CONTENTS. The dump is
+          # --schema=public --schema=app, so the secrets are not in it and never
+          # were. `verify:restore` says so out loud rather than leaving it to be
+          # discovered during a real recovery.
+          psql -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 -q <<'SQL'
+            create schema if not exists vault;
+            create table if not exists vault.secrets (
+              id uuid primary key default gen_random_uuid(),
+              name text unique, description text, secret text,
+              created_at timestamptz default now(), updated_at timestamptz default now()
+            );
+            create or replace view vault.decrypted_secrets as
+              select id, name, description, secret as decrypted_secret, created_at, updated_at
+              from vault.secrets;
+          SQL
+          echo "vault stand-in created (schema only — the dump carries no secrets)"
+
       - name: Restore
         env:
           PGPASSWORD: rehearsal
@@ -300,3 +331,26 @@ jobs:
           name: restore-report-${{ needs.backup.outputs.artifact }}
           path: restore-report.md
           retention-days: 90
+
+  notify:
+    name: page on failure
+    needs: [backup, restore-rehearsal]
+    # Only when something actually broke. `always()` so it still runs after a
+    # failed job, `contains(...)` so a green night is silent — a pager that
+    # fires nightly is a pager that gets muted.
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Page Grant
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          npm run --silent backup:notify -- \
+            "dump=${{ needs.backup.result }} · restore rehearsal=${{ needs['restore-rehearsal'].result }}" \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

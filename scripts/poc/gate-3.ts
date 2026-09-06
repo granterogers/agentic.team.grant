@@ -433,10 +433,20 @@ await clearPreference(db)
   )
 }
 
-// --- clean up the probe rows; the preference stays as evidence -------------
+// --- clean up the probe rows, INCLUDING the preference ---------------------
+//
+// This block used to end with "the preference stays as evidence", and left a
+// global `min_severity = 'important'` in `notification_preferences`. Evidence
+// and configuration are different things: the evidence is in
+// `preference_instructions`, which is append-only and keeps every instruction
+// with what it was taken to mean. What stayed behind here was live
+// configuration that silently suppressed every routine notification for three
+// days — invisible until the worker started actually delivering them. See
+// migration 0036.
 await db.execute(
   `delete from public.inbound_commands where actor = '4242' or actor = 'telegram:4242'`,
 )
+await clearPreference(db)
 await db.execute(`
   delete from public.inbound_commands
   where dedupe_key like 'telegram:%:${CHAT}%' or dedupe_key like 'telegram:callback:g3-%'

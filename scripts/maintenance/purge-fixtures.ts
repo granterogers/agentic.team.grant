@@ -161,6 +161,50 @@ if (orphans.rows.length > 0) {
   console.log(`\nretired ${String(orphans.rows.length)} orphaned fixture job(s).`)
 }
 
+// Delivery debris. Every `verify:*` dedupe key belongs to a verification run,
+// and a `job:*` key whose job belongs to a retired fixture project does too.
+//
+// Left alone until now, and it had reached 86 rows. That is not merely untidy:
+// `delivery_health` counts claimed leases and failed sends, and a report whose
+// numbers are mostly debris is a report nobody can act on — the same way
+// leaked fixture jobs made every "how busy are we" summary wrong in the
+// direction of "looks busy".
+const deliveries = await db.execute(`
+  delete from public.deliveries
+  where dedupe_key like 'verify:%'
+     or job_id in (
+       select job_id from public.jobs
+       where project_id in (select project_id from public.projects where (${predicate}))
+     )
+  returning delivery_id
+`)
+if (deliveries.rows.length > 0) {
+  console.log(`\nretired ${String(deliveries.rows.length)} fixture delivery record(s).`)
+}
+
+// Chats no human ever spoke from. A real chat is registered by the webhook and
+// has a positive id (a Telegram user id); every fixture here uses the
+// supergroup-shaped negative range, which no private chat can have.
+const chats = await db.execute(`
+  delete from public.telegram_chats
+  where chat_type = 'private' and chat_id like '-100%'
+  returning chat_id
+`)
+if (chats.rows.length > 0) {
+  console.log(`retired ${String(chats.rows.length)} fixture telegram chat(s).`)
+}
+
+const health = await db.execute(`select * from public.delivery_health order by channel, state`)
+if (health.rows.length > 0) {
+  console.log('\ndeliveries remaining:')
+  for (const r of health.rows) {
+    console.log(
+      `  ${String(r.channel)} ${String(r.state)}: ${String(r.deliveries)}` +
+        (Number(r.leases_expired) > 0 ? ` (${String(r.leases_expired)} lease(s) expired)` : ''),
+    )
+  }
+}
+
 const remaining = await db.execute(`
   select p.slug, p.name,
          (select count(*)::int from public.notebook_sources s where s.project_id = p.project_id) as sources
