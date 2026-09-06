@@ -83,7 +83,20 @@ The Google Cloud TTS credential is **parked at Grant's request**. Without one,
 every note degrades to text and says `no_credential` — the acceptance criterion
 working, not a gap.
 
-### 7. The corpus is one document
+### 7. NotebookLM is back on, and the reason it was off has not changed
+
+Restored on 2026-09-06 at Grant's instruction, with the credential verified the
+same day: three notebooks, `available_unofficial`, a real sync run. Recorded in
+migration 0061.
+
+The risk is not that it stops working — it works. It is that NotebookLM has no
+public API, so the client impersonates a browser session, which is the behaviour
+the 2026-09-04 ban named. The appeal reversed a penalty, not a rule. What has
+changed is the blast radius: everything the notebook feeds is cached in
+`public.documents`, retrieval needs no external service, and nothing else
+depends on the account. If it goes again it costs a route, not a corpus.
+
+### 8. The corpus is one document
 
 The knowledge layer is built and used — `npm run ask` retrieves before it asks,
 and records what it retrieved as the output's sources. But the whole corpus is a

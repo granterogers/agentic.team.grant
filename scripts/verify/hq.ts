@@ -285,6 +285,70 @@ record(
 )
 
 // ===========================================================================
+// The connections view
+// ===========================================================================
+//
+// Grant asked for a light per service. The claim worth checking is not that the
+// section returns JSON, but that the lights are HONEST: every row carries when
+// it was last probed, and a row nobody probed is not green.
+
+const connResponse = await get('?section=connections')
+const connData = (JSON.parse(connResponse.body) as { data?: { rows?: Record<string, unknown>[] } })
+  .data
+const connRows = connData?.rows ?? []
+
+record(
+  'the connections section returns a row per service',
+  `http ${String(connResponse.status)}, ${String(connRows.length)} row(s)`,
+  connResponse.status === 200 && connRows.length >= 5,
+)
+
+record(
+  'every row carries its age, so a light cannot silently go stale',
+  connRows.every((r) => typeof r.age_minutes === 'number')
+    ? 'all rows have age_minutes'
+    : 'a row has no age',
+  connRows.length > 0 && connRows.every((r) => typeof r.age_minutes === 'number'),
+)
+
+// The defect this check exists for: the page said "Backblaze · Working" in
+// green on a status no program has ever verified. `ok` must mean a probe
+// answered; anything a human merely asserted is `attested`.
+const greenWithoutAProbe = connRows.filter(
+  (r) => r.state === 'ok' && String(r.detail) === 'not machine-checkable',
+)
+record(
+  'nothing claims a probed "ok" that was never probed',
+  greenWithoutAProbe.length === 0
+    ? 'none'
+    : `GREEN WITHOUT A PROBE: ${greenWithoutAProbe.map((r) => String(r.service)).join(', ')}`,
+  greenWithoutAProbe.length === 0,
+)
+
+// Problems first: a list sorted alphabetically buries the one row that matters
+// between two healthy ones.
+const stateOrder = ['dead', 'missing', 'unknown', 'ok', 'attested', 'parked']
+const ranks = connRows.map((r) => stateOrder.indexOf(String(r.state)))
+record(
+  'problems are ordered first, not buried alphabetically',
+  connRows
+    .map((r) => String(r.state))
+    .join(', ')
+    .slice(0, 70),
+  ranks.every((v, i) => i === 0 || (ranks[i - 1] ?? 0) <= v),
+)
+
+// §25 again, on a surface a browser reads.
+const connLeaks = ['xoxb-', 'xoxe-', 'sbp_', 'ntn_', 'AIza'].filter((n) =>
+  connResponse.body.includes(n),
+)
+record(
+  'the connections payload carries no credential (§25)',
+  connLeaks.length === 0 ? 'clean' : `LEAKED: ${connLeaks.join(', ')}`,
+  connLeaks.length === 0,
+)
+
+// ===========================================================================
 
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')

@@ -47,6 +47,15 @@ type State =
    * reading.
    */
   | 'parked'
+  /**
+   * A person said so; no program has checked.
+   *
+   * Distinct from `ok` because green on the dashboard means "a probe reached
+   * it and it answered". Backblaze is used by a GitHub Action and not by this
+   * process, so its status comes from Grant — which may well be true and is a
+   * different claim with a different shelf life.
+   */
+  | 'attested'
 interface Row {
   service: string
   what: string
@@ -231,7 +240,7 @@ await check(
   'Google',
   'NotebookLM master token',
   '✅ Google (reinstated 2026-09-05)',
-  'Retired for good by ADR-0013: NotebookLM has no public API, so no unattended client',
+  "Re-enabled 2026-09-06 at Grant's instruction. No public API, so the client impersonates a browser session — the behaviour the 2026-09-04 ban named",
   async () => {
     const raw = (
       await db.execute(
@@ -295,6 +304,26 @@ await check(
   },
 )
 
+await check(
+  'Google',
+  'NotebookLM adapter (python)',
+  '— local to this environment',
+  'npm run setup:python',
+  async () => {
+    // Not a credential — a dependency. Probed anyway, and probed here, because
+    // its absence looked exactly like an expired credential: a reclaimed
+    // container took `notebooklm-py` with it and the probe reported
+    // `unavailable` on an integration whose account had genuinely been
+    // suspended the week before. The worst possible ambiguity.
+    const { spawnSync } = await import('node:child_process')
+    const r = spawnSync('python3', ['-c', 'import notebooklm'], { encoding: 'utf8' })
+    return {
+      ok: r.status === 0,
+      detail: r.status === 0 ? 'importable' : 'not installed — npm run setup:python',
+    }
+  },
+)
+
 // --- the ones only Grant can answer -----------------------------------------
 
 for (const [service, what, owner, action, state] of [
@@ -303,9 +332,9 @@ for (const [service, what, owner, action, state] of [
     'backup bucket + keys',
     '✅ Google address, but its OWN password',
     'nothing — confirmed 2026-09-06: no Google SSO, so a Google suspension cannot lock it',
-    'ok' as const,
+    'attested' as const,
   ],
-  ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—', 'ok' as const],
+  ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—', 'attested' as const],
   [
     'Google',
     'Cloud TTS service account',
@@ -326,7 +355,7 @@ for (const [service, what, owner, action, state] of [
 
 // --- report ------------------------------------------------------------------
 
-const icon = { ok: '✅', dead: '⛔', missing: '⬜', unknown: '❓', parked: '⏸' }
+const icon = { ok: '✅', dead: '⛔', missing: '⬜', unknown: '❓', parked: '⏸', attested: '🤝' }
 console.log('# Credential and account inventory\n')
 console.log(`Generated ${new Date().toISOString()} — every line above the fold was checked live.\n`)
 console.log('| | Service | Credential | Owner / login | State | Action |')
@@ -345,12 +374,14 @@ for (const r of rows) {
 // genuinely dead and stays under Dead; what Grant parked was the question of
 // whose account it is, and that is the list it leaves.
 const parked = rows.filter((r) => r.state === 'parked')
+const attested = rows.filter((r) => r.state === 'attested')
 const dead = rows.filter((r) => r.state === 'dead')
 const missing = rows.filter((r) => r.state === 'missing' && r.action !== '—')
 const unknown = rows.filter((r) => r.owner.startsWith('❓'))
 
 console.log(
-  `\n**${String(rows.filter((r) => r.state === 'ok').length)} working · ${String(dead.length)} dead · ` +
+  `\n**${String(rows.filter((r) => r.state === 'ok').length)} probed working · ` +
+    `${String(attested.length)} taken on trust · ${String(dead.length)} dead · ` +
     `${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership · ` +
     `${String(parked.length)} parked**\n`,
 )
@@ -369,4 +400,36 @@ if (unknown.length > 0) {
 if (parked.length > 0) {
   console.log('\n## Parked — deliberately not being pursued\n')
   for (const r of parked) console.log(`- **${r.service} ${r.what}** — ${r.action}`)
+}
+
+// --- record the run, so the dashboard can show it ---------------------------
+//
+// This script probed every service and then threw the answers away when it
+// finished printing. Team HQ needs the same facts and cannot gather them: a
+// read-only dashboard holding eleven vendor credentials so it can light a row
+// green would be the widest-privileged thing in the system. So the prober
+// records and the page reads, with `checked_at` travelling alongside — a light
+// with no age stays green after the prober stops running.
+try {
+  const payload = rows.map((r) => ({
+    service: r.service,
+    credential: r.what,
+    state: r.state,
+    detail: r.detail,
+    owner: r.owner,
+    action: r.action === '—' ? '' : r.action,
+  }))
+  const written = (
+    await db.execute(
+      `select app.record_connection_health($payload$${JSON.stringify(payload)}$payload$::jsonb) as n`,
+    )
+  ).rows[0]
+  console.log(
+    `\nrecorded ${String((written as { n?: number } | undefined)?.n)} row(s) for Team HQ.`,
+  )
+} catch (error) {
+  // Reported, never fatal. The inventory's job is to tell a human what is
+  // working; failing that job because a dashboard table rejected a row would
+  // be the tail wagging the dog.
+  console.log(`\ncould not record for Team HQ: ${(error as Error).message.slice(0, 120)}`)
 }

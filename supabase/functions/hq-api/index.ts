@@ -49,6 +49,7 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   usage: { fn: 'hq_usage' },
   activity: { fn: 'hq_activity', args: { p_limit: 50 } },
   series: { fn: 'hq_series', args: { p_days: 30 } },
+  connections: { fn: 'hq_connections' },
 }
 
 /**

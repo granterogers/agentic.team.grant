@@ -231,7 +231,7 @@ const CHAT = -1009999000001
     })
     const handled = r.status === 200 && r.body.includes('ignored')
     malformed.push(
-      `${label}=${String(r.status)}${handled ? ' ignored' : ' ' + r.body.slice(0, 30)}`,
+      `${label}=${String(r.status)}${handled ? ' ignored' : ` ${r.body.slice(0, 30)}`}`,
     )
     ourCodeRefused = handled
   }

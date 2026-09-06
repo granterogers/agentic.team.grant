@@ -58,5 +58,8 @@
   "0057_subject_is_resolved_by_the_table.sql": "db255b77b6614b60371d7d32f3c71e3ea72ca806d3299fac4e6c040a10dba40d",
   "0058_committed_work_is_never_redone.sql": "65786b64296b250731d5dd9dbd3ec09aa8b5757bcfb0d649e1578227333f9c99",
   "0059_the_rule_needs_both_halves.sql": "2400a683da8418de75dc30b54b9226fc17e497ee08b13d9903aed5bebf1601e4",
-  "0060_a_question_is_not_a_search_box.sql": "b20e08667ac4533adcc85e4b5bd08a18d7b9ff2ab1c39cb2d413ec126030d6d3"
+  "0060_a_question_is_not_a_search_box.sql": "b20e08667ac4533adcc85e4b5bd08a18d7b9ff2ab1c39cb2d413ec126030d6d3",
+  "0061_notebook_back_on.sql": "df3edec3edfc8c566c3ed56c9260f87ee79bf4d848498eb45c3d2aa2dd9cec92",
+  "0062_connection_health.sql": "989918d11b42494645ae866e3136b557523d3a773c9e97588b8e9939963dd2b2",
+  "0063_a_light_nobody_checked.sql": "8203fbc3bf821097d69d6f63a295dff73bda76ec4f9541b779a5dccd61113041"
 }

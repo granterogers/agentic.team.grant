@@ -421,9 +421,9 @@ const EXPECTED_USAGE_ROWS = 6
 add(
   'A2',
   'every attempt that reached the provider was recorded, successes and failures alike',
-  usageAfter.rows
+  `${usageAfter.rows
     .map((r) => `${String(r.outcome)}:${String(r.provenance)}=${String(r.n)}`)
-    .join(' ') + ` (total ${totalUsage}, expected ${EXPECTED_USAGE_ROWS})`,
+    .join(' ')} (total ${totalUsage}, expected ${EXPECTED_USAGE_ROWS})`,
   totalUsage === EXPECTED_USAGE_ROWS,
 )
 

@@ -97,6 +97,29 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
 .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
 .pill.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+
+/*
+  The light. A filled dot with a soft halo, because a 8px dot alone is hard to
+  find on a phone and the halo doubles the target the eye lands on.
+
+  Colour is never the only signal: each row also carries a word. A red/green
+  pair is the commonest accessibility failure in a status page, and roughly one
+  man in twelve cannot tell these two apart.
+*/
+.lamp { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block;
+  background: var(--muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent); }
+.lamp.ok { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+.lamp.bad { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); }
+.lamp.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent); }
+.conn { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.conn:last-child { border-bottom: 0; }
+.conn .who { min-width: 0; }
+.conn .who b { display: block; font-weight: 600; }
+.conn .who span { display: block; color: var(--muted); font-size: 12px; }
+.conn .st { margin-left: auto; text-align: right; font-size: 12px; color: var(--muted);
+  max-width: 46%; }
+.conn .st b { display: block; color: var(--ink); font-weight: 600; }
+.stale { color: var(--warn); }
 .staff { display: grid; gap: 10px; }
 .person { display: flex; gap: 12px; align-items: flex-start; }
 .person img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
@@ -186,7 +209,7 @@ const ago = (iso) => {
   reading the console, which is the step the method calls "render it and look at
   it" and the step that is easiest to skip.
 */
-const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage' }
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage', connections: 'connections' }
 
 async function load(tab) {
   const section = SECTION_FOR[tab] ?? tab
@@ -225,6 +248,7 @@ const TABS = [
   ['staff', 'Staff'],
   ['activity', 'Activity'],
   ['usage', 'Usage'],
+  ['connections', 'Links'],
 ]
 
 function shell(active) {
@@ -570,7 +594,96 @@ function trends(d) {
     ${chart('t-msgs', 'Messages delivered', d.messages_sent, FORMATS.plain)}`
 }
 
-const VIEWS = { overview, trends, staff, activity, usage }
+function connections(d) {
+  /*
+    Grant asked for "a list of all the services being connected to with a green
+    or red LED according to whether it's working".
+
+    Three things this does that a plain green dot would not, each because the
+    plain version would eventually mislead:
+
+    1. **Age, on every row and once at the top.** Green means "working"; what it
+       can honestly mean is "working when the prober last looked". A status that
+       stops depending on the thing it reports, and stays green while doing so,
+       is this project's recurring defect wearing a UI. Anything older than six
+       hours goes amber and says so.
+    2. **A word beside every colour.** Roughly one man in twelve cannot tell
+       this red from this green.
+    3. **Problems first.** Sorted by the database, so a broken row is at the top
+       where it is read rather than alphabetically buried between two healthy
+       ones.
+  */
+  const rows = d.rows || []
+  const STALE_MINUTES = 6 * 60
+
+  if (rows.length === 0) {
+    return `<section class="card"><h2>Connections</h2><div class="body">
+      <div class="empty">Nothing has been probed yet. Run <code>npm run inventory</code>.</div>
+    </div></section>`
+  }
+
+  /*
+    `attested` gets a neutral lamp, not a green one. Green here means "a probe
+    reached it and it answered"; Backblaze is used by a GitHub Action and not by
+    this process, so its status is Grant saying so. Painting those the same
+    colour is how an indicator stops depending on the thing it indicates — the
+    row said "Backblaze · Working" in green before this existed, on a status no
+    program had ever checked.
+  */
+  const lamp = (state, stale) => {
+    if (stale) return 'warn'
+    return { ok: 'ok', dead: 'bad', missing: '', parked: '', unknown: 'warn', attested: '' }[state] ?? ''
+  }
+  const word = (state, stale) => {
+    if (stale) return 'Unchecked'
+    return { ok: 'Working', dead: 'Not working', missing: 'Not set up',
+             parked: 'Parked', unknown: 'Unknown', attested: 'Confirmed by hand' }[state] ?? state
+  }
+
+  const oldest = Math.max(...rows.map((r) => Number(r.age_minutes) || 0))
+  const anyStale = oldest > STALE_MINUTES
+
+  const list = rows.map((r) => {
+    const stale = (Number(r.age_minutes) || 0) > STALE_MINUTES
+    return `<div class="conn">
+      <span class="lamp ${lamp(r.state, stale)}" aria-hidden="true"></span>
+      <span class="who">
+        <b>${esc(r.service)}</b>
+        <span>${esc(r.credential)}${r.owner ? ' · ' + esc(r.owner) : ''}</span>
+      </span>
+      <span class="st">
+        <b class="${stale ? 'stale' : ''}">${esc(word(r.state, stale))}</b>
+        ${esc(r.detail || '')}
+        ${r.action ? '<span style="display:block">' + esc(r.action) + '</span>' : ''}
+      </span>
+    </div>`
+  }).join('')
+
+  const working = rows.filter((r) => r.state === 'ok').length
+  const trusted = rows.filter((r) => r.state === 'attested').length
+  const broken = rows.filter((r) => r.state === 'dead').length
+
+  return `
+    <section class="card" data-card="connections">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>Connections${anyStale ? '<span class="est">STALE</span>' : ''}</h2>
+      <div class="body">
+        <div class="tiles">
+          <div class="tile"><b>${working}</b><span>probed working</span></div>
+          <div class="tile"><b>${broken}</b><span>not working</span></div>
+          <div class="tile"><b>${trusted}</b><span>taken on trust</span></div>
+        </div>
+        <div style="margin-top:12px">${list}</div>
+        <div class="meta" style="margin-top:10px">
+          Last checked ${esc(ago(d.checked_at))}. A light says what the prober found when
+          it last ran, not what is true this second — run <code>npm run inventory</code>
+          to refresh. A grey light reading “Confirmed by hand” was never probed at all.
+        </div>
+      </div>
+    </section>`
+}
+
+const VIEWS = { overview, trends, staff, activity, usage, connections }
 
 async function show(section) {
   for (const b of document.querySelectorAll('nav button')) {
