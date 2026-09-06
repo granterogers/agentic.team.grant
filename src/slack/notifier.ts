@@ -44,7 +44,11 @@ export interface Target {
   readonly channelId: string
   readonly threadTs: string | null
   /** `thread` (the question's own thread), `channel`, or `project`. */
-  readonly via: 'thread' | 'channel' | 'project'
+  /**
+   * How the destination was chosen. `discipline` is the staff member's own
+   * channel for this project (0070); `project` is its lobby.
+   */
+  readonly via: 'thread' | 'channel' | 'project' | 'discipline'
 }
 
 export interface NotifierOptions {
@@ -65,7 +69,11 @@ export interface NotifierOptions {
  * its own and would find nowhere to reply. The correlation is what ties the
  * whole conversation together, which is what it is for.
  */
-export async function resolveTarget(db: SqlExecutor, job: Job): Promise<Target | null> {
+export async function resolveTarget(
+  db: SqlExecutor,
+  job: Job,
+  staffSlug: string | null = null,
+): Promise<Target | null> {
   const { rows } = await db.execute(`
     select s.channel_id, s.thread_ts
     from public.inbound_commands c
@@ -87,14 +95,36 @@ export async function resolveTarget(db: SqlExecutor, job: Job): Promise<Target |
 
   if (job.projectId === null) return null
 
+  // The staff member's own channel for this project, then the project lobby.
+  //
+  // Grant asked for a channel per project per discipline (0070), and the
+  // ordering is the whole of the routing: `discipline is not distinct from
+  // <slug>` first, lobby second, so a Research Director's finding lands in
+  // `#money-mastery-research` when that channel exists and in
+  // `#money-mastery` when it does not.
+  //
+  // `bot_present` still gates both. A channel the app has been removed from is
+  // not a destination, and posting into one is how a delivery fails after
+  // reporting success.
   const project = await db.execute(`
-    select channel_id from public.slack_channel_map
+    select channel_id, discipline from public.slack_channel_map
     where project_id = ${lit(job.projectId)}::uuid and active and bot_present
-    order by purpose, created_at
+      and purpose = 'project'
+    order by case
+               when discipline is not distinct from ${staffSlug === null ? 'null' : lit(staffSlug)} then 0
+               when discipline is null then 1
+               else 2
+             end,
+             created_at
     limit 1
   `)
-  const channelId = (project.rows[0] as { channel_id?: string } | undefined)?.channel_id
-  return channelId === undefined ? null : { channelId, threadTs: null, via: 'project' }
+  const found = project.rows[0] as { channel_id?: string; discipline?: string | null } | undefined
+  if (found?.channel_id === undefined) return null
+  return {
+    channelId: found.channel_id,
+    threadTs: null,
+    via: found.discipline === null ? 'project' : 'discipline',
+  }
 }
 
 /**
@@ -123,7 +153,11 @@ export function slackChannel(
   return {
     name: 'slack',
     notify: async (job, output, outputId, context): Promise<NotifyOutcome> => {
-      const target = await resolveTarget(db, job)
+      // The staff member decides which channel, so it is passed in rather than
+      // re-derived: `context.staff` is who the office is about to present as,
+      // and presenting as one person in another's channel would be confusing
+      // in exactly the way per-discipline channels exist to prevent.
+      const target = await resolveTarget(db, job, context.staff?.slug ?? null)
       if (target === null) {
         return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
       }

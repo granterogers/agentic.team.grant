@@ -133,8 +133,14 @@ const teamId = String(
     )
   )?.team_id,
 )
+// The channel for the staff member who was convened, created on demand.
+//
+// 0070: a channel per project per discipline, made the first time that person
+// has something to say about that project rather than eight per project on day
+// one. An empty channel teaches you to ignore the section.
 const provisioner = new ChannelProvisioner(db, slack, teamId)
-const channel = await provisioner.ensureChannel(projectId, String(project.slug))
+const speaker = decision.roster[0] ?? null
+const channel = await provisioner.ensureChannel(projectId, String(project.slug), speaker)
 console.log(
   `slack: ${channel.outcome} #${String(channel.channelName)}` +
     (channel.invited === undefined ? '' : ` (grant: ${channel.invited})`),

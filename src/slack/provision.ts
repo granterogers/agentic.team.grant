@@ -27,30 +27,57 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 export const CHANNEL_NAME_MAX = 80
 
 /**
- * Turn a project's NAME into a legal Slack channel name.
+ * The longest discipline suffix, so a prefix can be trimmed to leave room.
  *
- * Plain English, no prefix. It used to be `proj-` plus the slug — technically
- * unambiguous and, in Grant's words, "a bit strange". A workspace is read by a
- * person scanning a sidebar, and `#proj-ai-team-hq-test` costs that person a
- * beat of decoding for a distinction (project channel vs. other channel) that
- * a one-human workspace does not need to draw. `#ai-team-hq-test` is the same
- * information with none of the tax.
- *
- * Still deterministic: the same project always proposes the same name, which is
- * what makes `name_taken` informative rather than a coin flip. Truncation is
- * from the end, because the discriminating part of a project name is its start.
- *
- * Slack's own rules, all enforced here rather than discovered in an error:
- * lowercase, no spaces or periods, only letters/digits/hyphens/underscores, at
- * most 80 characters, and not empty.
+ * Computed from the staff slugs rather than guessed: `communications-director`
+ * is 23 characters and a prefix trimmed to 48 without checking would produce a
+ * name Slack refuses, one project in.
  */
-export function channelNameFor(nameOrSlug: string): string {
+export const DISCIPLINE_SUFFIX_MAX = 24
+
+/**
+ * Turn a project name into the stem its channels are built from.
+ *
+ * Lowercase, non-alphanumerics to hyphens, collapsed, trimmed, and short enough
+ * that the longest discipline still fits under Slack's 80.
+ */
+export function channelPrefixFor(nameOrSlug: string): string {
   const cleaned = nameOrSlug
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '')
-  const name = cleaned === '' ? 'untitled-project' : cleaned
+  const room = CHANNEL_NAME_MAX - DISCIPLINE_SUFFIX_MAX - 1
+  const stem = cleaned === '' ? 'untitled-project' : cleaned
+  return stem.length <= room ? stem : stem.slice(0, room).replace(/-+$/, '')
+}
+
+/**
+ * The channel name for a project, optionally for one discipline.
+ *
+ * **Project first**, deliberately. Slack's channel list is flat — the sidebar
+ * "sections" people mean by subchannels are a per-user client feature with no
+ * API, so a bot cannot make one — which leaves the name to do the grouping.
+ * Alphabetical sorting then groups a project's channels together in every
+ * client with no configuration:
+ *
+ *     money-mastery              ← the lobby, sorts first
+ *     money-mastery-finance
+ *     money-mastery-research
+ *
+ * Discipline-first would group by agent instead, which is the wrong axis:
+ * Grant thinks in projects, and the team is the same eight people on all of
+ * them.
+ *
+ * The suffix is the role, not the slug: `-research`, not
+ * `-research-director`. Every one of them ends in `-director` and a suffix
+ * that is the same on every channel is a suffix carrying no information.
+ */
+export function channelNameFor(prefix: string, staffSlug?: string | null): string {
+  const stem = channelPrefixFor(prefix)
+  if (staffSlug === undefined || staffSlug === null || staffSlug === '') return stem
+  const role = staffSlug.replace(/-director$/, '').replace(/^chief-of-staff$/, 'chief')
+  const name = `${stem}-${role}`
   return name.length <= CHANNEL_NAME_MAX ? name : name.slice(0, CHANNEL_NAME_MAX).replace(/-+$/, '')
 }
 
@@ -97,19 +124,42 @@ export class ChannelProvisioner {
    * make the mapping depend on a `conversations.list` page we might not have
    * read, and 0014 exists precisely so that it does not.
    */
-  async ensureChannel(projectId: string, projectLabel: string): Promise<ProvisionResult> {
-    // The project's own name if it has one, and the caller's label otherwise.
-    // A slug is a machine's name for a project; a person reading a sidebar
-    // wants the name they gave it.
-    const named = await this.one<{ name: string | null }>(
-      `select name from public.projects where project_id = ${lit(projectId)}::uuid`,
+  /**
+   * Ensure a project has a channel — its lobby, or one discipline's.
+   *
+   * `staffSlug` names the discipline. Absent, this is the lobby. A discipline
+   * channel is created the first time that staff member has something to say
+   * about the project, rather than eight per project on day one: forty mostly
+   * empty channels is a sidebar that teaches you to ignore the section.
+   */
+  async ensureChannel(
+    projectId: string,
+    projectLabel: string,
+    staffSlug?: string | null,
+  ): Promise<ProvisionResult> {
+    // `channel_prefix` if the project has one — it is editable in the front
+    // end, which is the point — then its name, then the caller's label. A slug
+    // is a machine's name for a project; a person reading a sidebar wants the
+    // name they gave it.
+    const named = await this.one<{ name: string | null; channel_prefix: string | null }>(
+      `select name, channel_prefix from public.projects
+        where project_id = ${lit(projectId)}::uuid`,
     )
-    const label = named?.name ?? null
-    const name = channelNameFor(label === null || label.trim() === '' ? projectLabel : label)
+    const stem =
+      named?.channel_prefix !== null &&
+      named?.channel_prefix !== undefined &&
+      named.channel_prefix !== ''
+        ? named.channel_prefix
+        : named?.name !== null && named?.name !== undefined && named.name.trim() !== ''
+          ? named.name
+          : projectLabel
+    const name = channelNameFor(stem, staffSlug)
 
     const mapped = await this.one<{ channel_id: string; channel_name: string }>(`
       select channel_id, channel_name from public.slack_channel_map
       where project_id = ${lit(projectId)}::uuid and active
+        and purpose = 'project'
+        and discipline is not distinct from ${staffSlug === undefined || staffSlug === null ? 'null' : lit(staffSlug)}
       order by created_at limit 1
     `)
     if (mapped !== undefined) {
@@ -125,7 +175,7 @@ export class ChannelProvisioner {
       const { body } = await this.slack.call('conversations.create', { name, is_private: false })
       const channel = body.channel as { id?: string; name?: string } | undefined
       const channelId = channel?.id ?? ''
-      await this.map(channelId, channel?.name ?? name, projectId, true)
+      await this.map(channelId, channel?.name ?? name, projectId, true, staffSlug)
       const invited = await this.inviteSubject(channelId)
       return {
         outcome: 'created',
@@ -212,12 +262,14 @@ export class ChannelProvisioner {
     channelName: string,
     projectId: string,
     createdByApp: boolean,
+    discipline?: string | null,
   ): Promise<void> {
     await this.db.execute(`
       insert into public.slack_channel_map
-        (channel_id, team_id, project_id, channel_name, purpose, created_by_app)
+        (channel_id, team_id, project_id, channel_name, purpose, created_by_app, discipline)
       values (${lit(channelId)}, ${lit(this.teamId)}, ${lit(projectId)}::uuid,
-              ${lit(channelName)}, 'project', ${createdByApp ? 'true' : 'false'})
+              ${lit(channelName)}, 'project', ${createdByApp ? 'true' : 'false'},
+              ${discipline === undefined || discipline === null ? 'null' : lit(discipline)})
       on conflict (channel_id) do update
         set project_id = excluded.project_id,
             channel_name = excluded.channel_name,

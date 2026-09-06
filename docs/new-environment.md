@@ -19,13 +19,13 @@ npm ci                    # ~40s
 npm run setup:python      # the NotebookLM adapter — one pip package, and nothing else installs it
 npm run check:secrets     # must print clean; if it does not, stop and read it
 npm run inventory         # which credentials are alive, and whose account each is on
-npm run verify:db         # the full live suite, ~30 minutes, 450 checks
+npm run verify:db         # the full live suite, ~30 minutes, 454 checks
 ```
 
 `npm run inventory` is the one that replaces conversation. It probes every
 credential against its real provider and prints a table with an owner column, so
 "is Gemini working" and "who owns the Groq account" are answered by a script
-rather than by asking. `npm test` (657 unit tests, no network) is the fast
+rather than by asking. `npm test` (668 unit tests, no network) is the fast
 signal when you only touched pure code.
 
 Two scripts exist to use the system rather than test it: `npm run ask -- "…"`

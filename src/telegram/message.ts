@@ -57,6 +57,22 @@ export interface PagerMetadata {
 export interface PagerMessage {
   readonly staffName: string | null
   readonly staffTitle: string | null
+  /**
+   * Which project this is about.
+   *
+   * Grant: *"I certainly don't want a different bot per role per project. So a
+   * single bot, like it was a human — but obviously their messages should be
+   * clear which project they're referring to. So it's probably a good idea that
+   * the first line and the last line of each of their messages refers to the
+   * project."*
+   *
+   * Both ends, and both for a reason. The first line is what a lock-screen
+   * notification shows, so it is the only line most of these are read at. The
+   * last is what remains on screen after a long message pushes the header off
+   * the top — the moment you decide whether to act, which is exactly when you
+   * need to know what you are acting on.
+   */
+  readonly projectName?: string | null
   readonly body: string
   readonly metadata: PagerMetadata | null
   readonly correlationId: string
@@ -167,6 +183,18 @@ export function inlineKeyboard(
 export function pagerText(message: PagerMessage): string {
   const parts: string[] = []
 
+  const project =
+    message.projectName === undefined ||
+    message.projectName === null ||
+    message.projectName.trim() === ''
+      ? null
+      : message.projectName.trim()
+
+  // First line, before even the review warning. One bot speaks for eight people
+  // across every project, so "which project" is the first question every one of
+  // these raises and the lock screen shows one line.
+  if (project !== null) parts.push(`📁 <b>${escapeHtml(project)}</b>`)
+
   if (message.metadata !== null && !message.metadata.reviewed) {
     parts.push('⚠️ <b>Not reviewed</b> — do not rely on this yet')
   }
@@ -186,6 +214,10 @@ export function pagerText(message: PagerMessage): string {
       `<i>${escapeHtml(message.metadata.confidence)} confidence · evidence: ${escapeHtml(message.metadata.evidence)}</i>`,
     )
   }
+
+  // And last, after the provenance. A long message pushes the header off the
+  // top, and the end of it is where the decision gets made.
+  if (project !== null) parts.push(`<i>— ${escapeHtml(project)}</i>`)
 
   const text = parts.join('\n\n')
   // Belt and braces. The trim above makes this unreachable for any realistic

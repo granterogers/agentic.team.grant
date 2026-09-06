@@ -150,8 +150,43 @@ answer will be no, and the answer is what keeps the corpus trustworthy.
 
 **Given up:** true bidirectional sync, deliberately and permanently.
 
-**Next, in order of value:** the MCP server (large win, self-contained), then
-attachments with roles, then Team HQ read-write.
+### ▸ Surfaces, decided 2026-09-06
+
+**Slack: a channel per project per discipline, project first.** Slack has no
+subchannels — checked, not assumed: the sidebar sections people mean by that are
+a per-user client feature with no API, so a bot cannot make one. The name does
+the grouping instead, and putting the project first makes alphabetical order do
+it for free in every client:
+
+    money-mastery              ← the lobby, sorts first
+    money-mastery-finance
+    money-mastery-research
+    website-rebuild
+    website-rebuild-growth
+
+Discipline-first would group by agent, which is the wrong axis: Grant thinks in
+projects and the team is the same eight people on all of them. Channels are
+created the first time that person has something to say about that project —
+eight disciplines × five projects is forty channels, most of which would never
+see a message, and an empty channel teaches you to ignore the section.
+
+**Telegram: one bot, every message labelled.** Grant: *"I certainly don't want a
+different bot per role per project. So a single bot, like it was a human — but
+their messages should be clear which project they're referring to."* So the
+project name is the **first line and the last line** of every page. First
+because a lock screen shows one line and for most pages it is the only line
+read; last because a long message pushes the header off the top, and the end is
+where the decision gets made.
+
+**The project name is editable.** `projects.channel_prefix` is separate from
+`projects.name` because a display name may contain what a channel name may not —
+"Money Mastery (Q3 relaunch)" is a fine name and an illegal channel. Renaming a
+project renames its channels with it, or the two definitions of "the name"
+drift and that is the mess this is meant to prevent.
+
+**Next, in order of value:** the worker on a schedule (an MCP write that nothing
+picks up is a queue that looks like it is working), then Team HQ read-write so
+this configuration stops being a CLI, then the Obsidian push button.
 
 **Not decided here:** any of it. This is a recommendation, and the sequencing is
 Grant's to change.

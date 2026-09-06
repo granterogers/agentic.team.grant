@@ -10,8 +10,8 @@ place, and undoable. Every inference attempt is recorded, and paid inference is
 prevented by deterministic code rather than by a prompt.
 
 ```
-11,600 lines of TypeScript · 69 migrations · 657 unit tests
-22 live verification suites, 450 checks against real services
+11,900 lines of TypeScript · 70 migrations · 668 unit tests
+22 live verification suites, 454 checks against real services
 ```
 
 ---
@@ -99,7 +99,7 @@ cost three project references and one document rather than the project.
 ## Running it
 
 ```bash
-npm run verify        # lint, typecheck, migrations, 657 unit tests, secret scan
+npm run verify        # lint, typecheck, migrations, 668 unit tests, secret scan
 npm run verify:db     # every live suite in order — ~25 minutes
 npm run inventory     # which credentials work, and which account each hangs off
 npm run export:portable   # a copy of everything that needs no vendor login

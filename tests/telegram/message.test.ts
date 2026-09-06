@@ -172,3 +172,57 @@ describe('the message', () => {
     expect(pagerText(message({ body: 'x'.repeat(50_000) })).length).toBeLessThanOrEqual(4096)
   })
 })
+
+describe('one bot, many projects: every page says which (0070)', () => {
+  const base = {
+    staffName: 'Research Director',
+    staffTitle: 'Research Director',
+    body: 'The two sources disagree on the launch date.',
+    metadata: { confidence: 'medium' as const, evidence: 'inferred' as const, reviewed: true },
+    correlationId: 'c-1',
+    actions: [] as const,
+  }
+
+  it('names the project on the FIRST line', () => {
+    // The lock screen shows one line, and for most pages it is the only line
+    // read. Grant asked for a single bot across every project rather than a bot
+    // per role per project, which makes this the first question each page
+    // raises.
+    const lines = pagerText({ ...base, projectName: 'Money Mastery' }).split('\n\n')
+    expect(lines[0]).toContain('Money Mastery')
+  })
+
+  it('and on the LAST line', () => {
+    // A long message pushes the header off the top. The end is where the
+    // decision gets made, and it is the worst possible moment not to know what
+    // you are deciding about.
+    const lines = pagerText({ ...base, projectName: 'Money Mastery' }).split('\n\n')
+    expect(lines[lines.length - 1]).toContain('Money Mastery')
+  })
+
+  it('puts the project even above the not-reviewed warning', () => {
+    const lines = pagerText({
+      ...base,
+      projectName: 'Money Mastery',
+      metadata: { ...base.metadata, reviewed: false },
+    }).split('\n\n')
+    expect(lines[0]).toContain('Money Mastery')
+    expect(lines[1]).toContain('Not reviewed')
+  })
+
+  it('says nothing at all when there is no project, rather than "(none)"', () => {
+    // A page about no project is a real thing — a backup failure, a budget
+    // warning — and a placeholder would be noise on every one of them.
+    const text = pagerText({ ...base, projectName: null })
+    expect(text).not.toContain('📁')
+    expect(text).not.toContain('—')
+    expect(pagerText({ ...base, projectName: '   ' })).toBe(text)
+    expect(pagerText(base)).toBe(text)
+  })
+
+  it('escapes a project name, like everything else', () => {
+    const text = pagerText({ ...base, projectName: 'A & B <script>' })
+    expect(text).toContain('A &amp; B &lt;script&gt;')
+    expect(text).not.toContain('<script>')
+  })
+})

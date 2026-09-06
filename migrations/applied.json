@@ -67,5 +67,6 @@
   "0066_mcp_over_postgrest.sql": "38af9ca2639ad25b0b49312add815610c5f4a720415c14181bbbdc8b79d1d8e9",
   "0067_projects_attach_to_sources.sql": "05aa280b44cf000136200322338aedec5b009de4076f425516bf829877306b8f",
   "0068_mcp_can_write.sql": "4284721f01333da1445d3876b90926ddeddf566b491db9c5b2d98981d9569b07",
-  "0069_fingerprint_without_an_extension.sql": "4079dbb67db2d3d9a465cac40ab7c7b6d7d06a07424dd408faa8bf44dd60a9fd"
+  "0069_fingerprint_without_an_extension.sql": "4079dbb67db2d3d9a465cac40ab7c7b6d7d06a07424dd408faa8bf44dd60a9fd",
+  "0070_a_channel_per_project_per_discipline.sql": "c28fe73076adaf26d5b776155108892dba8028e59cdb4e026032e371f7748113"
 }

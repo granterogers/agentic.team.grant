@@ -29,12 +29,12 @@ import { processCallbacks } from '../../src/channels/callbacks.ts'
 import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import type { Handler, HandlerOutput } from '../../src/jobs/worker.ts'
+import type { Handler, HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { dequeue, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
 import type { ResultMessage } from '../../src/slack/blocks.ts'
 import { ACTIONS } from '../../src/slack/blocks.ts'
-import { slackChannel } from '../../src/slack/notifier.ts'
+import { resolveTarget, slackChannel } from '../../src/slack/notifier.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
@@ -204,6 +204,55 @@ record(
   'the human is IN the channel the app created — a room with only a bot in it is not delivery',
   `invited=${String(created.invited)} members=${String(memberIds.length)} subject_present=${String(memberIds.includes(String(subject?.user_id)))}`,
   created.invited === 'invited' && memberIds.includes(String(subject?.user_id)),
+)
+
+// --- per-project, per-discipline channels (0070) -----------------------------
+//
+// Grant asked for a channel per project per discipline. Slack has no
+// subchannels — its sidebar sections are a per-user client feature with no API
+// — so grouping comes from the name, and these check that it does.
+
+const researchChannel = await provisioner.ensureChannel(
+  PROJECT_ID,
+  PROJECT_SLUG,
+  'research-director',
+)
+record(
+  "a staff member's first work on a project creates their own channel",
+  `${researchChannel.outcome} #${String(researchChannel.channelName)}`,
+  researchChannel.outcome === 'created' &&
+    String(researchChannel.channelName).endsWith('-research') &&
+    researchChannel.channelId !== CHANNEL,
+)
+
+record(
+  'and it sorts next to the lobby, because the project comes first in the name',
+  `${created.channelName} / ${String(researchChannel.channelName)}`,
+  String(researchChannel.channelName).startsWith(created.channelName),
+)
+
+const researchAgain = await provisioner.ensureChannel(PROJECT_ID, PROJECT_SLUG, 'research-director')
+record(
+  'asking again returns the same channel rather than a second one',
+  `${researchAgain.outcome}, same=${String(researchAgain.channelId === researchChannel.channelId)}`,
+  researchAgain.outcome === 'existing' && researchAgain.channelId === researchChannel.channelId,
+)
+
+// The routing. Without this the channels exist and nothing uses them.
+// A job shape is all `resolveTarget` needs: it looks the destination up by
+// project, and the correlation branch above it finds nothing for a fresh id.
+const routingProbe = {
+  jobId: '00000000-0000-4000-8000-000000000000',
+  correlationId: '00000000-0000-4000-8000-000000000000',
+  projectId: PROJECT_ID,
+} as unknown as Job
+const routedToDiscipline = await resolveTarget(db, routingProbe, 'research-director')
+const routedToLobby = await resolveTarget(db, routingProbe, 'finance-director')
+record(
+  "a staff member's result routes to their channel, and one without a channel to the lobby",
+  `research → ${String(routedToDiscipline?.via)}, finance → ${String(routedToLobby?.via)}`,
+  routedToDiscipline?.channelId === researchChannel.channelId &&
+    routedToLobby?.channelId === CHANNEL,
 )
 
 record(

@@ -143,9 +143,26 @@ export class TelegramPager {
         ? null
         : `${this.options.projectUrlBase.replace(/\/+$/, '')}/projects/${input.job.projectId}`
 
+    // The project's name, read here rather than passed in. One bot speaks for
+    // eight people across every project (Grant's choice, and the right one — a
+    // bot per role per project is forty bots), so every page has to say what it
+    // is about. A caller that had to remember to pass it is a caller that will
+    // forget on the one page that matters.
+    const projectName =
+      input.job.projectId === null
+        ? null
+        : ((
+            (
+              await this.db.execute(
+                `select name from public.projects where project_id = ${lit(input.job.projectId)}::uuid`,
+              )
+            ).rows[0] as { name?: string } | undefined
+          )?.name ?? null)
+
     const message: PagerMessage = {
       staffName: input.staffName,
       staffTitle: input.staffTitle,
+      projectName,
       body: input.output.body,
       metadata: {
         confidence: input.output.confidence,
