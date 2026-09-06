@@ -1,6 +1,6 @@
 # Known problems
 
-**Last verified: 2026-09-05.** Everything here was checked, not assumed. Where
+**Last verified: 2026-09-06.** Everything here was checked, not assumed. Where
 something is unknown, it says unknown rather than guessing.
 
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
@@ -133,5 +133,10 @@ Without a Google credential every note degrades to text and says
 | The HQ deploy script **printed its token into a transcript** | rotated; the script can no longer print it — `npm run hq:token` sends it to Telegram |
 | `verify:credentials` **broke the live Slack install every run**: it upserted the production row with its probe secret reference, then deleted that secret at cleanup. Nothing failed until `slack:rotate` refused, days later | the lifecycle checks run against a probe row (`A0PROBELIFE`) and never touch the install; a 19th check fails the suite if any reference is DANGLING; `npm run slack:repair-refs` repairs one |
 | `npm run inventory` reported the Slack config token dead **minutes after a successful rotation** — it probed the environment copy, which rotation never updates | it resolves the token from the vault, where rotation writes it |
+| A **channel with only the bot in it**: the office provisioned its first real project channel, posted into it, and Grant saw nothing. 56 Slack checks passed because each asks whether the message arrived, none whether it arrived to anyone | the provisioner invites the human (0050); a 57th check reads the membership back |
+| The intent classifier could not read a **bare imperative** — "Research X", "Draft Y" matched no rule and fell through to an unconfident `thought`, which convenes nobody | a `bare-imperative` signal at `light_investigation`, with a CONTROL for the same verbs used as nouns |
+| Renaming `notebook_sources` broke `app.project_attention()` and surfaced as a **502 from Team HQ**: a function body is stored as text, so it does not follow a rename the way a view does | 0053 recreates it; `verify:schema` now fails on any function naming a relation that does not exist, and was itself proven to discriminate |
+| 0051 made the uniqueness index partial for uploads but left the columns `not null`, so the case the index was written for **could not be inserted at all** | 0052; found by `verify:knowledge` on its first run |
+| The same partial index then broke the sync's `on conflict` target — one run stored **zero rows** and said nothing | the conflict target carries the index predicate |
 
 Full accounts, with the reasoning, in [`test-evidence/`](test-evidence/).

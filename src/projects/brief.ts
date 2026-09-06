@@ -13,7 +13,7 @@
  * for genuine cross-source synthesis."*
  *
  * A brief is a summary of sources already read, not a question that needs
- * Notebook's own retrieval, so it reads `notebook_sources` and calls the
+ * Notebook's own retrieval, so it reads `documents` and calls the
  * provider router. Gate 2 proved the cache can be filled (94,490 characters
  * from one source); this is the half that spends it.
  *
@@ -78,7 +78,7 @@ export const cachedSources = async (
            content_fingerprint,
            left(content, ${String(CHARS_PER_SOURCE)}) as excerpt,
            content_chars
-    from public.notebook_sources
+    from public.documents
     where project_id = ${lit(projectId)}::uuid
       and content is not null
     order by content_chars desc

@@ -79,7 +79,7 @@ describe('displayName', () => {
 
 describe('fingerprintContent', () => {
   it('produces the shape the database CHECK requires', async () => {
-    // notebook_sources_fingerprint_sha256 is `^[0-9a-f]{64}$`.
+    // documents_fingerprint_sha256 is `^[0-9a-f]{64}$`.
     expect(await fingerprintContent('hello')).toMatch(/^[0-9a-f]{64}$/)
   })
 

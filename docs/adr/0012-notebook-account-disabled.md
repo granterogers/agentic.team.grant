@@ -1,6 +1,7 @@
 # ADR-0012 — Google disabled the NotebookLM account; what replaces it
 
-**Date:** 2026-09-05 · **Status:** open — the decision is Grant's
+**Date:** 2026-09-05 · **Status:** superseded by [ADR-0013](0013-the-project-is-the-source-of-truth.md) on 2026-09-06
+**Outcome:** the account was reinstated (migration 0049) and option **D** was taken anyway — Postgres owns the knowledge layer, and knowledge tools become connectors. NotebookLM's unattended sync is not coming back; the reinstatement reversed the penalty, not the policy.
 **Supersedes nothing. Forces a decision ADR-0003 anticipated.**
 
 ---

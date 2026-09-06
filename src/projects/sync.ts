@@ -182,7 +182,7 @@ export const ensureProject = async (
   throw new Error(`could not find a free slug for ${notebook.title}`)
 }
 
-/** SHA-256 of a source's text, as `notebook_sources.content_fingerprint`. */
+/** SHA-256 of a source's text, as `documents.content_fingerprint`. */
 export const fingerprintContent = async (content: string): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content))
   return Array.from(new Uint8Array(digest))
@@ -206,9 +206,10 @@ export const upsertSource = async (
   const fingerprint = await fingerprintContent(source.content)
 
   const existing = await db.execute(`
-    select content_fingerprint from public.notebook_sources
-    where remote_notebook_id = ${lit(source.remoteNotebookId)}
-      and remote_source_id = ${lit(source.remoteSourceId)}
+    select content_fingerprint from public.documents
+    where connector = 'notebooklm'
+      and external_parent_ref = ${lit(source.remoteNotebookId)}
+      and external_ref = ${lit(source.remoteSourceId)}
   `)
   const previous = existing.rows[0]?.content_fingerprint
   const known = existing.rows.length > 0
@@ -220,15 +221,21 @@ export const upsertSource = async (
   }
 
   await db.execute(`
-    insert into public.notebook_sources
-      (project_id, remote_notebook_id, remote_source_id, title, content,
+    insert into public.documents
+      (project_id, connector, external_parent_ref, external_ref, title, content,
        content_fingerprint, content_chars, fetched_at, remote_updated_at)
     values
-      (${lit(projectId)}::uuid, ${lit(source.remoteNotebookId)},
+      (${lit(projectId)}::uuid, 'notebooklm', ${lit(source.remoteNotebookId)},
        ${lit(source.remoteSourceId)}, ${nul(source.title)}, ${lit(source.content)},
        ${lit(fingerprint)}, ${String(source.content.length)}, app.now_utc(),
        ${nul(source.remoteUpdatedAt)}::timestamptz)
-    on conflict (remote_notebook_id, remote_source_id) do update
+    -- The index this infers against is PARTIAL (0051: an upload has no external
+    -- reference, so uniqueness is not asserted over a null). A conflict target
+    -- without the same predicate matches no index and the insert fails — which
+    -- is how the sync silently stored zero rows for one run.
+    on conflict (connector, external_parent_ref, external_ref)
+      where external_ref is not null
+      do update
       set title = excluded.title,
           content = excluded.content,
           content_fingerprint = excluded.content_fingerprint,
@@ -269,9 +276,10 @@ export const countRemoved = async (
       ? `'{}'::text[]`
       : `array[${seenSourceIds.map((s) => lit(s)).join(', ')}]::text[]`
   const { rows } = await db.execute(`
-    select count(*)::int as n from public.notebook_sources
-    where remote_notebook_id = ${lit(remoteNotebookId)}
-      and not (remote_source_id = any (${list}))
+    select count(*)::int as n from public.documents
+    where connector = 'notebooklm'
+      and external_parent_ref = ${lit(remoteNotebookId)}
+      and not (external_ref = any (${list}))
   `)
   return Number(rows[0]?.n ?? 0)
 }

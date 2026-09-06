@@ -48,5 +48,8 @@
   "0047_hq_daily_series.sql": "34cc286ef7ce159958188b14b5c159a077ed46cd56b9d148c1c2847635f3a724",
   "0048_notebook_account_disabled.sql": "47d5f996663a35799f42e38e4d527eb10db1e7f8b2096430fbe64b64361ec70f",
   "0049_google_account_reinstated.sql": "ac2b4823af2b947d111f935e560f7eae94b1c2dbdf76434afaa0051f0dc7d67a",
-  "0050_a_channel_nobody_is_in.sql": "d0edc16c2cc8177147e4ebb3c89be5bf441207bc60f833611881dca1a50c625c"
+  "0050_a_channel_nobody_is_in.sql": "d0edc16c2cc8177147e4ebb3c89be5bf441207bc60f833611881dca1a50c625c",
+  "0051_documents_not_notebook_sources.sql": "5f8caab7ce2ccb2ab929fbeabcc14c567d36a185f7849061d7bde22e0731c060",
+  "0052_an_upload_has_no_external_identity.sql": "77f85615cd6f4552a673399ce1086631cccfa46ee7a8bf54047323566db817fc",
+  "0053_project_attention_follows_the_rename.sql": "a46d92bd2a84cd21f1350cf56b4f071d6446627b001c8ec3b8691e5e36a96d85"
 }
