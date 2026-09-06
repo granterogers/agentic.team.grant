@@ -1,7 +1,7 @@
 # Defects found and fixed
 
 **What this is.** Every defect this project has found in itself, with what was
-wrong and what closed it. Twenty-four so far.
+wrong and what closed it. Twenty-five so far.
 
 **Why it is kept.** Not as a trophy cabinet. This project's method is that a
 check earns its place by failing, and the failures are the part worth reading —
@@ -53,6 +53,8 @@ history; nothing here is outstanding.
 | Renaming `notebook_sources` broke `app.project_attention()` and surfaced as a **502 from Team HQ**: a function body is stored as text, so it does not follow a rename the way a view does | 0053 recreates it; `verify:schema` now fails on any function naming a relation that does not exist, and was itself proven to discriminate |
 | 0051 made the uniqueness index partial for uploads but left the columns `not null`, so the case the index was written for **could not be inserted at all** | 0052; found by `verify:knowledge` on its first run |
 | The same partial index then broke the sync's `on conflict` target — one run stored **zero rows** and said nothing | the conflict target carries the index predicate |
+
+| Team HQ's endpoint documented a fixed list of sections and did not have one: `SECTIONS['constructor']` and `SECTIONS['__proto__']` are truthy through the prototype chain, so three inherited names passed the guard and reached a fetch of `/rpc/undefined` with the service key | `Object.hasOwn`. Nothing leaked — the value came back undefined — but the endpoint's own comment claimed a property it did not have, and `verify:security` now probes all three against the deployed function |
 
 ---
 

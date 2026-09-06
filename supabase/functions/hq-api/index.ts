@@ -102,7 +102,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const url = new URL(request.url)
   const name = url.searchParams.get('section') ?? 'overview'
-  const section = SECTIONS[name]
+  // `Object.hasOwn`, not a bare lookup. `SECTIONS['constructor']` and
+  // `SECTIONS['__proto__']` are both truthy through the prototype chain, so a
+  // bare `!== undefined` let three inherited names past the guard and on to a
+  // fetch of `/rpc/undefined` with the service key. Nothing came back and
+  // nothing leaked — but the comment above says "a section not named here does
+  // not exist", and until now that was not true.
+  const section = Object.hasOwn(SECTIONS, name) ? SECTIONS[name] : undefined
   if (section === undefined) {
     return json({ error: 'unknown section', sections: Object.keys(SECTIONS) }, 400)
   }

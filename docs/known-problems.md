@@ -7,7 +7,7 @@ Ordered by what would hurt most. `npm run inventory` regenerates the credential
 half of this live, and is the thing to trust when this file and it disagree.
 
 Defects already found and fixed are in
-[`defects-fixed.md`](defects-fixed.md) — twenty-four of them, kept because the
+[`defects-fixed.md`](defects-fixed.md) — twenty-five of them, kept because the
 shapes recur. Nothing there is outstanding.
 
 ---

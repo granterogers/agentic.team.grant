@@ -11,7 +11,7 @@ prevented by deterministic code rather than by a prompt.
 
 ```
 10,370 lines of TypeScript · 59 migrations · 642 unit tests
-20 live verification suites, 396 checks against real services
+21 live verification suites, 416 checks against real services
 ```
 
 ---
@@ -58,7 +58,7 @@ any vendor account is safe.
 | **[`docs/HANDOFF.md`](docs/HANDOFF.md)** | ⭐ **Starting a session.** Where things are, what to read, what is waiting |
 | **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Everything currently wrong**, with severity and owner |
 | [`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md) | The canonical specification. Supersedes everything else |
-| [`docs/defects-fixed.md`](docs/defects-fixed.md) | The 24 defects found and closed, and the one shape of mistake that keeps recurring |
+| [`docs/defects-fixed.md`](docs/defects-fixed.md) | The 25 defects found and closed, and the one shape of mistake that keeps recurring |
 | [`docs/test-evidence/`](docs/test-evidence/) | What the checks found **by failing** — the best reading in the repo |
 | [`docs/adr/`](docs/adr/) | 14 decisions, with the reasoning that produced them |
 | [`docs/new-environment.md`](docs/new-environment.md) | Four commands and two variables, to start a fresh session without rediscovering anything |
