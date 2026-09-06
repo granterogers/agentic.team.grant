@@ -156,11 +156,18 @@ await failsWith(
   'does not exist',
 )
 
+// The row these checks operate on is a probe, not the live install. It used to
+// be the live install, upserted with the probe reference above — and the
+// cleanup at the bottom then deleted that probe secret from the vault, leaving
+// production pointing at a uuid that no longer resolved. Nothing failed until
+// the next `slack:rotate`, days later. A check that changes real configuration
+// has to put it back; the cheaper discipline is not to touch it at all.
+const PROBE_APP = 'A0PROBELIFE'
 await succeeds(
   'a row with a valid reference is accepted',
   `insert into public.slack_app_credentials
      (slack_app_id, team_id, app_name, bot_user_id, scopes, bot_token_ref, installed_at)
-   values ('A0BUFRVSSLD', 'T0BUCJ2L5FD', 'AI Team HQ', 'U0BUG0RPZ8B',
+   values ('${PROBE_APP}', 'T0BUCJ2L5FD', 'lifecycle probe', 'U0BUG0RPZ8B',
            array['chat:write','chat:write.customize'], '${ref}'::app.vault_secret_ref, now())
    on conflict (slack_app_id) do update
      set bot_token_ref = excluded.bot_token_ref, scopes = excluded.scopes`,
@@ -170,7 +177,7 @@ await succeeds(
 await failsWith(
   'disabling an integration without a reason is refused (§8)',
   `update public.slack_app_credentials set enabled = false
-   where slack_app_id = 'A0BUFRVSSLD'`,
+   where slack_app_id = '${PROBE_APP}'`,
   '23514',
   'slack_disabled_has_reason',
 )
@@ -178,18 +185,18 @@ await succeeds(
   'disabling with a reason works, without taking anything else offline',
   `update public.slack_app_credentials
    set enabled = false, disabled_reason = 'verification probe'
-   where slack_app_id = 'A0BUFRVSSLD'`,
+   where slack_app_id = '${PROBE_APP}'`,
 )
 await succeeds(
   're-enabling clears the disabled state',
   `update public.slack_app_credentials
    set enabled = true, disabled_reason = null
-   where slack_app_id = 'A0BUFRVSSLD'`,
+   where slack_app_id = '${PROBE_APP}'`,
 )
 await failsWith(
   'a revoked install cannot also be enabled',
   `update public.slack_app_credentials set revoked_at = now()
-   where slack_app_id = 'A0BUFRVSSLD'`,
+   where slack_app_id = '${PROBE_APP}'`,
   '23514',
   'slack_revoked_is_disabled',
 )
@@ -257,10 +264,25 @@ checks.push({
 // --- cleanup ---------------------------------------------------------------
 await db.execute(`
   delete from public.slack_app_credentials where slack_app_id like 'A0PROBE%';
-  update public.slack_app_credentials set revoked_at = null, enabled = true, disabled_reason = null
-    where slack_app_id = 'A0BUFRVSSLD';
 `)
 await db.execute(`delete from vault.secrets where name like 'probe_%'`)
+
+// --- no dangling reference survives this run -------------------------------
+// A reference is a hint (§8), and a hint can outlive the secret it points at:
+// delete a vault secret and the row keeps the uuid. Nothing failed until the
+// next rotation, which is how the last one was found — by a rotation refusing,
+// not by a check. So the check exists now: a DANGLING row is a failure here.
+const dangling = (
+  await db.execute(`select slack_app_id, column_name from public.credential_health_problems`)
+).rows
+checks.push({
+  what: 'no credential reference points at a vault secret that is gone',
+  outcome:
+    dangling.length === 0
+      ? 'credential_health_problems is empty'
+      : dangling.map((d) => `${String(d.slack_app_id)}.${String(d.column_name)}`).join(', '),
+  passed: dangling.length === 0,
+})
 
 console.log('| check | outcome | |')
 console.log('|---|---|---|')

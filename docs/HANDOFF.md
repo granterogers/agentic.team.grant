@@ -4,7 +4,12 @@
 handoff; the dated ones remain as history and you do not need them.
 
 **Branch:** `claude/phase-7-communications-kh8ow8` — everything committed and
-pushed. **Written:** 2026-09-05, end of day.
+pushed. **Written:** 2026-09-05, revised 2026-09-06.
+
+**Starting a new session or a new environment?** Read
+[`new-environment.md`](new-environment.md) first — it is four commands and the
+two variables an environment needs, so the first thousand tokens go into work
+rather than rediscovery.
 
 ---
 
@@ -30,7 +35,7 @@ Then run `npm run inventory` before trusting any credential.
 | 0–6 | ✅ complete |
 | 7 · communications | ✅ complete bar six Telegram bots (tokens only Grant can make) |
 | 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
-| 9 · Google ecosystem | ⛔ **do not start** — its OAuth client is under a disabled account, and ADR-0012 questions the premise |
+| 9 · Google ecosystem | ⛔ **do not start** — the account is reinstated, but ADR-0012 questions the premise, and that is the blocker |
 | 10 · hardening | ⬜ **the obvious next move**, and it needs nobody |
 
 48 migrations · 583 unit tests · 15 live suites, ~300 checks, all green as of

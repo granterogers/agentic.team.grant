@@ -68,7 +68,8 @@
     "verify:hq": "tsx scripts/verify/hq.ts",
     "backup:notify": "tsx scripts/backup/notify-failure.ts",
     "export:portable": "tsx scripts/backup/export-portable.ts",
-    "inventory": "tsx scripts/audit/inventory.ts"
+    "inventory": "tsx scripts/audit/inventory.ts",
+    "slack:repair-refs": "tsx scripts/slack/repair-credential-refs.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
