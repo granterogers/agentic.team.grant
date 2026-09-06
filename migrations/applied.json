@@ -53,5 +53,7 @@
   "0052_an_upload_has_no_external_identity.sql": "77f85615cd6f4552a673399ce1086631cccfa46ee7a8bf54047323566db817fc",
   "0053_project_attention_follows_the_rename.sql": "a46d92bd2a84cd21f1350cf56b4f071d6446627b001c8ec3b8691e5e36a96d85",
   "0054_staff_have_their_own_bots.sql": "2a0cb821ddba88b8c4c32466c1302e042082783f615c94d693c748d3e8e1e658",
-  "0055_the_chief_bots_real_username.sql": "a8ad6ded78d52d5cf7e5c5ff3c3ea24f1b02954b0dc4fa83a2afbbe1594c0680"
+  "0055_the_chief_bots_real_username.sql": "a8ad6ded78d52d5cf7e5c5ff3c3ea24f1b02954b0dc4fa83a2afbbe1594c0680",
+  "0056_one_person_across_every_interface.sql": "3d09afd740cfe0423bfc4be5843f1454866bd8db3228e58966372e8d9ea480b5",
+  "0057_subject_is_resolved_by_the_table.sql": "db255b77b6614b60371d7d32f3c71e3ea72ca806d3299fac4e6c040a10dba40d"
 }
