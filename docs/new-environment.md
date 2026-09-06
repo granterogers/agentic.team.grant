@@ -27,6 +27,12 @@ credential against its real provider and prints a table with an owner column, so
 rather than by asking. `npm test` (583 unit tests, no network) is the fast
 signal when you only touched pure code.
 
+Two scripts exist to use the system rather than test it: `npm run ask -- "…"`
+runs a real question through routing, inference, review and both surfaces, and
+`npm run search -- "…"` searches the corpus. Neither cleans up after itself,
+which is the point — the verification suites do, and that is why the workspace
+looked empty after fifteen green runs.
+
 If `verify:db` is too slow to sit through, the individual suites are
 `verify:slack`, `verify:telegram`, `verify:hq`, `verify:tts`, `verify:worker`,
 and the eleven older ones — same names as the phases.
@@ -84,11 +90,13 @@ Reinstated on 2026-09-05, verified rather than assumed: the NotebookLM master
 token mints access tokens again and the Gemini key lists models again. Migration
 0049 records this.
 
-**The Notebook integration stays off regardless.** The appeal reversed the
-penalty, not the policy — ADR-0012 asks whether the system should depend on an
-unofficial NotebookLM interface at all, and a reinstatement does not answer that
-question. Re-enabling is one `UPDATE` once the ADR is settled, and settling it is
-Grant's call, not the next session's.
+**The NotebookLM sync is not coming back, and that is now decided.** The appeal
+reversed the penalty, not the policy: NotebookLM has no public API, so any
+unattended client has to impersonate a browser session, which is what the ban
+named. [ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) settles what
+replaces it — the project is the source of truth, knowledge tools are
+connectors, and retrieval is Postgres full-text search over `public.documents`.
+Notion is the registered first-class connector and waits only on a token.
 
 ---
 

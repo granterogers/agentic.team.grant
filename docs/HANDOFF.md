@@ -17,8 +17,10 @@ rather than rediscovery.
 
 1. **[`known-problems.md`](known-problems.md)** — everything currently wrong.
    Start here, not with the code.
-2. **[`adr/0012`](adr/0012-notebook-account-disabled.md)** — the open decision.
-   Do not re-enable Notebook and do not create a Google account before reading it.
+2. **[`adr/0013`](adr/0013-the-project-is-the-source-of-truth.md)** — the
+   decision that settles the knowledge layer. The project is the source of
+   truth; NotebookLM, Notion and uploads are connectors to it. Read it before
+   touching `documents`, and do not revive the NotebookLM sync.
 3. **[`../AI_TEAM_HQ_MASTER_SPEC.md`](../AI_TEAM_HQ_MASTER_SPEC.md)** — canonical,
    supersedes everything.
 4. **[`test-evidence/`](test-evidence/)** — twelve documents recording what the
@@ -35,7 +37,7 @@ Then run `npm run inventory` before trusting any credential.
 | 0–6 | ✅ complete |
 | 7 · communications | ✅ complete bar six Telegram bots (tokens only Grant can make) |
 | 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
-| 9 · Google ecosystem | ⛔ **do not start** — the account is reinstated, but ADR-0012 questions the premise, and that is the blocker |
+| 9 · Google ecosystem | 🟡 **unblocked but not scheduled** — ADR-0013 re-bases it: Calendar/Gmail/Drive read Grant's own data on his own account, which was always the supported path |
 | 10 · hardening | ⬜ **the obvious next move**, and it needs nobody |
 
 48 migrations · 583 unit tests · 15 live suites, ~300 checks, all green as of
@@ -112,7 +114,8 @@ week.
 
 1. 🔴 **Change the Backblaze account email** while that login still works.
 2. **Which email are OpenRouter, OpenAI and Groq under?**
-3. **A decision on the knowledge layer** — ADR-0012.
+3. **A Notion integration token**, when you want that connector built. It is
+   the one thing Notion waits on; the registry row is already there.
 4. Six Telegram bot tokens; a Google Cloud service account on a live account.
    Browser-agent prompt ready at [`offload/setup-prompt.md`](offload/setup-prompt.md).
 5. One button press, and a look at Team HQ on a phone.
