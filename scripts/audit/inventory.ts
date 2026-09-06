@@ -86,8 +86,8 @@ const env = (name: string): string => process.env[name] ?? ''
 await check(
   'Supabase',
   'management token',
-  '⚠️ dead Google account',
-  'Re-home or change the account email',
+  '⚠️ Google sign-in (account reinstated 2026-09-05)',
+  'Re-homing is no longer urgent, but this is still an account another company can suspend',
   async () => {
     const r = await fetch('https://api.supabase.com/v1/projects', {
       headers: { Authorization: `Bearer ${supabaseToken}` },
@@ -153,8 +153,8 @@ await check('Telegram', 'chief bot token', '✅ phone number', '—', async () =
 await check(
   'Vercel',
   'deploy token',
-  '⚠️ dead Google account',
-  'Re-home or change the account email',
+  '⚠️ Google sign-in (account reinstated 2026-09-05)',
+  'Re-homing is no longer urgent, but this is still an account another company can suspend',
   async () => {
     const r = (await (
       await fetch('https://api.vercel.com/v2/user', {
@@ -212,8 +212,8 @@ await check(
 await check(
   'Google',
   'Gemini API key',
-  '⛔ dead Google account',
-  'Delete the variable — it misleads',
+  '✅ Google (reinstated 2026-09-05)',
+  'Unused by anything — the router is OpenRouter-only',
   async () => {
     const r = (await (
       await fetch(
@@ -230,8 +230,8 @@ await check(
 await check(
   'Google',
   'NotebookLM master token',
-  '⛔ dead Google account',
-  'Retired in migration 0048',
+  '✅ Google (reinstated 2026-09-05)',
+  'Retired for good by ADR-0013: NotebookLM has no public API, so no unattended client',
   async () => {
     const raw = (
       await db.execute(
@@ -315,9 +315,9 @@ for (const [service, what, owner, action, state] of [
   ],
   [
     'Telegram',
-    '7 staff bot tokens',
-    '— not created',
-    'BotFather (docs/telegram-bot-roster.md)',
+    'staff bot tokens: 5 of 7',
+    '✅ phone number',
+    'Quality and Comms remain — BotFather (docs/telegram-bot-roster.md). Nothing waits on them',
     'missing' as const,
   ],
 ] as const) {

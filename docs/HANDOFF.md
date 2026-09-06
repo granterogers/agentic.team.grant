@@ -23,8 +23,9 @@ rather than rediscovery.
    touching `documents`, and do not revive the NotebookLM sync.
 3. **[`../AI_TEAM_HQ_MASTER_SPEC.md`](../AI_TEAM_HQ_MASTER_SPEC.md)** — canonical,
    supersedes everything.
-4. **[`test-evidence/`](test-evidence/)** — twelve documents recording what the
-   checks found *by failing*. The failures are the part worth reading.
+4. **[`defects-fixed.md`](defects-fixed.md)** — the 24 defects found and closed,
+   and the one shape of mistake that has now appeared in fifteen costumes.
+   [`test-evidence/`](test-evidence/) has the twelve long-form accounts.
 
 Then run `npm run inventory` before trusting any credential.
 
@@ -142,15 +143,23 @@ the OpenRouter, OpenAI and Groq accounts is parked.
 
 ## What I would do next
 
-**Phase 10 (hardening) is unblocked and needs nobody.** Failure injection across
-every integration, provider failover, the §30 documentation set. The backup
-restore rehearsal is already done — it now passes for the first time, and pages
-on failure.
+**Finish Phase 10.** Provider failover, §31's cross-interface equality and
+failure injection are done; `verify:chaos` covers seven of §18's twenty named
+cases. The remaining thirteen are the obvious next block of work, and they need
+nobody — §18 names them explicitly, so there is nothing to decide.
 
-**The knowledge layer spike** is the highest-value thing after that, and it can
-start the moment ADR-0012 is settled. Postgres full-text search needs no
-provider, no quota and no credential; the content is already in
-`notebook_sources.content`.
+After that, **§22's scenario A end to end**: a source arriving, being analysed,
+reviewed, delivered to the right Slack thread with the right face on it, and
+reacted to. Every piece exists and is checked in isolation; nothing has run the
+whole arc in one go.
 
-**Do not start Phase 9.** Its foundation is a credential under a disabled
-account, and ADR-0012 asks whether the system should depend on Google at all.
+**Phase 9 is unblocked but unscheduled.** ADR-0013 re-based it: Calendar, Gmail
+and Drive were always going to read Grant's own data on his own account with his
+consent, which is the supported path and carries no policy exposure. It needs an
+OAuth client in a project he owns, and it needs someone to decide it is worth
+the time before the hardening is finished.
+
+**Do not revive the NotebookLM sync.** Not caution — ADR-0013 decided it. There
+is no public API, so an unattended client must impersonate a browser session,
+which is exactly what the ban named. Pasting a source in by hand still works and
+produces a document like any other.

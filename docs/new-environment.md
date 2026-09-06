@@ -18,13 +18,13 @@ Run them in this order. Nothing below needs a decision from Grant.
 npm ci                    # ~40s
 npm run check:secrets     # must print clean; if it does not, stop and read it
 npm run inventory         # which credentials are alive, and whose account each is on
-npm run verify:db         # the full live suite, ~15 minutes, ~300 checks
+npm run verify:db         # the full live suite, ~25 minutes, 396 checks
 ```
 
 `npm run inventory` is the one that replaces conversation. It probes every
 credential against its real provider and prints a table with an owner column, so
 "is Gemini working" and "who owns the Groq account" are answered by a script
-rather than by asking. `npm test` (583 unit tests, no network) is the fast
+rather than by asking. `npm test` (642 unit tests, no network) is the fast
 signal when you only touched pure code.
 
 Two scripts exist to use the system rather than test it: `npm run ask -- "…"`
@@ -34,8 +34,10 @@ which is the point — the verification suites do, and that is why the workspace
 looked empty after fifteen green runs.
 
 If `verify:db` is too slow to sit through, the individual suites are
-`verify:slack`, `verify:telegram`, `verify:hq`, `verify:tts`, `verify:worker`,
-and the eleven older ones — same names as the phases.
+`verify:slack`, `verify:telegram`, `verify:hq`, `verify:knowledge`,
+`verify:notion`, `verify:chaos`, `verify:cross-interface`, `verify:schema` and
+the rest — same names as the things they check. `npm run verify:db` runs all
+twenty in order.
 
 ---
 

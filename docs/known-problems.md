@@ -4,106 +4,90 @@
 something is unknown, it says unknown rather than guessing.
 
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
-half of this live.
+half of this live, and is the thing to trust when this file and it disagree.
+
+Defects already found and fixed are in
+[`defects-fixed.md`](defects-fixed.md) — twenty-four of them, kept because the
+shapes recur. Nothing there is outstanding.
 
 ---
 
 ## 🔴 Serious — act on these
 
-### 1. Four vendors sign in with a Google account that no longer exists
-
-Google disabled `agentic.team.grant@gmail.com` on 2026-09-04 and **reinstated
-it on 2026-09-05** after an appeal (migration 0049; verified, not assumed — the
-NotebookLM token mints again and the Gemini key lists models again).
-
-**Everything held.** A disabled Google account breaks the login button, not the
-service, and API tokens are independent of how you signed up. What the week
-actually cost was an audit, and the audit's findings are the rows below.
-
-| Vendor | Where it stands |
-|---|---|
-| **Backblaze B2** | ✅ **safe.** Registered to the Google address but with its own password — no Google SSO, so a Google suspension cannot lock it. Confirmed 2026-09-06 |
-| **Supabase** | dashboard access restored with the account |
-| **Vercel** | dashboard access restored with the account |
-| **Google Cloud / Gemini** | back, and the Gemini key works |
-
-**The lesson stands even though the penalty was reversed.** The appeal did not
-change the policy: NotebookLM has no public API, so any unattended client has
-to impersonate a browser session, which is what the ban named.
-[ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) settles what replaces
-it — the project is the source of truth, knowledge tools are connectors, and
-Notion (official API, OAuth, no policy exposure) is the first-class one.
-
-See [`account-continuity.md`](account-continuity.md), which is now a rehearsed
-re-homing procedure rather than an emergency plan, and
-[`adr/0013`](adr/0013-the-project-is-the-source-of-truth.md).
-
-### 2. The knowledge layer is gone and its replacement is undecided
-
-NotebookLM authenticated as that account; the master token returns
-`403 BadAuthentication`. Turned off in migration 0048 with the reason recorded.
-
-Cost was small — 3 of 118 projects had a notebook reference, 1 source, and the
-source's text was already cached in Postgres — because ADR-0003 made it a
-replaceable adapter. But the system currently has **no knowledge layer at all**.
-
-Recommendation in ADR-0012: Postgres full-text search first, pgvector only if
-that proves insufficient. **Decision is Grant's and is open.**
-
-### 3. Credentials are not in the backup
+### 1. Credentials are not in the backup
 
 The nightly dump is `--schema=public --schema=app`. Supabase Vault lives in
 `vault` and is excluded — correctly, since a backup carrying decryptable secrets
 offsite would be a worse problem — but it means **a restore produces a working
 database with an empty vault**, and every secret must be re-entered by hand.
 
-The rehearsal now prints the list every night. Until the vault is copied into a
-password manager, that password manager gap *is* the credential backup gap.
+There are now twenty-two of them, including six Telegram bot tokens and a Notion
+token that only exists in the vault. The rehearsal prints the list every night.
+
+**What has to happen:** copy the vault contents into a password manager. Until
+that exists, the password-manager gap *is* the credential backup gap, and it is
+the one thing on this page that could turn a recoverable incident into a lost
+weekend.
 
 ---
 
 ## 🟠 Live but degraded
 
-### 4. Two credentials are dead and one is misleading
+### 2. Two accounts can be suspended by a company that is not us
 
-| | State | Action |
-|---|---|---|
-| `GROQ_API_KEY` | **401** — found by `npm run inventory`, nobody knew | regenerate, or drop Groq from the router |
-| `GEMINI_API_KEY` | dead with the account | **delete the variable** — it is present, so anything testing `if (key)` believes it has a credential |
-| `SLACK_APP_CONFIG_TOKEN` | expires every ~12h by design | `npm run slack:rotate` |
+Supabase and Vercel both sign in with Google. That account was disabled on
+2026-09-04 and reinstated on 2026-09-05 after an appeal — nothing went down,
+because a disabled account breaks the login button and not the service, and API
+tokens are independent of how you signed up.
 
-`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are valid but belong to a project
-under the dead account. **Assume dead** until proven otherwise. They are Phase
-9's foundation, which is why Phase 9 should wait.
+Re-homing is therefore no longer urgent. It is still worth doing, because the
+exposure is real and will be real again: an account another company can suspend
+should not be the recovery path for two others. Backblaze, checked on
+2026-09-06, uses the Google address as a username with **its own password** and
+no SSO — so the backup, the thing that would actually hurt, was never at risk.
 
-### 5. Ownership of three accounts is unknown
+Procedure in [`account-continuity.md`](account-continuity.md), now a rehearsed
+operation rather than an emergency plan.
 
-OpenRouter, OpenAI and Groq. Each is one question — which email? — and any on
-the dead account needs re-homing before it dies too.
+### 3. `GROQ_API_KEY` returns 401
+
+Found by `npm run inventory`; nobody knew. Grant has parked the question of
+which account it belongs to, so this stays listed as dead rather than quietly
+dropped — the router does not use Groq, so nothing is blocked, but a credential
+in the environment that does not work is a credential something will one day
+believe in.
 
 ---
 
 ## 🟡 Built but unproven
 
-### 6. No human has ever pressed a button
+### 4. No human has ever pressed a button
 
 Both channels' interaction paths are verified with synthetic presses through the
-deployed endpoints, and the callback processor acts on them correctly. But no
-real person has tapped 👍, Undo or Mute. One tap turns the whole path from
-"checked" into "observed".
+deployed endpoints, and the callback processor acts on them correctly. Grant has
+now received real messages on both surfaces, but no real person has tapped 👍,
+Undo or Mute. One tap turns the whole path from "checked" into "observed".
 
-### 7. Team HQ has never been judged on a phone
+### 5. Team HQ has been opened but not judged
 
-Viewport, touch targets and mobile-first CSS are checked. Whether it *reads*
-well is not, and §13's Gate 1 precedent is explicit that a subjective acceptance
-is not marked passed before the human performs it.
+It loads for Grant, which retires the deployment question. Whether it *reads*
+well on a phone — viewport, touch targets, whether the sparklines say anything
+at a glance — is a subjective acceptance, and §13's Gate 1 precedent is explicit
+that those are not marked passed before the human performs them.
 
-### 8. Voice notes have never been synthesised
+### 6. Voice notes have never been synthesised
 
 Everything up to the API call is built and checked (14 live checks: ledger,
 budget reservation with its concurrency guarantee, six reasons to stay silent).
-Without a Google credential every note degrades to text and says
-`no_credential` — the acceptance criterion working, not a gap.
+The Google Cloud TTS credential is **parked at Grant's request**. Without one,
+every note degrades to text and says `no_credential` — the acceptance criterion
+working, not a gap.
+
+### 7. Notion is connected but has nothing to read
+
+The token authenticates and the connector is built and checked. Nothing has been
+shared with the integration yet, so the corpus it can see is empty. Three clicks
+in Notion (⋯ → Connections → *Agentic Team Grant*), then `npm run notion:sync`.
 
 ---
 
@@ -119,38 +103,28 @@ Without a Google credential every note degrades to text and says
   sending twice. Slack can be asked; Telegram cannot. Not fixable.
 - **Slack identity is cosmetic.** `chat:write.customize` gives name and avatar,
   not a mentionable user. Per-staff Slack apps were considered and deferred.
-- **Six Telegram bots missing.** Roster and BotFather steps in
-  [`telegram-bot-roster.md`](telegram-bot-roster.md).
+- **Two Telegram bots missing** — Quality and Comms. A staff member without one
+  falls back to the pager, and there is a check that proves it. BotFather steps
+  in [`telegram-bot-roster.md`](telegram-bot-roster.md).
+- **A bot's profile photo cannot be set through the API.** It is BotFather only.
+  Cosmetic; the office already shows these faces in Slack.
+- **NotebookLM has no unattended client, permanently.** Not an outage and not a
+  gap — [ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) decided it.
+  It has no public API, so any automation must impersonate a browser session,
+  which is what got the account banned. A source can still be pasted in by hand
+  and becomes a document like any other.
 
 ---
 
-## Fixed today, recorded so they are not re-introduced
+## What is NOT a problem, though it was on 2026-09-05
 
-| | |
+Kept briefly, because a resolved item that vanishes silently gets re-raised.
+
+| Was | Now |
 |---|---|
-| The backup rehearsal had **never passed** — 12 runs, 12 failures, silently | vault stand-in in the rehearsal target; **now pages Grant on failure** |
-| A test left a **global mute** that suppressed every routine notification for 3 days | migration 0036; gate-3 cleans up after itself; the suite clears its own |
-| The worker moved jobs to `complete` with reason "delivered" while **delivering nothing** | a real notifier; the state reason now reports every channel's actual outcome |
-| A 👍 was attributed to **the wrong output** — resolved by correlation, which spans jobs | migration 0037: deliveries record the job |
-| Six **dead buttons** — the composer invented a wire format the adapter never parsed | both sides now tested against each other |
-| A correlation written into a column with a **foreign key to `events`** | left null; the work is resolved from the message instead |
-| The HQ deploy script **printed its token into a transcript** | rotated; the script can no longer print it — `npm run hq:token` sends it to Telegram |
-| `verify:credentials` **broke the live Slack install every run**: it upserted the production row with its probe secret reference, then deleted that secret at cleanup. Nothing failed until `slack:rotate` refused, days later | the lifecycle checks run against a probe row (`A0PROBELIFE`) and never touch the install; a 19th check fails the suite if any reference is DANGLING; `npm run slack:repair-refs` repairs one |
-| `npm run inventory` reported the Slack config token dead **minutes after a successful rotation** — it probed the environment copy, which rotation never updates | it resolves the token from the vault, where rotation writes it |
-| Slack channels were named `proj-<slug>` — unambiguous, and in Grant's words "a bit strange". A sidebar is read by a person | plain English from the project's name: `#ai-team-hq-test`. `slack:rename-channels` migrates the ones that already exist |
-| The Chief of Staff bot token lived **only in an environment variable**, against §15, so three senders each needed it in their own environment | it is in the vault, the registry (0054) holds its identity, and `ask`, `hq:token` and the backup pager all resolve it from there |
-| The router made **one attempt at one model**. On a free tier, being rate-limited is a model's normal state, so one 429 failed the whole job while four other models sat in the registry marked usable | failover across up to three candidates, each tried once; proven live by injecting a 429 and watching a different model answer |
-| §31's exit criterion — the same instruction through two interfaces produces the same command "modulo three fields" — **could not hold as written**: `actor` is channel-native, and Slack cannot say a Telegram id | identity is resolved rather than exempted. 0056 maps `(origin_channel, actor)` to a person; 0057 makes a trigger fill it for every writer, so a new channel gets it by existing rather than by remembering |
-| The new chaos suite's first check passed **three times for three wrong reasons** — no Slack destination mapped, then a foreign key on a fabricated job id, then a fabricated output id. Each time "Slack is broken" was indistinguishable from "the fixture was wrong" | a real job, a real output and a real channel mapping, so the only remaining reason to fail is the injected outage — which the note now names (`indeterminate:ECONNREFUSED (injected)`) |
-| **A job that crashed after committing was re-run from scratch**, producing a second output — precisely the duplicate substantive work §18 forbids. Recovery special-cased `committed` but not `notifying`, and a worker spends microseconds in the first and a whole Slack call in the second | 0058 keys on the evidence (an output row) rather than on a state name; 0059 restores the state rule alongside it, because `committed → retrying` is illegal and the evidence rule alone could not know that |
-| And nothing read the `notifying` state, so a correctly-recovered job would have parked there forever — the same "sweep to nowhere" as the requeue 0006 was written to close, one layer up | `deliverPending` claims and finishes them, and runs before new work in every drain |
-| `verify:cross-interface` could pass **exactly once**: its Telegram message id was a constant and its Slack `ts` was built from five base-36 characters that only change every forty seconds, so the second run collided on the dedupe index and read as a product defect | both fixture identities come from the full clock, and the cleanup deletes by the derived dedupe keys rather than only by the run stamp |
-| 0054 seeded the pager's username from the roster document (`atg_chief_bot`) rather than from `getMe`. The real one is `@agenticteamgrantbot` — a registry naming a bot nobody can open is worse than one with no name | 0055; the roster records an intention, the API records a fact |
-| `slack_channel_map` claimed nine channels were live that Slack had archived — every run whose cleanup was interrupted left one. A mapping that names an archived destination is worse than none | the rename script reconciles against Slack, which is the authority on archived |
-| A **channel with only the bot in it**: the office provisioned its first real project channel, posted into it, and Grant saw nothing. 56 Slack checks passed because each asks whether the message arrived, none whether it arrived to anyone | the provisioner invites the human (0050); a 57th check reads the membership back |
-| The intent classifier could not read a **bare imperative** — "Research X", "Draft Y" matched no rule and fell through to an unconfident `thought`, which convenes nobody | a `bare-imperative` signal at `light_investigation`, with a CONTROL for the same verbs used as nouns |
-| Renaming `notebook_sources` broke `app.project_attention()` and surfaced as a **502 from Team HQ**: a function body is stored as text, so it does not follow a rename the way a view does | 0053 recreates it; `verify:schema` now fails on any function naming a relation that does not exist, and was itself proven to discriminate |
-| 0051 made the uniqueness index partial for uploads but left the columns `not null`, so the case the index was written for **could not be inserted at all** | 0052; found by `verify:knowledge` on its first run |
-| The same partial index then broke the sync's `on conflict` target — one run stored **zero rows** and said nothing | the conflict target carries the index predicate |
-
-Full accounts, with the reasoning, in [`test-evidence/`](test-evidence/).
+| The Google account is disabled and four vendors sign in with it | reinstated 2026-09-05, verified rather than assumed (migration 0049) |
+| Backblaze may be locked out when its login window closes | it never had a Google login — own password, no SSO |
+| The system has no knowledge layer and its replacement is undecided | [ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) decided it and it is built: `public.documents`, a connector registry, Postgres full-text search, Notion connected |
+| `GEMINI_API_KEY` is dead | works again with the account. Unused by anything — the router is OpenRouter-only |
+| Ownership of the OpenRouter, OpenAI and Groq accounts is unknown | parked by Grant on 2026-09-06 |
+| Six Telegram bots missing | five arrived, registered, configured and answering |

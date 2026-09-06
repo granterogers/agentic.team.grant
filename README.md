@@ -10,8 +10,8 @@ place, and undoable. Every inference attempt is recorded, and paid inference is
 prevented by deterministic code rather than by a prompt.
 
 ```
-9,476 lines of TypeScript · 48 migrations · 583 unit tests
-15 live verification suites, ~300 checks against real services
+10,370 lines of TypeScript · 59 migrations · 642 unit tests
+20 live verification suites, 396 checks against real services
 ```
 
 ---
@@ -21,10 +21,11 @@ prevented by deterministic code rather than by a prompt.
 | Phase | |
 |---|---|
 | 0–6 · foundations, ledger, job engine, projects, agents, autonomy | ✅ complete |
-| 7 · communications | ✅ complete except six more Telegram bots |
+| 7 · communications | ✅ complete. Five of seven staff bots answer; two are BotFather clicks and nothing waits on them |
 | 8 · Team HQ web app | ✅ built and deployed; one criterion unclaimed¹ |
-| 9 · Google ecosystem | ⛔ **blocked and being reconsidered** — see below |
-| 10 · hardening | ⬜ |
+| · knowledge layer | ✅ ADR-0013 decided and built: connector-agnostic `documents`, a connector registry, Postgres full-text search, Notion connected |
+| 9 · Google ecosystem | 🟡 unblocked but unscheduled — ADR-0013 re-based it onto Grant's own account, which was always the supported path |
+| 10 · hardening | 🟡 **in progress** — provider failover, §31's cross-interface equality, and failure injection over 7 of §18's 20 named cases |
 
 ¹ Whether it *feels* right on a phone. A script can check the viewport and the
 touch targets; it cannot check that. §13's precedent is that a subjective
@@ -32,15 +33,21 @@ acceptance waits for the human.
 
 ### The thing to know before anything else
 
-On **2026-09-04 Google disabled the account** this project used for NotebookLM.
-It also owned the Cloud project behind the Gemini key, and it is the sign-in
-identity for Supabase, Vercel and Backblaze.
+**A project is a row in Postgres and the documents attached to it.** Every
+knowledge tool — Notion, an upload, a URL — is a connector that feeds documents
+in and can be disconnected without losing them. Retrieval is full-text search
+over content the database already holds: no provider, no quota, no credential.
 
-Nothing is down — a disabled Google account breaks the login button, not the
-service — but it forces a decision about the knowledge layer and about account
-ownership generally. Read **[`docs/adr/0012`](docs/adr/0012-notebook-account-disabled.md)**
-and **[`docs/account-continuity.md`](docs/account-continuity.md)** before
-touching anything.
+That is **[`docs/adr/0013`](docs/adr/0013-the-project-is-the-source-of-truth.md)**,
+and it was decided the hard way. On 2026-09-04 Google disabled the account this
+project used for NotebookLM — reinstated a day later on appeal, with nothing
+lost, because the design already treated the notebook as a replaceable adapter.
+The appeal reversed the penalty and not the policy, so the automation is gone
+for good and the architecture is the better for it.
+
+Read that ADR before touching the knowledge layer, and
+**[`docs/account-continuity.md`](docs/account-continuity.md)** before assuming
+any vendor account is safe.
 
 ---
 
@@ -51,8 +58,10 @@ touching anything.
 | **[`docs/HANDOFF.md`](docs/HANDOFF.md)** | ⭐ **Starting a session.** Where things are, what to read, what is waiting |
 | **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Everything currently wrong**, with severity and owner |
 | [`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md) | The canonical specification. Supersedes everything else |
+| [`docs/defects-fixed.md`](docs/defects-fixed.md) | The 24 defects found and closed, and the one shape of mistake that keeps recurring |
 | [`docs/test-evidence/`](docs/test-evidence/) | What the checks found **by failing** — the best reading in the repo |
 | [`docs/adr/`](docs/adr/) | 14 decisions, with the reasoning that produced them |
+| [`docs/new-environment.md`](docs/new-environment.md) | Four commands and two variables, to start a fresh session without rediscovering anything |
 | [`src/jobs/worker.ts`](src/jobs/worker.ts) | The rule the system is built on, in its header |
 
 ---
@@ -89,7 +98,7 @@ cost three project references and one document rather than the project.
 ## Running it
 
 ```bash
-npm run verify        # lint, typecheck, migrations, 583 unit tests, secret scan
+npm run verify        # lint, typecheck, migrations, 642 unit tests, secret scan
 npm run verify:db     # every live suite in order — ~25 minutes
 npm run inventory     # which credentials work, and which account each hangs off
 npm run export:portable   # a copy of everything that needs no vendor login
