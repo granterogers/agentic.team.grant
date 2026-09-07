@@ -10,7 +10,7 @@ place, and undoable. Every inference attempt is recorded, and paid inference is
 prevented by deterministic code rather than by a prompt.
 
 ```
-11,900 lines of TypeScript · 70 migrations · 668 unit tests
+12,400 lines of TypeScript · 73 migrations · 668 unit tests
 22 live verification suites, 454 checks against real services
 ```
 

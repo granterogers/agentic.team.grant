@@ -24,10 +24,13 @@
  */
 
 import { combinedNotifier, pagerChannel } from '../src/channels/notify.ts'
+import { replyChannel } from '../src/channels/reply.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { instructionHandler } from '../src/handlers/instruction.ts'
 import { notebookHandlers } from '../src/handlers/notebook.ts'
 import type { Reviewer } from '../src/jobs/worker.ts'
 import { drain } from '../src/jobs/worker.ts'
+import { ProviderRouter } from '../src/providers/router.ts'
 import { SlackClient } from '../src/slack/api.ts'
 import { slackChannel } from '../src/slack/notifier.ts'
 import { SlackOffice } from '../src/slack/office.ts'
@@ -82,7 +85,11 @@ if (pager !== null) {
     ),
   )
 }
-const notify = combinedNotifier(channels, db)
+// The reply channel goes FIRST. An instruction that arrived in a Telegram chat
+// is answered in that chat, by the bot it was sent to — a reply from the pager
+// to a message sent to Ines would be a colleague answering through a
+// switchboard. Everything else still gets its usual delivery.
+const notify = combinedNotifier([replyChannel(db), ...channels], db)
 
 // Notebook operations are deterministic — the notebook accepted the source or
 // it did not — and §16 exempts those from review. The reviewer is here for
@@ -90,7 +97,11 @@ const notify = combinedNotifier(channels, db)
 const review: Reviewer = () =>
   Promise.resolve({ status: 'approved' as const, notes: 'Deterministic notebook operation.' })
 
-const handlers = notebookHandlers(db)
+const orKey = process.env.OPENROUTER_API_KEY ?? ''
+const handlers = [
+  ...notebookHandlers(db),
+  ...(orKey === '' ? [] : [instructionHandler({ db, router: new ProviderRouter(db, orKey) })]),
+]
 
 const pass = async (): Promise<number> => {
   const done = await drain(db, workerId, handlers, review, 10, { notify })

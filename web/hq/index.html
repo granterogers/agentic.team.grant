@@ -120,6 +120,17 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
   max-width: 46%; }
 .conn .st b { display: block; color: var(--ink); font-weight: 600; }
 .stale { color: var(--warn); }
+
+/* Configuration controls. Deliberately plain: this is a settings surface, and
+   a settings surface that looks exciting is a settings surface people press by
+   accident. */
+.mini { font-size: 12px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); cursor: pointer; margin-left: 8px; }
+.mini:hover { border-color: var(--accent); color: var(--accent); }
+.addrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.addrow input, .addrow select { flex: 1 1 150px; min-width: 0; padding: 8px 10px; font: inherit;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.addrow button { flex: 0 0 auto; }
 .staff { display: grid; gap: 10px; }
 .person { display: flex; gap: 12px; align-items: flex-start; }
 .person img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
@@ -209,7 +220,22 @@ const ago = (iso) => {
   reading the console, which is the step the method calls "render it and look at
   it" and the step that is easiest to skip.
 */
-const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage', connections: 'connections' }
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects' }
+
+/* Configuration. The only writing this page does — see the endpoint's comment
+   on why configuring is allowed where acting is not. */
+async function act(action, args) {
+  const token = localStorage.getItem(KEY) || ''
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, args }),
+  })
+  const body = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(body.error || ('The server returned ' + r.status))
+  if (body.result && body.result.error) throw new Error(body.result.error)
+  return body.result
+}
 
 async function load(tab) {
   const section = SECTION_FOR[tab] ?? tab
@@ -249,6 +275,7 @@ const TABS = [
   ['activity', 'Activity'],
   ['usage', 'Usage'],
   ['connections', 'Links'],
+  ['projects', 'Projects'],
 ]
 
 function shell(active) {
@@ -683,7 +710,145 @@ function connections(d) {
     </section>`
 }
 
-const VIEWS = { overview, trends, staff, activity, usage, connections }
+function projects(list) {
+  /*
+    Grant: "the idea with this entire project is that it's customizable and
+    theoretically I could give the repo to somebody else and they could run it
+    for their own projects." So nothing about a project is baked in, and this
+    is where it stops needing a terminal.
+
+    A project cannot be created without a source, here as in the database
+    (0067): a project attached to nothing has nothing to read and nowhere to
+    write. The form says so rather than letting the server refuse it.
+  */
+  const rows = Array.isArray(list) ? list : []
+
+  const attachments = (p) => (p.attachments || []).map((a) =>
+    `<div class="conn">
+       <span class="lamp ${a.role === 'home' ? 'ok' : ''}" aria-hidden="true"></span>
+       <span class="who"><b>${esc(a.display_name || a.external_ref)}</b>
+         <span>${esc(a.connector)} · ${esc(a.role)}${a.artifact_kind ? ' · ' + esc(a.artifact_kind) : ''}</span></span>
+       <span class="st"><button class="mini" data-detach="${esc(a.attachment_id)}">Detach</button></span>
+     </div>`).join('') || '<div class="empty">Nothing attached.</div>'
+
+  const channels = (p) => (p.channels || []).length === 0
+    ? '<span class="m">no channels yet — the team makes them when it has something to say</span>'
+    : (p.channels || []).map((c) => `<span class="pill">#${esc(c.name)}</span>`).join(' ')
+
+  const cards = rows.map((p) => `
+    <section class="card" data-card="project-${esc(p.slug)}">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>${esc(p.name)}</h2>
+      <div class="body">
+        <div class="meta" style="margin-bottom:8px">
+          <code>${esc(p.slug)}</code> · ${p.documents} document(s)
+          <button class="mini" data-rename="${esc(p.slug)}" data-name="${esc(p.name)}">Rename</button>
+        </div>
+        <div style="margin-bottom:10px">${channels(p)}</div>
+        ${attachments(p)}
+        <div class="addrow">
+          <select data-conn="${esc(p.slug)}">
+            <option value="notion">Notion</option>
+            <option value="notebooklm">NotebookLM</option>
+          </select>
+          <input data-ref="${esc(p.slug)}" placeholder="Paste the Notion link or notebook id">
+          <select data-role="${esc(p.slug)}">
+            <option value="source">reads from</option>
+            <option value="home">writes to</option>
+          </select>
+          <button class="mini" data-attach="${esc(p.slug)}">Attach</button>
+        </div>
+      </div>
+    </section>`).join('')
+
+  return cards + `
+    <section class="card" data-card="new-project">
+      <h2>New project</h2>
+      <div class="body">
+        <div class="addrow">
+          <input id="np-name" placeholder="Project name">
+          <select id="np-conn">
+            <option value="notion">Notion</option>
+            <option value="notebooklm">NotebookLM</option>
+          </select>
+          <input id="np-ref" placeholder="Notion link or notebook id">
+          <button class="mini" id="np-go">Create</button>
+        </div>
+        <div class="meta" style="margin-top:8px">
+          A project needs at least one source. There is nothing to read or write
+          without one, so this will not create one in isolation.
+        </div>
+        <div class="err" id="np-err" hidden></div>
+      </div>
+    </section>`
+}
+
+const VIEWS = { overview, trends, staff, activity, usage, connections, projects }
+
+/*
+  The Projects tab's buttons.
+  
+  Wired after render rather than with inline handlers, because the markup is
+  built from server data and an onclick attribute in a template string is an
+  injection waiting for a project named after a quote character.
+*/
+function wireProjects() {
+  const fail = (e) => { const box = document.getElementById('np-err'); if (box) { box.textContent = e.message; box.hidden = false } else { alert(e.message) } }
+
+  for (const b of document.querySelectorAll('[data-attach]')) {
+    b.onclick = async () => {
+      const slug = b.dataset.attach
+      const conn = document.querySelector(`[data-conn="${slug}"]`).value
+      const ref = document.querySelector(`[data-ref="${slug}"]`).value.trim()
+      const role = document.querySelector(`[data-role="${slug}"]`).value
+      if (!ref) return
+      b.disabled = true
+      try {
+        // A home must say what it is the home for. Notion stores documents and
+        // NotebookLM generates artifacts — Grant's own distinction — so the
+        // kind follows the connector rather than asking a question with one
+        // sensible answer.
+        await act('attach', { p_slug: slug, p_connector: conn, p_ref: ref, p_role: role,
+                              p_kind: role === 'home' ? (conn === 'notion' ? 'document' : 'artifact') : null })
+        show('projects')
+      } catch (e) { fail(e); b.disabled = false }
+    }
+  }
+
+  for (const b of document.querySelectorAll('[data-detach]')) {
+    b.onclick = async () => {
+      // No confirmation: detaching disables a row and keeps every document the
+      // connector fed (ADR-0013). It is undone by attaching again.
+      b.disabled = true
+      try { await act('detach', { p_attachment_id: b.dataset.detach }); show('projects') }
+      catch (e) { fail(e); b.disabled = false }
+    }
+  }
+
+  for (const b of document.querySelectorAll('[data-rename]')) {
+    b.onclick = async () => {
+      const next = prompt('New name for this project', b.dataset.name)
+      if (!next || next === b.dataset.name) return
+      try { await act('rename_project', { p_slug: b.dataset.rename, p_name: next }); show('projects') }
+      catch (e) { fail(e) }
+    }
+  }
+
+  const go = document.getElementById('np-go')
+  if (go) {
+    go.onclick = async () => {
+      const name = document.getElementById('np-name').value.trim()
+      const ref = document.getElementById('np-ref').value.trim()
+      const conn = document.getElementById('np-conn').value
+      const box = document.getElementById('np-err')
+      box.hidden = true
+      if (!name || !ref) { box.textContent = 'A name and a source are both required.'; box.hidden = false; return }
+      go.disabled = true
+      try { await act('create_project', { p_name: name, p_connector: conn, p_ref: ref }); show('projects') }
+      catch (e) { fail(e); go.disabled = false }
+    }
+  }
+}
 
 async function show(section) {
   for (const b of document.querySelectorAll('nav button')) {
@@ -694,6 +859,7 @@ async function show(section) {
   try {
     const data = await load(section)
     main.innerHTML = VIEWS[section](data)
+    if (section === 'projects') wireProjects()
     armSparklines(main)
     applyLayout(main, section)
     armLayout(main, section)

@@ -50,6 +50,29 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   activity: { fn: 'hq_activity', args: { p_limit: 50 } },
   series: { fn: 'hq_series', args: { p_days: 30 } },
   connections: { fn: 'hq_connections' },
+  projects: { fn: 'hq_projects' },
+}
+
+/**
+ * The things the page may CHANGE, as opposed to read.
+ *
+ * Team HQ is read-only because a dashboard where you can do something
+ * irreversible by accident is worse than one where you can do nothing. That
+ * reasoning is about *acting* — cancelling a job, approving an output — and not
+ * about *configuring*. Attaching a Notion database is a row; detaching it is
+ * another row; neither loses anything, because the corpus a connector fed
+ * survives the connector being removed (ADR-0013).
+ *
+ * So configuration is writable and action stays read-only, and the line
+ * between them is this list. Deleting a project is deliberately absent: it
+ * cascades to documents, and the rule is that a route may be closed and a
+ * corpus is kept.
+ */
+const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[] }>> = {
+  create_project: { fn: 'hq_create_project', required: ['p_name', 'p_connector', 'p_ref'] },
+  rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
+  attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
+  detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
 }
 
 /**
@@ -99,6 +122,43 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const presented = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!(await tokenMatches(presented))) {
     return json({ error: 'unauthorized' }, 401)
+  }
+
+  // --- configuration -------------------------------------------------------
+  //
+  // POST, and only the named actions. Same rule as the reads: the page names an
+  // ACTION from a fixed list and the projection lives in `app.hq_*` where it
+  // can be reviewed. A page that could send SQL, or even a function name, is a
+  // page that has the database rather than a dashboard.
+  if (request.method === 'POST') {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const actionName = String(body.action ?? '')
+    const action = Object.hasOwn(ACTIONS, actionName) ? ACTIONS[actionName] : undefined
+    if (action === undefined) {
+      return json({ error: 'unknown action', actions: Object.keys(ACTIONS) }, 400)
+    }
+    const args = (body.args ?? {}) as Record<string, unknown>
+    const missing = action.required.filter(
+      (k) => args[k] === undefined || args[k] === null || String(args[k]).trim() === '',
+    )
+    if (missing.length > 0) {
+      return json({ error: `missing: ${missing.join(', ')}` }, 400)
+    }
+
+    const done = await fetch(`${DB_URL}/rest/v1/rpc/${action.fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(args),
+    })
+    if (!done.ok) {
+      console.error(`hq-api ${actionName}: upstream ${String(done.status)}`)
+      return json({ error: 'the action failed' }, 502)
+    }
+    return json({ action: actionName, result: await done.json() })
   }
 
   const url = new URL(request.url)

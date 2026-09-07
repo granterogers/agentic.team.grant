@@ -88,7 +88,8 @@
     "verify:mcp": "tsx scripts/verify/mcp.ts",
     "work": "tsx scripts/work.ts",
     "vault:export": "tsx scripts/vault/export.ts",
-    "project": "tsx scripts/projects/manage.ts"
+    "project": "tsx scripts/projects/manage.ts",
+    "telegram:webhooks": "tsx scripts/telegram/webhooks.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

@@ -68,5 +68,8 @@
   "0067_projects_attach_to_sources.sql": "05aa280b44cf000136200322338aedec5b009de4076f425516bf829877306b8f",
   "0068_mcp_can_write.sql": "4284721f01333da1445d3876b90926ddeddf566b491db9c5b2d98981d9569b07",
   "0069_fingerprint_without_an_extension.sql": "4079dbb67db2d3d9a465cac40ab7c7b6d7d06a07424dd408faa8bf44dd60a9fd",
-  "0070_a_channel_per_project_per_discipline.sql": "c28fe73076adaf26d5b776155108892dba8028e59cdb4e026032e371f7748113"
+  "0070_a_channel_per_project_per_discipline.sql": "c28fe73076adaf26d5b776155108892dba8028e59cdb4e026032e371f7748113",
+  "0071_the_team_has_names.sql": "1ffb15307035c27481170829abf826b5dcd4b3427fb8d191cb1060a815f8d85f",
+  "0072_every_bot_listens.sql": "21b6336357cb6606f9580ed00ce810a8b302454863cebe6b9ca79fd05af338aa",
+  "0073_the_front_end_can_configure.sql": "e9364a3151cbb9c8d3b042cd6220ca5679dc9b0c02dab19718f009606a915ac1"
 }

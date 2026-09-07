@@ -105,6 +105,26 @@ export class TelegramPager {
     readonly severity: PagerSeverity
     readonly actions: readonly ActionId[]
   }): Promise<PagerResult> {
+    // A reply is not an interruption.
+    //
+    // When Grant messages a staff bot, that bot answers him in the same chat.
+    // Paging him about the answer as well means two notifications for one
+    // exchange he started — and the pager exists to interrupt him about things
+    // he did NOT ask for. Checked before the floor, because it is a stronger
+    // reason to stay quiet than severity is.
+    const inbound = await this.db.execute(`
+      select 1 from public.inbound_commands
+       where job_id = ${lit(input.job.jobId)}::uuid and origin_channel = 'telegram'
+       limit 1
+    `)
+    if (inbound.rows.length > 0) {
+      return {
+        delivered: false,
+        note: 'not paged: this answers a message Grant sent, and he is already in that chat',
+        chatId: null,
+      }
+    }
+
     const floor = this.options.floor ?? 'important'
     if (RANK[input.severity] < RANK[floor]) {
       return {

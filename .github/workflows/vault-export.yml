@@ -1,0 +1,50 @@
+name: Vault export
+
+# The vault, encrypted, to Grant's phone — weekly.
+#
+# The nightly `pg_dump` is `--schema=public --schema=app`. Supabase Vault lives
+# in `vault` and is excluded, correctly: a backup carrying decryptable secrets
+# offsite would be a worse problem than the one it solves. The consequence is
+# that a restore produces a working database with an EMPTY vault, and every
+# secret has to be re-entered by hand.
+#
+# `npm run vault:export` closes that, and until this workflow existed it closed
+# it only when someone remembered — so a secret added on Tuesday was in no
+# export until somebody ran a command. That is a backup that depends on memory,
+# which is not a backup.
+#
+# Weekly rather than nightly on purpose: each run puts an encrypted copy of
+# every credential in a Telegram chat, and seven of those a week is seven
+# copies to delete rather than one. Secrets change rarely; the export is cheap
+# to run by hand the moment one does.
+on:
+  schedule:
+    # Sunday 04:13 UTC. Off the hour and off every other schedule here.
+    - cron: '13 4 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: vault-export
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Export
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        # The script prints no secret and no passphrase — both go to Telegram,
+        # in separate messages — so this log is safe to read.
+        run: npm run vault:export

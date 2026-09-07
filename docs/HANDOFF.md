@@ -42,7 +42,7 @@ Then run `npm run inventory` before trusting any credential.
 | · knowledge layer | ✅ ADR-0013 decided and built: `documents`, a connector registry, Postgres full-text search. Notion connected and waiting only on shared pages |
 | 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, a security pass over the live public surface, and **all but one** of §18's degradation cases — see [`degradation-coverage.md`](degradation-coverage.md). Remaining: §22's scenario A end to end |
 
-70 migrations · 668 unit tests · 22 live suites, 454 checks, all green (plus
+73 migrations · 668 unit tests · 22 live suites, 454 checks, all green (plus
 `verify:transitions`, which compares the two state machines rather than counting).
 
 **What Phase 10 has cost so far, which is the argument for doing it:** three

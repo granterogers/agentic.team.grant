@@ -27,8 +27,16 @@ import type { TelegramUpdate } from './telegram.ts'
 import { secretMatches, toCanonicalCommand, UnsupportedUpdateError } from './telegram.ts'
 
 const WEBHOOK_SECRET = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
-/** Which bot this webhook belongs to. A chat id is only meaningful against one. */
-const BOT_ID = Deno.env.get('TELEGRAM_BOT_ID') ?? ''
+/**
+ * The Chief of Staff bot, used only when a request names no bot.
+ *
+ * Seven bots share this one function and each registers its own URL with its
+ * own `?bot=` (0072). The id in the query string is never trusted — it is
+ * looked up in `telegram_bots`, and an unknown or disabled id is refused,
+ * because otherwise the query string would be a way to file an instruction as
+ * any staff member.
+ */
+const DEFAULT_BOT_ID = Deno.env.get('TELEGRAM_BOT_ID') ?? ''
 /** Who the private chats reaching this bot belong to. One human, for V1. */
 const SUBJECT = Deno.env.get('TELEGRAM_SUBJECT') ?? 'grant'
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -53,6 +61,28 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (!secretMatches(request.headers.get('X-Telegram-Bot-Api-Secret-Token'), WEBHOOK_SECRET)) {
     return unauthorized()
   }
+
+  // Which bot was written to, resolved rather than believed.
+  const claimed = new URL(request.url).searchParams.get('bot') ?? DEFAULT_BOT_ID
+  const speakers = (await (
+    await fetch(`${DB_URL}/rest/v1/rpc/staff_for_bot`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_bot_id: claimed }),
+    })
+  ).json()) as { staff_slug?: string | null; staff_name?: string | null; username?: string }[]
+  const speaker = speakers[0]
+  if (speaker === undefined) {
+    // An unregistered or disabled bot. 200 rather than 4xx: Telegram retries a
+    // non-2xx forever, and an update for a bot we have turned off is one we
+    // will never accept however many times it arrives.
+    return Response.json({ ok: true, ignored: 'unknown or disabled bot' })
+  }
+  const BOT_ID = claimed
 
   let update: TelegramUpdate
   try {
@@ -126,7 +156,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       apikey: SERVICE_KEY,
       Authorization: `Bearer ${SERVICE_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: 'resolution=ignore-duplicates,return=minimal',
+      Prefer: 'resolution=ignore-duplicates,return=representation',
     },
     body: JSON.stringify({
       origin_channel: command.origin_channel,
@@ -137,7 +167,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
       callback_action: command.callback_action,
       compensates_event_id: command.compensates_event_id,
       received_at: command.received_at,
+      // Who it was sent TO. Opening @atg_research_bot addresses Ines, and that
+      // is a clearer signal than any classifier could produce from the text.
+      addressed_to: speaker.staff_slug ?? null,
     }),
+    // `return=representation`, because the command_id is needed to turn this
+    // into work and a `return=minimal` insert hands back nothing.
   })
 
   if (!response.ok && response.status !== 409) {
@@ -146,5 +181,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return new Response('storage failed', { status: 503 })
   }
 
-  return Response.json({ ok: true, dedupe_key: command.dedupe_key, registration })
+  // An instruction becomes work. Storing it was the whole of the inbound path
+  // until now: `inbound_commands` had a writer and, for text, no consumer, so a
+  // message to a bot went into a table and nothing happened — which from
+  // Grant's side is indistinguishable from the bot being broken.
+  let queued: string | null = null
+  if (command.instruction !== null && command.instruction.trim() !== '') {
+    const stored = (await response.json().catch(() => [])) as { command_id?: string }[]
+    const commandId = stored[0]?.command_id
+    if (commandId !== undefined) {
+      const enqueued = (await (
+        await fetch(`${DB_URL}/rest/v1/rpc/enqueue_inbound`, {
+          method: 'POST',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ p_command_id: commandId }),
+        })
+      ).json()) as { job_id?: string; error?: string }
+      queued = enqueued.job_id ?? enqueued.error ?? null
+    }
+  }
+
+  return Response.json({
+    ok: true,
+    dedupe_key: command.dedupe_key,
+    registration,
+    addressed_to: speaker.staff_slug ?? '(the pager)',
+    queued,
+  })
 })
