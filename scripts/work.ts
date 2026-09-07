@@ -115,6 +115,17 @@ const review: Reviewer = () =>
   Promise.resolve({ status: 'approved' as const, notes: 'Deterministic notebook operation.' })
 
 const orKey = process.env.OPENROUTER_API_KEY ?? ''
+if (orKey === '') {
+  // Loudly, not silently. Without a key the instruction handler is not
+  // registered at all, so every `office.instruction` job — which is every
+  // message Grant sends a bot — finds no handler and parks. On the runner that
+  // read as a queue quietly doing nothing, because the secret is unset and an
+  // unset GitHub secret is an empty string rather than an error.
+  console.error(
+    'OPENROUTER_API_KEY is not set: the office cannot think, and every instruction ' +
+      'will park unhandled. Set it as a repository secret.',
+  )
+}
 const handlers = [
   ...notebookHandlers(db),
   planHandler(db),
