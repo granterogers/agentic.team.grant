@@ -261,6 +261,55 @@ export class NotebookActions {
     }
   }
 
+  /**
+   * The sources in a notebook, optionally with the first of each one's text.
+   *
+   * `withText` is how a person decides whether a source is worth keeping. Grant:
+   * *"be careful of the stuff that you're generating — there's some really odd
+   * looking files there, so inspect the content, make sure everything's seen."*
+   * A title tells you nothing: the leftover probe source in his notebook was
+   * called "AI Team HQ probe mtq92rvn", which is either a test fixture or a
+   * research note depending on whether you read it.
+   */
+  async sources(
+    notebookId: string,
+    withText = false,
+  ): Promise<
+    readonly {
+      sourceId: string
+      title: string | null
+      status: string
+      chars: number | null
+      opening: string | null
+    }[]
+  > {
+    const r = await this.act('sources', { notebook_id: notebookId, with_text: withText })
+    return ((r.sources ?? []) as Record<string, unknown>[]).map((x) => ({
+      sourceId: String(x.source_id),
+      title: x.title === undefined || x.title === null ? null : String(x.title),
+      status: String(x.status ?? ''),
+      chars: x.chars === undefined || x.chars === null ? null : Number(x.chars),
+      opening: x.opening === undefined || x.opening === null ? null : String(x.opening),
+    }))
+  }
+
+  /**
+   * Remove a source, by its exact id.
+   *
+   * The only destructive operations in this class, and deliberately narrow:
+   * there is no delete-by-title and no delete-all. A wildcard against Grant's
+   * own notebook is not recoverable from our side, and the thing that would
+   * make one tempting — a tidy-up script — is exactly the thing most likely to
+   * be run without reading it first.
+   */
+  async deleteSource(notebookId: string, sourceId: string): Promise<void> {
+    await this.act('delete_source', { notebook_id: notebookId, source_id: sourceId })
+  }
+
+  async deleteArtifact(notebookId: string, artifactId: string): Promise<void> {
+    await this.act('delete_artifact', { notebook_id: notebookId, artifact_id: artifactId })
+  }
+
   /** Ask the notebook about its own sources. */
   async ask(notebookId: string, question: string): Promise<string> {
     const r = await this.act('ask', { notebook_id: notebookId, question })

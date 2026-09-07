@@ -91,7 +91,8 @@
     "project": "tsx scripts/projects/manage.ts",
     "telegram:webhooks": "tsx scripts/telegram/webhooks.ts",
     "slack:introductions": "tsx scripts/slack/introductions.ts",
-    "avatars:cartoon": "tsx scripts/staff/generate-cartoon-avatars.ts"
+    "avatars:cartoon": "tsx scripts/staff/generate-cartoon-avatars.ts",
+    "notebook:tidy": "tsx scripts/notebook/tidy.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

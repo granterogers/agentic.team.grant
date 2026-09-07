@@ -231,6 +231,16 @@ async function act(
   // first version of this said "asking Google now" while the job was in fact
   // asking HIM, which is a small lie that makes the button arriving after it
   // look like a malfunction.
+  //
+  // In fact it must not be SAID at all when an approval request is following
+  // it. Grant: *"there's a lot of repetition going on in the Telegram
+  // messages."* This acknowledgement and the request that arrives fifteen
+  // seconds later say the same thing, and the second one is the one with the
+  // buttons on it. So this job goes quiet and the request speaks for both.
+  //
+  // The text is still produced and still stored, because it is this job's
+  // output and §10 wants an output; it is only not delivered.
+  await db.execute(`update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`)
   return (
     (started.length === 1
       ? `Right — ${list} for "${String(notebook)}". I'll ping you to approve it in a moment, ` +

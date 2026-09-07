@@ -156,6 +156,25 @@ export interface CombinedOptions {
 export function combinedNotifier(
   channels: readonly {
     readonly name: string
+    /**
+     * Which surface this channel writes to, when it writes to a shared one.
+     *
+     * Grant, having watched it for a day: *"there's a lot of repetition going
+     * on in the Telegram messages."* There was, and it was structural: the
+     * reply channel answers in the chat an instruction arrived in, the pager
+     * interrupts with anything important, and for an instruction Grant sent
+     * from Telegram those are the same chat. Every job produced two identical
+     * messages fifteen seconds apart.
+     *
+     * Neither channel was wrong. The rule that was missing sits above both of
+     * them: **one message per surface per job.** The first channel to reach a
+     * surface has said the thing; the second has nothing to add and no way to
+     * know that on its own.
+     *
+     * Undeclared means "no surface of its own", which for Slack is correct —
+     * it posts to a project channel, not to a chat Grant is already reading.
+     */
+    readonly surface?: string
     readonly notify: (
       job: Job,
       output: HandlerOutput,
@@ -184,9 +203,19 @@ export function combinedNotifier(
     const notes: string[] = []
     let delivered = false
 
+    // Surfaces already spoken to on this job. See `surface` above: the reply
+    // and the pager both write to Telegram, and for an instruction Grant sent
+    // from Telegram they write to the same chat.
+    const spokenTo = new Set<string>()
+
     for (const channel of channels) {
+      if (channel.surface !== undefined && spokenTo.has(channel.surface)) {
+        notes.push(`${channel.name}: already said on ${channel.surface}`)
+        continue
+      }
       try {
         const outcome = await channel.notify(job, output, outputId, context)
+        if (outcome.delivered && channel.surface !== undefined) spokenTo.add(channel.surface)
         delivered = delivered || outcome.delivered
         notes.push(outcome.note)
       } catch (error) {
@@ -207,6 +236,7 @@ export function pagerChannel(
   severity: PagerSeverity = 'routine',
 ): {
   readonly name: string
+  readonly surface: string
   readonly notify: (
     job: Job,
     output: HandlerOutput,
@@ -216,6 +246,7 @@ export function pagerChannel(
 } {
   return {
     name: 'telegram',
+    surface: 'telegram',
     notify: async (job, output, outputId, context) =>
       pager.page({
         job,

@@ -24,7 +24,9 @@
  * an ambiguous write" enforceable — a module that wrote directly could not be
  * held to it.
  */
+
 import type { SqlExecutor } from '../db/executor.ts'
+import { stripBoilerplate } from '../knowledge/boilerplate.ts'
 import type { Capability, NotebookAdapter, SourceText } from '../notebook/adapter.ts'
 import { NotebookUnavailableError } from '../notebook/adapter.ts'
 
@@ -226,7 +228,17 @@ export const upsertSource = async (
   projectId: string,
   source: SourceText,
 ): Promise<'added' | 'changed' | 'unchanged'> => {
-  const fingerprint = await fingerprintContent(source.content)
+  // The furniture comes off before anything else, so the fingerprint is taken
+  // over what we will actually store. Fingerprinting the raw text and storing
+  // the cleaned one would make every re-clean look like a change, and every
+  // change re-brief.
+  //
+  // Grant's Wikipedia article was 69,000 characters of which the first four
+  // thousand were the navigation menu — all of it indexed, all of it citable,
+  // and it had already been read back to him as an answer.
+  const cleaned = stripBoilerplate(source.content)
+  const content = cleaned.text
+  const fingerprint = await fingerprintContent(content)
 
   const existing = await db.execute(`
     select content_fingerprint from public.documents
@@ -249,8 +261,8 @@ export const upsertSource = async (
        content_fingerprint, content_chars, fetched_at, remote_updated_at)
     values
       (${lit(projectId)}::uuid, 'notebooklm', ${lit(source.remoteNotebookId)},
-       ${lit(source.remoteSourceId)}, ${nul(source.title)}, ${lit(source.content)},
-       ${lit(fingerprint)}, ${String(source.content.length)}, app.now_utc(),
+       ${lit(source.remoteSourceId)}, ${nul(source.title)}, ${lit(content)},
+       ${lit(fingerprint)}, ${String(content.length)}, app.now_utc(),
        ${nul(source.remoteUpdatedAt)}::timestamptz)
     -- The index this infers against is PARTIAL (0051: an upload has no external
     -- reference, so uniqueness is not asserted over a null). A conflict target

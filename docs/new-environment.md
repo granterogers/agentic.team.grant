@@ -7,6 +7,7 @@ in scripts and in this page rather than in a conversation. Read this, run four
 commands, and start work.
 
 **Written:** 2026-09-06, the morning after the Google account was reinstated.
+**Last verified:** 2026-09-07, after the approval gate and the voice work.
 
 ---
 
@@ -16,7 +17,7 @@ Run them in this order. Nothing below needs a decision from Grant.
 
 ```bash
 npm ci                    # ~40s
-npm run setup:python      # the NotebookLM adapter — one pip package, and nothing else installs it
+npm run setup:python      # two pip packages: the NotebookLM adapter and faster-whisper
 npm run check:secrets     # must print clean; if it does not, stop and read it
 npm run inventory         # which credentials are alive, and whose account each is on
 npm run verify:db         # the full live suite, ~30 minutes, 454 checks
@@ -25,7 +26,7 @@ npm run verify:db         # the full live suite, ~30 minutes, 454 checks
 `npm run inventory` is the one that replaces conversation. It probes every
 credential against its real provider and prints a table with an owner column, so
 "is Gemini working" and "who owns the Groq account" are answered by a script
-rather than by asking. `npm test` (668 unit tests, no network) is the fast
+rather than by asking. `npm test` (725 unit tests, no network) is the fast
 signal when you only touched pure code.
 
 Two scripts exist to use the system rather than test it: `npm run ask -- "…"`
@@ -106,7 +107,53 @@ Notion is the registered first-class connector and waits only on a token.
 ## What is actually left
 
 Phases 0–8 are complete. Phase 10 (hardening) is unblocked, needs nobody, and is
-the obvious next move. Phase 9 must not start. The five things waiting on Grant
-are listed at the end of [`HANDOFF.md`](HANDOFF.md) and in `npm run inventory` —
+the obvious next move. Phase 9 must not start. The things waiting on Grant are
+listed at the end of [`HANDOFF.md`](HANDOFF.md) and in `npm run inventory` —
 that list lives in files precisely so it stops being drip-fed one item per turn,
 which is the single worst habit of the sessions so far.
+
+---
+
+## Habits this codebase has had to learn the hard way
+
+Read these before writing anything. Each one cost a defect that shipped, and
+they are listed here rather than in a style guide because every one of them was
+already obvious in principle to whoever broke it.
+
+1. **A mechanism is not finished until something calls it.** `processCallbacks`
+   was written, tested six ways and called by nothing outside its own tests, so
+   no button in Slack or Telegram had ever done anything. `inbound_commands` had
+   a writer and no reader for text. Both were complete except at the point where
+   they met the rest of the system. When you add a module, grep for its name
+   outside `tests/` before you call it done.
+
+2. **A list that exists twice will drift.** The button vocabulary lives in
+   `ACTIONS`, in a Telegram map, and in a check constraint; the constraint fell
+   behind twice, each time surfacing as a 503 that Telegram retried forever. If
+   a list must be duplicated into SQL, add a live check that inserts every value
+   — `verify:slack` does this now.
+
+3. **Walk the parent chain.** A follow-up job is the same person continuing the
+   same work. Who is speaking, where to reply, which approval is open — every
+   one of those lookups was written against the job in hand, and every one of
+   them was wrong for a child job. Three separate fixes before it was written
+   down.
+
+4. **Read the library, do not infer it.** A private table of NotebookLM's status
+   integers read "in progress" as "finished". The library exposes `is_completed`
+   and says in as many words that the integers must not be read directly,
+   because two of them were transposed on the wire in an earlier release.
+
+5. **Measure the rule against the real document.** A boilerplate stripper based
+   on "menus are runs of short lines" wanted to delete two thirds of the actual
+   article, because that extractor hard-wraps prose too. Its own guard caught
+   it. Write the guard first.
+
+6. **Say what you could not do.** A guard that silently returns "nothing
+   happened" makes "nothing matched" and "everything matched and was overruled"
+   the same symptom. Return the reason.
+
+7. **One message per surface.** The reply channel and the pager both write to
+   Telegram; for an instruction Grant sent from Telegram they write to the same
+   chat, and every job produced two identical messages. Neither channel was
+   wrong — the rule above them was missing.

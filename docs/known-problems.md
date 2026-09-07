@@ -1,16 +1,53 @@
 # Known problems
 
-**Last verified: 2026-09-06.** Everything here was checked, not assumed. Where
+**Last verified: 2026-09-07.** Everything here was checked, not assumed. Where
 something is unknown, it says unknown rather than guessing.
 
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
 half of this live, and is the thing to trust when this file and it disagree.
 
 Defects already found and fixed are in
-[`defects-fixed.md`](defects-fixed.md) — twenty-six of them, kept because the
-shapes recur. Nothing there is outstanding.
+[`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
+distilled into the seven habits at the end of
+[`new-environment.md`](new-environment.md). Nothing there is outstanding.
 
 ---
+
+
+## NotebookLM slide decks fail, every time
+
+Four attempts across two sessions, all reported `failed` by Google within
+twenty minutes, on a notebook where audio overviews and mind maps succeed. No
+error detail is exposed — the artifact simply arrives in `failed`. Not our bug
+as far as anything here can tell, and the collector now says so out loud rather
+than polling a dead artifact until it gives up.
+
+Worth retrying occasionally; `artifacts.retry_failed` exists in the library and
+is not wired up.
+
+## Web extractions still carry furniture
+
+`stripBoilerplate` removes bare-URL lines, their labels and named chrome on
+ingest, which took the Wikipedia article in the corpus from 69,000 characters to
+27,000 and made the same search return the article's real paragraphs instead of
+its navigation menu.
+
+It is not solved. What remains still contains theme toggles, "Toggle the table
+of contents", language lists and the footer. The rules only delete lines they
+can name, and refuse entirely if too little would survive — both deliberate,
+because §10's citations are built on the stored text being what the source said.
+A real readability extractor is the fix; nobody has needed it enough yet.
+
+## Google's notebook allowance cannot be read
+
+Compute-based since 2 September, refreshing every five hours against a weekly
+cap, and exposed only in Google's own interface. The adapter library has
+`AccountLimits` — notebooks, sources, tier — and nothing about compute.
+
+So `notebook_spend` is OUR count of OUR spending, every surface says so, and the
+ceiling is learned from refusals rather than known. Do not let a figure derived
+from it be presented as Google's.
+
 
 ## 🔴 Serious — act on these
 

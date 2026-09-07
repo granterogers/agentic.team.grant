@@ -4,7 +4,7 @@
 handoff; the dated ones remain as history and you do not need them.
 
 **Branch:** `claude/phase-7-communications-kh8ow8` — everything committed and
-pushed. **Written:** 2026-09-05, revised 2026-09-06.
+pushed. **Written:** 2026-09-05, revised 2026-09-07.
 
 **Starting a new session or a new environment?** Read
 [`new-environment.md`](new-environment.md) first — it is four commands and the
@@ -23,9 +23,11 @@ rather than rediscovery.
    touching `documents`, and do not revive the NotebookLM sync.
 3. **[`../AI_TEAM_HQ_MASTER_SPEC.md`](../AI_TEAM_HQ_MASTER_SPEC.md)** — canonical,
    supersedes everything.
-4. **[`defects-fixed.md`](defects-fixed.md)** — the 26 defects found and closed,
-   and the one shape of mistake that has now appeared in fifteen costumes.
-   [`test-evidence/`](test-evidence/) has the twelve long-form accounts.
+4. **[`defects-fixed.md`](defects-fixed.md)** — every defect found and closed,
+   and the one shape of mistake that keeps arriving in a new costume.
+   [`test-evidence/`](test-evidence/) has the long-form accounts. The seven
+   habits at the end of [`new-environment.md`](new-environment.md) are the
+   distillation; read those even if you skip the list.
 
 Then run `npm run inventory` before trusting any credential.
 
@@ -144,6 +146,36 @@ week.
 **Settled on 2026-09-06, recorded so they are not re-asked:** Backblaze is safe
 (its own password, no Google SSO); Google Cloud TTS is parked; the ownership of
 the OpenRouter, OpenAI and Groq accounts is parked.
+
+---
+
+## What arrived on 2026-09-07, and what it left open
+
+The office can now act rather than only answer. In order of how likely you are
+to trip over them:
+
+- **Every notebook generation is gated on Grant's approval** (0083–0086). The
+  gate is in `notebook.generate`, not in the office, because an MCP client and a
+  scheduled retry can both start one. Approval creates a NEW job carrying
+  `approved_by`; nothing resumes.
+- **`jobs.not_before` and `jobs.announce`** (0074) exist and are load-bearing.
+  A job can be delayed, and a job can decide its own output is not worth a
+  message. Both are read by the worker and the notifier.
+- **The notebook meter** (0078). Google's compute allowance cannot be queried —
+  there is no API — so `notebook_spend` counts ours and a refusal lowers the
+  ceiling permanently. Never present those numbers as Google's.
+- **Voice notes** transcribe locally with faster-whisper. The audio never
+  leaves the runner, deliberately; do not "improve" this by sending it to a
+  provider.
+- **`#the-floor`** narrates routing decisions in plain English, rendered clause
+  by clause from the row. Do not let a model write it: an unconfident reading
+  smoothed into a confident one is exactly what the channel exists to show.
+
+Left open, and honestly: NotebookLM **slide decks fail** every time on this
+account (four attempts, all `failed` from Google, with audio and mind maps
+working). The boilerplate stripper removes 61% of a Wikipedia extraction but the
+remainder still carries theme toggles and table-of-contents chrome — better, not
+solved.
 
 ---
 

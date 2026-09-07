@@ -344,7 +344,11 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
 
           return {
             body:
-              `Shall I make the ${LABEL[kind] ?? kind} in "${notebook.name}"?` +
+              // Carries the acknowledgement too, now that the office's own is
+              // suppressed: this is the first thing Grant sees after asking,
+              // so it has to show that the ask was understood as well as ask
+              // for permission.
+              `You asked for ${LABEL[kind] ?? kind}. Shall I make it in "${notebook.name}"?` +
               (instructions === undefined ? '' : `\n\n${instructions}`) +
               `\n\n${describe(forecast)}` +
               '\n\nNothing happens until you say go ahead.',
@@ -461,6 +465,18 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           )
         `)
 
+        // Quiet. He pressed Go ahead fifteen seconds ago; "it has started" is
+        // not news, and the next message he wants is the link. Grant, on the
+        // repetition: *"you need to watch that."*
+        //
+        // Unconditional, and safe to be: the gate above returns early unless
+        // an approval is present, so there is no path to this line that Grant
+        // did not just press a button on. That includes an MCP client's
+        // generation — 0083 gates those too, which is the whole reason the gate
+        // is in the handler rather than in the office.
+        await db.execute(
+          `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
+        )
         return deterministic(
           `${sentence(LABEL[kind] ?? kind)} is away — Google has it (task ${String(started.taskId)}, ` +
             `${started.state}). Few minutes usually. I am watching for it and will post the ` +

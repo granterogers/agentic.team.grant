@@ -89,6 +89,7 @@ async function originOf(db: SqlExecutor, job: Job): Promise<Origin | null> {
 
 export function replyChannel(db: SqlExecutor): {
   readonly name: string
+  readonly surface: string
   readonly notify: (
     job: Job,
     output: HandlerOutput,
@@ -98,6 +99,10 @@ export function replyChannel(db: SqlExecutor): {
 } {
   return {
     name: 'reply',
+    // Telegram, same as the pager. Declared so the combined notifier can apply
+    // its one-message-per-surface rule: this channel goes first, so a job that
+    // came in on Telegram is answered here and the pager stays quiet.
+    surface: 'telegram',
     notify: async (job, output, _outputId, context): Promise<NotifyOutcome> => {
       const origin = await originOf(db, job)
       if (origin === null) {

@@ -95,7 +95,11 @@ GENERATORS = {
 
 async def main() -> None:
     if len(sys.argv) < 2:
-        die("(none)", f"usage: act.py <{'|'.join(['add_text', 'add_url', 'create_note', 'generate', 'poll', 'ask'])}> '<json>'")
+        die(
+            "(none)",
+            "usage: act.py <add_text|add_url|create_note|generate|poll|artifacts|"
+            "sources|ask|delete_source|delete_artifact> '<json>'",
+        )
     action = sys.argv[1]
     try:
         args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
@@ -224,6 +228,51 @@ async def main() -> None:
                     "title": getattr(artifact, "title", None),
                     "url": getattr(artifact, "url", None),
                 })
+                return
+
+            if action == "delete_source":
+                # Destructive, and the only destructive action here. Guarded by
+                # requiring the caller to name the exact source id: there is no
+                # "delete by title" and no "delete all", because the failure
+                # mode of a wildcard against Grant's own notebook is not
+                # recoverable from our side.
+                source_id = args.get("source_id")
+                if not source_id:
+                    die(action, "source_id is required")
+                await client.sources.delete(notebook, source_id)
+                emit({"ok": True, "action": action, "source_id": source_id})
+                return
+
+            if action == "delete_artifact":
+                artifact_id = args.get("artifact_id")
+                if not artifact_id:
+                    die(action, "artifact_id is required")
+                await client.artifacts.delete(notebook, artifact_id)
+                emit({"ok": True, "action": action, "artifact_id": artifact_id})
+                return
+
+            if action == "sources":
+                # Read, and here rather than in read.py because the tidy tool
+                # needs to see a source and delete it in one session, and
+                # splitting that across two processes means two logins.
+                items = await client.sources.list(notebook)
+                out = []
+                for src in items:
+                    entry = {
+                        "source_id": getattr(src, "id", None),
+                        "title": getattr(src, "title", None),
+                        "status": str(getattr(src, "status", "") or ""),
+                    }
+                    if args.get("with_text"):
+                        try:
+                            full = await client.sources.get_fulltext(notebook, entry["source_id"])
+                            body = getattr(full, "content", "") or ""
+                            entry["chars"] = len(body)
+                            entry["opening"] = body[:400]
+                        except Exception as exc:  # noqa: BLE001
+                            entry["opening"] = f"(could not read: {type(exc).__name__})"
+                    out.append(entry)
+                emit({"ok": True, "action": action, "sources": out})
                 return
 
             if action == "artifacts":
