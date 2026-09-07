@@ -46,12 +46,12 @@ const slackReturning = (responses: unknown[]): SlackClient => {
 
 describe('channel names', () => {
   it('is deterministic, which is what makes name_taken informative', () => {
-    expect(channelNameFor('Website Rebuild')).toBe('website-rebuild')
+    expect(channelNameFor('Website Rebuild')).toBe('website_rebuild')
     expect(channelNameFor('Website Rebuild')).toBe(channelNameFor('Website Rebuild'))
   })
 
   it('strips what Slack will not accept rather than letting the API reject it', () => {
-    expect(channelNameFor('Q3 Pricing! (draft)')).toBe('q3-pricing-draft')
+    expect(channelNameFor('Q3 Pricing! (draft)')).toBe('q3_pricing_draft')
   })
 
   it('never exceeds Slack ceiling', () => {
@@ -68,7 +68,7 @@ describe('channel names', () => {
   })
 
   it('produces something legal even from a slug that reduces to nothing', () => {
-    expect(channelNameFor('!!!')).toBe('untitled-project')
+    expect(channelNameFor('!!!')).toBe('untitled_project')
   })
 })
 
@@ -150,11 +150,11 @@ describe('per-project, per-discipline channel names (0070)', () => {
       channelNameFor('Website Rebuild', 'growth-director'),
     ]
     expect([...names].sort()).toEqual([
-      'money-mastery',
-      'money-mastery-finance',
-      'money-mastery-research',
-      'website-rebuild',
-      'website-rebuild-growth',
+      'money_mastery',
+      'money_mastery_finance',
+      'money_mastery_research',
+      'website_rebuild',
+      'website_rebuild_growth',
     ])
   })
 
@@ -162,12 +162,12 @@ describe('per-project, per-discipline channel names (0070)', () => {
     // Every staff slug ends in it, and a suffix that is the same on every
     // channel carries no information while costing nine characters of a
     // name that has 80.
-    expect(channelNameFor('Alpha', 'research-director')).toBe('alpha-research')
-    expect(channelNameFor('Alpha', 'quality-director')).toBe('alpha-quality')
+    expect(channelNameFor('Alpha', 'research-director')).toBe('alpha_research')
+    expect(channelNameFor('Alpha', 'quality-director')).toBe('alpha_quality')
   })
 
   it('shortens the Chief of Staff, whose slug is not shaped like the others', () => {
-    expect(channelNameFor('Alpha', 'chief-of-staff')).toBe('alpha-chief')
+    expect(channelNameFor('Alpha', 'chief-of-staff')).toBe('alpha_chief')
   })
 
   it('a lobby has no suffix at all', () => {
@@ -183,13 +183,39 @@ describe('per-project, per-discipline channel names (0070)', () => {
     )
     // And the discipline survives the truncation — trimming the suffix instead
     // of the stem would make two disciplines share a channel name.
-    expect(channelNameFor(long, 'communications-director')).toMatch(/-communications$/)
+    expect(channelNameFor(long, 'communications-director')).toMatch(/_communications$/)
   })
 
-  it('never ends in a hyphen, whatever the truncation', () => {
+  it('never ends in a separator, whatever the truncation', () => {
     for (const name of ['a-'.repeat(60), 'x'.repeat(200), 'Q3!!! (draft) ']) {
-      expect(channelNameFor(name)).not.toMatch(/-$/)
-      expect(channelNameFor(name, 'operations-director')).not.toMatch(/-$/)
+      expect(channelNameFor(name)).not.toMatch(/_$/)
+      expect(channelNameFor(name, 'operations-director')).not.toMatch(/_$/)
     }
+  })
+
+  /*
+    Grant, twice: *"Make them all plain English, and I prefer underscore rather
+    than hyphen. It's easier to read."* Asserted rather than left to the
+    examples above, so a future change back to hyphens fails a check that says
+    why instead of failing seven that look like typos.
+  */
+  it('uses underscores and never a hyphen, because a hyphen is hard to read', () => {
+    for (const [name, slug] of [
+      ['Money Mastery', null],
+      ['money-mastery', 'research-director'],
+      ['AI Team HQ Test', 'communications-director'],
+      ['Q3 Pricing! (draft)', 'chief-of-staff'],
+    ] as const) {
+      expect(channelNameFor(name, slug)).not.toMatch(/-/)
+      expect(channelNameFor(name, slug)).toMatch(/^[a-z0-9_]+$/)
+    }
+  })
+
+  it('a hyphenated slug and its spaced name produce the SAME channel', () => {
+    // Both are passed to this function by real callers — the provisioner takes
+    // the project name, the tidy script falls back to the slug — and two
+    // spellings of one project producing two channels is the confusion the
+    // convention exists to prevent.
+    expect(channelNameFor('money-mastery')).toBe(channelNameFor('Money Mastery'))
   })
 })

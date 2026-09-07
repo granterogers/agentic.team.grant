@@ -222,7 +222,7 @@ record(
   "a staff member's first work on a project creates their own channel",
   `${researchChannel.outcome} #${String(researchChannel.channelName)}`,
   researchChannel.outcome === 'created' &&
-    String(researchChannel.channelName).endsWith('-research') &&
+    String(researchChannel.channelName).endsWith('_research') &&
     researchChannel.channelId !== CHANNEL,
 )
 
@@ -1248,12 +1248,42 @@ console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)}
 
 // Every channel this run made, not just the lobby.
 //
-// The discipline channels (`…-research`) were never in this cleanup, so each
+// The discipline channels (`…_research`) were never in this cleanup, so each
 // full run left one behind: five of them had accumulated in Grant's sidebar by
 // the time anyone counted, against a standing instruction to keep it clear of
 // anything the team did not deliberately create. They archive fine — the bot is
 // a member, having posted in them — which is what distinguishes them from the
 // lobby below.
+
+/**
+ * Rename a channel out of the way before archiving it.
+ *
+ * Grant: *"look at the channel names. They're fucking all over the place."*
+ * Sixty of the seventy-three were `slack-office-verification-fixture-<digits>`,
+ * archived by this suite under their own names — and an archived channel still
+ * appears when you browse channels, still holds its name for good, and reads
+ * like a real room until you open it.
+ *
+ * Slack refuses to rename an archived channel and offers no delete outside
+ * Enterprise Grid, so the only moment this can be fixed is the moment before
+ * archiving. `zz_` sorts last in every client, and the name says what it is.
+ *
+ * Best effort: a rename that fails must not stop the archive, because an
+ * unarchived fixture is the worse of the two outcomes.
+ */
+const parkAndArchive = async (channelId: string, was: string): Promise<string> => {
+  const parked = `zz_test_${stamp}_${Math.random().toString(36).slice(2, 6)}`
+  try {
+    await slack.call('conversations.rename', { channel: channelId, name: parked })
+  } catch {
+    // Kept under its old name. Named in the log rather than silently.
+    await slack.call('conversations.archive', { channel: channelId })
+    return was
+  }
+  await slack.call('conversations.archive', { channel: channelId })
+  return parked
+}
+
 for (const extra of (
   await db.execute(`
     select channel_id, channel_name from public.slack_channel_map
@@ -1261,20 +1291,22 @@ for (const extra of (
   `)
 ).rows as { channel_id: string; channel_name: string }[]) {
   try {
-    await slack.call('conversations.archive', { channel: extra.channel_id })
+    const parked = await parkAndArchive(extra.channel_id, extra.channel_name)
     await db.execute(`
-      update public.slack_channel_map set active = false, archived_at = app.now_utc()
+      update public.slack_channel_map
+         set active = false, archived_at = app.now_utc(), channel_name = ${lit(parked)}
        where channel_id = ${lit(extra.channel_id)}
     `)
-    console.log(`archived #${extra.channel_name}`)
+    console.log(`archived #${extra.channel_name} as #${parked}`)
   } catch (error) {
     console.log(`#${extra.channel_name}: ${(error as Error).message.slice(0, 70)}`)
   }
 }
 
+let parkedLobby = created.channelName
 try {
-  await slack.call('conversations.archive', { channel: CHANNEL })
-  console.log(`\narchived #${created.channelName}`)
+  parkedLobby = await parkAndArchive(CHANNEL, created.channelName)
+  console.log(`\narchived #${created.channelName} as #${parkedLobby}`)
 } catch (error) {
   // Expected, and worth printing in full rather than swallowing: archiving
   // needs membership, the lockout check deliberately gave that up, and the app
@@ -1291,7 +1323,7 @@ try {
 try {
   await db.execute(`
     update public.slack_channel_map
-       set active = false, archived_at = app.now_utc()
+       set active = false, archived_at = app.now_utc(), channel_name = ${lit(parkedLobby)}
      where channel_id = ${lit(CHANNEL)};
     delete from public.deliveries where dedupe_key like ${lit(`verify:${stamp}:%`)};
     delete from public.preference_instructions where command_id in (

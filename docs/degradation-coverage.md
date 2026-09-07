@@ -20,7 +20,7 @@ by grepping for keywords.
 | 4 | Slack disabled | `verify:chaos` — *Slack switched off (§17): the pager is untouched by the decision*, plus *nothing behind the surface was affected* |
 | 5 | Telegram disabled | `verify:chaos` — *Telegram switched off (§17): the pager stops resolving*, and *Slack still delivers — the decision was about one surface*. The mirror of case 4, written because this map showed only one half existed |
 | 6 | Voice budget exhausted | `verify:tts` — *one character past a full budget is refused*, with the concurrency guarantee beside it |
-| 7 | Realtime unavailable | ⬜ **not covered.** Voice is not a command source yet; there is no Realtime session to fail |
+| 7 | Realtime unavailable | `verify:cross-interface` — *a voice turn redelivered after a dropped reply is discarded, not repeated*. Voice became a command source in 0102–0105; the failure that matters is the endpoint being unreachable mid-sentence, and what must survive it is §18's rule for every case: canonical state preserved, no duplicate work |
 | 8 | OpenRouter exhausted | `verify:router` — *a rate-limited first model fails over to the next and still answers*; `verify:chaos` — *the breaker recorded the failure* |
 | 9 | **Every** free provider unavailable | `verify:router` — *disabling a provider empties its allow-list*, and *the router refuses while it is disabled* (`NoUsableModelError`, so work queues rather than failing) |
 | 10 | Google OAuth revoked | ⬜ **not applicable yet.** Phase 9 has no OAuth client in service |
@@ -42,9 +42,16 @@ by grepping for keywords.
 
 ## The remaining work, plainly
 
-**One gap left, and it is not yet real.** *Realtime unavailable* (case 7)
-becomes testable the moment voice becomes a command source, and not before —
-there is no session to fail.
+**None left.** Case 7 was the last, carried for weeks as *"not testable until
+voice is a command source"*. Grant settled §12's "optional premium" against
+§22's completion criterion — **"Voice is required"** — and 0102–0105 made voice
+a command source, at which point the case became real and was covered.
+
+What it turned out to be worth testing is not the recogniser failing, which is
+visible and recoverable, but the turn that was heard, sent, and whose reply
+never arrived: the browser retries, and §18's rule is that the second delivery
+must change nothing. It does — the `inbound_commands` dedupe index refuses it,
+exactly as it refuses a redelivered Slack event.
 
 Cases 5 and 11 were the two this map exposed on the day it was written, and both
 are now closed. Case 11 is the better story: the rotation sequence lived only
@@ -57,7 +64,8 @@ nothing is caught immediately instead of twelve hours later.
 
 **Two are not applicable** and are recorded as such rather than left blank:
 Google OAuth and watch subscriptions belong to Phase 9, and Notebook write-back
-was retired by ADR-0013.
+was retired by ADR-0013. Case 10 becomes real the moment Grant creates an OAuth
+client — the plumbing is built and waiting on that one human step.
 
 ---
 

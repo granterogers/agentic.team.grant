@@ -42,7 +42,7 @@ import { SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner } from '../../src/slack/provision.ts'
 
 /** The channel. Named as a person would name it, not as a system would. */
-const CHANNEL = 'the-team'
+const CHANNEL = 'the_team'
 
 /**
  * Bumped only when the introductions genuinely have to be said again.

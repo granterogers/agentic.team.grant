@@ -32,6 +32,7 @@ import { capacityHandler, fireDueDuties } from '../src/handlers/capacity.ts'
 import { instructionHandler } from '../src/handlers/instruction.ts'
 import { notebookHandlers } from '../src/handlers/notebook.ts'
 import { planHandler } from '../src/handlers/plan.ts'
+import { sourceHandler } from '../src/handlers/source.ts'
 import type { Reviewer } from '../src/jobs/worker.ts'
 import { drain } from '../src/jobs/worker.ts'
 import { ProviderRouter } from '../src/providers/router.ts'
@@ -114,23 +115,47 @@ const notify = combinedNotifier([replyChannel(db), ...channels], db)
 const review: Reviewer = () =>
   Promise.resolve({ status: 'approved' as const, notes: 'Deterministic notebook operation.' })
 
+/**
+ * Whether the office can think at all.
+ *
+ * The key comes from the VAULT (§15), resolved by the router itself from
+ * `providers.secret_ref`. The environment variable is now only a local
+ * convenience — which is the right way round, and means a scheduled run needs
+ * exactly one GitHub secret (`SUPABASE_ACCESS_TOKEN`) rather than three.
+ *
+ * Checked here rather than assumed, because without a key the instruction
+ * handler is not registered at all and every `office.instruction` job — which
+ * is every message Grant sends a bot — finds no handler and parks. That reads
+ * as a queue quietly doing nothing.
+ */
 const orKey = process.env.OPENROUTER_API_KEY ?? ''
-if (orKey === '') {
-  // Loudly, not silently. Without a key the instruction handler is not
-  // registered at all, so every `office.instruction` job — which is every
-  // message Grant sends a bot — finds no handler and parks. On the runner that
-  // read as a queue quietly doing nothing, because the secret is unset and an
-  // unset GitHub secret is an empty string rather than an error.
+const vaultKey = String(
+  (
+    await db.execute(`
+      select coalesce(app.resolve_secret(secret_ref), '') as k
+        from public.providers where provider = 'openrouter' and secret_ref is not null
+    `)
+  ).rows[0]?.k ?? '',
+)
+const canThink = orKey !== '' || vaultKey !== ''
+if (!canThink) {
   console.error(
-    'OPENROUTER_API_KEY is not set: the office cannot think, and every instruction ' +
-      'will park unhandled. Set it as a repository secret.',
+    'No inference key in the vault (openrouter.api_key) and none in the environment: ' +
+      'the office cannot think, and every instruction will park unhandled.',
   )
 }
 const handlers = [
   ...notebookHandlers(db),
   planHandler(db),
   capacityHandler(db),
-  ...(orKey === '' ? [] : [instructionHandler({ db, router: new ProviderRouter(db, orKey) })]),
+  ...(canThink
+    ? [
+        instructionHandler({ db, router: new ProviderRouter(db, orKey) }),
+        // §22 A's first clause: a source arriving is read by Research. 0107's
+        // trigger makes the job; without this handler it would park.
+        sourceHandler({ db, router: new ProviderRouter(db, orKey) }),
+      ]
+    : []),
 ]
 
 /**

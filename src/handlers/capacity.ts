@@ -157,9 +157,9 @@ export function capacityHandler(db: SqlExecutor): Handler {
         evidence: 'verified',
         sources: [`job:${job.jobId}`],
         contradictions: null,
-        path: 'deterministic',
+        path: 'deterministic_retrieval',
         model: null,
-      } as unknown as HandlerOutput
+      } satisfies HandlerOutput
     },
   }
 }

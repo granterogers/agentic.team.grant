@@ -44,6 +44,13 @@ export const FIXTURE_PREFIXES = [
   'ledger-proof-',
   'jobs-proof-',
   'fixture-',
+  // `verify:knowledge` needs a project that looks REAL, because 0107
+  // deliberately does not start work for a project whose slug says fixture —
+  // and the trigger it is testing is the one that starts work. So it uses a
+  // slug outside the fixture family and this list is where that is reconciled:
+  // the suite cleans up after itself, and when it dies before doing so, the
+  // purge still finds it.
+  'newsroom-',
 ] as const
 
 const token = process.env.SUPABASE_ACCESS_TOKEN

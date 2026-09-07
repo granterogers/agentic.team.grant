@@ -58,9 +58,9 @@ const done = (body: string, sources: readonly string[]): HandlerOutput =>
     evidence: 'verified',
     sources,
     contradictions: null,
-    path: 'deterministic',
+    path: 'deterministic_retrieval',
     model: null,
-  }) as unknown as HandlerOutput
+  }) satisfies HandlerOutput
 
 export function planHandler(db: SqlExecutor): Handler {
   return {

@@ -163,11 +163,115 @@ record(
   stranger?.subject === null,
 )
 
+// ---------------------------------------------------------------------------
+// Voice, the third interface §31 names
+// ---------------------------------------------------------------------------
+//
+// This used to be a SKIP: *"voice captures audio and holds a conversation; it
+// is not yet a command source."* Grant settled §12's "optional premium"
+// against §22's completion criterion — **"Voice is required"** — and 0102 made
+// it one.
+//
+// The row is built the way the endpoint builds it, from the same fields, and
+// then compared against Slack's on exactly the same terms. Not through the HTTP
+// endpoint, deliberately: this suite is about what the DATABASE holds, and a
+// live call would also be testing Deno, the deploy and the network.
+const voiceRow = await store({
+  origin_channel: 'voice',
+  // `session:turn`, the same `chat:message` shape every other channel uses —
+  // which is what lets conversation memory and the pairing window work on voice
+  // with no special case.
+  origin_ref: `sv${run}:t1`,
+  actor: 'grant',
+  instruction: INSTRUCTION,
+  dedupe_key: `voice:turn:sv${run}.t1`,
+  received_at: AT.toISOString(),
+})
+
 record(
-  'voice, the third interface §31 names',
-  'SKIPPED: voice captures audio and holds a conversation; it is not yet a command source, ' +
-    'so it produces no normalized command to compare',
-  true,
+  'the same instruction stores through VOICE as well (§31, third interface)',
+  voiceRow === undefined ? 'no row' : 'stored',
+  voiceRow !== undefined,
+)
+
+const voiceDiffering = Object.keys(slackRow ?? {}).filter(
+  (key) => !MODULO.has(key) && JSON.stringify(slackRow?.[key]) !== JSON.stringify(voiceRow?.[key]),
+)
+record(
+  'and the voice row is identical to the Slack row apart from the channel-native fields',
+  voiceDiffering.length === 0
+    ? 'every other column matches'
+    : `differ: ${voiceDiffering.join(', ')}`,
+  voiceDiffering.length === 0,
+)
+
+// The half that only voice has: it can answer some questions itself, and it
+// must delegate everything else rather than inventing an answer. Both
+// directions, because a `voice_answer` that always returned null would pass a
+// one-sided check while making the surface useless — and one that never
+// returned null would be an adapter deciding, which §5 forbids.
+const answerable = await store({
+  origin_channel: 'voice',
+  origin_ref: `sv${run}:t2`,
+  actor: 'grant',
+  instruction: 'what projects have we got',
+  dedupe_key: `voice:turn:sv${run}.t2`,
+  received_at: AT.toISOString(),
+})
+const answered = await one(
+  `select app.voice_answer(${lit(String(answerable?.command_id))}::uuid) as a`,
+)
+const spoken = (answered?.a as { speak?: string } | null)?.speak
+record(
+  'a question about state is answered from real rows, here and now',
+  spoken === undefined ? 'not answered' : String(spoken).slice(0, 90),
+  typeof spoken === 'string' && spoken.length > 0,
+)
+
+const delegated = await one(
+  `select app.voice_answer(${lit(String(voiceRow?.command_id))}::uuid) as a`,
+)
+record(
+  'CONTROL: an instruction is NOT answered — it returns null so it goes to the team',
+  delegated?.a === null
+    ? 'null, as required'
+    : `answered: ${JSON.stringify(delegated?.a).slice(0, 70)}`,
+  delegated?.a === null,
+)
+
+// §18 case 7, which the degradation map has carried as "not covered — voice is
+// not a command source yet, there is no session to fail". There is now, and
+// the failure that matters is not the recogniser dying: it is the endpoint
+// being unreachable while Grant is mid-sentence. What must survive is the rule
+// every other case is held to — canonical state preserved, no duplicate work.
+const beforeCount = Number(
+  (
+    await one(
+      `select count(*)::int as n from public.jobs where idempotency_key like ${lit(`inbound-%`)}`,
+    )
+  )?.n,
+)
+// The same turn arriving twice, which is what a retry after a dropped response
+// looks like from the browser's side.
+const retried = await one(`
+  insert into public.inbound_commands
+    (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at)
+  values ('voice', ${lit(`sv${run}:t1`)}, 'grant', ${lit(INSTRUCTION)},
+          ${lit(`voice:turn:sv${run}.t1`)}, ${lit(AT.toISOString())}::timestamptz)
+  on conflict (dedupe_key) do nothing
+  returning command_id::text
+`)
+const afterCount = Number(
+  (
+    await one(
+      `select count(*)::int as n from public.jobs where idempotency_key like ${lit(`inbound-%`)}`,
+    )
+  )?.n,
+)
+record(
+  'a voice turn redelivered after a dropped reply is discarded, not repeated (§18 case 7)',
+  `insert returned ${retried === undefined ? 'nothing' : 'a row'}; jobs ${String(beforeCount)} -> ${String(afterCount)}`,
+  retried === undefined && beforeCount === afterCount,
 )
 
 console.log('\n| check | outcome | |')

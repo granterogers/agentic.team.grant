@@ -128,6 +128,16 @@ export const DEFAULT_MAX_ATTEMPTS = 3
 
 export class ProviderRouter {
   private readonly maxAttempts: number
+  /**
+   * The key, once resolved from the vault.
+   *
+   * `providers.secret_ref` has existed since the registry did, was loaded into
+   * `ProviderRow` on every call, and was never read — the constructor's key won
+   * unconditionally. So the only way to give a worker a key was an environment
+   * variable, and §15 says secrets live in the vault. Cached per instance
+   * because one drain resolves it once and then makes up to three calls.
+   */
+  private resolved: string | null = null
 
   constructor(
     private readonly db: SqlExecutor,
@@ -166,6 +176,29 @@ export class ProviderRouter {
         pricing_completion: r.pricing_completion === null ? null : String(r.pricing_completion),
       })),
     }
+  }
+
+  /**
+   * The key to present, preferring the vault over the environment.
+   *
+   * The environment still wins when the vault holds nothing, because a local
+   * run with `OPENROUTER_API_KEY` set should keep working and because the
+   * verification suites pass a fixture key directly.
+   */
+  private async key(provider: ProviderRow): Promise<string> {
+    if (this.resolved !== null) return this.resolved
+    if (provider.secret_ref !== null) {
+      const { rows } = await this.db.execute(
+        `select app.resolve_secret('${provider.secret_ref.replace(/'/g, "''")}'::app.vault_secret_ref) as k`,
+      )
+      const fromVault = (rows[0] as { k?: string | null } | undefined)?.k
+      if (fromVault !== null && fromVault !== undefined && fromVault !== '') {
+        this.resolved = fromVault
+        return fromVault
+      }
+    }
+    this.resolved = this.apiKey
+    return this.apiKey
   }
 
   /**
@@ -284,7 +317,7 @@ export class ProviderRouter {
       const response = await this.fetchImpl(`${provider.base_url}/chat/completions`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${await this.key(provider)}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),

@@ -95,32 +95,44 @@ export async function resolveTarget(
     }
   }
 
-  if (job.projectId === null) {
-    // A recurring duty belongs to a role, not a project (0027), so it has no
-    // project channel and would otherwise deliver nowhere — which for the daily
-    // capacity report means producing it every morning and showing it to
-    // nobody. `requested_by` is set to `duty:<slug>` by the dispatcher (0099)
-    // and is not client-supplied, so this cannot be reached by an instruction.
-    //
-    // Deliberately narrow. Every other project-less job here is a verification
-    // fixture, and a fallback that caught those would post test probes into the
-    // room the team introduces itself in.
-    const duty = await db.execute(`
+  /**
+   * The workspace's general channel, for work that has no room of its own.
+   *
+   * Two kinds of job reach here, and both are cases where delivering nowhere
+   * would be silent:
+   *
+   *   - a recurring DUTY belongs to a role rather than a project (0027), so it
+   *     has no project channel at all — which for the daily capacity report
+   *     means producing it every morning and showing it to nobody;
+   *   - a VOICE instruction has a project but often no channel yet, and the
+   *     voice surface promises out loud that the answer will appear in Slack.
+   *     A promise the system does not keep is worse than no promise.
+   *
+   * Both are matched on `requested_by`, which is written by the dispatcher
+   * (0099) and by `enqueue_inbound` — never by a client. Deliberately narrow:
+   * every other job that lands here is a verification fixture, and a fallback
+   * that caught those would post test probes into the room the team introduces
+   * itself in.
+   */
+  const generalChannel = async (): Promise<Target | null> => {
+    const home = await db.execute(`
       select m.channel_id from public.jobs j
         join public.slack_channel_map m
           on ${teamId === null ? 'true' : `m.team_id = ${lit(teamId)}`}
          and m.active and m.bot_present
          and m.purpose = 'general'
        where j.job_id = ${lit(job.jobId)}::uuid
-         and j.requested_by like 'duty:%'
+         and (j.requested_by like 'duty:%' or j.requested_by like 'voice:%')
        order by m.created_at
        limit 1
     `)
-    const home = duty.rows[0] as { channel_id?: string } | undefined
-    return home?.channel_id === undefined
+    const row = home.rows[0] as { channel_id?: string } | undefined
+    return row?.channel_id === undefined
       ? null
-      : { channelId: home.channel_id, threadTs: null, via: 'general' }
+      : { channelId: row.channel_id, threadTs: null, via: 'general' }
   }
+
+  if (job.projectId === null) return await generalChannel()
 
   // The staff member's own channel for this project, then the project lobby.
   //
@@ -146,7 +158,11 @@ export async function resolveTarget(
     limit 1
   `)
   const found = project.rows[0] as { channel_id?: string; discipline?: string | null } | undefined
-  if (found?.channel_id === undefined) return null
+  // A project with no channel yet is not a dead end for a duty or a voice
+  // instruction. The first version returned null here and a spoken instruction
+  // completed, was reviewed, committed — and delivered nowhere, having told
+  // Grant out loud that the answer would appear in Slack.
+  if (found?.channel_id === undefined) return await generalChannel()
   return {
     channelId: found.channel_id,
     threadTs: null,

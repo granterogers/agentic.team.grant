@@ -113,9 +113,9 @@ const deterministic = (body: string, notebook: { id: string; name: string }): Ha
     evidence: 'verified',
     sources: [`notebooklm:${notebook.id} ${notebook.name}`],
     contradictions: null,
-    path: 'deterministic',
+    path: 'deterministic_retrieval',
     model: null,
-  }) as unknown as HandlerOutput
+  }) satisfies HandlerOutput
 
 /** How long to keep asking, and how far apart. ~20 minutes in total. */
 const MAX_TICKS = 10
@@ -359,9 +359,9 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             // blocker row is exactly that.
             sources: [`approval:${asking}`],
             contradictions: null,
-            path: 'deterministic',
+            path: 'deterministic_retrieval',
             model: null,
-          } as unknown as HandlerOutput
+          } satisfies HandlerOutput
         }
 
         // The meter, before spending anything (0078). Google's allowance is
@@ -785,7 +785,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           contradictions: null,
           path: 'inference',
           model: 'notebooklm',
-        } as unknown as HandlerOutput
+        } satisfies HandlerOutput
       },
     },
   ]

@@ -38,18 +38,28 @@ export const DISCIPLINE_SUFFIX_MAX = 24
 /**
  * Turn a project name into the stem its channels are built from.
  *
- * Lowercase, non-alphanumerics to hyphens, collapsed, trimmed, and short enough
- * that the longest discipline still fits under Slack's 80.
+ * Lowercase, non-alphanumerics to UNDERSCORES, collapsed, trimmed, and short
+ * enough that the longest discipline still fits under Slack's 80.
+ *
+ * Underscores because Grant asked twice: *"Make them all plain English, and I
+ * prefer underscore rather than hyphen. It's easier to read."* He is right about
+ * the reading — a hyphen at 13px in a sidebar is nearly invisible between two
+ * words, and `ai_team_hq_research` separates where `ai-team-hq-research` runs
+ * together.
+ *
+ * A hyphen in the source name becomes an underscore too, so a project slug of
+ * `money-mastery` and a project NAME of "Money Mastery" produce the same
+ * channel — which they must, because `channelNameFor` is called with both.
  */
 export function channelPrefixFor(nameOrSlug: string): string {
   const cleaned = nameOrSlug
     .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '')
   const room = CHANNEL_NAME_MAX - DISCIPLINE_SUFFIX_MAX - 1
-  const stem = cleaned === '' ? 'untitled-project' : cleaned
-  return stem.length <= room ? stem : stem.slice(0, room).replace(/-+$/, '')
+  const stem = cleaned === '' ? 'untitled_project' : cleaned
+  return stem.length <= room ? stem : stem.slice(0, room).replace(/_+$/, '')
 }
 
 /**
@@ -61,24 +71,26 @@ export function channelPrefixFor(nameOrSlug: string): string {
  * Alphabetical sorting then groups a project's channels together in every
  * client with no configuration:
  *
- *     money-mastery              ← the lobby, sorts first
- *     money-mastery-finance
- *     money-mastery-research
+ *     money_mastery              ← the lobby, sorts first
+ *     money_mastery_finance
+ *     money_mastery_research
  *
  * Discipline-first would group by agent instead, which is the wrong axis:
  * Grant thinks in projects, and the team is the same eight people on all of
  * them.
  *
- * The suffix is the role, not the slug: `-research`, not
- * `-research-director`. Every one of them ends in `-director` and a suffix
- * that is the same on every channel is a suffix carrying no information.
+ * The suffix is the role in plain English, not the slug: `_research`, not
+ * `_research_director`. Every one of them ends in "director" and a suffix that
+ * is the same on every channel is a suffix carrying no information.
  */
 export function channelNameFor(prefix: string, staffSlug?: string | null): string {
   const stem = channelPrefixFor(prefix)
   if (staffSlug === undefined || staffSlug === null || staffSlug === '') return stem
-  const role = staffSlug.replace(/-director$/, '').replace(/^chief-of-staff$/, 'chief')
-  const name = `${stem}-${role}`
-  return name.length <= CHANNEL_NAME_MAX ? name : name.slice(0, CHANNEL_NAME_MAX).replace(/-+$/, '')
+  const role = channelPrefixFor(
+    staffSlug.replace(/-director$/, '').replace(/^chief-of-staff$/, 'chief'),
+  )
+  const name = `${stem}_${role}`
+  return name.length <= CHANNEL_NAME_MAX ? name : name.slice(0, CHANNEL_NAME_MAX).replace(/_+$/, '')
 }
 
 export type ProvisionOutcome =
@@ -196,14 +208,14 @@ export class ChannelProvisioner {
   /**
    * Ensure a channel that belongs to the workspace rather than to a project.
    *
-   * `#the-team`, where the staff introduce themselves. There is no project to
+   * `#the_team`, where the staff introduce themselves. There is no project to
    * hang it on and 0014's constraint says so in as many words — only a
    * project-purpose channel has a project — so this is the same create-map-
    * invite sequence with `project_id` null and a purpose that admits it.
    *
    * Adopting a channel of the same name IS safe here, unlike the project case.
    * There the danger is a project quietly posting into an unrelated channel and
-   * nobody noticing which; here the name is the identity. A `#the-team` that
+   * nobody noticing which; here the name is the identity. A `#the_team` that
    * already exists is the one we mean.
    */
   async ensureNamedChannel(

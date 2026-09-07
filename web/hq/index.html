@@ -299,6 +299,42 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .est { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+/* --- Talk to team -------------------------------------------------------
+   A big target and an obvious state. The microphone button is the one control
+   on this page pressed while looking at something else, so it says what it is
+   doing in a word and in a colour, and the words appear underneath either way
+   — a browser that will not speak still shows every reply. */
+.talkwrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.mic {
+  appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 600;
+  font-size: 16px; color: #fff; min-width: 116px; min-height: 116px;
+  border-radius: 50%; flex: none;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  box-shadow: 0 8px 26px -10px color-mix(in srgb, var(--accent) 80%, transparent);
+  transition: transform 0.12s;
+}
+@media (prefers-color-scheme: dark) { .mic { color: #0b0d14; } }
+.mic:hover { transform: scale(1.02); }
+.mic.on {
+  background: linear-gradient(140deg, var(--bad), var(--warn));
+  animation: listening 1.4s ease-in-out infinite;
+}
+@keyframes listening {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 45%, transparent); }
+  50% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--bad) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .mic.on { animation: none; } }
+.talkstate { color: var(--muted); font-size: 13.5px; min-width: 0; flex: 1 1 200px; }
+.turns { display: grid; gap: 8px; margin-top: 14px; }
+/* Newest first: the last thing said is the thing being read. */
+.turn { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  background: var(--bg); }
+.turn b { display: block; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin-bottom: 3px; }
+.turn.delegated { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.turn.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.turn.bad span { color: var(--bad); }
+
 .gate { max-width: 420px; margin: 12vh auto; padding: 0 var(--pad); }
 .gate input { width: 100%; padding: 12px; font: inherit; border-radius: 10px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
@@ -442,7 +478,7 @@ function gate(message) {
   under SET UP — which is also a safety property, not just tidiness.
 */
 const MENU = [
-  ['Now', [['overview', 'Today'], ['activity', 'Activity']]],
+  ['Now', [['talk', 'Talk to team'], ['overview', 'Today'], ['activity', 'Activity']]],
   ['Work', [['projects', 'Projects'], ['output', 'Output']]],
   ['People', [['staff', 'The team']]],
   ['Health', [['trends', 'Trends'], ['usage', 'Usage'], ['connections', 'Connections']]],
@@ -459,6 +495,11 @@ const TABS = MENU.flatMap(([, items]) => items)
   Telegram by design (§12), and the two places that DO write say which.
 */
 const GUIDE = {
+  talk: {
+    title: 'Talk to team',
+    what: 'Say something and the team hears it. Questions about what is going on are answered here and now; anything that is work goes into the same queue as a message you type.',
+    todo: 'Press Talk and speak normally. You will see what it heard before it acts — if that is wrong, say it again rather than letting it run.',
+  },
   overview: {
     title: 'Today',
     what: 'Everything waiting on you, everything the team has in hand right now, and the shape of the day so far.',
@@ -502,7 +543,7 @@ const GUIDE = {
   settings: {
     title: 'Settings',
     what: 'Where things should live, what the notebook allowance has left, and the Google connection.',
-    todo: 'This page and Projects are the only two that write anything. Facts about the database are shown but not editable — a box that looks like it moves a database and does not is worse than no box.',
+    todo: 'This page, Projects and Talk are the only three that write anything. Facts about the database are shown but not editable — a box that looks like it moves a database and does not is worse than no box.',
   },
 }
 
@@ -546,7 +587,7 @@ function shell(active) {
       <div>
         <div id="lede"></div>
         <main id="main"><div class="empty">Loading…</div></main>
-        <footer>Everything here is read-only except Projects and Settings. The buttons — approve, undo, go ahead — live in Slack and Telegram, where you are when you need them.</footer>
+        <footer>Talk, Projects and Settings are the three places this page changes anything. Everything else is a read-out. The buttons — approve, undo, go ahead — live in Slack and Telegram, where you are when you need them.</footer>
       </div>
     </div>`
   for (const b of document.querySelectorAll('nav button')) {
@@ -1304,7 +1345,153 @@ function wireSettings() {
   }
 }
 
-const VIEWS = { overview, trends, staff, activity, usage, connections, projects, output, settings }
+
+/*
+  Talk to Team.
+
+  §22's scenario A ends in a conversation, and Grant settled §12's "optional
+  premium" against §22's completion criterion with three words: *"Voice is
+  required."*
+
+  ## Why the browser does the listening
+
+  §12 describes server-minted ephemeral credentials and WebRTC, which is the
+  OpenAI Realtime shape — and `voice-token` already mints those. It also bills
+  per minute against an account Grant has parked. The browser's own recogniser
+  costs nothing, runs on the device, and reaches the same endpoint, so the
+  canonical layer is identical either way and the transport is a swap rather
+  than a rewrite.
+
+  What is genuinely lost: barge-in. With a Realtime session you interrupt and it
+  stops; here it finishes its sentence. Named rather than glossed, because it is
+  the difference Grant will notice first.
+
+  ## Why the transcript is shown before it acts
+
+  Grant, about the bots misunderstanding him: *"probably good idea that he
+  confirms he understands and spits back what I want before going ahead."* The
+  recogniser is the one part of this chain that can be confidently wrong, so
+  what it heard is on screen in his own words, and the reply underneath it.
+*/
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition || null
+
+function talk() {
+  if (SPEECH === null) {
+    return `<section class="card wide"><h2>Talk to team</h2><div class="body">
+      <p>This browser cannot listen. Speech recognition is available in Safari on
+      iPhone and iPad, and in Chrome on a desktop — open
+      <b>ai-team-hq.vercel.app</b> in one of those.</p>
+      <p class="meta">Nothing else on this page needs it, and a voice note sent to any
+      of the Telegram bots does the same job without a browser at all.</p>
+    </div></section>`
+  }
+  return `<section class="card wide" data-card="talk"><h2>Talk to team</h2><div class="body">
+      <div class="talkwrap">
+        <button id="mic" class="mic" aria-live="polite">Talk</button>
+        <div class="talkstate" id="talkstate">Press and speak. It stops when you stop.</div>
+      </div>
+      <div id="turns" class="turns"></div>
+    </div></section>`
+}
+
+/*
+  One turn: listen, show, send, speak.
+
+  Deliberately one turn per press rather than an always-on microphone. A page
+  that listens continuously on a phone in a pocket is a page that files
+  instructions nobody gave, and §5's dedupe index would not save us from a
+  recogniser hearing the television.
+*/
+function wireTalk() {
+  const mic = document.getElementById('mic')
+  if (mic === null) return
+  const state = document.getElementById('talkstate')
+  const turns = document.getElementById('turns')
+  // One session per visit to this view. It groups the turns of a conversation
+  // in `origin_ref`, which is what conversation memory reads.
+  const session = 's' + Math.random().toString(36).slice(2, 12)
+  let listening = false
+
+  const show = (who, text, cls) => {
+    const el = document.createElement('div')
+    el.className = 'turn ' + (cls || '')
+    el.innerHTML = `<b>${esc(who)}</b><span>${esc(text)}</span>`
+    turns.prepend(el)
+  }
+
+  const say = (text) => {
+    // Best effort. A browser that will not speak still shows every word, so a
+    // silent reply is a degraded experience rather than a lost one.
+    try {
+      const u = new SpeechSynthesisUtterance(text)
+      u.rate = 1.02
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(u)
+    } catch (e) { /* shown on screen regardless */ }
+  }
+
+  const send = async (said) => {
+    state.textContent = 'Thinking…'
+    try {
+      const r = await fetch(API.replace(/\/hq-api$/, '/voice') + '/turn', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ said, session }),
+      })
+      const body = await r.json()
+      if (!r.ok) throw new Error(body.error || ('The server returned ' + r.status))
+      show('The team', body.speak, body.did === 'delegated' ? 'delegated' : '')
+      say(body.speak)
+      state.textContent =
+        body.did === 'delegated'
+          ? 'Put to the team — the answer comes back in Slack and Telegram.'
+          : 'Press and speak.'
+    } catch (e) {
+      show('The team', 'I could not reach the office: ' + e.message, 'bad')
+      state.textContent = 'Press and speak.'
+    }
+  }
+
+  mic.onclick = () => {
+    if (listening) return
+    const rec = new SPEECH()
+    rec.lang = 'en-GB'
+    rec.interimResults = false
+    // One utterance. `continuous` on iOS Safari behaves inconsistently and a
+    // microphone that never closes is the failure mode described above.
+    rec.continuous = false
+    rec.maxAlternatives = 1
+
+    listening = true
+    mic.classList.add('on')
+    mic.textContent = 'Listening'
+    state.textContent = 'Listening — speak now.'
+
+    rec.onresult = (event) => {
+      const said = String(event.results[0][0].transcript || '').trim()
+      if (said === '') return
+      show('You', said)
+      send(said)
+    }
+    rec.onerror = (event) => {
+      state.textContent =
+        event.error === 'not-allowed'
+          ? 'The microphone was refused. Allow it for this site and press Talk again.'
+          : 'It did not catch that (' + event.error + '). Press Talk and try again.'
+    }
+    rec.onend = () => {
+      listening = false
+      mic.classList.remove('on')
+      mic.textContent = 'Talk'
+    }
+    rec.start()
+  }
+}
+
+const VIEWS = { talk, overview, trends, staff, activity, usage, connections, projects, output, settings }
 
 /*
   The Projects tab's buttons.
@@ -1411,8 +1598,13 @@ async function show(section) {
   const main = document.getElementById('main')
   main.innerHTML = '<div class="empty">Loading…</div>'
   try {
-    const data = await load(section)
+    // Talk fetches nothing: it has no state of its own, and its state lives in
+    // the conversation. `load('talk')` would ask hq-api for a section that does
+    // not exist and get a 400 — which is exactly how the tab/section mismatch
+    // above was found the first time.
+    const data = section === 'talk' ? {} : await load(section)
     main.innerHTML = VIEWS[section](data)
+    if (section === 'talk') wireTalk()
     if (section === 'projects') wireProjects()
     if (section === 'settings') wireSettings()
     if (section === 'staff') wireTeam()

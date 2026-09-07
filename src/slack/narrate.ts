@@ -43,7 +43,7 @@ import type { SlackOffice } from './office.ts'
 import { ChannelProvisioner } from './provision.ts'
 
 /** Named as a person would name it. */
-export const NARRATION_CHANNEL = 'the-floor'
+export const NARRATION_CHANNEL = 'the_floor'
 
 interface Handoff {
   job_id: string
