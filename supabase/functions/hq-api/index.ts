@@ -53,6 +53,7 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   projects: { fn: 'hq_projects' },
   artifacts: { fn: 'hq_artifacts' },
   settings: { fn: 'hq_settings' },
+  team: { fn: 'hq_team' },
 }
 
 /**
@@ -79,6 +80,11 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // than here — the page is not the only thing that could call this, and a
   // guard in the caller is a guard in one of the callers.
   set_setting: { fn: 'hq_set_setting', required: ['p_key', 'p_value'] },
+  // Editing a person, and retiring one. There is no delete and there will not
+  // be: outputs, routing decisions and deliveries all name a staff member, and
+  // a roster that can lose a row is a history that stops explaining itself.
+  staff_update: { fn: 'hq_staff_update', required: ['p_slug'] },
+  staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
 }
 
 /**

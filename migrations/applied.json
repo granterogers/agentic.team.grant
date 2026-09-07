@@ -76,5 +76,8 @@
   "0075_the_bots_can_listen.sql": "2b07b0464239e7d3bbd49def12767adaf8a52326ca99f2a6f20ea2477058fdea",
   "0076_a_recording_is_content.sql": "024d07efb9635ff26be2e13b7e4a597329b68bfb80a72d6fcd3da1640d930f2f",
   "0077_the_front_end_sees_the_output.sql": "f76f76999e2e2a00184d6d8dcd7859146106b022f35fe2483803749d5dab1478",
-  "0078_the_notebook_has_a_meter.sql": "53d01e15ad0746f5ab4985b09c53617db2e8fe260d73a9300031a0ca6d104d7b"
+  "0078_the_notebook_has_a_meter.sql": "53d01e15ad0746f5ab4985b09c53617db2e8fe260d73a9300031a0ca6d104d7b",
+  "0079_first_names_only.sql": "228efcd352750e71e981db351964ba8564d9d638c1913ad44517c95db2626bf4",
+  "0080_the_team_page_is_editable.sql": "2df5d14e7dee448deeb80403fa996d9d163995265d262406f65c295d754f29f8",
+  "0081_the_meter_is_on_the_page.sql": "fe2e134780ee604817976f999a6672408918cbcaededc78bcb2198ebe386ea9a"
 }

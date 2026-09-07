@@ -140,6 +140,17 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .fld input, .fld select { width: 100%; padding: 8px 10px; font: inherit; box-sizing: border-box;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .fld em { display: block; font-style: normal; color: var(--muted); font-size: 12px; margin-top: 4px; }
+/* Editable in place. The inputs are deliberately quiet until focused: eight
+   people each with four boxes would otherwise be a wall of form. */
+.person input, .person select, .person textarea { width: 100%; font: inherit; box-sizing: border-box;
+  padding: 5px 7px; margin-top: 4px; border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg); color: var(--ink); resize: vertical; }
+.person input:focus, .person select:focus, .person textarea:focus { border-color: var(--accent); outline: none; }
+.person input.nm { font-weight: 600; }
+.person .namerow { display: flex; gap: 6px; }
+.person .namerow .nm { flex: 1 1 auto; }
+.person .namerow select { flex: 0 0 auto; width: auto; font-size: 12px; color: var(--muted); }
+.person[data-retired] { opacity: 0.5; }
 .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
 .staff { display: grid; gap: 10px; }
 .person { display: flex; gap: 12px; align-items: flex-start; }
@@ -230,7 +241,7 @@ const ago = (iso) => {
   reading the console, which is the step the method calls "render it and look at
   it" and the step that is easiest to skip.
 */
-const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects', output: 'artifacts', settings: 'settings' }
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'team', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects', output: 'artifacts', settings: 'settings' }
 
 /* Configuration. The only writing this page does — see the endpoint's comment
    on why configuring is allowed where acting is not. */
@@ -374,20 +385,93 @@ function overview(d) {
 }
 
 function staff(d) {
-  const people = d.staff.map((s) => {
-    const src = d.avatar_base && s.avatar_ref ? d.avatar_base + '/' + s.avatar_ref : ''
-    return `<div class="person">
+  /*
+    Grant: "with regards to the actual members of staff, there should be
+    something that's also configurable in the front end. Their names, their
+    roles, there should be a link to the Telegram bot. So I should be able to
+    add and move stuff, adjust names, all that kind of stuff."
+
+    Editable in place rather than behind a pencil icon. There are eight of them
+    and the whole page fits on a phone screen; a modal per person would be four
+    taps to change a word.
+
+    Retired people are shown, greyed, with a Bring back button. A page that
+    hides them offers no way to undo a mistap — and there is no delete here at
+    all, because outputs, routing decisions and deliveries all name a staff
+    member and a roster that can lose a row is a history that stops explaining
+    itself.
+  */
+  const base = d.avatar_base || ''
+  const people = (d.staff || []).map((s) => {
+    const src = base && s.avatar_ref ? base + '/' + s.avatar_ref : ''
+    const bot = s.telegram_username
+      ? `<a href="https://t.me/${esc(s.telegram_username)}" target="_blank" rel="noopener">@${esc(s.telegram_username)}</a>`
+      : '<span class="m">no bot yet</span>'
+    const pron = ['she/her', 'he/him', 'they/them'].map((p) =>
+      `<option value="${p}"${s.pronouns === p ? ' selected' : ''}>${p}</option>`).join('')
+    return `<div class="person" data-slug="${esc(s.slug)}"${s.active ? '' : ' data-retired="1"'}>
       ${src ? `<img src="${esc(src)}" alt="" loading="lazy">` : '<div class="person-none"></div>'}
-      <div>
-        <div class="n">${esc(s.name)}</div>
-        <div class="m">${esc(s.title)}${s.permanent ? '' : ' · temporary'}</div>
-        <div class="m" style="margin-top:4px">${esc(s.responsibilities)}</div>
-        <div class="m" style="margin-top:4px">${esc((s.expertise || []).join(' · '))}</div>
-        <div class="m" style="margin-top:4px">Convened for ${s.jobs_convened_for} job${s.jobs_convened_for === 1 ? '' : 's'} · prompt v${s.prompt_version}</div>
+      <div style="min-width:0;flex:1">
+        <div class="namerow">
+          <input class="nm" data-f="p_name" value="${esc(s.name)}" aria-label="First name">
+          <select data-f="p_pronouns" aria-label="Pronouns">${pron}</select>
+        </div>
+        <input data-f="p_title" value="${esc(s.title)}" aria-label="Role">
+        <textarea data-f="p_remit" rows="2" aria-label="What they do">${esc(s.responsibilities || '')}</textarea>
+        <div class="m" style="margin-top:6px">${bot} · convened for ${s.convened_for} job${s.convened_for === 1 ? '' : 's'}${s.permanent ? '' : ' · temporary'}</div>
+        <div class="row" style="margin-top:6px">
+          <button class="mini" data-save="${esc(s.slug)}">Save</button>
+          ${s.slug === 'chief-of-staff' ? '' :
+            `<button class="mini" data-retire="${esc(s.slug)}" data-to="${s.active ? 'false' : 'true'}">${s.active ? 'Retire' : 'Bring back'}</button>`}
+          <span class="m" data-said="${esc(s.slug)}"></span>
+        </div>
       </div>
     </div>`
   }).join('')
-  return `<section class="card wide" data-card="team"><h2>The team</h2><div class="body"><div class="staff">${people}</div></div></section>`
+  return `<section class="card wide" data-card="team"><h2>The team</h2>
+    <p class="meta">First names only. Change one and press Save; the new name is
+      what they sign messages with everywhere.</p>
+    <div class="body"><div class="staff">${people}</div></div>
+  </section>`
+}
+
+function wireTeam() {
+  const said = (slug, text) => {
+    const el = document.querySelector(`[data-said="${slug}"]`)
+    if (el) el.textContent = text
+  }
+  for (const b of document.querySelectorAll('[data-save]')) {
+    b.onclick = async () => {
+      const slug = b.dataset.save
+      const card = b.closest('.person')
+      const args = { p_slug: slug }
+      for (const f of card.querySelectorAll('[data-f]')) args[f.dataset.f] = f.value
+      b.disabled = true
+      said(slug, 'Saving…')
+      try {
+        await act('staff_update', args)
+        said(slug, 'Saved.')
+      } catch (e) {
+        // The server refuses a two-word name (0079) and says so in words. Shown
+        // verbatim because "first names only" is the rule Grant asked for and a
+        // generic failure would read as a bug.
+        said(slug, e.message)
+      }
+      b.disabled = false
+    }
+  }
+  for (const b of document.querySelectorAll('[data-retire]')) {
+    b.onclick = async () => {
+      b.disabled = true
+      try {
+        await act('staff_retire', { p_slug: b.dataset.retire, p_active: b.dataset.to === 'true' })
+        show('staff')
+      } catch (e) {
+        said(b.dataset.retire, e.message)
+        b.disabled = false
+      }
+    }
+  }
 }
 
 function activity(rows) {
@@ -867,7 +951,23 @@ function settings(d) {
       <em>${esc(row.description || '')}</em></label>`
   }
 
+  const nb = d.notebook || {}
+  // Every sentence says whose count it is. Google publishes no usage API, and a
+  // figure here that did not say so would be read as theirs within a week —
+  // after which a refusal at half our number reads as our bug.
+  const meter = nb.window_ceiling === undefined ? '' : `
+    <section class="card"><h2>Notebook allowance</h2>
+      <p class="meta">Our own count of what we have spent, not Google's — they
+        publish no usage API.
+        ${nb.ceiling_is_measured ? 'The ceiling below was measured from a refusal.' : 'The ceiling below is still an estimate.'}</p>
+      ${fact('used in this ' + nb.window_hours + '-hour window', nb.window_spent + ' of ' + nb.window_ceiling)}
+      ${fact('used this week', nb.week_spent + ' of ' + nb.week_ceiling)}
+      ${nb.blocked_until ? fact('Google refused until', new Date(nb.blocked_until).toLocaleString()) : ''}
+      ${nb.window_resets_at ? fact('window frees up', new Date(nb.window_resets_at).toLocaleString()) : ''}
+    </section>`
+
   return `
+    ${meter}
     <section class="card"><h2>This database</h2>
       <p class="meta">Facts, not fields. Nothing here is editable, because editing it would not move anything.</p>
       ${fact('database', live.database)}
@@ -983,6 +1083,7 @@ async function show(section) {
     main.innerHTML = VIEWS[section](data)
     if (section === 'projects') wireProjects()
     if (section === 'settings') wireSettings()
+    if (section === 'staff') wireTeam()
     armSparklines(main)
     applyLayout(main, section)
     armLayout(main, section)
