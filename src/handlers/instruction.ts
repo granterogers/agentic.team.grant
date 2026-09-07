@@ -20,6 +20,15 @@
  * When the message went to the Chief of Staff bot there is no `addressed_to`,
  * and then the router does decide: that is what a chief of staff is for.
  *
+ * ## Spoken instructions
+ *
+ * A voice note arrives with no words in it: `voice_file_id` and nothing else.
+ * The first thing this handler does is turn it into words, on our own hardware
+ * (`src/voice/inbound.ts`), record them against the command, and then carry on
+ * exactly as though Grant had typed them. He asked not to be shown the
+ * transcription, so nothing echoes it — the answer is the answer to what he
+ * said, which is the only evidence that it was heard correctly he needs.
+ *
  * ## Answering is not the same as doing
  *
  * The first version of this file could only answer. Asked to *"generate an
@@ -45,6 +54,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
+import { transcribeTelegramVoice } from '../voice/inbound.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -55,6 +65,8 @@ export interface InstructionDeps {
 
 interface Payload {
   readonly instruction?: string
+  readonly voice_file_id?: string | null
+  readonly voice_seconds?: number | null
   readonly addressed_to?: string | null
   readonly origin_channel?: string
   readonly origin_ref?: string
@@ -162,11 +174,70 @@ async function act(
     started.length === 1
       ? (started[0] as string)
       : `${started.slice(0, -1).join(', ')} and ${String(started.at(-1))}`
-  return (
-    `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes for each; ` +
-    'I am watching for them and will post the links here and in the project channel as they ' +
-    'land.'
+  return started.length === 1
+    ? `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes; I am ` +
+        'watching for it and will post the link here and in the project channel when it lands.'
+    : `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes each; I am ` +
+        'watching for them and will post the links here and in the project channel as they land.'
+}
+
+/**
+ * Turn a voice note into the instruction it was.
+ *
+ * The bot's own token, resolved from the chat the message arrived in — a
+ * recording sent to Ines is fetched with Ines's credential, because a bot may
+ * only read files from its own conversations and using the pager's token would
+ * simply 400.
+ *
+ * The transcript is written back to `inbound_commands` before it is acted on.
+ * If the job then fails and retries, the words are already there and the audio
+ * is not fetched or transcribed twice.
+ */
+async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<string> {
+  const commandId = String(payload.command_id ?? '')
+  const { rows: existing } = await db.execute(
+    `select transcript from public.inbound_commands where command_id = ${lit(commandId)}::uuid`,
   )
+  const already = (existing[0] as { transcript?: string | null } | undefined)?.transcript
+  if (already !== undefined && already !== null && already.trim() !== '') return already.trim()
+
+  const { rows } = await db.execute(`
+    select app.resolve_secret(t.token_ref) as token
+      from public.inbound_commands c
+      join public.telegram_chats ch on ch.chat_id = split_part(c.origin_ref, ':', 1)
+      join public.telegram_bots t on t.bot_id = ch.bot_id
+     where c.command_id = ${lit(commandId)}::uuid
+       and t.enabled and t.token_ref is not null
+     limit 1
+  `)
+  const token = (rows[0] as { token?: string | null } | undefined)?.token
+  if (token === undefined || token === null || token === '') {
+    throw new Error('a voice note arrived on a bot whose token we cannot resolve')
+  }
+
+  const heard = await transcribeTelegramVoice(token, String(payload.voice_file_id), {
+    ...(payload.voice_seconds === null || payload.voice_seconds === undefined
+      ? {}
+      : { seconds: payload.voice_seconds }),
+  })
+
+  await db.execute(`
+    update public.inbound_commands
+       set transcript = ${lit(heard.text)}, instruction = ${lit(heard.text)}
+     where command_id = ${lit(commandId)}::uuid
+  `)
+  // Onto the job too, so `pinned_config` still explains the job's behaviour
+  // afterwards — §6's whole reason for pinning.
+  await db.execute(`
+    update public.jobs
+       set pinned_config = pinned_config || jsonb_build_object(
+             'instruction', ${lit(heard.text)},
+             'heard_by', ${lit(heard.model)},
+             'voice_seconds', ${String(heard.seconds)}
+           )
+     where job_id = ${lit(job.jobId)}::uuid
+  `)
+  return heard.text
 }
 
 export function instructionHandler(deps: InstructionDeps): Handler {
@@ -178,7 +249,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       )
       const payload = ((rows[0] as { pinned_config?: Payload } | undefined)?.pinned_config ??
         {}) as Payload
-      const instruction = String(payload.instruction ?? '').trim()
+      let instruction = String(payload.instruction ?? '').trim()
+      if (instruction === '' && (payload.voice_file_id ?? null) !== null) {
+        instruction = await listen(deps.db, job, payload)
+      }
       if (instruction === '') throw new Error('the command carried no instruction')
 
       const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)

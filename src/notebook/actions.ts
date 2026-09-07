@@ -61,7 +61,19 @@ export interface ArtifactListing {
   readonly title: string | null
   /** The library's own type string. Advisory: it has changed shape before. */
   readonly type: string
+  /** `status_str`: pending | in_progress | completed | failed | … */
   readonly status: string
+  /**
+   * The library's own verdict, not ours.
+   *
+   * Read from `is_completed` / `is_failed` rather than compared against a code
+   * table here. The library says in as many words that the integers are not to
+   * be read directly, and it is right: PENDING and PROCESSING were transposed
+   * on the wire in an earlier release. A table of our own would have gone on
+   * reading the old meaning without a symptom.
+   */
+  readonly done: boolean
+  readonly failed: boolean
   readonly createdAt: string | null
 }
 
@@ -190,7 +202,9 @@ export class NotebookActions {
       artifactId: String(a.artifact_id),
       title: a.title === undefined || a.title === null ? null : String(a.title),
       type: String(a.type ?? ''),
-      status: String(a.status ?? ''),
+      status: String(a.status ?? 'unknown'),
+      done: a.done === true,
+      failed: a.failed === true,
       createdAt: a.created_at === undefined || a.created_at === null ? null : String(a.created_at),
     }))
   }
@@ -198,10 +212,18 @@ export class NotebookActions {
   async poll(
     notebookId: string,
     artifactId: string,
-  ): Promise<{ state: string; title: string | null; url: string | null }> {
+  ): Promise<{
+    state: string
+    done: boolean
+    failed: boolean
+    title: string | null
+    url: string | null
+  }> {
     const r = await this.act('poll', { notebook_id: notebookId, artifact_id: artifactId })
     return {
       state: String(r.state ?? 'unknown'),
+      done: r.done === true,
+      failed: r.failed === true,
       title: r.title === undefined || r.title === null ? null : String(r.title),
       url: r.url === undefined || r.url === null ? null : String(r.url),
     }

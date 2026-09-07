@@ -66,8 +66,16 @@ export interface TelegramUpdate {
     message_id: number
     date: number
     text?: string
+    /** A caption on a voice/audio message, which Telegram keeps separate. */
+    caption?: string
     chat: { id: number; type: string }
     from?: { id: number; username?: string; is_bot?: boolean }
+    /** A held-to-record voice note. */
+    voice?: { file_id: string; duration?: number; mime_type?: string }
+    /** An attached audio file, which people also use to dictate. */
+    audio?: { file_id: string; duration?: number; mime_type?: string }
+    /** A round video message. Its audio track is the instruction. */
+    video_note?: { file_id: string; duration?: number }
   }
   readonly callback_query?: {
     id: string
@@ -92,6 +100,17 @@ export interface CanonicalCommand {
   /** Natural key for at-least-once delivery. */
   readonly dedupe_key: string
   readonly received_at: string
+  /**
+   * A recording to transcribe, when the message was spoken rather than typed.
+   *
+   * Carried, not resolved. §1: *"never pre-digested by the adapter"* — and
+   * transcription is the most pre-digesting an adapter could possibly do. The
+   * adapter says "there is audio, here is its handle"; the worker turns it into
+   * words, because that needs a model, a temp file and a bot token, none of
+   * which belong in a pure function.
+   */
+  readonly voice_file_id: string | null
+  readonly voice_seconds: number | null
   /** Present only for button presses. */
   readonly callback_action: string | null
   /** The event id a callback compensates, if any — §6 keys Undo on this. */
@@ -162,6 +181,8 @@ export function toCanonicalCommand(
       // redelivery through — which is precisely what §6 forbids.
       dedupe_key: `telegram:callback:${query.id}`,
       received_at,
+      voice_file_id: null,
+      voice_seconds: null,
       callback_action: action,
       // Deliberately null, including for Undo, and this changed after the
       // button composer existed.
@@ -182,7 +203,15 @@ export function toCanonicalCommand(
   }
 
   const message = update.message
-  if (message === undefined || message.text === undefined || message.text.trim() === '') {
+  if (message === undefined) throw new UnsupportedUpdateError(update.update_id)
+
+  // Spoken or typed, in that order of preference. A voice note WITH a caption
+  // is one message and the recording is the substance of it — the caption is
+  // usually "listen to this" — so the transcript wins and the caption is
+  // dropped rather than concatenated into a sentence nobody said.
+  const recording = message.voice ?? message.audio ?? message.video_note
+  const typed = message.text ?? message.caption ?? ''
+  if (recording === undefined && typed.trim() === '') {
     throw new UnsupportedUpdateError(update.update_id)
   }
 
@@ -191,7 +220,12 @@ export function toCanonicalCommand(
     origin_ref: `${String(message.chat.id)}:${String(message.message_id)}`,
     actor: String(message.from?.id ?? 'unknown'),
     // Raw text, never pre-digested. §1: "Never pre-digested by the adapter."
-    instruction: message.text,
+    // Empty for a recording: the words do not exist yet, and inventing a
+    // placeholder here is how a placeholder ends up being acted on.
+    instruction: recording === undefined ? typed : '',
+    voice_file_id: recording?.file_id ?? null,
+    voice_seconds:
+      recording === undefined || recording.duration === undefined ? null : recording.duration,
     // chat+message is stable across redeliveries of the same message, whereas
     // update_id is not.
     dedupe_key: `telegram:message:${String(message.chat.id)}:${String(message.message_id)}`,

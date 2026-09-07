@@ -182,11 +182,21 @@ async def main() -> None:
                 # `get(notebook_id, artifact_id)`: an artifact id alone is not
                 # addressable, which is why poll needs the notebook too.
                 artifact = await client.artifacts.get(notebook, artifact_id)
+                # `status_str` and the `is_*` properties, never the raw integer.
+                # The library says so in as many words — *"read via .status_str
+                # / .is_*, not by integer"* — and it is right for a reason we
+                # found the hard way: the wire codes for PENDING and PROCESSING
+                # were transposed in an earlier release, and a caller with its
+                # own code table would have read "generating" as "queued"
+                # without noticing. Ours read 2 as finished and announced a
+                # slide deck that did not exist.
                 emit({
                     "ok": True,
                     "action": action,
                     "artifact_id": artifact_id,
-                    "state": str(getattr(artifact, "status", "") or "unknown"),
+                    "state": str(getattr(artifact, "status_str", "") or "unknown"),
+                    "done": bool(getattr(artifact, "is_completed", False)),
+                    "failed": bool(getattr(artifact, "is_failed", False)),
                     "title": getattr(artifact, "title", None),
                     "url": getattr(artifact, "url", None),
                 })
@@ -205,7 +215,11 @@ async def main() -> None:
                             "artifact_id": getattr(a, "id", None),
                             "title": getattr(a, "title", None),
                             "type": str(getattr(a, "_artifact_type", "") or ""),
-                            "status": str(getattr(a, "status", "") or ""),
+                            # Named states and explicit booleans, for the reason
+                            # `poll` gives above. `status` stays a WORD here.
+                            "status": str(getattr(a, "status_str", "") or "unknown"),
+                            "done": bool(getattr(a, "is_completed", False)),
+                            "failed": bool(getattr(a, "is_failed", False)),
                             "created_at": getattr(a, "created_at", None),
                         }
                         for a in items

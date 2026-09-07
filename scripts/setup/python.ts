@@ -3,8 +3,9 @@
  *
  *   npm run setup:python
  *
- * There is exactly one Python dependency: `notebooklm-py`, the NotebookLM
- * adapter. §7 keeps it behind an adapter boundary and ADR-0003 makes it
+ * There are two Python dependencies: `notebooklm-py`, the NotebookLM
+ * adapter, and `faster-whisper`, which turns Grant's voice notes into
+ * instructions without sending them anywhere. §7 keeps it behind an adapter boundary and ADR-0003 makes it
  * replaceable, but while it is in service it has to be installed, and nothing
  * installed it.
  *
@@ -23,7 +24,13 @@
 
 import { spawnSync } from 'node:child_process'
 
-const PACKAGES = ['notebooklm-py']
+const PACKAGES = [
+  'notebooklm-py',
+  // Inbound voice notes, transcribed locally. See `src/voice/inbound.ts` for
+  // why locally: every audio-capable free model on our provider is closed to
+  // us, and Grant's voice is the last data to make a privacy exception for.
+  'faster-whisper',
+]
 
 console.log(`installing: ${PACKAGES.join(', ')}`)
 

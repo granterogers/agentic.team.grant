@@ -165,6 +165,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
       instruction: command.instruction,
       dedupe_key: command.dedupe_key,
       callback_action: command.callback_action,
+      // Spoken rather than typed. The handle only — the audio stays with
+      // Telegram until the worker fetches it, transcribes it on our own
+      // hardware and throws it away (0075).
+      voice_file_id: command.voice_file_id,
+      voice_seconds: command.voice_seconds,
       compensates_event_id: command.compensates_event_id,
       received_at: command.received_at,
       // Who it was sent TO. Opening @atg_research_bot addresses Ines, and that
@@ -186,7 +191,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // message to a bot went into a table and nothing happened — which from
   // Grant's side is indistinguishable from the bot being broken.
   let queued: string | null = null
-  if (command.instruction !== null && command.instruction.trim() !== '') {
+  if (
+    (command.instruction !== null && command.instruction.trim() !== '') ||
+    command.voice_file_id !== null
+  ) {
     const stored = (await response.json().catch(() => [])) as { command_id?: string }[]
     const commandId = stored[0]?.command_id
     if (commandId !== undefined) {
@@ -210,6 +218,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     dedupe_key: command.dedupe_key,
     registration,
     addressed_to: speaker.staff_slug ?? '(the pager)',
+    spoken: command.voice_file_id !== null,
     queued,
   })
 })

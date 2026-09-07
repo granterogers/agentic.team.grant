@@ -142,11 +142,18 @@ const TYPE_HINT: Record<string, readonly string[]> = {
   slides: ['8'],
 }
 
-const READY = /^(3|ready|complete|completed|succeeded|success|done)$/i
-const FAILED = /^(fail(ed)?|error|cancell?ed)$/i
-
-const isPending = (status: string): boolean => !READY.test(status) && !FAILED.test(status)
-const isFailed = (status: string): boolean => FAILED.test(status)
+// There is no status table here, and that is the point. The first version had
+// one — `3` ready, everything else pending — built by reading Grant's live
+// notebook, which is a better source than a guess and still the wrong source.
+// The library exposes `is_completed` and `is_failed` and says in as many words
+// that the integers must not be read directly, because PENDING and PROCESSING
+// were transposed on the wire in an earlier release. A private table would have
+// gone on reading the old meaning with no symptom at all.
+//
+// Measured cost of not doing this first: `2` (in progress) was read as
+// finished, and the collector announced a slide deck with no link. That slide
+// deck then genuinely failed with `4`, and the code that should have said so
+// said "still not ready" ten times instead.
 
 /**
  * Which listed artifact is the one we started, if any.
@@ -436,15 +443,16 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           if (claimed.length === 0) mine = null
         }
 
-        if (mine !== null && !isPending(mine.status)) {
-          if (isFailed(mine.status)) {
+        if (mine !== null && (mine.done || mine.failed)) {
+          if (mine.failed) {
             await db.execute(`
               update public.artifacts
                  set state = 'failed', detail = ${lit(`the notebook reported ${mine.status}`)}
                where artifact_id = ${lit(rowId)}::uuid
             `)
             return deterministic(
-              `The ${row.kind} failed in the notebook "${notebook.name}" — it reported ` +
+              `The ${LABEL[row.kind] ?? row.kind} failed in the notebook "${notebook.name}" — ` +
+                `it reported ` +
                 `"${mine.status}". Nothing to link to; it can be asked for again.`,
               notebook,
             )
