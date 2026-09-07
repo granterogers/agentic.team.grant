@@ -51,6 +51,8 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   series: { fn: 'hq_series', args: { p_days: 30 } },
   connections: { fn: 'hq_connections' },
   projects: { fn: 'hq_projects' },
+  artifacts: { fn: 'hq_artifacts' },
+  settings: { fn: 'hq_settings' },
 }
 
 /**
@@ -73,6 +75,10 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
   attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
   detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
+  // One setter over an allow-list of six keys, enforced in the function rather
+  // than here — the page is not the only thing that could call this, and a
+  // guard in the caller is a guard in one of the callers.
+  set_setting: { fn: 'hq_set_setting', required: ['p_key', 'p_value'] },
 }
 
 /**

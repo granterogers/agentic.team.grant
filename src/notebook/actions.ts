@@ -59,7 +59,17 @@ export const ARTIFACT_KINDS: readonly ArtifactKind[] = [
 export interface ArtifactListing {
   readonly artifactId: string
   readonly title: string | null
-  /** The library's own type string. Advisory: it has changed shape before. */
+  /**
+   * The library's own `ArtifactType`: audio, slide_deck, mind_map, report…
+   *
+   * Read through the library rather than mapped from the wire integer here.
+   * It knows things a table of ours would not — type 4 is a quiz, a flashcard
+   * set OR an interactive mind map depending on a variant field — and the first
+   * version of this file, whose table was built by looking at Grant's notebook,
+   * had no entry for a mind map at all and quietly never found one.
+   */
+  readonly kind: string
+  /** The raw code behind `kind`. Diagnostic only; never matched on. */
   readonly type: string
   /** `status_str`: pending | in_progress | completed | failed | … */
   readonly status: string
@@ -201,6 +211,7 @@ export class NotebookActions {
     return ((r.artifacts ?? []) as Record<string, unknown>[]).map((a) => ({
       artifactId: String(a.artifact_id),
       title: a.title === undefined || a.title === null ? null : String(a.title),
+      kind: String(a.kind ?? 'unknown'),
       type: String(a.type ?? ''),
       status: String(a.status ?? 'unknown'),
       done: a.done === true,

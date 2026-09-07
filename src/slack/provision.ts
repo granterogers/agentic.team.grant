@@ -194,6 +194,111 @@ export class ChannelProvisioner {
   }
 
   /**
+   * Ensure a channel that belongs to the workspace rather than to a project.
+   *
+   * `#the-team`, where the staff introduce themselves. There is no project to
+   * hang it on and 0014's constraint says so in as many words — only a
+   * project-purpose channel has a project — so this is the same create-map-
+   * invite sequence with `project_id` null and a purpose that admits it.
+   *
+   * Adopting a channel of the same name IS safe here, unlike the project case.
+   * There the danger is a project quietly posting into an unrelated channel and
+   * nobody noticing which; here the name is the identity. A `#the-team` that
+   * already exists is the one we mean.
+   */
+  async ensureNamedChannel(
+    name: string,
+    purpose: 'general' | 'alerts' | 'other' = 'general',
+  ): Promise<ProvisionResult> {
+    const mapped = await this.one<{ channel_id: string; channel_name: string }>(`
+      select channel_id, channel_name from public.slack_channel_map
+       where channel_name = ${lit(name)} and team_id = ${lit(this.teamId)} and active
+       order by created_at limit 1
+    `)
+    if (mapped !== undefined) {
+      return {
+        outcome: 'existing',
+        channelId: mapped.channel_id,
+        channelName: mapped.channel_name,
+        errorCode: null,
+        // Checked every time, not only on creation. The project path can
+        // reasonably invite once, because a channel Grant left is a channel he
+        // left on purpose; a workspace channel that has been re-mapped or
+        // re-created without him is just an empty room, and 0050 exists because
+        // we shipped exactly that once already.
+        invited: await this.inviteSubject(mapped.channel_id),
+      }
+    }
+
+    try {
+      const { body } = await this.slack.call('conversations.create', { name, is_private: false })
+      const channel = body.channel as { id?: string; name?: string } | undefined
+      const channelId = channel?.id ?? ''
+      await this.mapWorkspaceChannel(channelId, channel?.name ?? name, purpose)
+      return {
+        outcome: 'created',
+        channelId,
+        channelName: channel?.name ?? name,
+        errorCode: null,
+        invited: await this.inviteSubject(channelId),
+      }
+    } catch (error) {
+      if (!(error instanceof SlackApiError)) throw error
+      if (error.code !== 'name_taken') {
+        return { outcome: 'failed', channelId: null, channelName: name, errorCode: error.code }
+      }
+      // Someone — probably a previous run whose response was lost — already
+      // made it. Find it by name and adopt it.
+      const found = await this.findByName(name)
+      if (found === null) {
+        return {
+          outcome: 'name_conflict',
+          channelId: null,
+          channelName: name,
+          errorCode: 'name_taken',
+        }
+      }
+      await this.mapWorkspaceChannel(found, name, purpose)
+      return {
+        outcome: 'adopted',
+        channelId: found,
+        channelName: name,
+        errorCode: null,
+        invited: await this.inviteSubject(found),
+      }
+    }
+  }
+
+  /** The channel with this name, from Slack's own list, or null. */
+  private async findByName(name: string): Promise<string | null> {
+    // `exclude_archived`, because an archived channel of the same name is why
+    // `conversations.create` said `name_taken` and is not a channel to post in.
+    const { body } = await this.slack.call('conversations.list', {
+      exclude_archived: true,
+      types: 'public_channel',
+      limit: 1000,
+    })
+    const channels = (body.channels ?? []) as { id?: string; name?: string }[]
+    return channels.find((c) => c.name === name)?.id ?? null
+  }
+
+  private async mapWorkspaceChannel(
+    channelId: string,
+    channelName: string,
+    purpose: string,
+  ): Promise<void> {
+    if (channelId === '') return
+    await this.db.execute(`
+      insert into public.slack_channel_map
+        (channel_id, team_id, project_id, channel_name, purpose, created_by_app)
+      values (${lit(channelId)}, ${lit(this.teamId)}, null, ${lit(channelName)},
+              ${lit(purpose)}, true)
+      on conflict (channel_id) do update
+        set channel_name = excluded.channel_name, active = true, archived_at = null
+    `)
+  }
+
+  /**
    * Invite the human this workspace exists for.
    *
    * Failure is reported, never thrown. A channel that exists and has the wrong

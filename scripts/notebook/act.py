@@ -214,6 +214,13 @@ async def main() -> None:
                         {
                             "artifact_id": getattr(a, "id", None),
                             "title": getattr(a, "title", None),
+                            # The library's own ArtifactType, not the wire
+                            # integer behind it. Ours read "8" and "5" out of a
+                            # table built by looking at Grant's notebook; the
+                            # library maps the codes AND their variants, and
+                            # knows that type 4 is a quiz, a flashcard set or an
+                            # interactive mind map depending on the variant.
+                            "kind": str(getattr(getattr(a, "kind", None), "value", "") or "unknown"),
                             "type": str(getattr(a, "_artifact_type", "") or ""),
                             # Named states and explicit booleans, for the reason
                             # `poll` gives above. `status` stays a WORD here.

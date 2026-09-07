@@ -49,6 +49,15 @@ import {
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/**
+ * Where a notebook lives, for a person.
+ *
+ * The fallback link for anything finished that has no file of its own — a mind
+ * map, an interactive quiz. Not a guess: it is the address Grant's own notebook
+ * is at, and it opens the artifact in the place the artifact exists.
+ */
+const notebookUrl = (id: string): string => `https://notebooklm.google.com/notebook/${id}`
+
 /** The notebook a project's artifacts belong in, or null with a reason. */
 async function notebookFor(
   db: SqlExecutor,
@@ -123,23 +132,31 @@ const LABEL: Record<string, string> = {
 }
 
 /**
- * The library's own type codes, as a hint of last resort.
+ * Our artifact kinds against the library's `ArtifactType`, as a hint of last
+ * resort.
  *
- * Also bare numbers: `"1"` for the audio overview and `"8"` for the slide deck
- * started in the run that produced this comment, `"5"` for the mind maps from
- * the day before. Only the first two are certain, so only those two are here.
- *
- * This is reached only when a generation gave back no task id — which has not
- * happened yet. `external_ref` is normally the task id, recorded the moment the
+ * Reached only when a generation gave back no task id, which happens for mind
+ * maps. `external_ref` is normally the task id, recorded the moment the
  * generation starts, because the id the generator returns IS the id the
- * artifact appears under. That was worth measuring: the first version of this
- * file assumed the two were unrelated and matched artifacts by "which one is
- * new", which handed the slide deck's artifact to the audio overview's
- * collector within one minute of going live.
+ * artifact appears under — worth measuring, because the first version of this
+ * file assumed the two were unrelated and matched by "which artifact is new",
+ * which handed the slide deck's artifact to the audio overview's collector
+ * within one minute of going live.
+ *
+ * Matched against the library's mapped kind rather than the wire integer. The
+ * version of this table that held integers was built by reading Grant's
+ * notebook, had no row for a mind map, and so quietly never found one.
  */
-const TYPE_HINT: Record<string, readonly string[]> = {
-  audio: ['1'],
-  slides: ['8'],
+const KIND_MATCHES: Record<string, string> = {
+  audio: 'audio',
+  slides: 'slide_deck',
+  video: 'video',
+  mindmap: 'mind_map',
+  report: 'report',
+  infographic: 'infographic',
+  quiz: 'quiz',
+  flashcards: 'flashcards',
+  study_guide: 'report',
 }
 
 // There is no status table here, and that is the point. The first version had
@@ -170,12 +187,12 @@ const TYPE_HINT: Record<string, readonly string[]> = {
  * plus everything any sibling row has already claimed in the same notebook.
  * The caller assembles it; this function must never be given less.
  *
- * The type hint also stops being advisory when the listing HAS types. If
- * Google labels its artifacts and none of the fresh ones is labelled ours, the
- * honest answer is "not yet" — falling back to "the newest" is how the same
- * collision returns through a different door. The advisory fallback survives
- * only for the case it was written for: a library release that reports no
- * types at all.
+ * The kind hint also stops being advisory when the listing HAS kinds. If the
+ * library can name what these artifacts are and none of the fresh ones is
+ * ours, the honest answer is "not yet" — falling back to "the newest" is how
+ * the same collision returns through a different door. The advisory fallback
+ * survives only for the case it was written for: a release that can name
+ * nothing at all.
  */
 function pick(
   listing: readonly ArtifactListing[],
@@ -184,8 +201,8 @@ function pick(
 ): ArtifactListing | null {
   const fresh = listing.filter((a) => !known.has(a.artifactId))
   if (fresh.length === 0) return null
-  const hints = TYPE_HINT[kind] ?? []
-  const hinted = fresh.filter((a) => hints.includes(a.type))
+  const wanted = KIND_MATCHES[kind]
+  const hinted = wanted === undefined ? [] : fresh.filter((a) => a.kind === wanted)
   const pool =
     hinted.length > 0
       ? hinted
@@ -298,7 +315,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const started = await actions.generate(notebook.id, kind as ArtifactKind, instructions)
 
         // The task id IS the artifact id — measured, not assumed (see
-        // `TYPE_HINT`). Recording it here is what makes the collector exact
+        // `KIND_MATCHES`). Recording it here is what makes the collector exact
         // instead of a guess about which artifact is newest.
         const { rows: made } = await db.execute(`
           insert into public.artifacts
@@ -459,13 +476,16 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           }
 
           const detail = await actions.poll(notebook.id, mine.artifactId)
-          const url = detail.url
-          if (url === null || url === '') {
-            // Reported complete with nowhere to go. Not treated as ready:
-            // `artifacts_ready_has_a_link` would refuse the row anyway, and a
-            // "here it is" with no link is worse than one more tick.
-            return await again(db, job, notebook, rowId, tick, row.kind, 'complete but no link yet')
-          }
+          // A direct link when Google gives us one — an audio overview is an
+          // mp2 you can open — and the notebook itself when it does not.
+          //
+          // Measured: a mind map is finished and has no url of its own, ever.
+          // It is interactive and lives inside NotebookLM. The first version
+          // treated "complete with no url" as "not ready yet" and polled a
+          // finished artifact until it gave up, which is the worst of both — it
+          // never delivered the thing and never said why.
+          const direct = detail.url !== null && detail.url !== ''
+          const url = direct ? String(detail.url) : notebookUrl(notebook.id)
           const title = detail.title ?? mine.title ?? `${row.kind} overview`
           await db.execute(`
             update public.artifacts
@@ -475,7 +495,10 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           `)
           return deterministic(
             `The ${LABEL[row.kind] ?? row.kind} is ready: “${title}”\n${url}\n\n` +
-              `It is in the notebook "${notebook.name}" and in this project's store.`,
+              (direct
+                ? `It is in the notebook "${notebook.name}" and in this project's store.`
+                : `That link opens the notebook "${notebook.name}" — this one is interactive ` +
+                  "and has no file of its own. It is in this project's store either way."),
             notebook,
           )
         }

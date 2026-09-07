@@ -131,6 +131,16 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .addrow input, .addrow select { flex: 1 1 150px; min-width: 0; padding: 8px 10px; font: inherit;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .addrow button { flex: 0 0 auto; }
+/* One setting per row, label above the control: a phone is narrow and a
+   two-column settings form on a phone is a two-column settings form nobody
+   fills in. */
+.fld { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.fld:last-child { border-bottom: 0; }
+.fld > span { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.fld input, .fld select { width: 100%; padding: 8px 10px; font: inherit; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.fld em { display: block; font-style: normal; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
 .staff { display: grid; gap: 10px; }
 .person { display: flex; gap: 12px; align-items: flex-start; }
 .person img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
@@ -220,7 +230,7 @@ const ago = (iso) => {
   reading the console, which is the step the method calls "render it and look at
   it" and the step that is easiest to skip.
 */
-const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects' }
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects', output: 'artifacts', settings: 'settings' }
 
 /* Configuration. The only writing this page does — see the endpoint's comment
    on why configuring is allowed where acting is not. */
@@ -276,6 +286,8 @@ const TABS = [
   ['usage', 'Usage'],
   ['connections', 'Links'],
   ['projects', 'Projects'],
+  ['output', 'Output'],
+  ['settings', 'Settings'],
 ]
 
 function shell(active) {
@@ -783,7 +795,117 @@ function projects(list) {
     </section>`
 }
 
-const VIEWS = { overview, trends, staff, activity, usage, connections, projects }
+
+function output(list) {
+  /*
+    Grant: "once they're created, see if you can pull them into our store
+    project and display the results as a link within both Slack and Telegram."
+    Both of those happen when the artifact lands. This is the third place — the
+    one you come back to a week later, when the message has scrolled away.
+
+    A failed generation stays on the list rather than being hidden. Google
+    fails a slide deck roughly as often as it makes one, and a list that shows
+    only successes teaches you that everything worked.
+  */
+  const rows = Array.isArray(list) ? list : []
+  if (rows.length === 0) {
+    return `<section class="card wide"><h2>Output</h2>
+      <div class="empty">Nothing made yet. Ask the team for an audio overview or a
+      slide deck, in Slack or Telegram, and it will appear here with its link.</div>
+    </section>`
+  }
+  const LAMP = { ready: 'ok', generating: 'warn', failed: 'bad', abandoned: 'bad' }
+  const SAID = {
+    ready: 'ready', generating: 'still making it', failed: 'failed', abandoned: 'gave up watching',
+  }
+  const item = (a) => `
+    <div class="conn">
+      <span class="lamp ${LAMP[a.state] || ''}" aria-hidden="true"></span>
+      <span class="who">
+        <b>${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title || a.kind)}</a>` : esc(a.title || a.kind)}</b>
+        <span>${esc(a.kind)} · ${esc(a.project || '')}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
+      </span>
+      <span class="st">${esc(SAID[a.state] || a.state)}</span>
+    </div>`
+  return `<section class="card wide"><h2>Output</h2>
+    <p class="meta">What the notebook has made. Opens in Google.</p>
+    ${rows.map(item).join('')}
+  </section>`
+}
+
+function settings(d) {
+  /*
+    Two halves, and the difference between them is the point.
+
+    LIVE is a set of facts about the database this page is talking to. It is
+    not editable, because a text box that appears to move a database and does
+    not is worse than no text box at all.
+
+    SETTINGS are declared intent: where the tooling should connect next time,
+    where backups go, whether the calendar is in service. Editing one changes
+    what the next run reads. Six keys, allow-listed in the database (0077), so
+    the page cannot reach the job lease or the autonomy level.
+  */
+  const live = d.live || {}
+  const settings = d.settings || {}
+  const editable = d.editable || []
+
+  const fact = (label, value) =>
+    `<div class="conn"><span class="who"><b>${esc(String(value ?? '—'))}</b><span>${esc(label)}</span></span></div>`
+
+  const field = (key) => {
+    const row = settings[key] || {}
+    const value = row.value
+    const isBool = typeof value === 'boolean'
+    const control = isBool
+      ? `<select data-setting="${esc(key)}">
+           <option value="true"${value ? ' selected' : ''}>on</option>
+           <option value="false"${value ? '' : ' selected'}>off</option>
+         </select>`
+      : `<input data-setting="${esc(key)}" value="${esc(String(value ?? ''))}" autocomplete="off">`
+    return `<label class="fld"><span>${esc(key)}</span>${control}
+      <em>${esc(row.description || '')}</em></label>`
+  }
+
+  return `
+    <section class="card"><h2>This database</h2>
+      <p class="meta">Facts, not fields. Nothing here is editable, because editing it would not move anything.</p>
+      ${fact('database', live.database)}
+      ${fact('server', live.server)}
+      ${fact('on disk', live.size)}
+      ${fact('tables', live.tables)}
+    </section>
+    <section class="card"><h2>Where things should live</h2>
+      <p class="meta">Declared, not live. Changing one tells the next run where to look.</p>
+      <div id="fields">${editable.map(field).join('')}</div>
+      <div class="row"><button id="save-settings">Save</button>
+        <span id="settings-said" class="m"></span></div>
+    </section>`
+}
+
+function wireSettings() {
+  const said = document.getElementById('settings-said')
+  const save = document.getElementById('save-settings')
+  if (save === null) return
+  save.onclick = async () => {
+    save.disabled = true
+    said.textContent = 'Saving…'
+    try {
+      // One call per changed key rather than a batch. There are six of them,
+      // and a partial batch failure would leave the page unable to say which
+      // half went in.
+      for (const el of document.querySelectorAll('[data-setting]')) {
+        await act('set_setting', { p_key: el.dataset.setting, p_value: String(el.value) })
+      }
+      said.textContent = 'Saved.'
+    } catch (e) {
+      said.textContent = 'Not saved: ' + e.message
+    }
+    save.disabled = false
+  }
+}
+
+const VIEWS = { overview, trends, staff, activity, usage, connections, projects, output, settings }
 
 /*
   The Projects tab's buttons.
@@ -860,6 +982,7 @@ async function show(section) {
     const data = await load(section)
     main.innerHTML = VIEWS[section](data)
     if (section === 'projects') wireProjects()
+    if (section === 'settings') wireSettings()
     armSparklines(main)
     applyLayout(main, section)
     armLayout(main, section)

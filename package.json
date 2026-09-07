@@ -89,7 +89,8 @@
     "work": "tsx scripts/work.ts",
     "vault:export": "tsx scripts/vault/export.ts",
     "project": "tsx scripts/projects/manage.ts",
-    "telegram:webhooks": "tsx scripts/telegram/webhooks.ts"
+    "telegram:webhooks": "tsx scripts/telegram/webhooks.ts",
+    "slack:introductions": "tsx scripts/slack/introductions.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
