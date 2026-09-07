@@ -1246,6 +1246,32 @@ for (const c of checks) {
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 
+// Every channel this run made, not just the lobby.
+//
+// The discipline channels (`…-research`) were never in this cleanup, so each
+// full run left one behind: five of them had accumulated in Grant's sidebar by
+// the time anyone counted, against a standing instruction to keep it clear of
+// anything the team did not deliberately create. They archive fine — the bot is
+// a member, having posted in them — which is what distinguishes them from the
+// lobby below.
+for (const extra of (
+  await db.execute(`
+    select channel_id, channel_name from public.slack_channel_map
+     where project_id = ${lit(PROJECT_ID)}::uuid and active and channel_id <> ${lit(CHANNEL)}
+  `)
+).rows as { channel_id: string; channel_name: string }[]) {
+  try {
+    await slack.call('conversations.archive', { channel: extra.channel_id })
+    await db.execute(`
+      update public.slack_channel_map set active = false, archived_at = app.now_utc()
+       where channel_id = ${lit(extra.channel_id)}
+    `)
+    console.log(`archived #${extra.channel_name}`)
+  } catch (error) {
+    console.log(`#${extra.channel_name}: ${(error as Error).message.slice(0, 70)}`)
+  }
+}
+
 try {
   await slack.call('conversations.archive', { channel: CHANNEL })
   console.log(`\narchived #${created.channelName}`)
