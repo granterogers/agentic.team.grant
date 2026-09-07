@@ -85,7 +85,13 @@ const STYLE =
   'shapes, a limited palette of two or three flat colours plus skin tone, ' +
   'solid single-colour background, no gradients, no shading detail, no text, ' +
   'no logos, no props, square composition with the head filling most of the ' +
-  'frame. Friendly, competent, unmistakable at thumbnail size.'
+  'frame. Friendly, competent, unmistakable at thumbnail size. ' +
+  // Grant: *"everyone in their photos should be happy thanks."* Said once, in
+  // the house style, rather than eight times in the table below — an
+  // expression written per person drifts, and the first set had one person
+  // "serious and unflinching" and another "dry and sceptical", which reads as a
+  // team who do not want to be there.
+  'Everyone is smiling — a genuine, warm, unforced smile that reaches the eyes.'
 
 /**
  * What makes each of them a different person at a glance.
@@ -93,24 +99,22 @@ const STYLE =
  * Hair, colour and one strong feature each — not job descriptions. A prompt
  * that says "a strategist" produces the model's average of a strategist, and
  * eight averages look like the same person eight times.
+ *
+ * No expressions here. They belong in `STYLE`, where they are said once: the
+ * first set gave each person their own — "dry sceptical", "serious
+ * unflinching" — and the result was a team who looked like they did not want
+ * to be photographed.
  */
 const LOOK: Record<string, string> = {
-  'chief-of-staff':
-    'short silver-grey bob, rectangular dark glasses, deep teal blazer, calm direct expression',
-  'strategy-director':
-    'dark brown side-parted hair, no glasses, mustard-yellow jumper, thoughtful raised eyebrow',
+  'chief-of-staff': 'short silver-grey bob, rectangular dark glasses, deep teal blazer',
+  'strategy-director': 'dark brown side-parted hair, no glasses, mustard-yellow jumper',
   'research-director':
-    'long auburn hair tied back, round tortoiseshell glasses, forest-green shirt, curious expression',
-  'finance-director':
-    'closely cropped grey hair and beard, thin wire glasses, navy shirt, dry sceptical expression',
-  'growth-director':
-    'shoulder-length black curly hair, gold hoop earrings, coral top, bright energetic smile',
-  'operations-director':
-    'shaved head, dark full beard, olive work shirt, steady unhurried expression',
-  'quality-director':
-    'straight dark bob with a blunt fringe, no glasses, plum high-necked top, serious unflinching expression',
-  'communications-director':
-    'wavy light-brown hair, freckles, open-collar sky-blue shirt, lively attentive expression',
+    'long auburn hair tied back, round tortoiseshell glasses, forest-green shirt',
+  'finance-director': 'closely cropped grey hair and beard, thin wire glasses, navy shirt',
+  'growth-director': 'shoulder-length black curly hair, gold hoop earrings, coral top',
+  'operations-director': 'shaved head, dark full beard, olive work shirt',
+  'quality-director': 'straight dark bob with a blunt fringe, no glasses, plum high-necked top',
+  'communications-director': 'wavy light-brown hair, freckles, open-collar sky-blue shirt',
 }
 
 const PERSON: Record<string, string> = {

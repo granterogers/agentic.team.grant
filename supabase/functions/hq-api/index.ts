@@ -54,6 +54,7 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   artifacts: { fn: 'hq_artifacts' },
   settings: { fn: 'hq_settings' },
   team: { fn: 'hq_team' },
+  google: { fn: 'hq_google' },
 }
 
 /**
@@ -85,6 +86,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // a roster that can lose a row is a history that stops explaining itself.
   staff_update: { fn: 'hq_staff_update', required: ['p_slug'] },
   staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
+  // Write-only by construction: there is no matching section that reads it
+  // back, and `hq_google` reports only whether one exists.
+  set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
 }
 
 /**

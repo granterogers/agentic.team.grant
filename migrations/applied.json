@@ -88,5 +88,11 @@
   "0087_say_it_back_before_doing_it.sql": "a8bfc2cdd879a36a0892a550850f9395aa91f97b7c9592204a9139b49d1e24e9",
   "0088_two_messages_one_instruction.sql": "ec03a3053320406674cc3a923ae91552f030edea4fef8dafcd21b7e364e7bfa1",
   "0089_a_conversation_not_a_command_line.sql": "74959a29336fc52633444e483eceff87fd875aa91b1b8fc111f7316dbebbab8d",
-  "0090_a_child_can_belong_elsewhere.sql": "7197d9c040174d8643ca91ceb8f4f017aedc29e64183050526fd7b0a1ea36d2f"
+  "0090_a_child_can_belong_elsewhere.sql": "7197d9c040174d8643ca91ceb8f4f017aedc29e64183050526fd7b0a1ea36d2f",
+  "0091_the_mcp_server_speaks_oauth.sql": "62a3ea44b0b692025257ad7819a90e9d6f350eb1dad44ff93e0cad3ca71ec74e",
+  "0092_client_ids_without_pgcrypto.sql": "fe47769368ee46235388e7ceb9cadd4ea82fd7b1236313890c78420f0327fe5d",
+  "0093_the_consent_page_names_the_real_client.sql": "58ab3635a1050d0fcd23803de1d060d6e0c3e93d65f2aec85e2a03efeff035ae",
+  "0094_google_oauth_on_the_front_end.sql": "e8c3f32e5ea03b9373097a860d9d34c54ef1ec4753ea7d9ee560a8a9455757ee",
+  "0095_storing_the_google_refresh_token.sql": "bcc371efc2ef3d243477bd3c24a34d4265c0b3387951a8f39ec9889b5cdcaa33",
+  "0096_settings_carries_google.sql": "48fa1d5229945b9b5e30e54a70904384b263cf901a9bfc9b842f05f06847a3ac"
 }

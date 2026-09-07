@@ -94,7 +94,12 @@ PATTERNS = {
     # exactly this reason: a credential shape we mint is a credential shape we
     # can teach the scanner, and one that only ever exists in a vault-adjacent
     # table and a Telegram message should never appear in a file.
-    "mcp client token":       r"\bmcp_[A-Za-z0-9_\-]{32,}",
+    # At least one capital or digit in the body. A real token is 43 characters
+    # of base64url and always has some; a snake_case identifier — the trigger
+    # `mcp_oauth_clients_redirects_are_safe`, which is exactly what tripped
+    # this — is lowercase and underscores all the way down. Without the
+    # lookahead this rule fails the build on its own schema.
+    "mcp client token":       r"\bmcp_(?=[A-Za-z0-9_\-]{32,})[a-z0-9_\-]*[A-Z0-9][A-Za-z0-9_\-]*",
     "private key block":      r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
     # Google session cookies (Gate 2). Distinct from an API key in kind, not
     # just in value: these authenticate as the signed-in human across Google,

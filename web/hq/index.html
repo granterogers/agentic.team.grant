@@ -966,8 +966,45 @@ function settings(d) {
       ${nb.window_resets_at ? fact('window frees up', new Date(nb.window_resets_at).toLocaleString()) : ''}
     </section>`
 
+  const g = d.google || {}
+  const step = (done, text) =>
+    `<div class="conn"><span class="lamp ${done ? 'ok' : ''}" aria-hidden="true"></span>` +
+    `<span class="who"><b>${text}</b></span>` +
+    `<span class="st">${done ? 'done' : 'to do'}</span></div>`
+
+  // Ordered the way he has to do them: the console first, because the client id
+  // and the redirect URI have to exist over there before anything here works.
+  const google = `
+    <section class="card"><h2>Google</h2>
+      <p class="meta">Calendar needs an OAuth client from your own Google Cloud project.
+        Four steps, once.</p>
+      ${step(true, '1. Create an OAuth client (type: Web application) at console.cloud.google.com')}
+      ${step(g.client_id ? true : false, '2. Paste the client ID below')}
+      ${step(g.has_secret ? true : false, '3. Paste the client secret below')}
+      ${step(g.has_refresh_token ? true : false, '4. Press Connect and approve it')}
+
+      <label class="fld"><span>Authorised redirect URI — paste this INTO Google</span>
+        <input readonly value="${esc(g.redirect_uri || '')}" onclick="this.select()">
+        <em>Must match to the character, or the consent screen refuses before you see it.</em>
+      </label>
+      <label class="fld"><span>google.client_id</span>
+        <input data-setting="google.client_id" value="${esc(g.client_id || '')}" autocomplete="off">
+        <em>Public by design — it appears in every authorization URL.</em>
+      </label>
+      <label class="fld"><span>Client secret</span>
+        <input id="gsecret" type="password" placeholder="${g.has_secret ? '•••••••• already stored — paste again to replace' : 'GOCSPX-…'}" autocomplete="off">
+        <em>Stored in the vault. This page can write it and can never read it back.</em>
+      </label>
+      <div class="row">
+        <button id="save-google">Save secret</button>
+        <a class="mini" href="${esc(API.replace('/hq-api', '/google-oauth/start'))}" target="_blank" rel="noopener">Connect Google →</a>
+        <span id="google-said" class="m">${g.has_refresh_token ? 'Connected.' : ''}</span>
+      </div>
+    </section>`
+
   return `
     ${meter}
+    ${google}
     <section class="card"><h2>This database</h2>
       <p class="meta">Facts, not fields. Nothing here is editable, because editing it would not move anything.</p>
       ${fact('database', live.database)}
@@ -984,6 +1021,27 @@ function settings(d) {
 }
 
 function wireSettings() {
+  const gsaid = document.getElementById('google-said')
+  const gsave = document.getElementById('save-google')
+  if (gsave !== null) {
+    gsave.onclick = async () => {
+      const box = document.getElementById('gsecret')
+      if (!box.value.trim()) { gsaid.textContent = 'Nothing to save.'; return }
+      gsave.disabled = true
+      gsaid.textContent = 'Saving…'
+      try {
+        await act('set_google_secret', { p_secret: box.value.trim() })
+        box.value = ''
+        gsaid.textContent = 'Saved. Now press Connect.'
+      } catch (e) {
+        // Shown verbatim: the server refuses anything not starting GOCSPX-,
+        // and the commonest mistake is pasting the client ID in here.
+        gsaid.textContent = e.message
+      }
+      gsave.disabled = false
+    }
+  }
+
   const said = document.getElementById('settings-said')
   const save = document.getElementById('save-settings')
   if (save === null) return
