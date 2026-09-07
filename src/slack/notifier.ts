@@ -48,7 +48,7 @@ export interface Target {
    * How the destination was chosen. `discipline` is the staff member's own
    * channel for this project (0070); `project` is its lobby.
    */
-  readonly via: 'thread' | 'channel' | 'project' | 'discipline'
+  readonly via: 'thread' | 'channel' | 'project' | 'discipline' | 'general'
 }
 
 export interface NotifierOptions {
@@ -73,6 +73,8 @@ export async function resolveTarget(
   db: SqlExecutor,
   job: Job,
   staffSlug: string | null = null,
+  /** Which workspace, for the duty fallback below. Null means any. */
+  teamId: string | null = null,
 ): Promise<Target | null> {
   const { rows } = await db.execute(`
     select s.channel_id, s.thread_ts
@@ -93,7 +95,32 @@ export async function resolveTarget(
     }
   }
 
-  if (job.projectId === null) return null
+  if (job.projectId === null) {
+    // A recurring duty belongs to a role, not a project (0027), so it has no
+    // project channel and would otherwise deliver nowhere — which for the daily
+    // capacity report means producing it every morning and showing it to
+    // nobody. `requested_by` is set to `duty:<slug>` by the dispatcher (0099)
+    // and is not client-supplied, so this cannot be reached by an instruction.
+    //
+    // Deliberately narrow. Every other project-less job here is a verification
+    // fixture, and a fallback that caught those would post test probes into the
+    // room the team introduces itself in.
+    const duty = await db.execute(`
+      select m.channel_id from public.jobs j
+        join public.slack_channel_map m
+          on ${teamId === null ? 'true' : `m.team_id = ${lit(teamId)}`}
+         and m.active and m.bot_present
+         and m.purpose = 'general'
+       where j.job_id = ${lit(job.jobId)}::uuid
+         and j.requested_by like 'duty:%'
+       order by m.created_at
+       limit 1
+    `)
+    const home = duty.rows[0] as { channel_id?: string } | undefined
+    return home?.channel_id === undefined
+      ? null
+      : { channelId: home.channel_id, threadTs: null, via: 'general' }
+  }
 
   // The staff member's own channel for this project, then the project lobby.
   //
@@ -157,7 +184,7 @@ export function slackChannel(
       // re-derived: `context.staff` is who the office is about to present as,
       // and presenting as one person in another's channel would be confusing
       // in exactly the way per-discipline channels exist to prevent.
-      const target = await resolveTarget(db, job, context.staff?.slug ?? null)
+      const target = await resolveTarget(db, job, context.staff?.slug ?? null, options.teamId)
       if (target === null) {
         return { delivered: false, note: 'no slack destination for this job; nothing delivered' }
       }

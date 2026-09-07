@@ -38,14 +38,25 @@ Then run `npm run inventory` before trusting any credential.
 | Phase | |
 |---|---|
 | 0–6 | ✅ complete |
-| 7 · communications | ✅ complete. Five of seven staff bots exist and answer; the other two are BotFather clicks and nothing waits on them |
-| 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
-| 9 · Google ecosystem | 🟡 **unblocked but not scheduled** — ADR-0013 re-bases it: Calendar/Gmail/Drive read Grant's own data on his own account, which was always the supported path |
-| · knowledge layer | ✅ ADR-0013 decided and built: `documents`, a connector registry, Postgres full-text search. Notion connected and waiting only on shared pages |
-| 10 · hardening | 🟡 **in progress.** Provider failover, §31's cross-interface equality, a security pass over the live public surface, and **all but one** of §18's degradation cases — see [`degradation-coverage.md`](degradation-coverage.md). Remaining: §22's scenario A end to end |
+| 7 · communications | ✅ complete. All eight bots exist, answer, and have introduced themselves to Grant individually on both surfaces |
+| 8 · Team HQ | ✅ deployed and redesigned — grouped menus, and every tab says what it is for and what to do |
+| 9 · Google ecosystem | 🟡 **plumbing built, readers not written.** OAuth start/callback, the four-step setup on the Settings page, and a refresh token in the vault. Calendar, Gmail and Drive have no reader yet, and it waits on Grant creating an OAuth client in a project he owns |
+| · knowledge layer | ✅ ADR-0013 built. Notion connected and syncing 15 pages |
+| 10 · hardening | ✅ §18 covered except case 7, which is not yet real; §31 equality live; a security pass over the public surface |
+| · the office acting | ✅ an instruction becomes work, is said back before it runs, and every generation is gated on Grant |
+| · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
+| · recurring duties | 🟡 **dispatcher built (0098–0101), one duty seeded.** The daily capacity report §22 names. Briefings, weekly reviews and self-improvement proposals are rows nobody has written |
 
-73 migrations · 668 unit tests · 22 live suites, 454 checks, all green (plus
-`verify:transitions`, which compares the two state machines rather than counting).
+101 migrations · 752 unit tests · 25 live suites, 458 checks, all green (plus
+`verify:transitions`, which compares the two state machines rather than
+counting).
+
+**The gap that matters most, and it is not code.** `.github/workflows/worker.yml`
+and `vault-export.yml` live only on this branch, and GitHub schedules workflows
+from the **default branch** only. So the worker has never run on a timer: every
+message to a staff bot is accepted, filed, and ignored until someone runs
+`npm run work` by hand. PR #2 fixes it by existing. Until it merges, run the
+worker yourself.
 
 **What Phase 10 has cost so far, which is the argument for doing it:** three
 real defects, none of which any existing suite could see. The router made one
@@ -176,6 +187,75 @@ account (four attempts, all `failed` from Google, with audio and mind maps
 working). The boilerplate stripper removes 61% of a Wikipedia extraction but the
 remainder still carries theme toggles and table-of-contents chrome — better, not
 solved.
+
+---
+
+## §22 completion, measured rather than felt
+
+The spec says V1 is complete only when **both** scenarios work reliably. Each is
+broken into its own clauses below, because "nearly there" is a feeling and this
+is a list.
+
+### A — source to conversation
+
+| clause | |
+|---|---|
+| Grant adds a source from his phone | ✅ paste a link to any bot |
+| detected within the sync interval | 🟡 the worker is not scheduled — PR #2 |
+| Research analyses it | ✅ |
+| justified specialists consulted | ✅ the cap, the justification and the refusal to convene are all enforced |
+| Quality/Risk reviews | ✅ |
+| findings written back | ✅ as a document; NOT into the notebook — ADR-0013 retired that |
+| operational metadata in Postgres | ✅ |
+| Slack project channel, correct staff identity | ✅ |
+| Telegram notified where policy warrants | ✅ |
+| react / respond / Undo | ✅ six buttons, all acted on |
+| **Talk to Team — a live voice conversation** | ❌ **not built.** See below |
+| Chief explains from real state, "bring Finance in" | 🟡 works by text; the voice path does not exist |
+| work continues autonomously | ✅ |
+| all actions versioned | ✅ |
+| usage in-app and in the daily capacity report | ✅ as of 0098–0101 |
+
+### B — cross-interface delegation
+
+| clause | |
+|---|---|
+| the instruction through Slack | ✅ |
+| identifies the project, creates a persistent initiative | ✅ — and asks first, after it created two projects nobody wanted |
+| delegates to justified specialists | ✅ |
+| routes conclusions through Quality/Risk | ✅ |
+| works asynchronously, preserves state | ✅ |
+| returns progress to the right Slack thread | ✅ |
+| places rich artifacts in the notebook | 🟡 audio overviews and mind maps yes; slide decks fail every time |
+| notifies Telegram only per policy | ✅ |
+| **the same instruction through Voice** | ❌ **not built** |
+| generated code in an isolated workspace or branch | ❌ not built, and nothing generates code yet |
+
+### The one thing standing between here and V1
+
+**Voice is not a command source.** What exists is a Gate-1 POC page, an
+ephemeral-credential minting endpoint, and voice *notes* — spoken instructions
+sent to a bot, transcribed locally, acted on. That is genuinely useful and it is
+not what §22 asks for: "Talk to Team" is a live conversation in which Grant
+interrupts, redirects and brings someone else in, and §22 B requires the same
+instruction spoken to take the same canonical path as the same instruction
+typed.
+
+It is also the only §18 case still uncovered (case 7, *Realtime unavailable*),
+which becomes testable the moment there is a session to fail.
+
+**There is a real tension in the spec here, and it needs Grant.** §12 calls
+voice "optional premium". §22 makes it a completion criterion for both
+scenarios. Those cannot both be true, and the answer changes what "done" means:
+
+- if voice is required, V1 is one substantial build away — a Realtime session
+  over WebRTC, ephemeral credentials, and the canonical command layer reached
+  from a third adapter;
+- if §12 wins and voice notes are accepted as the voice surface, then apart from
+  Phase 9's readers, the slide decks and the code workspace, **V1 is done**.
+
+Nobody but Grant can settle that, and it should not be settled by whoever picks
+this up next quietly assuming one.
 
 ---
 

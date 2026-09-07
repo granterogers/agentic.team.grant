@@ -265,6 +265,125 @@ const ownedDueAfter = (
   )
 ).rows.length
 
+// ---------------------------------------------------------------------------
+// The dispatcher — the half that did not exist
+// ---------------------------------------------------------------------------
+//
+// Everything above proves `due_responsibilities` is correct. For a year it was
+// correct and unreachable: the table had no rows and nothing in production
+// called the function, so every property here passed against a mechanism wired
+// to nothing (0098). These checks are the ones that would have caught that.
+
+const dutySlug = `fixture-duty-dispatch-${run}`
+await db.execute(`
+  insert into public.responsibilities
+    (slug, staff_id, project_id, description, job_kind, period_minutes)
+  values (${lit(dutySlug)}, ${lit(String(cos?.id))}::uuid, ${lit(projectId)}::uuid,
+          'A duty used to prove the dispatcher fires it, stamps it, and refuses to fire it twice.',
+          'duty.fixture', 60)
+`)
+
+const fired = (
+  await db.execute(
+    `select * from app.dispatch_due_responsibilities() where duty_slug = ${lit(dutySlug)}`,
+  )
+).rows as { outcome?: string; fired_job_id?: string }[]
+record(
+  'responsibilities',
+  'the dispatcher fires a due duty and produces a real job',
+  `${String(fired.length)} row(s), outcome=${String(fired[0]?.outcome)}`,
+  fired.length === 1 && fired[0]?.outcome === 'fired' && fired[0]?.fired_job_id !== null,
+)
+
+// The job it made must be a job, not a claim that one was made.
+const madeJob = await one(`
+  select kind, requested_by, announce from public.jobs
+   where job_id = ${lit(String(fired[0]?.fired_job_id))}::uuid
+`)
+record(
+  'responsibilities',
+  'and the job is the duty’s own kind, attributed to the duty, and will be delivered',
+  `kind=${String(madeJob?.kind)} by=${String(madeJob?.requested_by)} announce=${String(madeJob?.announce)}`,
+  madeJob?.kind === 'duty.fixture' &&
+    madeJob?.requested_by === `duty:${dutySlug}` &&
+    // 0100. The first version set this false to keep the pager quiet and
+    // silenced the report instead — the start message is governed elsewhere.
+    madeJob?.announce === true,
+)
+
+const stamped = await one(
+  `select last_run_at from public.responsibilities where slug = ${lit(dutySlug)}`,
+)
+record(
+  'responsibilities',
+  'the duty is stamped, so it leaves the due set',
+  stamped?.last_run_at === null ? 'not stamped' : 'stamped',
+  stamped?.last_run_at !== null,
+)
+
+// The property the whole design turns on, exercised through the dispatcher
+// rather than through a hand-written insert: two firings in one period produce
+// one job. Forced by clearing the stamp, which is what a worker restarting
+// inside the period effectively does.
+await db.execute(
+  `update public.responsibilities set last_run_at = null where slug = ${lit(dutySlug)}`,
+)
+const again = (
+  await db.execute(
+    `select * from app.dispatch_due_responsibilities() where duty_slug = ${lit(dutySlug)}`,
+  )
+).rows as { outcome?: string }[]
+record(
+  'responsibilities',
+  'firing the same duty twice in one period reports already_fired instead of raising',
+  `outcome=${String(again[0]?.outcome)}`,
+  again[0]?.outcome === 'already_fired',
+)
+
+const jobCount = await one(`
+  select count(*)::int as n from public.jobs
+   where requested_by = ${lit(`duty:${dutySlug}`)}
+`)
+record(
+  'responsibilities',
+  'and there is exactly ONE job, which is the entire point of the idempotency key',
+  `${String(jobCount?.n)} job(s)`,
+  Number(jobCount?.n) === 1,
+)
+
+// CONTROL. Without this, every check above would pass on a dispatcher that
+// fired everything unconditionally: a duty just stamped must NOT come back.
+const notFired = (
+  await db.execute(
+    `select * from app.dispatch_due_responsibilities() where duty_slug = ${lit(dutySlug)}`,
+  )
+).rows
+record(
+  'responsibilities',
+  'CONTROL: a duty already stamped this period is not offered at all',
+  `${String(notFired.length)} row(s)`,
+  notFired.length === 0,
+)
+
+// And the real one, because a dispatcher with nothing to dispatch is the state
+// this whole section was in until 0098.
+const real = await one(`
+  select slug, job_kind, period_minutes, enabled from public.responsibilities
+   where slug = 'daily-capacity-report'
+`)
+record(
+  'responsibilities',
+  '§22’s daily capacity report exists as a real duty, not only as a mechanism',
+  real === undefined
+    ? 'no such duty'
+    : `${String(real.job_kind)} every ${String(real.period_minutes)}m, enabled=${String(real.enabled)}`,
+  real?.job_kind === 'office.capacity_report' &&
+    real?.enabled === true &&
+    Number(real?.period_minutes) === 1440,
+)
+
+await db.execute(`delete from public.responsibilities where slug = ${lit(dutySlug)}`)
+
 // ===========================================================================
 // 3. Needs Me stays small
 // ===========================================================================

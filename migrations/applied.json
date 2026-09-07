@@ -95,5 +95,9 @@
   "0094_google_oauth_on_the_front_end.sql": "e8c3f32e5ea03b9373097a860d9d34c54ef1ec4753ea7d9ee560a8a9455757ee",
   "0095_storing_the_google_refresh_token.sql": "bcc371efc2ef3d243477bd3c24a34d4265c0b3387951a8f39ec9889b5cdcaa33",
   "0096_settings_carries_google.sql": "48fa1d5229945b9b5e30e54a70904384b263cf901a9bfc9b842f05f06847a3ac",
-  "0097_a_chat_is_a_chat_with_someone.sql": "76c3ae8e2b75c6ef5a9d9637b3a626a1403f6e58bf19402f33c453c6972ad2a6"
+  "0097_a_chat_is_a_chat_with_someone.sql": "76c3ae8e2b75c6ef5a9d9637b3a626a1403f6e58bf19402f33c453c6972ad2a6",
+  "0098_the_duties_nobody_fired.sql": "51b06f336c803fbb3252a29bee0e879a6f0ba81dca714efd050534c8b7978c77",
+  "0099_the_out_parameter_shadowed_the_column.sql": "1aa1830c70cfffeb63f267f1543bedcee9ebab26c753d06fcedb8d5f9041fbae",
+  "0100_a_report_nobody_receives.sql": "17eeace5224fe9a2a03d33f33da007ad08411963a83bf69331d58978ceb516c8",
+  "0101_already_fired_is_still_fired.sql": "c7de4464e9134fadf7e1d58c5b5acb751f1db5f22bdc08c866d5070cf4210fe5"
 }

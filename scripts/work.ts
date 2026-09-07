@@ -28,6 +28,7 @@ import { combinedNotifier, pagerChannel } from '../src/channels/notify.ts'
 import { announceStart } from '../src/channels/progress.ts'
 import { replyChannel } from '../src/channels/reply.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { capacityHandler, fireDueDuties } from '../src/handlers/capacity.ts'
 import { instructionHandler } from '../src/handlers/instruction.ts'
 import { notebookHandlers } from '../src/handlers/notebook.ts'
 import { planHandler } from '../src/handlers/plan.ts'
@@ -117,6 +118,7 @@ const orKey = process.env.OPENROUTER_API_KEY ?? ''
 const handlers = [
   ...notebookHandlers(db),
   planHandler(db),
+  capacityHandler(db),
   ...(orKey === '' ? [] : [instructionHandler({ db, router: new ProviderRouter(db, orKey) })]),
 ]
 
@@ -144,6 +146,13 @@ const handlers = [
  */
 const pass = async (): Promise<number> => {
   const pressed = await processCallbacks(db, { subject: 'grant' })
+
+  // Recurring duties, before the drain, so one fired this tick is worked this
+  // tick. §17 has had a table for these since 0027 and nothing had ever called
+  // the function that finds them — the same shape as `processCallbacks` below:
+  // a mechanism complete everywhere except where it meets the rest of the
+  // system.
+  for (const fired of await fireDueDuties(db)) console.log(`duty: ${fired}`)
   for (const p of pressed) {
     console.log(`button ${p.action}: ${p.outcome} — ${p.note.slice(0, 100)}`)
   }
