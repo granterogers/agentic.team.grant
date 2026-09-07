@@ -102,3 +102,33 @@ export async function roster(db: SqlExecutor): Promise<readonly RosterEntry[]> {
     disabledReason: r.disabled_reason,
   }))
 }
+
+/**
+ * The bot an inbound command arrived on, as a join fragment.
+ *
+ * Interpolated into a query that already has `public.inbound_commands` aliased
+ * as `c`, and it binds `t` to that command's bot.
+ *
+ * ## Why this is not `join telegram_chats on chat_id`
+ *
+ * Because a chat id does not identify a chat. In a private conversation
+ * Telegram uses the USER's id as the chat id, so Grant's chat with Emma and his
+ * chat with Tom are both 1386648496 — and a join on that alone matched all
+ * eight bots and took whichever `limit 1` happened to return first (0097).
+ *
+ * What that looked like: a reply to a question he asked Emma coming back from
+ * Ruby's bot, and a voice note fetched with the wrong bot's token — Telegram
+ * scopes a `file_id` to the bot that received it, so that one fails outright
+ * rather than quietly.
+ *
+ * `addressed_to` is the reliable field: the webhook resolves it from the bot
+ * that was written to (0072), the roster gives each staff member exactly one
+ * bot (0054), and the chief's bot is registered as the pager with a null
+ * `staff_slug` — which is why null and 'chief-of-staff' both land there.
+ */
+export const BOT_FOR_INBOUND = `
+  join public.telegram_bots t
+    on (t.staff_slug = c.addressed_to
+        or (t.staff_slug is null
+            and (c.addressed_to is null or c.addressed_to = 'chief-of-staff')))
+`

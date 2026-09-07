@@ -94,6 +94,7 @@
     "avatars:cartoon": "tsx scripts/staff/generate-cartoon-avatars.ts",
     "notebook:tidy": "tsx scripts/notebook/tidy.ts",
     "team:hello": "tsx scripts/staff/say-hello.ts",
+    "telegram:recover-chats": "tsx scripts/telegram/recover-chats.ts",
     "verify:oauth": "tsx scripts/verify/oauth.ts"
   },
   "devDependencies": {

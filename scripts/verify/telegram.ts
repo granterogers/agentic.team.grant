@@ -655,11 +655,21 @@ record(
 
 // A bot with no token cannot send, so calling it enabled would be a promise
 // the system cannot keep.
+//
+// Its own fixture, not a placeholder row that happened to be lying about. The
+// first version updated `pending:quality-director`, which existed only while
+// Grant had not yet made that bot. He made it, the UPDATE matched nothing, and
+// the check reported the constraint missing when it was the fixture that was.
+await db.execute(`
+  insert into public.telegram_bots (bot_id, username, expected, enabled, disabled_reason)
+  values ('fixture-tokenless', 'fixture_tokenless_bot', false, false, 'fixture')
+  on conflict (bot_id) do nothing
+`)
 let tokenlessCode = 'nothing was refused'
 try {
   await db.execute(`
     update public.telegram_bots set enabled = true, disabled_reason = null
-     where bot_id = 'pending:quality-director'
+     where bot_id = 'fixture-tokenless'
   `)
 } catch (error) {
   tokenlessCode =
@@ -672,6 +682,7 @@ record(
   `refused with ${tokenlessCode}`,
   tokenlessCode === '23514',
 )
+await db.execute(`delete from public.telegram_bots where bot_id = 'fixture-tokenless'`)
 
 const research = await botForStaff(db, 'research-director')
 record(
@@ -682,10 +693,13 @@ record(
   research !== null && research.botId === '8842154625',
 )
 
-// The negative that matters: two of seven bots do not exist, and a resolver
-// that threw would make "Grant has not made that bot" indistinguishable from
-// "the database is broken".
-const missing = await botForStaff(db, 'quality-director')
+// The negative that matters: a resolver that threw would make "Grant has not
+// made that bot" indistinguishable from "the database is broken".
+//
+// A slug with no bot BY CONSTRUCTION. This used to name quality-director,
+// which was bot-less until Grant sent that token — after which the check was
+// asserting that a bot he had just made did not exist.
+const missing = await botForStaff(db, 'nobody-has-this-slug')
 record(
   'a staff member with no bot resolves to null rather than raising',
   missing === null ? 'null, as required' : 'resolved something that should not exist',

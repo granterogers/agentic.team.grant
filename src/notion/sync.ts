@@ -75,6 +75,21 @@ export async function listShared(notion: NotionClient): Promise<readonly NotionO
 }
 
 /**
+ * A block that is a document in its own right, not part of this one.
+ *
+ * A child page and a child database both appear as blocks on their parent AND
+ * as separate objects in `/search`, so descending into them stores their text
+ * twice: once inside the parent's document and once as their own. That was
+ * visible as a search for a marker word returning two hits for one page, and
+ * as a parent page whose fingerprint changed whenever any descendant did — so
+ * it re-synced for ever, and "changed" stopped meaning anything.
+ *
+ * Not descended into, therefore. The child is synced on its own row, where a
+ * citation can point at the right page.
+ */
+const IS_ITS_OWN_DOCUMENT = new Set(['child_page', 'child_database'])
+
+/**
  * A page's whole block tree, depth-first, flattened with its depth.
  *
  * Depth-bounded rather than unbounded: Notion permits arbitrarily deep nesting
@@ -91,7 +106,11 @@ export async function fetchBlocks(
   for await (const raw of notion.paginate(`/blocks/${blockId}/children`, {}, 'GET')) {
     const block = raw as NotionBlock
     out.push({ block, depth })
-    if (block.has_children === true && typeof block.id === 'string') {
+    if (
+      block.has_children === true &&
+      typeof block.id === 'string' &&
+      !IS_ITS_OWN_DOCUMENT.has(String(block.type))
+    ) {
       out.push(...(await fetchBlocks(notion, block.id, depth + 1)))
     }
   }

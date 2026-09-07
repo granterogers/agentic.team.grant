@@ -126,7 +126,7 @@ describe('callback queries', () => {
     // update_id would let a redelivery through, which is what §6 forbids.
     const first = toCanonicalCommand({ ...callback('useful', 'cb-9'), update_id: 5 }, NOW)
     const redelivered = toCanonicalCommand({ ...callback('useful', 'cb-9'), update_id: 6 }, NOW)
-    expect(first.dedupe_key).toBe('telegram:callback:cb-9')
+    expect(first.dedupe_key).toBe('telegram:callback:default:cb-9')
     expect(first.dedupe_key).toBe(redelivered.dedupe_key)
   })
 
@@ -222,5 +222,43 @@ describe('voice notes', () => {
     const c = toCanonicalCommand(spoken({ text: 'hello' }))
     expect(c.voice_file_id).toBeNull()
     expect(c.voice_seconds).toBeNull()
+  })
+})
+
+describe('a chat id is not unique across bots', () => {
+  /*
+    Grant pressed Start on seven director bots and one row appeared. Every
+    update had reached the webhook and registered successfully — into the same
+    key, because in a private chat Telegram uses the USER's id as the chat id
+    and each bot numbers its own messages from 1 (0097).
+  */
+  it('keys the same chat and message differently for two different bots', () => {
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        chat: { id: 1386648496, type: 'private' },
+        from: { id: 1386648496 },
+        text: '/start',
+      },
+    }
+    const emma = toCanonicalCommand(update as never, new Date(), '8842154625')
+    const tom = toCanonicalCommand(update as never, new Date(), '8319112012')
+    expect(emma.dedupe_key).not.toBe(tom.dedupe_key)
+  })
+
+  it('but the SAME bot redelivering the same message still collides', () => {
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        chat: { id: 1386648496, type: 'private' },
+        from: { id: 1386648496 },
+        text: '/start',
+      },
+    }
+    const first = toCanonicalCommand(update as never, new Date(), '8842154625')
+    const again = toCanonicalCommand({ ...update, update_id: 2 } as never, new Date(), '8842154625')
+    expect(first.dedupe_key).toBe(again.dedupe_key)
   })
 })

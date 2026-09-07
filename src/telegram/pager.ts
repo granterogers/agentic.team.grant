@@ -229,7 +229,10 @@ export class TelegramPager {
       result.errorCode === 'chat_not_found'
     ) {
       await this.db.execute(
-        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}) as marked`,
+        // Scoped to this bot (0097). A chat id is the same number across every
+        // bot Grant has opened, so an unscoped mark would silence the whole
+        // team because one director was blocked.
+        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}, ${lit(this.options.botId)}) as marked`,
       )
     }
 

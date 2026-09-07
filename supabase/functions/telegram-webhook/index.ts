@@ -137,7 +137,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   let command: ReturnType<typeof toCanonicalCommand>
   try {
-    command = toCanonicalCommand(update)
+    // The bot, so the dedupe key can tell his first message to Emma from his
+    // first message to Tom. They are the same chat id and the same message
+    // number, and without this the second was discarded as a redelivery.
+    command = toCanonicalCommand(update, new Date(), BOT_ID)
   } catch (error) {
     if (error instanceof UnsupportedUpdateError) {
       // 200, not 4xx. Telegram retries non-2xx, and an update we will never

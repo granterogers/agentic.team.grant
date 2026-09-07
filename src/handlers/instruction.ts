@@ -71,6 +71,7 @@ import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
+import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
 import { transcribeTelegramVoice } from '../voice/inbound.ts'
 import { allowance, describe } from './meter.ts'
 
@@ -276,8 +277,10 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   const { rows } = await db.execute(`
     select app.resolve_secret(t.token_ref) as token
       from public.inbound_commands c
-      join public.telegram_chats ch on ch.chat_id = split_part(c.origin_ref, ':', 1)
-      join public.telegram_bots t on t.bot_id = ch.bot_id
+      -- The bot it arrived ON, not "a bot with this chat id" (0097). A
+      -- Telegram file_id is scoped to the bot that received the file, so the
+      -- wrong token here does not fetch the wrong audio — it fetches nothing.
+      ${BOT_FOR_INBOUND}
      where c.command_id = ${lit(commandId)}::uuid
        and t.enabled and t.token_ref is not null
      limit 1
@@ -484,10 +487,14 @@ async function pairWithNearby(
   const commandId = String(payload.command_id ?? '')
   if (commandId === '') return null
 
-  // Same person, same chat, inside the window, not already paired, and not
-  // this message. `origin_ref` is `chat:message`, so the chat is its first
-  // field — a link shared into Ines's chat must not complete an instruction
-  // typed into Tom's.
+  // Same person, same BOT, inside the window, not already paired, and not this
+  // message.
+  //
+  // The bot, not the chat: a link shared into Emma's chat must not complete an
+  // instruction typed into Tom's, and the first version compared the chat id,
+  // which is the same number in both (0097). So it paired across the whole
+  // team — and `origin_ref`'s first field, which that comparison read, is
+  // exactly the field that cannot tell them apart.
   const { rows } = await db.execute(`
     select c.command_id::text as command_id,
            coalesce(c.transcript, c.instruction) as said
@@ -496,6 +503,7 @@ async function pairWithNearby(
      where c.command_id <> self.command_id
        and c.origin_channel = self.origin_channel
        and split_part(c.origin_ref, ':', 1) = split_part(self.origin_ref, ':', 1)
+       and coalesce(c.addressed_to, '') = coalesce(self.addressed_to, '')
        and coalesce(c.subject, c.actor) = coalesce(self.subject, self.actor)
        and c.paired_with is null
        and c.callback_action is null

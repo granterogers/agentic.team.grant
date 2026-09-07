@@ -182,6 +182,26 @@ if (parent === undefined) {
     text === `## Findings\nThe marker word is ${MARKER}.`,
   )
 
+  // Notion's search index is eventually consistent: a page created a second
+  // ago is not in `/search` yet. The first version synced immediately, so the
+  // new page was absent from the first pass and present in the second — which
+  // reported `added=1` and failed the idempotence check below for a reason that
+  // had nothing to do with fingerprints.
+  //
+  // So wait for the page to be visible, and only then test that syncing twice
+  // does the same thing twice.
+  let indexed = false
+  for (let attempt = 0; attempt < 12 && !indexed; attempt += 1) {
+    const seen = await listShared(notion)
+    indexed = seen.some((o) => o.id === createdPageId)
+    if (!indexed) await new Promise((r) => setTimeout(r, 2500))
+  }
+  record(
+    'a page just created becomes visible to the integration',
+    indexed ? 'in /search' : 'still not indexed after 30s',
+    indexed,
+  )
+
   const first = await syncNotion(db, notion, projectId)
   record(
     'the sync stores what is shared',

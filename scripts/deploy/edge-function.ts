@@ -144,6 +144,17 @@ const set = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
 const setBody = (await set.json()) as { ok: boolean; description?: string }
 console.log(`setWebhook: ok=${String(setBody.ok)} ${setBody.description ?? ''}`)
 
+// This call registers the CHIEF's webhook only, at the bare URL. The seven
+// director bots each register the same function with their own `?bot=` (0072),
+// and this deploy leaves those untouched — but the bare URL it just set on the
+// chief is the one shape that carries no bot id, which is why the reminder is
+// printed rather than left to be remembered.
+console.log(
+  '\nThe seven director bots register their own ?bot= URLs. Run:\n' +
+    '  npm run telegram:webhooks\n' +
+    'to confirm all eight are listening — it is a set, so it is safe to re-run.',
+)
+
 const info = (await (
   await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`)
 ).json()) as { result?: Record<string, unknown> }

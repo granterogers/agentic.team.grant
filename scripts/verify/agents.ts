@@ -741,7 +741,13 @@ const capSlots = Number((await one(`select app.temporary_specialist_slots() as n
 for (let i = 0; i < capSlots - 1; i++) {
   await db.execute(`
     select app.create_temporary_specialist(
-      ${lit(`${specSlug}-fill`)} || ${String(i)}, 'Filler', 'Filler',
+      -- A DISTINCT name per filler. 0071 made lower(name) unique among active
+      -- staff, and every filler used to be called Filler — so the second one
+      -- refused and this script died before reaching the cap it was written to
+      -- demonstrate. (No backticks in this comment: it lives inside a template
+      -- literal, and the first version of it ended the string.)
+      ${lit(`${specSlug}-fill`)} || ${String(i)},
+      ${lit(`Filler ${String(i)}`)}, 'Filler',
       'Occupies a specialist slot so that the cap can be demonstrated.',
       '{}'::text[], 'Plainly.',
       'Exists only to occupy a slot while the specialist cap is being demonstrated.',

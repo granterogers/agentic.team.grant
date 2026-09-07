@@ -22,6 +22,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { escapeHtml } from '../telegram/message.ts'
+import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
 import { TelegramTransport } from '../telegram/transport.ts'
 import { DeliveryService } from './delivery.ts'
 import type { ResultContext } from './notify.ts'
@@ -58,9 +59,10 @@ async function originOf(db: SqlExecutor, job: Job): Promise<Origin | null> {
            s.name as staff_name
       from lineage l
       join public.inbound_commands c on c.job_id = l.job_id
+      ${BOT_FOR_INBOUND}
       join public.telegram_chats ch
-        on ch.chat_id = split_part(c.origin_ref, ':', 1)
-      join public.telegram_bots t on t.bot_id = ch.bot_id
+        on ch.bot_id = t.bot_id
+       and ch.chat_id = split_part(c.origin_ref, ':', 1)
       left join public.staff s on s.slug = c.addressed_to
      where c.origin_channel = 'telegram'
        and t.enabled and t.token_ref is not null
