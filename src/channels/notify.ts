@@ -59,12 +59,26 @@ export async function resultContext(
   // as slugs. An empty roster is a real answer ("trivial work spawns no
   // subagents"), and the message then comes from no one in particular rather
   // than from an invented author.
+  //
+  // Up the parent chain when this job has no decision of its own. A follow-up
+  // job — the collector that watches an artifact Grant asked the Chief of Staff
+  // for — is the same person continuing the same piece of work, and having the
+  // link arrive from nobody in particular would undo the whole point of §9's
+  // named staff.
   const staffRow = await db.execute(`
+    with recursive lineage as (
+      select job_id, parent_job_id, 0 as depth
+        from public.jobs where job_id = ${lit(job.jobId)}::uuid
+      union all
+      select j.job_id, j.parent_job_id, l.depth + 1
+        from public.jobs j join lineage l on j.job_id = l.parent_job_id
+       where l.depth < 8
+    )
     select st.slug, st.name, st.title, st.avatar_ref
-    from public.routing_decisions r
+    from lineage l
+    join public.routing_decisions r on r.job_id = l.job_id
     join public.staff st on st.slug = r.roster[1]
-    where r.job_id = ${lit(job.jobId)}::uuid
-    order by r.decided_at desc
+    order by l.depth asc, r.decided_at desc
     limit 1
   `)
   const raw = staffRow.rows[0] as
@@ -137,6 +151,19 @@ export function combinedNotifier(
   options: CombinedOptions = {},
 ): Notifier {
   return async (job, output, outputId) => {
+    // 0074: a job may declare its own output not worth a message. Interim
+    // polls of a still-generating artifact are real outputs — the poll
+    // happened, the answer was "not yet" — and saying "not yet" nine times is
+    // how a pager stops being read. Checked here rather than per channel so
+    // there is one rule, for the reason this file's header already gives about
+    // a filter applied in one of two call paths.
+    const quiet = await db.execute(
+      `select announce from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+    )
+    if ((quiet.rows[0] as { announce?: boolean } | undefined)?.announce === false) {
+      return { delivered: false, note: 'nothing worth announcing' }
+    }
+
     const context = await resultContext(db, job, outputId, options.projectUrlBase)
     const notes: string[] = []
     let delivered = false

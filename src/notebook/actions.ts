@@ -55,6 +55,16 @@ export const ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'study_guide',
 ]
 
+/** One row of the notebook's artifact listing. */
+export interface ArtifactListing {
+  readonly artifactId: string
+  readonly title: string | null
+  /** The library's own type string. Advisory: it has changed shape before. */
+  readonly type: string
+  readonly status: string
+  readonly createdAt: string | null
+}
+
 export class NotebookActionError extends Error {
   constructor(
     readonly action: string,
@@ -165,15 +175,23 @@ export class NotebookActions {
     }
   }
 
-  /** What the notebook holds now. How a started generation is followed. */
-  async artifacts(
-    notebookId: string,
-  ): Promise<readonly { artifactId: string; title: string | null; status: string }[]> {
+  /**
+   * What the notebook holds now. How a started generation is followed.
+   *
+   * `type` and `createdAt` come through because they are how a collector picks
+   * its own artifact out of the list. `generate` hands back a TASK id and the
+   * artifact appears minutes later under an unrelated id, so identifying it
+   * means comparing the listing against what was there before — and the type
+   * is the tiebreak when two arrived in the same window.
+   */
+  async artifacts(notebookId: string): Promise<readonly ArtifactListing[]> {
     const r = await this.act('artifacts', { notebook_id: notebookId })
     return ((r.artifacts ?? []) as Record<string, unknown>[]).map((a) => ({
       artifactId: String(a.artifact_id),
       title: a.title === undefined || a.title === null ? null : String(a.title),
+      type: String(a.type ?? ''),
       status: String(a.status ?? ''),
+      createdAt: a.created_at === undefined || a.created_at === null ? null : String(a.created_at),
     }))
   }
 

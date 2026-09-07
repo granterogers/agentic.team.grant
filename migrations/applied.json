@@ -71,5 +71,6 @@
   "0070_a_channel_per_project_per_discipline.sql": "c28fe73076adaf26d5b776155108892dba8028e59cdb4e026032e371f7748113",
   "0071_the_team_has_names.sql": "1ffb15307035c27481170829abf826b5dcd4b3427fb8d191cb1060a815f8d85f",
   "0072_every_bot_listens.sql": "21b6336357cb6606f9580ed00ce810a8b302454863cebe6b9ca79fd05af338aa",
-  "0073_the_front_end_can_configure.sql": "e9364a3151cbb9c8d3b042cd6220ca5679dc9b0c02dab19718f009606a915ac1"
+  "0073_the_front_end_can_configure.sql": "e9364a3151cbb9c8d3b042cd6220ca5679dc9b0c02dab19718f009606a915ac1",
+  "0074_the_office_can_act.sql": "20af367f0d52f33028f7154def1365299183636175a37de67a2e411af5b10173"
 }

@@ -39,19 +39,32 @@ interface Origin {
 
 /** Where this job's instruction arrived, or null when it did not. */
 async function originOf(db: SqlExecutor, job: Job): Promise<Origin | null> {
+  // Up the parent chain, not just this job. Grant asks the Chief of Staff for
+  // an audio overview; the instruction job answers "starting it now", and the
+  // job that eventually carries the LINK is a grandchild two steps away with no
+  // inbound command of its own. Without this it would have nowhere to reply and
+  // the one message Grant actually wanted would go only to Slack.
   const { rows } = await db.execute(`
+    with recursive lineage as (
+      select job_id, parent_job_id, 0 as depth
+        from public.jobs where job_id = ${lit(job.jobId)}::uuid
+      union all
+      select j.job_id, j.parent_job_id, l.depth + 1
+        from public.jobs j join lineage l on j.job_id = l.parent_job_id
+       where l.depth < 8
+    )
     select c.origin_channel, c.origin_ref, c.addressed_to,
            t.bot_id, app.resolve_secret(t.token_ref) as token,
            s.name as staff_name
-      from public.inbound_commands c
+      from lineage l
+      join public.inbound_commands c on c.job_id = l.job_id
       join public.telegram_chats ch
         on ch.chat_id = split_part(c.origin_ref, ':', 1)
       join public.telegram_bots t on t.bot_id = ch.bot_id
       left join public.staff s on s.slug = c.addressed_to
-     where c.job_id = ${lit(job.jobId)}::uuid
-       and c.origin_channel = 'telegram'
+     where c.origin_channel = 'telegram'
        and t.enabled and t.token_ref is not null
-     order by c.received_at desc
+     order by l.depth asc, c.received_at desc
      limit 1
   `)
   const r = rows[0] as

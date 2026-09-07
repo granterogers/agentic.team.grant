@@ -20,12 +20,26 @@
  * When the message went to the Chief of Staff bot there is no `addressed_to`,
  * and then the router does decide: that is what a chief of staff is for.
  *
+ * ## Answering is not the same as doing
+ *
+ * The first version of this file could only answer. Asked to *"generate an
+ * audio overview in our Google notebook"*, the Chief of Staff wrote a paragraph
+ * about what an audio overview might contain — a perfect answer to a question
+ * nobody asked. `src/agents/actions.ts` reads the instruction for the artifacts
+ * it asks for; this file starts them, as child jobs, and says so in one
+ * sentence instead of pretending to have done the work in prose.
+ *
+ * The confirmation is deterministic on purpose. It is a statement about what
+ * just happened in the queue, and generating it with a model would put a
+ * paraphrase between Grant and a fact.
+ *
  * ## The reply goes back where the instruction came from
  *
  * Same chat, same bot, in that person's voice. A reply from the pager to a
  * message sent to Ines would be a colleague answering through a switchboard.
  */
 
+import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -88,6 +102,73 @@ async function speaker(
     : { ...s, reason }
 }
 
+/**
+ * Start the artifacts an instruction asked for, or say why not.
+ *
+ * Returns null when the instruction asked for none, which hands control back to
+ * the prose path. The two are exclusive: an instruction that starts work is
+ * answered by the fact that the work started, and following it with a model's
+ * essay on the subject would be the original defect wearing a hat.
+ */
+async function act(
+  db: SqlExecutor,
+  job: Job,
+  kinds: readonly RequestedKind[],
+  instructions: string,
+): Promise<string | null> {
+  if (job.projectId === null) {
+    return (
+      'I can start that, but this instruction is not attached to a project, so I have no ' +
+      'notebook to put it in. Say which project and I will.'
+    )
+  }
+
+  // Grant anticipated this exact reply: *"maybe he's gonna ask for details
+  // based on the configuration of what's required."* A project with no notebook
+  // attached is a configuration question, and asking it is better than picking
+  // a notebook — ADR-0014's whole point is that "where does this project's
+  // output go" has one answer.
+  const { rows } = await db.execute(`
+    select display_name from public.project_attachments
+     where project_id = ${lit(String(job.projectId))}::uuid
+       and connector = 'notebooklm' and enabled
+     order by case when role = 'home' then 0 else 1 end
+     limit 1
+  `)
+  const notebook = (rows[0] as { display_name?: string } | undefined)?.display_name
+  if (notebook === undefined) {
+    return (
+      'I would need a notebook for that. This project has no NotebookLM notebook attached, ' +
+      'and I am not going to write into whichever of yours I find first — attach one on the ' +
+      'web front end and ask me again.'
+    )
+  }
+
+  const started: string[] = []
+  for (const kind of kinds) {
+    // announce = false: this reply IS the announcement. The generate job's own
+    // output would otherwise arrive seconds later saying the same thing twice.
+    await db.execute(`
+      select app.enqueue_child(
+        ${lit(job.jobId)}::uuid, 'notebook.generate',
+        jsonb_build_object('kind', ${lit(kind)}, 'instructions', ${lit(instructions)}),
+        interval '0', false
+      )
+    `)
+    started.push(KIND_LABEL[kind])
+  }
+
+  const list =
+    started.length === 1
+      ? (started[0] as string)
+      : `${started.slice(0, -1).join(', ')} and ${String(started.at(-1))}`
+  return (
+    `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes for each; ` +
+    'I am watching for them and will post the links here and in the project channel as they ' +
+    'land.'
+  )
+}
+
 export function instructionHandler(deps: InstructionDeps): Handler {
   return {
     kind: 'office.instruction',
@@ -102,37 +183,46 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)
 
+      // Does this ask for something to be MADE? If so, make it, and let the
+      // confirmation be the reply.
+      const wanted = notebookRequest(instruction)
+      const confirmation =
+        wanted === null ? null : await act(deps.db, job, wanted.kinds, wanted.instructions)
+
       // The same retrieval the office uses, so an instruction answered in
       // Telegram cites the same corpus as one answered in Slack. §22's rule
       // that the source interface must not change the organisation's
       // behaviour applies to the answer as much as to the routing.
-      const hits = await retrieve(deps.db, instruction, job.projectId)
+      const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
       const context = contextBlock(hits)
 
-      const completion = await deps.router.complete({
-        messages: [
-          {
-            role: 'system',
-            content:
-              `You are ${who.name}, ${who.title} on a small team. You are replying to ` +
-              'Grant, who runs it, in a private chat. Write as a colleague would: plain ' +
-              'prose, first person, no preamble, no bullet points, under 120 words. Do ' +
-              'not sign your name — the chat already shows who you are. If you are ' +
-              'inferring rather than reporting, say so.' +
-              (context === ''
-                ? ' Nothing in our own records matched this, so answer from general ' +
-                  'knowledge and open by saying our records had nothing on it.'
-                : ' Numbered excerpts from our documents follow. Prefer them, cite them ' +
-                  'as [1], [2], and say plainly when they do not answer the question.'),
-          },
-          ...(context === ''
-            ? []
-            : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
-          { role: 'user', content: instruction },
-        ],
-        maxTokens: 2_000,
-        correlationId: job.correlationId,
-      })
+      const completion =
+        confirmation !== null
+          ? null
+          : await deps.router.complete({
+              messages: [
+                {
+                  role: 'system',
+                  content:
+                    `You are ${who.name}, ${who.title} on a small team. You are replying to ` +
+                    'Grant, who runs it, in a private chat. Write as a colleague would: plain ' +
+                    'prose, first person, no preamble, no bullet points, under 120 words. Do ' +
+                    'not sign your name — the chat already shows who you are. If you are ' +
+                    'inferring rather than reporting, say so.' +
+                    (context === ''
+                      ? ' Nothing in our own records matched this, so answer from general ' +
+                        'knowledge and open by saying our records had nothing on it.'
+                      : ' Numbered excerpts from our documents follow. Prefer them, cite them ' +
+                        'as [1], [2], and say plainly when they do not answer the question.'),
+                },
+                ...(context === ''
+                  ? []
+                  : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+                { role: 'user', content: instruction },
+              ],
+              maxTokens: 2_000,
+              correlationId: job.correlationId,
+            })
 
       // §5: the decision is recorded with its reason, through the same
       // `recordDecision` the office uses.
@@ -154,6 +244,26 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         roster: [who.slug] as never,
         rosterReason: who.reason,
       })
+
+      // A confirmation is `verified`/`deterministic` because it reports a fact
+      // about the queue rather than an opinion: the child job exists or the
+      // insert failed. §16 exempts a deterministic output from review, which is
+      // right here — there is nothing in it for a reviewer to disagree with.
+      //
+      // Its source is the job itself. §10's gate refuses `verified` with no
+      // sources, and correctly: verified means someone can go and check.
+      if (confirmation !== null) {
+        return {
+          body: confirmation,
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'deterministic',
+          model: null,
+        } as unknown as HandlerOutput
+      }
+      if (completion === null) throw new Error('no completion and no confirmation')
 
       return {
         body: completion.content.trim(),
