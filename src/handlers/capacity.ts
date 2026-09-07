@@ -82,7 +82,10 @@ export function capacityHandler(db: SqlExecutor): Handler {
   return {
     kind: 'office.capacity_report',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const day = (await db.execute(DAY)).rows[0] as Day
+      // `as unknown as`, because a row comes back as Record<string, unknown> and
+      // TypeScript is right that the two do not overlap. The shape is asserted by
+      // the SQL above, which names every column.
+      const day = (await db.execute(DAY)).rows[0] as unknown as Day
       const meter = (await db.execute('select app.notebook_allowance() as a')).rows[0] as {
         a?: {
           window_spent?: number
