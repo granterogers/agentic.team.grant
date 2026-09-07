@@ -99,5 +99,10 @@
   "0098_the_duties_nobody_fired.sql": "51b06f336c803fbb3252a29bee0e879a6f0ba81dca714efd050534c8b7978c77",
   "0099_the_out_parameter_shadowed_the_column.sql": "1aa1830c70cfffeb63f267f1543bedcee9ebab26c753d06fcedb8d5f9041fbae",
   "0100_a_report_nobody_receives.sql": "17eeace5224fe9a2a03d33f33da007ad08411963a83bf69331d58978ceb516c8",
-  "0101_already_fired_is_still_fired.sql": "c7de4464e9134fadf7e1d58c5b5acb751f1db5f22bdc08c866d5070cf4210fe5"
+  "0101_already_fired_is_still_fired.sql": "c7de4464e9134fadf7e1d58c5b5acb751f1db5f22bdc08c866d5070cf4210fe5",
+  "0102_the_team_can_be_spoken_to.sql": "088ed2b1341222390f4b41ba0cf4d58fce0d2b0a6ca7d3875e987a11bb93554b",
+  "0103_who_produced_it_has_one_answer.sql": "7b42f3c3e69c5807e7ded2a008b1837b2744659fa0eff9f30ef668cc42951ee6",
+  "0104_voice_has_an_actor_too.sql": "fb6df59f4c316a27768a995ce192e976f82027a79eef1884112453ef0ca84dc5",
+  "0105_a_request_is_not_a_question.sql": "db8c8b7904a5f552e4cecaabcf1e5e9d91eca64b0b1f67254885d45c3b801ad8",
+  "0106_a_duty_has_an_owner_too.sql": "ab0e14701d676263384b1a3411e9af74ceb6f5931f723ded723eb83b406b13a9"
 }

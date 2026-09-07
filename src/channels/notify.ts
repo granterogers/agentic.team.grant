@@ -65,21 +65,19 @@ export async function resultContext(
   // for — is the same person continuing the same piece of work, and having the
   // link arrive from nobody in particular would undo the whole point of §9's
   // named staff.
+  //
+  // Through `app.staff_behind_job` rather than a copy of its query. This was
+  // the copy: 0103 extracted the same lineage walk into SQL for the voice
+  // surface, and two hand-written versions of "who does this job belong to" is
+  // two things to keep in step. 0106 then added the duty fallback — a recurring
+  // duty is routed by nothing, so it had no decision to walk to, and the daily
+  // capacity report posted into #the_team as the bare app with no name and no
+  // face, beside eight introductions that each had both. Only the function
+  // knew about that fallback; the copy here did not.
   const staffRow = await db.execute(`
-    with recursive lineage as (
-      select job_id, parent_job_id, 0 as depth
-        from public.jobs where job_id = ${lit(job.jobId)}::uuid
-      union all
-      select j.job_id, j.parent_job_id, l.depth + 1
-        from public.jobs j join lineage l on j.job_id = l.parent_job_id
-       where l.depth < 8
-    )
     select st.slug, st.name, st.title, st.avatar_ref
-    from lineage l
-    join public.routing_decisions r on r.job_id = l.job_id
-    join public.staff st on st.slug = r.roster[1]
-    order by l.depth asc, r.decided_at desc
-    limit 1
+      from public.staff st
+     where st.slug = app.staff_behind_job(${lit(job.jobId)}::uuid)
   `)
   const raw = staffRow.rows[0] as
     | { slug: string; name: string; title: string; avatar_ref: string | null }

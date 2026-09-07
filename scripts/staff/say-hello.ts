@@ -7,7 +7,7 @@
  * Grant: *"get each team member to message me individually on Slack. I am also
  * waiting for the same on telegram."*
  *
- * ## Why this is not the #the-team channel again
+ * ## Why this is not the #the_team channel again
  *
  * That channel is a noticeboard: eight introductions posted into one room,
  * which is how you meet a team. This is eight private conversations, which is
@@ -248,3 +248,31 @@ if (unopened.length > 0) {
 }
 
 console.log(go ? `\n${String(sent)} message(s) sent.` : '\nNothing sent. Re-run with --go.')
+
+/*
+  Where the Slack half actually lands, said out loud.
+
+  Grant, after all eight reported `sent`: *"I'm also still waiting for the
+  individual messages in Slack from each team member."* They had been delivered
+  — Slack held eight unread in the DM, each with the right name and face — but
+  he was looking for eight conversations in his sidebar and there is one.
+
+  There is one Slack app, so there is one DM channel. `chat:write.customize`
+  changes the name and picture ON a message; it cannot create a second
+  conversation. Eight sidebar entries would need eight Slack apps: eight
+  creations, eight installs, eight tokens, eight things to rotate.
+
+  Printed every run rather than explained once, because "sent" and "seen" came
+  apart here and the report is the only place to close the gap.
+*/
+if (dm !== null) {
+  console.log(
+    `\nThe Slack messages are all in ONE conversation — the app's DM, under
+` +
+      `**Apps → Agentic Team Hq** in the sidebar, not eight separate threads.
+` +
+      `Each carries its own name and face; one app can only hold one DM.
+` +
+      `They are also posted individually in #the_team.`,
+  )
+}
