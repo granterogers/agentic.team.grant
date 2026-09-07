@@ -21,7 +21,7 @@ prevented by deterministic code rather than by a prompt.
 | Phase | |
 |---|---|
 | 0–6 · foundations, ledger, job engine, projects, agents, autonomy | ✅ complete |
-| 7 · communications | ✅ complete except six more Telegram bots |
+| 7 · communications | ✅ complete except seven staff Telegram bots |
 | 8 · Team HQ web app | ✅ built and deployed; one criterion unclaimed¹ |
 | 9 · Google ecosystem | ⛔ **blocked and being reconsidered** — see below |
 | 10 · hardening | ⬜ |
@@ -46,10 +46,18 @@ touching anything.
 
 ## Start here
 
+**A fresh session reads three documents and nothing else**, in this order:
+
 | Read | For |
 |---|---|
-| **[`docs/HANDOFF.md`](docs/HANDOFF.md)** | ⭐ **Starting a session.** Where things are, what to read, what is waiting |
-| **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Everything currently wrong**, with severity and owner |
+| **[`docs/new-environment.md`](docs/new-environment.md)** | ⭐ **First.** Four commands, two environment variables, and the seven habits this codebase learned the hard way |
+| **[`docs/HANDOFF.md`](docs/HANDOFF.md)** | ⭐ **Second.** What arrived today, what it left open, and what is waiting on Grant |
+| **[`docs/known-problems.md`](docs/known-problems.md)** | ⭐ **Third.** Everything currently wrong, with severity and owner |
+
+Everything below is reference. Go to it when one of those three sends you.
+
+| | |
+|---|---|
 | [`AI_TEAM_HQ_MASTER_SPEC.md`](AI_TEAM_HQ_MASTER_SPEC.md) | The canonical specification. Supersedes everything else |
 | [`docs/test-evidence/`](docs/test-evidence/) | What the checks found **by failing** — the best reading in the repo |
 | [`docs/adr/`](docs/adr/) | 14 decisions, with the reasoning that produced them |

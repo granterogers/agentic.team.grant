@@ -3,23 +3,28 @@
 **For the next session, human or otherwise.** This replaces every earlier
 handoff; the dated ones remain as history and you do not need them.
 
-**Branch:** `claude/phase-7-communications-kh8ow8` — everything committed and
-pushed. **Written:** 2026-09-05, end of day.
+**Branch:** `claude/docs-onboarding-setup-5nxt5z` — everything committed and
+pushed. **Written:** 2026-09-07.
 
 ---
 
-## Read these four, in this order
+## Read three documents, in this order
 
-1. **[`known-problems.md`](known-problems.md)** — everything currently wrong.
-   Start here, not with the code.
-2. **[`adr/0012`](adr/0012-notebook-account-disabled.md)** — the open decision.
-   Do not re-enable Notebook and do not create a Google account before reading it.
-3. **[`../AI_TEAM_HQ_MASTER_SPEC.md`](../AI_TEAM_HQ_MASTER_SPEC.md)** — canonical,
-   supersedes everything.
-4. **[`test-evidence/`](test-evidence/)** — twelve documents recording what the
-   checks found *by failing*. The failures are the part worth reading.
+1. **[`new-environment.md`](new-environment.md)** — the four commands, the two
+   environment variables, and the seven habits this codebase learned by
+   shipping the defect first.
+2. **This document** — what arrived today, and what it left open.
+3. **[`known-problems.md`](known-problems.md)** — everything currently wrong,
+   worst first. Current as of 2026-09-07.
 
-Then run `npm run inventory` before trusting any credential.
+**Nothing else, before starting.** The master spec, the ADRs and the twelve
+test-evidence documents are reference material, and each of the three above
+sends you to the right one when you need it. Previous handoffs opened with a
+four-document reading list plus "then run `npm run inventory`", and the reading
+was the part that got skipped.
+
+`npm run inventory` is command three in `new-environment.md`. Run it before you
+believe anything about a credential, including anything in this file.
 
 ---
 
@@ -28,26 +33,45 @@ Then run `npm run inventory` before trusting any credential.
 | Phase | |
 |---|---|
 | 0–6 | ✅ complete |
-| 7 · communications | ✅ complete bar six Telegram bots (tokens only Grant can make) |
+| 7 · communications | ✅ complete bar seven staff Telegram bots (tokens only Grant can make) |
 | 8 · Team HQ | ✅ deployed; the mobile judgement is Grant's and unmade |
-| 9 · Google ecosystem | ⛔ **do not start** — its OAuth client is under a disabled account, and ADR-0012 questions the premise |
+| 9 · Google ecosystem | ⛔ **do not start** — its OAuth client is under a disabled account, and [ADR-0012](adr/0012-notebook-account-disabled.md) questions the premise |
 | 10 · hardening | ⬜ **the obvious next move**, and it needs nobody |
 
-48 migrations · 583 unit tests · 15 live suites, ~300 checks, all green as of
-this evening.
+48 migrations · 583 unit tests · 15 live suites, ~300 checks. The unit tests and
+the secret scan were re-run green today; the live suites were last run in full
+on 2026-09-05.
 
 ---
 
-## What happened today, in one paragraph
+## What arrived today
 
-Grant reinstalled Slack with `channels:join` and set the interactivity URL, so
-the office is complete. Photorealistic avatars were generated, hosted and are
-live. Team HQ was built and deployed. Then Google disabled the account four
-vendors sign in with, which turned the day into an audit: NotebookLM is gone,
-the Gemini key was already dead of the same cause, Groq turned out to be dead
-too, and the backup rehearsal turned out to have failed every night since it was
-written without telling anyone. All of that is fixed or recorded; none of it is
-still bleeding.
+**An onboarding entry point, and nothing else.** No code, no migrations, no
+behaviour change.
+
+- **[`new-environment.md`](new-environment.md)** is new: four commands and two
+  environment variables, both verified by running them in a clean container
+  rather than transcribed from the older docs, plus a section naming the seven
+  habits — each one traceable to a defect that shipped, so the habit arrives
+  with its argument attached.
+- **The reading list is three documents**, down from four-plus-a-command, and
+  the three are now internally consistent about what to read and in what order.
+- **Two stale facts corrected.** The Telegram staff-bot count is seven, not six
+  — [`telegram-bot-roster.md`](telegram-bot-roster.md) has always listed seven
+  and `npm run inventory` reports seven. And `known-problems.md` now carries
+  today's live credential state rather than 2026-09-05's.
+
+## What it left open
+
+- **Phase 10 is still unstarted**, and it is still the obvious next move.
+  Nothing today touched it.
+- **The Slack config token has expired again** — it does that every ~12 hours by
+  design. `npm run slack:rotate`. Today's inventory caught it; that is not a new
+  problem, it is the expected steady state.
+- **`GEMINI_API_KEY` is still set and still dead.** Deleting the variable is a
+  one-line environment change nobody has made, and while it is present anything
+  testing `if (key)` believes it has a credential.
+- Everything on the waiting-on-Grant list below is exactly where it was.
 
 ---
 
@@ -63,11 +87,8 @@ whose result does not depend on the thing under test.** When you write one, ask
 what it would do if the feature were deleted. If it would still pass, it is not
 a check — add a CONTROL that proves it discriminates.
 
-Two siblings, each learned the hard way:
-
-- a test that changes real configuration must restore it;
-- **a failing check that notifies nobody is indistinguishable from a passing
-  one.**
+All seven of these, with the defect each one cost, are in
+[`new-environment.md`](new-environment.md).
 
 ---
 
@@ -102,14 +123,15 @@ working.
 
 Do not add to this list in chat. It lives in
 [`known-problems.md`](known-problems.md) and in `npm run inventory`, and the
-reason is that surfacing needs one per turn is exactly what went wrong this
+reason is that surfacing needs one per turn is exactly what went wrong that
 week.
 
 1. 🔴 **Change the Backblaze account email** while that login still works.
 2. **Which email are OpenRouter, OpenAI and Groq under?**
 3. **A decision on the knowledge layer** — ADR-0012.
-4. Six Telegram bot tokens; a Google Cloud service account on a live account.
-   Browser-agent prompt ready at [`offload/setup-prompt.md`](offload/setup-prompt.md).
+4. Seven staff Telegram bot tokens; a Google Cloud service account on a live
+   account. Browser-agent prompt ready at
+   [`offload/setup-prompt.md`](offload/setup-prompt.md).
 5. One button press, and a look at Team HQ on a phone.
 
 ---

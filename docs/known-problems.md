@@ -1,10 +1,16 @@
 # Known problems
 
-**Last verified: 2026-09-05.** Everything here was checked, not assumed. Where
-something is unknown, it says unknown rather than guessing.
+**Last verified: 2026-09-07**, by running `npm run inventory` rather than by
+re-reading this file. Everything here was checked, not assumed. Where something
+is unknown, it says unknown rather than guessing.
 
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
-half of this live.
+half of this live, and **its output wins over this table** — the file goes stale
+and the command cannot.
+
+Today's count: **8 credentials working · 2 dead · 3 outstanding · 3 of unknown
+ownership.** Unchanged from 2026-09-05 apart from the Slack config token, which
+expires by design (#4).
 
 ---
 
@@ -66,7 +72,7 @@ password manager, that password manager gap *is* the credential backup gap.
 |---|---|---|
 | `GROQ_API_KEY` | **401** — found by `npm run inventory`, nobody knew | regenerate, or drop Groq from the router |
 | `GEMINI_API_KEY` | dead with the account | **delete the variable** — it is present, so anything testing `if (key)` believes it has a credential |
-| `SLACK_APP_CONFIG_TOKEN` | expires every ~12h by design | `npm run slack:rotate` |
+| `SLACK_APP_CONFIG_TOKEN` | **expired again** (`token_expired`, checked today) — it does this every ~12h by design | `npm run slack:rotate` |
 
 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are valid but belong to a project
 under the dead account. **Assume dead** until proven otherwise. They are Phase
@@ -115,12 +121,15 @@ Without a Google credential every note degrades to text and says
   sending twice. Slack can be asked; Telegram cannot. Not fixable.
 - **Slack identity is cosmetic.** `chat:write.customize` gives name and avatar,
   not a mentionable user. Per-staff Slack apps were considered and deferred.
-- **Six Telegram bots missing.** Roster and BotFather steps in
+- **Seven staff Telegram bots missing.** One bot exists — the Chief of Staff,
+  `@agenticteamgrantbot`. The other seven staff need their own tokens, because
+  Telegram gives a bot one name and one avatar and cannot post as anyone else.
+  Roster and BotFather steps in
   [`telegram-bot-roster.md`](telegram-bot-roster.md).
 
 ---
 
-## Fixed today, recorded so they are not re-introduced
+## Fixed on 2026-09-05, recorded so they are not re-introduced
 
 | | |
 |---|---|
