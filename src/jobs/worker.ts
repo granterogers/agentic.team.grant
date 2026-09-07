@@ -228,10 +228,28 @@ export const runJob = async (
 ): Promise<WorkerResult> => {
   const handler = handlers.find((h) => h.kind === job.kind)
   if (handler === undefined) {
-    // Not a retryable condition: the next attempt has the same missing
-    // handler. Failing immediately beats five identical attempts and a
-    // misleading attempt count.
-    await moveTo(db, job.jobId, 'failed', `no handler for kind ${job.kind}`)
+    // PAUSED, not failed.
+    //
+    // The old reasoning was that the next attempt has the same missing handler,
+    // so failing at once beats five identical attempts. True of a typo in a
+    // kind, and wrong about the case that actually happened: 0107's trigger
+    // shipped a `knowledge.read_source` job into a worker running the merged
+    // branch, which did not have that handler yet. It failed the job
+    // permanently, and the deploy that would have handled it arrived four
+    // minutes later to find nothing waiting.
+    //
+    // A kind this worker cannot handle is a statement about THIS WORKER, not
+    // about the job. Paused is the state for work that is real and cannot
+    // proceed here — it leaves the queue, so it cannot spin, and a later
+    // worker or a human can resume it. `attempt` is untouched, so the count
+    // still means what it says.
+    await moveTo(
+      db,
+      job.jobId,
+      'paused',
+      `no handler for kind ${job.kind} in this worker — paused rather than failed, ` +
+        'because a deploy that knows the kind can resume it',
+    )
     throw new NoHandlerError(job.kind)
   }
 
@@ -441,10 +459,14 @@ export const deliverPending = async (
               deterministic, model
          from public.outputs where output_id = ${lit(r.output_id)}::uuid`,
     )
+    // Typed as what the columns actually are, so the reconstruction below is
+    // checked rather than asserted. It was `as unknown as HandlerOutput`, and
+    // that cast is how `path: 'deterministic'` — a string that is not a
+    // ProductionPath at all — survived in six handlers.
     const o = stored.rows[0] as {
       body: string
-      confidence: string
-      evidence: string
+      confidence: Confidence
+      evidence: Evidence
       deterministic: boolean
       model: string | null
     }
@@ -454,9 +476,9 @@ export const deliverPending = async (
       evidence: o.evidence,
       sources: [],
       contradictions: null,
-      path: o.deterministic ? 'deterministic' : 'inference',
+      path: o.deterministic ? ('deterministic_retrieval' as const) : ('inference' as const),
       model: o.model,
-    } as unknown as HandlerOutput
+    } satisfies HandlerOutput
 
     let notified: NotifyOutcome
     if (notify === undefined) {

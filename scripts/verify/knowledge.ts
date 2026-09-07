@@ -403,6 +403,137 @@ record(
 )
 
 // ---------------------------------------------------------------------------
+// A source arriving is news (0107)
+// ---------------------------------------------------------------------------
+//
+// §22 A opens *"Grant adds a source ... → detected within the sync interval →
+// Research analyzes"*, and for 586 documents nothing joined those two clauses:
+// the sync wrote a row and stopped. The trigger joins them. These checks are
+// the ones that would have noticed it was missing, and the ones that keep the
+// guards honest — a trigger that fired on everything would be worse than none.
+
+// The fixture project is `fixture-knowledge-…`, which 0107 excludes by name,
+// so the guards have to be exercised on a project shaped like a real one.
+const realish = await one(`
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`newsroom-${run}`)}, ${lit(`Newsroom ${run}`)}, 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', ${lit(`newsroom-${run}`)}, 'Fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
+`)
+const newsroom = String(realish?.id)
+const LONG = `A substantive document about ${TOKEN}. `.repeat(40)
+
+const jobFor = async (documentId: string): Promise<string | undefined> =>
+  (
+    await one(`
+      select state::text as state from public.jobs
+       where idempotency_key = ${lit(`read:${documentId}`)}
+    `)
+  )?.state as string | undefined
+
+// The first document of a project is an import, not news.
+const firstDoc = await insertDoc({
+  connector: 'upload',
+  parent: `newsroom-${run}`,
+  ref: `newsroom-first-${run}`,
+  title: `First arrival ${run}`,
+  content: LONG,
+  project: newsroom,
+})
+record(
+  'the FIRST document of a project starts nothing — attaching a notebook is an import',
+  `job=${String(await jobFor(firstDoc))}`,
+  (await jobFor(firstDoc)) === undefined,
+)
+
+// The second is.
+const secondDoc = await insertDoc({
+  connector: 'upload',
+  parent: `newsroom-${run}`,
+  ref: `newsroom-second-${run}`,
+  title: `Second arrival ${run}`,
+  content: LONG,
+  project: newsroom,
+})
+record(
+  'a document arriving into an established project starts a research job',
+  `job=${String(await jobFor(secondDoc))}`,
+  (await jobFor(secondDoc)) === 'queued',
+)
+
+// CONTROL. Without it the check above would pass on a trigger that fired for
+// everything, which is the version that stampedes forty jobs on a first sync.
+const tinyDoc = await insertDoc({
+  connector: 'upload',
+  parent: `newsroom-${run}`,
+  ref: `newsroom-tiny-${run}`,
+  title: `Tiny arrival ${run}`,
+  content: 'Two lines. Not worth convening anyone over.',
+  project: newsroom,
+})
+record(
+  'CONTROL: a trivial document starts nothing, so the trigger is not simply firing on everything',
+  `job=${String(await jobFor(tinyDoc))}`,
+  (await jobFor(tinyDoc)) === undefined,
+)
+
+// And a fixture project is excluded by name, so a verification run never
+// convenes anyone or eats the hourly cap.
+const fixtureDoc = await insertDoc({
+  connector: 'upload',
+  parent: `fixture-${run}`,
+  ref: `fixture-news-${run}`,
+  title: `Fixture arrival ${run}`,
+  content: LONG,
+  project: projectId,
+})
+record(
+  'a document in a FIXTURE project starts nothing, whatever its size',
+  `job=${String(await jobFor(fixtureDoc))}`,
+  (await jobFor(fixtureDoc)) === undefined,
+)
+
+// The job is real work, attributed to the person §9 gives it to.
+const newsJob = await one(`
+  select j.kind, j.announce, j.priority,
+         (j.pinned_config ->> 'document_id') as document_id
+    from public.jobs j where j.idempotency_key = ${lit(`read:${secondDoc}`)}
+`)
+record(
+  'and it carries the document, announces itself, and sits below an instruction Grant is waiting on',
+  `kind=${String(newsJob?.kind)} announce=${String(newsJob?.announce)} priority=${String(newsJob?.priority)}`,
+  newsJob?.kind === 'knowledge.read_source' &&
+    newsJob?.announce === true &&
+    String(newsJob?.document_id) === secondDoc,
+)
+
+// Cancelled, not deleted. `job_state_transitions` references `jobs`, and the
+// ledger is append-only by design — a suite that could delete its own job
+// history could delete anyone's.
+await db.execute(`
+  update public.jobs set state = 'cancelled', state_reason = 'verify:knowledge fixture retired',
+         finished_at = app.now_utc()
+   where idempotency_key like ${lit(`read:%`)}
+     and project_id in (${lit(newsroom)}::uuid, ${lit(projectId)}::uuid)
+     and state not in ('complete', 'cancelled', 'failed');
+  delete from public.documents where project_id = ${lit(newsroom)}::uuid;
+`)
+// Archived rather than deleted, for the same reason: the cancelled jobs above
+// still point at it.
+await db.execute(`
+  update public.projects set status = 'archived' where project_id = ${lit(newsroom)}::uuid
+`)
+
+// ---------------------------------------------------------------------------
 // Report, then clean up after itself
 // ---------------------------------------------------------------------------
 

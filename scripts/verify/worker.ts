@@ -365,10 +365,32 @@ if (unkDequeued !== null) {
     unkError = (error as Error).message.slice(0, 120)
   }
 }
+// PAUSED, not failed, and not retried either.
+//
+// This check used to require `failed`, on the reasoning that the next attempt
+// has the same missing handler. That is true of a typo in a kind and wrong
+// about the case that happened: 0107's trigger shipped a
+// `knowledge.read_source` job to a worker running the previous deploy, which
+// failed it permanently four minutes before the deploy that could handle it
+// arrived. The kind is a statement about this worker, not about the job.
+const unkState = await stateOf(unknownJob)
+const unkAttempt = Number(
+  (await one(`select attempt from public.jobs where job_id = ${lit(unknownJob)}::uuid`))?.attempt,
+)
 record(
-  'an unhandled kind fails immediately rather than burning five identical attempts',
-  `${unkError} | state=${await stateOf(unknownJob)}`,
-  unkError.includes('no handler registered') && (await stateOf(unknownJob)) === 'failed',
+  'an unhandled kind is PAUSED for a later deploy, not failed and not retried',
+  `${unkError} | state=${unkState} attempt=${String(unkAttempt)}`,
+  unkError.includes('no handler registered') && unkState === 'paused',
+)
+
+// The half that makes pausing safe rather than merely kinder: it must leave
+// the queue. A job that stayed queued would be dequeued again immediately and
+// spin for as long as the handler is missing.
+const unkRequeued = await dequeue(db, WORKER)
+record(
+  'CONTROL: and it is out of the queue, so it cannot spin against the same missing handler',
+  unkRequeued === null ? 'nothing dequeued' : `dequeued ${unkRequeued.kind}`,
+  unkRequeued === null || unkRequeued.jobId !== unknownJob,
 )
 
 // ===========================================================================

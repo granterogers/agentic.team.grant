@@ -104,5 +104,7 @@
   "0103_who_produced_it_has_one_answer.sql": "7b42f3c3e69c5807e7ded2a008b1837b2744659fa0eff9f30ef668cc42951ee6",
   "0104_voice_has_an_actor_too.sql": "fb6df59f4c316a27768a995ce192e976f82027a79eef1884112453ef0ca84dc5",
   "0105_a_request_is_not_a_question.sql": "db8c8b7904a5f552e4cecaabcf1e5e9d91eca64b0b1f67254885d45c3b801ad8",
-  "0106_a_duty_has_an_owner_too.sql": "ab0e14701d676263384b1a3411e9af74ceb6f5931f723ded723eb83b406b13a9"
+  "0106_a_duty_has_an_owner_too.sql": "ab0e14701d676263384b1a3411e9af74ceb6f5931f723ded723eb83b406b13a9",
+  "0107_a_source_arriving_is_news.sql": "961dc3d75cf32d66ffa03f55f007db71baee8da5698ff472f9e10e104da11367",
+  "0108_a_fixture_must_not_spend_the_ceiling.sql": "b71f49ef8a8ffd0f089549aec68148f3b4bab8dbcef49222adf1a0fbc63079a9"
 }

@@ -725,9 +725,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: 'deterministic',
+          path: 'deterministic_retrieval',
           model: null,
-        } as unknown as HandlerOutput
+        } satisfies HandlerOutput
       }
 
       // Does this carry a link? A link is the more specific reading and is
@@ -860,9 +860,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: 'deterministic',
+          path: 'deterministic_retrieval',
           model: null,
-        } as unknown as HandlerOutput
+        } satisfies HandlerOutput
       }
       if (completion === null) throw new Error('no completion and no confirmation')
 
@@ -874,7 +874,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         contradictions: null,
         path: 'inference',
         model: completion.model,
-      } as unknown as HandlerOutput
+      } satisfies HandlerOutput
     },
   }
 }

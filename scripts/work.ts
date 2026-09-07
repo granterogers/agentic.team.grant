@@ -32,6 +32,7 @@ import { capacityHandler, fireDueDuties } from '../src/handlers/capacity.ts'
 import { instructionHandler } from '../src/handlers/instruction.ts'
 import { notebookHandlers } from '../src/handlers/notebook.ts'
 import { planHandler } from '../src/handlers/plan.ts'
+import { sourceHandler } from '../src/handlers/source.ts'
 import type { Reviewer } from '../src/jobs/worker.ts'
 import { drain } from '../src/jobs/worker.ts'
 import { ProviderRouter } from '../src/providers/router.ts'
@@ -147,7 +148,14 @@ const handlers = [
   ...notebookHandlers(db),
   planHandler(db),
   capacityHandler(db),
-  ...(canThink ? [instructionHandler({ db, router: new ProviderRouter(db, orKey) })] : []),
+  ...(canThink
+    ? [
+        instructionHandler({ db, router: new ProviderRouter(db, orKey) }),
+        // §22 A's first clause: a source arriving is read by Research. 0107's
+        // trigger makes the job; without this handler it would park.
+        sourceHandler({ db, router: new ProviderRouter(db, orKey) }),
+      ]
+    : []),
 ]
 
 /**
