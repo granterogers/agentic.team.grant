@@ -116,9 +116,12 @@ describe('callback data', () => {
 })
 
 describe('the keyboard', () => {
-  it('lays six buttons out three to a row', () => {
+  it('lays every action out three to a row', () => {
+    // Derived, not hard-coded at two. The list grew to eight when the approval
+    // pair arrived (0083) and a literal here failed for the one reason that is
+    // not a defect — which is a test asserting the wrong thing about itself.
     const rows = inlineKeyboard([...ACTIONS], CORR)
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(Math.ceil(ACTIONS.length / BUTTONS_PER_ROW))
     for (const row of rows) expect(row.length).toBeLessThanOrEqual(BUTTONS_PER_ROW)
   })
 
@@ -170,5 +173,72 @@ describe('the message', () => {
 
   it('stays inside Telegram hard limit even for an absurd body', () => {
     expect(pagerText(message({ body: 'x'.repeat(50_000) })).length).toBeLessThanOrEqual(4096)
+  })
+})
+
+describe('one bot, many projects: every page says which (0070)', () => {
+  const base = {
+    staffName: 'Research Director',
+    staffTitle: 'Research Director',
+    body: 'The two sources disagree on the launch date.',
+    metadata: { confidence: 'medium' as const, evidence: 'inferred' as const, reviewed: true },
+    correlationId: 'c-1',
+    actions: [] as const,
+  }
+
+  it('names the project on the FIRST line', () => {
+    // The lock screen shows one line, and for most pages it is the only line
+    // read. Grant asked for a single bot across every project rather than a bot
+    // per role per project, which makes this the first question each page
+    // raises.
+    const lines = pagerText({ ...base, projectName: 'Money Mastery' }).split('\n\n')
+    expect(lines[0]).toContain('Money Mastery')
+  })
+
+  it('and on the LAST line', () => {
+    // A long message pushes the header off the top. The end is where the
+    // decision gets made, and it is the worst possible moment not to know what
+    // you are deciding about.
+    const lines = pagerText({ ...base, projectName: 'Money Mastery' }).split('\n\n')
+    expect(lines[lines.length - 1]).toContain('Money Mastery')
+  })
+
+  it('puts the project even above the not-reviewed warning', () => {
+    const lines = pagerText({
+      ...base,
+      projectName: 'Money Mastery',
+      metadata: { ...base.metadata, reviewed: false },
+    }).split('\n\n')
+    expect(lines[0]).toContain('Money Mastery')
+    expect(lines[1]).toContain('Not reviewed')
+  })
+
+  it('says nothing at all when there is no project, rather than "(none)"', () => {
+    // A page about no project is a real thing — a backup failure, a budget
+    // warning — and a placeholder would be noise on every one of them.
+    const text = pagerText({ ...base, projectName: null })
+    expect(text).not.toContain('📁')
+    expect(text).not.toContain('—')
+    expect(pagerText({ ...base, projectName: '   ' })).toBe(text)
+    expect(pagerText(base)).toBe(text)
+  })
+
+  it('escapes a project name, like everything else', () => {
+    const text = pagerText({ ...base, projectName: 'A & B <script>' })
+    expect(text).toContain('A &amp; B &lt;script&gt;')
+    expect(text).not.toContain('<script>')
+  })
+})
+
+describe('the approval pair', () => {
+  it('renders as its own two buttons, both carrying the correlation', () => {
+    // The message they appear on asks a yes/no question, so these are the whole
+    // keyboard — `resultContext` swaps them for the usual six rather than
+    // adding to them, because 👍 on "may I generate this?" answers nothing.
+    const rows = inlineKeyboard(['approve', 'decline'], CORR)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveLength(2)
+    expect(rows[0]?.[0]?.callback_data).toBe(`approve:${CORR}`)
+    expect(rows[0]?.[1]?.callback_data).toBe(`decline:${CORR}`)
   })
 })

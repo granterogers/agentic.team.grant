@@ -3,6 +3,17 @@
 **Date:** 2026-09-05 · **Trigger:** `agentic.team.grant@gmail.com` disabled by
 Google on 2026-09-04, deletion scheduled 2027-07-31.
 
+> **Resolved 2026-09-05: the account was reinstated on appeal**, verified rather
+> than taken on trust (migration 0049). Nothing below was needed. It is kept
+> because it is now a *rehearsed procedure* rather than an emergency plan, and
+> because the exposure it describes is permanent: an account another company can
+> suspend should not be the recovery path for the accounts under it. The one
+> vendor that would really have hurt — Backblaze, which holds the only offsite
+> backup — turned out on 2026-09-06 to use the Google address as a username with
+> its own password and no SSO, so it was never at risk.
+>
+> Read the rest in the past tense.
+
 Supabase and Vercel were signed up with that Google account. This is what that
 does and does not mean, checked rather than assumed.
 
@@ -35,8 +46,8 @@ The exposure is **account control**, not data loss, and not an outage.
 | **Slack** | primary owner `grant.e.rogers` | ✅ safe | — |
 | **Telegram** | Grant's phone number | ✅ safe | — |
 | **Backblaze B2** (the backups) | ❓ **unknown — needs checking** | ? | see below |
-| **Supabase** | dead Google account | ⚠️ dashboard only | project runs; no settings, no billing, no new keys |
-| **Vercel** | dead Google account (`agentic.team.grant@gmail.com`, confirmed) | ⚠️ dashboard only | site serves; no domain or project changes |
+| **Supabase** | Google sign-in (account since reinstated) | ⚠️ dashboard only | project runs; no settings, no billing, no new keys |
+| **Vercel** | Google sign-in (`agentic.team.grant@gmail.com`, since reinstated) | ⚠️ dashboard only | site serves; no domain or project changes |
 | OpenRouter / Groq / OpenAI | unknown, keys work | ? | inference stops if a key is lost |
 
 **The one question that matters most: which email is Backblaze B2 under?**

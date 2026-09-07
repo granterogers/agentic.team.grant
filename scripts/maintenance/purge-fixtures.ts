@@ -65,7 +65,7 @@ const found = await db.execute(`
          (select count(*)::int from public.jobs j
            where j.project_id = p.project_id
              and j.state not in ('complete', 'cancelled', 'failed')) as live_jobs,
-         (select count(*)::int from public.notebook_sources s where s.project_id = p.project_id) as sources,
+         (select count(*)::int from public.documents s where s.project_id = p.project_id) as sources,
          (select count(*)::int from public.project_briefs b where b.project_id = p.project_id) as briefs
   from public.projects p
   where (${predicate}) and p.status = 'active'
@@ -103,7 +103,7 @@ if (found.rows.length > 0) {
     )
   `)
   await db.execute(`
-    delete from public.notebook_sources where project_id in (
+    delete from public.documents where project_id in (
       select project_id from public.projects where (${predicate})
     )
   `)
@@ -207,7 +207,7 @@ if (health.rows.length > 0) {
 
 const remaining = await db.execute(`
   select p.slug, p.name,
-         (select count(*)::int from public.notebook_sources s where s.project_id = p.project_id) as sources
+         (select count(*)::int from public.documents s where s.project_id = p.project_id) as sources
   from public.projects p where p.status = 'active' order by p.slug
 `)
 console.log(`\n${String(remaining.rows.length)} active project(s) remain:`)

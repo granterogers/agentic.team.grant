@@ -31,6 +31,8 @@ import { UnsupportedSlackEventError } from './events.ts'
 
 /** Button `action_id` → the canonical action, which is the §12 vocabulary. */
 const ACTION_IDS: Readonly<Record<string, string>> = {
+  approve: 'approve',
+  decline: 'decline',
   'feedback.useful': 'useful',
   'feedback.not_useful': 'not_useful',
   undo: 'undo',
@@ -156,6 +158,8 @@ export function toCanonicalInteraction(
     // id — the undoable action is found from `undo_offers` by correlation at
     // handling time. Putting the correlation here would satisfy the type and
     // point at the wrong table.
+    voice_file_id: null,
+    voice_seconds: null,
     compensates_event_id: null,
     slack: {
       team_id: payload.team?.id ?? 'unknown',

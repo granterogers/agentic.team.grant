@@ -20,6 +20,17 @@ export interface CanonicalCommand {
   readonly instruction: string
   readonly dedupe_key: string
   readonly received_at: string
+  /**
+   * Always null here, and present anyway.
+   *
+   * Telegram gained spoken instructions in 0075 and Slack has no equivalent —
+   * but §31 requires the canonical row to be identical across interfaces, and
+   * a field that exists on one envelope and not the other makes that comparison
+   * a matter of which fields somebody remembered to exclude. Declaring it null
+   * says "this channel carries no recording" rather than leaving it unsaid.
+   */
+  readonly voice_file_id: null
+  readonly voice_seconds: null
   readonly callback_action: string | null
   readonly compensates_event_id: string | null
   /** Slack-specific routing the core does not interpret, only carries. */
@@ -205,6 +216,8 @@ export const toCanonicalCommand = (
       dedupe_key: `slack:reaction:${String(item.channel ?? 'x')}:${String(item.ts ?? 'x')}:${event.user ?? 'x'}:${action}`,
       received_at,
       callback_action: action,
+      voice_file_id: null,
+      voice_seconds: null,
       compensates_event_id: null,
       slack: {
         team_id: teamId,
@@ -250,6 +263,8 @@ export const toCanonicalCommand = (
       dedupe_key: `slack:message:${String(event.channel ?? 'x')}:${ts}`,
       received_at,
       callback_action: null,
+      voice_file_id: null,
+      voice_seconds: null,
       compensates_event_id: null,
       slack: {
         team_id: teamId,

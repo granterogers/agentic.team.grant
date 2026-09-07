@@ -18,7 +18,7 @@ import {
   assertModelAllowed,
   assertResponseWasFree,
   buildRequestBody,
-  type PaidCallPreventedError,
+  PaidCallPreventedError,
 } from './guards.ts'
 
 export class ProviderUnavailableError extends Error {
@@ -69,6 +69,28 @@ export class NoUsableModelError extends Error {
   }
 }
 
+/**
+ * Every candidate was tried and every one failed.
+ *
+ * Carries the models it tried, in order, because "inference failed" is not an
+ * actionable sentence and "these three were tried, the last said 429" is. The
+ * final failure is kept as `cause` rather than flattened into the message, so
+ * a caller that wants to distinguish an empty completion from a rate limit
+ * still can.
+ */
+export class AllCandidatesFailedError extends Error {
+  constructor(
+    readonly candidates: readonly string[],
+    override readonly cause: Error,
+  ) {
+    super(
+      `all ${String(candidates.length)} candidate model(s) failed ` +
+        `(${candidates.join(', ')}); last: ${cause.message.slice(0, 200)}`,
+    )
+    this.name = 'AllCandidatesFailedError'
+  }
+}
+
 export interface CompletionRequest {
   /** Conversation, in the provider's chat format. */
   readonly messages: readonly { role: string; content: string }[]
@@ -101,12 +123,23 @@ interface ProviderRow {
  * The database is passed in rather than imported so tests drive it with a fake
  * executor, and so the same router works over either transport (ADR-0007).
  */
+/** How many different models one request may be tried against. */
+export const DEFAULT_MAX_ATTEMPTS = 3
+
 export class ProviderRouter {
+  private readonly maxAttempts: number
+
   constructor(
     private readonly db: SqlExecutor,
     private readonly apiKey: string,
     private readonly fetchImpl: typeof fetch = fetch,
-  ) {}
+    // Bounded, and bounded low. Every attempt is a real request to a real
+    // provider, and a router that walks the whole registry on a bad afternoon
+    // turns one slow job into thirty seconds of requests nobody asked for.
+    maxAttempts: number = DEFAULT_MAX_ATTEMPTS,
+  ) {
+    this.maxAttempts = Math.max(1, maxAttempts)
+  }
 
   /** Layer 3's data, read fresh: availability is a measured, expiring fact. */
   private async loadAllowList(): Promise<{ provider: ProviderRow; models: AllowedModel[] }> {
@@ -135,9 +168,75 @@ export class ProviderRouter {
     }
   }
 
+  /**
+   * Complete a request, failing over between measured-usable models.
+   *
+   * ## Why failover, and why only here
+   *
+   * Until 2026-09-06 this made exactly one attempt at exactly one model. On a
+   * paid tier that is defensible; on the free tier it is not, because a free
+   * endpoint's normal state includes being rate-limited. One 429 from the
+   * top-priority model failed the whole job, and the registry recorded four
+   * other models as usable at that moment.
+   *
+   * Failover is **not** a retry loop. The same model is never tried twice: if
+   * it is rate-limited, waiting is what a rate limit means and hammering it is
+   * how a temporary limit becomes a longer one. Each candidate is a different
+   * model, tried once, in the priority order measurement produced.
+   *
+   * ## What it deliberately does NOT fail over on
+   *
+   * - **A paid response** (`PaidCallPreventedError`). §11's whole point. A
+   *   model that charged us is a defect in the allow-list, and moving on to
+   *   the next model would hide it behind a success.
+   * - **An open breaker** (`ProviderUnavailableError`). That is a statement
+   *   about the provider, not the model, and every candidate shares it.
+   * - **A caller-named model.** `request.model` is a decision someone made;
+   *   silently answering with a different model would make the recorded
+   *   provenance a lie.
+   */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     const { provider, models } = await this.loadAllowList()
 
+    // A named model is honoured exactly, or it fails. See above.
+    if (request.model !== undefined) {
+      return this.attempt(provider, models, request, request.model)
+    }
+
+    const candidates = models.slice(0, this.maxAttempts).map((m) => m.model_id)
+    let lastError: Error = new NoUsableModelError()
+
+    for (const [index, model] of candidates.entries()) {
+      try {
+        return await this.attempt(provider, models, request, model)
+      } catch (error) {
+        // Non-negotiable: these end the call rather than advancing it.
+        // `PaidCallPreventedError` covers both "this model is not on the
+        // allow-list" and "the response was charged for". Neither is a reason
+        // to try another model: the first says the registry is wrong and the
+        // second says a guard was bypassed, and moving on would hide either
+        // behind a success.
+        if (error instanceof PaidCallPreventedError) throw error
+        if (error instanceof ProviderUnavailableError) throw error
+        lastError = error as Error
+        if (index === candidates.length - 1) break
+      }
+    }
+
+    // One candidate is not a failover, so it does not get a failover's error.
+    // Wrapping a lone `EmptyCompletionError` in "all 1 candidate(s) failed"
+    // would cost every caller the ability to tell an empty completion from a
+    // rate limit, in exchange for no information at all.
+    if (candidates.length <= 1) throw lastError
+    throw new AllCandidatesFailedError(candidates, lastError)
+  }
+
+  private async attempt(
+    provider: ProviderRow,
+    models: AllowedModel[],
+    request: CompletionRequest,
+    chosenModel: string,
+  ): Promise<CompletionResult> {
     // §6: breaker state lives in the database, so a restart does not forget an
     // outage and every worker sees the same breaker.
     const available = await this.db.execute(
@@ -145,10 +244,11 @@ export class ProviderRouter {
     )
     if (available.rows[0]?.ok !== true) throw new ProviderUnavailableError(provider.provider)
 
-    // No explicit model means the highest-priority measured-usable one. There
-    // is deliberately no "default model" constant: §4 requires model
-    // identifiers to be configuration, and here they are measurement.
-    const model = request.model ?? (models[0] as AllowedModel).model_id
+    // Chosen by the caller above: either the model they named, or the next
+    // candidate in the priority order measurement produced. There is
+    // deliberately no "default model" constant — §4 requires model identifiers
+    // to be configuration, and here they are measurement.
+    const model = chosenModel
 
     // Layers 1 and 3, before the request exists.
     assertModelAllowed(model, models, provider.free_only)

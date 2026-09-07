@@ -16,28 +16,54 @@
   resolution here is that the CARD is the unit on both, and on a wide screen the
   cards flow into columns and their internal padding tightens.
 */
+/*
+  Grant: *"you also need to make the front end a lot more attractive, better
+  colours, menus etc.. with more explanation of each component, what to do."*
+
+  Three separate asks, and they are answered in three places:
+
+    - colour, here: an indigo accent over slightly cooler neutrals, a raised
+      surface token so a card can sit ON something rather than beside it, and
+      one soft shadow instead of the flat hairline-box look;
+    - menus, in `shell()`: nine equal pills became five named groups, a real
+      sidebar on a wide screen;
+    - explanation, in `GUIDE` and `HINTS`: every tab says what it is for and
+      what to do on it, and every card gets a line under its heading.
+
+  The chart colour is deliberately NOT the new accent. `--series` keeps the
+  values the palette validator actually passed — #2f6df6 on light, #5c8cf5 on
+  dark — because a chart colour answers to a lightness band and a chroma floor
+  that a UI accent does not, and re-pointing it at the indigo would be claiming
+  a check that was never run on it.
+*/
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --ink: #14161a; --muted: #5b6270;
-  --line: #e3e6ec; --accent: #2f6df6; --warn: #b8541b; --bad: #b3261e;
+  --bg: #f2f4f9; --panel: #ffffff; --panel-2: #f8f9fc;
+  --ink: #12141c; --muted: #5a6072;
+  --line: #e2e5ee; --accent: #4f46e5; --accent-2: #7c3aed;
+  --accent-soft: rgba(79, 70, 229, 0.10);
+  --warn: #b45309; --bad: #be123c; --good: #0f766e;
   /* Validated against the light surface: inside the lightness band, above the
      chroma floor, over 3:1 contrast. Not eyeballed — the palette validator was
-     run, and #6f9bff (the UI accent's dark step) FAILED the dark band at
-     L 0.703, which is why the dark series colour below is a different value
-     from the dark UI accent. */
+     run, and the lighter step FAILED the dark band at L 0.703, which is why the
+     dark series colour below is a different value. */
   --series: #2f6df6;
-  --good: #1f7a4d; --radius: 14px;
+  --shadow: 0 1px 2px rgba(16, 20, 40, 0.04), 0 10px 28px -16px rgba(16, 20, 40, 0.18);
+  --radius: 14px;
   --pad: 16px;
   font-synthesis-weight: none;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1115; --panel: #171a20; --ink: #e7e9ee; --muted: #9aa2b1;
-    --line: #262b34; --accent: #6f9bff; --warn: #e8a06a; --bad: #ef7a72;
-    --good: #64c79a;
-    /* #5c8cf5, not the #6f9bff used for links: the lighter step is outside the
-       dark lightness band. A chart colour and a UI accent answer to different
-       checks and are allowed to differ. */
+    --bg: #0b0d14; --panel: #14171f; --panel-2: #1a1e28;
+    --ink: #e8eaf2; --muted: #98a0b4;
+    --line: #252a36; --accent: #a5b4fc; --accent-2: #c4b5fd;
+    --accent-soft: rgba(165, 180, 252, 0.12);
+    --warn: #f0b47a; --bad: #fb7185; --good: #2dd4a7;
+    /* #5c8cf5, not the accent: the lighter step is outside the dark lightness
+       band. A chart colour and a UI accent answer to different checks and are
+       allowed to differ. */
     --series: #5c8cf5;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -18px rgba(0, 0, 0, 0.8);
   }
 }
 * { box-sizing: border-box; }
@@ -49,35 +75,124 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 header {
-  position: sticky; top: 0; z-index: 10;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(12px);
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--line);
   padding: 10px var(--pad);
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 11px;
 }
-h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
-#stamp { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
-nav { display: flex; gap: 4px; padding: 8px var(--pad) 0; overflow-x: auto; scrollbar-width: none; }
+/* The mark. A gradient square with a diamond in it — enough to make the tab
+   and the home-screen icon recognisable at a glance, and cheap: two elements
+   and no image request. */
+.mark {
+  width: 28px; height: 28px; border-radius: 9px; flex: none;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  display: grid; place-items: center; color: #fff; font-size: 14px;
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.brand { min-width: 0; }
+h1 { font-size: 16px; margin: 0; letter-spacing: -0.015em; line-height: 1.15; }
+.brand span { display: block; color: var(--muted); font-size: 11.5px; }
+#stamp { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+
+/*
+  The menu. Nine equal pills gave no clue which of them answered a question, so
+  they are grouped under five headings — and the headings only appear where
+  there is room for them, which is the sidebar.
+
+  `display: contents` on a group is what lets ONE nav element be both: on a
+  phone the group vanishes as a box and its buttons flow into the horizontal
+  strip; on a wide screen the group becomes a block with its label showing.
+*/
+nav { display: flex; gap: 5px; padding: 9px var(--pad) 0; overflow-x: auto; scrollbar-width: none; }
 nav::-webkit-scrollbar { display: none; }
+nav .grp { display: contents; }
+nav .lbl { display: none; }
 nav button {
   appearance: none; border: 1px solid var(--line); background: var(--panel);
   color: var(--muted); border-radius: 999px; padding: 8px 14px; font: inherit;
   font-size: 14px; white-space: nowrap; cursor: pointer; min-height: 38px;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
-nav button[aria-current="true"] { color: var(--panel); background: var(--ink); border-color: var(--ink); }
+nav button:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+nav button[aria-current="true"] {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+}
+@media (prefers-color-scheme: dark) {
+  nav button[aria-current="true"] { color: #0b0d14; }
+}
 main { padding: var(--pad); display: grid; gap: 12px; }
+
+/*
+  What this tab is for, above the cards.
+
+  Grant: *"more explanation of each component, what to do."* Two sentences, and
+  they are two DIFFERENT sentences on purpose: what the tab shows, and what he
+  can do about it — including "nothing, this is a read-out", which is the honest
+  answer on most of them and the one a dashboard usually leaves him to infer.
+*/
+.lede { padding: 14px var(--pad) 0; max-width: 74ch; }
+.lede h2 { margin: 0 0 3px; font-size: 19px; letter-spacing: -0.02em; }
+.lede p { margin: 0 0 7px; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+/* The second half — what to do — carries a rule so the two sentences are not
+   two paragraphs of equal weight saying different kinds of thing. */
+.lede p.todo {
+  margin: 0; color: var(--ink); border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+
+@media (min-width: 1040px) {
+  :root { --pad: 26px; }
+  /* The rail carries the divider and the nav sticks inside it. The border was
+     on the nav itself at first, which made it stop wherever the last menu item
+     did — a line that ends two thirds of the way down a long page reads as a
+     rendering fault. */
+  .frame { display: grid; grid-template-columns: 226px minmax(0, 1fr); align-items: stretch; }
+  .rail { border-right: 1px solid var(--line); }
+  nav {
+    flex-direction: column; gap: 2px; overflow: visible;
+    position: sticky; top: 50px; padding: 16px 12px 24px;
+  }
+  nav .grp { display: block; margin-bottom: 14px; }
+  nav .lbl {
+    display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); padding: 0 10px 5px; opacity: 0.75;
+  }
+  nav button {
+    display: block; width: 100%; text-align: left; border: 0; background: transparent;
+    border-radius: 9px; padding: 8px 10px; min-height: 34px; font-size: 14px;
+  }
+  nav button:hover { background: var(--accent-soft); color: var(--ink); }
+  nav button[aria-current="true"] {
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    nav button[aria-current="true"] { color: var(--accent); }
+  }
+  .lede { padding: 20px var(--pad) 0; }
+}
 @media (min-width: 760px) {
-  :root { --pad: 22px; }
   main { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
   .wide { grid-column: 1 / -1; }
 }
 .card {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px;
+  border-radius: var(--radius); padding: 15px; box-shadow: var(--shadow);
 }
-.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.card h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+/* A line under the heading saying what the card is. Injected from HINTS after
+   render, so a view function does not have to carry its own documentation and
+   a card added later simply has no hint rather than a stale one. */
+.card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 11px;
+  padding-bottom: 9px; border-bottom: 1px dashed var(--line); }
+.card.collapsed .hint { display: none; }
+.card h2:only-child, .card h2 + .body { margin-bottom: 0; }
+.card > h2 { margin-bottom: 10px; }
+.card > h2:has(+ .hint) { margin-bottom: 4px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 /* auto-FILL, not auto-fit. With auto-fit five tiles stretch to fill a 1900px
    row and a single digit gets 300px of card to itself, which is the opposite of
@@ -97,6 +212,84 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
 .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
 .pill.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+
+/*
+  The light. A filled dot with a soft halo, because a 8px dot alone is hard to
+  find on a phone and the halo doubles the target the eye lands on.
+
+  Colour is never the only signal: each row also carries a word. A red/green
+  pair is the commonest accessibility failure in a status page, and roughly one
+  man in twelve cannot tell these two apart.
+*/
+.lamp { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block;
+  background: var(--muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent); }
+.lamp.ok { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+.lamp.bad { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); }
+.lamp.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent); }
+.conn { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.conn:last-child { border-bottom: 0; }
+.conn .who { min-width: 0; }
+.conn .who b { display: block; font-weight: 600; }
+.conn .who span { display: block; color: var(--muted); font-size: 12px; }
+.conn .st { margin-left: auto; text-align: right; font-size: 12px; color: var(--muted);
+  max-width: 46%; }
+/* On a wide card the status has room to be a sentence rather than four words a
+   line, and the two columns stop fighting over the same 340px. */
+@media (min-width: 760px) { .card.wide .conn .st { max-width: 62%; } }
+.conn .st b { display: block; color: var(--ink); font-weight: 600; }
+.stale { color: var(--warn); }
+
+/* Configuration controls. Deliberately plain: this is a settings surface, and
+   a settings surface that looks exciting is a settings surface people press by
+   accident. */
+/* The one real button shape, used by Save and Create. Quiet enough for a
+   settings page, distinct enough not to be read as a label. */
+/* `:not(.mini)`, because `.mini` is the quiet variant and the staff card uses
+   it for both Save and Retire. Without the exclusion the two looked identical
+   — a destructive action wearing the primary style, eight times down the page. */
+.row > button:not(.mini), .addrow button {
+  appearance: none; font: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer;
+  padding: 9px 16px; min-height: 38px; border-radius: 9px; border: 1px solid transparent;
+  color: #fff; background: linear-gradient(140deg, var(--accent), var(--accent-2));
+}
+@media (prefers-color-scheme: dark) {
+  .row > button:not(.mini), .addrow button { color: #0b0d14; }
+}
+.row > button:not(.mini):hover, .addrow button:hover { filter: brightness(1.06); }
+/* Retire and Bring back. Outlined, and the border warms on hover — this is the
+   one control on the page that stops a colleague being given work. */
+.mini[data-retire] { color: var(--muted); }
+.mini[data-retire]:hover { color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.mini { font-size: 12px; padding: 5px 11px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); cursor: pointer; margin-left: 8px;
+  text-decoration: none; display: inline-block; }
+.mini:hover { border-color: var(--accent); color: var(--accent); }
+.addrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.addrow input, .addrow select { flex: 1 1 150px; min-width: 0; padding: 8px 10px; font: inherit;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.addrow button { flex: 0 0 auto; }
+/* One setting per row, label above the control: a phone is narrow and a
+   two-column settings form on a phone is a two-column settings form nobody
+   fills in. */
+.fld { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.fld:last-child { border-bottom: 0; }
+.fld > span { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.fld input, .fld select { width: 100%; padding: 8px 10px; font: inherit; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.fld em { display: block; font-style: normal; color: var(--muted); font-size: 12px; margin-top: 4px; }
+/* Editable in place. The inputs are deliberately quiet until focused: eight
+   people each with four boxes would otherwise be a wall of form. */
+.person input, .person select, .person textarea { width: 100%; font: inherit; box-sizing: border-box;
+  padding: 5px 7px; margin-top: 4px; border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg); color: var(--ink); resize: vertical; }
+.person input:focus, .person select:focus, .person textarea:focus { border-color: var(--accent); outline: none; }
+.person input.nm { font-weight: 600; }
+.person .namerow { display: flex; gap: 6px; }
+.person .namerow .nm { flex: 1 1 auto; }
+.person .namerow select { flex: 0 0 auto; width: auto; font-size: 12px; color: var(--muted); }
+.person[data-retired] { opacity: 0.5; }
+.row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
 .staff { display: grid; gap: 10px; }
 .person { display: flex; gap: 12px; align-items: flex-start; }
 .person img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
@@ -110,7 +303,10 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .gate input { width: 100%; padding: 12px; font: inherit; border-radius: 10px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 .gate button { width: 100%; margin-top: 10px; padding: 12px; font: inherit; font-weight: 600;
-  border-radius: 10px; border: 0; background: var(--ink); color: var(--panel); min-height: 46px; }
+  border-radius: 10px; border: 0; min-height: 46px; cursor: pointer; color: #fff;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
+@media (prefers-color-scheme: dark) { .gate button { color: #0b0d14; } }
 .err { color: var(--bad); font-size: 13px; margin-top: 10px; }
 footer { color: var(--muted); font-size: 12px; padding: 4px var(--pad) 28px; }
 
@@ -186,7 +382,22 @@ const ago = (iso) => {
   reading the console, which is the step the method calls "render it and look at
   it" and the step that is easiest to skip.
 */
-const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'staff', activity: 'activity', usage: 'usage' }
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'team', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects', output: 'artifacts', settings: 'settings' }
+
+/* Configuration. The only writing this page does — see the endpoint's comment
+   on why configuring is allowed where acting is not. */
+async function act(action, args) {
+  const token = localStorage.getItem(KEY) || ''
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, args }),
+  })
+  const body = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(body.error || ('The server returned ' + r.status))
+  if (body.result && body.result.error) throw new Error(body.result.error)
+  return body.result
+}
 
 async function load(tab) {
   const section = SECTION_FOR[tab] ?? tab
@@ -202,9 +413,11 @@ async function load(tab) {
 function gate(message) {
   app.innerHTML = `
     <div class="gate">
-      <h1 style="font-size:22px;margin:0 0 6px">Team HQ</h1>
-      <p class="meta" style="margin:0 0 16px">This device needs the access token once.</p>
-      <input id="tok" type="password" autocomplete="off" placeholder="Access token" enterkeyhint="go">
+      <span class="mark" style="width:44px;height:44px;border-radius:13px;font-size:21px;margin-bottom:14px">◆</span>
+      <h1 style="font-size:24px;margin:0 0 5px;letter-spacing:-0.02em">Team HQ</h1>
+      <p class="meta" style="margin:0 0 18px">Eight people, one queue. This device needs the password once —
+        it is kept on this device and never sent anywhere but here.</p>
+      <input id="tok" type="password" autocomplete="current-password" placeholder="Password" enterkeyhint="go">
       <button id="go">Unlock</button>
       ${message ? `<div class="err">${esc(message)}</div>` : ''}
     </div>`
@@ -219,21 +432,123 @@ function gate(message) {
   input.focus()
 }
 
-const TABS = [
-  ['overview', 'Today'],
-  ['trends', 'Trends'],
-  ['staff', 'Staff'],
-  ['activity', 'Activity'],
-  ['usage', 'Usage'],
+/*
+  Five groups, and the grouping is the explanation.
+
+  Nine equal pills made every tab look equally likely to hold the answer, so
+  finding anything meant remembering where it was. Grouped, the question
+  answers itself: "is the team working?" is under WORK, "why did it stop?" is
+  under HEALTH, and the two tabs that can change something are the only two
+  under SET UP — which is also a safety property, not just tidiness.
+*/
+const MENU = [
+  ['Now', [['overview', 'Today'], ['activity', 'Activity']]],
+  ['Work', [['projects', 'Projects'], ['output', 'Output']]],
+  ['People', [['staff', 'The team']]],
+  ['Health', [['trends', 'Trends'], ['usage', 'Usage'], ['connections', 'Connections']]],
+  ['Set up', [['settings', 'Settings']]],
 ]
+const TABS = MENU.flatMap(([, items]) => items)
+
+/*
+  What each tab is, and what to do on it.
+
+  `todo` is the half a dashboard usually omits. Most of these tabs cannot be
+  acted on from here at all, and saying so plainly is more useful than leaving
+  him to discover it by pressing things — the actions live in Slack and
+  Telegram by design (§12), and the two places that DO write say which.
+*/
+const GUIDE = {
+  overview: {
+    title: 'Today',
+    what: 'Everything waiting on you, everything the team has in hand right now, and the shape of the day so far.',
+    todo: 'Read the top card first — those are the decisions nothing can proceed without. Answer them in Slack or Telegram, where the buttons are.',
+  },
+  activity: {
+    title: 'Activity',
+    what: 'The last few hundred things that happened, newest first: work finished, messages sent, decisions taken.',
+    todo: 'Nothing to do here. It is the record — use it to answer "when did that happen, and what did it say".',
+  },
+  projects: {
+    title: 'Projects',
+    what: 'Every project the team works on, what is attached to each, and how much of it has been read in.',
+    todo: 'You can start a project here and attach a notebook or a Notion page to it. Naming one is a real commitment — everything filed afterwards goes to whichever project is current.',
+  },
+  output: {
+    title: 'Output',
+    what: 'What the team has produced — audio overviews, briefings, documents — with a link to each.',
+    todo: 'Open anything that looks finished. If something you asked for is missing, it either failed or is still waiting on approval; Today will say which.',
+  },
+  staff: {
+    title: 'The team',
+    what: 'The eight of them: what each is for, how they write, and which Telegram bot reaches them.',
+    todo: 'Names, pronouns and remits are editable here and take effect immediately — including in how they sign their messages. Retiring someone stops them being given work; it does not delete what they have already done.',
+  },
+  trends: {
+    title: 'Trends',
+    what: 'The same handful of numbers over time: work done, work refused, how long things took.',
+    todo: 'Nothing to do here. Look at the shape rather than the last point — one bad day is noise, a fortnight leaning the wrong way is not.',
+  },
+  usage: {
+    title: 'Usage',
+    what: 'Which models did the work, what each cost, and whether messages actually arrived.',
+    todo: 'Nothing to do here, unless delivery is failing — a message that never landed is the one failure that looks like silence rather than an error.',
+  },
+  connections: {
+    title: 'Connections',
+    what: 'Every outside service this depends on — Google, Notion, Slack, Telegram, the model providers — and whether it answered when last asked.',
+    todo: 'A red light is the first thing to fix: everything downstream of it will fail in ways that look like something else. Each row says when it was last checked, so a stale green is not a green.',
+  },
+  settings: {
+    title: 'Settings',
+    what: 'Where things should live, what the notebook allowance has left, and the Google connection.',
+    todo: 'This page and Projects are the only two that write anything. Facts about the database are shown but not editable — a box that looks like it moves a database and does not is worse than no box.',
+  },
+}
+
+/*
+  One line per card, keyed by its heading.
+
+  Keyed by the HEADING rather than by `data-card`, because not every card has
+  the latter and a card without a hint should simply have no hint — never a
+  hint belonging to something else.
+*/
+const HINTS = {
+  'at a glance': 'Counts for today. A number in red or amber is asking for attention; the rest is background.',
+  'needs you': 'Work that has stopped and cannot restart until you decide something. Answer these in Slack or Telegram.',
+  'projects': 'Where work is currently being filed. The current project is the one new instructions land in.',
+  'in flight': 'Being worked on right now, and which stage each has reached.',
+  'recent activity': 'Newest first. Every line is something that actually happened, not a summary of it.',
+  'the team': 'Edit a name, a remit or a way of writing and it takes effect on the next message they send.',
+  'free models': 'Which models did the work. Free ones are used first, and a paid one appears here only when nothing free could do the job.',
+  'message delivery': 'Whether messages reached Slack and Telegram. An undelivered message is the failure that looks like silence.',
+  'connections': 'Green means it answered when last asked. The time matters as much as the colour — a stale green is not a green.',
+  'output': 'Finished work, with a link to each piece. Anything you asked for that is not here either failed or is still waiting for your approval.',
+  'notebook allowance': 'Our own count of what we have spent in Google NotebookLM. Google publishes no usage API, so this is an estimate that corrects itself when they refuse us.',
+  'google': 'Four steps, once. Calendar and Drive need an OAuth client from your own Google Cloud project.',
+  'this database': 'Facts about the database this page is talking to. Read-only on purpose.',
+  'where things should live': 'Declared intent, not live state. Changing one tells the next run where to look.',
+  'new project': 'Starting a project is a real commitment — everything filed afterwards goes to whichever project is current.',
+}
 
 function shell(active) {
   app.innerHTML = `
-    <header><h1>Team HQ</h1><span id="stamp"></span></header>
-    <nav>${TABS.map(([k, label]) =>
-      `<button data-tab="${k}" aria-current="${k === active}">${label}</button>`).join('')}</nav>
-    <main id="main"><div class="empty">Loading…</div></main>
-    <footer>Everything here is read-only. Actions live in Slack and Telegram.</footer>`
+    <header>
+      <span class="mark" aria-hidden="true">◆</span>
+      <span class="brand"><h1>Team HQ</h1><span>Eight people, one queue</span></span>
+      <span id="stamp"></span>
+    </header>
+    <div class="frame">
+      <div class="rail"><nav>${MENU.map(([group, items]) => `
+        <div class="grp"><span class="lbl">${group}</span>${items.map(([k, label]) =>
+          `<button data-tab="${k}" aria-current="${k === active}">${label}</button>`).join('')}</div>`).join('')}
+      </nav></div>
+      <div>
+        <div id="lede"></div>
+        <main id="main"><div class="empty">Loading…</div></main>
+        <footer>Everything here is read-only except Projects and Settings. The buttons — approve, undo, go ahead — live in Slack and Telegram, where you are when you need them.</footer>
+      </div>
+    </div>`
   for (const b of document.querySelectorAll('nav button')) {
     b.onclick = () => show(b.dataset.tab)
   }
@@ -311,20 +626,93 @@ function overview(d) {
 }
 
 function staff(d) {
-  const people = d.staff.map((s) => {
-    const src = d.avatar_base && s.avatar_ref ? d.avatar_base + '/' + s.avatar_ref : ''
-    return `<div class="person">
+  /*
+    Grant: "with regards to the actual members of staff, there should be
+    something that's also configurable in the front end. Their names, their
+    roles, there should be a link to the Telegram bot. So I should be able to
+    add and move stuff, adjust names, all that kind of stuff."
+
+    Editable in place rather than behind a pencil icon. There are eight of them
+    and the whole page fits on a phone screen; a modal per person would be four
+    taps to change a word.
+
+    Retired people are shown, greyed, with a Bring back button. A page that
+    hides them offers no way to undo a mistap — and there is no delete here at
+    all, because outputs, routing decisions and deliveries all name a staff
+    member and a roster that can lose a row is a history that stops explaining
+    itself.
+  */
+  const base = d.avatar_base || ''
+  const people = (d.staff || []).map((s) => {
+    const src = base && s.avatar_ref ? base + '/' + s.avatar_ref : ''
+    const bot = s.telegram_username
+      ? `<a href="https://t.me/${esc(s.telegram_username)}" target="_blank" rel="noopener">@${esc(s.telegram_username)}</a>`
+      : '<span class="m">no bot yet</span>'
+    const pron = ['she/her', 'he/him', 'they/them'].map((p) =>
+      `<option value="${p}"${s.pronouns === p ? ' selected' : ''}>${p}</option>`).join('')
+    return `<div class="person" data-slug="${esc(s.slug)}"${s.active ? '' : ' data-retired="1"'}>
       ${src ? `<img src="${esc(src)}" alt="" loading="lazy">` : '<div class="person-none"></div>'}
-      <div>
-        <div class="n">${esc(s.name)}</div>
-        <div class="m">${esc(s.title)}${s.permanent ? '' : ' · temporary'}</div>
-        <div class="m" style="margin-top:4px">${esc(s.responsibilities)}</div>
-        <div class="m" style="margin-top:4px">${esc((s.expertise || []).join(' · '))}</div>
-        <div class="m" style="margin-top:4px">Convened for ${s.jobs_convened_for} job${s.jobs_convened_for === 1 ? '' : 's'} · prompt v${s.prompt_version}</div>
+      <div style="min-width:0;flex:1">
+        <div class="namerow">
+          <input class="nm" data-f="p_name" value="${esc(s.name)}" aria-label="First name">
+          <select data-f="p_pronouns" aria-label="Pronouns">${pron}</select>
+        </div>
+        <input data-f="p_title" value="${esc(s.title)}" aria-label="Role">
+        <textarea data-f="p_remit" rows="2" aria-label="What they do">${esc(s.responsibilities || '')}</textarea>
+        <div class="m" style="margin-top:6px">${bot} · convened for ${s.convened_for} job${s.convened_for === 1 ? '' : 's'}${s.permanent ? '' : ' · temporary'}</div>
+        <div class="row" style="margin-top:6px">
+          <button class="mini" data-save="${esc(s.slug)}">Save</button>
+          ${s.slug === 'chief-of-staff' ? '' :
+            `<button class="mini" data-retire="${esc(s.slug)}" data-to="${s.active ? 'false' : 'true'}">${s.active ? 'Retire' : 'Bring back'}</button>`}
+          <span class="m" data-said="${esc(s.slug)}"></span>
+        </div>
       </div>
     </div>`
   }).join('')
-  return `<section class="card wide" data-card="team"><h2>The team</h2><div class="body"><div class="staff">${people}</div></div></section>`
+  return `<section class="card wide" data-card="team"><h2>The team</h2>
+    <p class="meta">First names only. Change one and press Save; the new name is
+      what they sign messages with everywhere.</p>
+    <div class="body"><div class="staff">${people}</div></div>
+  </section>`
+}
+
+function wireTeam() {
+  const said = (slug, text) => {
+    const el = document.querySelector(`[data-said="${slug}"]`)
+    if (el) el.textContent = text
+  }
+  for (const b of document.querySelectorAll('[data-save]')) {
+    b.onclick = async () => {
+      const slug = b.dataset.save
+      const card = b.closest('.person')
+      const args = { p_slug: slug }
+      for (const f of card.querySelectorAll('[data-f]')) args[f.dataset.f] = f.value
+      b.disabled = true
+      said(slug, 'Saving…')
+      try {
+        await act('staff_update', args)
+        said(slug, 'Saved.')
+      } catch (e) {
+        // The server refuses a two-word name (0079) and says so in words. Shown
+        // verbatim because "first names only" is the rule Grant asked for and a
+        // generic failure would read as a bug.
+        said(slug, e.message)
+      }
+      b.disabled = false
+    }
+  }
+  for (const b of document.querySelectorAll('[data-retire]')) {
+    b.onclick = async () => {
+      b.disabled = true
+      try {
+        await act('staff_retire', { p_slug: b.dataset.retire, p_active: b.dataset.to === 'true' })
+        show('staff')
+      } catch (e) {
+        said(b.dataset.retire, e.message)
+        b.disabled = false
+      }
+    }
+  }
 }
 
 function activity(rows) {
@@ -570,17 +958,465 @@ function trends(d) {
     ${chart('t-msgs', 'Messages delivered', d.messages_sent, FORMATS.plain)}`
 }
 
-const VIEWS = { overview, trends, staff, activity, usage }
+function connections(d) {
+  /*
+    Grant asked for "a list of all the services being connected to with a green
+    or red LED according to whether it's working".
+
+    Three things this does that a plain green dot would not, each because the
+    plain version would eventually mislead:
+
+    1. **Age, on every row and once at the top.** Green means "working"; what it
+       can honestly mean is "working when the prober last looked". A status that
+       stops depending on the thing it reports, and stays green while doing so,
+       is this project's recurring defect wearing a UI. Anything older than six
+       hours goes amber and says so.
+    2. **A word beside every colour.** Roughly one man in twelve cannot tell
+       this red from this green.
+    3. **Problems first.** Sorted by the database, so a broken row is at the top
+       where it is read rather than alphabetically buried between two healthy
+       ones.
+  */
+  const rows = d.rows || []
+  const STALE_MINUTES = 6 * 60
+
+  if (rows.length === 0) {
+    return `<section class="card wide"><h2>Connections</h2><div class="body">
+      <div class="empty">Nothing has been probed yet. Run <code>npm run inventory</code>.</div>
+    </div></section>`
+  }
+
+  /*
+    `attested` gets a neutral lamp, not a green one. Green here means "a probe
+    reached it and it answered"; Backblaze is used by a GitHub Action and not by
+    this process, so its status is Grant saying so. Painting those the same
+    colour is how an indicator stops depending on the thing it indicates — the
+    row said "Backblaze · Working" in green before this existed, on a status no
+    program had ever checked.
+  */
+  const lamp = (state, stale) => {
+    if (stale) return 'warn'
+    return { ok: 'ok', dead: 'bad', missing: '', parked: '', unknown: 'warn', attested: '' }[state] ?? ''
+  }
+  const word = (state, stale) => {
+    if (stale) return 'Unchecked'
+    return { ok: 'Working', dead: 'Not working', missing: 'Not set up',
+             parked: 'Parked', unknown: 'Unknown', attested: 'Confirmed by hand' }[state] ?? state
+  }
+
+  const oldest = Math.max(...rows.map((r) => Number(r.age_minutes) || 0))
+  const anyStale = oldest > STALE_MINUTES
+
+  const list = rows.map((r) => {
+    const stale = (Number(r.age_minutes) || 0) > STALE_MINUTES
+    return `<div class="conn">
+      <span class="lamp ${lamp(r.state, stale)}" aria-hidden="true"></span>
+      <span class="who">
+        <b>${esc(r.service)}</b>
+        <span>${esc(r.credential)}${r.owner ? ' · ' + esc(r.owner) : ''}</span>
+      </span>
+      <span class="st">
+        <b class="${stale ? 'stale' : ''}">${esc(word(r.state, stale))}</b>
+        ${esc(r.detail || '')}
+        ${r.action ? '<span style="display:block">' + esc(r.action) + '</span>' : ''}
+      </span>
+    </div>`
+  }).join('')
+
+  const working = rows.filter((r) => r.state === 'ok').length
+  const trusted = rows.filter((r) => r.state === 'attested').length
+  const broken = rows.filter((r) => r.state === 'dead').length
+
+  return `
+    <section class="card wide" data-card="connections">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>Connections${anyStale ? '<span class="est">STALE</span>' : ''}</h2>
+      <div class="body">
+        <div class="tiles">
+          <div class="tile"><b>${working}</b><span>probed working</span></div>
+          <div class="tile"><b>${broken}</b><span>not working</span></div>
+          <div class="tile"><b>${trusted}</b><span>taken on trust</span></div>
+        </div>
+        <div style="margin-top:12px">${list}</div>
+        <div class="meta" style="margin-top:10px">
+          Last checked ${esc(ago(d.checked_at))}. A light says what the prober found when
+          it last ran, not what is true this second — run <code>npm run inventory</code>
+          to refresh. A grey light reading “Confirmed by hand” was never probed at all.
+        </div>
+      </div>
+    </section>`
+}
+
+function projects(list) {
+  /*
+    Grant: "the idea with this entire project is that it's customizable and
+    theoretically I could give the repo to somebody else and they could run it
+    for their own projects." So nothing about a project is baked in, and this
+    is where it stops needing a terminal.
+
+    A project cannot be created without a source, here as in the database
+    (0067): a project attached to nothing has nothing to read and nowhere to
+    write. The form says so rather than letting the server refuse it.
+  */
+  const rows = Array.isArray(list) ? list : []
+
+  const attachments = (p) => (p.attachments || []).map((a) =>
+    `<div class="conn">
+       <span class="lamp ${a.role === 'home' ? 'ok' : ''}" aria-hidden="true"></span>
+       <span class="who"><b>${esc(a.display_name || a.external_ref)}</b>
+         <span>${esc(a.connector)} · ${esc(a.role)}${a.artifact_kind ? ' · ' + esc(a.artifact_kind) : ''}</span></span>
+       <span class="st"><button class="mini" data-detach="${esc(a.attachment_id)}">Detach</button></span>
+     </div>`).join('') || '<div class="empty">Nothing attached.</div>'
+
+  const channels = (p) => (p.channels || []).length === 0
+    ? '<span class="m">no channels yet — the team makes them when it has something to say</span>'
+    : (p.channels || []).map((c) => `<span class="pill">#${esc(c.name)}</span>`).join(' ')
+
+  const cards = rows.map((p) => `
+    <section class="card" data-card="project-${esc(p.slug)}">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>${esc(p.name)}</h2>
+      <div class="body">
+        <div class="meta" style="margin-bottom:8px">
+          <code>${esc(p.slug)}</code> · ${p.documents} document(s)
+          <button class="mini" data-rename="${esc(p.slug)}" data-name="${esc(p.name)}">Rename</button>
+        </div>
+        <div style="margin-bottom:10px">${channels(p)}</div>
+        ${attachments(p)}
+        <div class="addrow">
+          <select data-conn="${esc(p.slug)}">
+            <option value="notion">Notion</option>
+            <option value="notebooklm">NotebookLM</option>
+          </select>
+          <input data-ref="${esc(p.slug)}" placeholder="Paste the Notion link or notebook id">
+          <select data-role="${esc(p.slug)}">
+            <option value="source">reads from</option>
+            <option value="home">writes to</option>
+          </select>
+          <button class="mini" data-attach="${esc(p.slug)}">Attach</button>
+        </div>
+      </div>
+    </section>`).join('')
+
+  return cards + `
+    <section class="card" data-card="new-project">
+      <h2>New project</h2>
+      <div class="body">
+        <div class="addrow">
+          <input id="np-name" placeholder="Project name">
+          <select id="np-conn">
+            <option value="notion">Notion</option>
+            <option value="notebooklm">NotebookLM</option>
+          </select>
+          <input id="np-ref" placeholder="Notion link or notebook id">
+          <button class="mini" id="np-go">Create</button>
+        </div>
+        <div class="meta" style="margin-top:8px">
+          A project needs at least one source. There is nothing to read or write
+          without one, so this will not create one in isolation.
+        </div>
+        <div class="err" id="np-err" hidden></div>
+      </div>
+    </section>`
+}
+
+
+function output(list) {
+  /*
+    Grant: "once they're created, see if you can pull them into our store
+    project and display the results as a link within both Slack and Telegram."
+    Both of those happen when the artifact lands. This is the third place — the
+    one you come back to a week later, when the message has scrolled away.
+
+    A failed generation stays on the list rather than being hidden. Google
+    fails a slide deck roughly as often as it makes one, and a list that shows
+    only successes teaches you that everything worked.
+  */
+  const rows = Array.isArray(list) ? list : []
+  if (rows.length === 0) {
+    return `<section class="card wide"><h2>Output</h2>
+      <div class="empty">Nothing made yet. Ask the team for an audio overview or a
+      slide deck, in Slack or Telegram, and it will appear here with its link.</div>
+    </section>`
+  }
+  const LAMP = { ready: 'ok', generating: 'warn', failed: 'bad', abandoned: 'bad' }
+  const SAID = {
+    ready: 'ready', generating: 'still making it', failed: 'failed', abandoned: 'gave up watching',
+  }
+  const item = (a) => `
+    <div class="conn">
+      <span class="lamp ${LAMP[a.state] || ''}" aria-hidden="true"></span>
+      <span class="who">
+        <b>${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title || a.kind)}</a>` : esc(a.title || a.kind)}</b>
+        <span>${esc(a.kind)} · ${esc(a.project || '')}${a.detail ? ' · ' + esc(a.detail) : ''}</span>
+      </span>
+      <span class="st">${esc(SAID[a.state] || a.state)}</span>
+    </div>`
+  return `<section class="card wide"><h2>Output</h2>
+    <p class="meta">What the notebook has made. Opens in Google.</p>
+    ${rows.map(item).join('')}
+  </section>`
+}
+
+function settings(d) {
+  /*
+    Two halves, and the difference between them is the point.
+
+    LIVE is a set of facts about the database this page is talking to. It is
+    not editable, because a text box that appears to move a database and does
+    not is worse than no text box at all.
+
+    SETTINGS are declared intent: where the tooling should connect next time,
+    where backups go, whether the calendar is in service. Editing one changes
+    what the next run reads. Six keys, allow-listed in the database (0077), so
+    the page cannot reach the job lease or the autonomy level.
+  */
+  const live = d.live || {}
+  const settings = d.settings || {}
+  const editable = d.editable || []
+
+  const fact = (label, value) =>
+    `<div class="conn"><span class="who"><b>${esc(String(value ?? '—'))}</b><span>${esc(label)}</span></span></div>`
+
+  const field = (key) => {
+    const row = settings[key] || {}
+    const value = row.value
+    const isBool = typeof value === 'boolean'
+    const control = isBool
+      ? `<select data-setting="${esc(key)}">
+           <option value="true"${value ? ' selected' : ''}>on</option>
+           <option value="false"${value ? '' : ' selected'}>off</option>
+         </select>`
+      : `<input data-setting="${esc(key)}" value="${esc(String(value ?? ''))}" autocomplete="off">`
+    return `<label class="fld"><span>${esc(key)}</span>${control}
+      <em>${esc(row.description || '')}</em></label>`
+  }
+
+  const nb = d.notebook || {}
+  // Every sentence says whose count it is. Google publishes no usage API, and a
+  // figure here that did not say so would be read as theirs within a week —
+  // after which a refusal at half our number reads as our bug.
+  const meter = nb.window_ceiling === undefined ? '' : `
+    <section class="card"><h2>Notebook allowance</h2>
+      <p class="meta">Our own count of what we have spent, not Google's — they
+        publish no usage API.
+        ${nb.ceiling_is_measured ? 'The ceiling below was measured from a refusal.' : 'The ceiling below is still an estimate.'}</p>
+      ${fact('used in this ' + nb.window_hours + '-hour window', nb.window_spent + ' of ' + nb.window_ceiling)}
+      ${fact('used this week', nb.week_spent + ' of ' + nb.week_ceiling)}
+      ${nb.blocked_until ? fact('Google refused until', new Date(nb.blocked_until).toLocaleString()) : ''}
+      ${nb.window_resets_at ? fact('window frees up', new Date(nb.window_resets_at).toLocaleString()) : ''}
+    </section>`
+
+  const g = d.google || {}
+  const step = (done, text) =>
+    `<div class="conn"><span class="lamp ${done ? 'ok' : ''}" aria-hidden="true"></span>` +
+    `<span class="who"><b>${text}</b></span>` +
+    `<span class="st">${done ? 'done' : 'to do'}</span></div>`
+
+  // Ordered the way he has to do them: the console first, because the client id
+  // and the redirect URI have to exist over there before anything here works.
+  const google = `
+    <section class="card"><h2>Google</h2>
+      <p class="meta">Calendar needs an OAuth client from your own Google Cloud project.
+        Four steps, once.</p>
+      ${step(true, '1. Create an OAuth client (type: Web application) at console.cloud.google.com')}
+      ${step(g.client_id ? true : false, '2. Paste the client ID below')}
+      ${step(g.has_secret ? true : false, '3. Paste the client secret below')}
+      ${step(g.has_refresh_token ? true : false, '4. Press Connect and approve it')}
+
+      <label class="fld"><span>Authorised redirect URI — paste this INTO Google</span>
+        <input readonly value="${esc(g.redirect_uri || '')}" onclick="this.select()">
+        <em>Must match to the character, or the consent screen refuses before you see it.</em>
+      </label>
+      <label class="fld"><span>google.client_id</span>
+        <input data-setting="google.client_id" value="${esc(g.client_id || '')}" autocomplete="off">
+        <em>Public by design — it appears in every authorization URL.</em>
+      </label>
+      <label class="fld"><span>Client secret</span>
+        <input id="gsecret" type="password" placeholder="${g.has_secret ? '•••••••• already stored — paste again to replace' : 'GOCSPX-…'}" autocomplete="off">
+        <em>Stored in the vault. This page can write it and can never read it back.</em>
+      </label>
+      <div class="row">
+        <button id="save-google">Save secret</button>
+        <a class="mini" href="${esc(API.replace('/hq-api', '/google-oauth/start'))}" target="_blank" rel="noopener">Connect Google →</a>
+        <span id="google-said" class="m">${g.has_refresh_token ? 'Connected.' : ''}</span>
+      </div>
+    </section>`
+
+  return `
+    ${meter}
+    ${google}
+    <section class="card"><h2>This database</h2>
+      <p class="meta">Facts, not fields. Nothing here is editable, because editing it would not move anything.</p>
+      ${fact('database', live.database)}
+      ${fact('server', live.server)}
+      ${fact('on disk', live.size)}
+      ${fact('tables', live.tables)}
+    </section>
+    <section class="card"><h2>Where things should live</h2>
+      <p class="meta">Declared, not live. Changing one tells the next run where to look.</p>
+      <div id="fields">${editable.map(field).join('')}</div>
+      <div class="row"><button id="save-settings">Save</button>
+        <span id="settings-said" class="m"></span></div>
+    </section>`
+}
+
+function wireSettings() {
+  const gsaid = document.getElementById('google-said')
+  const gsave = document.getElementById('save-google')
+  if (gsave !== null) {
+    gsave.onclick = async () => {
+      const box = document.getElementById('gsecret')
+      if (!box.value.trim()) { gsaid.textContent = 'Nothing to save.'; return }
+      gsave.disabled = true
+      gsaid.textContent = 'Saving…'
+      try {
+        await act('set_google_secret', { p_secret: box.value.trim() })
+        box.value = ''
+        gsaid.textContent = 'Saved. Now press Connect.'
+      } catch (e) {
+        // Shown verbatim: the server refuses anything not starting GOCSPX-,
+        // and the commonest mistake is pasting the client ID in here.
+        gsaid.textContent = e.message
+      }
+      gsave.disabled = false
+    }
+  }
+
+  const said = document.getElementById('settings-said')
+  const save = document.getElementById('save-settings')
+  if (save === null) return
+  save.onclick = async () => {
+    save.disabled = true
+    said.textContent = 'Saving…'
+    try {
+      // One call per changed key rather than a batch. There are six of them,
+      // and a partial batch failure would leave the page unable to say which
+      // half went in.
+      for (const el of document.querySelectorAll('[data-setting]')) {
+        await act('set_setting', { p_key: el.dataset.setting, p_value: String(el.value) })
+      }
+      said.textContent = 'Saved.'
+    } catch (e) {
+      said.textContent = 'Not saved: ' + e.message
+    }
+    save.disabled = false
+  }
+}
+
+const VIEWS = { overview, trends, staff, activity, usage, connections, projects, output, settings }
+
+/*
+  The Projects tab's buttons.
+  
+  Wired after render rather than with inline handlers, because the markup is
+  built from server data and an onclick attribute in a template string is an
+  injection waiting for a project named after a quote character.
+*/
+function wireProjects() {
+  const fail = (e) => { const box = document.getElementById('np-err'); if (box) { box.textContent = e.message; box.hidden = false } else { alert(e.message) } }
+
+  for (const b of document.querySelectorAll('[data-attach]')) {
+    b.onclick = async () => {
+      const slug = b.dataset.attach
+      const conn = document.querySelector(`[data-conn="${slug}"]`).value
+      const ref = document.querySelector(`[data-ref="${slug}"]`).value.trim()
+      const role = document.querySelector(`[data-role="${slug}"]`).value
+      if (!ref) return
+      b.disabled = true
+      try {
+        // A home must say what it is the home for. Notion stores documents and
+        // NotebookLM generates artifacts — Grant's own distinction — so the
+        // kind follows the connector rather than asking a question with one
+        // sensible answer.
+        await act('attach', { p_slug: slug, p_connector: conn, p_ref: ref, p_role: role,
+                              p_kind: role === 'home' ? (conn === 'notion' ? 'document' : 'artifact') : null })
+        show('projects')
+      } catch (e) { fail(e); b.disabled = false }
+    }
+  }
+
+  for (const b of document.querySelectorAll('[data-detach]')) {
+    b.onclick = async () => {
+      // No confirmation: detaching disables a row and keeps every document the
+      // connector fed (ADR-0013). It is undone by attaching again.
+      b.disabled = true
+      try { await act('detach', { p_attachment_id: b.dataset.detach }); show('projects') }
+      catch (e) { fail(e); b.disabled = false }
+    }
+  }
+
+  for (const b of document.querySelectorAll('[data-rename]')) {
+    b.onclick = async () => {
+      const next = prompt('New name for this project', b.dataset.name)
+      if (!next || next === b.dataset.name) return
+      try { await act('rename_project', { p_slug: b.dataset.rename, p_name: next }); show('projects') }
+      catch (e) { fail(e) }
+    }
+  }
+
+  const go = document.getElementById('np-go')
+  if (go) {
+    go.onclick = async () => {
+      const name = document.getElementById('np-name').value.trim()
+      const ref = document.getElementById('np-ref').value.trim()
+      const conn = document.getElementById('np-conn').value
+      const box = document.getElementById('np-err')
+      box.hidden = true
+      if (!name || !ref) { box.textContent = 'A name and a source are both required.'; box.hidden = false; return }
+      go.disabled = true
+      try { await act('create_project', { p_name: name, p_connector: conn, p_ref: ref }); show('projects') }
+      catch (e) { fail(e); go.disabled = false }
+    }
+  }
+}
+
+/*
+  The hint under each card heading, inserted after render.
+
+  After, and from a map, so that a view function stays a view function: adding a
+  card does not oblige anyone to write documentation for it in the same breath,
+  and a card whose heading changes loses its hint rather than keeping a wrong
+  one. Idempotent, because `show` re-renders the whole view on every visit.
+*/
+function explain(main) {
+  for (const card of main.querySelectorAll('.card')) {
+    const heading = card.querySelector('h2')
+    if (heading === null || card.querySelector('.hint') !== null) continue
+    // A card that already introduces itself is left alone. Four of them do —
+    // the notebook meter, Google, the database facts, the settings form — and
+    // the first version put a second, near-identical sentence above each.
+    if (heading.nextElementSibling?.classList.contains('meta') === true) continue
+    const hint = HINTS[heading.textContent.trim().toLowerCase()]
+    if (hint === undefined) continue
+    const p = document.createElement('p')
+    p.className = 'hint'
+    p.textContent = hint
+    heading.after(p)
+  }
+}
 
 async function show(section) {
   for (const b of document.querySelectorAll('nav button')) {
     b.setAttribute('aria-current', String(b.dataset.tab === section))
+  }
+  const guide = GUIDE[section]
+  const lede = document.getElementById('lede')
+  if (lede) {
+    lede.innerHTML = guide === undefined ? '' : `
+      <h2>${esc(guide.title)}</h2>
+      <p>${esc(guide.what)}</p>
+      <p class="todo">${esc(guide.todo)}</p>`
   }
   const main = document.getElementById('main')
   main.innerHTML = '<div class="empty">Loading…</div>'
   try {
     const data = await load(section)
     main.innerHTML = VIEWS[section](data)
+    if (section === 'projects') wireProjects()
+    if (section === 'settings') wireSettings()
+    if (section === 'staff') wireTeam()
+    explain(main)
     armSparklines(main)
     applyLayout(main, section)
     armLayout(main, section)

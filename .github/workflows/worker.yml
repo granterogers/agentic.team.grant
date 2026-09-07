@@ -1,0 +1,92 @@
+name: Worker
+
+# Drain the job queue, every few minutes.
+#
+# ## Why this exists
+#
+# Until 2026-09-06 every caller of the job engine was a verification suite that
+# enqueued its own work and drained it in the same process. That was enough
+# while the only things enqueueing were tests. It stopped being enough the
+# moment Grant could enqueue: he messages a staff bot, or asks ChatGPT for an
+# audio overview, the job goes to `queued`, and nothing on earth picks it up.
+#
+# A queue with no consumer is a queue that looks like it is working — which is
+# worse than one that is visibly broken, because the request was accepted.
+#
+# ## Why five minutes
+#
+# Grant is talking to these bots. A reply that lands ten minutes later is a
+# reply he has stopped waiting for, and the whole point of a bot per role is
+# that it feels like messaging a colleague. Five is a compromise with Actions
+# cron, which is best-effort and can be delayed under load; anything tighter
+# would be a promise the scheduler does not make.
+#
+# `npm run work` is also safe to run by hand while iterating, and does one pass.
+on:
+  schedule:
+    # :02 and every five minutes after. Off the hour, and off the sync's :07,
+    # because every cron on the hour contends with every other and GitHub
+    # delays the losers.
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Never two workers at once. The engine would survive it — `dequeue_job`
+  # leases, and two workers racing collide on the lease rather than doing the
+  # same job twice — but a second runner adds nothing and costs minutes.
+  group: worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    # Longer than any single job's lease, so a runner is never killed while the
+    # database still believes it holds one. The recovery sweep would reclaim it
+    # on the next tick, but a job that has to be reclaimed every run is a job
+    # that never finishes.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          npm ci
+          # Pinned for the same reason the sync pins it: the notebook adapter is
+          # the highest-risk dependency here (§7), and an unattended job
+          # silently upgrading it is how an undocumented RPC change arrives at
+          # 3am instead of in a diff.
+          pip install --quiet "notebooklm-py==0.8.2"
+          # Voice notes are transcribed on this runner and nowhere else. The
+          # three audio-capable free models OpenRouter offers are all closed to
+          # us — two gated to their vendor's harness, one refused by our own
+          # `data_collection: deny` — and a voice note is the last thing to
+          # relax that for. Pinned for the same reason as the line above.
+          pip install --quiet "faster-whisper==1.1.1"
+
+      # ~140MB, downloaded from Hugging Face on first use. Cached because
+      # fetching it every five minutes is both slow and rude, and because a
+      # rate-limited download would surface as "the bot ignored my voice note".
+      - name: Cache the speech model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-base-en-v1
+
+      - name: Work
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: npm run work

@@ -114,9 +114,19 @@ const rosterBefore = (
   .join(',')
 
 const project = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-agents-${run}`)}, 'Fixture: agent engine', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-agents-${run}`)}, 'Fixture: agent engine', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const projectId = String(project?.id)
 
@@ -731,7 +741,13 @@ const capSlots = Number((await one(`select app.temporary_specialist_slots() as n
 for (let i = 0; i < capSlots - 1; i++) {
   await db.execute(`
     select app.create_temporary_specialist(
-      ${lit(`${specSlug}-fill`)} || ${String(i)}, 'Filler', 'Filler',
+      -- A DISTINCT name per filler. 0071 made lower(name) unique among active
+      -- staff, and every filler used to be called Filler — so the second one
+      -- refused and this script died before reaching the cap it was written to
+      -- demonstrate. (No backticks in this comment: it lives inside a template
+      -- literal, and the first version of it ended the string.)
+      ${lit(`${specSlug}-fill`)} || ${String(i)},
+      ${lit(`Filler ${String(i)}`)}, 'Filler',
       'Occupies a specialist slot so that the cap can be demonstrated.',
       '{}'::text[], 'Plainly.',
       'Exists only to occupy a slot while the specialist cap is being demonstrated.',
@@ -913,9 +929,19 @@ record(
 
 const scopeRef = `fixture-chat-${run}`
 const otherProject = await one(`
-  insert into public.projects (slug, name, status)
-  values (${lit(`fixture-other-${run}`)}, 'Fixture: the other project', 'active')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name, status)
+    values (${lit(`fixture-other-${run}`)}, 'Fixture: the other project', 'active')
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const otherId = String(otherProject?.id)
 

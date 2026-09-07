@@ -9,7 +9,12 @@
 import { describe, expect, it } from 'vitest'
 import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
 import { SlackClient } from '../../src/slack/api.ts'
-import { CHANNEL_NAME_MAX, ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
+import {
+  CHANNEL_NAME_MAX,
+  ChannelProvisioner,
+  channelNameFor,
+  DISCIPLINE_SUFFIX_MAX,
+} from '../../src/slack/provision.ts'
 
 const PROJECT = '11111111-1111-1111-1111-111111111111'
 const OTHER = '22222222-2222-2222-2222-222222222222'
@@ -41,20 +46,29 @@ const slackReturning = (responses: unknown[]): SlackClient => {
 
 describe('channel names', () => {
   it('is deterministic, which is what makes name_taken informative', () => {
-    expect(channelNameFor('website-rebuild')).toBe('proj-website-rebuild')
-    expect(channelNameFor('website-rebuild')).toBe(channelNameFor('website-rebuild'))
+    expect(channelNameFor('Website Rebuild')).toBe('website-rebuild')
+    expect(channelNameFor('Website Rebuild')).toBe(channelNameFor('Website Rebuild'))
   })
 
   it('strips what Slack will not accept rather than letting the API reject it', () => {
-    expect(channelNameFor('Q3 Pricing! (draft)')).toBe('proj-q3-pricing-draft')
+    expect(channelNameFor('Q3 Pricing! (draft)')).toBe('q3-pricing-draft')
   })
 
   it('never exceeds Slack ceiling', () => {
-    expect(channelNameFor('x'.repeat(200)).length).toBe(CHANNEL_NAME_MAX)
+    // The prefix is trimmed to leave room for the longest discipline suffix,
+    // so a lobby name is shorter than Slack's ceiling by design — a prefix that
+    // used all 80 would produce an illegal name the first time a discipline
+    // channel was made from it.
+    expect(channelNameFor('x'.repeat(200)).length).toBe(
+      CHANNEL_NAME_MAX - DISCIPLINE_SUFFIX_MAX - 1,
+    )
+    expect(channelNameFor('x'.repeat(200), 'communications-director').length).toBeLessThanOrEqual(
+      CHANNEL_NAME_MAX,
+    )
   })
 
   it('produces something legal even from a slug that reduces to nothing', () => {
-    expect(channelNameFor('!!!')).toBe('proj-unnamed')
+    expect(channelNameFor('!!!')).toBe('untitled-project')
   })
 })
 
@@ -120,5 +134,62 @@ describe('provisioning', () => {
       channelId: null,
       errorCode: 'restricted_action',
     })
+  })
+})
+
+describe('per-project, per-discipline channel names (0070)', () => {
+  it('puts the project first, so a sidebar groups by project', () => {
+    // Slack's channel list is flat and its sidebar sections are a per-user
+    // client feature with no API, so alphabetical order is the only grouping a
+    // bot can produce. Project-first gets it for free.
+    const names = [
+      channelNameFor('Money Mastery'),
+      channelNameFor('Money Mastery', 'research-director'),
+      channelNameFor('Money Mastery', 'finance-director'),
+      channelNameFor('Website Rebuild'),
+      channelNameFor('Website Rebuild', 'growth-director'),
+    ]
+    expect([...names].sort()).toEqual([
+      'money-mastery',
+      'money-mastery-finance',
+      'money-mastery-research',
+      'website-rebuild',
+      'website-rebuild-growth',
+    ])
+  })
+
+  it('drops the redundant -director from the suffix', () => {
+    // Every staff slug ends in it, and a suffix that is the same on every
+    // channel carries no information while costing nine characters of a
+    // name that has 80.
+    expect(channelNameFor('Alpha', 'research-director')).toBe('alpha-research')
+    expect(channelNameFor('Alpha', 'quality-director')).toBe('alpha-quality')
+  })
+
+  it('shortens the Chief of Staff, whose slug is not shaped like the others', () => {
+    expect(channelNameFor('Alpha', 'chief-of-staff')).toBe('alpha-chief')
+  })
+
+  it('a lobby has no suffix at all', () => {
+    expect(channelNameFor('Alpha')).toBe('alpha')
+    expect(channelNameFor('Alpha', null)).toBe('alpha')
+    expect(channelNameFor('Alpha', '')).toBe('alpha')
+  })
+
+  it('a long project name still leaves room for the longest discipline', () => {
+    const long = 'a quarterly relaunch of the money mastery programme across every market'
+    expect(channelNameFor(long, 'communications-director').length).toBeLessThanOrEqual(
+      CHANNEL_NAME_MAX,
+    )
+    // And the discipline survives the truncation — trimming the suffix instead
+    // of the stem would make two disciplines share a channel name.
+    expect(channelNameFor(long, 'communications-director')).toMatch(/-communications$/)
+  })
+
+  it('never ends in a hyphen, whatever the truncation', () => {
+    for (const name of ['a-'.repeat(60), 'x'.repeat(200), 'Q3!!! (draft) ']) {
+      expect(channelNameFor(name)).not.toMatch(/-$/)
+      expect(channelNameFor(name, 'operations-director')).not.toMatch(/-$/)
+    }
   })
 })

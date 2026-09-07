@@ -20,8 +20,7 @@
 import { createHash } from 'node:crypto'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import type { RotationError, TokenPair } from '../../src/slack/rotation.ts'
-import { rotateTokens, secondsUntilExpiry, shouldRotate } from '../../src/slack/rotation.ts'
+import { rotateAndPersist, secondsUntilExpiry, shouldRotate } from '../../src/slack/rotation.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -37,9 +36,6 @@ const APP_ID = 'A0BUFRVSSLD'
 const fp = (v: string): string => createHash('sha256').update(v, 'utf8').digest('hex').slice(0, 8)
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
-const store = async (name: string, value: string, description: string): Promise<void> => {
-  await db.execute(`select app.store_secret(${lit(name)}, ${lit(value)}, ${lit(description)})`)
-}
 const read = async (name: string): Promise<string | null> => {
   const { rows } = await db.execute(
     `select decrypted_secret as v from vault.decrypted_secrets where name = ${lit(name)}`,
@@ -87,28 +83,19 @@ if (expiresAt !== 0 && !shouldRotate(expiresAt) && !process.argv.includes('--for
   process.exit(0)
 }
 
-// 1. Durable copy BEFORE consuming a single-use credential. Costs nothing.
-await store(
-  'slack.config_refresh_token',
+// The sequence lives in `src/slack/rotation.ts` so its failure path can be
+// tested — §18's *invalid refresh token* case, and the one path here that can
+// lock us out of Slack. This script is the caller and the reporting.
+const outcome = await rotateAndPersist(
+  { execute: (sql: string) => db.execute(sql) },
+  APP_ID,
   refreshToken,
-  'Slack config refresh token (pre-rotation copy)',
 )
-console.log('\ncurrent refresh token persisted before rotating')
 
-// 2. Rotate.
-let pair: TokenPair
-try {
-  pair = await rotateTokens(refreshToken)
-} catch (error) {
-  const rotation = error as RotationError
-  await db.execute(`
-    update public.slack_app_credentials
-    set rotation_failures = rotation_failures + 1,
-        last_rotation_error = ${lit(rotation.message.slice(0, 400))}
-    where slack_app_id = '${APP_ID}'
-  `)
-  console.error(`\nrotation FAILED: ${rotation.message}`)
-  if (rotation.needsHuman) {
+if (outcome.kind === 'failed') {
+  console.error(`\nrotation FAILED: ${outcome.error}`)
+  console.error('The stored access token is untouched and keeps working until it expires.')
+  if (outcome.needsHuman) {
     console.error(
       'Unrecoverable by retry — the refresh token itself is dead.\n' +
         'A human must regenerate the pair: https://api.slack.com/apps → Your App Configuration Tokens',
@@ -117,9 +104,8 @@ try {
   process.exit(1)
 }
 
-// 3. Persist the new pair immediately, before touching anything else.
-await store('slack.config_token', pair.accessToken, 'Slack config access token (rotates ~12h)')
-await store('slack.config_refresh_token', pair.refreshToken, 'Slack config refresh token')
+const pair = { expiresAt: outcome.expiresAt }
+console.log('\ncurrent refresh token persisted before rotating; new pair stored')
 
 const refFor = async (name: string): Promise<string> =>
   String(
@@ -145,19 +131,23 @@ await db.execute(`
 `)
 
 console.log(
-  `rotated and persisted: access len ${pair.accessToken.length} fp ${fp(pair.accessToken)}, ` +
-    `refresh len ${pair.refreshToken.length} fp ${fp(pair.refreshToken)}`,
-)
-console.log(
   `new expiry: ${new Date(pair.expiresAt * 1000).toISOString()} ` +
     `(${String(Math.round(secondsUntilExpiry(pair.expiresAt) / 3600))}h away)`,
 )
 
-// 4. Only now verify.
+// 4. Only now verify — and verify the STORED token, read back out of the vault,
+// rather than the one still in memory. They should be the same value; the
+// difference is that this way a `store_secret` that silently wrote nothing
+// would be caught here instead of at the next rotation, twelve hours later.
+const storedToken = await read('slack.config_token')
+if (storedToken === null || storedToken === '') {
+  console.error('\nthe new token did not land in the vault')
+  process.exit(1)
+}
 const check = await fetch('https://slack.com/api/apps.manifest.export', {
   method: 'POST',
   headers: {
-    Authorization: `Bearer ${pair.accessToken}`,
+    Authorization: `Bearer ${storedToken}`,
     'Content-Type': 'application/x-www-form-urlencoded',
   },
   body: new URLSearchParams({ app_id: APP_ID }).toString(),

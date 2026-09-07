@@ -212,6 +212,19 @@ export const runJob = async (
   handlers: readonly Handler[],
   review: Reviewer,
   notify?: Notifier,
+  /**
+   * Called before the handler, so the person doing the work can say so.
+   *
+   * A function rather than a channel import, for the same reason `notify` is:
+   * the worker knows nothing about Slack or Telegram (§5), and a worker that
+   * imported a bot registry to send a courtesy message would have acquired a
+   * channel dependency for the least important message in the system.
+   *
+   * Its failure is swallowed on purpose. The work proceeds and the result
+   * arrives by the usual route; a job that died because an "on it" could not be
+   * sent would be absurd.
+   */
+  onStart?: (job: Job) => Promise<unknown>,
 ): Promise<WorkerResult> => {
   const handler = handlers.find((h) => h.kind === job.kind)
   if (handler === undefined) {
@@ -220,6 +233,14 @@ export const runJob = async (
     // misleading attempt count.
     await moveTo(db, job.jobId, 'failed', `no handler for kind ${job.kind}`)
     throw new NoHandlerError(job.kind)
+  }
+
+  if (onStart !== undefined) {
+    try {
+      await onStart(job)
+    } catch {
+      // Deliberately silent. See the parameter's own comment.
+    }
   }
 
   let output: HandlerOutput
@@ -360,6 +381,109 @@ export const runJob = async (
 }
 
 /**
+ * Deliver for a job whose work is committed and whose notification is not.
+ *
+ * The other half of §18's crash-after-commit case. 0058's recovery moves such a
+ * job to `notifying`; this is what reads that state. Without it the fix for the
+ * duplication defect would have parked the job forever instead — the same
+ * "sweep to nowhere" shape as 0006's requeue, one layer up, and the reason to
+ * write both halves in the same change.
+ *
+ * It never calls a handler. That is the whole point: the work is done, the
+ * output row is the evidence, and re-running would produce a second one.
+ */
+export const deliverPending = async (
+  db: SqlExecutor,
+  workerId: string,
+  notify?: Notifier,
+  max = 25,
+): Promise<WorkerResult[]> => {
+  const done: WorkerResult[] = []
+
+  for (let i = 0; i < max; i++) {
+    const { rows } = await db.execute(
+      `select job_id::text as job_id, correlation_id::text as correlation_id,
+              project_id::text as project_id, kind, output_id::text as output_id
+       from app.claim_pending_notification(${lit(workerId)})`,
+    )
+    const r = rows[0] as
+      | {
+          job_id: string
+          correlation_id: string
+          project_id: string | null
+          kind: string
+          output_id: string | null
+        }
+      | undefined
+    if (r === undefined) break
+
+    const job: Job = {
+      jobId: r.job_id,
+      kind: r.kind,
+      correlationId: r.correlation_id,
+      projectId: r.project_id,
+      idempotencyKey: '',
+      attempt: 0,
+    }
+
+    if (r.output_id === null) {
+      // A job in `notifying` with no output is a contradiction: recovery only
+      // routes here on the evidence of an output row. Recorded as failed rather
+      // than silently completed, because "delivered nothing successfully" is
+      // the claim this worker exists not to make.
+      await moveTo(db, r.job_id, 'failed', 'in notifying with no output to deliver')
+      done.push({ jobId: r.job_id, finalState: 'failed', note: 'no output to deliver' })
+      continue
+    }
+
+    const stored = await db.execute(
+      `select body, confidence::text as confidence, evidence::text as evidence,
+              deterministic, model
+         from public.outputs where output_id = ${lit(r.output_id)}::uuid`,
+    )
+    const o = stored.rows[0] as {
+      body: string
+      confidence: string
+      evidence: string
+      deterministic: boolean
+      model: string | null
+    }
+    const output = {
+      body: o.body,
+      confidence: o.confidence,
+      evidence: o.evidence,
+      sources: [],
+      contradictions: null,
+      path: o.deterministic ? 'deterministic' : 'inference',
+      model: o.model,
+    } as unknown as HandlerOutput
+
+    let notified: NotifyOutcome
+    if (notify === undefined) {
+      notified = { delivered: false, note: 'no notifier configured; nothing was delivered' }
+    } else {
+      try {
+        notified = await notify(job, output, r.output_id)
+      } catch (error) {
+        notified = {
+          delivered: false,
+          note: `notifier threw: ${(error as Error).message.slice(0, 120)}`,
+        }
+      }
+    }
+
+    await moveTo(db, r.job_id, 'complete', `resumed delivery; ${notified.note}`.slice(0, 200))
+    done.push({
+      jobId: r.job_id,
+      finalState: 'complete',
+      note: `resumed delivery; ${notified.note}`,
+    })
+  }
+
+  return done
+}
+
+/**
  * Drain the queue.
  *
  * Stops when `dequeue_job` returns nothing, which happens both when the queue
@@ -372,19 +496,26 @@ export const drain = async (
   handlers: readonly Handler[],
   review: Reviewer,
   max = 25,
-  options: { readonly recover?: boolean; readonly notify?: Notifier } = {},
+  options: {
+    readonly recover?: boolean
+    readonly notify?: Notifier
+    readonly onStart?: (job: Job) => Promise<unknown>
+  } = {},
 ): Promise<WorkerResult[]> => {
   // Sweep first. A job held by a dead worker counts against capacity, so
   // skipping this makes a worker unable to dequeue for reasons that look
   // nothing like the cause.
   if (options.recover !== false) await recoverStalled(db)
 
-  const done: WorkerResult[] = []
+  // Then finish anything the sweep found already committed. Before new work,
+  // because a job whose output exists and whose owner never heard about it is
+  // the most overdue thing in the system.
+  const done: WorkerResult[] = [...(await deliverPending(db, workerId, options.notify, max))]
   for (let i = 0; i < max; i++) {
     const job = await dequeue(db, workerId)
     if (job === null) break
     try {
-      done.push(await runJob(db, job, handlers, review, options.notify))
+      done.push(await runJob(db, job, handlers, review, options.notify, options.onStart))
     } catch (error) {
       done.push({
         jobId: job.jobId,

@@ -115,8 +115,16 @@ const correlation = (await db.execute('select gen_random_uuid() as id')).rows[0]
 // Setup: a project and one real event, written through the intended boundary.
 // ---------------------------------------------------------------------------
 await db.execute(`
-  insert into public.projects (slug, name)
-  values ('ledger-proof-${runId}', 'Ledger proof ${runId}')
+  with created as (
+    insert into public.projects (slug, name)
+    values ('ledger-proof-${runId}', 'Ledger proof ${runId}')
+    returning project_id
+  )
+  -- 0067: an active project must be attached to something real, and this one
+  -- defaults to active. One statement, so the deferred constraint sees both.
+  insert into public.project_attachments
+    (project_id, connector, external_ref, display_name, role)
+  select project_id, 'upload', 'fixture', 'Verification fixture', 'source' from created
 `)
 
 const eventId = (

@@ -263,9 +263,17 @@ for (const state of JOB_STATES) {
   const after = String((await one(`select state from public.jobs where job_id = '${id}'`))?.state)
 
   if ((IN_FLIGHT_STATES as readonly JobState[]).includes(state)) {
-    // committed is the §18 case: durable work, delivery outstanding, so it
-    // resumes delivery rather than retrying.
-    const expected = state === 'committed' ? 'notifying' : 'retrying'
+    // `committed` AND `notifying` are both §18's case: past the commit point,
+    // so recovery resumes delivery rather than retrying.
+    //
+    // `notifying` was expected to sweep to `retrying` until 2026-09-06, and
+    // that expectation was wrong in a way this suite could not see. Retrying
+    // from `notifying` sends a job whose output already exists back through
+    // its handler — measured, in `verify:chaos`: the handler ran a second time
+    // and the job finished with two outputs, which is exactly the duplicate
+    // substantive work §18 forbids. The transition is legal in the state
+    // machine and was still the wrong move. 0058 and 0059 fix it.
+    const expected = state === 'committed' || state === 'notifying' ? 'notifying' : 'retrying'
     record(
       'hard kill',
       `killed in ${state} (in-flight)`,

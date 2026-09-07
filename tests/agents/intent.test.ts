@@ -28,6 +28,17 @@ describe('the classes it gets right outright', () => {
     ['I need you to draft the announcement', 'assignment'],
     ['Do the migration right now', 'direct_command'],
     ['Random thought, the onboarding feels long', 'thought'],
+    // A bare imperative. Before the `bare-imperative` rule these matched
+    // nothing and fell through to an unconfident `thought`, which convenes
+    // nobody — so the commonest way to delegate work was the one shape the
+    // router could not read. They are `light_investigation` and not
+    // `assignment` because §6 resolves an unbounded verb downward.
+    ['Research the trade-offs between Postgres and an external tool', 'light_investigation'],
+    ['Draft a plan for the knowledge layer', 'light_investigation'],
+    ['Compare the two hosting options', 'light_investigation'],
+    // CONTROL: the same verbs where they are not the instruction's imperative.
+    // Without the start-anchor these would read as work.
+    ['Review of the quarter is attached, no action needed', 'thought'],
   ])('%s -> %s', (text, expected) => {
     expect(classifyIntent(text).intent).toBe(expected)
   })
@@ -190,5 +201,34 @@ describe('the cost ladder', () => {
     ])
     for (const k of Object.keys(INTENT_COST)) expect(allowed).toContain(k)
     expect(Object.keys(INTENT_COST).length).toBe(allowed.size)
+  })
+})
+
+describe('the productive imperatives', () => {
+  it('reads "generate a slide deck" as a straight instruction', () => {
+    // It used to fall through to an unconfident `thought` — "thinking out
+    // loud" — which the narration channel put in front of Grant in plain
+    // English on its first day.
+    const c = classifyIntent('Generate a slide deck in the notebook.')
+    expect(c.intent).toBe('direct_command')
+    expect(c.confident).toBe(true)
+  })
+
+  it('covers the verbs people actually use for this', () => {
+    for (const text of [
+      'Make a mind map in the notebook',
+      'Create an audio overview',
+      'Add this to the project',
+      'Upload the summary to Notion',
+    ]) {
+      expect(classifyIntent(text).intent, text).toBe('direct_command')
+    }
+  })
+
+  it('leaves the investigative imperatives where they were', () => {
+    // §6's downward rule still governs these: "research X" could be ten minutes
+    // or ten days, so it reads as the cheap version. "Make a slide deck" has no
+    // cheap version, which is why the two are classified differently.
+    expect(classifyIntent('Research the coaching market').intent).toBe('light_investigation')
   })
 })

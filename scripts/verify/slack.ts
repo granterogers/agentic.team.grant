@@ -29,16 +29,17 @@ import { processCallbacks } from '../../src/channels/callbacks.ts'
 import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import type { Handler, HandlerOutput } from '../../src/jobs/worker.ts'
+import type { Handler, HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { dequeue, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
 import type { ResultMessage } from '../../src/slack/blocks.ts'
 import { ACTIONS } from '../../src/slack/blocks.ts'
-import { slackChannel } from '../../src/slack/notifier.ts'
+import { resolveTarget, slackChannel } from '../../src/slack/notifier.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
+import { CALLBACK_ACTIONS } from '../../src/telegram/message.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
@@ -80,6 +81,9 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const stamp = String(Date.now()).slice(-8)
 const PROJECT_SLUG = `fixture-slack-office-${stamp}`
+// Unique per run: a channel name is claimed for good once used, archived or
+// not, so a constant fixture name would collide with yesterday's channel.
+const PROJECT_NAME = `Slack office verification fixture ${stamp}`
 const message = (body: string): ResultMessage => ({
   staffTitle: 'Research Director',
   body,
@@ -113,9 +117,19 @@ await db.execute(`
 `)
 
 const project = await one<{ id: string }>(`
-  insert into public.projects (slug, name)
-  values (${lit(PROJECT_SLUG)}, 'Slack office verification fixture')
-  returning project_id::text as id
+  with created as (
+    insert into public.projects (slug, name)
+    values (${lit(PROJECT_SLUG)}, ${lit(PROJECT_NAME)})
+    returning project_id
+  ),
+  attached as (
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role)
+    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+      from created
+    returning project_id
+  )
+  select project_id::text as id from created
 `)
 const PROJECT_ID = String(project?.id)
 const CORRELATION = PROJECT_ID
@@ -177,10 +191,75 @@ record(
   again.outcome === 'existing' && again.channelId === CHANNEL,
 )
 
+// The check this suite did not have. Fifty-six of them established that a
+// message reaches the channel; none established that the channel reaches a
+// person, and the first real project channel was therefore created, posted
+// into, and read by nobody — the bot was its only member. "Delivered" and
+// "delivered to somebody" are different claims and only the second is §12's.
+const members = await slack.call('conversations.members', { channel: CHANNEL, limit: 200 })
+const memberIds = Array.isArray(members.body.members) ? (members.body.members as string[]) : []
+const subject = await one<{ user_id: string | null }>(
+  `select value #>> '{}' as user_id from public.system_config where key = 'slack.subject_user_id'`,
+)
 record(
-  'the proposed name is derived deterministically from the project slug',
-  `${channelNameFor(PROJECT_SLUG)} == ${created.channelName}`,
-  channelNameFor(PROJECT_SLUG) === created.channelName,
+  'the human is IN the channel the app created — a room with only a bot in it is not delivery',
+  `invited=${String(created.invited)} members=${String(memberIds.length)} subject_present=${String(memberIds.includes(String(subject?.user_id)))}`,
+  created.invited === 'invited' && memberIds.includes(String(subject?.user_id)),
+)
+
+// --- per-project, per-discipline channels (0070) -----------------------------
+//
+// Grant asked for a channel per project per discipline. Slack has no
+// subchannels — its sidebar sections are a per-user client feature with no API
+// — so grouping comes from the name, and these check that it does.
+
+const researchChannel = await provisioner.ensureChannel(
+  PROJECT_ID,
+  PROJECT_SLUG,
+  'research-director',
+)
+record(
+  "a staff member's first work on a project creates their own channel",
+  `${researchChannel.outcome} #${String(researchChannel.channelName)}`,
+  researchChannel.outcome === 'created' &&
+    String(researchChannel.channelName).endsWith('-research') &&
+    researchChannel.channelId !== CHANNEL,
+)
+
+record(
+  'and it sorts next to the lobby, because the project comes first in the name',
+  `${created.channelName} / ${String(researchChannel.channelName)}`,
+  String(researchChannel.channelName).startsWith(created.channelName),
+)
+
+const researchAgain = await provisioner.ensureChannel(PROJECT_ID, PROJECT_SLUG, 'research-director')
+record(
+  'asking again returns the same channel rather than a second one',
+  `${researchAgain.outcome}, same=${String(researchAgain.channelId === researchChannel.channelId)}`,
+  researchAgain.outcome === 'existing' && researchAgain.channelId === researchChannel.channelId,
+)
+
+// The routing. Without this the channels exist and nothing uses them.
+// A job shape is all `resolveTarget` needs: it looks the destination up by
+// project, and the correlation branch above it finds nothing for a fresh id.
+const routingProbe = {
+  jobId: '00000000-0000-4000-8000-000000000000',
+  correlationId: '00000000-0000-4000-8000-000000000000',
+  projectId: PROJECT_ID,
+} as unknown as Job
+const routedToDiscipline = await resolveTarget(db, routingProbe, 'research-director')
+const routedToLobby = await resolveTarget(db, routingProbe, 'finance-director')
+record(
+  "a staff member's result routes to their channel, and one without a channel to the lobby",
+  `research → ${String(routedToDiscipline?.via)}, finance → ${String(routedToLobby?.via)}`,
+  routedToDiscipline?.channelId === researchChannel.channelId &&
+    routedToLobby?.channelId === CHANNEL,
+)
+
+record(
+  'the proposed name is plain English, derived deterministically from the project NAME',
+  `${channelNameFor(PROJECT_NAME)} == ${created.channelName}`,
+  channelNameFor(PROJECT_NAME) === created.channelName,
 )
 
 // ===========================================================================
@@ -1118,6 +1197,47 @@ const health = await db.execute(`select * from public.delivery_health order by c
 console.log('\ndelivery health:')
 for (const row of health.rows) console.log(`  ${JSON.stringify(row)}`)
 
+// ---------------------------------------------------------------------------
+// The button vocabulary, on both sides of the wire
+//
+// `ACTIONS` is the list the composer renders and Slack sends back. The database
+// has its own copy in `inbound_callback_action_known`, and that copy is the one
+// that can drift silently — which it did: 0011 wrote it when six was the whole
+// list, 0083 added a seventh and an eighth, and the first press of "Go ahead"
+// was refused by a check constraint, reported as a 503, and retried by Telegram
+// forever.
+//
+// It is the second time exactly this has happened (0076, voice notes). So the
+// list is no longer kept in step by a comment asking for it: every action is
+// inserted here, and any one the database refuses fails this suite.
+// ---------------------------------------------------------------------------
+{
+  const canonical = [...ACTIONS].map((a) => CALLBACK_ACTIONS[a])
+  const refused: string[] = []
+  for (const action of canonical) {
+    const key = `slack:vocab:${action}-${stamp}`
+    try {
+      await db.execute(`
+      insert into public.inbound_commands
+        (origin_channel, origin_ref, actor, instruction, dedupe_key,
+         callback_action, received_at)
+      values ('slack', 'CVOCAB:1.0', 'UVOCAB', '', ${lit(key)},
+              ${lit(action)}, app.now_utc())
+    `)
+      await db.execute(`delete from public.inbound_commands where dedupe_key = ${lit(key)}`)
+    } catch {
+      refused.push(action)
+    }
+  }
+  record(
+    'every button the composer can render is a button the database accepts',
+    refused.length === 0
+      ? `${String(canonical.length)} action(s), all accepted`
+      : `refused: ${refused.join(', ')} — the constraint and ACTIONS have drifted`,
+    refused.length === 0,
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) {
@@ -1125,6 +1245,32 @@ for (const c of checks) {
 }
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
+
+// Every channel this run made, not just the lobby.
+//
+// The discipline channels (`…-research`) were never in this cleanup, so each
+// full run left one behind: five of them had accumulated in Grant's sidebar by
+// the time anyone counted, against a standing instruction to keep it clear of
+// anything the team did not deliberately create. They archive fine — the bot is
+// a member, having posted in them — which is what distinguishes them from the
+// lobby below.
+for (const extra of (
+  await db.execute(`
+    select channel_id, channel_name from public.slack_channel_map
+     where project_id = ${lit(PROJECT_ID)}::uuid and active and channel_id <> ${lit(CHANNEL)}
+  `)
+).rows as { channel_id: string; channel_name: string }[]) {
+  try {
+    await slack.call('conversations.archive', { channel: extra.channel_id })
+    await db.execute(`
+      update public.slack_channel_map set active = false, archived_at = app.now_utc()
+       where channel_id = ${lit(extra.channel_id)}
+    `)
+    console.log(`archived #${extra.channel_name}`)
+  } catch (error) {
+    console.log(`#${extra.channel_name}: ${(error as Error).message.slice(0, 70)}`)
+  }
+}
 
 try {
   await slack.call('conversations.archive', { channel: CHANNEL })
@@ -1171,6 +1317,7 @@ try {
        and state not in ('complete', 'cancelled', 'failed');
     update public.projects set status = 'archived' where project_id = ${lit(PROJECT_ID)}::uuid;
   `)
+
   console.log('fixtures retired; run `npm run purge:fixtures -- --go` for anything left.')
 } catch (error) {
   console.log(`cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)

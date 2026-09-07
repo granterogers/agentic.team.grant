@@ -130,6 +130,46 @@ const RULES: readonly Rule[] = [
     pattern:
       /\b(?:quick(?:ly)?|briefly|rough(?:ly)?)\b.{0,30}\b(?:research|investigate|compare|review)\b/i,
   },
+  {
+    // A bare imperative opening the instruction — "Research the trade-offs",
+    // "Draft the announcement", "Compare the two options". The commonest way
+    // anyone actually delegates, and until this rule existed it matched
+    // nothing at all: it fell through to `thought`, unconfident, which
+    // convenes nobody and asks Grant to rephrase work he had already phrased.
+    //
+    // Deliberately `light_investigation` and not `assignment`, on §6's
+    // downward rule: an imperative says what to do, not how much of it, and
+    // the cheap reading of an unbounded verb is a bounded look. An explicit
+    // "I need you to …" still reads as an assignment, because that rule is
+    // about the delegation and not about the verb.
+    name: 'bare-imperative',
+    intent: 'light_investigation',
+    pattern:
+      /^(?:research|investigate|compare|review|draft|write|summari[sz]e|analy[sz]e|outline|assess|evaluate|audit)\s+(?!of\b)/i,
+  },
+
+  {
+    // The productive imperatives, which are a different case from the
+    // investigative ones above and were falling through to an unconfident
+    // `thought` — "Generate a slide deck in the notebook" read as thinking out
+    // loud, which the new narration channel put in front of Grant in plain
+    // English on its first day.
+    //
+    // `direct_command`, not `light_investigation`, and this does not break §6's
+    // downward rule. That rule says take the cheaper reading of an AMBIGUOUS
+    // instruction: "research X" could be ten minutes or ten days, so read it as
+    // ten minutes. "Make a slide deck" has no cheaper reading — there is no
+    // smaller version of making the thing. The ambiguity the rule protects
+    // against is absent, so deferring to it here would only be wrong politely.
+    //
+    // Safe to read this way now in a sense it would not have been last week:
+    // 0083 puts every notebook generation behind Grant's own button, so the
+    // cost of over-reading one is a question he answers with a tap.
+    name: 'make-this',
+    intent: 'direct_command',
+    pattern:
+      /^(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put)\s+/i,
+  },
 
   // --- suggestion: an idea offered, not an instruction given.
   {

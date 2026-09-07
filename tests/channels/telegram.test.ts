@@ -126,7 +126,7 @@ describe('callback queries', () => {
     // update_id would let a redelivery through, which is what §6 forbids.
     const first = toCanonicalCommand({ ...callback('useful', 'cb-9'), update_id: 5 }, NOW)
     const redelivered = toCanonicalCommand({ ...callback('useful', 'cb-9'), update_id: 6 }, NOW)
-    expect(first.dedupe_key).toBe('telegram:callback:cb-9')
+    expect(first.dedupe_key).toBe('telegram:callback:default:cb-9')
     expect(first.dedupe_key).toBe(redelivered.dedupe_key)
   })
 
@@ -169,5 +169,96 @@ describe('undo carries a uuid, and it is NOT an event id', () => {
 
   it('leaves compensates_event_id null for non-undo actions', () => {
     expect(toCanonicalCommand(callback('useful'), NOW).compensates_event_id).toBeNull()
+  })
+})
+
+describe('voice notes', () => {
+  const spoken = (extra: Record<string, unknown>): TelegramUpdate =>
+    ({
+      update_id: 9001,
+      message: {
+        message_id: 42,
+        date: 1_760_000_000,
+        chat: { id: 1386648496, type: 'private' },
+        from: { id: 1386648496 },
+        ...extra,
+      },
+    }) as TelegramUpdate
+
+  it('carries the recording handle and leaves the words to the worker', () => {
+    // §1: never pre-digested by the adapter — and transcription is the most
+    // pre-digesting an adapter could do. The instruction is EMPTY, not a
+    // placeholder: a placeholder is a thing that can be acted on by mistake.
+    const c = toCanonicalCommand(spoken({ voice: { file_id: 'AwACAgQAA', duration: 12 } }))
+    expect(c.voice_file_id).toBe('AwACAgQAA')
+    expect(c.voice_seconds).toBe(12)
+    expect(c.instruction).toBe('')
+  })
+
+  it('accepts an audio file and a video note the same way', () => {
+    expect(toCanonicalCommand(spoken({ audio: { file_id: 'A1' } })).voice_file_id).toBe('A1')
+    expect(toCanonicalCommand(spoken({ video_note: { file_id: 'V1' } })).voice_file_id).toBe('V1')
+  })
+
+  it('prefers the recording over its caption', () => {
+    // A caption on a voice note is usually "listen to this". Concatenating the
+    // two would put words in the message that nobody said.
+    const c = toCanonicalCommand(
+      spoken({ voice: { file_id: 'A1' }, caption: 'have a listen when you get a sec' }),
+    )
+    expect(c.instruction).toBe('')
+    expect(c.voice_file_id).toBe('A1')
+  })
+
+  it('still reads a caption when there is no recording', () => {
+    expect(toCanonicalCommand(spoken({ caption: 'look at this' })).instruction).toBe('look at this')
+  })
+
+  it('still refuses a message that is neither', () => {
+    expect(() => toCanonicalCommand(spoken({}))).toThrow(UnsupportedUpdateError)
+  })
+
+  it('reports no recording for a typed message', () => {
+    const c = toCanonicalCommand(spoken({ text: 'hello' }))
+    expect(c.voice_file_id).toBeNull()
+    expect(c.voice_seconds).toBeNull()
+  })
+})
+
+describe('a chat id is not unique across bots', () => {
+  /*
+    Grant pressed Start on seven director bots and one row appeared. Every
+    update had reached the webhook and registered successfully — into the same
+    key, because in a private chat Telegram uses the USER's id as the chat id
+    and each bot numbers its own messages from 1 (0097).
+  */
+  it('keys the same chat and message differently for two different bots', () => {
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        chat: { id: 1386648496, type: 'private' },
+        from: { id: 1386648496 },
+        text: '/start',
+      },
+    }
+    const emma = toCanonicalCommand(update as never, new Date(), '8842154625')
+    const tom = toCanonicalCommand(update as never, new Date(), '8319112012')
+    expect(emma.dedupe_key).not.toBe(tom.dedupe_key)
+  })
+
+  it('but the SAME bot redelivering the same message still collides', () => {
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        chat: { id: 1386648496, type: 'private' },
+        from: { id: 1386648496 },
+        text: '/start',
+      },
+    }
+    const first = toCanonicalCommand(update as never, new Date(), '8842154625')
+    const again = toCanonicalCommand({ ...update, update_id: 2 } as never, new Date(), '8842154625')
+    expect(first.dedupe_key).toBe(again.dedupe_key)
   })
 })

@@ -59,12 +59,26 @@ export async function resultContext(
   // as slugs. An empty roster is a real answer ("trivial work spawns no
   // subagents"), and the message then comes from no one in particular rather
   // than from an invented author.
+  //
+  // Up the parent chain when this job has no decision of its own. A follow-up
+  // job — the collector that watches an artifact Grant asked the Chief of Staff
+  // for — is the same person continuing the same piece of work, and having the
+  // link arrive from nobody in particular would undo the whole point of §9's
+  // named staff.
   const staffRow = await db.execute(`
+    with recursive lineage as (
+      select job_id, parent_job_id, 0 as depth
+        from public.jobs where job_id = ${lit(job.jobId)}::uuid
+      union all
+      select j.job_id, j.parent_job_id, l.depth + 1
+        from public.jobs j join lineage l on j.job_id = l.parent_job_id
+       where l.depth < 8
+    )
     select st.slug, st.name, st.title, st.avatar_ref
-    from public.routing_decisions r
+    from lineage l
+    join public.routing_decisions r on r.job_id = l.job_id
     join public.staff st on st.slug = r.roster[1]
-    where r.job_id = ${lit(job.jobId)}::uuid
-    order by r.decided_at desc
+    order by l.depth asc, r.decided_at desc
     limit 1
   `)
   const raw = staffRow.rows[0] as
@@ -95,6 +109,16 @@ export async function resultContext(
       ? null
       : `${projectUrlBase.replace(/\/+$/, '')}/projects/${job.projectId}`
 
+  // An approval request gets two buttons and only two (0083). Swapped for the
+  // usual six rather than added to them: 👍 on "may I generate this?" answers
+  // nothing, and Undo on a thing that has not happened is worse than nothing.
+  const asking = await db.execute(`
+    select app.open_approval_for_job(${lit(job.jobId)}::uuid) as id
+  `)
+  if ((asking.rows[0] as { id?: string | null } | undefined)?.id != null) {
+    return { staff, reviewed, actions: ['approve', 'decline'], projectUrl }
+  }
+
   // Undo is offered only when there is something to undo — an offer that does
   // nothing is worse than no offer, because it teaches that Undo does nothing.
   const offers = await db.execute(`
@@ -104,7 +128,13 @@ export async function resultContext(
   const undoable = Number((offers.rows[0] as { n?: number } | undefined)?.n ?? 0) > 0
   const actions = ACTIONS.filter(
     (action) =>
-      (action !== 'undo' || undoable) && (action !== 'open_project' || projectUrl !== null),
+      // The approval pair never appears on an ordinary result — there is
+      // nothing to approve — and the list is filtered rather than partitioned
+      // so that a new action added to ACTIONS has to say where it belongs.
+      action !== 'approve' &&
+      action !== 'decline' &&
+      (action !== 'undo' || undoable) &&
+      (action !== 'open_project' || projectUrl !== null),
   )
 
   return { staff, reviewed, actions, projectUrl }
@@ -126,6 +156,25 @@ export interface CombinedOptions {
 export function combinedNotifier(
   channels: readonly {
     readonly name: string
+    /**
+     * Which surface this channel writes to, when it writes to a shared one.
+     *
+     * Grant, having watched it for a day: *"there's a lot of repetition going
+     * on in the Telegram messages."* There was, and it was structural: the
+     * reply channel answers in the chat an instruction arrived in, the pager
+     * interrupts with anything important, and for an instruction Grant sent
+     * from Telegram those are the same chat. Every job produced two identical
+     * messages fifteen seconds apart.
+     *
+     * Neither channel was wrong. The rule that was missing sits above both of
+     * them: **one message per surface per job.** The first channel to reach a
+     * surface has said the thing; the second has nothing to add and no way to
+     * know that on its own.
+     *
+     * Undeclared means "no surface of its own", which for Slack is correct —
+     * it posts to a project channel, not to a chat Grant is already reading.
+     */
+    readonly surface?: string
     readonly notify: (
       job: Job,
       output: HandlerOutput,
@@ -137,13 +186,36 @@ export function combinedNotifier(
   options: CombinedOptions = {},
 ): Notifier {
   return async (job, output, outputId) => {
+    // 0074: a job may declare its own output not worth a message. Interim
+    // polls of a still-generating artifact are real outputs — the poll
+    // happened, the answer was "not yet" — and saying "not yet" nine times is
+    // how a pager stops being read. Checked here rather than per channel so
+    // there is one rule, for the reason this file's header already gives about
+    // a filter applied in one of two call paths.
+    const quiet = await db.execute(
+      `select announce from public.jobs where job_id = ${lit(job.jobId)}::uuid`,
+    )
+    if ((quiet.rows[0] as { announce?: boolean } | undefined)?.announce === false) {
+      return { delivered: false, note: 'nothing worth announcing' }
+    }
+
     const context = await resultContext(db, job, outputId, options.projectUrlBase)
     const notes: string[] = []
     let delivered = false
 
+    // Surfaces already spoken to on this job. See `surface` above: the reply
+    // and the pager both write to Telegram, and for an instruction Grant sent
+    // from Telegram they write to the same chat.
+    const spokenTo = new Set<string>()
+
     for (const channel of channels) {
+      if (channel.surface !== undefined && spokenTo.has(channel.surface)) {
+        notes.push(`${channel.name}: already said on ${channel.surface}`)
+        continue
+      }
       try {
         const outcome = await channel.notify(job, output, outputId, context)
+        if (outcome.delivered && channel.surface !== undefined) spokenTo.add(channel.surface)
         delivered = delivered || outcome.delivered
         notes.push(outcome.note)
       } catch (error) {
@@ -164,6 +236,7 @@ export function pagerChannel(
   severity: PagerSeverity = 'routine',
 ): {
   readonly name: string
+  readonly surface: string
   readonly notify: (
     job: Job,
     output: HandlerOutput,
@@ -173,6 +246,7 @@ export function pagerChannel(
 } {
   return {
     name: 'telegram',
+    surface: 'telegram',
     notify: async (job, output, outputId, context) =>
       pager.page({
         job,

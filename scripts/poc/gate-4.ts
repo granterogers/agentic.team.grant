@@ -162,9 +162,19 @@ let botUserId = ''
 // ---------------------------------------------------------------------------
 {
   const project = await db.execute(`
-    insert into public.projects (name, slug, status)
-    values ('Gate 4 probe ${stamp}', 'gate4-probe-${String(stamp).slice(-8)}', 'active')
-    returning project_id::text as project_id
+    with created as (
+      insert into public.projects (name, slug, status)
+      values ('Gate 4 probe ${stamp}', 'gate4-probe-${String(stamp).slice(-8)}', 'active')
+      returning project_id
+    ),
+    attached as (
+      insert into public.project_attachments
+        (project_id, connector, external_ref, display_name, role)
+      select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
+        from created
+      returning project_id
+    )
+    select project_id::text as project_id from created
   `)
   projectId = String(project.rows[0]?.project_id)
 

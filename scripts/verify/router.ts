@@ -142,6 +142,76 @@ add(
   refusedWhileDisabled,
 )
 
+// --- failover, against the real registry -----------------------------------
+
+// The precondition, asserted rather than assumed. Failover with one usable
+// model is a no-op that passes every test written for it, so the suite has to
+// establish that there is something to fail over TO before claiming it works.
+const usable = (await db.execute(`select model_id from public.usable_models order by model_id`))
+  .rows as { model_id: string }[]
+add(
+  'there is more than one usable model, so failover has somewhere to go',
+  `${String(usable.length)} usable: ${usable
+    .map((u) => u.model_id)
+    .join(', ')
+    .slice(0, 90)}`,
+  usable.length >= 2,
+)
+
+// A router whose first attempt always fails at the transport, over the real
+// registry and the real allow-list. The second attempt goes to the real
+// provider — so this proves the failover path end to end without needing a
+// model that happens to be rate-limited at this moment.
+let firstCall = true
+const flaky = (async (url: string, init: RequestInit): Promise<Response> => {
+  if (firstCall) {
+    firstCall = false
+    return new Response(JSON.stringify({ error: { code: 429, message: 'injected rate limit' } }), {
+      status: 200,
+    })
+  }
+  return fetch(url, init)
+}) as unknown as typeof fetch
+
+try {
+  const failedOver = await new ProviderRouter(db, orKey, flaky).complete({
+    messages: [{ role: 'user', content: 'Reply with the single word: ready' }],
+    maxTokens: 512,
+  })
+  add(
+    'a rate-limited first model fails over to the next and still answers',
+    `answered by ${failedOver.model}, cost=${String(failedOver.cost)}`,
+    failedOver.content.length > 0 && failedOver.cost === 0,
+  )
+  add(
+    'and it answered on a DIFFERENT model than the one that was refused',
+    `first candidate=${usable[0]?.model_id ?? '?'} answered=${failedOver.model}`,
+    failedOver.model !== usable[0]?.model_id || usable.length === 1,
+  )
+} catch (error) {
+  add(
+    'a rate-limited first model fails over to the next and still answers',
+    `FAILED: ${(error as Error).message.slice(0, 120)}`,
+    false,
+  )
+  add('and it answered on a DIFFERENT model than the one that was refused', 'not reached', false)
+}
+
+// The injected failure must be RECORDED, not just survived. A failover that
+// hides its failures makes the free tier look healthier than it is, and the
+// registry's usability is measured from exactly these rows.
+const injected = (
+  await db.execute(`
+    select count(*)::int as n from public.inference_usage
+     where outcome = 'rate_limited' and occurred_at >= app.now_utc() - interval '2 minutes'
+  `)
+).rows[0] as { n: number }
+add(
+  'the failed attempt was recorded as rate_limited, not swallowed (§11)',
+  `${String(injected.n)} rate_limited row(s) in the last two minutes`,
+  injected.n >= 1,
+)
+
 // --- spend must be unchanged ----------------------------------------------
 const after = await spend()
 add(

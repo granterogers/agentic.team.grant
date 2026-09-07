@@ -304,3 +304,158 @@ describe('an empty completion is an explicit failure, not an empty string', () =
     expect(Object.keys(result)).not.toContain('reasoning')
   })
 })
+
+describe('failover — a rate-limited free model is normal, not fatal', () => {
+  /** A fetch that answers each call from a queue of scripted responses. */
+  const scripted = (
+    responses: readonly (() => Response)[],
+  ): { impl: typeof fetch; bodies: () => Record<string, unknown>[] } => {
+    const seen: Record<string, unknown>[] = []
+    let i = 0
+    const impl = vi.fn(async (_url: string, init: { body: string }) => {
+      seen.push(JSON.parse(init.body) as Record<string, unknown>)
+      const make = responses[Math.min(i, responses.length - 1)]
+      i += 1
+      return (make as () => Response)()
+    }) as unknown as typeof fetch
+    return { impl, bodies: () => seen }
+  }
+
+  const rateLimited = (): Response =>
+    new Response(JSON.stringify({ error: { code: 429, message: 'rate-limited upstream' } }), {
+      status: 200,
+    })
+  const answered = (model: string): Response =>
+    new Response(
+      JSON.stringify({
+        model,
+        choices: [{ message: { content: 'the answer' } }],
+        usage: { cost: 0, prompt_tokens: 3, completion_tokens: 2 },
+      }),
+      { status: 200 },
+    )
+  const emptyReply = (model: string): Response =>
+    new Response(
+      JSON.stringify({
+        model,
+        choices: [{ message: { content: '' }, finish_reason: 'length' }],
+        usage: { cost: 0, prompt_tokens: 3, completion_tokens: 0 },
+      }),
+      { status: 200 },
+    )
+
+  it('moves to the next model when the first is rate-limited', async () => {
+    const db = new FakeDb([model('first/one:free'), model('second/two:free')])
+    const { impl, bodies } = scripted([rateLimited, () => answered('second/two:free')])
+    const result = await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES })
+
+    expect(result.content).toBe('the answer')
+    expect(result.model).toBe('second/two:free')
+    // The models tried, in the priority order measurement produced — and each
+    // tried exactly once. A rate limit means wait, so re-asking the same model
+    // is how a temporary limit becomes a longer one.
+    expect(bodies().map((b) => b.model)).toEqual(['first/one:free', 'second/two:free'])
+  })
+
+  it('fails over on an empty completion too', async () => {
+    const db = new FakeDb([model('first/one:free'), model('second/two:free')])
+    const { impl } = scripted([
+      () => emptyReply('first/one:free'),
+      () => answered('second/two:free'),
+    ])
+    const result = await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES })
+    expect(result.model).toBe('second/two:free')
+  })
+
+  it('records every attempt, failures included (§11)', async () => {
+    const db = new FakeDb([model('first/one:free'), model('second/two:free')])
+    const { impl } = scripted([rateLimited, () => answered('second/two:free')])
+    await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES })
+    // Two usage rows: one rate_limited, one ok. A failover that only recorded
+    // the success would make the free tier look healthier than it is, and §11
+    // exists so spend and behaviour are both measured rather than assumed.
+    const usage = db.calls('record_inference_usage').concat(db.calls('inference_usage'))
+    expect(usage.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('stops after the attempt budget rather than walking the whole registry', async () => {
+    const db = new FakeDb([
+      model('a/one:free'),
+      model('b/two:free'),
+      model('c/three:free'),
+      model('d/four:free'),
+      model('e/five:free'),
+    ])
+    const { impl, bodies } = scripted([rateLimited])
+    await expect(
+      new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES }),
+    ).rejects.toThrow(/all 3 candidate model\(s\) failed/)
+    expect(bodies()).toHaveLength(3)
+  })
+
+  it('names every model it tried, because "inference failed" is not actionable', async () => {
+    const db = new FakeDb([model('a/one:free'), model('b/two:free')])
+    const { impl } = scripted([rateLimited])
+    const error: Error = await new ProviderRouter(db, 'k', impl)
+      .complete({ messages: MESSAGES })
+      .then(() => new Error('it resolved, which it must not'))
+      .catch((e: unknown) => e as Error)
+    expect(error.message).toContain('a/one:free')
+    expect(error.message).toContain('b/two:free')
+    expect(error.message).toContain('429')
+  })
+
+  it('does not wrap a lone failure — one candidate is not a failover', async () => {
+    // Wrapping here would cost every caller the ability to tell an empty
+    // completion from a rate limit, in exchange for no information at all.
+    const db = new FakeDb([model('only/one:free')])
+    const { impl } = scripted([() => emptyReply('only/one:free')])
+    await expect(
+      new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES }),
+    ).rejects.toBeInstanceOf(EmptyCompletionError)
+  })
+
+  it('honours a caller-named model exactly, and never substitutes another', async () => {
+    // Silently answering with a different model would make the recorded
+    // provenance a lie, and provenance is the thing §10 will not compromise.
+    const db = new FakeDb([model('first/one:free'), model('second/two:free')])
+    const { impl, bodies } = scripted([rateLimited])
+    await expect(
+      new ProviderRouter(db, 'k', impl).complete({
+        messages: MESSAGES,
+        model: 'second/two:free',
+      }),
+    ).rejects.toThrow(/refused/)
+    expect(bodies().map((b) => b.model)).toEqual(['second/two:free'])
+  })
+
+  it('does NOT fail over when a response was charged for', async () => {
+    // §11's whole point. A model that charged us is a defect in the
+    // allow-list; moving to the next model would hide it behind a success.
+    const db = new FakeDb([model('first/one:free'), model('second/two:free')])
+    const { impl, bodies } = scripted([
+      () =>
+        new Response(
+          JSON.stringify({
+            model: 'first/one:free',
+            choices: [{ message: { content: 'hi' } }],
+            usage: { cost: 0.02, prompt_tokens: 3, completion_tokens: 2 },
+          }),
+          { status: 200 },
+        ),
+    ])
+    await expect(
+      new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES }),
+    ).rejects.toBeInstanceOf(PaidCallPreventedError)
+    expect(bodies()).toHaveLength(1)
+  })
+
+  it('does NOT fail over when the breaker is open — that is about the provider', async () => {
+    const db = new FakeDb([model('first/one:free'), model('second/two:free')], false)
+    const { impl, bodies } = scripted([() => answered('first/one:free')])
+    await expect(
+      new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES }),
+    ).rejects.toBeInstanceOf(ProviderUnavailableError)
+    expect(bodies()).toHaveLength(0)
+  })
+})

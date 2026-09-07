@@ -1,105 +1,147 @@
 # Known problems
 
-**Last verified: 2026-09-05.** Everything here was checked, not assumed. Where
+**Last verified: 2026-09-07.** Everything here was checked, not assumed. Where
 something is unknown, it says unknown rather than guessing.
 
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
-half of this live.
+half of this live, and is the thing to trust when this file and it disagree.
+
+Defects already found and fixed are in
+[`defects-fixed.md`](defects-fixed.md), kept because the shapes recur — and
+distilled into the seven habits at the end of
+[`new-environment.md`](new-environment.md). Nothing there is outstanding.
 
 ---
 
+
+## NotebookLM slide decks fail, every time
+
+Four attempts across two sessions, all reported `failed` by Google within
+twenty minutes, on a notebook where audio overviews and mind maps succeed. No
+error detail is exposed — the artifact simply arrives in `failed`. Not our bug
+as far as anything here can tell, and the collector now says so out loud rather
+than polling a dead artifact until it gives up.
+
+Worth retrying occasionally; `artifacts.retry_failed` exists in the library and
+is not wired up.
+
+## Web extractions still carry furniture
+
+`stripBoilerplate` removes bare-URL lines, their labels and named chrome on
+ingest, which took the Wikipedia article in the corpus from 69,000 characters to
+27,000 and made the same search return the article's real paragraphs instead of
+its navigation menu.
+
+It is not solved. What remains still contains theme toggles, "Toggle the table
+of contents", language lists and the footer. The rules only delete lines they
+can name, and refuse entirely if too little would survive — both deliberate,
+because §10's citations are built on the stored text being what the source said.
+A real readability extractor is the fix; nobody has needed it enough yet.
+
+## Google's notebook allowance cannot be read
+
+Compute-based since 2 September, refreshing every five hours against a weekly
+cap, and exposed only in Google's own interface. The adapter library has
+`AccountLimits` — notebooks, sources, tier — and nothing about compute.
+
+So `notebook_spend` is OUR count of OUR spending, every surface says so, and the
+ceiling is learned from refusals rather than known. Do not let a figure derived
+from it be presented as Google's.
+
+
 ## 🔴 Serious — act on these
 
-### 1. Four vendors sign in with a Google account that no longer exists
+### 1. The vault export is a manual habit, not a schedule
 
-Google disabled `agentic.team.grant@gmail.com` on 2026-09-04 ("created or used
-with multiple other accounts... might have been created by a computer program").
-Deletion scheduled 2027-07-31.
+`npm run vault:export` now exists: it reads all twenty-two secrets, writes a
+Bitwarden-format JSON, encrypts it with AES-256 and a random passphrase, and
+sends the file and the passphrase as **two separate Telegram messages**. Nothing
+is printed and nothing is written outside a temp directory that is removed even
+on failure. First run was 2026-09-06.
 
-| Vendor | Effect |
-|---|---|
-| **Backblaze B2** | holds the only offsite backup. Login still works — **this window may close** |
-| **Supabase** | dashboard locked out. Project runs, tokens work |
-| **Vercel** | dashboard locked out. Site serves, token works |
-| **Google Cloud / Gemini** | gone with the account |
+That closes the acute problem — a restore no longer means re-entering
+twenty-two secrets from memory — and leaves a smaller one: it runs when someone
+remembers. The nightly backup still excludes `vault` and still should, so until
+this is on the same schedule as the dump, a secret added on Tuesday is not in
+any export until someone runs the command.
 
-**Nothing is down.** A disabled Google account breaks the login button, not the
-service, and API tokens are independent of how you signed up.
-
-**What has to happen:** change the Backblaze account email while login still
-works — password resets and 2FA recovery go to a dead mailbox, so losing that
-session is permanent. Then decide whether to re-home Supabase and Vercel or
-petition support. Re-homing is now a rehearsed operation; support is a hope.
-
-See [`account-continuity.md`](account-continuity.md) and
-[`adr/0012`](adr/0012-notebook-account-disabled.md).
-
-### 2. The knowledge layer is gone and its replacement is undecided
-
-NotebookLM authenticated as that account; the master token returns
-`403 BadAuthentication`. Turned off in migration 0048 with the reason recorded.
-
-Cost was small — 3 of 118 projects had a notebook reference, 1 source, and the
-source's text was already cached in Postgres — because ADR-0003 made it a
-replaceable adapter. But the system currently has **no knowledge layer at all**.
-
-Recommendation in ADR-0012: Postgres full-text search first, pgvector only if
-that proves insufficient. **Decision is Grant's and is open.**
-
-### 3. Credentials are not in the backup
-
-The nightly dump is `--schema=public --schema=app`. Supabase Vault lives in
-`vault` and is excluded — correctly, since a backup carrying decryptable secrets
-offsite would be a worse problem — but it means **a restore produces a working
-database with an empty vault**, and every secret must be re-entered by hand.
-
-The rehearsal now prints the list every night. Until the vault is copied into a
-password manager, that password manager gap *is* the credential backup gap.
+**What has to happen:** put it on the backup cron, and import the file Grant
+already has.
 
 ---
 
 ## 🟠 Live but degraded
 
-### 4. Two credentials are dead and one is misleading
+### 2. Two accounts can be suspended by a company that is not us
 
-| | State | Action |
-|---|---|---|
-| `GROQ_API_KEY` | **401** — found by `npm run inventory`, nobody knew | regenerate, or drop Groq from the router |
-| `GEMINI_API_KEY` | dead with the account | **delete the variable** — it is present, so anything testing `if (key)` believes it has a credential |
-| `SLACK_APP_CONFIG_TOKEN` | expires every ~12h by design | `npm run slack:rotate` |
+Supabase and Vercel both sign in with Google. That account was disabled on
+2026-09-04 and reinstated on 2026-09-05 after an appeal — nothing went down,
+because a disabled account breaks the login button and not the service, and API
+tokens are independent of how you signed up.
 
-`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are valid but belong to a project
-under the dead account. **Assume dead** until proven otherwise. They are Phase
-9's foundation, which is why Phase 9 should wait.
+Re-homing is therefore no longer urgent. It is still worth doing, because the
+exposure is real and will be real again: an account another company can suspend
+should not be the recovery path for two others. Backblaze, checked on
+2026-09-06, uses the Google address as a username with **its own password** and
+no SSO — so the backup, the thing that would actually hurt, was never at risk.
 
-### 5. Ownership of three accounts is unknown
+Procedure in [`account-continuity.md`](account-continuity.md), now a rehearsed
+operation rather than an emergency plan.
 
-OpenRouter, OpenAI and Groq. Each is one question — which email? — and any on
-the dead account needs re-homing before it dies too.
+### 3. `GROQ_API_KEY` returns 401
+
+Found by `npm run inventory`; nobody knew. Grant has parked the question of
+which account it belongs to, so this stays listed as dead rather than quietly
+dropped — the router does not use Groq, so nothing is blocked, but a credential
+in the environment that does not work is a credential something will one day
+believe in.
 
 ---
 
 ## 🟡 Built but unproven
 
-### 6. No human has ever pressed a button
+### 4. No human has ever pressed a button
 
 Both channels' interaction paths are verified with synthetic presses through the
-deployed endpoints, and the callback processor acts on them correctly. But no
-real person has tapped 👍, Undo or Mute. One tap turns the whole path from
-"checked" into "observed".
+deployed endpoints, and the callback processor acts on them correctly. Grant has
+now received real messages on both surfaces, but no real person has tapped 👍,
+Undo or Mute. One tap turns the whole path from "checked" into "observed".
 
-### 7. Team HQ has never been judged on a phone
+### 5. Team HQ has been opened but not judged
 
-Viewport, touch targets and mobile-first CSS are checked. Whether it *reads*
-well is not, and §13's Gate 1 precedent is explicit that a subjective acceptance
-is not marked passed before the human performs it.
+It loads for Grant, which retires the deployment question. Whether it *reads*
+well on a phone — viewport, touch targets, whether the sparklines say anything
+at a glance — is a subjective acceptance, and §13's Gate 1 precedent is explicit
+that those are not marked passed before the human performs them.
 
-### 8. Voice notes have never been synthesised
+### 6. Voice notes have never been synthesised
 
 Everything up to the API call is built and checked (14 live checks: ledger,
 budget reservation with its concurrency guarantee, six reasons to stay silent).
-Without a Google credential every note degrades to text and says
-`no_credential` — the acceptance criterion working, not a gap.
+The Google Cloud TTS credential is **parked at Grant's request**. Without one,
+every note degrades to text and says `no_credential` — the acceptance criterion
+working, not a gap.
+
+### 7. NotebookLM is back on, and the reason it was off has not changed
+
+Restored on 2026-09-06 at Grant's instruction, with the credential verified the
+same day: three notebooks, `available_unofficial`, a real sync run. Recorded in
+migration 0061.
+
+The risk is not that it stops working — it works. It is that NotebookLM has no
+public API, so the client impersonates a browser session, which is the behaviour
+the 2026-09-04 ban named. The appeal reversed a penalty, not a rule. What has
+changed is the blast radius: everything the notebook feeds is cached in
+`public.documents`, retrieval needs no external service, and nothing else
+depends on the account. If it goes again it costs a route, not a corpus.
+
+### 8. The corpus is one document
+
+The knowledge layer is built and used — `npm run ask` retrieves before it asks,
+and records what it retrieved as the output's sources. But the whole corpus is a
+single cached Wikipedia article, so the retrieval is exercised rather than
+useful. Notion authenticates and has nothing shared with it; three clicks in
+Notion (⋯ → Connections → *Agentic Team Grant*), then `npm run notion:sync`.
 
 ---
 
@@ -115,21 +157,28 @@ Without a Google credential every note degrades to text and says
   sending twice. Slack can be asked; Telegram cannot. Not fixable.
 - **Slack identity is cosmetic.** `chat:write.customize` gives name and avatar,
   not a mentionable user. Per-staff Slack apps were considered and deferred.
-- **Six Telegram bots missing.** Roster and BotFather steps in
-  [`telegram-bot-roster.md`](telegram-bot-roster.md).
+- **Two Telegram bots missing** — Quality and Comms. A staff member without one
+  falls back to the pager, and there is a check that proves it. BotFather steps
+  in [`telegram-bot-roster.md`](telegram-bot-roster.md).
+- **A bot's profile photo cannot be set through the API.** It is BotFather only.
+  Cosmetic; the office already shows these faces in Slack.
+- **NotebookLM has no unattended client, permanently.** Not an outage and not a
+  gap — [ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) decided it.
+  It has no public API, so any automation must impersonate a browser session,
+  which is what got the account banned. A source can still be pasted in by hand
+  and becomes a document like any other.
 
 ---
 
-## Fixed today, recorded so they are not re-introduced
+## What is NOT a problem, though it was on 2026-09-05
 
-| | |
+Kept briefly, because a resolved item that vanishes silently gets re-raised.
+
+| Was | Now |
 |---|---|
-| The backup rehearsal had **never passed** — 12 runs, 12 failures, silently | vault stand-in in the rehearsal target; **now pages Grant on failure** |
-| A test left a **global mute** that suppressed every routine notification for 3 days | migration 0036; gate-3 cleans up after itself; the suite clears its own |
-| The worker moved jobs to `complete` with reason "delivered" while **delivering nothing** | a real notifier; the state reason now reports every channel's actual outcome |
-| A 👍 was attributed to **the wrong output** — resolved by correlation, which spans jobs | migration 0037: deliveries record the job |
-| Six **dead buttons** — the composer invented a wire format the adapter never parsed | both sides now tested against each other |
-| A correlation written into a column with a **foreign key to `events`** | left null; the work is resolved from the message instead |
-| The HQ deploy script **printed its token into a transcript** | rotated; the script can no longer print it — `npm run hq:token` sends it to Telegram |
-
-Full accounts, with the reasoning, in [`test-evidence/`](test-evidence/).
+| The Google account is disabled and four vendors sign in with it | reinstated 2026-09-05, verified rather than assumed (migration 0049) |
+| Backblaze may be locked out when its login window closes | it never had a Google login — own password, no SSO |
+| The system has no knowledge layer and its replacement is undecided | [ADR-0013](adr/0013-the-project-is-the-source-of-truth.md) decided it and it is built: `public.documents`, a connector registry, Postgres full-text search, Notion connected |
+| `GEMINI_API_KEY` is dead | works again with the account. Unused by anything — the router is OpenRouter-only |
+| Ownership of the OpenRouter, OpenAI and Groq accounts is unknown | parked by Grant on 2026-09-06 |
+| Six Telegram bots missing | five arrived, registered, configured and answering |

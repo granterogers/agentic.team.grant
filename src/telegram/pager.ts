@@ -105,6 +105,26 @@ export class TelegramPager {
     readonly severity: PagerSeverity
     readonly actions: readonly ActionId[]
   }): Promise<PagerResult> {
+    // A reply is not an interruption.
+    //
+    // When Grant messages a staff bot, that bot answers him in the same chat.
+    // Paging him about the answer as well means two notifications for one
+    // exchange he started — and the pager exists to interrupt him about things
+    // he did NOT ask for. Checked before the floor, because it is a stronger
+    // reason to stay quiet than severity is.
+    const inbound = await this.db.execute(`
+      select 1 from public.inbound_commands
+       where job_id = ${lit(input.job.jobId)}::uuid and origin_channel = 'telegram'
+       limit 1
+    `)
+    if (inbound.rows.length > 0) {
+      return {
+        delivered: false,
+        note: 'not paged: this answers a message Grant sent, and he is already in that chat',
+        chatId: null,
+      }
+    }
+
     const floor = this.options.floor ?? 'important'
     if (RANK[input.severity] < RANK[floor]) {
       return {
@@ -143,9 +163,26 @@ export class TelegramPager {
         ? null
         : `${this.options.projectUrlBase.replace(/\/+$/, '')}/projects/${input.job.projectId}`
 
+    // The project's name, read here rather than passed in. One bot speaks for
+    // eight people across every project (Grant's choice, and the right one — a
+    // bot per role per project is forty bots), so every page has to say what it
+    // is about. A caller that had to remember to pass it is a caller that will
+    // forget on the one page that matters.
+    const projectName =
+      input.job.projectId === null
+        ? null
+        : ((
+            (
+              await this.db.execute(
+                `select name from public.projects where project_id = ${lit(input.job.projectId)}::uuid`,
+              )
+            ).rows[0] as { name?: string } | undefined
+          )?.name ?? null)
+
     const message: PagerMessage = {
       staffName: input.staffName,
       staffTitle: input.staffTitle,
+      projectName,
       body: input.output.body,
       metadata: {
         confidence: input.output.confidence,
@@ -192,7 +229,10 @@ export class TelegramPager {
       result.errorCode === 'chat_not_found'
     ) {
       await this.db.execute(
-        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}) as marked`,
+        // Scoped to this bot (0097). A chat id is the same number across every
+        // bot Grant has opened, so an unscoped mark would silence the whole
+        // team because one director was blocked.
+        `select app.mark_telegram_undeliverable(${lit(chatId)}, ${lit(result.errorCode)}, ${lit(this.options.botId)}) as marked`,
       )
     }
 

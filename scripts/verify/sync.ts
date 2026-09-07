@@ -196,7 +196,7 @@ await db.execute('select app.recover_stalled_syncs()')
     workerId: 'verify-2b',
   })
   const stored = await db.execute(`
-    select count(*)::int as n from public.notebook_sources where remote_notebook_id = '${NB}'
+    select count(*)::int as n from public.documents where external_parent_ref = '${NB}'
   `)
   add(
     '2',
@@ -241,7 +241,7 @@ await db.execute('select app.recover_stalled_syncs()')
     workerId: 'verify-4',
   })
   const stored = await db.execute(`
-    select count(*)::int as n from public.notebook_sources where remote_notebook_id = '${NB}'
+    select count(*)::int as n from public.documents where external_parent_ref = '${NB}'
   `)
   add(
     '4',
@@ -277,7 +277,7 @@ await db.execute('select app.recover_stalled_syncs()')
   `)
   const after = await db.execute('select count(*)::int as n from public.jobs')
   const cached = await db.execute(`
-    select count(*)::int as n from public.notebook_sources where remote_notebook_id = '${NB}'
+    select count(*)::int as n from public.documents where external_parent_ref = '${NB}'
   `)
   add(
     '5',
@@ -479,7 +479,7 @@ await db.execute('select app.recover_stalled_syncs()')
 }
 
 // --- clean up the fixtures; the sync_runs history stays as evidence --------
-await db.execute(`delete from public.notebook_sources where remote_notebook_id like '${NB}%'`)
+await db.execute(`delete from public.documents where external_parent_ref like '${NB}%'`)
 await db.execute(`delete from public.notebook_exclusions where remote_notebook_id like '${NB}%'`)
 await db.execute(`
   update public.projects set status = 'archived', notebook_ref = null

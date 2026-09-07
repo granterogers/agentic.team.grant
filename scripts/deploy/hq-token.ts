@@ -18,16 +18,12 @@ import { DeliveryService } from '../../src/channels/delivery.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
 import { escapeHtml } from '../../src/telegram/message.ts'
+import { pagerBot } from '../../src/telegram/roster.ts'
 import { TelegramTransport } from '../../src/telegram/transport.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
-const botToken = process.env.TELEGRAM_CHIEF_BOT_TOKEN
 if (supabaseToken === undefined || supabaseToken === '') {
   console.error('SUPABASE_ACCESS_TOKEN is required')
-  process.exit(2)
-}
-if (botToken === undefined || botToken === '') {
-  console.error('TELEGRAM_CHIEF_BOT_TOKEN is required — this is how the token is delivered')
   process.exit(2)
 }
 
@@ -35,8 +31,16 @@ const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   supabaseToken,
 )
-const telegram = new TelegramClient(botToken)
-const botId = String(((await telegram.call('getMe')).result as { id: number }).id)
+// The pager, from the registry (0054). Both its id and its token come from
+// the database, so this script no longer needs a second credential in its
+// environment to deliver the first one.
+const pager = await pagerBot(db)
+if (pager === null) {
+  console.error('no enabled pager bot with a resolvable token — see npm run telegram:roster')
+  process.exit(1)
+}
+const telegram = new TelegramClient(pager.token)
+const botId = pager.botId
 
 const chat = (await db.execute(`select app.telegram_chat_for('grant', '${botId}') as c`)).rows[0]?.c
 if (chat === null || chat === undefined) {
@@ -54,13 +58,21 @@ if (token === undefined) {
   process.exit(1)
 }
 
+// `--resend` asks for the same token again. The dedupe key below is deliberate
+// — it stops a re-run from sending a second copy of a token that is already in
+// the chat — but "I cannot find that message" is a real reason to want another,
+// and the alternative (deleting a delivery row by hand) is worse than a flag.
+const resend = process.argv.includes('--resend')
+
 const service = new DeliveryService(db, new TelegramTransport(telegram))
 const result = await service.deliver({
   // Keyed on the token itself, so re-running this does not send a second copy
   // of the same token — but a ROTATED token is a different message and does
   // send. The key is a hash rather than the token, because a dedupe key is
   // stored in the clear.
-  dedupeKey: `hq-token:${Buffer.from(String(token)).toString('base64url').slice(0, 24)}`,
+  dedupeKey:
+    `hq-token:${Buffer.from(String(token)).toString('base64url').slice(0, 24)}` +
+    (resend ? `:resend:${new Date().toISOString().slice(0, 16)}` : ''),
   accountRef: botId,
   targetRef: String(chat),
   purpose: 'notice',

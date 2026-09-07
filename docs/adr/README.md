@@ -21,3 +21,12 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0010](0010-webhooks-on-supabase-edge-functions.md) | Webhooks run on Supabase Edge Functions, not Vercel | Accepted |
 | [0011](0011-supabase-cannot-serve-html.md) | Supabase cannot serve a web page; pages go to Vercel | Accepted |
 | [0012](0012-github-actions-for-the-sync-schedule.md) | GitHub Actions cron for the ten-minute sync | accepted |
+| [0012](0012-notebook-account-disabled.md) | Google disabled the NotebookLM account; what replaces it | Superseded by 0013 |
+| [0013](0013-the-project-is-the-source-of-truth.md) | The project is the source of truth; knowledge tools are connectors | Accepted |
+
+| [0014](0014-the-team-attaches-to-projects.md) | The team attaches to projects; it does not own them | Proposed |
+
+**Note the collision:** two ADRs were written as 0012 on the same day, by two
+sessions that each read the highest number and then wrote. They are left as
+they are rather than renumbered, because a renumber breaks every link already
+written to them and the filenames are unambiguous. Cite them by filename.

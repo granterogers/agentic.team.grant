@@ -42,6 +42,8 @@ export type CallbackAction =
   | 'open_project'
   | 'mute_24h'
   | 'more_detail'
+  | 'approve'
+  | 'decline'
 
 export interface ProcessedCallback {
   readonly commandId: string
@@ -61,6 +63,8 @@ interface PendingRow {
   correlation_id: string | null
   project_id: string | null
   output_id: string | null
+  /** The job the pressed message came from, for 0083's approval lookup. */
+  job_id: string | null
 }
 
 /**
@@ -94,6 +98,7 @@ const PENDING = (limit: number): string => `
     press.actor                   as actor,
     d.correlation_id::text        as correlation_id,
     j.project_id::text            as project_id,
+    j.job_id::text                as job_id,
     o.output_id::text             as output_id
   from press
   -- One join for every channel, which is the practical reason 0039
@@ -311,6 +316,49 @@ export const processCallbacks = async (
           action,
           outcome: 'noted',
           note: 'opening a project is a signal, not a request',
+        })
+        break
+      }
+
+      case 'approve':
+      case 'decline': {
+        // Resolved from the JOB the message came from, never from the button's
+        // payload. The payload round-trips through a client and §10 forbids
+        // free-form input reaching a lookup; the delivery row is ours, and 0037
+        // already established it as the trustworthy end of a button press.
+        if (row.job_id === null) {
+          done.push({
+            commandId: row.command_id,
+            action,
+            outcome: 'unresolvable',
+            note: 'the delivery record for that message is gone, so I cannot tell what it was asking about',
+          })
+          break
+        }
+        const { rows: answered } = await db.execute(`
+          select app.answer_generation_approval(
+            app.open_approval_for_job(${lit(row.job_id)}::uuid),
+            ${action === 'approve' ? 'true' : 'false'},
+            ${lit(options.subject ?? 'grant')}
+          ) as r
+        `)
+        const r = (answered[0] as { r: Record<string, unknown> | null } | undefined)?.r ?? null
+        await resolveNotification(db, row, action === 'approve' ? 'acted' : 'dismissed')
+        done.push({
+          commandId: row.command_id,
+          action,
+          outcome: r === null || r.error !== undefined ? 'unresolvable' : 'acted',
+          note:
+            r === null || r.error !== undefined
+              ? // The same message can be answered on Slack and on Telegram.
+                // Answering twice is normal, not a fault, and saying "already
+                // answered" is the honest note for the second press.
+                String(r?.error ?? 'nothing was waiting on that message')
+              : r.already === true
+                ? `already ${String(r.state)}`
+                : action === 'approve'
+                  ? `approved — queued as ${String(r.job_id).slice(0, 8)}`
+                  : 'declined; nothing was generated',
         })
         break
       }

@@ -39,9 +39,9 @@ const before = await spend()
 
 const projects = await db.execute(`
   select p.project_id::text as project_id, p.name,
-         count(s.source_id)::int as sources
+         count(s.document_id)::int as sources
   from public.projects p
-  join public.notebook_sources s on s.project_id = p.project_id
+  join public.documents s on s.project_id = p.project_id
   where p.status = 'active' and s.content is not null
   group by p.project_id, p.name
   order by p.name

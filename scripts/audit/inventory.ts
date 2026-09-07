@@ -26,6 +26,7 @@
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { roster } from '../../src/telegram/roster.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 const db = new ManagementApiExecutor(
@@ -33,7 +34,29 @@ const db = new ManagementApiExecutor(
   supabaseToken,
 )
 
-type State = 'ok' | 'dead' | 'missing' | 'unknown'
+type State =
+  | 'ok'
+  | 'dead'
+  | 'missing'
+  | 'unknown'
+  /**
+   * Deliberately not being pursued, and not a gap.
+   *
+   * Added because two rows sat under "needs Grant" after Grant had answered
+   * them — Backblaze was confirmed safe and TTS was parked — and a list of
+   * outstanding items that includes settled ones is a list nobody finishes
+   * reading.
+   */
+  | 'parked'
+  /**
+   * A person said so; no program has checked.
+   *
+   * Distinct from `ok` because green on the dashboard means "a probe reached
+   * it and it answered". Backblaze is used by a GitHub Action and not by this
+   * process, so its status comes from Grant — which may well be true and is a
+   * different claim with a different shelf life.
+   */
+  | 'attested'
 interface Row {
   service: string
   what: string
@@ -73,8 +96,8 @@ const env = (name: string): string => process.env[name] ?? ''
 await check(
   'Supabase',
   'management token',
-  '⚠️ dead Google account',
-  'Re-home or change the account email',
+  '⚠️ Google sign-in (account reinstated 2026-09-05)',
+  'Re-homing is no longer urgent, but this is still an account another company can suspend',
   async () => {
     const r = await fetch('https://api.supabase.com/v1/projects', {
       headers: { Authorization: `Bearer ${supabaseToken}` },
@@ -101,9 +124,26 @@ await check(
   '✅ grant.e.rogers',
   'npm run slack:rotate',
   async () => {
+    // From the vault, not from `SLACK_APP_CONFIG_TOKEN`. This token rotates
+    // every twelve hours and `slack:rotate` writes the new one to the vault —
+    // so an environment copy is stale within a day and stays stale forever.
+    // Probing it reported `token_expired` minutes after a rotation that had
+    // just succeeded: a check reporting on a copy rather than on the credential
+    // the system actually uses, which is this project's recurring defect in
+    // its twelfth costume.
+    const token = String(
+      (
+        await db.execute(
+          `select app.resolve_secret(config_token_ref) as t
+             from public.slack_app_credentials
+            where slack_app_id = '${env('SLACK_APP_ID')}'`,
+        )
+      ).rows[0]?.t ?? '',
+    )
+    if (token === '') return { ok: false, detail: 'no config token in the vault' }
     const r = (await (
       await fetch(`https://slack.com/api/apps.manifest.export?app_id=${env('SLACK_APP_ID')}`, {
-        headers: { Authorization: `Bearer ${env('SLACK_APP_CONFIG_TOKEN')}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
     ).json()) as { ok?: boolean; error?: string }
     return { ok: r.ok === true, detail: r.ok === true ? 'valid' : String(r.error) }
@@ -123,8 +163,8 @@ await check('Telegram', 'chief bot token', '✅ phone number', '—', async () =
 await check(
   'Vercel',
   'deploy token',
-  '⚠️ dead Google account',
-  'Re-home or change the account email',
+  '⚠️ Google sign-in (account reinstated 2026-09-05)',
+  'Re-homing is no longer urgent, but this is still an account another company can suspend',
   async () => {
     const r = (await (
       await fetch('https://api.vercel.com/v2/user', {
@@ -135,37 +175,55 @@ await check(
   },
 )
 
-await check('OpenRouter', 'inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = (await (
-    await fetch('https://openrouter.ai/api/v1/key', {
-      headers: { Authorization: `Bearer ${env('OPENROUTER_API_KEY')}` },
+await check(
+  'OpenRouter',
+  'inference key',
+  '⏸ parked',
+  'parked 2026-09-06 — Grant asked to leave this',
+  async () => {
+    const r = (await (
+      await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { Authorization: `Bearer ${env('OPENROUTER_API_KEY')}` },
+      })
+    ).json()) as { data?: { limit_remaining?: number }; error?: unknown }
+    return {
+      ok: r.data !== undefined,
+      detail: r.data ? `${String(r.data.limit_remaining)} credits left` : 'rejected',
+    }
+  },
+)
+
+await check(
+  'OpenAI',
+  'image/inference key',
+  '⏸ parked',
+  'parked 2026-09-06 — Grant asked to leave this',
+  async () => {
+    const r = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${env('OPENAI_API_KEY')}` },
     })
-  ).json()) as { data?: { limit_remaining?: number }; error?: unknown }
-  return {
-    ok: r.data !== undefined,
-    detail: r.data ? `${String(r.data.limit_remaining)} credits left` : 'rejected',
-  }
-})
+    return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
+  },
+)
 
-await check('OpenAI', 'image/inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = await fetch('https://api.openai.com/v1/models', {
-    headers: { Authorization: `Bearer ${env('OPENAI_API_KEY')}` },
-  })
-  return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
-})
-
-await check('Groq', 'inference key', '❓ unknown', 'Confirm which email', async () => {
-  const r = await fetch('https://api.groq.com/openai/v1/models', {
-    headers: { Authorization: `Bearer ${env('GROQ_API_KEY')}` },
-  })
-  return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
-})
+await check(
+  'Groq',
+  'inference key',
+  '⏸ parked',
+  'parked 2026-09-06 — Grant asked to leave this',
+  async () => {
+    const r = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${env('GROQ_API_KEY')}` },
+    })
+    return { ok: r.ok, detail: r.ok ? 'valid' : `http ${String(r.status)}` }
+  },
+)
 
 await check(
   'Google',
   'Gemini API key',
-  '⛔ dead Google account',
-  'Delete the variable — it misleads',
+  '✅ Google (reinstated 2026-09-05)',
+  'Unused by anything — the router is OpenRouter-only',
   async () => {
     const r = (await (
       await fetch(
@@ -182,8 +240,8 @@ await check(
 await check(
   'Google',
   'NotebookLM master token',
-  '⛔ dead Google account',
-  'Retired in migration 0048',
+  '✅ Google (reinstated 2026-09-05)',
+  "Re-enabled 2026-09-06 at Grant's instruction. No public API, so the client impersonates a browser session — the behaviour the 2026-09-04 ban named",
   async () => {
     const raw = (
       await db.execute(
@@ -211,30 +269,147 @@ await check(
   },
 )
 
+/*
+ * Google Calendar, which is a credential this script did not used to know about.
+ *
+ * 0077 seeded a red row for it and 0095 turns that row green when a refresh
+ * token lands. Neither of them is this script — and `record_connection_health`
+ * deletes any row the current run did not write, so every `npm run inventory`
+ * silently swept the calendar light off the page entirely. 0077's own comment
+ * says why that is the wrong outcome: an absent row reads exactly like a
+ * forgotten one.
+ *
+ * So it is probed here like everything else, from the same three facts the
+ * Settings page shows him, and each stage says which step is next rather than
+ * reporting one undifferentiated red.
+ */
+await check(
+  'google_calendar',
+  'oauth_client',
+  '✅ grant',
+  'Settings → Google on the web front end',
+  async () => {
+    const g = (await db.execute('select app.hq_google() as g')).rows[0] as {
+      g?: { client_id?: string | null; has_secret?: boolean; has_refresh_token?: boolean }
+    }
+    const google = g.g ?? {}
+    if (google.client_id === null || google.client_id === undefined || google.client_id === '') {
+      return { ok: false, detail: 'no OAuth client id yet — step 2 of 4' }
+    }
+    if (google.has_secret !== true)
+      return { ok: false, detail: 'no client secret yet — step 3 of 4' }
+    if (google.has_refresh_token !== true) {
+      return { ok: false, detail: 'not connected — press Connect Google, step 4 of 4' }
+    }
+    return { ok: true, detail: 'connected — a refresh token is in the vault' }
+  },
+)
+
+await check(
+  'Notion',
+  'integration token',
+  '✅ Grant Rogers’s Space',
+  'Share pages with the "Agentic Team Grant" connection',
+  async () => {
+    const t = String(
+      (
+        await db.execute(
+          `select app.resolve_secret(
+             (select id from vault.secrets where name = 'notion.integration_token')::app.vault_secret_ref
+           ) as t`,
+        )
+      ).rows[0]?.t ?? '',
+    )
+    if (t === '') return { ok: false, detail: 'not in the vault' }
+    const r = (await (
+      await fetch('https://api.notion.com/v1/search', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${t}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ page_size: 1 }),
+      })
+    ).json()) as { results?: unknown[]; code?: string }
+    if (r.code !== undefined) return { ok: false, detail: r.code }
+    // A working token with nothing shared is a working token. Reported as the
+    // real state rather than as a failure, because the fix is Grant clicking
+    // Connections in Notion and no amount of retrying is that.
+    const n = (r.results ?? []).length
+    return { ok: true, detail: n === 0 ? 'valid; nothing shared yet' : 'valid; pages shared' }
+  },
+)
+
+await check(
+  'Google',
+  'NotebookLM adapter (python)',
+  '— local to this environment',
+  'npm run setup:python',
+  async () => {
+    // Not a credential — a dependency. Probed anyway, and probed here, because
+    // its absence looked exactly like an expired credential: a reclaimed
+    // container took `notebooklm-py` with it and the probe reported
+    // `unavailable` on an integration whose account had genuinely been
+    // suspended the week before. The worst possible ambiguity.
+    const { spawnSync } = await import('node:child_process')
+    const r = spawnSync('python3', ['-c', 'import notebooklm'], { encoding: 'utf8' })
+    return {
+      ok: r.status === 0,
+      detail: r.status === 0 ? 'importable' : 'not installed — npm run setup:python',
+    }
+  },
+)
+
 // --- the ones only Grant can answer -----------------------------------------
 
-for (const [service, what, owner, action] of [
+for (const [service, what, owner, action, state] of [
   [
     'Backblaze B2',
     'backup bucket + keys',
-    '⚠️ dead Google account (login still works)',
-    '🔴 CHANGE THE ACCOUNT EMAIL WHILE YOU CAN',
+    '✅ Google address, but its OWN password',
+    'nothing — confirmed 2026-09-06: no Google SSO, so a Google suspension cannot lock it',
+    'attested' as const,
   ],
-  ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—'],
+  ['GitHub', 'repository + Actions secrets', '✅ granterogers', '—', 'attested' as const],
   [
     'Google',
     'Cloud TTS service account',
-    '— not created',
-    'Create on a LIVE account (docs/google-cloud-tts-credential.md)',
+    '⏸ parked',
+    "parked 2026-09-06 at Grant's request — voice notes degrade to text and say no_credential, which is the criterion working",
+    'parked' as const,
   ],
-  ['Telegram', '7 staff bot tokens', '— not created', 'BotFather (docs/telegram-bot-roster.md)'],
 ] as const) {
-  rows.push({ service, what, state: 'missing', owner, detail: 'not machine-checkable', action })
+  rows.push({ service, what, state, owner, detail: 'not machine-checkable', action })
 }
+
+// The staff bots, counted rather than written down.
+//
+// This line used to read "staff bot tokens: 5 of 7" as a string literal. Grant
+// sent the last two on 2026-09-06 and the inventory went on reporting a gap
+// that had been closed — which is the exact failure this whole script exists to
+// prevent, committed by the script itself.
+const bots = await roster(db)
+const withToken = bots.filter((b) => b.hasToken).length
+const missingBots = bots.filter((b) => !b.hasToken)
+rows.push({
+  service: 'Telegram',
+  what: `staff bot tokens: ${String(withToken)} of ${String(bots.length)}`,
+  owner: '✅ phone number',
+  detail: 'from the roster, not from memory',
+  action:
+    missingBots.length === 0
+      ? 'nothing outstanding'
+      : `${missingBots.map((b) => b.staffSlug ?? b.username).join(', ')} remain — BotFather (docs/telegram-bot-roster.md)`,
+  // `attested`, not `ok`: nobody probed these tokens here. The count is from
+  // our own roster, which is a claim about what we hold, not evidence that
+  // Telegram still accepts it — verify:telegram is what calls getMe.
+  state: missingBots.length === 0 ? ('attested' as const) : ('missing' as const),
+})
 
 // --- report ------------------------------------------------------------------
 
-const icon = { ok: '✅', dead: '⛔', missing: '⬜', unknown: '❓' }
+const icon = { ok: '✅', dead: '⛔', missing: '⬜', unknown: '❓', parked: '⏸', attested: '🤝' }
 console.log('# Credential and account inventory\n')
 console.log(`Generated ${new Date().toISOString()} — every line above the fold was checked live.\n`)
 console.log('| | Service | Credential | Owner / login | State | Action |')
@@ -245,12 +420,24 @@ for (const r of rows) {
   )
 }
 
+// A row Grant has parked is not a gap and must not be counted as one. The
+// whole value of this script is that its bottom line can be read in one
+// glance; a bottom line that keeps counting settled items is one that gets
+// skimmed, which is how the credential document it replaced failed.
+// Parking the QUESTION about a row does not park the row. Groq's key is
+// genuinely dead and stays under Dead; what Grant parked was the question of
+// whose account it is, and that is the list it leaves.
+const parked = rows.filter((r) => r.state === 'parked')
+const attested = rows.filter((r) => r.state === 'attested')
 const dead = rows.filter((r) => r.state === 'dead')
 const missing = rows.filter((r) => r.state === 'missing' && r.action !== '—')
 const unknown = rows.filter((r) => r.owner.startsWith('❓'))
 
 console.log(
-  `\n**${String(rows.filter((r) => r.state === 'ok').length)} working · ${String(dead.length)} dead · ${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership**\n`,
+  `\n**${String(rows.filter((r) => r.state === 'ok').length)} probed working · ` +
+    `${String(attested.length)} taken on trust · ${String(dead.length)} dead · ` +
+    `${String(missing.length)} outstanding · ${String(unknown.length)} of unknown ownership · ` +
+    `${String(parked.length)} parked**\n`,
 )
 if (dead.length > 0) {
   console.log('## Dead\n')
@@ -263,4 +450,40 @@ if (missing.length > 0) {
 if (unknown.length > 0) {
   console.log('\n## Ownership unknown — one question each\n')
   for (const r of unknown) console.log(`- **${r.service}** — which email is this account under?`)
+}
+if (parked.length > 0) {
+  console.log('\n## Parked — deliberately not being pursued\n')
+  for (const r of parked) console.log(`- **${r.service} ${r.what}** — ${r.action}`)
+}
+
+// --- record the run, so the dashboard can show it ---------------------------
+//
+// This script probed every service and then threw the answers away when it
+// finished printing. Team HQ needs the same facts and cannot gather them: a
+// read-only dashboard holding eleven vendor credentials so it can light a row
+// green would be the widest-privileged thing in the system. So the prober
+// records and the page reads, with `checked_at` travelling alongside — a light
+// with no age stays green after the prober stops running.
+try {
+  const payload = rows.map((r) => ({
+    service: r.service,
+    credential: r.what,
+    state: r.state,
+    detail: r.detail,
+    owner: r.owner,
+    action: r.action === '—' ? '' : r.action,
+  }))
+  const written = (
+    await db.execute(
+      `select app.record_connection_health($payload$${JSON.stringify(payload)}$payload$::jsonb) as n`,
+    )
+  ).rows[0]
+  console.log(
+    `\nrecorded ${String((written as { n?: number } | undefined)?.n)} row(s) for Team HQ.`,
+  )
+} catch (error) {
+  // Reported, never fatal. The inventory's job is to tell a human what is
+  // working; failing that job because a dashboard table rejected a row would
+  // be the tail wagging the dog.
+  console.log(`\ncould not record for Team HQ: ${(error as Error).message.slice(0, 120)}`)
 }

@@ -24,7 +24,9 @@
  * an ambiguous write" enforceable — a module that wrote directly could not be
  * held to it.
  */
+
 import type { SqlExecutor } from '../db/executor.ts'
+import { stripBoilerplate } from '../knowledge/boilerplate.ts'
 import type { Capability, NotebookAdapter, SourceText } from '../notebook/adapter.ts'
 import { NotebookUnavailableError } from '../notebook/adapter.ts'
 
@@ -160,11 +162,34 @@ export const ensureProject = async (
   const base = slugify(name)
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const slug = attempt === 0 ? base : `${base}-${String(attempt + 1)}`
+    // The project AND its attachment, in one statement.
+    //
+    // 0067 requires an active project to be attached to something real, checked
+    // by a deferred constraint trigger — so a project inserted alone fails at
+    // commit, which is exactly what happened the first time this ran after that
+    // migration: the sync reported "created 0 projects" and every downstream
+    // check in `verify:sync` went red at once.
+    //
+    // The right fix is not to exempt the sync. A project discovered by syncing
+    // a notebook IS attached to that notebook; it simply was not saying so.
+    // Writing both here makes the constraint true rather than tolerated, and a
+    // CTE keeps them one transaction without the caller having to remember.
     const inserted = await db.execute(`
-      insert into public.projects (slug, name, notebook_ref, status)
-      values (${lit(slug)}, ${lit(name)}, ${lit(notebook.id)}, 'active')
-      on conflict do nothing
-      returning project_id::text as project_id
+      with created as (
+        insert into public.projects (slug, name, notebook_ref, status)
+        values (${lit(slug)}, ${lit(name)}, ${lit(notebook.id)}, 'active')
+        on conflict do nothing
+        returning project_id
+      ),
+      attached as (
+        insert into public.project_attachments
+          (project_id, connector, external_ref, display_name, role)
+        select project_id, 'notebooklm', ${lit(notebook.id)}, ${lit(name)}, 'source'
+          from created
+        on conflict do nothing
+        returning project_id
+      )
+      select project_id::text as project_id from created
     `)
     const id = inserted.rows[0]?.project_id
     if (typeof id === 'string') return { projectId: id, created: true }
@@ -182,7 +207,7 @@ export const ensureProject = async (
   throw new Error(`could not find a free slug for ${notebook.title}`)
 }
 
-/** SHA-256 of a source's text, as `notebook_sources.content_fingerprint`. */
+/** SHA-256 of a source's text, as `documents.content_fingerprint`. */
 export const fingerprintContent = async (content: string): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content))
   return Array.from(new Uint8Array(digest))
@@ -203,12 +228,23 @@ export const upsertSource = async (
   projectId: string,
   source: SourceText,
 ): Promise<'added' | 'changed' | 'unchanged'> => {
-  const fingerprint = await fingerprintContent(source.content)
+  // The furniture comes off before anything else, so the fingerprint is taken
+  // over what we will actually store. Fingerprinting the raw text and storing
+  // the cleaned one would make every re-clean look like a change, and every
+  // change re-brief.
+  //
+  // Grant's Wikipedia article was 69,000 characters of which the first four
+  // thousand were the navigation menu — all of it indexed, all of it citable,
+  // and it had already been read back to him as an answer.
+  const cleaned = stripBoilerplate(source.content)
+  const content = cleaned.text
+  const fingerprint = await fingerprintContent(content)
 
   const existing = await db.execute(`
-    select content_fingerprint from public.notebook_sources
-    where remote_notebook_id = ${lit(source.remoteNotebookId)}
-      and remote_source_id = ${lit(source.remoteSourceId)}
+    select content_fingerprint from public.documents
+    where connector = 'notebooklm'
+      and external_parent_ref = ${lit(source.remoteNotebookId)}
+      and external_ref = ${lit(source.remoteSourceId)}
   `)
   const previous = existing.rows[0]?.content_fingerprint
   const known = existing.rows.length > 0
@@ -220,15 +256,21 @@ export const upsertSource = async (
   }
 
   await db.execute(`
-    insert into public.notebook_sources
-      (project_id, remote_notebook_id, remote_source_id, title, content,
+    insert into public.documents
+      (project_id, connector, external_parent_ref, external_ref, title, content,
        content_fingerprint, content_chars, fetched_at, remote_updated_at)
     values
-      (${lit(projectId)}::uuid, ${lit(source.remoteNotebookId)},
-       ${lit(source.remoteSourceId)}, ${nul(source.title)}, ${lit(source.content)},
-       ${lit(fingerprint)}, ${String(source.content.length)}, app.now_utc(),
+      (${lit(projectId)}::uuid, 'notebooklm', ${lit(source.remoteNotebookId)},
+       ${lit(source.remoteSourceId)}, ${nul(source.title)}, ${lit(content)},
+       ${lit(fingerprint)}, ${String(content.length)}, app.now_utc(),
        ${nul(source.remoteUpdatedAt)}::timestamptz)
-    on conflict (remote_notebook_id, remote_source_id) do update
+    -- The index this infers against is PARTIAL (0051: an upload has no external
+    -- reference, so uniqueness is not asserted over a null). A conflict target
+    -- without the same predicate matches no index and the insert fails — which
+    -- is how the sync silently stored zero rows for one run.
+    on conflict (connector, external_parent_ref, external_ref)
+      where external_ref is not null
+      do update
       set title = excluded.title,
           content = excluded.content,
           content_fingerprint = excluded.content_fingerprint,
@@ -269,9 +311,10 @@ export const countRemoved = async (
       ? `'{}'::text[]`
       : `array[${seenSourceIds.map((s) => lit(s)).join(', ')}]::text[]`
   const { rows } = await db.execute(`
-    select count(*)::int as n from public.notebook_sources
-    where remote_notebook_id = ${lit(remoteNotebookId)}
-      and not (remote_source_id = any (${list}))
+    select count(*)::int as n from public.documents
+    where connector = 'notebooklm'
+      and external_parent_ref = ${lit(remoteNotebookId)}
+      and not (external_ref = any (${list}))
   `)
   return Number(rows[0]?.n ?? 0)
 }

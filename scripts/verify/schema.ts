@@ -1,0 +1,110 @@
+/**
+ * The schema's own dangling references.
+ *
+ *   npm run verify:schema
+ *
+ * ## The failure this exists for
+ *
+ * Renaming a table rewrites every view and every constraint that depends on it,
+ * because those hold a parsed reference. A function body does not: it is stored
+ * as text and resolved when it is called. So 0051's rename left
+ * `app.project_attention()` naming a table that no longer existed, the
+ * migration applied cleanly, `verify:sync` went green, and the symptom was a
+ * **502 from Team HQ** — three layers away, in a dashboard, hours later.
+ *
+ * A rename is not the only way to get here. Dropping a table, moving one
+ * between schemas, or renaming a column all leave function bodies untouched and
+ * unchecked. This is the check that turns that into a red line at the moment it
+ * happens rather than a support question later.
+ *
+ * It is deliberately structural rather than behavioural: it does not call
+ * anything, so it costs nothing and cannot have side effects.
+ */
+
+import type { SqlExecutor } from '../../src/db/executor.ts'
+import { ManagementApiExecutor } from '../../src/db/executor.ts'
+
+const token = process.env.SUPABASE_ACCESS_TOKEN
+if (token === undefined || token === '') {
+  console.error('SUPABASE_ACCESS_TOKEN is not set')
+  process.exit(2)
+}
+const db: SqlExecutor = new ManagementApiExecutor(
+  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
+  token,
+)
+
+const checks: { what: string; outcome: string; passed: boolean }[] = []
+
+// Every `schema.name` a function body mentions, against every relation that
+// exists. A name that appears in no catalogue is either a table that was
+// renamed out from under the function or one that never existed.
+const dangling = (
+  await db.execute(`
+    with bodies as (
+      select n.nspname || '.' || p.proname as fn, pg_get_functiondef(p.oid) as def
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('app', 'public')
+    ),
+    referenced as (
+      select b.fn,
+             lower((regexp_matches(b.def, '\\m(app|public)\\.([a-z_][a-z0-9_]*)', 'gi'))[1]
+                   || '.' ||
+                   (regexp_matches(b.def, '\\m(app|public)\\.([a-z_][a-z0-9_]*)', 'gi'))[2]) as ref
+      from bodies b
+    ),
+    known as (
+      select lower(n.nspname || '.' || c.relname) as name
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       union
+      select lower(n.nspname || '.' || p.proname)
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       union
+      select lower(n.nspname || '.' || t.typname)
+        from pg_type t join pg_namespace n on n.oid = t.typnamespace
+    )
+    select distinct r.fn, r.ref
+      from referenced r
+     where not exists (select 1 from known k where k.name = r.ref)
+     order by r.fn, r.ref
+  `)
+).rows as { fn: string; ref: string }[]
+
+checks.push({
+  what: 'no function body names a table, function or type that does not exist',
+  outcome:
+    dangling.length === 0
+      ? 'every qualified name in every app/public function resolves'
+      : dangling.map((d) => `${d.fn} -> ${d.ref}`).join(', '),
+  passed: dangling.length === 0,
+})
+
+// CONTROL. Without it this suite would pass just as happily against a query
+// that returns no rows for any reason at all — an empty `referenced`, a broken
+// regex, a `known` set that accidentally contains everything.
+const control = (
+  await db.execute(`
+    with known as (
+      select lower(n.nspname || '.' || c.relname) as name
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    )
+    select
+      (select count(*)::int from known) as known_names,
+      (select count(*)::int from known
+        where name = 'public.a_relation_that_does_not_exist') as impossible
+  `)
+).rows[0] as { known_names: number; impossible: number }
+
+checks.push({
+  what: 'CONTROL: the catalogue query sees real relations and not a fabricated one',
+  outcome: `${String(control.known_names)} known relation(s); the impossible one matched ${String(control.impossible)} time(s)`,
+  passed: control.known_names > 50 && control.impossible === 0,
+})
+
+console.log('| check | outcome | |')
+console.log('|---|---|---|')
+for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
+const failed = checks.filter((c) => !c.passed)
+console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`)
+if (failed.length > 0) process.exit(1)
