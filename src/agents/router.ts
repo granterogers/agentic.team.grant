@@ -243,7 +243,7 @@ export const scanForDuplicates = async (
     // rather than skipped, because the constraint and the audit trail both
     // want the row, and "we looked and had nothing to look for" is a true
     // statement about a real query.
-    return { terms, candidates: [], unroutedLiveJobs } as unknown as DuplicateScan
+    return scanned({ terms, candidates: [], unroutedLiveJobs })
   }
 
   const termArray = `array[${terms.map(lit).join(', ')}]::text[]`
@@ -274,7 +274,7 @@ export const scanForDuplicates = async (
     limit 10
   `)
 
-  return {
+  return scanned({
     terms,
     unroutedLiveJobs,
     candidates: rows.map((r) => ({
@@ -285,8 +285,24 @@ export const scanForDuplicates = async (
       matchedTerms: Number(r.matched),
       sharedTerms: parsePgTextArray(String(r.shared_terms ?? '{}')),
     })),
-  } as unknown as DuplicateScan
+  })
 }
+
+/**
+ * Apply the brand, in one place, on a value the compiler has already checked.
+ *
+ * `DuplicateScan` carries a private symbol so that only a real scan can be
+ * passed where one is required — a caller cannot fabricate the evidence that it
+ * looked for duplicates. The cast is how a brand is applied and is not a
+ * mistake.
+ *
+ * It was written inline at both return sites, and there it was indistinguishable
+ * from the `as unknown as` that hid six invalid production paths in the
+ * handlers. Here the argument is typed, so the fields are checked; only the
+ * brand is asserted, which is the one thing that cannot be.
+ */
+const scanned = (scan: Omit<DuplicateScan, typeof scanBrand>): DuplicateScan =>
+  scan as DuplicateScan
 
 /** Postgres renders a text[] as {a,b,c}. Quoted where a value needs it. */
 export const parsePgTextArray = (raw: string): readonly string[] =>

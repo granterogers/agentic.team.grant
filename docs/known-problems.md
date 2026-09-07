@@ -14,16 +14,36 @@ distilled into the seven habits at the end of
 ---
 
 
-## NotebookLM slide decks fail, every time
+## NotebookLM slide decks — the headline was wrong
 
-Four attempts across two sessions, all reported `failed` by Google within
-twenty minutes, on a notebook where audio overviews and mind maps succeed. No
-error detail is exposed — the artifact simply arrives in `failed`. Not our bug
-as far as anything here can tell, and the collector now says so out loud rather
-than polling a dead artifact until it gives up.
+This section said *"slide decks fail, every time"* for two sessions. Running
+`npm run notebook:slides` — a read, costing nothing — took ninety seconds and
+showed both halves of that claim to be false:
 
-Worth retrying occasionally; `artifacts.retry_failed` exists in the library and
-is not wired up.
+- **The account is offered slide decks.** `get_customization_choices` lists
+  `slide_deck` with two presets. Nobody had ever called it, which is the
+  embarrassing part: the question "does this tier support them at all" was
+  free to answer and load-bearing for everything else.
+- **The notebook contains a COMPLETED slide deck** — "The Blueprint of Trust" —
+  and zero failed artifacts of any kind.
+
+So what is true is narrower and more useful: **our two attempts failed, and
+slide decks work on this account.** Google no longer holds either of the
+artifacts we recorded as `failed` and `abandoned`, so they were cleaned up on
+their side.
+
+What is still unknown: why those two failed. Not enough to act on, and no
+longer a reason to treat the feature as unavailable.
+
+`artifacts.retry_failed` is now wired into `act.py` as the `retry` action — it
+had been in the library all along with no caller, so a failed artifact was a
+dead end whose only recovery was generating a fresh one, paying the allowance
+twice and losing the instructions. It is a generation as far as the meter and
+0083's approval gate are concerned, both of which sit upstream of it.
+
+**The lesson worth keeping**: a claim in this file said "every time" on a sample
+of four, and stopped anyone looking for ninety seconds' worth of evidence that
+contradicted it.
 
 ## Web extractions still carry furniture
 
