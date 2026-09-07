@@ -114,5 +114,6 @@
   "0113_count_what_is_live.sql": "6ef0302f59b5c43746135f8dde9ee6b6a29a162ce1eb0e240135545292f5a9df",
   "0114_settings_you_can_actually_change.sql": "c9df0197735f3b28c922f77500898e94a265288af05bc282209adebe6d8498e8",
   "0115_the_settings_page_shows_them_all.sql": "e70a7ab36654c990eed0665455fe362a8d296dc2faf9786d41afbdebcb67bc7b",
-  "0116_a_check_that_cannot_write.sql": "c48e4b1b2394ad1e5f1532ad6f38a8eb7fb7d49e7563591ca847a98b93ef3473"
+  "0116_a_check_that_cannot_write.sql": "c48e4b1b2394ad1e5f1532ad6f38a8eb7fb7d49e7563591ca847a98b93ef3473",
+  "0117_repair_what_the_probe_wrote.sql": "dd21e184577387bf3d81cb8bf3e9262c85a3a797d83dea91c0904282c3f73a0c"
 }

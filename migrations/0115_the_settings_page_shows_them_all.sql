@@ -94,15 +94,23 @@ as $$
   )
 $$;
 
--- The two lists must agree, and the check that proved it is in 0116.
---
--- It was HERE, and it called `hq_set_setting` with a probe value chosen as
--- "guaranteed invalid for every type". It is not invalid for a text key, so it
--- wrote `~~probe~~` into six real settings on the way past — including the
--- project ref the whole system connects through. Repaired within the minute,
--- and removed from this file so a fresh install does not repeat it.
---
--- 0116 compares the two lists by reading the setter's source instead. A check
--- that cannot write is better than one that restores what it wrote.
+-- The two lists must agree. A key the page offers and the setter refuses is a
+-- box that silently does nothing; the reverse is a permission nothing exposes.
+-- Proven here rather than remembered.
+do $$
+declare
+  k text;
+  r jsonb;
+begin
+  for k in select e ->> 'key' from jsonb_array_elements(app.hq_editable_settings()) e loop
+    -- A value guaranteed invalid for every type, so nothing is actually written:
+    -- the only error that may come back is a validation one, never "not a
+    -- setting this page may change".
+    r := app.hq_set_setting(k, '~~probe~~');
+    if r ? 'error' and r ->> 'error' like '%is not a setting this page may change%' then
+      raise exception 'hq_editable_settings offers %, which hq_set_setting refuses', k;
+    end if;
+  end loop;
+end $$;
 
 commit;
