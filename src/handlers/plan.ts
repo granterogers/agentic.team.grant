@@ -80,6 +80,42 @@ export function planHandler(db: SqlExecutor): Handler {
       const references: string[] = []
 
       for (const step of steps) {
+        if (step.kind === 'use_project') {
+          // Already exists — ours, or one of Grant's the resolver matched by
+          // name. Adopt it rather than making a second: `hq_create_project` is
+          // idempotent on the slug, so a project we already run is found and a
+          // notebook of his we have never seen gets a project around it.
+          const { rows } = await db.execute(`
+            select app.hq_create_project(
+              ${lit(step.name)}, 'notebooklm', ${lit(step.notebookRef)}, ${lit(step.name)}
+            ) as r
+          `)
+          const made = (rows[0] as { r: { error?: string; project_id?: string } }).r
+          if (made.project_id !== undefined) projectId = String(made.project_id)
+          else {
+            const found = await db.execute(`
+              select project_id::text as project_id from public.projects p
+               join public.project_attachments a using (project_id)
+               where a.external_ref = ${lit(step.notebookRef)} limit 1
+            `)
+            const row = found.rows[0] as { project_id?: string } | undefined
+            if (row?.project_id === undefined) throw new Error(String(made.error))
+            projectId = row.project_id
+          }
+          projectName = step.name
+          said.push(`working in your existing “${step.name}”`)
+          references.push(`notebooklm:${step.notebookRef} ${step.name}`)
+          continue
+        }
+
+        if (step.kind === 'project') {
+          // Unresolved: the handler is supposed to have decided before this ran.
+          // Refusing beats guessing — guessing is what made the duplicate.
+          throw new Error(
+            `I do not know whether “${step.name}” already exists, and I am not going to guess`,
+          )
+        }
+
         if (step.kind === 'create_project') {
           const actions = await NotebookActions.fromVault(db)
           if (actions === null) {

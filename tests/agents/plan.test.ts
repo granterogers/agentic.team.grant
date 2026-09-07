@@ -18,14 +18,18 @@ describe('the voice note that asked for this', () => {
   it('reads all three intentions', () => {
     const plan = readPlan(VOICE)
     expect(plan).not.toBeNull()
-    expect(plan?.steps.map((s) => s.kind)).toEqual(['create_project', 'add_source', 'ask'])
+    // `project`, not `create_project`. Whether it exists is a fact about the
+    // world, and the planner does not touch the world — the handler resolves it
+    // before the plan is shown. Grant already had a notebook called "AI
+    // learning" and the first version made a second one beside it.
+    expect(plan?.steps.map((s) => s.kind)).toEqual(['project', 'add_source', 'ask'])
   })
 
   it('takes the project name out of the middle of a run-on sentence', () => {
     const plan = readPlan(VOICE)
     const first = plan?.steps[0]
-    expect(first?.kind).toBe('create_project')
-    expect(first?.kind === 'create_project' && first.name).toBe('AI Learning')
+    expect(first?.kind).toBe('project')
+    expect(first?.kind === 'project' && first.name).toBe('AI Learning')
   })
 
   it('puts the question last, after the source it is about', () => {
@@ -67,7 +71,7 @@ describe('what is not a plan', () => {
     const plan = readPlan(
       'Add https://youtu.be/abc123 to the coaching project and tell me what repositories it mentions',
     )
-    expect(plan?.steps.some((s) => s.kind === 'create_project')).toBe(false)
+    expect(plan?.steps.some((s) => s.kind === 'project')).toBe(false)
     expect(plan?.project).toBe('coaching')
   })
 })
@@ -77,7 +81,7 @@ describe('the other shapes it handles', () => {
     const plan = readPlan(
       'Add https://youtu.be/abc123 to a new project called Research and make an audio overview',
     )
-    expect(plan?.steps.map((s) => s.kind)).toEqual(['create_project', 'add_source', 'generate'])
+    expect(plan?.steps.map((s) => s.kind)).toEqual(['project', 'add_source', 'generate'])
   })
 
   it('an attachment plus a question', () => {
@@ -111,5 +115,57 @@ describe('the question it puts to the notebook', () => {
     const plan = readPlan('Add https://youtu.be/abc123 and list the repositories')
     const ask = plan?.steps.at(-1)
     expect(ask?.kind === 'ask' && ask.question.length).toBeGreaterThan(11)
+  })
+})
+
+describe('never proposing to create without saying so loudly', () => {
+  it('marks a genuine creation with a warning, not a bland line', () => {
+    // Grant: "please don't assume I wish to create a new project. This is a
+    // large task and should always be confirmed." A line that reads the same
+    // whether it is adopting or creating is a line he will approve without
+    // noticing which.
+    const plan = readPlan(VOICE) as never
+    const created = {
+      ...(plan as { steps: unknown[] }),
+      steps: [{ kind: 'create_project', name: 'AI Learning' }],
+    }
+    const said = describePlan(created as never)
+    expect(said).toContain('BRAND NEW')
+    expect(said).toContain('you have nothing by that name')
+  })
+
+  it('says plainly when it is using one that exists', () => {
+    const used = {
+      steps: [{ kind: 'use_project', name: 'AI learning', notebookRef: 'nb-1' }],
+      project: 'AI learning',
+      instruction: 'x',
+    }
+    expect(describePlan(used as never)).toContain('Use your existing')
+  })
+})
+
+describe('a project named without the word "new"', () => {
+  it('is still a project step, so the resolver decides', () => {
+    // What Grant actually says when he means one he already has. The first
+    // version matched only "a NEW project called X", emitted no project step,
+    // and silently used whichever project the message had been filed under.
+    const plan = readPlan(
+      'Push this video into the notebook project called AI learning, then tell me all ' +
+        'the repositories mentioned with URLs. https://youtu.be/9_SZFIW7tus',
+    )
+    expect(plan?.steps.map((s) => s.kind)).toEqual(['project', 'add_source', 'ask'])
+    const first = plan?.steps[0]
+    expect(first?.kind === 'project' && first.name).toBe('AI learning')
+  })
+
+  it('reads the same whichever way he phrases it', () => {
+    for (const text of [
+      'add https://youtu.be/x to the project called Research and summarise it',
+      'add https://youtu.be/x to a new project called Research and summarise it',
+    ]) {
+      const first = readPlan(text)?.steps[0]
+      expect(first?.kind, text).toBe('project')
+      expect(first?.kind === 'project' && first.name, text).toBe('Research')
+    }
   })
 })

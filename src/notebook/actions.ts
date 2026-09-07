@@ -193,6 +193,22 @@ export class NotebookActions {
     return { id: String(r.notebook_id), title: String(r.title ?? title) }
   }
 
+  /**
+   * Every notebook in Grant's account.
+   *
+   * Read before creating anything: he had a notebook called "AI learning" and
+   * the planner made a second called "AI Learning" beside it, because nothing
+   * looked. One network call is cheap against the cost of a duplicate nobody
+   * asked for in somebody else's Google account.
+   */
+  async notebooks(): Promise<readonly { id: string; title: string }[]> {
+    const r = await this.act('notebooks', { notebook_id: 'list' })
+    return ((r.notebooks ?? []) as Record<string, unknown>[]).map((n) => ({
+      id: String(n.notebook_id),
+      title: String(n.title ?? ''),
+    }))
+  }
+
   /** Put text into a notebook as a source. */
   async addText(notebookId: string, text: string, title?: string): Promise<string | null> {
     const r = await this.act('add_text', { notebook_id: notebookId, text, title })

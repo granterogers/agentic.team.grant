@@ -46,6 +46,26 @@ import { classifyLink, type FoundLink, linkRequest } from './links.ts'
 
 /** One thing that will happen, in the order it will happen. */
 export type Step =
+  /**
+   * A project by this name — existing if there is one, new only if there is
+   * not, and the difference is decided against reality rather than here.
+   *
+   * The first version emitted `create_project` straight from the words "a new
+   * project called X" and created one. Grant already had a notebook called "AI
+   * learning"; the planner made "AI Learning" beside it, and then a second
+   * called "AI Learning Two" during a test. Three notebooks, one intention.
+   *
+   * *"Please don't assume I wish to create a new project. This is a large task
+   * and should always be confirmed. In my example I was telling it to work on
+   * an existing project."*
+   *
+   * So the planner names the project and does not decide its fate. The handler
+   * resolves it — our own projects first, then the notebooks in Grant's
+   * account — and rewrites this into `use_project` or `create_project` before
+   * the plan is ever shown. What he approves therefore says which one it is.
+   */
+  | { readonly kind: 'project'; readonly name: string }
+  | { readonly kind: 'use_project'; readonly name: string; readonly notebookRef: string }
   | { readonly kind: 'create_project'; readonly name: string }
   | { readonly kind: 'add_source'; readonly link: FoundLink }
   | { readonly kind: 'attach'; readonly link: FoundLink }
@@ -68,8 +88,40 @@ export interface Plan {
  * instruction to create something, and confusing the two either creates a
  * duplicate or files work into a project that does not exist.
  */
-const NEW_PROJECT =
-  /\bnew\b[^.]{0,40}?\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+["“']?([A-Za-z0-9][A-Za-z0-9 &._-]{1,48}?)["”']?(?=[.,;!?]|$)/i
+/**
+ * Where a project's name stops.
+ *
+ * Punctuation, the end of the message, or a conjunction that starts the next
+ * clause. Without the conjunctions the capture is greedy to the end of an
+ * unpunctuated sentence: "the project called Research and summarise it" gave a
+ * project named "Research and summarise it", which would then match nothing
+ * and propose creating it.
+ */
+const NAME_ENDS = String.raw`["”']?\s*(?=[.,;!?]|$|\band\b|\bthen\b|\bwith\b|\bso\b)`
+const NAME = String.raw`["“']?([A-Za-z0-9][A-Za-z0-9 &._-]{1,48}?)`
+
+const NEW_PROJECT = new RegExp(
+  String.raw`\bnew\b[^.]{0,40}?\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
+  'i',
+)
+
+/**
+ * A project named without the word "new".
+ *
+ * "the notebook project called AI learning" — which is what Grant actually
+ * says when he means one he already has, and which the pattern above does not
+ * match. The first version therefore emitted no project step at all and the
+ * plan silently used whichever project the message had been filed under.
+ *
+ * Both patterns now produce the same `project` step. Whether it exists is the
+ * resolver's job either way, so the presence or absence of the word "new" stops
+ * being load-bearing — which is the right outcome: it was never a reliable
+ * signal about Grant's intent, only about his phrasing.
+ */
+const NAMED_PROJECT = new RegExp(
+  String.raw`\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
+  'i',
+)
 
 /**
  * A request to report on what the sources say.
@@ -133,9 +185,11 @@ function askablePart(instruction: string): string {
 export function readPlan(instruction: string): Plan | null {
   const steps: Step[] = []
 
-  const newProject = NEW_PROJECT.exec(instruction)
-  const projectName = newProject === null ? null : String(newProject[1]).trim()
-  if (projectName !== null) steps.push({ kind: 'create_project', name: projectName })
+  const found = NEW_PROJECT.exec(instruction) ?? NAMED_PROJECT.exec(instruction)
+  const projectName = found === null ? null : String(found[1]).trim()
+  // `project`, not `create_project`. Whether it exists is a fact about the
+  // world and this function does not touch the world.
+  if (projectName !== null) steps.push({ kind: 'project', name: projectName })
 
   const links = linkRequest(instruction)
   if (links !== null && links.intent !== 'discuss') {
@@ -162,7 +216,9 @@ export function readPlan(instruction: string): Plan | null {
 
   // One intention is not a plan. Creating a project is scaffolding for whatever
   // follows, so it does not earn its own step towards the threshold.
-  const substantive = steps.filter((s) => s.kind !== 'create_project')
+  const substantive = steps.filter(
+    (s) => s.kind !== 'project' && s.kind !== 'create_project' && s.kind !== 'use_project',
+  )
   if (substantive.length < 2) return null
 
   return {
@@ -185,8 +241,18 @@ export function describePlan(plan: Plan): string {
   const lines = plan.steps.map((step, i) => {
     const n = `${String(i + 1)}.`
     switch (step.kind) {
+      case 'project':
+        // Unresolved. Only reachable if a caller describes a plan without
+        // resolving it first, which is a bug — and one that should read as a
+        // question rather than as a decision.
+        return `${n} Work on “${step.name}” — I will check whether that already exists.`
+      case 'use_project':
+        return `${n} Use your existing “${step.name}” notebook.`
       case 'create_project':
-        return `${n} Start a new project called “${step.name}”, with its own notebook.`
+        return (
+          `${n} ⚠️ Start a BRAND NEW project called “${step.name}” with a new notebook — ` +
+          'you have nothing by that name. Say so if you meant an existing one.'
+        )
       case 'attach':
         return `${n} Attach that ${step.link.kind === 'notion' ? 'Notion page' : 'notebook'} to it.`
       case 'add_source':
@@ -207,6 +273,10 @@ export function describePlan(plan: Plan): string {
     'Go ahead and I will start. Say what to change if I have it wrong.',
   ].join('\n')
 }
+
+/** True when the plan will create something in Grant's Google account. */
+export const createsSomething = (plan: Plan): boolean =>
+  plan.steps.some((s) => s.kind === 'create_project')
 
 /** The link a plan's `ask` step should be answered against, if any. */
 export const firstSource = (plan: Plan): FoundLink | null => {

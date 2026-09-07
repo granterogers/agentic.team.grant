@@ -64,11 +64,12 @@
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
-import { describePlan, readPlan } from '../agents/plan.ts'
+import { createsSomething, describePlan, type Plan, readPlan, type Step } from '../agents/plan.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
+import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { transcribeTelegramVoice } from '../voice/inbound.ts'
 import { allowance, describe } from './meter.ts'
@@ -571,6 +572,93 @@ async function conversationBefore(
     }))
 }
 
+/**
+ * Decide, against reality, whether each named project already exists.
+ *
+ * Grant: *"please don't assume I wish to create a new project. This is a large
+ * task and should always be confirmed. In my example I was telling it to work
+ * on an existing project."*
+ *
+ * He was right and the cost was visible: he had a notebook called "AI
+ * learning", the planner read "a new project called AI Learning" literally and
+ * made a second one beside it. Three notebooks by the end of the session, one
+ * intention.
+ *
+ * ## Our projects first, Google second
+ *
+ * A project row is free to read and is the thing the rest of the system works
+ * against. Listing Grant's notebooks is a network call, so it happens only when
+ * nothing local matches — which is exactly the case where being wrong is
+ * expensive, and the one case where the answer is worth a round trip.
+ *
+ * ## Case- and space-insensitive, deliberately
+ *
+ * "AI Learning" and "AI learning" are the same notebook to a person, and a
+ * matcher that disagreed would recreate the exact defect this exists to close.
+ */
+async function resolveProjects(db: SqlExecutor, plan: Plan): Promise<Plan> {
+  const named = plan.steps.filter((s) => s.kind === 'project')
+  if (named.length === 0) return plan
+
+  const normalise = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ').trim()
+
+  // Ours: a project we already run, with a notebook attached.
+  const { rows } = await db.execute(`
+    select p.name, a.external_ref
+      from public.projects p
+      join public.project_attachments a using (project_id)
+     where p.status = 'active' and a.connector = 'notebooklm' and a.enabled
+  `)
+  const mine = new Map(
+    (rows as { name: string; external_ref: string }[]).map((r) => [
+      normalise(r.name),
+      r.external_ref,
+    ]),
+  )
+
+  // Grant's, when ours does not have it. One network call, only when needed.
+  let theirs: Map<string, string> | null = null
+  const google = async (): Promise<Map<string, string>> => {
+    if (theirs !== null) return theirs
+    const actions = await NotebookActions.fromVault(db)
+    if (actions === null) {
+      theirs = new Map()
+      return theirs
+    }
+    try {
+      theirs = new Map((await actions.notebooks()).map((n) => [normalise(n.title), n.id] as const))
+    } catch {
+      // A failed listing must not turn into "so I will make a new one". An
+      // unknown answer resolves to `project`, which the description renders as
+      // a question rather than as a decision.
+      theirs = new Map()
+    }
+    return theirs
+  }
+
+  const steps: Step[] = []
+  for (const step of plan.steps) {
+    if (step.kind !== 'project') {
+      steps.push(step)
+      continue
+    }
+    const key = normalise(step.name)
+    const ours = mine.get(key)
+    if (ours !== undefined) {
+      steps.push({ kind: 'use_project', name: step.name, notebookRef: ours })
+      continue
+    }
+    const found = (await google()).get(key)
+    steps.push(
+      found === undefined
+        ? { kind: 'create_project', name: step.name }
+        : { kind: 'use_project', name: step.name, notebookRef: found },
+    )
+  }
+
+  return { ...plan, steps }
+}
+
 export function instructionHandler(deps: InstructionDeps): Handler {
   return {
     kind: 'office.instruction',
@@ -601,7 +689,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // better served by doing it — a permission slip for one thing is
       // friction — so `readPlan` returns null below two substantive steps and
       // the single-step paths below take over.
-      const plan = readPlan(instruction)
+      const unresolved = readPlan(instruction)
+      const plan = unresolved === null ? null : await resolveProjects(deps.db, unresolved)
       if (plan !== null) {
         await deps.db.execute(`
           update public.jobs
@@ -613,7 +702,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           select app.request_approval(
             ${lit(job.jobId)}::uuid,
             ${lit(`Carry out ${String(plan.steps.length)} steps: ${plan.instruction.slice(0, 160)}`)},
-            ${lit('Several steps, so I would rather check I have understood before starting any of them.')},
+            ${lit(
+              createsSomething(plan)
+                ? 'This CREATES a new project and a new notebook in your Google account. ' +
+                    'Nothing by that name exists — say so if you meant an existing one.'
+                : 'Several steps, so I would rather check I have understood before starting any of them.',
+            )},
             'office.execute_plan'
           )
         `)

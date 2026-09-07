@@ -230,6 +230,19 @@ async def main() -> None:
                 })
                 return
 
+            if action == "notebooks":
+                # Read before creating. Nothing looked, once, and Grant ended
+                # up with two notebooks called the same thing.
+                emit({
+                    "ok": True,
+                    "action": action,
+                    "notebooks": [
+                        {"notebook_id": getattr(n, "id", None), "title": getattr(n, "title", None)}
+                        for n in await client.notebooks.list()
+                    ],
+                })
+                return
+
             if action == "create_notebook":
                 title = args.get("title") or ""
                 if not title.strip():
