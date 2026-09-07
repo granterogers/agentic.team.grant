@@ -55,6 +55,8 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   settings: { fn: 'hq_settings' },
   team: { fn: 'hq_team' },
   google: { fn: 'hq_google' },
+  // What to do next, for a person who has just opened this for the first time.
+  setup: { fn: 'hq_setup' },
 }
 
 /**
@@ -89,6 +91,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
+  // The way back out. There was a way in and none out, which made a consent
+  // granted through a browser effectively permanent from this page's side.
+  forget_google: { fn: 'hq_forget_google', required: [] },
 }
 
 /**
