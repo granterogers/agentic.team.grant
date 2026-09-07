@@ -97,8 +97,8 @@ async def main() -> None:
     if len(sys.argv) < 2:
         die(
             "(none)",
-            "usage: act.py <add_text|add_url|create_note|generate|poll|artifacts|"
-            "sources|ask|delete_source|delete_artifact> '<json>'",
+            "usage: act.py <add_text|add_url|create_note|create_notebook|generate|"
+            "poll|artifacts|sources|ask|delete_source|delete_artifact> '<json>'",
         )
     action = sys.argv[1]
     try:
@@ -227,6 +227,19 @@ async def main() -> None:
                     "failed": bool(getattr(artifact, "is_failed", False)),
                     "title": getattr(artifact, "title", None),
                     "url": getattr(artifact, "url", None),
+                })
+                return
+
+            if action == "create_notebook":
+                title = args.get("title") or ""
+                if not title.strip():
+                    die(action, "title is required")
+                nb = await client.notebooks.create(title.strip())
+                emit({
+                    "ok": True,
+                    "action": action,
+                    "notebook_id": getattr(nb, "id", None),
+                    "title": getattr(nb, "title", None),
                 })
                 return
 

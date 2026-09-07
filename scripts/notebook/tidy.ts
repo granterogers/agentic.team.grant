@@ -28,12 +28,39 @@
  * printed for a human to look at. A tidy-up script that guesses is a tidy-up
  * script that eventually removes the one document a project was built on — and
  * the notebook has no undo.
+ *
+ * ## And it will not delete anything Grant has not seen
+ *
+ * `--go` is no longer enough. Grant, after the first run: *"not sure what you
+ * did there, but you should always check before making any destructive action
+ * with me."* He was right, and the flag was the wrong control: it protected him
+ * from the SCRIPT running unintentionally and not at all from me running it on
+ * purpose without asking.
+ *
+ * So `--go` now requires `--confirmed-with-grant`, whose only function is to be
+ * a sentence somebody had to type after being told yes. That is a convention
+ * and not a mechanism, which is worth admitting — but it is a convention with a
+ * name, in a file, that appears in the diff and in the command, and the
+ * alternative I considered (routing deletions through the Telegram approval
+ * buttons) would put a destructive action behind a tap in a chat, which is
+ * where taps are least deliberate.
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { NotebookActions } from '../../src/notebook/actions.ts'
 
 const go = process.argv.includes('--go')
+const confirmed = process.argv.includes('--confirmed-with-grant')
+if (go && !confirmed) {
+  console.error(
+    'Refusing to delete anything.\n\n' +
+      '  --go removes sources and artifacts from a notebook, and the notebook has no\n' +
+      '  undo. Show him this report first, get a yes, and then pass\n' +
+      '  --confirmed-with-grant alongside --go.\n\n' +
+      '  Run without --go to see what it would remove.',
+  )
+  process.exit(2)
+}
 const token = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 if (token === '') {
   console.error('SUPABASE_ACCESS_TOKEN is required')
@@ -140,5 +167,6 @@ for (const nb of notebooks) {
 console.log(
   go
     ? `\nremoved ${String(removed)} of ${String(flagged)} flagged item(s).`
-    : `\n${String(flagged)} item(s) flagged. Nothing removed — re-run with --go.`,
+    : `\n${String(flagged)} item(s) flagged. Nothing removed.\n` +
+        'Show Grant this list. If he says yes: --go --confirmed-with-grant',
 )

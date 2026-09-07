@@ -1,0 +1,218 @@
+/**
+ * Reading a multi-step instruction, and saying it back before doing any of it.
+ *
+ * Grant, in a voice note attached to a YouTube link: *"I want you to push this
+ * video into a new notebook project called AI Learning, then find me the
+ * transcription and then report back to me here in Telegram all the
+ * repositories that are mentioned and provide me the URLs so I can investigate
+ * them immediately."*
+ *
+ * And, in the same breath: *"probably good idea that he confirms he
+ * understands and spits back what I want before going ahead."*
+ *
+ * Those two sentences are one feature. A single-step instruction can be acted
+ * on and reported; a four-step one has three places to go wrong before anything
+ * comes back, and by then the work is done wrongly. So a plan is written first,
+ * shown, and held until he says go.
+ *
+ * ## Why the plan is assembled and not generated
+ *
+ * Every step below corresponds to a job kind that already exists. A model
+ * asked to plan freely would produce steps nothing can execute — and the
+ * failure would look like agreement: a confident plan, approved, followed by
+ * silence. Assembling from a fixed vocabulary means the plan he approves is
+ * exactly the plan that will run, which is the whole point of showing it.
+ *
+ * The cost is real and worth naming: an instruction whose shape is not in this
+ * file gets a prose answer rather than a plan. That is recoverable by
+ * rephrasing. A plan that cannot be executed is not.
+ *
+ * ## What it reads
+ *
+ * The verbs and nouns that `actions.ts` and `links.ts` already recognise, plus
+ * two things they did not:
+ *
+ *   - **a project that does not exist yet.** "a new notebook project called AI
+ *     Learning" is a project AND a notebook AND an attachment, and Grant
+ *     should not have to make any of those by hand first.
+ *   - **a question to put to the sources once they are in.** "report back all
+ *     the repositories that are mentioned, with URLs" is not a request for an
+ *     artifact; it is a question for the notebook to answer about its own
+ *     sources, which `notebook.ask` does.
+ */
+
+import { KIND_LABEL, notebookRequest, type RequestedKind } from './actions.ts'
+import { classifyLink, type FoundLink, linkRequest } from './links.ts'
+
+/** One thing that will happen, in the order it will happen. */
+export type Step =
+  | { readonly kind: 'create_project'; readonly name: string }
+  | { readonly kind: 'add_source'; readonly link: FoundLink }
+  | { readonly kind: 'attach'; readonly link: FoundLink }
+  | { readonly kind: 'generate'; readonly artifact: RequestedKind }
+  | { readonly kind: 'ask'; readonly question: string }
+
+export interface Plan {
+  readonly steps: readonly Step[]
+  /** The project the plan is about, when the instruction named one. */
+  readonly project: string | null
+  /** The instruction as given, kept so the confirmation can quote it. */
+  readonly instruction: string
+}
+
+/**
+ * "a new project called X", in the phrasings people use.
+ *
+ * `new` is load-bearing. "add this to the coaching project" names an existing
+ * one and `links.ts` resolves it; "a new project called AI Learning" is an
+ * instruction to create something, and confusing the two either creates a
+ * duplicate or files work into a project that does not exist.
+ */
+const NEW_PROJECT =
+  /\bnew\b[^.]{0,40}?\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+["“']?([A-Za-z0-9][A-Za-z0-9 &._-]{1,48}?)["”']?(?=[.,;!?]|$)/i
+
+/**
+ * A request to report on what the sources say.
+ *
+ * Distinguished from an artifact request by what it asks FOR: a list, the
+ * names of things, the URLs. "Make me an audio overview" wants a file; "tell me
+ * every repository mentioned" wants an answer, and the notebook can answer
+ * questions about its own sources without generating anything.
+ */
+const WANTS_AN_ANSWER =
+  /\b(?:report back|tell me|list|find me|give me|what are|which|extract|pull out|summarise|summarize)\b/i
+
+/** Phrases that mean "the thing I just sent you". */
+const THE_TRANSCRIPT = /\b(?:transcription|transcript|what(?:'s| is) in it|the contents?)\b/i
+
+/**
+ * The part of a multi-step instruction that is actually a question.
+ *
+ * The first version passed the whole thing, and the notebook answered the
+ * INSTRUCTION rather than the sources: *"I operate strictly within this active
+ * notebook interface, meaning I cannot create a new notebook project called 'AI
+ * Learning', push videos to other projects, or send messages to Telegram."*
+ * Perfectly reasonable, and useless — it was asked to do the plan, not to read
+ * the video.
+ *
+ * So the clauses about moving things around come off, and what is left is the
+ * thing to ask. Cut rather than rewritten: a paraphrase would change the
+ * question Grant asked, and the answer is quoted back to him.
+ */
+function askablePart(instruction: string): string {
+  const cleaned = instruction
+    // The scaffolding clauses. Each is an instruction to this system about
+    // where things go, not a question about their contents.
+    .replace(/\bpush (?:this|that|the) [a-z]+ into[^,.]*/gi, '')
+    .replace(/\binto a new[^,.]*project[^,.]*/gi, '')
+    .replace(/\breport back to me (?:here )?(?:in|on) \w+,?/gi, 'tell me')
+    .replace(/\b(?:and )?(?:then )?find me the transcriptions?,?/gi, '')
+    .replace(/\bhere in telegram,?/gi, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\bthank you\b\.?/gi, '')
+    .replace(/\s*,\s*,/g, ',')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,;.]+|[\s,;]+$/g, '')
+    .trim()
+
+  // If cutting left nothing usable, ask the original. A bad question beats no
+  // question: the notebook's answer is at least about the sources, and Grant
+  // can see what was asked.
+  return cleaned.length < 12 ? instruction.trim() : cleaned
+}
+
+/**
+ * The plan, or null when the instruction is not multi-step.
+ *
+ * Null is not a failure: a one-step instruction is better served by doing it
+ * and saying so than by asking permission to do one thing. The threshold is
+ * two steps, and a step that only exists because a project had to be created
+ * does not count towards it — "add this to a new project called X" is one
+ * intention.
+ */
+export function readPlan(instruction: string): Plan | null {
+  const steps: Step[] = []
+
+  const newProject = NEW_PROJECT.exec(instruction)
+  const projectName = newProject === null ? null : String(newProject[1]).trim()
+  if (projectName !== null) steps.push({ kind: 'create_project', name: projectName })
+
+  const links = linkRequest(instruction)
+  if (links !== null && links.intent !== 'discuss') {
+    for (const link of links.links) {
+      steps.push(
+        link.kind === 'notebooklm' || link.kind === 'notion'
+          ? { kind: 'attach', link }
+          : { kind: 'add_source', link },
+      )
+    }
+  }
+
+  const artifacts = notebookRequest(instruction)
+  if (artifacts !== null) {
+    for (const artifact of artifacts.kinds) steps.push({ kind: 'generate', artifact })
+  }
+
+  // The question, last, because it is asked OF the sources and the sources
+  // arrive in the steps above. Ordering is not cosmetic here: asking before the
+  // video is transcribed gets a confident answer about nothing.
+  if (WANTS_AN_ANSWER.test(instruction) && (links !== null || THE_TRANSCRIPT.test(instruction))) {
+    steps.push({ kind: 'ask', question: askablePart(instruction) })
+  }
+
+  // One intention is not a plan. Creating a project is scaffolding for whatever
+  // follows, so it does not earn its own step towards the threshold.
+  const substantive = steps.filter((s) => s.kind !== 'create_project')
+  if (substantive.length < 2) return null
+
+  return {
+    steps,
+    project: projectName ?? links?.namedProject ?? null,
+    instruction: instruction.trim(),
+  }
+}
+
+/**
+ * The plan, in Grant's words rather than the system's.
+ *
+ * Numbered, because he has to be able to say "not step 3". Quoting the
+ * instruction back first, because the thing he asked for was confirmation that
+ * it was UNDERSTOOD — and a list of steps with no restatement leaves him
+ * checking a plan against his memory of what he said thirty seconds ago into a
+ * phone.
+ */
+export function describePlan(plan: Plan): string {
+  const lines = plan.steps.map((step, i) => {
+    const n = `${String(i + 1)}.`
+    switch (step.kind) {
+      case 'create_project':
+        return `${n} Start a new project called “${step.name}”, with its own notebook.`
+      case 'attach':
+        return `${n} Attach that ${step.link.kind === 'notion' ? 'Notion page' : 'notebook'} to it.`
+      case 'add_source':
+        return `${n} Put ${step.link.url} into the notebook and wait for Google to read it — a video gets transcribed, which takes a few minutes.`
+      case 'generate':
+        return `${n} Make ${KIND_LABEL[step.artifact]} from it. I will ask you before I do.`
+      case 'ask':
+        return `${n} Read what it says and answer you here.`
+      default:
+        return `${n} —`
+    }
+  })
+
+  return [
+    `Let me say that back. You want:\n`,
+    ...lines,
+    '',
+    'Go ahead and I will start. Say what to change if I have it wrong.',
+  ].join('\n')
+}
+
+/** The link a plan's `ask` step should be answered against, if any. */
+export const firstSource = (plan: Plan): FoundLink | null => {
+  for (const step of plan.steps) if (step.kind === 'add_source') return step.link
+  return null
+}
+
+/** Exported for the tests, which check the classifier and the plan agree. */
+export { classifyLink }

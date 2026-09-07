@@ -25,10 +25,12 @@
 
 import { processCallbacks } from '../src/channels/callbacks.ts'
 import { combinedNotifier, pagerChannel } from '../src/channels/notify.ts'
+import { announceStart } from '../src/channels/progress.ts'
 import { replyChannel } from '../src/channels/reply.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { instructionHandler } from '../src/handlers/instruction.ts'
 import { notebookHandlers } from '../src/handlers/notebook.ts'
+import { planHandler } from '../src/handlers/plan.ts'
 import type { Reviewer } from '../src/jobs/worker.ts'
 import { drain } from '../src/jobs/worker.ts'
 import { ProviderRouter } from '../src/providers/router.ts'
@@ -114,6 +116,7 @@ const review: Reviewer = () =>
 const orKey = process.env.OPENROUTER_API_KEY ?? ''
 const handlers = [
   ...notebookHandlers(db),
+  planHandler(db),
   ...(orKey === '' ? [] : [instructionHandler({ db, router: new ProviderRouter(db, orKey) })]),
 ]
 
@@ -145,7 +148,14 @@ const pass = async (): Promise<number> => {
     console.log(`button ${p.action}: ${p.outcome} — ${p.note.slice(0, 100)}`)
   }
 
-  const done = await drain(db, workerId, handlers, review, 10, { notify })
+  // Grant: *"I want an individual message from each bot on Telegram so I can
+  // see they are working."* Once per person per instruction, from their own
+  // bot — see `src/channels/progress.ts` for why that is not the repetition he
+  // complained about in the same breath.
+  const done = await drain(db, workerId, handlers, review, 10, {
+    notify,
+    onStart: (job) => announceStart(db, job),
+  })
   for (const r of done) {
     console.log(`${r.jobId.slice(0, 8)} ${r.finalState}: ${r.note.slice(0, 120)}`)
   }

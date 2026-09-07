@@ -180,6 +180,19 @@ export class NotebookActions {
     return parsed
   }
 
+  /**
+   * Make a new notebook.
+   *
+   * `notebook_id` is required by every other action here, so this is the one
+   * that can be called without one — Grant asked for *"a new notebook project
+   * called AI Learning"*, and until now the only way to get a notebook was for
+   * him to make it and paste the link.
+   */
+  async createNotebook(title: string): Promise<{ id: string; title: string }> {
+    const r = await this.act('create_notebook', { notebook_id: 'new', title })
+    return { id: String(r.notebook_id), title: String(r.title ?? title) }
+  }
+
   /** Put text into a notebook as a source. */
   async addText(notebookId: string, text: string, title?: string): Promise<string | null> {
     const r = await this.act('add_text', { notebook_id: notebookId, text, title })

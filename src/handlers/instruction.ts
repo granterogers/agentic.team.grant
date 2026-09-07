@@ -63,6 +63,8 @@
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
+import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
+import { describePlan, readPlan } from '../agents/plan.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -449,17 +451,124 @@ async function enqueueSource(
   // be the one the link belongs to — `enqueue_inbound` picks the most recently
   // updated active project for every inbound message. So the job is moved onto
   // the right project after it is created, in the same statement.
+  // The project as a parameter (0090). The CTE-then-update this replaced could
+  // not see the row it had just inserted, so a source addressed to one project
+  // was quietly filed under another.
   await db.execute(`
-    with made as (
-      select app.enqueue_child(
-        ${lit(job.jobId)}::uuid, 'notebook.add_source',
-        jsonb_build_object('url', ${lit(link.url)}, 'kind', ${lit(link.kind)}),
-        interval '0', false
-      ) as job_id
+    select app.enqueue_child(
+      ${lit(job.jobId)}::uuid, 'notebook.add_source',
+      jsonb_build_object('url', ${lit(link.url)}, 'kind', ${lit(link.kind)}),
+      interval '0', false, ${lit(projectId)}::uuid
     )
-    update public.jobs set project_id = ${lit(projectId)}::uuid
-     where job_id = (select job_id from made)
   `)
+}
+
+/**
+ * Complete a half-instruction from its neighbour, or leave it alone.
+ *
+ * Returns the joined text when a pair was found, else null. The pairing is
+ * RECORDED on both commands, so a message that was consumed as half of
+ * something else is not later re-read as an instruction of its own — which
+ * would do the work twice, once wrongly.
+ */
+async function pairWithNearby(
+  db: SqlExecutor,
+  job: Job,
+  payload: Payload,
+  instruction: string,
+): Promise<string | null> {
+  const half = readFragment(instruction)
+  if (!half.isBareLink && !half.needsALink) return null
+
+  const commandId = String(payload.command_id ?? '')
+  if (commandId === '') return null
+
+  // Same person, same chat, inside the window, not already paired, and not
+  // this message. `origin_ref` is `chat:message`, so the chat is its first
+  // field — a link shared into Ines's chat must not complete an instruction
+  // typed into Tom's.
+  const { rows } = await db.execute(`
+    select c.command_id::text as command_id,
+           coalesce(c.transcript, c.instruction) as said
+      from public.inbound_commands c
+      join public.inbound_commands self on self.command_id = ${lit(commandId)}::uuid
+     where c.command_id <> self.command_id
+       and c.origin_channel = self.origin_channel
+       and split_part(c.origin_ref, ':', 1) = split_part(self.origin_ref, ':', 1)
+       and coalesce(c.subject, c.actor) = coalesce(self.subject, self.actor)
+       and c.paired_with is null
+       and c.callback_action is null
+       and abs(extract(epoch from (c.received_at - self.received_at)))
+             < ${String(PAIRING_WINDOW_MINUTES * 60)}
+     order by abs(extract(epoch from (c.received_at - self.received_at))) asc
+     limit 4
+  `)
+
+  for (const raw of rows) {
+    const other = raw as { command_id: string; said: string | null }
+    const said = String(other.said ?? '')
+    if (said.trim() === '') continue
+    const theirs = readFragment(said)
+
+    // Each half must supply what the other lacks. Two bare links are two
+    // links; two instructions are two instructions.
+    const joined =
+      half.isBareLink && theirs.needsALink
+        ? join(said, instruction)
+        : half.needsALink && theirs.isBareLink
+          ? join(instruction, said)
+          : null
+    if (joined === null) continue
+
+    // Recorded on both, so neither is acted on again alone. The other command
+    // may already have produced a job — that one is done and its output stands;
+    // this is about not doing it a THIRD time on the next drain.
+    await db.execute(`
+      update public.inbound_commands
+         set paired_with = case
+               when command_id = ${lit(commandId)}::uuid then ${lit(other.command_id)}::uuid
+               else ${lit(commandId)}::uuid end,
+             instruction = case
+               when command_id = ${lit(commandId)}::uuid then ${lit(joined)}
+               else instruction end
+       where command_id in (${lit(commandId)}::uuid, ${lit(other.command_id)}::uuid)
+    `)
+    await db.execute(`
+      update public.jobs
+         set pinned_config = pinned_config
+               || jsonb_build_object('instruction', ${lit(joined)},
+                                     'paired_with', ${lit(other.command_id)})
+       where job_id = ${lit(job.jobId)}::uuid
+    `)
+    return joined
+  }
+
+  return null
+}
+
+/**
+ * The turns before this one, as the model will see them.
+ *
+ * Empty for a message with no command id — an MCP-enqueued instruction has no
+ * chat behind it — which is correct rather than degraded: there is no
+ * conversation to carry.
+ */
+async function conversationBefore(
+  db: SqlExecutor,
+  commandId: string,
+): Promise<readonly { said: string; answered: string | null }[]> {
+  if (commandId === '') return []
+  const { rows } = await db.execute(`select app.conversation_before(${lit(commandId)}::uuid) as t`)
+  const raw = (rows[0] as { t: unknown } | undefined)?.t
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((entry) => entry as { said?: string; answered?: string | null })
+    .filter((entry) => typeof entry.said === 'string' && entry.said.trim() !== '')
+    .map((entry) => ({
+      said: String(entry.said),
+      answered:
+        entry.answered === null || entry.answered === undefined ? null : String(entry.answered),
+    }))
 }
 
 export function instructionHandler(deps: InstructionDeps): Handler {
@@ -477,7 +586,47 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       }
       if (instruction === '') throw new Error('the command carried no instruction')
 
+      // Two messages that are one instruction. Grant shares a video and then
+      // says what to do with it, or the reverse; both halves are correct alone
+      // and wrong apart. See `src/agents/pairing.ts`.
+      const paired = await pairWithNearby(deps.db, job, payload, instruction)
+      if (paired !== null) instruction = paired
+
       const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)
+
+      // Is this several things at once? If so, say it back and hold it.
+      //
+      // Grant: *"probably a good idea that he confirms he understands and spits
+      // back what I want before going ahead."* A one-step instruction is
+      // better served by doing it — a permission slip for one thing is
+      // friction — so `readPlan` returns null below two substantive steps and
+      // the single-step paths below take over.
+      const plan = readPlan(instruction)
+      if (plan !== null) {
+        await deps.db.execute(`
+          update public.jobs
+             set pinned_config = pinned_config
+                   || jsonb_build_object('plan_steps', ${lit(JSON.stringify(plan.steps))}::jsonb)
+           where job_id = ${lit(job.jobId)}::uuid
+        `)
+        await deps.db.execute(`
+          select app.request_approval(
+            ${lit(job.jobId)}::uuid,
+            ${lit(`Carry out ${String(plan.steps.length)} steps: ${plan.instruction.slice(0, 160)}`)},
+            ${lit('Several steps, so I would rather check I have understood before starting any of them.')},
+            'office.execute_plan'
+          )
+        `)
+        return {
+          body: describePlan(plan),
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'deterministic',
+          model: null,
+        } as unknown as HandlerOutput
+      }
 
       // Does this carry a link? A link is the more specific reading and is
       // checked first: "add this video and make an audio overview" is two
@@ -499,6 +648,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // Telegram cites the same corpus as one answered in Slack. §22's rule
       // that the source interface must not change the organisation's
       // behaviour applies to the answer as much as to the routing.
+      // What was said before this. Grant sent six messages in forty-three
+      // seconds — a correction, a fact, an instruction, a check that we had
+      // followed — and each was answered as a standalone sentence because
+      // nothing carried the exchange (0089).
+      const turns = await conversationBefore(deps.db, String(payload.command_id ?? ''))
+
       const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
       const context = contextBlock(hits)
 
@@ -524,6 +679,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       : `How you talk: ${who.communication_style} `) +
                     'You are replying to Grant, who runs the place, in a private chat. He is ' +
                     'a colleague you know well, not a customer.\n\n' +
+                    (turns.length === 0
+                      ? ''
+                      : 'You are mid-conversation. The turns before this one follow; the last ' +
+                        'message is what you are answering. He corrects himself, changes his ' +
+                        'mind and checks you have followed — read the latest message as a ' +
+                        'continuation, not as a fresh request, and do not repeat what you ' +
+                        'have already said.\n\n') +
                     'Write like a person messaging a person. Use contractions. Start with ' +
                     'the answer, not a restatement of the question. Have an opinion where ' +
                     'you have one and say so when you do not. A dry aside is fine if it is ' +
@@ -543,6 +705,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ...(context === ''
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+                // The exchange, as an exchange. Replayed as real turns rather
+                // than pasted into the system prompt as a transcript: a model
+                // handed "here is what was said" reasons about the text, and a
+                // model handed the turns reasons about the conversation.
+                ...turns.flatMap((t) =>
+                  t.answered === null
+                    ? [{ role: 'user' as const, content: t.said }]
+                    : [
+                        { role: 'user' as const, content: t.said },
+                        { role: 'assistant' as const, content: t.answered },
+                      ],
+                ),
                 { role: 'user', content: instruction },
               ],
               maxTokens: 2_000,

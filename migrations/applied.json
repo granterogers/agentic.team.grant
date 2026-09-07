@@ -84,5 +84,9 @@
   "0083_nothing_is_generated_without_you.sql": "2d8ae9dd2af27aba91089d073f7d5bc44d4d15efd7dc018138aa28f77a4e73cb",
   "0084_the_request_is_signed_by_someone.sql": "499b0fca031d947910835352830fdfc81708bfd48e42b74f60a085aa705f7f11",
   "0085_the_button_vocabulary_grew.sql": "c08e638be03ba2763154f00276c55cd7a6dc0ebf3f5e265607e7656861a53068",
-  "0086_declining_is_answering.sql": "2bfcba53fdf9f71fd8fdd970520199ac89886748994646dd6a0a798c9cd5cc4a"
+  "0086_declining_is_answering.sql": "2bfcba53fdf9f71fd8fdd970520199ac89886748994646dd6a0a798c9cd5cc4a",
+  "0087_say_it_back_before_doing_it.sql": "a8bfc2cdd879a36a0892a550850f9395aa91f97b7c9592204a9139b49d1e24e9",
+  "0088_two_messages_one_instruction.sql": "ec03a3053320406674cc3a923ae91552f030edea4fef8dafcd21b7e364e7bfa1",
+  "0089_a_conversation_not_a_command_line.sql": "74959a29336fc52633444e483eceff87fd875aa91b1b8fc111f7316dbebbab8d",
+  "0090_a_child_can_belong_elsewhere.sql": "7197d9c040174d8643ca91ceb8f4f017aedc29e64183050526fd7b0a1ea36d2f"
 }

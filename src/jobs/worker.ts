@@ -212,6 +212,19 @@ export const runJob = async (
   handlers: readonly Handler[],
   review: Reviewer,
   notify?: Notifier,
+  /**
+   * Called before the handler, so the person doing the work can say so.
+   *
+   * A function rather than a channel import, for the same reason `notify` is:
+   * the worker knows nothing about Slack or Telegram (§5), and a worker that
+   * imported a bot registry to send a courtesy message would have acquired a
+   * channel dependency for the least important message in the system.
+   *
+   * Its failure is swallowed on purpose. The work proceeds and the result
+   * arrives by the usual route; a job that died because an "on it" could not be
+   * sent would be absurd.
+   */
+  onStart?: (job: Job) => Promise<unknown>,
 ): Promise<WorkerResult> => {
   const handler = handlers.find((h) => h.kind === job.kind)
   if (handler === undefined) {
@@ -220,6 +233,14 @@ export const runJob = async (
     // misleading attempt count.
     await moveTo(db, job.jobId, 'failed', `no handler for kind ${job.kind}`)
     throw new NoHandlerError(job.kind)
+  }
+
+  if (onStart !== undefined) {
+    try {
+      await onStart(job)
+    } catch {
+      // Deliberately silent. See the parameter's own comment.
+    }
   }
 
   let output: HandlerOutput
@@ -475,7 +496,11 @@ export const drain = async (
   handlers: readonly Handler[],
   review: Reviewer,
   max = 25,
-  options: { readonly recover?: boolean; readonly notify?: Notifier } = {},
+  options: {
+    readonly recover?: boolean
+    readonly notify?: Notifier
+    readonly onStart?: (job: Job) => Promise<unknown>
+  } = {},
 ): Promise<WorkerResult[]> => {
   // Sweep first. A job held by a dead worker counts against capacity, so
   // skipping this makes a worker unable to dequeue for reasons that look
@@ -490,7 +515,7 @@ export const drain = async (
     const job = await dequeue(db, workerId)
     if (job === null) break
     try {
-      done.push(await runJob(db, job, handlers, review, options.notify))
+      done.push(await runJob(db, job, handlers, review, options.notify, options.onStart))
     } catch (error) {
       done.push({
         jobId: job.jobId,

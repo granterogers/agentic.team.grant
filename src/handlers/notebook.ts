@@ -727,6 +727,46 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const payload = await payloadOf(db, job)
         const question = String(payload.question ?? '')
         if (question.trim() === '') throw new Error('no question was given')
+
+        // A question about a video cannot be answered until Google has
+        // transcribed it, and nothing tells us when that finished. So the step
+        // LOOKS, rather than trusting the delay that scheduled it: a plan that
+        // asked too early would get a confident answer about a source the
+        // notebook had not read, which is the worst of the available outcomes.
+        if (payload.await_sources === true) {
+          const tick = Number(payload.tick ?? 1)
+          const pending = (await actions.sources(notebook.id)).filter(
+            (src) => !/ready/i.test(src.status),
+          )
+          if (pending.length > 0) {
+            if (tick >= 8) {
+              throw new Error(
+                `${String(pending.length)} source(s) are still not ready after ` +
+                  `${String(tick)} checks; the notebook cannot answer about them yet`,
+              )
+            }
+            await db.execute(`
+              select app.enqueue_child(
+                coalesce(
+                  (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+                  ${lit(job.jobId)}::uuid
+                ),
+                'notebook.ask',
+                (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid)
+                  || jsonb_build_object('tick', ${String(tick + 1)}),
+                interval '90 seconds', true
+              )
+            `)
+            await db.execute(
+              `update public.jobs set announce = false where job_id = ${lit(job.jobId)}::uuid`,
+            )
+            return deterministic(
+              `Still waiting on ${String(pending.length)} source(s) to finish processing ` +
+                `(check ${String(tick)}). I will ask again shortly.`,
+              notebook,
+            )
+          }
+        }
         const answer = await actions.ask(notebook.id, question)
         await record(db, 'ask', {
           notebook: notebook.id,
