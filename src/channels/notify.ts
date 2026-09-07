@@ -109,6 +109,16 @@ export async function resultContext(
       ? null
       : `${projectUrlBase.replace(/\/+$/, '')}/projects/${job.projectId}`
 
+  // An approval request gets two buttons and only two (0083). Swapped for the
+  // usual six rather than added to them: 👍 on "may I generate this?" answers
+  // nothing, and Undo on a thing that has not happened is worse than nothing.
+  const asking = await db.execute(`
+    select app.open_approval_for_job(${lit(job.jobId)}::uuid) as id
+  `)
+  if ((asking.rows[0] as { id?: string | null } | undefined)?.id != null) {
+    return { staff, reviewed, actions: ['approve', 'decline'], projectUrl }
+  }
+
   // Undo is offered only when there is something to undo — an offer that does
   // nothing is worse than no offer, because it teaches that Undo does nothing.
   const offers = await db.execute(`
@@ -118,7 +128,13 @@ export async function resultContext(
   const undoable = Number((offers.rows[0] as { n?: number } | undefined)?.n ?? 0) > 0
   const actions = ACTIONS.filter(
     (action) =>
-      (action !== 'undo' || undoable) && (action !== 'open_project' || projectUrl !== null),
+      // The approval pair never appears on an ordinary result — there is
+      // nothing to approve — and the list is filtered rather than partitioned
+      // so that a new action added to ACTIONS has to say where it belongs.
+      action !== 'approve' &&
+      action !== 'decline' &&
+      (action !== 'undo' || undoable) &&
+      (action !== 'open_project' || projectUrl !== null),
   )
 
   return { staff, reviewed, actions, projectUrl }

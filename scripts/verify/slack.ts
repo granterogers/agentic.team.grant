@@ -39,6 +39,7 @@ import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
 import { computeSignature } from '../../src/slack/signature.ts'
 import { TelegramClient } from '../../src/telegram/api.ts'
+import { CALLBACK_ACTIONS } from '../../src/telegram/message.ts'
 import { TelegramPager } from '../../src/telegram/pager.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
@@ -1196,6 +1197,47 @@ const health = await db.execute(`select * from public.delivery_health order by c
 console.log('\ndelivery health:')
 for (const row of health.rows) console.log(`  ${JSON.stringify(row)}`)
 
+// ---------------------------------------------------------------------------
+// The button vocabulary, on both sides of the wire
+//
+// `ACTIONS` is the list the composer renders and Slack sends back. The database
+// has its own copy in `inbound_callback_action_known`, and that copy is the one
+// that can drift silently — which it did: 0011 wrote it when six was the whole
+// list, 0083 added a seventh and an eighth, and the first press of "Go ahead"
+// was refused by a check constraint, reported as a 503, and retried by Telegram
+// forever.
+//
+// It is the second time exactly this has happened (0076, voice notes). So the
+// list is no longer kept in step by a comment asking for it: every action is
+// inserted here, and any one the database refuses fails this suite.
+// ---------------------------------------------------------------------------
+{
+  const canonical = [...ACTIONS].map((a) => CALLBACK_ACTIONS[a])
+  const refused: string[] = []
+  for (const action of canonical) {
+    const key = `slack:vocab:${action}-${stamp}`
+    try {
+      await db.execute(`
+      insert into public.inbound_commands
+        (origin_channel, origin_ref, actor, instruction, dedupe_key,
+         callback_action, received_at)
+      values ('slack', 'CVOCAB:1.0', 'UVOCAB', '', ${lit(key)},
+              ${lit(action)}, app.now_utc())
+    `)
+      await db.execute(`delete from public.inbound_commands where dedupe_key = ${lit(key)}`)
+    } catch {
+      refused.push(action)
+    }
+  }
+  record(
+    'every button the composer can render is a button the database accepts',
+    refused.length === 0
+      ? `${String(canonical.length)} action(s), all accepted`
+      : `refused: ${refused.join(', ')} — the constraint and ACTIONS have drifted`,
+    refused.length === 0,
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) {
@@ -1249,6 +1291,7 @@ try {
        and state not in ('complete', 'cancelled', 'failed');
     update public.projects set status = 'archived' where project_id = ${lit(PROJECT_ID)}::uuid;
   `)
+
   console.log('fixtures retired; run `npm run purge:fixtures -- --go` for anything left.')
 } catch (error) {
   console.log(`cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)

@@ -73,6 +73,17 @@ import { allowance, describe } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/** Who is answering, and everything that makes them sound like themselves. */
+interface Speaker {
+  readonly slug: string
+  readonly name: string
+  readonly title: string
+  /** §9's recorded voice. Read by the prompt; the reason they differ. */
+  readonly communication_style: string | null
+  readonly responsibilities: string | null
+  readonly reason: string
+}
+
 export interface InstructionDeps {
   readonly db: SqlExecutor
   readonly router: ProviderRouter
@@ -99,13 +110,14 @@ async function speaker(
   db: SqlExecutor,
   addressedTo: string | null,
   instruction: string,
-): Promise<{ slug: string; name: string; title: string; reason: string }> {
+): Promise<Speaker> {
   const byName = addressedTo === null || addressedTo === '' ? null : addressedTo
   if (byName !== null) {
-    const { rows } = await db.execute(
-      `select slug, name, title from public.staff where slug = ${lit(byName)} and active`,
-    )
-    const s = rows[0] as { slug: string; name: string; title: string } | undefined
+    const { rows } = await db.execute(`
+      select slug, name, title, communication_style, responsibilities
+        from public.staff where slug = ${lit(byName)} and active
+    `)
+    const s = rows[0] as Omit<Speaker, 'reason'> | undefined
     if (s !== undefined) {
       return { ...s, reason: 'addressed directly — Grant opened this person’s bot' }
     }
@@ -120,12 +132,20 @@ async function speaker(
   const classified = classifyIntent(instruction)
   const { roster, reason } = pickRoster(classified, instruction)
   const chosen = roster[0] ?? 'chief-of-staff'
-  const { rows } = await db.execute(
-    `select slug, name, title from public.staff where slug = ${lit(chosen)} and active`,
-  )
-  const s = rows[0] as { slug: string; name: string; title: string } | undefined
+  const { rows } = await db.execute(`
+    select slug, name, title, communication_style, responsibilities
+      from public.staff where slug = ${lit(chosen)} and active
+  `)
+  const s = rows[0] as Omit<Speaker, 'reason'> | undefined
   return s === undefined
-    ? { slug: 'chief-of-staff', name: 'Chief of Staff', title: 'Chief of Staff', reason }
+    ? {
+        slug: 'chief-of-staff',
+        name: 'Claire',
+        title: 'Chief of Staff',
+        communication_style: null,
+        responsibilities: null,
+        reason,
+      }
     : { ...s, reason }
 }
 
@@ -145,8 +165,8 @@ async function act(
 ): Promise<string | null> {
   if (job.projectId === null) {
     return (
-      'I can start that, but this instruction is not attached to a project, so I have no ' +
-      'notebook to put it in. Say which project and I will.'
+      'Happy to, but this one is not attached to a project, so I have nowhere to put it. ' +
+      'Tell me which project and it is done.'
     )
   }
 
@@ -165,21 +185,24 @@ async function act(
   const notebook = (rows[0] as { display_name?: string } | undefined)?.display_name
   if (notebook === undefined) {
     return (
-      'I would need a notebook for that. This project has no NotebookLM notebook attached, ' +
-      'and I am not going to write into whichever of yours I find first — attach one on the ' +
-      'web front end and ask me again.'
+      'I need a notebook for that one. This project has not got one attached, and I am not ' +
+      'about to write into whichever of yours I find first. Send me its NotebookLM link, or ' +
+      'attach it on the web front end, and ask me again.'
     )
   }
 
   const started: string[] = []
   for (const kind of kinds) {
-    // announce = false: this reply IS the announcement. The generate job's own
-    // output would otherwise arrive seconds later saying the same thing twice.
+    // announce = true, since 0083. It used to be false because the generate
+    // job's output repeated this reply — but now that output is the request for
+    // permission, with the buttons on it, and it is the most important message
+    // in the exchange. The handler forces it back on anyway if a caller gets
+    // this wrong: a gate whose request can be muted is not a gate.
     await db.execute(`
       select app.enqueue_child(
         ${lit(job.jobId)}::uuid, 'notebook.generate',
         jsonb_build_object('kind', ${lit(kind)}, 'instructions', ${lit(instructions)}),
-        interval '0', false
+        interval '0', true
       )
     `)
     started.push(KIND_LABEL[kind])
@@ -195,13 +218,25 @@ async function act(
   const meter = await allowance(db, kinds[0] ?? 'ask')
   const cost = `\n\n${describe(meter)}`
 
+  // Written the way a person writes a one-line acknowledgement, not the way a
+  // system writes a status. Grant: *"the messages they're sending are a bit too
+  // robotic — try to make them sound a bit more personable."* The LLM path got
+  // the roster's `communication_style`; this path cannot, because it is a
+  // statement of fact about the queue and putting a model between him and a
+  // fact would be a paraphrase of something already true. So it is just written
+  // better.
+  //
+  // And it must not promise the generation. 0083 put a gate in front of every
+  // one of them, so the next thing Grant sees is a request for permission — the
+  // first version of this said "asking Google now" while the job was in fact
+  // asking HIM, which is a small lie that makes the button arriving after it
+  // look like a malfunction.
   return (
     (started.length === 1
-      ? `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes; I am ` +
-        'watching for it and will post the link here and in the project channel when it lands.'
-      : `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes each; I ` +
-        'am watching for them and will post the links here and in the project channel as they ' +
-        'land.') + cost
+      ? `Right — ${list} for "${String(notebook)}". I'll ping you to approve it in a moment, ` +
+        "and once you do I'll post the link here and in the project channel."
+      : `Right — ${list} for "${String(notebook)}". I'll ping you to approve each one, then ` +
+        'post the links here and in the project channel as they land.') + cost
   )
 }
 
@@ -299,7 +334,7 @@ async function whichProject(
       ask:
         `I do not have a project called “${named}”. ` +
         (active.length === 0
-          ? 'There are no active projects yet — tell me a name and a notebook and I will start one.'
+          ? 'There are no active projects yet — give me a name and a notebook and I will start one.'
           : `The active ones are ${active.map((p) => `“${p.name}”`).join(', ')}.`),
     }
   }
@@ -308,14 +343,14 @@ async function whichProject(
   if (active.length === 0) {
     return {
       project: null,
-      ask: 'There are no active projects to put that in. Give me a name for one and a notebook to hang it on, and I will set it up.',
+      ask: 'Nothing active to put that in yet. Give me a name and a notebook to hang it on and I will set one up.',
     }
   }
   return {
     project: null,
     ask:
       `Which project is that for? ${active.map((p) => `“${p.name}”`).join(', ')}. ` +
-      'Say the name and send it again — I would rather ask than file it in the wrong place.',
+      'Tell me which and send it again — I would rather ask than file it somewhere wrong.',
   }
 }
 
@@ -465,11 +500,30 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 {
                   role: 'system',
                   content:
-                    `You are ${who.name}, ${who.title} on a small team. You are replying to ` +
-                    'Grant, who runs it, in a private chat. Write as a colleague would: plain ' +
-                    'prose, first person, no preamble, no bullet points, under 120 words. Do ' +
-                    'not sign your name — the chat already shows who you are. If you are ' +
-                    'inferring rather than reporting, say so.' +
+                    // §9 records a `communication_style` for every one of these
+                    // people and this prompt ignored it, which is why Grant
+                    // said the messages read "a bit too robotic": eight
+                    // colleagues generated from one template with the name
+                    // swapped in. The style and the remit are what make Daniel
+                    // sound sceptical and Emma sound careful, and they are in
+                    // the database precisely so this is not written eight times.
+                    `You are ${who.name}, ${who.title} on a small team. ` +
+                    (who.responsibilities === null ? '' : `Your remit: ${who.responsibilities} `) +
+                    (who.communication_style === null
+                      ? ''
+                      : `How you talk: ${who.communication_style} `) +
+                    'You are replying to Grant, who runs the place, in a private chat. He is ' +
+                    'a colleague you know well, not a customer.\n\n' +
+                    'Write like a person messaging a person. Use contractions. Start with ' +
+                    'the answer, not a restatement of the question. Have an opinion where ' +
+                    'you have one and say so when you do not. A dry aside is fine if it is ' +
+                    'actually dry. Under 120 words, first person, no bullet points, no ' +
+                    'headings.\n\n' +
+                    'Never write: "I hope this helps", "Let me know if", "Certainly", "As ' +
+                    'an AI", "I have drafted", "Here is a summary of". Do not sign your ' +
+                    'name — the chat already shows who you are. Do not thank him for ' +
+                    'asking. If you are inferring rather than reporting, say so inside the ' +
+                    'sentence rather than as a disclaimer at the end.' +
                     (context === ''
                       ? ' Nothing in our own records matched this, so answer from general ' +
                         'knowledge and open by saying our records had nothing on it.'

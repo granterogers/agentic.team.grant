@@ -121,6 +121,9 @@ const deterministic = (body: string, notebook: { id: string; name: string }): Ha
 const MAX_TICKS = 10
 const TICK_GAP = '2 minutes'
 
+/** Capitalised for the start of a sentence: "mind map is away" reads as a typo. */
+const sentence = (v: string): string => `${v.charAt(0).toUpperCase()}${v.slice(1)}`
+
 const LABEL: Record<string, string> = {
   audio: 'audio overview',
   slides: 'slide deck',
@@ -309,6 +312,54 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             ? undefined
             : String(payload.instructions)
 
+        // The gate, before the meter and before anything else (0083). Grant:
+        // *"when it comes to any of the agents deciding to generate anything on
+        // the notebook, I would like manual approval for that."*
+        //
+        // Here rather than in the office because three things can start a
+        // generation — an instruction, an MCP client, a scheduled retry — and a
+        // gate on the one door he watches is no gate at all on the two he does
+        // not. The only thing that writes an approval is a button press.
+        const approvedBy = payload.approved_by
+        if (approvedBy === undefined || approvedBy === null || String(approvedBy) === '') {
+          const forecast = await allowance(db, kind)
+          const { rows: asked } = await db.execute(`
+            select app.request_generation_approval(
+              ${lit(job.jobId)}::uuid, ${lit(kind)},
+              ${lit(`${LABEL[kind] ?? kind} for “${notebook.name}”`)},
+              ${lit(`It costs about ${String(forecast.operationCost ?? 5)} of the notebook's allowance. ${describe(forecast)}`)}
+            ) as id
+          `)
+          const asking = String((asked[0] as { id: string }).id)
+
+          // Forced, whatever the enqueuer wanted. The office silences the
+          // generation job because its own reply already acknowledged the
+          // request (`announce = false`), and that was right until this gate
+          // existed — after which it produced the worst possible outcome:
+          // nothing generated, and nobody told why. A gate whose request can be
+          // muted by a caller is not a gate.
+          await db.execute(
+            `update public.jobs set announce = true where job_id = ${lit(job.jobId)}::uuid`,
+          )
+
+          return {
+            body:
+              `Shall I make the ${LABEL[kind] ?? kind} in "${notebook.name}"?` +
+              (instructions === undefined ? '' : `\n\n${instructions}`) +
+              `\n\n${describe(forecast)}` +
+              '\n\nNothing happens until you say go ahead.',
+            confidence: 'high',
+            evidence: 'verified',
+            // The request itself, so the trail from "she asked" to "he said
+            // yes" is one join. §10's gate wants something checkable and a
+            // blocker row is exactly that.
+            sources: [`approval:${asking}`],
+            contradictions: null,
+            path: 'deterministic',
+            model: null,
+          } as unknown as HandlerOutput
+        }
+
         // The meter, before spending anything (0078). Google's allowance is
         // compute-based since 2 September and cannot be queried, so this is our
         // own ledger — and the honest thing to do when it says no is to
@@ -411,10 +462,9 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         `)
 
         return deterministic(
-          `Started the ${LABEL[kind] ?? kind} in the notebook "${notebook.name}". ` +
-            `Task ${String(started.taskId)}, ` +
-            `state ${started.state}. Google takes a few minutes; I am watching for it and will ` +
-            'post the link here when it lands.',
+          `${sentence(LABEL[kind] ?? kind)} is away — Google has it (task ${String(started.taskId)}, ` +
+            `${started.state}). Few minutes usually. I am watching for it and will post the ` +
+            'link the moment it appears.',
           notebook,
         )
       },
@@ -479,9 +529,8 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         })
 
         return deterministic(
-          `Added to the notebook "${notebook.name}": ${url}\n\nGoogle is reading it now — ` +
-            'a video takes a few minutes to transcribe. It is a source the whole team can ' +
-            'cite from once it lands.',
+          `In it goes — "${notebook.name}" now has ${url}\n\nGoogle is reading it; a video ` +
+            'takes a few minutes to transcribe. Once it lands the whole team can cite it.',
           notebook,
         )
       },
@@ -635,9 +684,9 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
              where artifact_id = ${lit(rowId)}::uuid
           `)
           return deterministic(
-            `The ${LABEL[row.kind] ?? row.kind} is ready: “${title}”\n${url}\n\n` +
+            `${sentence(LABEL[row.kind] ?? row.kind)} is done — “${title}”\n${url}\n\n` +
               (direct
-                ? `It is in the notebook "${notebook.name}" and in this project's store.`
+                ? `It is in "${notebook.name}" and in the project's store here too.`
                 : `That link opens the notebook "${notebook.name}" — this one is interactive ` +
                   "and has no file of its own. It is in this project's store either way."),
             notebook,

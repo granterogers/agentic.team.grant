@@ -148,6 +148,29 @@ const RULES: readonly Rule[] = [
       /^(?:research|investigate|compare|review|draft|write|summari[sz]e|analy[sz]e|outline|assess|evaluate|audit)\s+(?!of\b)/i,
   },
 
+  {
+    // The productive imperatives, which are a different case from the
+    // investigative ones above and were falling through to an unconfident
+    // `thought` — "Generate a slide deck in the notebook" read as thinking out
+    // loud, which the new narration channel put in front of Grant in plain
+    // English on its first day.
+    //
+    // `direct_command`, not `light_investigation`, and this does not break §6's
+    // downward rule. That rule says take the cheaper reading of an AMBIGUOUS
+    // instruction: "research X" could be ten minutes or ten days, so read it as
+    // ten minutes. "Make a slide deck" has no cheaper reading — there is no
+    // smaller version of making the thing. The ambiguity the rule protects
+    // against is absent, so deferring to it here would only be wrong politely.
+    //
+    // Safe to read this way now in a sense it would not have been last week:
+    // 0083 puts every notebook generation behind Grant's own button, so the
+    // cost of over-reading one is a question he answers with a tap.
+    name: 'make-this',
+    intent: 'direct_command',
+    pattern:
+      /^(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put)\s+/i,
+  },
+
   // --- suggestion: an idea offered, not an instruction given.
   {
     name: 'we-should-maybe',

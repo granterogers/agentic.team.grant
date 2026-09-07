@@ -23,6 +23,7 @@
  * dependency on somebody's open window.
  */
 
+import { processCallbacks } from '../src/channels/callbacks.ts'
 import { combinedNotifier, pagerChannel } from '../src/channels/notify.ts'
 import { replyChannel } from '../src/channels/reply.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
@@ -32,6 +33,7 @@ import type { Reviewer } from '../src/jobs/worker.ts'
 import { drain } from '../src/jobs/worker.ts'
 import { ProviderRouter } from '../src/providers/router.ts'
 import { SlackClient } from '../src/slack/api.ts'
+import { narrateHandoffs } from '../src/slack/narrate.ts'
 import { slackChannel } from '../src/slack/notifier.ts'
 import { SlackOffice } from '../src/slack/office.ts'
 import { TelegramClient } from '../src/telegram/api.ts'
@@ -54,6 +56,8 @@ const workerId = `work-${process.pid}-${Date.now().toString(36)}`
 // by the same path. A worker with its own notification code is a worker whose
 // output looks different for no reason.
 const channels = []
+/** Set when Slack is installed, so the narrator can run after the drain. */
+let floor: (() => Promise<void>) | null = null
 const botToken = String(
   (
     await db.execute(
@@ -71,7 +75,17 @@ if (botToken !== '') {
       )
     ).rows[0]?.team_id,
   )
-  channels.push(slackChannel(db, await SlackOffice.configured(db, slack), { teamId }))
+  const office = await SlackOffice.configured(db, slack)
+  channels.push(slackChannel(db, office, { teamId }))
+
+  // Grant: *"create an additional channel in Slack where I see the
+  // communications between the Chief of Staff and the rest of the members."*
+  // Runs AFTER the drain, so a decision taken this pass is narrated this pass.
+  floor = async (): Promise<void> => {
+    for (const s of await narrateHandoffs(db, slack, office, teamId)) {
+      if (s.outcome === 'sent') console.log(`floor: narrated ${s.jobId.slice(0, 8)}`)
+    }
+  }
 }
 const pager = await pagerBot(db)
 if (pager !== null) {
@@ -103,12 +117,51 @@ const handlers = [
   ...(orKey === '' ? [] : [instructionHandler({ db, router: new ProviderRouter(db, orKey) })]),
 ]
 
+/**
+ * Button presses first, then work.
+ *
+ * ## The gap this closes, which was total
+ *
+ * `processCallbacks` existed, was tested from six angles, and was called by
+ * NOTHING outside those tests. Every 👍, every Undo, every Mute in Slack and
+ * Telegram since Phase 3 recorded an `inbound_commands` row and then sat there.
+ * The buttons worked in the sense that they responded; they did nothing in the
+ * sense that mattered. It is the same shape as `inbound_commands` having a
+ * writer and no reader for text (0072) — a mechanism finished everywhere except
+ * at the point where it meets the rest of the system.
+ *
+ * Found by adding a seventh button that had to work: Grant asked for manual
+ * approval before any notebook generation (0083), and an approval button that
+ * files a row nobody reads is a generation that never happens and never says
+ * why.
+ *
+ * BEFORE the drain, deliberately. Approving a generation enqueues it, so
+ * pressing the button and getting the artifact in the same five-minute tick is
+ * the difference between "it works" and "it works eventually".
+ */
 const pass = async (): Promise<number> => {
+  const pressed = await processCallbacks(db, { subject: 'grant' })
+  for (const p of pressed) {
+    console.log(`button ${p.action}: ${p.outcome} — ${p.note.slice(0, 100)}`)
+  }
+
   const done = await drain(db, workerId, handlers, review, 10, { notify })
   for (const r of done) {
     console.log(`${r.jobId.slice(0, 8)} ${r.finalState}: ${r.note.slice(0, 120)}`)
   }
-  return done.length
+
+  // Never fatal. A narration channel that fails takes nothing with it: the work
+  // is done and delivered, and the running commentary is the least important
+  // thing in this file.
+  if (floor !== null) {
+    try {
+      await floor()
+    } catch (error) {
+      console.log(`floor: ${(error as Error).message.slice(0, 120)}`)
+    }
+  }
+
+  return done.length + pressed.length
 }
 
 if (process.argv.includes('--watch')) {

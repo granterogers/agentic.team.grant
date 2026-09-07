@@ -41,6 +41,8 @@ const BUTTON_TEXT: Readonly<Record<ActionId, string>> = {
   open_project: 'Open project',
   mute_24h: 'Mute 24h',
   more_detail: 'More detail',
+  approve: '✅ Go ahead',
+  decline: '🚫 Not now',
 }
 
 /** Escape for `parse_mode: HTML`. Exactly three characters, and no more. */
@@ -123,6 +125,8 @@ export const CALLBACK_ACTIONS: Readonly<Record<ActionId, string>> = {
   open_project: 'open_project',
   mute_24h: 'mute_24h',
   more_detail: 'more_detail',
+  approve: 'approve',
+  decline: 'decline',
 }
 
 export class CallbackDataTooLongError extends Error {

@@ -48,6 +48,14 @@ export const ACTIONS = [
   'open_project',
   'mute_24h',
   'more_detail',
+  // 0083. Not part of §12's six, and deliberately in the same list rather than
+  // a parallel one: both surfaces render buttons from `ActionId[]`, so adding
+  // them here gives Slack and Telegram the same two buttons with no second
+  // implementation to diverge. They appear ONLY on an approval request — see
+  // `resultContext`, which swaps the six for these two rather than adding to
+  // them, because 👍 on "may I generate this?" answers nothing.
+  'approve',
+  'decline',
 ] as const
 export type ActionId = (typeof ACTIONS)[number]
 
@@ -58,6 +66,8 @@ const BUTTON_TEXT: Readonly<Record<ActionId, string>> = {
   open_project: 'Open project',
   mute_24h: 'Mute 24h',
   more_detail: 'More detail',
+  approve: '✅ Go ahead',
+  decline: '🚫 Not now',
 }
 
 export interface MessageMetadata {

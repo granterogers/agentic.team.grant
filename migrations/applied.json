@@ -80,5 +80,9 @@
   "0079_first_names_only.sql": "228efcd352750e71e981db351964ba8564d9d638c1913ad44517c95db2626bf4",
   "0080_the_team_page_is_editable.sql": "2df5d14e7dee448deeb80403fa996d9d163995265d262406f65c295d754f29f8",
   "0081_the_meter_is_on_the_page.sql": "fe2e134780ee604817976f999a6672408918cbcaededc78bcb2198ebe386ea9a",
-  "0082_the_chief_has_a_bot_too.sql": "5e7110a58922b5506328a4d3fdd1e0b6898bb0e61bd92fb530d80517747f8e3d"
+  "0082_the_chief_has_a_bot_too.sql": "5e7110a58922b5506328a4d3fdd1e0b6898bb0e61bd92fb530d80517747f8e3d",
+  "0083_nothing_is_generated_without_you.sql": "2d8ae9dd2af27aba91089d073f7d5bc44d4d15efd7dc018138aa28f77a4e73cb",
+  "0084_the_request_is_signed_by_someone.sql": "499b0fca031d947910835352830fdfc81708bfd48e42b74f60a085aa705f7f11",
+  "0085_the_button_vocabulary_grew.sql": "c08e638be03ba2763154f00276c55cd7a6dc0ebf3f5e265607e7656861a53068",
+  "0086_declining_is_answering.sql": "2bfcba53fdf9f71fd8fdd970520199ac89886748994646dd6a0a798c9cd5cc4a"
 }

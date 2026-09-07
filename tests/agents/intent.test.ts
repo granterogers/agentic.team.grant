@@ -203,3 +203,32 @@ describe('the cost ladder', () => {
     expect(Object.keys(INTENT_COST).length).toBe(allowed.size)
   })
 })
+
+describe('the productive imperatives', () => {
+  it('reads "generate a slide deck" as a straight instruction', () => {
+    // It used to fall through to an unconfident `thought` — "thinking out
+    // loud" — which the narration channel put in front of Grant in plain
+    // English on its first day.
+    const c = classifyIntent('Generate a slide deck in the notebook.')
+    expect(c.intent).toBe('direct_command')
+    expect(c.confident).toBe(true)
+  })
+
+  it('covers the verbs people actually use for this', () => {
+    for (const text of [
+      'Make a mind map in the notebook',
+      'Create an audio overview',
+      'Add this to the project',
+      'Upload the summary to Notion',
+    ]) {
+      expect(classifyIntent(text).intent, text).toBe('direct_command')
+    }
+  })
+
+  it('leaves the investigative imperatives where they were', () => {
+    // §6's downward rule still governs these: "research X" could be ten minutes
+    // or ten days, so it reads as the cheap version. "Make a slide deck" has no
+    // cheap version, which is why the two are classified differently.
+    expect(classifyIntent('Research the coaching market').intent).toBe('light_investigation')
+  })
+})

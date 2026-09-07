@@ -31,6 +31,8 @@ import { UnsupportedSlackEventError } from './events.ts'
 
 /** Button `action_id` → the canonical action, which is the §12 vocabulary. */
 const ACTION_IDS: Readonly<Record<string, string>> = {
+  approve: 'approve',
+  decline: 'decline',
   'feedback.useful': 'useful',
   'feedback.not_useful': 'not_useful',
   undo: 'undo',

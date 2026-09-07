@@ -116,9 +116,12 @@ describe('callback data', () => {
 })
 
 describe('the keyboard', () => {
-  it('lays six buttons out three to a row', () => {
+  it('lays every action out three to a row', () => {
+    // Derived, not hard-coded at two. The list grew to eight when the approval
+    // pair arrived (0083) and a literal here failed for the one reason that is
+    // not a defect — which is a test asserting the wrong thing about itself.
     const rows = inlineKeyboard([...ACTIONS], CORR)
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(Math.ceil(ACTIONS.length / BUTTONS_PER_ROW))
     for (const row of rows) expect(row.length).toBeLessThanOrEqual(BUTTONS_PER_ROW)
   })
 
@@ -224,5 +227,18 @@ describe('one bot, many projects: every page says which (0070)', () => {
     const text = pagerText({ ...base, projectName: 'A & B <script>' })
     expect(text).toContain('A &amp; B &lt;script&gt;')
     expect(text).not.toContain('<script>')
+  })
+})
+
+describe('the approval pair', () => {
+  it('renders as its own two buttons, both carrying the correlation', () => {
+    // The message they appear on asks a yes/no question, so these are the whole
+    // keyboard — `resultContext` swaps them for the usual six rather than
+    // adding to them, because 👍 on "may I generate this?" answers nothing.
+    const rows = inlineKeyboard(['approve', 'decline'], CORR)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveLength(2)
+    expect(rows[0]?.[0]?.callback_data).toBe(`approve:${CORR}`)
+    expect(rows[0]?.[1]?.callback_data).toBe(`decline:${CORR}`)
   })
 })

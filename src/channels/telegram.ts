@@ -139,6 +139,12 @@ export const CALLBACK_ACTIONS = new Set([
   'open_project',
   'mute_24h',
   'more_detail',
+  // 0083: approving a generation. Carries the correlation like the others, and
+  // like the others the meaning is resolved from our record of the message
+  // rather than from the payload — a button press is client-supplied and §10
+  // forbids free-form input reaching a lookup.
+  'approve',
+  'decline',
 ])
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
