@@ -154,6 +154,32 @@ if (staffLeft.rows.length > 0) {
   )
 }
 
+// Blockers on a project that is no longer active.
+//
+// A blocker is a question waiting on Grant, and `needs_me` puts it at the top
+// of Today and at the front of what the voice surface says is waiting on him.
+// Two of the five sitting there were fixture decisions from a project archived
+// three days earlier, and two more were plan approvals for a project he had
+// asked to be deleted — none of them answerable, all of them counted.
+//
+// Withdrawn, not resolved: `resolved` claims a decision was taken. Nobody
+// decided anything; the thing it was about stopped existing.
+const stale = await db.execute(`
+  update public.blockers b
+     set state = 'withdrawn', resolved_at = app.now_utc(),
+         resolution = 'withdrawn: the project it belonged to is no longer active'
+    from public.projects p
+   where p.project_id = b.project_id
+     and b.state = 'open'
+     and p.status <> 'active'
+  returning b.blocker_id
+`)
+if (stale.rows.length > 0) {
+  console.log(
+    `\nwithdrew ${String(stale.rows.length)} blocker(s) on projects that are no longer active.`,
+  )
+}
+
 // Orphans: fixture jobs whose project was archived by an earlier run that did
 // not know to terminate them. Matched by the project's slug, so a real
 // project's jobs are never in scope.

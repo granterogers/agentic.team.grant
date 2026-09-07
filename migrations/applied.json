@@ -106,5 +106,14 @@
   "0105_a_request_is_not_a_question.sql": "db8c8b7904a5f552e4cecaabcf1e5e9d91eca64b0b1f67254885d45c3b801ad8",
   "0106_a_duty_has_an_owner_too.sql": "ab0e14701d676263384b1a3411e9af74ceb6f5931f723ded723eb83b406b13a9",
   "0107_a_source_arriving_is_news.sql": "961dc3d75cf32d66ffa03f55f007db71baee8da5698ff472f9e10e104da11367",
-  "0108_a_fixture_must_not_spend_the_ceiling.sql": "b71f49ef8a8ffd0f089549aec68148f3b4bab8dbcef49222adf1a0fbc63079a9"
+  "0108_a_fixture_must_not_spend_the_ceiling.sql": "b71f49ef8a8ffd0f089549aec68148f3b4bab8dbcef49222adf1a0fbc63079a9",
+  "0109_the_calendar_the_team_can_see.sql": "6cb04f8cd41cc16a97d62ed8c60085ade06b2d001983e8e739cdb5faabfb2303",
+  "0110_the_diary_answers_out_loud.sql": "71bb453d4fef5c975d7b210615b7e3f23fa4ecaf5900abd8e5d113b47dc755a5",
+  "0111_one_page_that_says_what_to_do.sql": "aea08d605595bfd2399bfa26053ccad99b5d45dcc43a6dff2d8e24d6f7b9f024",
+  "0112_signing_out_of_google.sql": "03128bf7435e1ab6fa4d1ca7c5f68c7e6a8493894254e399d01d8c7b39e20b84",
+  "0113_count_what_is_live.sql": "6ef0302f59b5c43746135f8dde9ee6b6a29a162ce1eb0e240135545292f5a9df",
+  "0114_settings_you_can_actually_change.sql": "c9df0197735f3b28c922f77500898e94a265288af05bc282209adebe6d8498e8",
+  "0115_the_settings_page_shows_them_all.sql": "e70a7ab36654c990eed0665455fe362a8d296dc2faf9786d41afbdebcb67bc7b",
+  "0116_a_check_that_cannot_write.sql": "c48e4b1b2394ad1e5f1532ad6f38a8eb7fb7d49e7563591ca847a98b93ef3473",
+  "0117_repair_what_the_probe_wrote.sql": "dd21e184577387bf3d81cb8bf3e9262c85a3a797d83dea91c0904282c3f73a0c"
 }

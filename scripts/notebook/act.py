@@ -98,7 +98,7 @@ async def main() -> None:
         die(
             "(none)",
             "usage: act.py <add_text|add_url|create_note|create_notebook|generate|"
-            "poll|artifacts|sources|ask|delete_source|delete_artifact> '<json>'",
+            "poll|retry|artifacts|sources|ask|delete_source|delete_artifact> '<json>'",
         )
     action = sys.argv[1]
     try:
@@ -200,6 +200,29 @@ async def main() -> None:
                     # LISTING the notebook's artifacts, which is why the reply
                     # carries no artifact id — there is not one yet.
                     "note": "generation started; list the notebook's artifacts to follow it",
+                })
+                return
+
+            if action == "retry":
+                # `retry_failed(notebook_id, artifact_id)`. Wired up because the
+                # library has had it all along and nothing called it, so a failed
+                # artifact was a dead end — the only recovery was generating a
+                # new one, which costs the allowance twice and loses whatever
+                # instructions the first carried.
+                #
+                # It IS a generation as far as the meter and 0083's approval gate
+                # are concerned, and both sit upstream of this file.
+                artifact_id = args.get("artifact_id")
+                if not artifact_id:
+                    die(action, "artifact_id is required")
+                started = await client.artifacts.retry_failed(notebook, artifact_id)
+                emit({
+                    "ok": True,
+                    "action": action,
+                    "artifact_id": artifact_id,
+                    "task_id": getattr(started, "task_id", None),
+                    "state": str(getattr(started, "status", "") or "generating"),
+                    "error": getattr(started, "error", None),
                 })
                 return
 

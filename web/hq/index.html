@@ -299,6 +299,37 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .est { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+/* --- Set up and Help ----------------------------------------------------
+   A checklist reads top to bottom, so a service is a row with one lamp, one
+   sentence and at most one action — never a card, which invites scanning. */
+.svcs { display: grid; gap: 2px; margin-top: 12px; }
+.svc { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0;
+  border-bottom: 1px solid var(--line); }
+.svc:last-child { border-bottom: 0; }
+.svc > .lamp { margin-top: 6px; }
+.svc-body { min-width: 0; flex: 1; }
+.svc-body b { font-size: 15px; }
+.svc-body .m { margin-top: 3px; }
+.svc .go { flex: none; align-self: center; white-space: nowrap; }
+a.mini.go { border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent); font-weight: 600; }
+/* The one-off Google registration, boxed so it reads as a detour rather than
+   as part of the row. */
+.stepbox { margin-top: 10px; padding: 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--panel-2); }
+.stepbox details { margin-bottom: 8px; }
+.stepbox summary { cursor: pointer; font-weight: 600; font-size: 13.5px; min-height: 24px; }
+.stepbox ol { margin: 8px 0; padding-left: 20px; }
+.stepbox li { border: 0; padding: 2px 0; background: none; }
+.stepbox input { width: 100%; padding: 8px 10px; font: inherit; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.steps { margin: 6px 0 0; padding-left: 22px; display: grid; gap: 7px; }
+.steps li { border: 0; padding: 0; background: none; }
+details.qa { border-bottom: 1px solid var(--line); padding: 4px 0; }
+details.qa:last-child { border-bottom: 0; }
+details.qa summary { cursor: pointer; font-weight: 600; padding: 9px 0; min-height: 30px; }
+details.qa p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; max-width: 72ch; }
+
 /* --- Talk to team -------------------------------------------------------
    A big target and an obvious state. The microphone button is the one control
    on this page pressed while looking at something else, so it says what it is
@@ -478,11 +509,16 @@ function gate(message) {
   under SET UP — which is also a safety property, not just tidiness.
 */
 const MENU = [
-  ['Now', [['talk', 'Talk to team'], ['overview', 'Today'], ['activity', 'Activity']]],
-  ['Work', [['projects', 'Projects'], ['output', 'Output']]],
-  ['People', [['staff', 'The team']]],
-  ['Health', [['trends', 'Trends'], ['usage', 'Usage'], ['connections', 'Connections']]],
-  ['Set up', [['settings', 'Settings']]],
+  // Start comes first and stays first, even once everything is connected.
+  // Grant, on the third pass at this: *"it just isn't really intuitive what you
+  // should be doing."* A menu whose first entry answers that is the fix; a
+  // menu that hides it once set-up is done is a menu that answers it only for
+  // people who did not need asking.
+  ['Start', [['setup', 'Set up'], ['help', 'Help']]],
+  ['Do', [['talk', 'Talk to team'], ['overview', 'Today'], ['projects', 'Projects']]],
+  ['See', [['output', 'Output'], ['activity', 'Activity'], ['staff', 'The team']]],
+  ['Health', [['connections', 'Connections'], ['usage', 'Usage'], ['trends', 'Trends']]],
+  ['Advanced', [['settings', 'Settings']]],
 ]
 const TABS = MENU.flatMap(([, items]) => items)
 
@@ -495,6 +531,16 @@ const TABS = MENU.flatMap(([, items]) => items)
   Telegram by design (§12), and the two places that DO write say which.
 */
 const GUIDE = {
+  setup: {
+    title: 'Set up',
+    what: 'Every outside service this depends on, whether it is working, and the one thing to do next for each.',
+    todo: 'Work down the amber rows. Everything green needs nothing from you. A row marked "off" is switched off on purpose, not broken.',
+  },
+  help: {
+    title: 'Help',
+    what: 'What this is, how the pieces fit together, and how to set it up from nothing.',
+    todo: 'Read the first section if you are new. The rest is reference — come back to it when something surprises you.',
+  },
   talk: {
     title: 'Talk to team',
     what: 'Say something and the team hears it. Questions about what is going on are answered here and now; anything that is work goes into the same queue as a message you type.',
@@ -559,6 +605,7 @@ const HINTS = {
   'needs you': 'Work that has stopped and cannot restart until you decide something. Answer these in Slack or Telegram.',
   'projects': 'Where work is currently being filed. The current project is the one new instructions land in.',
   'in flight': 'Being worked on right now, and which stage each has reached.',
+  'next 24 hours': 'Your diary, cached hourly so the team can answer questions about it without a round trip — and still answer them when Google is unreachable.',
   'recent activity': 'Newest first. Every line is something that actually happened, not a summary of it.',
   'the team': 'Edit a name, a remit or a way of writing and it takes effect on the next message they send.',
   'free models': 'Which models did the work. Free ones are used first, and a paid one appears here only when nothing free could do the job.',
@@ -587,7 +634,7 @@ function shell(active) {
       <div>
         <div id="lede"></div>
         <main id="main"><div class="empty">Loading…</div></main>
-        <footer>Talk, Projects and Settings are the three places this page changes anything. Everything else is a read-out. The buttons — approve, undo, go ahead — live in Slack and Telegram, where you are when you need them.</footer>
+        <footer>Set up, Talk, Projects and Settings are the places this page changes anything. Everything else is a read-out. The buttons — approve, undo, go ahead — live in Slack and Telegram, where you are when you need them.</footer>
       </div>
     </div>`
   for (const b of document.querySelectorAll('nav button')) {
@@ -611,6 +658,63 @@ function overview(d) {
       <div class="m">${esc(b.why_needed)}</div>
       ${b.consequences_of_delay ? `<div class="m">If it waits: ${esc(b.consequences_of_delay)}</div>` : ''}
     </li>`).join('')
+
+  /*
+    The diary, when it is connected.
+
+    Nothing at all when Google has not been set up — an empty card headed
+    "Calendar" on a page where the calendar does not exist is a card that reads
+    as broken. The Connections tab is where "not connected" belongs, and it
+    already says which of the four steps is next.
+
+    The age is shown whenever it is over an hour, for the same reason the spoken
+    answer says it: this is a cache that keeps working when Google is
+    unreachable (§18), and a stale diary presented as a current one is worse
+    than no diary.
+  */
+  const cal = d.calendar || {}
+  const calendar =
+    cal.enabled !== true || cal.as_of == null
+      ? ''
+      : `<section class="card" data-card="calendar"><span class="drag" title="Move up">⌃</span>
+          <h2>Next 24 hours${
+            Date.now() - new Date(cal.as_of).getTime() > 3600_000
+              ? `<span class="est">AS OF ${esc(ago(cal.as_of).toUpperCase())}</span>`
+              : ''
+          }</h2>
+          <div class="body">${
+            (cal.events || []).length === 0
+              ? '<div class="empty">Nothing in the diary.</div>'
+              : `<ul>${(cal.events || [])
+                  .map(
+                    (e) => `<li><div class="row">
+                      <span class="t">${esc(e.summary || 'Untitled')}</span>
+                      <span class="m">${
+                        e.all_day
+                          ? 'all day'
+                          : esc(
+                              new Date(e.starts_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }),
+                            )
+                      }</span>
+                      ${e.status === 'tentative' ? '<span class="pill warn">tentative</span>' : ''}
+                    </div>
+                    ${
+                      e.location || e.attendees
+                        ? `<div class="m">${[
+                            e.attendees ? e.attendees + ' ' + (e.attendees === 1 ? 'person' : 'people') : '',
+                            esc(e.location || ''),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}</div>`
+                        : ''
+                    }</li>`,
+                  )
+                  .join('')}</ul>`
+          }</div>
+        </section>`
 
   const jobs = d.today.map((j) => `
     <li>
@@ -663,7 +767,8 @@ function overview(d) {
     <section class="card" data-card="inflight"><span class="drag" title="Move up">⌃</span>
       <h2>In flight</h2>
       <div class="body">${jobs ? `<ul>${jobs}</ul>` : '<div class="empty">The queue is empty.</div>'}</div>
-    </section>`
+    </section>
+    ${calendar}`
 }
 
 function staff(d) {
@@ -1491,7 +1596,336 @@ function wireTalk() {
   }
 }
 
-const VIEWS = { talk, overview, trends, staff, activity, usage, connections, projects, output, settings }
+
+/*
+  Set up — the page that answers "what should I do".
+
+  Grant, three times now, on the interface not being intuitive. The first two
+  passes added explanation to pages that already existed, which was the wrong
+  shape: a dashboard explains what you are LOOKING at, and cannot answer what to
+  do, because that answer is spread across Connections being red, Settings
+  having four Google steps, and a document in the repository.
+
+  So this page is a checklist and nothing else. `app.hq_setup` knows the state
+  of every service; this renders it, largest first, with one action per row.
+
+  Three states, not two: `off` is a thing switched off on purpose and must not
+  read as an outstanding task, or the list grows a permanent red item and stops
+  being a list.
+*/
+function setup(d) {
+  const services = d.services || []
+  const lamp = { ready: 'ok', action: 'warn', off: '' }
+  const word = { ready: 'Working', action: 'Needs you', off: 'Switched off' }
+
+  const row = (s) => `
+    <div class="svc" data-svc="${esc(s.key)}">
+      <span class="lamp ${lamp[s.state] ?? ''}" aria-hidden="true"></span>
+      <div class="svc-body">
+        <div class="row" style="margin:0;gap:8px">
+          <b>${esc(s.name)}</b>
+          <span class="pill">${esc(s.vendor)}</span>
+          <span class="m">${esc(word[s.state] ?? s.state)}</span>
+        </div>
+        <div class="m">${esc(s.does)}</div>
+        <div class="m" style="opacity:.75">${esc(s.detail || '')}</div>
+        ${s.key === 'google' ? googleBlock(d.google || {}) : ''}
+        ${s.key === 'calendar' ? calendarToggle(d) : ''}
+      </div>
+      ${
+        // No pill for a row that carries its own controls. Google's action is
+        // the box inside the row, and repeating it as an unclickable chip on
+        // the right was a button that did nothing — which teaches that buttons
+        // do nothing.
+        s.action && s.href && s.key !== 'google'
+          ? `<a class="mini go" href="${esc(s.href)}" target="_blank" rel="noopener">${esc(s.action)} →</a>`
+          : ''
+      }
+    </div>`
+
+  return `
+    <section class="card wide" data-card="setup"><h2>What needs you</h2>
+      <div class="body">
+        <div class="tiles">
+          <div class="tile"><b>${d.ready ?? 0}</b><span>working</span></div>
+          <div class="tile ${(d.needs_you ?? 0) > 0 ? 'warn' : ''}"><b>${d.needs_you ?? 0}</b><span>need you</span></div>
+        </div>
+        <div class="svcs">${services.map(row).join('')}</div>
+      </div>
+    </section>`
+}
+
+/*
+  Google, as one button once and one button after that.
+
+  Grant: *"I don't understand why you're making it so complicated on the back
+  end. It should be just, like, if someone wants to add connection to Gmail,
+  connection to Google Calendar, you just click on a button, and then it brings
+  up the Google authenticator in the browser."*
+
+  He is right about the experience and there is one unavoidable piece behind it.
+  An Apple app is one click because the vendor ships its own OAuth client,
+  registered with Google under their name. This runs on his own Google Cloud
+  project, on his own account, deliberately — ADR-0013 and the account
+  suspension in September both point the same way — so the client has to be
+  registered once, by him.
+
+  Once. After that Google is one button, and each service is one button, sharing
+  the same client through incremental consent. So the console step is collapsed
+  by default, states plainly that it happens once, and gives him the two values
+  to copy in the order Google asks for them.
+*/
+function googleBlock(g) {
+  if (g.has_refresh_token) {
+    return `<div class="m" style="margin-top:8px">
+      Signed in. Turning a Google service on below asks for that service's
+      permission and nothing more.
+      <button class="mini" id="google-forget">Sign out</button>
+    </div>`
+  }
+  const ready = g.client_id && g.has_secret
+  return `
+    <div class="stepbox">
+      ${
+        ready
+          ? ''
+          : `<details${g.client_id ? '' : ' open'}>
+        <summary>First time only: register this app with Google</summary>
+        <p class="m">Google will not let any application read your data until an
+          app is registered under your own account. Every desktop app you have
+          signed into with Google did this once too — theirs was registered by
+          the company that made it. This one is yours, so it is yours to make.
+          Five minutes, once, and then everything Google is a single button.</p>
+        <ol class="m">
+          <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com/apis/credentials</a>
+              and create an <b>OAuth client ID</b> of type <b>Web application</b>.</li>
+          <li>Under <b>Authorised redirect URIs</b>, paste this exactly:</li>
+        </ol>
+        <input readonly value="${esc(g.redirect_uri || '')}" onclick="this.select()">
+        <ol class="m" start="3">
+          <li>Copy the client ID and client secret it gives you into the two boxes below.</li>
+        </ol>
+      </details>`
+      }
+      <label class="fld"><span>Client ID</span>
+        <input id="g-id" value="${esc(g.client_id || '')}" placeholder="…apps.googleusercontent.com" autocomplete="off">
+      </label>
+      <label class="fld"><span>Client secret</span>
+        <input id="g-secret" type="password" autocomplete="off"
+               placeholder="${g.has_secret ? '•••••••• stored — paste again to replace' : 'GOCSPX-…'}">
+        <em>Stored in the vault. This page can write it and can never read it back.</em>
+      </label>
+      <div class="row">
+        <button id="g-save">Save</button>
+        ${
+          ready
+            ? `<a class="mini go" href="${esc(API.replace(/\/hq-api$/, '/google-oauth/start'))}">Sign in with Google →</a>`
+            : '<span class="m">Save both, then a Sign in button appears here.</span>'
+        }
+        <span id="g-said" class="m"></span>
+      </div>
+    </div>`
+}
+
+/* A service is a switch once the account is connected — never another sign-in. */
+function calendarToggle(d) {
+  if (!(d.google || {}).has_refresh_token) {
+    return '<div class="m" style="margin-top:6px">Sign in with Google above to switch this on.</div>'
+  }
+  const on = (d.settings || {})['calendar.enabled'] === true
+  return `<div class="row" style="margin-top:8px">
+    <button class="mini" id="cal-toggle" data-to="${on ? 'false' : 'true'}">${on ? 'Switch off' : 'Switch on'}</button>
+    <span id="cal-said" class="m"></span>
+  </div>`
+}
+
+function wireSetup() {
+  const said = (id, text) => {
+    const el = document.getElementById(id)
+    if (el) el.textContent = text
+  }
+  const save = document.getElementById('g-save')
+  if (save) {
+    save.onclick = async () => {
+      const id = (document.getElementById('g-id') || {}).value || ''
+      const secret = (document.getElementById('g-secret') || {}).value || ''
+      save.disabled = true
+      said('g-said', 'Saving…')
+      try {
+        if (id.trim()) await act('set_setting', { p_key: 'google.client_id', p_value: id.trim() })
+        if (secret.trim()) await act('set_google_secret', { p_secret: secret.trim() })
+        said('g-said', 'Saved.')
+        show('setup')
+      } catch (e) {
+        said('g-said', e.message)
+      }
+      save.disabled = false
+    }
+  }
+
+  const cal = document.getElementById('cal-toggle')
+  if (cal) {
+    cal.onclick = async () => {
+      cal.disabled = true
+      said('cal-said', 'Saving…')
+      try {
+        await act('set_setting', { p_key: 'calendar.enabled', p_value: cal.dataset.to })
+        show('setup')
+      } catch (e) {
+        said('cal-said', e.message)
+        cal.disabled = false
+      }
+    }
+  }
+
+  const forget = document.getElementById('google-forget')
+  if (forget) {
+    forget.onclick = async () => {
+      // Signing out is destructive in the only sense that matters here: it
+      // throws away a consent he gave, and getting it back means the consent
+      // screen again. So it asks.
+      if (!window.confirm('Sign out of Google? You will need to sign in again to use Calendar.')) {
+        return
+      }
+      forget.disabled = true
+      try {
+        await act('forget_google', {})
+        show('setup')
+      } catch (e) {
+        forget.disabled = false
+      }
+    }
+  }
+}
+
+
+/*
+  Help — what this is, and how to stand one up from nothing.
+
+  Grant: *"within the front end there should definitely be a help section that
+  explains everything about this project, what it does, how to get it set up,
+  etcetera."*
+
+  Written out rather than generated, and static rather than fetched. Two
+  reasons. A model asked to explain the system would produce a plausible
+  description of a system slightly unlike this one, and the place that must not
+  happen is the page someone reads when they are already confused. And a help
+  page that needs the API to work is a help page that goes blank exactly when
+  something is broken — which is when it is opened.
+*/
+function help() {
+  const q = (title, body) => `<details class="qa"><summary>${title}</summary>${body}</details>`
+
+  return `
+    <section class="card wide"><h2>What this is</h2><div class="body">
+      <p>Eight people who are not people. They read what you give them, do the work
+         you ask for, and come back to you where you already are — Slack, Telegram,
+         or by voice on this page. Everything they know and everything they have
+         done lives in one Postgres database, so no surface can tell you a
+         different story from another.</p>
+      <p class="m">There is one human here, and that is you. Nothing in this system
+         acts on anyone else's behalf.</p>
+    </div></section>
+
+    <section class="card wide"><h2>The four places</h2><div class="body">
+      <div class="conn"><span class="who"><b>Slack — the office</b>
+        <span>Where work happens. Each project gets a channel, and each person a
+        channel inside it once they have something to say. Results arrive with the
+        face and name of whoever produced them, and carry buttons: useful, not
+        useful, undo, more detail.</span></span></div>
+      <div class="conn"><span class="who"><b>Telegram — the pager</b>
+        <span>Eight bots, one per person, in your pocket. Send a voice note, a link,
+        or both, and it becomes work. Only important things interrupt you.</span></span></div>
+      <div class="conn"><span class="who"><b>This page — the dashboard</b>
+        <span>What is true right now. Mostly read-only on purpose: a dashboard where
+        you can do something irreversible by accident is worse than one where you can
+        do nothing. Set up, Projects and Talk are the exceptions.</span></span></div>
+      <div class="conn"><span class="who"><b>Notebooks — the knowledge</b>
+        <span>Google NotebookLM makes audio overviews, mind maps and briefings out of
+        a project's sources. Every generation asks you first.</span></span></div>
+    </div></section>
+
+    <section class="card wide"><h2>Setting one up from nothing</h2><div class="body">
+      <p class="m">In order. Each step is checked live on the <b>Set up</b> page, so
+         you never have to remember where you got to.</p>
+      <ol class="steps">
+        <li><b>A Supabase project.</b> Everything else is stored in it. The migrations
+            build the schema; nothing is created by hand.</li>
+        <li><b>An OpenRouter key.</b> This is what the team thinks with. Free models are
+            used first and a paid one only when nothing free can do the job, so this
+            usually costs nothing.</li>
+        <li><b>A Slack app</b> in your workspace, with permission to post as different
+            people. The team makes its own channels from there.</li>
+        <li><b>Telegram bots</b> from BotFather — one per person. You have to open each
+            one and press Start, because Telegram forbids a bot messaging first.</li>
+        <li><b>Notion</b>, optionally. Share a page with the integration and it becomes
+            something the team can read and cite.</li>
+        <li><b>Google</b>, optionally. One registration in your own Cloud project, then
+            every Google service is a single button.</li>
+        <li><b>Backups.</b> An S3 bucket. The copy is restored into a scratch database
+            every night, because a backup nobody has restored is not a backup.</li>
+      </ol>
+    </div></section>
+
+    <section class="card wide"><h2>Questions</h2><div class="body">
+      ${q(
+        'How do I ask for something?',
+        `<p>Say it. Message any Telegram bot, post in a Slack channel the team is in, or
+         press Talk on this page. Plain sentences: "have a look at whether we should be
+         worried about X". You do not need to know who does what — that gets decided
+         for you, and the reasoning is posted in <b>#the_floor</b>.</p>`,
+      )}
+      ${q(
+        'Something has several steps. Will it just go and do them?',
+        `<p>No. Anything with more than one step is written back to you as a numbered
+         list first, and waits for you to say go. Anything that would create something
+         in your Google account asks separately, every time.</p>`,
+      )}
+      ${q(
+        'Where did my answer go?',
+        `<p>To wherever you asked from. A Telegram message is answered by the bot you
+         sent it to; a Slack message in its own thread. Spoken instructions go to Slack,
+         because a conversation has no thread to come back to. <b>Output</b> lists
+         everything finished, and <b>Activity</b> everything that happened.</p>`,
+      )}
+      ${q(
+        'How much does this cost?',
+        `<p>Usually nothing. The team uses free models first and only reaches for a paid
+         one when nothing free can do the job — <b>Usage</b> shows the split and the
+         spend. Google's notebook allowance is the one number that cannot be read
+         directly: Google publish no figure for it, so what you see is our own count,
+         and the ceiling is learned from being refused.</p>`,
+      )}
+      ${q(
+        'Can I undo something?',
+        `<p>Within a window, yes — every result carries an Undo button in Slack and
+         Telegram. After the window it will tell you it is too late rather than
+         pretending to undo it. Nothing is ever deleted from the record; a reversal is
+         written down as its own event.</p>`,
+      )}
+      ${q(
+        'A light is red. What do I do?',
+        `<p>Start with <b>Set up</b> — it names the one next action for each service.
+         <b>Connections</b> has more detail, including when each was last checked; a
+         green light with an old timestamp is not a green light.</p>`,
+      )}
+      ${q(
+        'Can I change who does what?',
+        `<p>Yes, on <b>The team</b>. Names, pronouns, roles and remits are all editable
+         and take effect on the next message that person sends. Retiring someone stops
+         them being given work without deleting anything they have already done.</p>`,
+      )}
+      ${q(
+        'Is my data going anywhere?',
+        `<p>Voice notes are transcribed on our own machine and the audio is thrown away
+         — it never reaches a third party. Documents you share are stored in your own
+         database. Model calls go to OpenRouter with data collection refused. Credentials
+         live in the database vault, never in the code.</p>`,
+      )}
+    </div></section>`
+}
+
+const VIEWS = { setup, help, talk, overview, trends, staff, activity, usage, connections, projects, output, settings }
 
 /*
   The Projects tab's buttons.
@@ -1574,7 +2008,15 @@ function explain(main) {
     // the notebook meter, Google, the database facts, the settings form — and
     // the first version put a second, near-identical sentence above each.
     if (heading.nextElementSibling?.classList.contains('meta') === true) continue
-    const hint = HINTS[heading.textContent.trim().toLowerCase()]
+    // The heading WITHOUT its badge. Two cards append an `.est` chip — STALE on
+    // Connections, AS OF … on the diary — and `textContent` glues it to the
+    // title, so "Connections" became "ConnectionsSTALE" and lost its hint at
+    // exactly the moment the card needed explaining most.
+    const label = [...heading.childNodes]
+      .filter((n) => !(n.nodeType === 1 && n.classList.contains('est')))
+      .map((n) => n.textContent)
+      .join('')
+    const hint = HINTS[label.trim().toLowerCase()]
     if (hint === undefined) continue
     const p = document.createElement('p')
     p.className = 'hint'
@@ -1602,9 +2044,13 @@ async function show(section) {
     // the conversation. `load('talk')` would ask hq-api for a section that does
     // not exist and get a 400 — which is exactly how the tab/section mismatch
     // above was found the first time.
-    const data = section === 'talk' ? {} : await load(section)
+    // Talk and Help fetch nothing. Help especially: a help page that needs the
+    // API is a help page that goes blank exactly when something is broken,
+    // which is when it gets opened.
+    const data = section === 'talk' || section === 'help' ? {} : await load(section)
     main.innerHTML = VIEWS[section](data)
     if (section === 'talk') wireTalk()
+    if (section === 'setup') wireSetup()
     if (section === 'projects') wireProjects()
     if (section === 'settings') wireSettings()
     if (section === 'staff') wireTeam()
@@ -1621,9 +2067,30 @@ async function show(section) {
   }
 }
 
-function start() {
-  shell('overview')
-  show('overview')
+/*
+  Where to land.
+
+  Set up when something needs him, Today when nothing does. Grant's complaint
+  was that it is not obvious what to do; opening on a dashboard when three
+  services are unconfigured is the page answering a question he did not ask and
+  ignoring the one he did.
+
+  Falls back to Today if the check itself fails — a landing decision that can
+  strand someone on an error screen is worse than a wrong landing.
+*/
+async function landing() {
+  try {
+    const setup = await load('setup')
+    return (setup.needs_you ?? 0) > 0 ? 'setup' : 'overview'
+  } catch {
+    return 'overview'
+  }
+}
+
+async function start() {
+  const first = await landing()
+  shell(first)
+  show(first)
   // Refresh on return rather than on a timer: a phone in a pocket polling every
   // thirty seconds is a battery cost for data nobody is looking at.
   document.addEventListener('visibilitychange', () => {

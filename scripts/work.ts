@@ -28,6 +28,7 @@ import { combinedNotifier, pagerChannel } from '../src/channels/notify.ts'
 import { announceStart } from '../src/channels/progress.ts'
 import { replyChannel } from '../src/channels/reply.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { calendarHandler } from '../src/handlers/calendar.ts'
 import { capacityHandler, fireDueDuties } from '../src/handlers/capacity.ts'
 import { instructionHandler } from '../src/handlers/instruction.ts'
 import { notebookHandlers } from '../src/handlers/notebook.ts'
@@ -148,6 +149,7 @@ const handlers = [
   ...notebookHandlers(db),
   planHandler(db),
   capacityHandler(db),
+  calendarHandler(db),
   ...(canThink
     ? [
         instructionHandler({ db, router: new ProviderRouter(db, orKey) }),
