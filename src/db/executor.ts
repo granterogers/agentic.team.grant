@@ -56,6 +56,24 @@ export class ManagementApiExecutor implements SqlExecutor {
     baseUrl = 'https://api.supabase.com',
   ) {
     if (accessToken === '') throw new Error('a Supabase access token is required')
+    // An EMPTY ref is refused here rather than sent.
+    //
+    // Every caller writes `process.env.SUPABASE_PROJECT_REF ?? '<the ref>'`,
+    // and `??` does not fire on an empty string. A GitHub Actions workflow that
+    // passes `${{ secrets.SUPABASE_PROJECT_REF }}` for a secret that was never
+    // set passes exactly that — so the default was overridden by nothing, the
+    // URL became `/v1/projects//database/query`, and every scheduled run died
+    // with a 404 that named no cause. Thirty consecutive nightly syncs failed
+    // that way, and the first worker run after it was scheduled.
+    //
+    // Refused at construction, with the reason, because the alternative is 82
+    // call sites each remembering to write `|| '<the ref>'` instead.
+    if (projectRef.trim() === '') {
+      throw new Error(
+        'SUPABASE_PROJECT_REF is set but empty — an unset GitHub secret looks exactly like this. ' +
+          'Unset it to use the default, or give it the project ref.',
+      )
+    }
     this.endpoint = `${baseUrl}/v1/projects/${projectRef}/database/query`
   }
 

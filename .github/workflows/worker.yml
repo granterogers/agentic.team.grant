@@ -87,6 +87,15 @@ jobs:
       - name: Work
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          # `|| ...` and not a bare secret reference. An unset GitHub secret
+          # interpolates to the EMPTY STRING, and every call site writes
+          # `process.env.SUPABASE_PROJECT_REF ?? '<ref>'`, which does not fire on
+          # empty. So an unset secret overrode the default with nothing, the URL
+          # became /v1/projects//database/query, and thirty consecutive nightly
+          # syncs died on a 404 that named no cause. The executor now refuses an
+          # empty ref out loud (0102's sibling change); this stops it arising.
+          # The project ref is not a secret — it is the default in 82 source
+          # files already.
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF || 'baujwlzcziasnfhhkchg' }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: npm run work
