@@ -16,28 +16,54 @@
   resolution here is that the CARD is the unit on both, and on a wide screen the
   cards flow into columns and their internal padding tightens.
 */
+/*
+  Grant: *"you also need to make the front end a lot more attractive, better
+  colours, menus etc.. with more explanation of each component, what to do."*
+
+  Three separate asks, and they are answered in three places:
+
+    - colour, here: an indigo accent over slightly cooler neutrals, a raised
+      surface token so a card can sit ON something rather than beside it, and
+      one soft shadow instead of the flat hairline-box look;
+    - menus, in `shell()`: nine equal pills became five named groups, a real
+      sidebar on a wide screen;
+    - explanation, in `GUIDE` and `HINTS`: every tab says what it is for and
+      what to do on it, and every card gets a line under its heading.
+
+  The chart colour is deliberately NOT the new accent. `--series` keeps the
+  values the palette validator actually passed — #2f6df6 on light, #5c8cf5 on
+  dark — because a chart colour answers to a lightness band and a chroma floor
+  that a UI accent does not, and re-pointing it at the indigo would be claiming
+  a check that was never run on it.
+*/
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --ink: #14161a; --muted: #5b6270;
-  --line: #e3e6ec; --accent: #2f6df6; --warn: #b8541b; --bad: #b3261e;
+  --bg: #f2f4f9; --panel: #ffffff; --panel-2: #f8f9fc;
+  --ink: #12141c; --muted: #5a6072;
+  --line: #e2e5ee; --accent: #4f46e5; --accent-2: #7c3aed;
+  --accent-soft: rgba(79, 70, 229, 0.10);
+  --warn: #b45309; --bad: #be123c; --good: #0f766e;
   /* Validated against the light surface: inside the lightness band, above the
      chroma floor, over 3:1 contrast. Not eyeballed — the palette validator was
-     run, and #6f9bff (the UI accent's dark step) FAILED the dark band at
-     L 0.703, which is why the dark series colour below is a different value
-     from the dark UI accent. */
+     run, and the lighter step FAILED the dark band at L 0.703, which is why the
+     dark series colour below is a different value. */
   --series: #2f6df6;
-  --good: #1f7a4d; --radius: 14px;
+  --shadow: 0 1px 2px rgba(16, 20, 40, 0.04), 0 10px 28px -16px rgba(16, 20, 40, 0.18);
+  --radius: 14px;
   --pad: 16px;
   font-synthesis-weight: none;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1115; --panel: #171a20; --ink: #e7e9ee; --muted: #9aa2b1;
-    --line: #262b34; --accent: #6f9bff; --warn: #e8a06a; --bad: #ef7a72;
-    --good: #64c79a;
-    /* #5c8cf5, not the #6f9bff used for links: the lighter step is outside the
-       dark lightness band. A chart colour and a UI accent answer to different
-       checks and are allowed to differ. */
+    --bg: #0b0d14; --panel: #14171f; --panel-2: #1a1e28;
+    --ink: #e8eaf2; --muted: #98a0b4;
+    --line: #252a36; --accent: #a5b4fc; --accent-2: #c4b5fd;
+    --accent-soft: rgba(165, 180, 252, 0.12);
+    --warn: #f0b47a; --bad: #fb7185; --good: #2dd4a7;
+    /* #5c8cf5, not the accent: the lighter step is outside the dark lightness
+       band. A chart colour and a UI accent answer to different checks and are
+       allowed to differ. */
     --series: #5c8cf5;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -18px rgba(0, 0, 0, 0.8);
   }
 }
 * { box-sizing: border-box; }
@@ -49,35 +75,124 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 header {
-  position: sticky; top: 0; z-index: 10;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(12px);
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--line);
   padding: 10px var(--pad);
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 11px;
 }
-h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
-#stamp { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
-nav { display: flex; gap: 4px; padding: 8px var(--pad) 0; overflow-x: auto; scrollbar-width: none; }
+/* The mark. A gradient square with a diamond in it — enough to make the tab
+   and the home-screen icon recognisable at a glance, and cheap: two elements
+   and no image request. */
+.mark {
+  width: 28px; height: 28px; border-radius: 9px; flex: none;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  display: grid; place-items: center; color: #fff; font-size: 14px;
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.brand { min-width: 0; }
+h1 { font-size: 16px; margin: 0; letter-spacing: -0.015em; line-height: 1.15; }
+.brand span { display: block; color: var(--muted); font-size: 11.5px; }
+#stamp { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+
+/*
+  The menu. Nine equal pills gave no clue which of them answered a question, so
+  they are grouped under five headings — and the headings only appear where
+  there is room for them, which is the sidebar.
+
+  `display: contents` on a group is what lets ONE nav element be both: on a
+  phone the group vanishes as a box and its buttons flow into the horizontal
+  strip; on a wide screen the group becomes a block with its label showing.
+*/
+nav { display: flex; gap: 5px; padding: 9px var(--pad) 0; overflow-x: auto; scrollbar-width: none; }
 nav::-webkit-scrollbar { display: none; }
+nav .grp { display: contents; }
+nav .lbl { display: none; }
 nav button {
   appearance: none; border: 1px solid var(--line); background: var(--panel);
   color: var(--muted); border-radius: 999px; padding: 8px 14px; font: inherit;
   font-size: 14px; white-space: nowrap; cursor: pointer; min-height: 38px;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
-nav button[aria-current="true"] { color: var(--panel); background: var(--ink); border-color: var(--ink); }
+nav button:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+nav button[aria-current="true"] {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+}
+@media (prefers-color-scheme: dark) {
+  nav button[aria-current="true"] { color: #0b0d14; }
+}
 main { padding: var(--pad); display: grid; gap: 12px; }
+
+/*
+  What this tab is for, above the cards.
+
+  Grant: *"more explanation of each component, what to do."* Two sentences, and
+  they are two DIFFERENT sentences on purpose: what the tab shows, and what he
+  can do about it — including "nothing, this is a read-out", which is the honest
+  answer on most of them and the one a dashboard usually leaves him to infer.
+*/
+.lede { padding: 14px var(--pad) 0; max-width: 74ch; }
+.lede h2 { margin: 0 0 3px; font-size: 19px; letter-spacing: -0.02em; }
+.lede p { margin: 0 0 7px; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+/* The second half — what to do — carries a rule so the two sentences are not
+   two paragraphs of equal weight saying different kinds of thing. */
+.lede p.todo {
+  margin: 0; color: var(--ink); border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+
+@media (min-width: 1040px) {
+  :root { --pad: 26px; }
+  /* The rail carries the divider and the nav sticks inside it. The border was
+     on the nav itself at first, which made it stop wherever the last menu item
+     did — a line that ends two thirds of the way down a long page reads as a
+     rendering fault. */
+  .frame { display: grid; grid-template-columns: 226px minmax(0, 1fr); align-items: stretch; }
+  .rail { border-right: 1px solid var(--line); }
+  nav {
+    flex-direction: column; gap: 2px; overflow: visible;
+    position: sticky; top: 50px; padding: 16px 12px 24px;
+  }
+  nav .grp { display: block; margin-bottom: 14px; }
+  nav .lbl {
+    display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); padding: 0 10px 5px; opacity: 0.75;
+  }
+  nav button {
+    display: block; width: 100%; text-align: left; border: 0; background: transparent;
+    border-radius: 9px; padding: 8px 10px; min-height: 34px; font-size: 14px;
+  }
+  nav button:hover { background: var(--accent-soft); color: var(--ink); }
+  nav button[aria-current="true"] {
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    nav button[aria-current="true"] { color: var(--accent); }
+  }
+  .lede { padding: 20px var(--pad) 0; }
+}
 @media (min-width: 760px) {
-  :root { --pad: 22px; }
   main { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
   .wide { grid-column: 1 / -1; }
 }
 .card {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px;
+  border-radius: var(--radius); padding: 15px; box-shadow: var(--shadow);
 }
-.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.card h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+/* A line under the heading saying what the card is. Injected from HINTS after
+   render, so a view function does not have to carry its own documentation and
+   a card added later simply has no hint rather than a stale one. */
+.card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 11px;
+  padding-bottom: 9px; border-bottom: 1px dashed var(--line); }
+.card.collapsed .hint { display: none; }
+.card h2:only-child, .card h2 + .body { margin-bottom: 0; }
+.card > h2 { margin-bottom: 10px; }
+.card > h2:has(+ .hint) { margin-bottom: 4px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 /* auto-FILL, not auto-fit. With auto-fit five tiles stretch to fill a 1900px
    row and a single digit gets 300px of card to itself, which is the opposite of
@@ -118,14 +233,37 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .conn .who span { display: block; color: var(--muted); font-size: 12px; }
 .conn .st { margin-left: auto; text-align: right; font-size: 12px; color: var(--muted);
   max-width: 46%; }
+/* On a wide card the status has room to be a sentence rather than four words a
+   line, and the two columns stop fighting over the same 340px. */
+@media (min-width: 760px) { .card.wide .conn .st { max-width: 62%; } }
 .conn .st b { display: block; color: var(--ink); font-weight: 600; }
 .stale { color: var(--warn); }
 
 /* Configuration controls. Deliberately plain: this is a settings surface, and
    a settings surface that looks exciting is a settings surface people press by
    accident. */
-.mini { font-size: 12px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink); cursor: pointer; margin-left: 8px; }
+/* The one real button shape, used by Save and Create. Quiet enough for a
+   settings page, distinct enough not to be read as a label. */
+/* `:not(.mini)`, because `.mini` is the quiet variant and the staff card uses
+   it for both Save and Retire. Without the exclusion the two looked identical
+   — a destructive action wearing the primary style, eight times down the page. */
+.row > button:not(.mini), .addrow button {
+  appearance: none; font: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer;
+  padding: 9px 16px; min-height: 38px; border-radius: 9px; border: 1px solid transparent;
+  color: #fff; background: linear-gradient(140deg, var(--accent), var(--accent-2));
+}
+@media (prefers-color-scheme: dark) {
+  .row > button:not(.mini), .addrow button { color: #0b0d14; }
+}
+.row > button:not(.mini):hover, .addrow button:hover { filter: brightness(1.06); }
+/* Retire and Bring back. Outlined, and the border warms on hover — this is the
+   one control on the page that stops a colleague being given work. */
+.mini[data-retire] { color: var(--muted); }
+.mini[data-retire]:hover { color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.mini { font-size: 12px; padding: 5px 11px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); cursor: pointer; margin-left: 8px;
+  text-decoration: none; display: inline-block; }
 .mini:hover { border-color: var(--accent); color: var(--accent); }
 .addrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
 .addrow input, .addrow select { flex: 1 1 150px; min-width: 0; padding: 8px 10px; font: inherit;
@@ -165,7 +303,10 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
 .gate input { width: 100%; padding: 12px; font: inherit; border-radius: 10px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 .gate button { width: 100%; margin-top: 10px; padding: 12px; font: inherit; font-weight: 600;
-  border-radius: 10px; border: 0; background: var(--ink); color: var(--panel); min-height: 46px; }
+  border-radius: 10px; border: 0; min-height: 46px; cursor: pointer; color: #fff;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
+@media (prefers-color-scheme: dark) { .gate button { color: #0b0d14; } }
 .err { color: var(--bad); font-size: 13px; margin-top: 10px; }
 footer { color: var(--muted); font-size: 12px; padding: 4px var(--pad) 28px; }
 
@@ -272,9 +413,11 @@ async function load(tab) {
 function gate(message) {
   app.innerHTML = `
     <div class="gate">
-      <h1 style="font-size:22px;margin:0 0 6px">Team HQ</h1>
-      <p class="meta" style="margin:0 0 16px">This device needs the access token once.</p>
-      <input id="tok" type="password" autocomplete="off" placeholder="Access token" enterkeyhint="go">
+      <span class="mark" style="width:44px;height:44px;border-radius:13px;font-size:21px;margin-bottom:14px">◆</span>
+      <h1 style="font-size:24px;margin:0 0 5px;letter-spacing:-0.02em">Team HQ</h1>
+      <p class="meta" style="margin:0 0 18px">Eight people, one queue. This device needs the password once —
+        it is kept on this device and never sent anywhere but here.</p>
+      <input id="tok" type="password" autocomplete="current-password" placeholder="Password" enterkeyhint="go">
       <button id="go">Unlock</button>
       ${message ? `<div class="err">${esc(message)}</div>` : ''}
     </div>`
@@ -289,25 +432,123 @@ function gate(message) {
   input.focus()
 }
 
-const TABS = [
-  ['overview', 'Today'],
-  ['trends', 'Trends'],
-  ['staff', 'Staff'],
-  ['activity', 'Activity'],
-  ['usage', 'Usage'],
-  ['connections', 'Links'],
-  ['projects', 'Projects'],
-  ['output', 'Output'],
-  ['settings', 'Settings'],
+/*
+  Five groups, and the grouping is the explanation.
+
+  Nine equal pills made every tab look equally likely to hold the answer, so
+  finding anything meant remembering where it was. Grouped, the question
+  answers itself: "is the team working?" is under WORK, "why did it stop?" is
+  under HEALTH, and the two tabs that can change something are the only two
+  under SET UP — which is also a safety property, not just tidiness.
+*/
+const MENU = [
+  ['Now', [['overview', 'Today'], ['activity', 'Activity']]],
+  ['Work', [['projects', 'Projects'], ['output', 'Output']]],
+  ['People', [['staff', 'The team']]],
+  ['Health', [['trends', 'Trends'], ['usage', 'Usage'], ['connections', 'Connections']]],
+  ['Set up', [['settings', 'Settings']]],
 ]
+const TABS = MENU.flatMap(([, items]) => items)
+
+/*
+  What each tab is, and what to do on it.
+
+  `todo` is the half a dashboard usually omits. Most of these tabs cannot be
+  acted on from here at all, and saying so plainly is more useful than leaving
+  him to discover it by pressing things — the actions live in Slack and
+  Telegram by design (§12), and the two places that DO write say which.
+*/
+const GUIDE = {
+  overview: {
+    title: 'Today',
+    what: 'Everything waiting on you, everything the team has in hand right now, and the shape of the day so far.',
+    todo: 'Read the top card first — those are the decisions nothing can proceed without. Answer them in Slack or Telegram, where the buttons are.',
+  },
+  activity: {
+    title: 'Activity',
+    what: 'The last few hundred things that happened, newest first: work finished, messages sent, decisions taken.',
+    todo: 'Nothing to do here. It is the record — use it to answer "when did that happen, and what did it say".',
+  },
+  projects: {
+    title: 'Projects',
+    what: 'Every project the team works on, what is attached to each, and how much of it has been read in.',
+    todo: 'You can start a project here and attach a notebook or a Notion page to it. Naming one is a real commitment — everything filed afterwards goes to whichever project is current.',
+  },
+  output: {
+    title: 'Output',
+    what: 'What the team has produced — audio overviews, briefings, documents — with a link to each.',
+    todo: 'Open anything that looks finished. If something you asked for is missing, it either failed or is still waiting on approval; Today will say which.',
+  },
+  staff: {
+    title: 'The team',
+    what: 'The eight of them: what each is for, how they write, and which Telegram bot reaches them.',
+    todo: 'Names, pronouns and remits are editable here and take effect immediately — including in how they sign their messages. Retiring someone stops them being given work; it does not delete what they have already done.',
+  },
+  trends: {
+    title: 'Trends',
+    what: 'The same handful of numbers over time: work done, work refused, how long things took.',
+    todo: 'Nothing to do here. Look at the shape rather than the last point — one bad day is noise, a fortnight leaning the wrong way is not.',
+  },
+  usage: {
+    title: 'Usage',
+    what: 'Which models did the work, what each cost, and whether messages actually arrived.',
+    todo: 'Nothing to do here, unless delivery is failing — a message that never landed is the one failure that looks like silence rather than an error.',
+  },
+  connections: {
+    title: 'Connections',
+    what: 'Every outside service this depends on — Google, Notion, Slack, Telegram, the model providers — and whether it answered when last asked.',
+    todo: 'A red light is the first thing to fix: everything downstream of it will fail in ways that look like something else. Each row says when it was last checked, so a stale green is not a green.',
+  },
+  settings: {
+    title: 'Settings',
+    what: 'Where things should live, what the notebook allowance has left, and the Google connection.',
+    todo: 'This page and Projects are the only two that write anything. Facts about the database are shown but not editable — a box that looks like it moves a database and does not is worse than no box.',
+  },
+}
+
+/*
+  One line per card, keyed by its heading.
+
+  Keyed by the HEADING rather than by `data-card`, because not every card has
+  the latter and a card without a hint should simply have no hint — never a
+  hint belonging to something else.
+*/
+const HINTS = {
+  'at a glance': 'Counts for today. A number in red or amber is asking for attention; the rest is background.',
+  'needs you': 'Work that has stopped and cannot restart until you decide something. Answer these in Slack or Telegram.',
+  'projects': 'Where work is currently being filed. The current project is the one new instructions land in.',
+  'in flight': 'Being worked on right now, and which stage each has reached.',
+  'recent activity': 'Newest first. Every line is something that actually happened, not a summary of it.',
+  'the team': 'Edit a name, a remit or a way of writing and it takes effect on the next message they send.',
+  'free models': 'Which models did the work. Free ones are used first, and a paid one appears here only when nothing free could do the job.',
+  'message delivery': 'Whether messages reached Slack and Telegram. An undelivered message is the failure that looks like silence.',
+  'connections': 'Green means it answered when last asked. The time matters as much as the colour — a stale green is not a green.',
+  'output': 'Finished work, with a link to each piece. Anything you asked for that is not here either failed or is still waiting for your approval.',
+  'notebook allowance': 'Our own count of what we have spent in Google NotebookLM. Google publishes no usage API, so this is an estimate that corrects itself when they refuse us.',
+  'google': 'Four steps, once. Calendar and Drive need an OAuth client from your own Google Cloud project.',
+  'this database': 'Facts about the database this page is talking to. Read-only on purpose.',
+  'where things should live': 'Declared intent, not live state. Changing one tells the next run where to look.',
+  'new project': 'Starting a project is a real commitment — everything filed afterwards goes to whichever project is current.',
+}
 
 function shell(active) {
   app.innerHTML = `
-    <header><h1>Team HQ</h1><span id="stamp"></span></header>
-    <nav>${TABS.map(([k, label]) =>
-      `<button data-tab="${k}" aria-current="${k === active}">${label}</button>`).join('')}</nav>
-    <main id="main"><div class="empty">Loading…</div></main>
-    <footer>Everything here is read-only. Actions live in Slack and Telegram.</footer>`
+    <header>
+      <span class="mark" aria-hidden="true">◆</span>
+      <span class="brand"><h1>Team HQ</h1><span>Eight people, one queue</span></span>
+      <span id="stamp"></span>
+    </header>
+    <div class="frame">
+      <div class="rail"><nav>${MENU.map(([group, items]) => `
+        <div class="grp"><span class="lbl">${group}</span>${items.map(([k, label]) =>
+          `<button data-tab="${k}" aria-current="${k === active}">${label}</button>`).join('')}</div>`).join('')}
+      </nav></div>
+      <div>
+        <div id="lede"></div>
+        <main id="main"><div class="empty">Loading…</div></main>
+        <footer>Everything here is read-only except Projects and Settings. The buttons — approve, undo, go ahead — live in Slack and Telegram, where you are when you need them.</footer>
+      </div>
+    </div>`
   for (const b of document.querySelectorAll('nav button')) {
     b.onclick = () => show(b.dataset.tab)
   }
@@ -740,7 +981,7 @@ function connections(d) {
   const STALE_MINUTES = 6 * 60
 
   if (rows.length === 0) {
-    return `<section class="card"><h2>Connections</h2><div class="body">
+    return `<section class="card wide"><h2>Connections</h2><div class="body">
       <div class="empty">Nothing has been probed yet. Run <code>npm run inventory</code>.</div>
     </div></section>`
   }
@@ -787,7 +1028,7 @@ function connections(d) {
   const broken = rows.filter((r) => r.state === 'dead').length
 
   return `
-    <section class="card" data-card="connections">
+    <section class="card wide" data-card="connections">
       <span class="drag" title="Move up">⌃</span>
       <h2>Connections${anyStale ? '<span class="est">STALE</span>' : ''}</h2>
       <div class="body">
@@ -1130,9 +1371,42 @@ function wireProjects() {
   }
 }
 
+/*
+  The hint under each card heading, inserted after render.
+
+  After, and from a map, so that a view function stays a view function: adding a
+  card does not oblige anyone to write documentation for it in the same breath,
+  and a card whose heading changes loses its hint rather than keeping a wrong
+  one. Idempotent, because `show` re-renders the whole view on every visit.
+*/
+function explain(main) {
+  for (const card of main.querySelectorAll('.card')) {
+    const heading = card.querySelector('h2')
+    if (heading === null || card.querySelector('.hint') !== null) continue
+    // A card that already introduces itself is left alone. Four of them do —
+    // the notebook meter, Google, the database facts, the settings form — and
+    // the first version put a second, near-identical sentence above each.
+    if (heading.nextElementSibling?.classList.contains('meta') === true) continue
+    const hint = HINTS[heading.textContent.trim().toLowerCase()]
+    if (hint === undefined) continue
+    const p = document.createElement('p')
+    p.className = 'hint'
+    p.textContent = hint
+    heading.after(p)
+  }
+}
+
 async function show(section) {
   for (const b of document.querySelectorAll('nav button')) {
     b.setAttribute('aria-current', String(b.dataset.tab === section))
+  }
+  const guide = GUIDE[section]
+  const lede = document.getElementById('lede')
+  if (lede) {
+    lede.innerHTML = guide === undefined ? '' : `
+      <h2>${esc(guide.title)}</h2>
+      <p>${esc(guide.what)}</p>
+      <p class="todo">${esc(guide.todo)}</p>`
   }
   const main = document.getElementById('main')
   main.innerHTML = '<div class="empty">Loading…</div>'
@@ -1142,6 +1416,7 @@ async function show(section) {
     if (section === 'projects') wireProjects()
     if (section === 'settings') wireSettings()
     if (section === 'staff') wireTeam()
+    explain(main)
     armSparklines(main)
     applyLayout(main, section)
     armLayout(main, section)

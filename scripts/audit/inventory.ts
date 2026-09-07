@@ -26,6 +26,7 @@
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { roster } from '../../src/telegram/roster.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
 const db = new ManagementApiExecutor(
@@ -268,6 +269,42 @@ await check(
   },
 )
 
+/*
+ * Google Calendar, which is a credential this script did not used to know about.
+ *
+ * 0077 seeded a red row for it and 0095 turns that row green when a refresh
+ * token lands. Neither of them is this script — and `record_connection_health`
+ * deletes any row the current run did not write, so every `npm run inventory`
+ * silently swept the calendar light off the page entirely. 0077's own comment
+ * says why that is the wrong outcome: an absent row reads exactly like a
+ * forgotten one.
+ *
+ * So it is probed here like everything else, from the same three facts the
+ * Settings page shows him, and each stage says which step is next rather than
+ * reporting one undifferentiated red.
+ */
+await check(
+  'google_calendar',
+  'oauth_client',
+  '✅ grant',
+  'Settings → Google on the web front end',
+  async () => {
+    const g = (await db.execute('select app.hq_google() as g')).rows[0] as {
+      g?: { client_id?: string | null; has_secret?: boolean; has_refresh_token?: boolean }
+    }
+    const google = g.g ?? {}
+    if (google.client_id === null || google.client_id === undefined || google.client_id === '') {
+      return { ok: false, detail: 'no OAuth client id yet — step 2 of 4' }
+    }
+    if (google.has_secret !== true)
+      return { ok: false, detail: 'no client secret yet — step 3 of 4' }
+    if (google.has_refresh_token !== true) {
+      return { ok: false, detail: 'not connected — press Connect Google, step 4 of 4' }
+    }
+    return { ok: true, detail: 'connected — a refresh token is in the vault' }
+  },
+)
+
 await check(
   'Notion',
   'integration token',
@@ -342,16 +379,33 @@ for (const [service, what, owner, action, state] of [
     "parked 2026-09-06 at Grant's request — voice notes degrade to text and say no_credential, which is the criterion working",
     'parked' as const,
   ],
-  [
-    'Telegram',
-    'staff bot tokens: 5 of 7',
-    '✅ phone number',
-    'Quality and Comms remain — BotFather (docs/telegram-bot-roster.md). Nothing waits on them',
-    'missing' as const,
-  ],
 ] as const) {
   rows.push({ service, what, state, owner, detail: 'not machine-checkable', action })
 }
+
+// The staff bots, counted rather than written down.
+//
+// This line used to read "staff bot tokens: 5 of 7" as a string literal. Grant
+// sent the last two on 2026-09-06 and the inventory went on reporting a gap
+// that had been closed — which is the exact failure this whole script exists to
+// prevent, committed by the script itself.
+const bots = await roster(db)
+const withToken = bots.filter((b) => b.hasToken).length
+const missingBots = bots.filter((b) => !b.hasToken)
+rows.push({
+  service: 'Telegram',
+  what: `staff bot tokens: ${String(withToken)} of ${String(bots.length)}`,
+  owner: '✅ phone number',
+  detail: 'from the roster, not from memory',
+  action:
+    missingBots.length === 0
+      ? 'nothing outstanding'
+      : `${missingBots.map((b) => b.staffSlug ?? b.username).join(', ')} remain — BotFather (docs/telegram-bot-roster.md)`,
+  // `attested`, not `ok`: nobody probed these tokens here. The count is from
+  // our own roster, which is a claim about what we hold, not evidence that
+  // Telegram still accepts it — verify:telegram is what calls getMe.
+  state: missingBots.length === 0 ? ('attested' as const) : ('missing' as const),
+})
 
 // --- report ------------------------------------------------------------------
 
