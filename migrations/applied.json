@@ -75,5 +75,6 @@
   "0074_the_office_can_act.sql": "20af367f0d52f33028f7154def1365299183636175a37de67a2e411af5b10173",
   "0075_the_bots_can_listen.sql": "2b07b0464239e7d3bbd49def12767adaf8a52326ca99f2a6f20ea2477058fdea",
   "0076_a_recording_is_content.sql": "024d07efb9635ff26be2e13b7e4a597329b68bfb80a72d6fcd3da1640d930f2f",
-  "0077_the_front_end_sees_the_output.sql": "f76f76999e2e2a00184d6d8dcd7859146106b022f35fe2483803749d5dab1478"
+  "0077_the_front_end_sees_the_output.sql": "f76f76999e2e2a00184d6d8dcd7859146106b022f35fe2483803749d5dab1478",
+  "0078_the_notebook_has_a_meter.sql": "53d01e15ad0746f5ab4985b09c53617db2e8fe260d73a9300031a0ca6d104d7b"
 }

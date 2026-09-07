@@ -44,8 +44,10 @@ import {
   ARTIFACT_KINDS,
   type ArtifactKind,
   type ArtifactListing,
+  NotebookActionError,
   NotebookActions,
 } from '../notebook/actions.ts'
+import { allowance, deferUntil, describe, record, refused } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -307,12 +309,77 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             ? undefined
             : String(payload.instructions)
 
+        // The meter, before spending anything (0078). Google's allowance is
+        // compute-based since 2 September and cannot be queried, so this is our
+        // own ledger — and the honest thing to do when it says no is to
+        // schedule the work rather than refuse it.
+        const meter = await allowance(db, kind)
+        if (!meter.allowed) {
+          const when = deferUntil(meter)
+          await db.execute(`
+            select app.enqueue_child(
+              coalesce(
+                (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+                ${lit(job.jobId)}::uuid
+              ),
+              'notebook.generate',
+              (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+              ${lit(`${String(Math.max(60, Math.round((when.getTime() - Date.now()) / 1000)))} seconds`)}::interval,
+              true
+            )
+          `)
+          return deterministic(
+            `Not starting the ${LABEL[kind] ?? kind} yet — that would take us past what we ` +
+              `think is safe on the notebook's five-hour allowance. ${describe(meter)} ` +
+              `I have scheduled it for ${when.toISOString().slice(11, 16)} UTC, when the ` +
+              'window turns over, and it will run then without you asking again.',
+            notebook,
+          )
+        }
+
         // Snapshot BEFORE starting. A generator returns a task id and the
         // artifact appears in the listing minutes later under an id that has
         // nothing to do with the task, so the only reliable answer to "which
         // one is ours" is "the one that was not there a moment ago".
         const before = await actions.artifacts(notebook.id)
-        const started = await actions.generate(notebook.id, kind as ArtifactKind, instructions)
+        let started: Awaited<ReturnType<typeof actions.generate>>
+        try {
+          started = await actions.generate(notebook.id, kind as ArtifactKind, instructions)
+        } catch (error) {
+          if (error instanceof NotebookActionError && error.quota) {
+            // The measurement. Refused having spent what we spent, so the real
+            // ceiling is at most that — and 0078 lowers ours to match, once.
+            const learned = await refused(db, kind, error.detail)
+            const when = deferUntil(await allowance(db, kind))
+            await db.execute(`
+              select app.enqueue_child(
+                coalesce(
+                  (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+                  ${lit(job.jobId)}::uuid
+                ),
+                'notebook.generate',
+                (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+                ${lit(`${String(Math.max(60, Math.round((when.getTime() - Date.now()) / 1000)))} seconds`)}::interval,
+                true
+              )
+            `)
+            return deterministic(
+              `Google refused the ${LABEL[kind] ?? kind}: the notebook's usage limit is spent. ` +
+                (learned.loweredTo === null
+                  ? ''
+                  : `I have lowered our own ceiling to ${String(learned.loweredTo)} units a ` +
+                    'window, which is what that refusal measured. ') +
+                `Rescheduled for ${when.toISOString().slice(11, 16)} UTC.`,
+              notebook,
+            )
+          }
+          throw error
+        }
+        await record(db, kind, {
+          notebook: notebook.id,
+          projectId: job.projectId,
+          jobId: job.jobId,
+        })
 
         // The task id IS the artifact id — measured, not assumed (see
         // `KIND_MATCHES`). Recording it here is what makes the collector exact
@@ -353,6 +420,73 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
       },
     },
     {
+      /**
+       * Put a link into the project's notebook, so Google fetches and reads it.
+       *
+       * Grant: *"let's just say it's a YouTube link on the history of coaching,
+       * and we just send him that link and say, add that to the project."* This
+       * is the doing of it. Deciding that a link means this rather than
+       * something else is `src/agents/links.ts`.
+       *
+       * The URL rather than our own fetch of it, deliberately. NotebookLM
+       * transcribes a YouTube video and renders a PDF; we would hand it the
+       * HTML of a consent banner.
+       */
+      kind: 'notebook.add_source',
+      handle: async (job: Job): Promise<HandlerOutput> => {
+        const { actions, notebook } = await need(job)
+        const payload = await payloadOf(db, job)
+        const url = String(payload.url ?? '')
+        if (!/^https?:\/\//.test(url)) throw new Error(`${url} is not a link I can add`)
+
+        const meter = await allowance(db, 'add_url')
+        if (!meter.allowed) {
+          const when = deferUntil(meter)
+          await db.execute(`
+            select app.enqueue_child(
+              coalesce(
+                (select parent_job_id from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+                ${lit(job.jobId)}::uuid
+              ),
+              'notebook.add_source',
+              (select pinned_config from public.jobs where job_id = ${lit(job.jobId)}::uuid),
+              ${lit(`${String(Math.max(60, Math.round((when.getTime() - Date.now()) / 1000)))} seconds`)}::interval,
+              true
+            )
+          `)
+          return deterministic(
+            `Holding that link until ${when.toISOString().slice(11, 16)} UTC — adding a source ` +
+              `costs the notebook's allowance and we are at the edge of it. ${describe(meter)}`,
+            notebook,
+          )
+        }
+
+        try {
+          await actions.addUrl(notebook.id, url)
+        } catch (error) {
+          if (error instanceof NotebookActionError && error.quota) {
+            await refused(db, 'add_url', error.detail)
+            throw new Error(
+              `Google refused the source: the notebook's usage limit is spent. ${error.detail}`,
+            )
+          }
+          throw error
+        }
+        await record(db, 'add_url', {
+          notebook: notebook.id,
+          projectId: job.projectId,
+          jobId: job.jobId,
+        })
+
+        return deterministic(
+          `Added to the notebook "${notebook.name}": ${url}\n\nGoogle is reading it now — ` +
+            'a video takes a few minutes to transcribe. It is a source the whole team can ' +
+            'cite from once it lands.',
+          notebook,
+        )
+      },
+    },
+    {
       kind: 'notebook.push_document',
       handle: async (job: Job): Promise<HandlerOutput> => {
         const { actions, notebook } = await need(job)
@@ -374,6 +508,13 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
           String(doc.content),
           String(doc.title ?? 'From AI Team HQ'),
         )
+        // Cheap, but not free: Google processes a source on the way in, and a
+        // meter that counts only the expensive things drifts (0078).
+        await record(db, 'add_text', {
+          notebook: notebook.id,
+          projectId: job.projectId,
+          jobId: job.jobId,
+        })
         return deterministic(
           `Pushed "${String(doc.title)}" into the notebook "${notebook.name}" as source ` +
             `${String(sourceId)}.`,
@@ -522,6 +663,11 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         const question = String(payload.question ?? '')
         if (question.trim() === '') throw new Error('no question was given')
         const answer = await actions.ask(notebook.id, question)
+        await record(db, 'ask', {
+          notebook: notebook.id,
+          projectId: job.projectId,
+          jobId: job.jobId,
+        })
         return {
           body: answer,
           confidence: 'medium',

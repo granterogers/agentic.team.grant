@@ -49,9 +49,33 @@ def emit(payload: object) -> None:
     sys.stdout.flush()
 
 
-def die(action: str, message: str) -> None:
-    emit({"ok": False, "action": action, "error": message})
+def die(action: str, message: str, **extra: object) -> None:
+    emit({"ok": False, "action": action, "error": message, **extra})
     sys.exit(1)
+
+
+# Phrases Google uses when the answer is "not now" rather than "no".
+#
+# Matched on the message because the library raises `RateLimitError` for some
+# refusals and a generic `RPCError` carrying a USER_DISPLAYABLE_ERROR for
+# others, and from our side both mean the same thing: stop asking, come back
+# when the window turns over. Missing one costs a job that retries into a wall;
+# a false positive costs a deferral, which is recoverable.
+QUOTA_PHRASES = (
+    "usage limit",
+    "limit reached",
+    "quota",
+    "rate limit",
+    "resource_exhausted",
+    "too many requests",
+    "try again later",
+    "generate later",
+)
+
+
+def looks_like_quota(message: str) -> bool:
+    lowered = message.lower()
+    return any(phrase in lowered for phrase in QUOTA_PHRASES)
 
 
 # Artifact kinds, mapped to the library's generator. Named here rather than
@@ -257,7 +281,21 @@ async def main() -> None:
     except Exception as exc:  # noqa: BLE001 - the boundary reports, never crashes
         # The action name travels with the error. A bare exception class in an
         # MCP client's context is a model apologising without knowing what for.
-        die(action, f"{type(exc).__name__}: {exc}")
+        #
+        # And "you are out of quota" travels as a FLAG rather than as prose,
+        # because the caller does something different about it: it defers the
+        # work to the next window instead of retrying into the same wall, and
+        # it records the refusal as a measurement of where the ceiling really
+        # is. A quota refusal read as a generic failure is five wasted retries
+        # and no lesson learned.
+        text = f"{type(exc).__name__}: {exc}"
+        try:
+            from notebooklm import RateLimitError
+
+            rate_limited = isinstance(exc, RateLimitError)
+        except ImportError:
+            rate_limited = False
+        die(action, text, quota=bool(rate_limited or looks_like_quota(text)))
 
 
 if __name__ == "__main__":

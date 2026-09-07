@@ -91,6 +91,16 @@ export class NotebookActionError extends Error {
   constructor(
     readonly action: string,
     readonly detail: string,
+    /**
+     * Google refused for quota rather than for cause.
+     *
+     * A distinct flag and not a substring the caller re-matches, because the
+     * caller does something different about it — defers to the next window
+     * instead of retrying into the same wall, and records the refusal as the
+     * only real measurement of where the ceiling is (0078). Losing the
+     * distinction costs five retries and the lesson.
+     */
+    readonly quota = false,
   ) {
     super(`notebook ${action} failed: ${detail}`)
     this.name = 'NotebookActionError'
@@ -141,8 +151,15 @@ export class NotebookActions {
       const text = (e.stdout ?? '').trim()
       if (text !== '') {
         try {
-          const parsed = JSON.parse(text.slice(text.indexOf('{'))) as { error?: string }
-          throw new NotebookActionError(action, String(parsed.error ?? text).slice(0, 300))
+          const parsed = JSON.parse(text.slice(text.indexOf('{'))) as {
+            error?: string
+            quota?: boolean
+          }
+          throw new NotebookActionError(
+            action,
+            String(parsed.error ?? text).slice(0, 300),
+            parsed.quota === true,
+          )
         } catch (parseError) {
           if (parseError instanceof NotebookActionError) throw parseError
         }
@@ -154,7 +171,11 @@ export class NotebookActions {
     if (start === -1) throw new NotebookActionError(action, 'the runner produced no JSON')
     const parsed = JSON.parse(stdout.slice(start)) as Record<string, unknown>
     if (parsed.ok !== true) {
-      throw new NotebookActionError(action, String(parsed.error ?? 'unknown failure').slice(0, 300))
+      throw new NotebookActionError(
+        action,
+        String(parsed.error ?? 'unknown failure').slice(0, 300),
+        parsed.quota === true,
+      )
     }
     return parsed
   }

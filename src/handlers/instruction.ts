@@ -29,6 +29,19 @@
  * transcription, so nothing echoes it — the answer is the answer to what he
  * said, which is the only evidence that it was heard correctly he needs.
  *
+ * ## Links
+ *
+ * Grant: *"rather than me necessarily having to go into the front end, I can
+ * just send the Chief of Staff either on Telegram or on Slack a link… he'd have
+ * to obviously be smart enough to know to which project are we uploading it."*
+ *
+ * `src/agents/links.ts` reads the link; this file decides which project it
+ * belongs to and does the work. The project question has exactly three
+ * answers and one of them is a question back: named in the message, or the
+ * only active one, or *"which project?"* — never a guess between two, because
+ * a source filed into the wrong project is invisible. It is present, it is
+ * searchable, and it quietly answers questions about the wrong thing.
+ *
  * ## Answering is not the same as doing
  *
  * The first version of this file could only answer. Asked to *"generate an
@@ -49,12 +62,14 @@
  */
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
+import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { transcribeTelegramVoice } from '../voice/inbound.ts'
+import { allowance, describe } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -174,11 +189,20 @@ async function act(
     started.length === 1
       ? (started[0] as string)
       : `${started.slice(0, -1).join(', ')} and ${String(started.at(-1))}`
-  return started.length === 1
-    ? `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes; I am ` +
+  // What this will cost, said at the moment of asking rather than after.
+  // Grant asked to be told the remaining usage "every time I make a request",
+  // and the request is the only moment at which knowing changes his mind.
+  const meter = await allowance(db, kinds[0] ?? 'ask')
+  const cost = `\n\n${describe(meter)}`
+
+  return (
+    (started.length === 1
+      ? `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes; I am ` +
         'watching for it and will post the link here and in the project channel when it lands.'
-    : `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes each; I am ` +
-        'watching for them and will post the links here and in the project channel as they land.'
+      : `Starting the ${list} in "${String(notebook)}" now. Google takes a few minutes each; I ` +
+        'am watching for them and will post the links here and in the project channel as they ' +
+        'land.') + cost
+  )
 }
 
 /**
@@ -240,6 +264,159 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   return heard.text
 }
 
+/** A project the message could be about. */
+interface Candidate {
+  readonly project_id: string
+  readonly slug: string
+  readonly name: string
+}
+
+/**
+ * Which project this is for: one, or a question to ask instead.
+ *
+ * `job.projectId` is deliberately NOT the fallback. `app.enqueue_inbound` fills
+ * it with the most recently updated active project so that every job has one,
+ * which is right for answering a question and wrong for filing a source: the
+ * cost of guessing is a permanent, silent misfiling rather than one odd reply.
+ */
+async function whichProject(
+  db: SqlExecutor,
+  named: string | null,
+): Promise<{ project: Candidate | null; ask: string | null }> {
+  const { rows } = await db.execute(`
+    select project_id::text as project_id, slug, name
+      from public.projects where status = 'active' order by updated_at desc
+  `)
+  const active = rows as unknown as Candidate[]
+
+  if (named !== null) {
+    const match = active.find(
+      (p) => p.slug.toLowerCase() === named || p.name.toLowerCase() === named,
+    )
+    if (match !== undefined) return { project: match, ask: null }
+    return {
+      project: null,
+      ask:
+        `I do not have a project called “${named}”. ` +
+        (active.length === 0
+          ? 'There are no active projects yet — tell me a name and a notebook and I will start one.'
+          : `The active ones are ${active.map((p) => `“${p.name}”`).join(', ')}.`),
+    }
+  }
+
+  if (active.length === 1) return { project: active[0] as Candidate, ask: null }
+  if (active.length === 0) {
+    return {
+      project: null,
+      ask: 'There are no active projects to put that in. Give me a name for one and a notebook to hang it on, and I will set it up.',
+    }
+  }
+  return {
+    project: null,
+    ask:
+      `Which project is that for? ${active.map((p) => `“${p.name}”`).join(', ')}. ` +
+      'Say the name and send it again — I would rather ask than file it in the wrong place.',
+  }
+}
+
+/**
+ * Do something with the links in a message, or say why not.
+ *
+ * Returns null when the message has no links, or when it is asking ABOUT one
+ * rather than asking for something to be done with it — both of which hand
+ * control back to the prose path.
+ */
+async function handleLinks(
+  db: SqlExecutor,
+  job: Job,
+  request: LinkRequest,
+): Promise<string | null> {
+  if (request.intent === 'discuss') return null
+
+  const { project, ask } = await whichProject(db, request.namedProject)
+  if (project === null) return ask
+
+  const said: string[] = []
+
+  // Places first: a notebook attached in the same message is the destination
+  // the sources in that message should go to, and doing it in the other order
+  // would refuse the sources for want of the notebook that arrived with them.
+  const places = request.links.filter((l) => l.kind === 'notebooklm' || l.kind === 'notion')
+  for (const link of places) {
+    const { rows } = await db.execute(`
+      select app.hq_attach(
+        ${lit(project.slug)},
+        ${lit(link.kind === 'notebooklm' ? 'notebooklm' : 'notion')},
+        ${lit(link.ref)},
+        ${link.kind === 'notebooklm' ? "'home'" : "'source'"},
+        ${link.kind === 'notebooklm' ? "'artifact'" : 'null'},
+        ${lit(project.name)}
+      ) as r
+    `)
+    const r = (rows[0] as { r: { error?: string } }).r
+    said.push(
+      r.error === undefined
+        ? `attached the ${LINK_LABEL[link.kind]} to “${project.name}”`
+        : `could not attach the ${LINK_LABEL[link.kind]}: ${r.error}`,
+    )
+  }
+
+  const content = request.links.filter((l) => l.kind !== 'notebooklm' && l.kind !== 'notion')
+  if (content.length > 0) {
+    // Content goes to the notebook, not to Notion. ADR-0013 settled the split —
+    // Notion stores, NotebookLM generates — and NotebookLM ingests a URL
+    // natively, transcribing a video and rendering a PDF, where we would hand
+    // Notion the HTML of a consent banner.
+    const { rows } = await db.execute(`
+      select display_name from public.project_attachments
+       where project_id = ${lit(project.project_id)}::uuid
+         and connector = 'notebooklm' and enabled
+       limit 1
+    `)
+    if (rows.length === 0) {
+      said.push(
+        `could not add ${String(content.length)} source(s): “${project.name}” has no notebook ` +
+          'attached. Send me its NotebookLM link and I will hang it on first.',
+      )
+    } else {
+      for (const link of content) {
+        await enqueueSource(db, job, project.project_id, link)
+        said.push(`adding the ${LINK_LABEL[link.kind]} to “${project.name}”`)
+      }
+    }
+  }
+
+  const list =
+    said.length === 1
+      ? (said[0] as string)
+      : `${said.slice(0, -1).join('; ')}; and ${String(said.at(-1))}`
+  return `${list.charAt(0).toUpperCase()}${list.slice(1)}.`
+}
+
+/** One source, as its own job, because Google takes minutes over a video. */
+async function enqueueSource(
+  db: SqlExecutor,
+  job: Job,
+  projectId: string,
+  link: FoundLink,
+): Promise<void> {
+  // The child inherits the parent's project, and the parent's project may not
+  // be the one the link belongs to — `enqueue_inbound` picks the most recently
+  // updated active project for every inbound message. So the job is moved onto
+  // the right project after it is created, in the same statement.
+  await db.execute(`
+    with made as (
+      select app.enqueue_child(
+        ${lit(job.jobId)}::uuid, 'notebook.add_source',
+        jsonb_build_object('url', ${lit(link.url)}, 'kind', ${lit(link.kind)}),
+        interval '0', false
+      ) as job_id
+    )
+    update public.jobs set project_id = ${lit(projectId)}::uuid
+     where job_id = (select job_id from made)
+  `)
+}
+
 export function instructionHandler(deps: InstructionDeps): Handler {
   return {
     kind: 'office.instruction',
@@ -257,11 +434,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)
 
+      // Does this carry a link? A link is the more specific reading and is
+      // checked first: "add this video and make an audio overview" is two
+      // instructions, and the link half must not be lost to the artifact half.
+      const sent = linkRequest(instruction)
+      const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
+
       // Does this ask for something to be MADE? If so, make it, and let the
       // confirmation be the reply.
+      // Both, independently. "Add this video and make an audio overview" is
+      // two instructions in one sentence, and the first version answered only
+      // the half it noticed first.
       const wanted = notebookRequest(instruction)
-      const confirmation =
+      const made =
         wanted === null ? null : await act(deps.db, job, wanted.kinds, wanted.instructions)
+      const confirmation = linked === null ? made : made === null ? linked : `${linked}\n\n${made}`
 
       // The same retrieval the office uses, so an instruction answered in
       // Telegram cites the same corpus as one answered in Slack. §22's rule
