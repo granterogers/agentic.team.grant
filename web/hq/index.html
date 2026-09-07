@@ -559,6 +559,7 @@ const HINTS = {
   'needs you': 'Work that has stopped and cannot restart until you decide something. Answer these in Slack or Telegram.',
   'projects': 'Where work is currently being filed. The current project is the one new instructions land in.',
   'in flight': 'Being worked on right now, and which stage each has reached.',
+  'next 24 hours': 'Your diary, cached hourly so the team can answer questions about it without a round trip — and still answer them when Google is unreachable.',
   'recent activity': 'Newest first. Every line is something that actually happened, not a summary of it.',
   'the team': 'Edit a name, a remit or a way of writing and it takes effect on the next message they send.',
   'free models': 'Which models did the work. Free ones are used first, and a paid one appears here only when nothing free could do the job.',
@@ -612,6 +613,63 @@ function overview(d) {
       ${b.consequences_of_delay ? `<div class="m">If it waits: ${esc(b.consequences_of_delay)}</div>` : ''}
     </li>`).join('')
 
+  /*
+    The diary, when it is connected.
+
+    Nothing at all when Google has not been set up — an empty card headed
+    "Calendar" on a page where the calendar does not exist is a card that reads
+    as broken. The Connections tab is where "not connected" belongs, and it
+    already says which of the four steps is next.
+
+    The age is shown whenever it is over an hour, for the same reason the spoken
+    answer says it: this is a cache that keeps working when Google is
+    unreachable (§18), and a stale diary presented as a current one is worse
+    than no diary.
+  */
+  const cal = d.calendar || {}
+  const calendar =
+    cal.enabled !== true || cal.as_of == null
+      ? ''
+      : `<section class="card" data-card="calendar"><span class="drag" title="Move up">⌃</span>
+          <h2>Next 24 hours${
+            Date.now() - new Date(cal.as_of).getTime() > 3600_000
+              ? `<span class="est">AS OF ${esc(ago(cal.as_of).toUpperCase())}</span>`
+              : ''
+          }</h2>
+          <div class="body">${
+            (cal.events || []).length === 0
+              ? '<div class="empty">Nothing in the diary.</div>'
+              : `<ul>${(cal.events || [])
+                  .map(
+                    (e) => `<li><div class="row">
+                      <span class="t">${esc(e.summary || 'Untitled')}</span>
+                      <span class="m">${
+                        e.all_day
+                          ? 'all day'
+                          : esc(
+                              new Date(e.starts_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }),
+                            )
+                      }</span>
+                      ${e.status === 'tentative' ? '<span class="pill warn">tentative</span>' : ''}
+                    </div>
+                    ${
+                      e.location || e.attendees
+                        ? `<div class="m">${[
+                            e.attendees ? e.attendees + ' ' + (e.attendees === 1 ? 'person' : 'people') : '',
+                            esc(e.location || ''),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}</div>`
+                        : ''
+                    }</li>`,
+                  )
+                  .join('')}</ul>`
+          }</div>
+        </section>`
+
   const jobs = d.today.map((j) => `
     <li>
       <div class="row">
@@ -663,7 +721,8 @@ function overview(d) {
     <section class="card" data-card="inflight"><span class="drag" title="Move up">⌃</span>
       <h2>In flight</h2>
       <div class="body">${jobs ? `<ul>${jobs}</ul>` : '<div class="empty">The queue is empty.</div>'}</div>
-    </section>`
+    </section>
+    ${calendar}`
 }
 
 function staff(d) {
@@ -1574,7 +1633,15 @@ function explain(main) {
     // the notebook meter, Google, the database facts, the settings form — and
     // the first version put a second, near-identical sentence above each.
     if (heading.nextElementSibling?.classList.contains('meta') === true) continue
-    const hint = HINTS[heading.textContent.trim().toLowerCase()]
+    // The heading WITHOUT its badge. Two cards append an `.est` chip — STALE on
+    // Connections, AS OF … on the diary — and `textContent` glues it to the
+    // title, so "Connections" became "ConnectionsSTALE" and lost its hint at
+    // exactly the moment the card needed explaining most.
+    const label = [...heading.childNodes]
+      .filter((n) => !(n.nodeType === 1 && n.classList.contains('est')))
+      .map((n) => n.textContent)
+      .join('')
+    const hint = HINTS[label.trim().toLowerCase()]
     if (hint === undefined) continue
     const p = document.createElement('p')
     p.className = 'hint'

@@ -106,5 +106,7 @@
   "0105_a_request_is_not_a_question.sql": "db8c8b7904a5f552e4cecaabcf1e5e9d91eca64b0b1f67254885d45c3b801ad8",
   "0106_a_duty_has_an_owner_too.sql": "ab0e14701d676263384b1a3411e9af74ceb6f5931f723ded723eb83b406b13a9",
   "0107_a_source_arriving_is_news.sql": "961dc3d75cf32d66ffa03f55f007db71baee8da5698ff472f9e10e104da11367",
-  "0108_a_fixture_must_not_spend_the_ceiling.sql": "b71f49ef8a8ffd0f089549aec68148f3b4bab8dbcef49222adf1a0fbc63079a9"
+  "0108_a_fixture_must_not_spend_the_ceiling.sql": "b71f49ef8a8ffd0f089549aec68148f3b4bab8dbcef49222adf1a0fbc63079a9",
+  "0109_the_calendar_the_team_can_see.sql": "6cb04f8cd41cc16a97d62ed8c60085ade06b2d001983e8e739cdb5faabfb2303",
+  "0110_the_diary_answers_out_loud.sql": "71bb453d4fef5c975d7b210615b7e3f23fa4ecaf5900abd8e5d113b47dc755a5"
 }
