@@ -1,0 +1,240 @@
+/**
+ * Reading recent mail into the cache the team answers from.
+ *
+ * Grant asked for Gmail, and 0123 gave it a Connect button. A button that
+ * connects to nothing is worse than no button: it reports success and changes
+ * nothing, which is the failure shape this project keeps finding. This is the
+ * half that makes it mean something.
+ *
+ * Deliberately shaped like `calendar.ts`, down to the outcome type and the page
+ * bound. That pattern is proven here — cache what was seen, answer from the
+ * cache, keep answering when Google is unreachable (§18 case 3) — and two
+ * different shapes for two Google readers would be two sets of bugs.
+ *
+ * ## Two requests per message, and why not three
+ *
+ * `messages.list` returns ids only, so each message needs a `messages.get` to
+ * get headers. `format=metadata` with named headers is used rather than `full`:
+ * it returns the headers and the snippet and NOT the body, so the body is never
+ * transferred, never held in memory here, and cannot end up in the row by
+ * accident. Cheaper and safer for the same reason.
+ *
+ * ## Why the cap is low
+ *
+ * Fifty messages. Not a rate limit — Gmail's quota is generous — but a
+ * usefulness one: the question the team gets asked is "what has come in", and
+ * the answer to that is the last day or two. An inbox mirror would be a
+ * liability that grows every hour whether or not anyone reads it.
+ */
+import type { SqlExecutor } from '../db/executor.ts'
+import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
+
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+const nullable = (v: string | null | undefined): string =>
+  v === null || v === undefined || v === '' ? 'null' : lit(v)
+
+/** Matches `CalendarOutcome` so the two handlers can report identically. */
+export interface MailOutcome {
+  readonly ok: boolean
+  readonly note: string
+  readonly seen: number
+  readonly stored: number
+  readonly removed: number
+}
+
+interface GmailMessage {
+  id?: string
+  threadId?: string
+  labelIds?: string[]
+  snippet?: string
+  internalDate?: string
+  payload?: {
+    headers?: { name?: string; value?: string }[]
+    parts?: { filename?: string }[]
+    filename?: string
+  }
+}
+
+/** `"Jane Smith" <jane@example.com>` → name and address, separately. */
+export const parseFrom = (raw: string): { name: string | null; address: string | null } => {
+  const angled = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(raw)
+  if (angled !== null) {
+    const name = (angled[1] ?? '').replace(/^"|"$/g, '').trim()
+    return { name: name === '' ? null : name, address: (angled[2] ?? '').trim().toLowerCase() }
+  }
+  const bare = raw.trim()
+  // A bare address is an address, not a name. Storing it as a name would make
+  // "who emailed about this" return a display name nobody chose.
+  return bare === '' ? { name: null, address: null } : { name: null, address: bare.toLowerCase() }
+}
+
+const header = (m: GmailMessage, name: string): string => {
+  const found = (m.payload?.headers ?? []).find(
+    (h) => (h.name ?? '').toLowerCase() === name.toLowerCase(),
+  )
+  return (found?.value ?? '').trim()
+}
+
+/** How many addresses a header lists, without keeping any of them. */
+const countAddresses = (raw: string): number =>
+  raw.trim() === '' ? 0 : raw.split(',').filter((p) => p.trim() !== '').length
+
+export async function refreshMail(
+  db: SqlExecutor,
+  options: {
+    readonly hours?: number
+    readonly max?: number
+    readonly fetchImpl?: typeof fetch
+  } = {},
+): Promise<MailOutcome> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const hours = options.hours ?? 48
+  const max = Math.max(1, Math.min(100, options.max ?? 50))
+
+  const enabled = (
+    await db.execute(`
+      select coalesce((select value::text::boolean from public.system_config
+                        where key = 'gmail.enabled'), false) as on
+    `)
+  ).rows[0] as { on: boolean }
+  if (!enabled.on) {
+    // §17: an integration turned off stays off and says so, rather than being
+    // quietly skipped. What is already cached stays readable.
+    return { ok: true, note: 'gmail is switched off in Settings', seen: 0, stored: 0, removed: 0 }
+  }
+
+  const access = await googleAccess(db, fetchImpl)
+  await recordGoogleHealth(db, access)
+  if (!access.ok) return { ok: false, note: access.reason, seen: 0, stored: 0, removed: 0 }
+
+  const granted = access as GoogleAccess
+  if (!granted.scopes.some((s) => s.includes('gmail.readonly') || s.includes('gmail.modify'))) {
+    return {
+      ok: false,
+      // A scope unchecked on the consent screen. Named, because the alternative
+      // symptom is a 403 from an endpoint that looks fine.
+      note: `the connection has no Gmail read scope — granted: ${granted.scopes.join(' ') || 'none'}`,
+      seen: 0,
+      stored: 0,
+      removed: 0,
+    }
+  }
+
+  // --- which messages -------------------------------------------------------
+  const ids: string[] = []
+  let pageToken: string | undefined
+  for (let page = 0; page < 3 && ids.length < max; page += 1) {
+    const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages')
+    // Gmail's own query language. `newer_than` is in days and takes whole
+    // numbers, so the hours are rounded UP: asking for 36 hours and getting
+    // one day would silently miss half the window.
+    url.searchParams.set('q', `newer_than:${String(Math.ceil(hours / 24))}d -in:chats`)
+    url.searchParams.set('maxResults', String(Math.min(100, max - ids.length)))
+    if (pageToken !== undefined) url.searchParams.set('pageToken', pageToken)
+
+    const response = await fetchImpl(url.toString(), {
+      headers: { Authorization: `Bearer ${granted.accessToken}` },
+    })
+    const body = (await response.json().catch(() => ({}))) as {
+      messages?: { id?: string }[]
+      nextPageToken?: string
+      error?: { message?: string; code?: number }
+    }
+    if (body.error !== undefined) {
+      return {
+        ok: false,
+        note: `Google refused: ${String(body.error.code ?? '')} ${String(body.error.message ?? '')}`.trim(),
+        seen: ids.length,
+        stored: 0,
+        removed: 0,
+      }
+    }
+    for (const m of body.messages ?? []) if (m.id !== undefined) ids.push(m.id)
+    pageToken = body.nextPageToken
+    if (pageToken === undefined) break
+  }
+
+  // --- and what is in their headers ----------------------------------------
+  const seenIds: string[] = []
+  let stored = 0
+  for (const id of ids) {
+    const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`)
+    // `metadata`, not `full`. The body is never transferred, so it cannot end
+    // up in a row by accident — see the header.
+    url.searchParams.set('format', 'metadata')
+    for (const h of ['From', 'To', 'Cc', 'Subject', 'Date']) {
+      url.searchParams.append('metadataHeaders', h)
+    }
+    const response = await fetchImpl(url.toString(), {
+      headers: { Authorization: `Bearer ${granted.accessToken}` },
+    })
+    const m = (await response.json().catch(() => ({}))) as GmailMessage & {
+      error?: { message?: string }
+    }
+    if (m.error !== undefined || m.id === undefined) continue
+
+    const from = parseFrom(header(m, 'From'))
+    const labels = m.labelIds ?? []
+    const sentAt =
+      m.internalDate === undefined || m.internalDate === ''
+        ? null
+        : new Date(Number(m.internalDate)).toISOString()
+
+    await db.execute(`
+      insert into public.mail_messages
+        (message_id, thread_id, subject, from_name, from_address, to_count,
+         sent_at, excerpt, labels, has_attachments, unread, last_seen_at, vanished_at)
+      values (
+        ${lit(m.id)}, ${lit(String(m.threadId ?? m.id))},
+        ${nullable(header(m, 'Subject').slice(0, 400))},
+        ${nullable(from.name?.slice(0, 200))}, ${nullable(from.address?.slice(0, 320))},
+        ${String(countAddresses(header(m, 'To')) + countAddresses(header(m, 'Cc')))},
+        ${sentAt === null ? 'null' : `${lit(sentAt)}::timestamptz`},
+        ${nullable((m.snippet ?? '').slice(0, 400))},
+        array[${labels.map((l) => lit(l)).join(', ')}]::text[],
+        ${labels.includes('HAS_ATTACHMENT') ? 'true' : 'false'},
+        ${labels.includes('UNREAD') ? 'true' : 'false'},
+        app.now_utc(), null
+      )
+      on conflict (message_id) do update
+        set subject = excluded.subject,
+            labels = excluded.labels,
+            unread = excluded.unread,
+            last_seen_at = app.now_utc(),
+            -- A message that came back was not deleted after all.
+            vanished_at = null
+    `)
+    seenIds.push(m.id)
+    stored += 1
+  }
+
+  // --- what has gone ---------------------------------------------------------
+  //
+  // Only within the window we just asked about: a message older than the window
+  // is not missing, it is simply not something we looked for. Marking those as
+  // vanished would flag the whole cache every run.
+  let removed = 0
+  if (seenIds.length > 0) {
+    const kept = seenIds.map((i) => lit(i)).join(', ')
+    const gone = await db.execute(`
+      update public.mail_messages
+         set vanished_at = app.now_utc()
+       where vanished_at is null
+         and sent_at > app.now_utc() - make_interval(hours => ${String(hours)})
+         and message_id not in (${kept})
+      returning message_id
+    `)
+    removed = gone.rows.length
+  }
+
+  return {
+    ok: true,
+    note:
+      stored === 0 && removed === 0
+        ? 'nothing new in the inbox'
+        : `${String(stored)} message(s) cached, ${String(removed)} no longer there`,
+    seen: ids.length,
+    stored,
+    removed,
+  }
+}

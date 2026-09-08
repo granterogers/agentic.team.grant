@@ -63,17 +63,48 @@ const already = (await one(`
       exists (select 1 from vault.secrets where name = 'google.client_secret') as has_secret,
       exists (select 1 from vault.secrets where name = 'google.refresh_token') as has_refresh
   `)) as { has_id: boolean; has_secret: boolean; has_refresh: boolean }
-const injected = !(already.has_id && already.has_secret && already.has_refresh)
-if (injected && (already.has_id || already.has_secret || already.has_refresh)) {
-  // Half-connected. Refusing beats filling in the gaps: the missing half might
-  // be a step Grant is in the middle of, and a fixture written over it would
-  // look like his.
+/**
+ * Three states, not two.
+ *
+ * The first version had two — connected, or nothing — and refused anything in
+ * between as corrupt. Then Grant registered the app and had not yet pressed
+ * Connect, which is `client_id` and `client_secret` present with no refresh
+ * token, and the suite refused to run at all. That state is not corruption. It
+ * is the normal, possibly long-lived state of "registered, not connected", and
+ * a check that cannot run in it is a check that cannot run on the day it is
+ * most useful.
+ *
+ *   nothing        → install the whole fixture credential
+ *   registered     → borrow his client, inject ONLY the missing refresh token
+ *   connected      → use his, write nothing
+ *
+ * Any other combination — a secret with no id, a refresh token with no secret —
+ * really is incoherent, and refusing is still right there.
+ */
+const state: 'nothing' | 'registered' | 'connected' | 'incoherent' =
+  already.has_id && already.has_secret && already.has_refresh
+    ? 'connected'
+    : already.has_id && already.has_secret
+      ? 'registered'
+      : !already.has_id && !already.has_secret && !already.has_refresh
+        ? 'nothing'
+        : 'incoherent'
+
+if (state === 'incoherent') {
   console.error(
-    'Google is half-configured — some of the credential exists and some does not.\n' +
+    'Google is half-configured in a way that is not simply "not connected yet":\n' +
+      `  client_id ${already.has_id ? 'yes' : 'no'}, secret ${already.has_secret ? 'yes' : 'no'},` +
+      ` refresh ${already.has_refresh ? 'yes' : 'no'}\n` +
       'Refusing to fill in the rest with a fixture: finish or clear it in Settings first.',
   )
   process.exit(2)
 }
+console.log(`Google is: ${state}`)
+
+/** What this run added, so the restore removes exactly that and nothing else. */
+const injected = state !== 'connected'
+const injectedClient = state === 'nothing'
+const FIXTURE_REFRESH = `1//fixture-refresh-${run}`
 
 const wasEnabled = (
   await one(`select coalesce((select value::text::boolean from public.system_config
@@ -99,21 +130,41 @@ const restore = async (): Promise<void> => {
     delete from public.calendar_events where calendar_id = ${lit(CAL)};
   `)
   if (!injected) return
-  // Exactly what was installed, and only if it was installed here.
+
+  // Exactly what was installed, and only if it is still what was installed.
+  //
+  // The refresh token is deleted only when its value is STILL the fixture. If
+  // Grant pressed Connect while this was running, the vault now holds his real
+  // token and deleting it would undo a thing a human did — the worst possible
+  // outcome for a verification run.
+  await db.execute(`
+    delete from vault.secrets
+     where name = 'google.refresh_token'
+       and id in (select id from vault.decrypted_secrets
+                   where name = 'google.refresh_token'
+                     and decrypted_secret = ${lit(FIXTURE_REFRESH)});
+  `)
+  if (!injectedClient) return
   await db.execute(`
     update public.system_config set value = to_jsonb(''::text) where key = 'google.client_id';
-    delete from vault.secrets where name in ('google.client_secret', 'google.refresh_token');
+    delete from vault.secrets where name = 'google.client_secret';
   `)
 }
 
-if (injected) {
+if (injectedClient) {
   await db.execute(`
     insert into public.system_config (key, value, description)
     values ('google.client_id', to_jsonb('fixture.apps.googleusercontent.com'::text), 'fixture')
     on conflict (key) do update set value = excluded.value;
     select app.store_secret('google.client_secret', 'GOCSPX-fixture',
       'verify:calendar fixture; removed at the end of the run');
-    select app.store_secret('google.refresh_token', '1//fixture-refresh',
+  `)
+}
+if (injected) {
+  // The refresh token, whichever of the two states we are in. Every fetch in
+  // this file is faked, so this value never reaches Google.
+  await db.execute(`
+    select app.store_secret('google.refresh_token', ${lit(FIXTURE_REFRESH)},
       'verify:calendar fixture; removed at the end of the run');
   `)
 }

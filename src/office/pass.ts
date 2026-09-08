@@ -45,6 +45,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
+import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { sourceHandler } from '../handlers/source.ts'
@@ -183,6 +184,7 @@ export const buildPass = async (
     planHandler(db),
     capacityHandler(db),
     calendarHandler(db),
+    mailHandler(db),
     ...(cannotThink
       ? []
       : [

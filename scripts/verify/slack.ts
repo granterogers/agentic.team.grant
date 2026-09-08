@@ -29,6 +29,7 @@ import { processCallbacks } from '../../src/channels/callbacks.ts'
 import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { hold, release } from '../../src/jobs/quiet.ts'
 import type { Handler, HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { dequeue, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
@@ -57,6 +58,13 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   supabaseToken,
 )
+
+// Hold the queue for the duration. Since 0121 a pass runs every minute, and a
+// suite that drives the queue itself is now racing a live worker — see 0129
+// and `src/jobs/quiet.ts`. Bounded and self-lapsing, so a crash here cannot
+// leave the office stopped.
+await hold(db, 600)
+
 const slack = new SlackClient(botToken)
 // `configured`, not the constructor: it reads the avatar base from
 // `system_config`, which is what the running system does. Constructing it bare
@@ -1354,5 +1362,7 @@ try {
 } catch (error) {
   console.log(`cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
 }
+
+await release(db)
 
 if (failed.length > 0) process.exit(1)

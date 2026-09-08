@@ -21,6 +21,7 @@
 
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
+import { hold, release } from '../../src/jobs/quiet.ts'
 import type { JobState } from '../../src/jobs/states.ts'
 import {
   DORMANT_STATES,
@@ -38,6 +39,16 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+
+// Hold the queue for the duration.
+//
+// This suite kills jobs and then reads what recovery did with them. Since a
+// pass began running every minute (0121) the heartbeat was getting there
+// first: recovery moved a job to `retrying`, `requeue_retrying` promoted it to
+// `queued`, and four checks failed at random on correct code. 0129 is the
+// switch; this is the suite taking it. Bounded and self-lapsing, so a crash
+// here cannot leave the office stopped.
+await hold(db, 600)
 
 const run = Date.now().toString(36)
 interface Check {
@@ -521,5 +532,7 @@ try {
 } catch (error) {
   console.log(`Cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
 }
+
+await release(db)
 
 if (failedChecks.length > 0) process.exit(1)

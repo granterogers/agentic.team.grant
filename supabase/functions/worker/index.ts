@@ -149,11 +149,30 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   if (running) return json({ ok: true, skipped: 'a pass is already running' })
+
+  // Held? Then hold, whoever asked.
+  //
+  // pg_cron checks this too, so this is the second of two gates rather than
+  // the only one — deliberately, because a webhook kick does not go through
+  // pg_cron, and the point of a pause is that NOTHING touches the queue while
+  // a verification suite is measuring it. `verify:jobs` failed four checks at
+  // random once a pass began running every minute: recovery moved a job to
+  // `retrying` exactly as designed, and the heartbeat had already promoted it
+  // to `queued` before the suite looked.
+  const db = new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)
+  try {
+    const { rows } = await db.execute('select app.worker_paused() as held')
+    if (rows[0]?.held === true) return json({ ok: true, skipped: 'the office is paused' })
+  } catch {
+    // A pause we cannot read is not a pause. Working is the safer default: a
+    // failed check that stopped the queue would turn a transient blip into
+    // Grant waiting again, which is the thing this path exists to fix.
+  }
+
   running = true
 
   const lines: string[] = []
   try {
-    const db = new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)
     const pass = await buildPass(db, `edge-${crypto.randomUUID().slice(0, 8)}`, {
       log: (line) => lines.push(line),
       max: MAX_JOBS,

@@ -20,6 +20,7 @@
 
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
+import { hold, release } from '../../src/jobs/quiet.ts'
 import type { Handler, HandlerOutput, Job, Reviewer } from '../../src/jobs/worker.ts'
 import { dequeue, drain, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { ProviderRouter } from '../../src/providers/router.ts'
@@ -33,6 +34,12 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+
+// Hold the queue for the duration. Since 0121 a pass runs every minute, and a
+// suite that drives the queue itself is now racing a live worker — see 0129
+// and `src/jobs/quiet.ts`. Bounded and self-lapsing, so a crash here cannot
+// leave the office stopped.
+await hold(db, 600)
 
 const run = Date.now().toString(36)
 const WORKER = `verify-worker-${run}`
@@ -585,5 +592,7 @@ try {
 } catch (error) {
   console.log(`\ncleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
 }
+
+await release(db)
 
 if (failed.length > 0) process.exit(1)

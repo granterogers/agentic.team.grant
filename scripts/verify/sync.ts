@@ -17,6 +17,7 @@
  * by `npm run poc:gate-2` and by the real sync runs in `sync_runs`.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { hold, release } from '../../src/jobs/quiet.ts'
 import {
   type Capability,
   type NotebookAdapter,
@@ -35,6 +36,12 @@ const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+
+// Hold the queue for the duration. Since 0121 a pass runs every minute, and a
+// suite that drives the queue itself is now racing a live worker — see 0129
+// and `src/jobs/quiet.ts`. Bounded and self-lapsing, so a crash here cannot
+// leave the office stopped.
+await hold(db, 600)
 
 const rows: { n: string; what: string; outcome: string; passed: boolean }[] = []
 const add = (n: string, what: string, outcome: string, passed: boolean): void => {
@@ -492,4 +499,6 @@ for (const r of rows)
   console.log(`| ${r.n} | ${r.what} | ${r.outcome} | ${r.passed ? '✅' : '❌'} |`)
 const failed = rows.filter((r) => !r.passed)
 console.log(`\n${rows.length - failed.length}/${rows.length} checks passed`)
+await release(db)
+
 if (failed.length > 0) process.exit(1)

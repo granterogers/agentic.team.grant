@@ -19,7 +19,7 @@
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",
-    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router && npm run verify:sync && npm run verify:knowledge && npm run verify:schema && npm run verify:notion && npm run verify:cross-interface && npm run verify:chaos && npm run verify:security && npm run verify:mcp && npm run verify:oauth && npm run verify:agents && npm run verify:autonomy && npm run verify:undo && npm run verify:learning && npm run purge:fixtures -- --go && npm run verify:tts && npm run verify:hq && npm run verify:telegram && npm run verify:slack && npm run verify:worker && npm run purge:fixtures -- --go && npm run slack:tidy -- --go",
+    "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router && npm run verify:sync && npm run verify:knowledge && npm run verify:schema && npm run verify:notion && npm run verify:mail && npm run verify:cross-interface && npm run verify:chaos && npm run verify:security && npm run verify:mcp && npm run verify:oauth && npm run verify:agents && npm run verify:autonomy && npm run verify:undo && npm run verify:learning && npm run purge:fixtures -- --go && npm run verify:tts && npm run verify:hq && npm run verify:telegram && npm run verify:slack && npm run verify:worker && npm run purge:fixtures -- --go && npm run slack:tidy -- --go",
     "backup:manifest": "tsx scripts/backup/manifest.ts",
     "backup:connection": "tsx scripts/backup/print-connection.ts",
     "verify:restore": "tsx scripts/backup/verify-restore.ts",
@@ -102,7 +102,8 @@
     "deploy:worker": "tsx scripts/deploy/worker.ts",
     "deploy:google": "tsx scripts/deploy/google.ts",
     "telegram:login": "tsx scripts/telegram/login.ts",
-    "telegram:bots": "tsx scripts/telegram/bots.ts"
+    "telegram:bots": "tsx scripts/telegram/bots.ts",
+    "verify:mail": "tsx scripts/verify/mail.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
