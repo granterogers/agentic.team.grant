@@ -118,7 +118,44 @@ if (phone !== undefined) {
       apiHash: account.apiHash,
       settings: new Api.CodeSettings({}),
     }),
-  )) as { phoneCodeHash?: string }
+  )) as {
+    phoneCodeHash?: string
+    type?: { className?: string; length?: number }
+    nextType?: { className?: string }
+    timeout?: number
+  }
+
+  // WHERE Telegram sent it, which is the whole diagnosis when it does not
+  // arrive. Grant got nothing twice and the runs both reported success,
+  // because success here means "Telegram accepted the request" and says
+  // nothing about the channel it chose. `SentCodeTypeApp` means a message
+  // inside Telegram itself and never an SMS; `SentCodeTypeSms` means a text;
+  // `SentCodeTypeEmailCode` means his Telegram account email. Those are three
+  // different places to look, and telling him the wrong one wastes his time.
+  //
+  // The className and the LENGTH are printed. The code is not, and there is no
+  // flag that would print it.
+  const where: Record<string, string> = {
+    SentCodeTypeApp:
+      'as a message INSIDE Telegram — open the app and look for the chat named "Telegram"',
+    SentCodeTypeSms: 'by SMS text message to your phone',
+    SentCodeTypeCall: 'by an automated phone call that reads the digits out',
+    SentCodeTypeFlashCall: 'as a flash call — the code is the last digits of the calling number',
+    SentCodeTypeMissedCall: 'as a missed call — the code is the last digits of the calling number',
+    SentCodeTypeFragmentSms: 'via Fragment (fragment.com) rather than normal SMS',
+    SentCodeTypeEmailCode: 'to the email address on your Telegram account',
+    SentCodeTypeSetUpEmailRequired:
+      'nowhere yet — Telegram wants an email set up on the account first',
+  }
+  const kind = String(sent.type?.className ?? 'unknown')
+  console.log(`Telegram sent the code ${where[kind] ?? `by an unrecognised method (${kind})`}.`)
+  console.log(`  code length: ${String(sent.type?.length ?? '?')} digits`)
+  if (sent.nextType?.className !== undefined) {
+    console.log(
+      `  if it does not arrive, Telegram will fall back to: ${String(sent.nextType.className)}`,
+    )
+  }
+  if (sent.timeout !== undefined) console.log(`  valid for about ${String(sent.timeout)}s`)
 
   const hash = String(sent.phoneCodeHash ?? '')
   if (hash === '') {
@@ -144,8 +181,7 @@ if (phone !== undefined) {
   await client.disconnect()
 
   console.log(
-    'Telegram has sent a code to your Telegram app (not SMS, usually).\n' +
-      'Finish within a few minutes:\n' +
+    'Finish within a few minutes:\n' +
       '  npm run telegram:login -- --code 12345\n' +
       'and add --password <your 2FA password> if you have two-step verification on.',
   )
