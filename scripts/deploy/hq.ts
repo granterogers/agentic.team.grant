@@ -125,14 +125,82 @@ if (project !== undefined && project.ssoProtection !== null) {
   console.log(`sso protection disabled: http ${String(off.status)}`)
 }
 
+// --- the notebook reader ----------------------------------------------------
+//
+// It ships in THIS deployment, not its own, because a Vercel deployment is an
+// atomic file list: deploying `api/` alone would delete the page.
+//
+// Why it exists at all: every notebook read used to shell out to Python, which
+// no longer has a runtime — Actions are off and the only worker is a Deno Edge
+// Function (0137). The read path needs no browser, only `httpx`, so it fits
+// here as a serverless function on the project already serving the page.
+const readerSecretRow = (
+  await db.execute(
+    `select decrypted_secret as v from vault.decrypted_secrets where name = 'notebook.reader_secret'`,
+  )
+).rows[0]
+let readerSecret = readerSecretRow?.v === undefined ? '' : String(readerSecretRow.v)
+if (readerSecret === '') {
+  readerSecret = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '')
+  await db.execute(
+    `select vault.create_secret(${`'${readerSecret.replace(/'/g, "''")}'`},
+       'notebook.reader_secret',
+       'Shared secret a worker presents to the Vercel notebook reader.')`,
+  )
+  console.log('reader secret: generated and stored in the vault')
+} else {
+  console.log('reader secret: already in the vault')
+}
+
+// Vercel keeps the SECRET and nothing else. The cookie jar stays in the vault
+// and travels in the request body for the life of one call — §15 wants one home
+// for a credential, and an environment variable at a third party is a second.
+const envBody = JSON.stringify({
+  key: 'NOTEBOOK_READER_SECRET',
+  value: readerSecret,
+  type: 'encrypted',
+  target: ['production'],
+})
+if (project === undefined) {
+  // First ever deploy: the project is created BY the deployment below, so
+  // there is nothing to attach an environment variable to yet. Said out loud
+  // rather than skipped silently, because the function answers 503 until a
+  // second run and that would otherwise look like a broken reader.
+  console.log(
+    'reader secret on vercel: skipped — the project does not exist yet, re-run after this',
+  )
+} else {
+  const envSet = await fetch(`https://api.vercel.com/v10/projects/${project.id}/env?upsert=true`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
+    body: envBody,
+  })
+  console.log(`reader secret on vercel: http ${String(envSet.status)}`)
+  if (!envSet.ok) {
+    console.error(
+      `${(await envSet.text()).slice(0, 200)}\n` +
+        'the function answers 503 without it — refusing to deploy half of this',
+    )
+    process.exit(1)
+  }
+}
+
 const html = await readFile('web/hq/index.html', 'utf8')
+const reader = await readFile('api/notebook.py', 'utf8')
+const requirements = await readFile('requirements.txt', 'utf8')
+const vercelConfig = await readFile('vercel.json', 'utf8')
 const deployment = await fetch('https://api.vercel.com/v13/deployments', {
   method: 'POST',
   headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
   body: JSON.stringify({
     name: 'ai-team-hq',
     target: 'production',
-    files: [{ file: 'index.html', data: html }],
+    files: [
+      { file: 'index.html', data: html },
+      { file: 'api/notebook.py', data: reader },
+      { file: 'requirements.txt', data: requirements },
+      { file: 'vercel.json', data: vercelConfig },
+    ],
     projectSettings: { framework: null },
   }),
 })
@@ -157,6 +225,51 @@ if (!looksRight) {
   console.error('the page URL did not serve the page')
   process.exit(1)
 }
+// --- and prove the reader reads --------------------------------------------
+//
+// By behaviour, not by status. A Python function that failed to install its
+// dependency still serves a 200 for the liveness route and fails only on the
+// one call that matters.
+const readerBase = `https://${String(page.url)}/api/notebook`
+const readerLive = await fetch(readerBase)
+const readerLiveBody = (await readerLive.json().catch(() => ({}))) as {
+  ok?: boolean
+  configured?: boolean
+}
+console.log(
+  `  reader: http ${String(readerLive.status)} configured=${String(readerLiveBody.configured)}`,
+)
+
+const jar = String(
+  (
+    await db.execute(
+      `select decrypted_secret as v from vault.decrypted_secrets
+        where name = 'notebook.storage_state'`,
+    )
+  ).rows[0]?.v ?? '',
+)
+if (jar === '') {
+  console.log('  reader: no cookie jar in the vault, so the read was not attempted')
+} else {
+  const read = await fetch(readerBase, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${readerSecret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ op: 'notebooks', storage_state: jar }),
+  })
+  const list = (await read.json().catch(() => ({}))) as { error?: string } | { id: string }[]
+  const count = Array.isArray(list) ? list.length : -1
+  console.log(
+    `  reader: http ${String(read.status)} ` +
+      (count >= 0
+        ? `${String(count)} notebook(s)`
+        : `error=${String((list as { error?: string }).error).slice(0, 120)}`),
+  )
+  if (count < 0) {
+    console.error('the notebook reader is deployed but cannot read — see the message above')
+    process.exit(1)
+  }
+}
+
 // The token is deliberately NOT printed.
 //
 // This script printed it once, into a session transcript, which is the same

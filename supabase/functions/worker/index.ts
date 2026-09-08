@@ -102,6 +102,26 @@ const secretMatches = async (presented: string): Promise<boolean> => {
 let running = false
 
 /**
+ * Can this runtime spawn a local process at all?
+ *
+ * The more general form of the question above, and the one that decides
+ * whether this worker may claim notebook work — the live adapter shells out to
+ * Python for every read (0137). Asked the same way and for the same reason:
+ * the honest answer here is no, and a function that ASKS gives the honest
+ * answer on any runtime rather than only on this one.
+ */
+const canSubprocess = async (): Promise<boolean> => {
+  const Command = Deno.Command
+  if (Command === undefined) return false
+  try {
+    return (await new Command('python3', { args: ['-c', 'pass'] }).output()).success
+  } catch {
+    // A permissions failure, or no such binary. Either way: no.
+    return false
+  }
+}
+
+/**
  * Can this runtime turn a voice note into words?
  *
  * Asked, not assumed. The answer decides whether the edge worker may take a
@@ -160,6 +180,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       endpoint: 'worker',
       configured: PROJECT_REF !== '' && ACCESS_TOKEN !== '' && KICK_SECRET !== '',
       can_transcribe: await canTranscribe(new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)),
+      can_subprocess: await canSubprocess(),
     })
   }
 
@@ -203,6 +224,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // note is therefore left for the runner that can hear it (0125), instead
       // of being claimed and failed three times by the worker that cannot.
       canTranscribe: await canTranscribe(db),
+      canSubprocess: await canSubprocess(),
     })
     const result = await pass()
     return json({ ok: true, ...result, log: lines })

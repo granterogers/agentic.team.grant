@@ -1,0 +1,169 @@
+/**
+ * The handler behind the `discovery-sync` duty.
+ *
+ * §22 scenario A opens with two clauses:
+ *
+ *   "Grant adds a source to the Money Mastery Notebook from his phone →
+ *    detected within the sync interval"
+ *
+ * `runSync` has done the detecting since Phase 4. What never existed was
+ * anything that called it on a schedule from inside the office: the ten-minute
+ * cron lived in GitHub Actions, Actions are switched off, and 0133 seeded the
+ * duty `enabled = false` because there was no handler for its job kind. So the
+ * first clause of the completion criterion has been unowned for four days.
+ *
+ * This is that owner. It is deliberately thin — a handler, not a second
+ * implementation of sync — because `scripts/projects/sync.ts` already had the
+ * right shape and a duplicate would be the copy that drifts.
+ *
+ * ## Where it can run
+ *
+ * Anywhere, as of 0138 — and it very nearly could not run anywhere at all.
+ *
+ * Reading a notebook went through `scripts/notebook/read.py` in a subprocess,
+ * which no remaining runtime has: Actions are off and the only worker is a
+ * Deno Edge Function. 0137 recorded that honestly and left these jobs queued
+ * for a machine nobody had rented yet.
+ *
+ * Measuring the dependency was the way out. `notebooklm-py` needs `httpx`, not
+ * a browser — Playwright is only on the login path, which happened once, by
+ * hand, months ago. So the read is an ordinary HTTPS call, `api/notebook.py`
+ * serves it from the Vercel project already hosting Team HQ, and
+ * `HttpNotebookAdapter` is what this handler gets by default.
+ *
+ * ## Why a Notebook outage is a `complete` job, not a failed one
+ *
+ * Phase 4's acceptance requires an outage to *degrade*. `runSync` returns a
+ * `failed` RUN with a reason rather than throwing, and a failed run is a real
+ * outcome: we looked, and could not see. Reporting that as a failed JOB would
+ * retry it three times, page nobody usefully, and make an hour of Google being
+ * unavailable indistinguishable from the worker being broken.
+ *
+ * The distinction is carried in the body, which says plainly that we could not
+ * read. Deliberately NOT in `evidence`: the enum is `verified | inferred |
+ * speculative` and describes how a FINDING was arrived at. A failed cycle has
+ * no finding — the only claim in the output is "we tried and could not see",
+ * and that claim is verified. Downgrading it to `speculative` would say we
+ * guessed at the outage, which is the opposite of what happened.
+ */
+
+import type { SqlExecutor } from '../db/executor.ts'
+import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { type NotebookAdapter, UnavailableNotebookAdapter } from '../notebook/adapter.ts'
+import { notebookEnabled } from '../notebook/sync-queue.ts'
+import { type RemoteNotebook, runSync, SyncAlreadyRunningError } from '../projects/sync.ts'
+import { count } from '../text/plain.ts'
+
+export interface SyncHandlerDeps {
+  readonly db: SqlExecutor
+  /**
+   * How to build the live adapter, injected.
+   *
+   * `src/handlers/` exists precisely so a handler can bridge the notebook and
+   * the job engine while neither imports it (see `notebook.ts`), and
+   * `tests/notebook/isolation.test.ts` enforces that. Taking the adapter as a
+   * dependency keeps the live one — which reaches the vault and a subprocess —
+   * out of this file, and lets a test drive the whole handler with a fixture.
+   */
+  readonly adapter: () => Promise<{
+    readonly adapter: NotebookAdapter
+    readonly listNotebooks: () => Promise<readonly RemoteNotebook[]>
+  } | null>
+  readonly workerId: string
+}
+
+export function syncHandler(deps: SyncHandlerDeps): Handler {
+  const { db, adapter, workerId } = deps
+  return {
+    kind: 'office.sync',
+    handle: async (job: Job): Promise<HandlerOutput> => {
+      const base = {
+        confidence: 'high' as const,
+        sources: [`job:${job.jobId}`],
+        contradictions: null,
+        path: 'deterministic_retrieval' as const,
+        model: null,
+      }
+
+      // §17's kill-switch, checked before anything else. A switch that the
+      // scheduled path ignores is not a switch.
+      if (!(await notebookEnabled(db))) {
+        return {
+          ...base,
+          body: 'Notebook is switched off, so there was nothing to look for.',
+          evidence: 'verified',
+        } satisfies HandlerOutput
+      }
+
+      const live = await adapter()
+
+      let outcome: Awaited<ReturnType<typeof runSync>>
+      try {
+        outcome = await runSync({
+          db,
+          // No credential is a state, not a crash. The unavailable adapter is
+          // installed so the cycle is RECORDED as failed with a reason — an
+          // attempt that left no trace would make "we have not looked since
+          // Tuesday" invisible.
+          adapter: live?.adapter ?? new UnavailableNotebookAdapter(),
+          listNotebooks: live?.listNotebooks ?? (async () => []),
+          workerId,
+        })
+      } catch (error) {
+        if (error instanceof SyncAlreadyRunningError) {
+          // Two duties firing close together, or a previous run still holding
+          // its lease. Not a failure of anything: the other run is doing the
+          // work.
+          return {
+            ...base,
+            body: 'A sync was already running, so this one stood down.',
+            evidence: 'verified',
+          } satisfies HandlerOutput
+        }
+        throw error
+      }
+
+      if (outcome.state === 'failed') {
+        return {
+          ...base,
+          body: `Could not read the notebooks this time: ${outcome.detail}`,
+          // `verified` and `high`, which looks wrong for a failure and is not:
+          // the claim being made is about the ATTEMPT, and we know exactly
+          // what happened to it. The run is recorded as failed in
+          // `notebook_sync_runs`, which is where "we have not managed to look
+          // since Tuesday" is answered from.
+          evidence: 'verified',
+        } satisfies HandlerOutput
+      }
+
+      // Written as a sentence rather than a table of counters. Nobody reads
+      // this unless something arrived, and when something did, the useful
+      // sentence is which thing.
+      const parts: string[] = []
+      if (outcome.projectsCreated > 0) {
+        parts.push(`${count(outcome.projectsCreated, 'new project', 'new projects')}`)
+      }
+      if (outcome.sourcesAdded > 0) {
+        parts.push(`${count(outcome.sourcesAdded, 'new source', 'new sources')}`)
+      }
+      if (outcome.sourcesChanged > 0) {
+        parts.push(`${count(outcome.sourcesChanged, 'change', 'changes')}`)
+      }
+
+      const body =
+        parts.length === 0
+          ? `Looked through ${count(outcome.notebooksSeen, 'notebook', 'notebooks')}. ` +
+            'Nothing new.'
+          : `${parts.join(', ')} across ` +
+            `${count(outcome.notebooksSeen, 'notebook', 'notebooks')}.` +
+            // Counted, never deleted — `countRemoved` explains why a source
+            // that vanished is a thing to notice rather than act on.
+            (outcome.sourcesRemoved === 0
+              ? ''
+              : ` ${count(outcome.sourcesRemoved, 'source', 'sources')} we had before ` +
+                'is no longer listed, which is noted rather than acted on.')
+
+      return { ...base, body, evidence: 'verified' } satisfies HandlerOutput
+    },
+  }
+}

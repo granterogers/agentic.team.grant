@@ -49,8 +49,10 @@ import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { sourceHandler } from '../handlers/source.ts'
+import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import type { Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
+import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
 import { ProviderRouter } from '../providers/router.ts'
 import { SlackClient } from '../slack/api.ts'
 import { narrateHandoffs } from '../slack/narrate.ts'
@@ -85,6 +87,27 @@ export interface PassOptions {
    * `GET /functions/v1/worker` rather than assuming it.
    */
   readonly canTranscribe?: boolean
+  /**
+   * Whether this runtime can spawn a local process.
+   *
+   * False in the Edge Function. Passed down to the dequeue so notebook work
+   * and discovery stay queued for a worker that can do them (0137), rather
+   * than being claimed and failed here.
+   */
+  readonly canSubprocess?: boolean
+  /**
+   * How to reach the notebook. Defaults to the HTTPS reader.
+   *
+   * An override, not a requirement. `HttpNotebookAdapter` is plain `fetch`, so
+   * it works in Deno and in Node alike, and the default keeps both runtimes
+   * running the same code — which is the whole reason this pass exists in one
+   * file rather than two.
+   *
+   * Deliberately NOT the live subprocess adapter, even here: importing it
+   * would put `node:child_process` in the Edge bundle, which does not have it,
+   * and the bundle would fail to load rather than degrade.
+   */
+  readonly notebook?: SyncHandlerDeps['adapter']
 }
 
 export interface PassResult {
@@ -185,6 +208,18 @@ export const buildPass = async (
     capacityHandler(db),
     calendarHandler(db),
     mailHandler(db),
+    // §22 A's first clause — a source arriving is noticed — but only where the
+    // notebook can actually be read. See `notebook` in the options above.
+    syncHandler({
+      db,
+      adapter:
+        options.notebook ??
+        (async () => {
+          const http = await HttpNotebookAdapter.fromVault(db)
+          return http === null ? null : { adapter: http, listNotebooks: () => http.listNotebooks() }
+        }),
+      workerId,
+    }),
     ...(cannotThink
       ? []
       : [
@@ -213,6 +248,7 @@ export const buildPass = async (
       notify,
       onStart: (job) => announceStart(db, job),
       canTranscribe: options.canTranscribe ?? true,
+      canSubprocess: options.canSubprocess ?? true,
       ...(deadline === undefined
         ? {}
         : { stopStartingAfter: (): boolean => Date.now() - started > deadline }),

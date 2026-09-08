@@ -192,11 +192,23 @@ export const dequeue = async (
    * worse off than before the speed-up.
    */
   canTranscribe = true,
+  /**
+   * Whether this worker can spawn a local process at all.
+   *
+   * False in the Edge Function for the same reason `canTranscribe` is, and it
+   * is the more general fact: the live notebook adapter shells out to Python
+   * for every read, so five notebook kinds and `office.sync` are work the fast
+   * worker cannot do. 0137 keeps those queued for a worker that can, instead
+   * of letting this one claim, attempt and fail them — which is what it did
+   * silently from the moment Actions were switched off.
+   */
+  canSubprocess = true,
 ): Promise<Job | null> => {
   const { rows } = await db.execute(
     `select job_id::text as job_id, kind, correlation_id::text as correlation_id,
             project_id::text as project_id, idempotency_key, attempt
-     from app.dequeue_job(${lit(workerId)}, ${canTranscribe ? 'true' : 'false'})`,
+     from app.dequeue_job(${lit(workerId)}, ${canTranscribe ? 'true' : 'false'},
+                          ${canSubprocess ? 'true' : 'false'})`,
   )
   const r = rows[0]
   if (r === undefined) return null
@@ -550,6 +562,7 @@ export const drain = async (
     readonly stopStartingAfter?: () => boolean
     /** See `dequeue`. Defaults to true: every caller before the edge worker could hear. */
     readonly canTranscribe?: boolean
+    readonly canSubprocess?: boolean
   } = {},
 ): Promise<WorkerResult[]> => {
   // Sweep first. A job held by a dead worker counts against capacity, so
@@ -563,7 +576,12 @@ export const drain = async (
   const done: WorkerResult[] = [...(await deliverPending(db, workerId, options.notify, max))]
   for (let i = 0; i < max; i++) {
     if (options.stopStartingAfter?.() === true) break
-    const job = await dequeue(db, workerId, options.canTranscribe ?? true)
+    const job = await dequeue(
+      db,
+      workerId,
+      options.canTranscribe ?? true,
+      options.canSubprocess ?? true,
+    )
     if (job === null) break
     try {
       done.push(await runJob(db, job, handlers, review, options.notify, options.onStart))
