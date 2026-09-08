@@ -522,6 +522,19 @@ export const drain = async (
     readonly recover?: boolean
     readonly notify?: Notifier
     readonly onStart?: (job: Job) => Promise<unknown>
+    /**
+     * Asked before each new job is started. Return true to stop taking more.
+     *
+     * For a caller with a wall-clock limit — an edge function has one, a
+     * runner does not. A pass killed mid-job leaves a lease to expire, which
+     * recovers but costs whoever was waiting their reply, so it is better to
+     * decline the next job than to start one that cannot finish.
+     *
+     * Deliberately consulted only BEFORE dequeuing. A job already started runs
+     * to its end: abandoning work halfway is how a queue acquires a job that
+     * has been attempted nine times and never once completed.
+     */
+    readonly stopStartingAfter?: () => boolean
   } = {},
 ): Promise<WorkerResult[]> => {
   // Sweep first. A job held by a dead worker counts against capacity, so
@@ -534,6 +547,7 @@ export const drain = async (
   // the most overdue thing in the system.
   const done: WorkerResult[] = [...(await deliverPending(db, workerId, options.notify, max))]
   for (let i = 0; i < max; i++) {
+    if (options.stopStartingAfter?.() === true) break
     const job = await dequeue(db, workerId)
     if (job === null) break
     try {

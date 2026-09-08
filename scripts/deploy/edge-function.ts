@@ -39,6 +39,25 @@ if (webhookSecret === null) {
   process.exit(1)
 }
 
+// --- the worker kick secret, from the vault --------------------------------
+//
+// Written by `npm run deploy:worker`. Absent means the worker has never been
+// deployed, and the webhook falls back to enqueue-and-wait: correct, and slow
+// enough that Grant notices, so it is said out loud rather than left as a
+// surprise.
+const kickRow = (
+  await db.execute(
+    `select decrypted_secret as v from vault.decrypted_secrets where name = 'worker.kick_secret'`,
+  )
+).rows[0]
+const kickSecret = kickRow?.v === undefined ? '' : String(kickRow.v)
+if (kickSecret === '') {
+  console.warn(
+    'no worker.kick_secret in the vault — run `npm run deploy:worker` first, or replies ' +
+      'will wait for the slow schedule instead of arriving in seconds',
+  )
+}
+
 // --- give the function its secret ------------------------------------------
 // Edge Functions receive SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
 // automatically; anything else has to be set explicitly.
@@ -71,6 +90,11 @@ const setSecret = await fetch(`${api}/secrets`, {
   body: JSON.stringify([
     { name: 'TELEGRAM_WEBHOOK_SECRET', value: webhookSecret },
     { name: 'TELEGRAM_BOT_ID', value: botId },
+    // So the webhook can start the work it just queued. Without these the
+    // message still gets answered, just on the slower schedule — which is the
+    // ten-minute wait Grant reported, so the deploy warns rather than shrugs.
+    { name: 'WORKER_URL', value: `https://${ref}.supabase.co/functions/v1/worker` },
+    { name: 'WORKER_KICK_SECRET', value: kickSecret },
   ]),
 })
 console.log(`function secret set: http ${setSecret.status}`)

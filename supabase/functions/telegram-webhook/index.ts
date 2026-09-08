@@ -40,6 +40,21 @@ const DEFAULT_BOT_ID = Deno.env.get('TELEGRAM_BOT_ID') ?? ''
 /** Who the private chats reaching this bot belong to. One human, for V1. */
 const SUBJECT = Deno.env.get('TELEGRAM_SUBJECT') ?? 'grant'
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
+/**
+ * Where to kick the worker, and what to present when kicking it.
+ *
+ * Grant: *"I need the response to be pretty much instant whenever I send a
+ * message to one of the bots."* It was not: the job reached the queue in under
+ * a second and then waited for a GitHub Actions cron that claims every five
+ * minutes and, over the fourteen hours before he said so, ran six times.
+ * Actions schedules are best-effort and GitHub drops the frequent ones first.
+ *
+ * So the thing that receives the message starts the work. Empty means no kick,
+ * and the queue still drains on the slower paths — a missing secret must
+ * degrade to "late", never to "lost" (§18).
+ */
+const WORKER_URL = Deno.env.get('WORKER_URL') ?? ''
+const WORKER_KICK_SECRET = Deno.env.get('WORKER_KICK_SECRET') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 /** Never echo a reason to an unauthenticated caller — it is a probing aid. */
@@ -216,8 +231,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
   }
 
+  // Start the work now, without waiting for it.
+  //
+  // Deliberately NOT awaited. Telegram retries a webhook that does not answer
+  // within seconds, and a retried update is a second copy of the same message;
+  // a pass can take a minute. `waitUntil` keeps the runtime alive for the
+  // request after the response has gone, which is exactly the shape needed:
+  // Grant gets his reply in the time one model call takes, and Telegram gets
+  // its 200 immediately.
+  //
+  // Failures are swallowed on purpose. The kick is an accelerator, not the
+  // delivery mechanism — pg_cron runs the same pass every minute and Actions
+  // behind that, so a kick that fails costs latency and nothing else.
+  let kicked = false
+  if (queued !== null && WORKER_URL !== '' && WORKER_KICK_SECRET !== '') {
+    kicked = true
+    const kick = fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${WORKER_KICK_SECRET}` },
+    }).catch(() => undefined)
+    const keepAlive = (
+      globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }
+    ).EdgeRuntime?.waitUntil
+    if (keepAlive === undefined) void kick
+    else keepAlive(kick)
+  }
+
   return Response.json({
     ok: true,
+    kicked,
     dedupe_key: command.dedupe_key,
     registration,
     addressed_to: speaker.staff_slug ?? '(the pager)',
