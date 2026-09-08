@@ -87,6 +87,32 @@ if (preSwept.length > 0) {
 //
 // An unclear failure is a failure that gets misdiagnosed, so this refuses to
 // start. Exit code 2, distinct from the 1 that means a check actually failed.
+//
+// Since 2026-09-09 there are seven live duties, so the office is rarely idle
+// for long and "refuse immediately" started failing this suite on a queue that
+// was simply busy. The queue is already held above, so nothing NEW arrives —
+// what is left is whatever was in flight at that moment, and the honest thing
+// is to wait for it rather than to declare a working office a broken one.
+//
+// Two minutes, because a job that has not finished in two minutes is stuck
+// rather than busy, and that is worth refusing over.
+const liveNow = async (): Promise<number> =>
+  Number(
+    (
+      await one(`
+        select count(*)::int as live from public.jobs
+         where state not in ('complete', 'cancelled', 'failed')
+      `)
+    )?.live ?? 0,
+  )
+
+for (let waited = 0; waited < 120 && (await liveNow()) > 0; waited += 5) {
+  if (waited === 0) console.log('waiting for the office to go quiet before starting…')
+  // The pause stops new work being CLAIMED, not work already running, so this
+  // is waiting for in-flight jobs to reach a terminal state on their own.
+  await new Promise((r) => setTimeout(r, 5_000))
+}
+
 const queueState = await one(`
   select app.capacity_limit('max_concurrent_jobs', 3) as limit_,
          (select count(*)::int from public.jobs
@@ -99,7 +125,7 @@ if (Number(queueState?.live) > 0) {
     group by 1, 2 order by 3 desc limit 5
   `)
   console.error(
-    `the queue is not empty: ${String(queueState?.live)} live job(s).\n` +
+    `the queue is still not empty after two minutes: ${String(queueState?.live)} live job(s).\n` +
       others.rows
         .map((r) => `  ${String(r.n)} x ${String(r.kind)} (${String(r.state)})`)
         .join('\n') +

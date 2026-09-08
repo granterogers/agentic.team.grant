@@ -30,9 +30,8 @@
  * than the one it solves. The manifest lists what would need re-entering.
  */
 
-import { createHash } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
-import { gzipSync } from 'node:zlib'
+import { buildArchive } from '../../src/backup/portable.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -43,80 +42,19 @@ if (token === undefined || token === '') {
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
 const db = new ManagementApiExecutor(ref, token)
 
-const tables = (
-  await db.execute(`
-    select table_schema, table_name
-    from information_schema.tables
-    where table_schema in ('public', 'app')
-      and table_type = 'BASE TABLE'
-    order by table_schema, table_name
-  `)
-).rows as { table_schema: string; table_name: string }[]
-
-console.log(`${String(tables.length)} tables`)
-
-const data: Record<string, unknown[]> = {}
-let rows = 0
-for (const t of tables) {
-  const qualified = `${t.table_schema}.${t.table_name}`
-  // Whole tables. This is a backup: a WHERE clause here is a row somebody does
-  // not get back.
-  const result = await db.execute(`select * from ${qualified}`)
-  data[qualified] = [...result.rows]
-  rows += result.rows.length
-  if (result.rows.length > 0) console.log(`  ${qualified}: ${String(result.rows.length)}`)
-}
-
-// The schema, so the file is self-describing rather than only meaningful to
-// someone holding this repository at the right commit.
-const ddl = (
-  await db.execute(`
-    select table_schema || '.' || table_name as t, column_name, data_type, is_nullable
-    from information_schema.columns
-    where table_schema in ('public', 'app')
-    order by table_schema, table_name, ordinal_position
-  `)
-).rows
-
-const migrations = (
-  await db.execute(`select name from app.schema_migrations order by name`)
-).rows.map((r) => String(r.name))
-
-const payload = {
-  exported_at: new Date().toISOString(),
-  project_ref: ref,
-  note:
-    'Portable JSON export. NOT a pg_dump — restoring means applying the ' +
-    'migrations from git, then loading these rows. Contains no credentials: ' +
-    'the vault schema is deliberately excluded.',
-  credentials_not_included: [
-    'slack.signing_secret, slack.config_token, slack.config_refresh_token — api.slack.com',
-    'telegram.webhook_secret — regenerate, then npm run deploy:telegram',
-    'hq.api_token — npm run deploy:hq -- --rotate-token',
-    'backup.s3_* — Backblaze dashboard',
-    'supabase.db_password — reset on the project',
-  ],
-  latest_migration: migrations[migrations.length - 1],
-  migrations,
-  row_counts: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length])),
-  schema: ddl,
-  data,
-}
-
-const json = JSON.stringify(payload, null, 1)
-const gz = gzipSync(Buffer.from(json), { level: 9 })
-const stamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
-const name = `aiteamhq-portable-${stamp}.json.gz`
-await writeFile(name, gz)
-
+const archive = await buildArchive(db, ref)
+await writeFile(archive.name, archive.bytes)
 // A checksum, so a corrupted copy is detectable rather than merely disappointing.
-const sha = createHash('sha256').update(gz).digest('hex')
-await writeFile(`${name}.sha256`, `${sha}  ${name}\n`)
+await writeFile(`${archive.name}.sha256`, `${archive.sha256}  ${archive.name}\n`)
 
-console.log(`\n${name}`)
-console.log(`  ${String(rows)} rows across ${String(tables.length)} tables`)
+console.log(archive.name)
+console.log(`  ${String(archive.rows)} rows across ${String(archive.tables)} tables`)
 console.log(
-  `  ${String(Math.round(json.length / 1024))}KB raw → ${String(Math.round(gz.length / 1024))}KB gzipped`,
+  `  ${String(Math.round(archive.rawBytes / 1024))}KB raw → ` +
+    `${String(Math.round(archive.bytes.length / 1024))}KB gzipped`,
 )
-console.log(`  sha256 ${sha.slice(0, 16)}…`)
-console.log(`  latest migration: ${String(migrations[migrations.length - 1])}`)
+console.log(`  sha256 ${archive.sha256.slice(0, 16)}…`)
+console.log(`  latest migration: ${archive.latestMigration}`)
+console.log(
+  '\nThe nightly duty puts this same archive in a private bucket. ' + 'This copy is for holding.',
+)

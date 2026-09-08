@@ -280,12 +280,27 @@ export const dequeue = async (
    * silently from the moment Actions were switched off.
    */
   canSubprocess = true,
+  /**
+   * The kinds this worker actually holds a handler for.
+   *
+   * Undefined means "everything", which is what every caller meant before this
+   * existed. Passing it stops the most obvious version of the rule 0125 and
+   * 0137 already established for two special cases: three real duty jobs spent
+   * hours in `paused` because a verification suite with five handlers was
+   * handed work needing a sixth (0147).
+   */
+  kinds?: readonly string[],
 ): Promise<Job | null> => {
   const { rows } = await db.execute(
     `select job_id::text as job_id, kind, correlation_id::text as correlation_id,
             project_id::text as project_id, idempotency_key, attempt
      from app.dequeue_job(${lit(workerId)}, ${canTranscribe ? 'true' : 'false'},
-                          ${canSubprocess ? 'true' : 'false'})`,
+                          ${canSubprocess ? 'true' : 'false'},
+                          ${
+                            kinds === undefined
+                              ? 'null'
+                              : `array[${kinds.map(lit).join(', ')}]::text[]`
+                          })`,
   )
   const r = rows[0]
   if (r === undefined) return null
@@ -667,10 +682,30 @@ export const drain = async (
     readonly canSubprocess?: boolean
   } = {},
 ): Promise<WorkerResult[]> => {
+  // What this worker can actually do. Passed to the dequeue so it cannot be
+  // handed a kind it has no handler for — the fault that left three real duty
+  // jobs parked for hours (0147).
+  const handlerKinds = handlers.map((h) => h.kind)
+
   // Sweep first. A job held by a dead worker counts against capacity, so
   // skipping this makes a worker unable to dequeue for reasons that look
   // nothing like the cause.
   if (options.recover !== false) await recoverStalled(db)
+
+  // And put back anything a previous worker parked for want of a handler THIS
+  // one holds. Beside the stall sweep because it is the same kind of thing: a
+  // job that can proceed now and will not without being told. Never fatal —
+  // the queue matters more than the tidying.
+  if (options.recover !== false) {
+    try {
+      await db.execute(
+        `select app.resume_paused(array[${handlerKinds.map(lit).join(', ')}]::text[])`,
+      )
+    } catch {
+      // Reported by the next pass if it persists; a failed resume must not
+      // stop the drain.
+    }
+  }
 
   // Then finish anything the sweep found already committed. Before new work,
   // because a job whose output exists and whose owner never heard about it is
@@ -683,6 +718,7 @@ export const drain = async (
       workerId,
       options.canTranscribe ?? true,
       options.canSubprocess ?? true,
+      handlerKinds,
     )
     if (job === null) break
     try {
