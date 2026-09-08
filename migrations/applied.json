@@ -140,5 +140,6 @@
   "0139_asking_about_someone_is_not_asking_for_work.sql": "f270d5a897769907d68aa998103493c0d1a029b9feaf47d072b15ebc2436e1ad",
   "0140_the_notebook_can_be_written_to_from_anywhere.sql": "4fdd363752757f42a47964ec077d050dd0b048d2d4d70d009a905f01aa8dd017",
   "0141_something_takes_a_copy_again.sql": "f300b39cb985a5dca5f00eee82149b20133109d49361bff720cdc8be95966f7f",
-  "0142_the_setup_page_knows_about_the_group.sql": "24683138956786900c8d529a7272890d19ff58986e7c60911550222205c649bd"
+  "0142_the_setup_page_knows_about_the_group.sql": "24683138956786900c8d529a7272890d19ff58986e7c60911550222205c649bd",
+  "0143_the_slack_tokens_stop_living_on_luck.sql": "0d18a0889f2a693ff17fc04fc10fc47f7d7c4b5e0b9c8189c478630e1fb68e17"
 }

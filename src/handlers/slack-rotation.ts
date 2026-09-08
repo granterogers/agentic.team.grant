@@ -1,0 +1,145 @@
+/**
+ * Keep the Slack configuration tokens alive.
+ *
+ * Slack's app-configuration tokens expire **twelve hours** after they are
+ * issued, and the refresh token is single-use: rotating produces a new pair and
+ * kills the old one. Miss the window and the pair is dead, and the only way
+ * back is a human at https://api.slack.com/apps regenerating it by hand.
+ *
+ * A GitHub Actions cron used to do this. Actions were switched off on
+ * 2026-09-08 and nothing replaced it, so the tokens have been living on
+ * whatever `verify:slack` happens to rotate when the suite is run — which is
+ * to say, on luck. Twelve hours of nobody running the suite and Grant is back
+ * at the Slack dashboard.
+ *
+ * ## Why this is safe to run unattended and channel tidying is not
+ *
+ * The duty this handler answers was seeded in 0133 describing channel
+ * archiving. That description was wrong about its own job kind: the module
+ * behind `office.slack_rotate` is `src/slack/rotation.ts`, which rotates
+ * TOKENS. The distinction matters because they sit on opposite sides of a line
+ * — rotating a credential is maintenance, and archiving somebody's channels is
+ * destructive and belongs behind `npm run slack:tidy -- --go` where a human
+ * types the `--go`.
+ *
+ * ## Why it checks before it rotates
+ *
+ * `shouldRotate` reads the recorded expiry and says no while there is time
+ * left. The refresh token is single-use, so a rotation that was not needed
+ * still burns one — and a duty firing every four hours would burn six a day
+ * for no reason, each one a chance to fail.
+ *
+ * ## Why a failure is a completed job
+ *
+ * Because the interesting state is recorded either way. `rotateAndPersist`
+ * writes the failure and touches no credential, so the existing access token
+ * keeps working until it expires — that buys hours, and hours are the
+ * difference between a retry and a human. Failing the JOB would retry it three
+ * times against a refresh token that is already dead, which is how you turn a
+ * recoverable problem into a locked-out app.
+ */
+
+import type { SqlExecutor } from '../db/executor.ts'
+import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { rotateAndPersist, secondsUntilExpiry, shouldRotate } from '../slack/rotation.ts'
+
+export interface SlackRotationDeps {
+  readonly db: SqlExecutor
+  readonly appId: string
+}
+
+export function slackRotationHandler(deps: SlackRotationDeps): Handler {
+  const { db, appId } = deps
+  return {
+    kind: 'office.slack_rotate',
+    handle: async (job: Job): Promise<HandlerOutput> => {
+      const base = {
+        confidence: 'high' as const,
+        evidence: 'verified' as const,
+        sources: [`job:${job.jobId}`],
+        contradictions: null,
+        path: 'deterministic_retrieval' as const,
+        model: null,
+      }
+
+      const state = (
+        await db.execute(`
+          select c.config_token_expires_at, c.rotation_failures,
+                 -- Straight from the vault by name, exactly as
+                 -- scripts/slack/rotate.ts reads it. The credentials row has
+                 -- no reference column for this one, and inventing a join
+                 -- would have failed on the first firing.
+                 (select decrypted_secret from vault.decrypted_secrets
+                   where name = 'slack.config_refresh_token') as refresh
+            from public.slack_app_credentials c
+           where c.enabled and c.revoked_at is null
+           limit 1
+        `)
+      ).rows[0] as
+        | {
+            config_token_expires_at?: string | null
+            rotation_failures?: number
+            refresh?: string | null
+          }
+        | undefined
+
+      if (state === undefined) {
+        return {
+          ...base,
+          body: 'No enabled Slack install, so there is nothing to keep alive.',
+        } satisfies HandlerOutput
+      }
+
+      const refreshToken = String(state.refresh ?? '')
+      if (refreshToken === '') {
+        return {
+          ...base,
+          body:
+            'The Slack refresh token is missing from the vault, so the configuration ' +
+            'tokens cannot be renewed. Regenerating the pair is a human step: ' +
+            'https://api.slack.com/apps → Your App Configuration Tokens.',
+          confidence: 'high',
+        } satisfies HandlerOutput
+      }
+
+      const expiresAt =
+        state.config_token_expires_at === null || state.config_token_expires_at === undefined
+          ? 0
+          : Math.floor(new Date(String(state.config_token_expires_at)).getTime() / 1000)
+
+      if (expiresAt !== 0 && !shouldRotate(expiresAt)) {
+        const hours = Math.round(secondsUntilExpiry(expiresAt) / 360) / 10
+        return {
+          ...base,
+          body: `Slack tokens are good for another ${String(hours)} hours. Left alone.`,
+        } satisfies HandlerOutput
+      }
+
+      const outcome = await rotateAndPersist(
+        { execute: (sql) => db.execute(sql) },
+        appId,
+        refreshToken,
+      )
+
+      if (outcome.kind === 'failed') {
+        return {
+          ...base,
+          body:
+            `Could not renew the Slack tokens: ${outcome.error}\n\n` +
+            (outcome.needsHuman
+              ? 'The refresh token itself is dead, so no retry will fix it. Regenerate ' +
+                'the pair at https://api.slack.com/apps → Your App Configuration Tokens.'
+              : 'The token we hold still works until it expires, and this will be ' +
+                'tried again shortly.'),
+          confidence: 'high',
+        } satisfies HandlerOutput
+      }
+
+      const hours = Math.round(secondsUntilExpiry(outcome.expiresAt) / 360) / 10
+      return {
+        ...base,
+        body: `Slack tokens renewed. Good for another ${String(hours)} hours.`,
+      } satisfies HandlerOutput
+    },
+  }
+}

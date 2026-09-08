@@ -49,6 +49,7 @@ import { instructionHandler } from '../handlers/instruction.ts'
 import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { planHandler } from '../handlers/plan.ts'
+import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import type { Reviewer } from '../jobs/worker.ts'
@@ -229,6 +230,23 @@ export const buildPass = async (
     // "no storage key" as an outcome rather than failing, because a backup
     // that silently does not happen is the failure this whole thing is about.
     backupHandler({ db, projectRef, serviceKey }),
+    // Slack's configuration tokens die twelve hours after they are issued and
+    // the refresh token is single-use. A GitHub Actions cron used to renew
+    // them; since it went, they have survived on whichever verification run
+    // happened to rotate one.
+    slackRotationHandler({
+      db,
+      // Read from the install rather than pasted in: there is exactly one
+      // enabled Slack app (§9's "V1 is ONE app") and it knows its own id.
+      appId: String(
+        (
+          await db.execute(`
+            select slack_app_id from public.slack_app_credentials
+             where enabled and revoked_at is null limit 1
+          `)
+        ).rows[0]?.slack_app_id ?? '',
+      ),
+    }),
     // §22 A's first clause — a source arriving is noticed — but only where the
     // notebook can actually be read. See `notebook` in the options above.
     syncHandler({
