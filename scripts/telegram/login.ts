@@ -147,7 +147,11 @@ if (phone !== undefined) {
     SentCodeTypeSetUpEmailRequired:
       'nowhere yet — Telegram wants an email set up on the account first',
   }
-  const kind = String(sent.type?.className ?? 'unknown')
+  // Strip the namespace. teleproto reports `auth.SentCodeTypeApp`, the table
+  // above is keyed on `SentCodeTypeApp`, and the first run printed "an
+  // unrecognised method" for the commonest case of all — a lookup that misses
+  // is worse than no lookup, because it reads as a fault in Telegram.
+  const kind = String(sent.type?.className ?? 'unknown').replace(/^[a-z]+\./, '')
   console.log(`Telegram sent the code ${where[kind] ?? `by an unrecognised method (${kind})`}.`)
   console.log(`  code length: ${String(sent.type?.length ?? '?')} digits`)
   if (sent.nextType?.className !== undefined) {
@@ -155,7 +159,11 @@ if (phone !== undefined) {
       `  if it does not arrive, Telegram will fall back to: ${String(sent.nextType.className)}`,
     )
   }
-  if (sent.timeout !== undefined) console.log(`  valid for about ${String(sent.timeout)}s`)
+  // `timeout` is often absent for an in-app code, and printing "about nulls"
+  // is how a helpful line becomes noise.
+  if (typeof sent.timeout === 'number') {
+    console.log(`  valid for about ${String(sent.timeout)}s`)
+  }
 
   const hash = String(sent.phoneCodeHash ?? '')
   if (hash === '') {
