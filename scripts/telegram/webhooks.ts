@@ -68,7 +68,7 @@ for (const entry of entries) {
         // Text and button presses. Deliberately not `edited_message`: an edit
         // is not a new instruction, and treating it as one would carry out the
         // same request twice.
-        allowed_updates: ['message', 'callback_query'],
+        allowed_updates: ['message', 'callback_query', 'my_chat_member'],
         drop_pending_updates: false,
       }),
     })

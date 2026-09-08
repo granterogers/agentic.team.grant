@@ -687,9 +687,9 @@ const GUIDE = {
   },
   talk: {
     title: 'Talk to the team',
-    one: 'Type or speak, and the team hears it',
-    what: 'Say something and the team hears it. Questions about what is going on are answered here and now; anything that is work goes into the same queue as a message you type.',
-    todo: 'Type what you want and press Send — that works on every device. If your browser has speech, the microphone does the same thing by voice. You see what it heard before it acts, so a mishearing is something you correct rather than something that runs.',
+    one: 'Call your chief of staff, or type it instead',
+    what: 'Press the phone and you are on a real call with Claire, your chief of staff. She hears you the whole time, so you can cut in mid-sentence, and she can put work to the rest of the team while you are still on the line. Questions about what is going on she answers there and then; real work goes into the same queue as anything else.',
+    todo: 'Press the phone and start talking — the browser will ask for the microphone once. Every word, yours and hers, is written down underneath as you go, so you can see what she heard. If you would rather not talk, or you are somewhere quiet, type in the box and press Send: that works on every device. The call costs a few pence a minute; typing is free.',
   },
   overview: {
     title: 'Today',
@@ -1790,113 +1790,124 @@ function wireSettings() {
   premium" against §22's completion criterion with three words: *"Voice is
   required."*
 
-  ## Why the browser does the listening
+  ## What was wrong with the previous version
 
-  §12 describes server-minted ephemeral credentials and WebRTC, which is the
-  OpenAI Realtime shape — and `voice-token` already mints those. It also bills
-  per minute against an account Grant has parked. The browser's own recogniser
-  costs nothing, runs on the device, and reaches the same endpoint, so the
-  canonical layer is identical either way and the transport is a swap rather
-  than a rewrite.
+  Grant: *"you need to fix the proper voice chat feature in the front end.. the
+  current solution sucks"*. It did, and in three separate ways.
 
-  What is genuinely lost: barge-in. With a Realtime session you interrupt and it
-  stops; here it finishes its sentence. Named rather than glossed, because it is
-  the difference Grant will notice first.
+  It was the browser's own recogniser, so it was **one utterance per press** —
+  press, say a sentence, wait, read, press again. That is dictation with extra
+  steps, not a conversation, and there is no way to interrupt something that is
+  not listening while it talks.
 
-  ## Why the transcript is shown before it acts
+  It **could not be interrupted**. The reply was spoken by `speechSynthesis`,
+  which finishes its sentence whatever you do. Barge-in was named as the known
+  loss at the time; it turns out to be the thing that decides whether this
+  feels like talking to someone.
+
+  And on most phones it **did not exist at all**. `webkitSpeechRecognition` is
+  absent from every in-app browser you land in from a link, so the microphone
+  simply was not offered.
+
+  ## What it is now
+
+  A real Realtime call over WebRTC: full duplex, semantic turn detection,
+  interruptible mid-sentence, and running on Claire — the Chief of Staff — with
+  a tool that reaches the actual office. `voice-token` mints the credential and
+  owns her instructions; this page never sees the permanent key and cannot
+  change who she is (§12).
+
+  The cost of the change, stated: this bills per minute, where the recogniser
+  was free. That is the trade §12 always described, and it is the one Grant
+  asked for.
+
+  ## Why typing stays
+
+  It works on every device, on a train, and on a desktop with no microphone. A
+  page whose only control needs permission and quiet is a page that sometimes
+  does not work, and this one has to always work.
+
+  ## Why the transcript is on screen
 
   Grant, about the bots misunderstanding him: *"probably good idea that he
-  confirms he understands and spits back what I want before going ahead."* The
-  recogniser is the one part of this chain that can be confidently wrong, so
-  what it heard is on screen in his own words, and the reply underneath it.
+  confirms he understands and spits back what I want before going ahead."* On
+  a call there is no message to re-read, so both sides are transcribed live —
+  and when Claire puts something to the team, that shows as its own line, in
+  her words, so a mishearing is caught at the point it becomes an instruction.
 */
-const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition || null
 
 function talk() {
-  /*
-    Grant: *"the talk to team feature doesn't seem to work on a mobile device."*
-
-    It did not, and the reason was the shape of the page rather than a bug in
-    the microphone code. The whole view was a mic button. Where the browser has
-    no speech recognition — which on a phone is most of them outside Safari and
-    Chrome proper, and includes every in-app browser you land in from a link —
-    the page said "this browser cannot listen" and offered nothing else. A page
-    whose only control is unavailable is a page that does not work.
-
-    So typing is the path, always present, and the microphone is an addition to
-    it where the browser has one. That also makes the feature testable on a
-    desktop with no mic and usable on a train, neither of which speech does.
-  */
-  const canHear = SPEECH !== null
   return `<section class="card wide" data-card="talk"><h2>Talk to the team</h2><div class="body">
+      <div class="talkwrap">
+        <button type="button" id="call" class="mic" title="Start a voice call with Claire">📞</button>
+        <div class="talkstate" id="talkstate">Press the phone to call Claire, your chief of
+          staff. She can hear you the whole time — talk over her if she is going on.</div>
+      </div>
       <form class="askform" id="askform">
-        <input id="asktext" placeholder="Ask the team something, or tell them to do something"
+        <input id="asktext" placeholder="…or type it instead"
                aria-label="What you want to say" autocomplete="off" enterkeyhint="send">
         <button type="submit" id="asksend">Send</button>
-        ${canHear ? '<button type="button" id="mic" class="mic" aria-live="polite" title="Speak instead of typing">🎤</button>' : ''}
       </form>
-      <div class="talkstate" id="talkstate">${
-        canHear
-          ? 'Type and press Send, or press the microphone and speak.'
-          : 'Type and press Send. This browser has no speech recognition, so the microphone is not offered — Safari on iPhone and Chrome on a desktop do have it.'
-      }</div>
       <div id="turns" class="turns"></div>
     </div></section>`
 }
 
-/*
-  One turn: listen, show, send, speak.
+const MINT = 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/voice-token'
 
-  Deliberately one turn per press rather than an always-on microphone. A page
-  that listens continuously on a phone in a pocket is a page that files
-  instructions nobody gave, and §5's dedupe index would not save us from a
-  recogniser hearing the television.
-*/
 function wireTalk() {
   const form = document.getElementById('askform')
   if (form === null) return
-  const mic = document.getElementById('mic')
+  const callBtn = document.getElementById('call')
   const box = document.getElementById('asktext')
   const state = document.getElementById('talkstate')
   const turns = document.getElementById('turns')
   // One session per visit to this view. It groups the turns of a conversation
-  // in `origin_ref`, which is what conversation memory reads.
+  // in `origin_ref`, which is what conversation memory reads. Shared between
+  // the call and the typing box on purpose: they are one conversation.
   const session = 's' + Math.random().toString(36).slice(2, 12)
-  let listening = false
+
+  let pc = null
+  let stream = null
+  let channel = null
+  let onCall = false
 
   const show = (who, text, cls) => {
     const el = document.createElement('div')
     el.className = 'turn ' + (cls || '')
     el.innerHTML = `<b>${esc(who)}</b><span>${esc(text)}</span>`
     turns.prepend(el)
+    return el
   }
 
-  const say = (text) => {
-    // Best effort. A browser that will not speak still shows every word, so a
-    // silent reply is a degraded experience rather than a lost one.
-    try {
-      const u = new SpeechSynthesisUtterance(text)
-      u.rate = 1.02
-      window.speechSynthesis.cancel()
-      window.speechSynthesis.speak(u)
-    } catch (e) { /* shown on screen regardless */ }
+  /*
+    One turn through the office.
+
+    The same call the typing box makes and the same call Claire's tool makes,
+    because they are the same thing: something was said, and the office
+    answers or takes it on. Two implementations would drift, and the one that
+    drifted would be the voice one, which is the one nobody reads the logs of.
+  */
+  const askOffice = async (said) => {
+    const r = await fetch(API.replace(/\/hq-api$/, '/voice') + '/turn', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ said, session }),
+    })
+    const body = await r.json()
+    if (!r.ok) throw new Error(body.error || ('The office returned ' + r.status))
+    return body
   }
+
+  // --- typing ---------------------------------------------------------------
 
   const send = async (said) => {
     state.textContent = 'Thinking…'
     try {
-      const r = await fetch(API.replace(/\/hq-api$/, '/voice') + '/turn', {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ said, session }),
-      })
-      const body = await r.json()
-      if (!r.ok) throw new Error(body.error || ('The server returned ' + r.status))
+      const body = await askOffice(said)
       show('The team', body.speak, body.did === 'delegated' ? 'delegated' : '')
-      say(body.speak)
       state.textContent =
         body.did === 'delegated'
           ? 'Put to the team — the answer comes back in Slack and Telegram.'
@@ -1916,42 +1927,141 @@ function wireTalk() {
     send(said)
   }
 
-  if (mic === null) return
-  mic.onclick = () => {
-    if (listening) return
-    const rec = new SPEECH()
-    rec.lang = 'en-GB'
-    rec.interimResults = false
-    // One utterance. `continuous` on iOS Safari behaves inconsistently and a
-    // microphone that never closes is the failure mode described above.
-    rec.continuous = false
-    rec.maxAlternatives = 1
+  // --- the call -------------------------------------------------------------
 
-    listening = true
-    mic.classList.add('on')
-    mic.textContent = '●'
-    state.textContent = 'Listening — speak now.'
+  const hangUp = (why) => {
+    onCall = false
+    try { channel?.close() } catch (e) { /* already gone */ }
+    try { pc?.close() } catch (e) { /* already gone */ }
+    stream?.getTracks().forEach((t) => t.stop())
+    pc = null; stream = null; channel = null
+    callBtn.classList.remove('on')
+    callBtn.textContent = '📞'
+    callBtn.title = 'Start a voice call with Claire'
+    state.textContent = why || 'Call ended. Press the phone to call again.'
+  }
 
-    rec.onresult = (event) => {
-      const said = String(event.results[0][0].transcript || '').trim()
-      if (said === '') return
-      show('You', said)
-      send(said)
+  /*
+    A tool call from Claire.
+
+    She says what she is doing before she calls it, so by the time this runs
+    Grant has already heard "right, I will put that to Emma" — which is why
+    the delay of a real office round trip is tolerable in a conversation. The
+    result goes back as a function_call_output and she is asked to respond;
+    without that second `response.create` she calls the tool and then says
+    nothing, which sounds exactly like a crash.
+  */
+  const runTool = async (callId, argsJson) => {
+    let said = ''
+    try { said = String(JSON.parse(argsJson).said || '') } catch (e) { said = '' }
+    if (said !== '') show('Claire → the team', said, 'delegated')
+
+    let result
+    try {
+      const body = await askOffice(said)
+      result = { ok: true, did: body.did, answer: body.speak }
+    } catch (e) {
+      result = { ok: false, error: e.message }
     }
-    rec.onerror = (event) => {
-      state.textContent =
-        event.error === 'not-allowed'
-          ? 'The microphone was refused. Allow it for this site and press Talk again.'
-          : 'It did not catch that (' + event.error + '). Press Talk and try again.'
+    channel?.send(JSON.stringify({
+      type: 'conversation.item.create',
+      item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) },
+    }))
+    channel?.send(JSON.stringify({ type: 'response.create' }))
+  }
+
+  const onEvent = (ev) => {
+    switch (ev.type) {
+      // Both spellings. The GA API renamed these from `response.audio_*` to
+      // `response.output_audio_*` and still emits the old ones on some
+      // deployments; listening for one name is how a transcript silently
+      // stops appearing after an upstream release.
+      case 'response.audio_transcript.done':
+      case 'response.output_audio_transcript.done':
+        if (ev.transcript) show('Claire', ev.transcript)
+        break
+      case 'conversation.item.input_audio_transcription.completed':
+        if (ev.transcript) show('You', ev.transcript)
+        break
+      case 'response.function_call_arguments.done':
+        state.textContent = 'Claire is putting that to the team…'
+        runTool(ev.call_id, ev.arguments)
+        break
+      case 'input_audio_buffer.speech_started':
+        state.textContent = 'Listening…'
+        break
+      case 'input_audio_buffer.speech_stopped':
+        state.textContent = 'On a call with Claire. Talk over her if she is going on.'
+        break
+      case 'error':
+        show('Claire', 'Something went wrong on the call: ' +
+          (ev.error?.message || JSON.stringify(ev.error)), 'bad')
+        break
     }
-    rec.onend = () => {
-      listening = false
-      mic.classList.remove('on')
-      mic.textContent = '🎤'
+  }
+
+  callBtn.onclick = async () => {
+    if (onCall) { hangUp(); return }
+    onCall = true
+    callBtn.classList.add('on')
+    callBtn.textContent = '⏹'
+    callBtn.title = 'End the call'
+    state.textContent = 'Connecting…'
+
+    try {
+      const minted = await fetch(MINT, { method: 'POST' })
+      if (!minted.ok) throw new Error('the office would not start a call (' + minted.status + ')')
+      const { client_secret, model, degraded } = await minted.json()
+      if (degraded) show('Claire', 'I am on a stripped-down session and cannot reach the team ' +
+        'on this call — worth telling whoever looks after this.', 'bad')
+
+      state.textContent = 'Asking for the microphone…'
+      stream = await navigator.mediaDevices.getUserMedia({
+        // Echo cancellation is what makes barge-in possible on a speaker.
+        // Asked for explicitly so this is the browser doing its best rather
+        // than whatever the default happens to be.
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+
+      pc = new RTCPeerConnection()
+      const audio = new Audio()
+      audio.autoplay = true
+      pc.ontrack = (e) => { audio.srcObject = e.streams[0] }
+      pc.addTrack(stream.getTracks()[0])
+      // A dropped connection must not leave the button saying "on a call".
+      pc.onconnectionstatechange = () => {
+        if (onCall && (pc?.connectionState === 'failed' || pc?.connectionState === 'disconnected')) {
+          hangUp('The call dropped. Press the phone to try again.')
+        }
+      }
+
+      channel = pc.createDataChannel('oai-events')
+      channel.onmessage = (e) => { try { onEvent(JSON.parse(e.data)) } catch (err) { /* not ours */ } }
+
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+
+      // SDP exchange at /v1/realtime/calls. Anything citing
+      // /v1/realtime/sessions for this is stale (§4).
+      const sdp = await fetch('https://api.openai.com/v1/realtime/calls?model=' +
+        encodeURIComponent(model), {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + client_secret, 'Content-Type': 'application/sdp' },
+        body: offer.sdp,
+      })
+      if (!sdp.ok) throw new Error('the call would not connect (' + sdp.status + ')')
+      await pc.setRemoteDescription({ type: 'answer', sdp: await sdp.text() })
+
+      state.textContent = 'On a call with Claire. Just start talking.'
+    } catch (e) {
+      const why = e.name === 'NotAllowedError'
+        ? 'The microphone was refused. Allow it for this site, then press the phone again.'
+        : String(e.message || e)
+      hangUp(why)
     }
-    rec.start()
   }
 }
+
 
 
 /*

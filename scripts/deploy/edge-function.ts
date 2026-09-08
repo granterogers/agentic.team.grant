@@ -160,7 +160,7 @@ const set = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
     secret_token: webhookSecret,
     // Only what this adapter understands. Narrowing the subscription means
     // Telegram does not queue updates nothing will ever read.
-    allowed_updates: ['message', 'callback_query'],
+    allowed_updates: ['message', 'callback_query', 'my_chat_member'],
     // Anything queued while there was no endpoint is stale by definition.
     drop_pending_updates: true,
   }),

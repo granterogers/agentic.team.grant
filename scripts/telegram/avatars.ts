@@ -15,6 +15,17 @@
  *
  * Idempotent, so it is safe on every avatar change. Re-run it after generating
  * new avatars or renaming anyone.
+ *
+ * ## The pager bot has a face too
+ *
+ * Grant: *"chief of staff needs a photo too"* — and she had none, because the
+ * pager bot deliberately belongs to nobody. `hq_bot_assign` refuses to give it
+ * an owner (0131) and is right to: every notification path assumes the pager
+ * exists and is unowned, and the routing rule added in 0136 reads a null
+ * `staff_slug` as "this is the voice that may interrupt Grant".
+ *
+ * A face is not ownership. The pager speaks as the Chief of Staff, so it wears
+ * her face, and the roster row stays exactly as it was.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
@@ -30,13 +41,25 @@ const db = new ManagementApiExecutor(
 
 const rows = (
   await db.execute(`
-    select t.username, app.resolve_secret(t.token_ref) as token, s.name, s.avatar_ref,
-           (select value #>> '{}' from public.system_config
-             where key = 'staff.avatar_base_url') as base
+    with base as (
+      select value #>> '{}' as url from public.system_config
+       where key = 'staff.avatar_base_url'
+    )
+    -- The bots somebody owns.
+    select t.username, app.resolve_secret(t.token_ref) as token, s.name,
+           s.avatar_ref, (select url from base) as base
       from public.telegram_bots t
       join public.staff s on s.slug = t.staff_slug
      where t.enabled and s.active and s.avatar_ref is not null
-     order by s.name
+    union all
+    -- And the pager, which owns nobody and speaks as the Chief of Staff.
+    select t.username, app.resolve_secret(t.token_ref) as token, s.name,
+           s.avatar_ref, (select url from base) as base
+      from public.telegram_bots t
+      cross join public.staff s
+     where t.enabled and t.is_pager and t.staff_slug is null
+       and s.slug = 'chief-of-staff' and s.active and s.avatar_ref is not null
+     order by 3
   `)
 ).rows as { username: string; token: string; name: string; avatar_ref: string; base: string }[]
 

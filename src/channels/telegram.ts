@@ -68,7 +68,7 @@ export interface TelegramUpdate {
     text?: string
     /** A caption on a voice/audio message, which Telegram keeps separate. */
     caption?: string
-    chat: { id: number; type: string }
+    chat: { id: number; type: string; title?: string }
     from?: { id: number; username?: string; is_bot?: boolean }
     /** A held-to-record voice note. */
     voice?: { file_id: string; duration?: number; mime_type?: string }
@@ -82,6 +82,21 @@ export interface TelegramUpdate {
     data?: string
     from: { id: number; username?: string }
     message?: { message_id: number; chat: { id: number; type?: string } }
+  }
+  /**
+   * The bot's own membership changed — it was added to a group, promoted, or
+   * removed.
+   *
+   * This is the only update a bot reliably receives from a group it has just
+   * joined. Group privacy is on by default, so an ordinary message in the room
+   * is never delivered to it, and without this the bot would sit in the group
+   * unable to prove it is there. It is how the office group registers itself
+   * (0136).
+   */
+  readonly my_chat_member?: {
+    chat: { id: number; type: string; title?: string }
+    from?: { id: number; username?: string }
+    new_chat_member?: { status?: string }
   }
 }
 

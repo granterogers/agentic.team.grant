@@ -90,4 +90,62 @@ if (unauthorized.status !== 401 || answer.did !== 'answered') {
   console.error('the endpoint did not behave as required')
   process.exit(1)
 }
+
+// --- and the other half: the credential the call itself runs on -------------
+//
+// `voice-token` used to be deployed by hand, which is how it spent two months
+// minting a session whose instructions said it was a proof of concept. It is
+// the same feature as `/voice` — one of them takes the call, the other decides
+// who is on it — so it ships in the same command.
+const mintSource = await readFile('supabase/functions/voice-token/index.ts', 'utf8')
+const mintForm = new FormData()
+mintForm.append(
+  'metadata',
+  // No JWT: the page is public and the endpoint hands out a credential that
+  // expires in about a minute and can do nothing but hold one conversation.
+  JSON.stringify({ name: 'voice-token', entrypoint_path: 'index.ts', verify_jwt: false }),
+)
+mintForm.append('file', new File([mintSource], 'index.ts', { type: 'application/typescript' }))
+
+const mintDeployed = await fetch(`${api}/functions/deploy?slug=voice-token`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${supabaseToken}` },
+  body: mintForm,
+})
+const mintResult = (await mintDeployed.json()) as { version?: number; status?: string }
+if (!mintDeployed.ok) {
+  console.error(`voice-token deploy failed: http ${String(mintDeployed.status)}`)
+  process.exit(1)
+}
+console.log(`voice-token v${String(mintResult.version)} ${String(mintResult.status)}`)
+
+// Behaviour again: a mint that returns a credential but silently dropped the
+// tools is a call where Claire cannot reach the team, and it looks identical
+// from the outside until you ask her to do something.
+const mintProbe = await fetch(`https://${ref}.supabase.co/functions/v1/voice-token`, {
+  method: 'POST',
+})
+const mintBody = (await mintProbe.json()) as {
+  client_secret?: string
+  model?: string
+  voice?: string
+  tools?: string[]
+  degraded?: boolean
+}
+console.log(
+  `  mint:            http ${String(mintProbe.status)} model=${String(mintBody.model)} ` +
+    `voice=${String(mintBody.voice)} tools=${JSON.stringify(mintBody.tools ?? [])}`,
+)
+if (mintProbe.status !== 200 || mintBody.client_secret === undefined) {
+  console.error('the mint did not return a credential')
+  process.exit(1)
+}
+if (mintBody.degraded === true) {
+  console.error(
+    'the mint fell back to a bare session — she has no tools and no transcript. ' +
+      'Read the function logs for the rejected field.',
+  )
+  process.exit(1)
+}
+
 console.log('\nvoice is listening.')

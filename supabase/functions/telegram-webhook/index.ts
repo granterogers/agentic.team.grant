@@ -141,7 +141,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // where to page (0041). An update we cannot turn into an instruction — a
   // sticker, a join notice — still proves the chat is reachable, and dropping
   // it inside the normalizer's catch would throw that away.
-  const chat = update.message?.chat ?? update.callback_query?.message?.chat
+  // `my_chat_member` last, and it matters that it is there at all. Group
+  // privacy is on by default, so a bot added to the office group never sees an
+  // ordinary message in it and would otherwise have no way to learn the room
+  // exists. Being added IS the registration event (0136).
+  const chat =
+    update.message?.chat ?? update.callback_query?.message?.chat ?? update.my_chat_member?.chat
   //
   // Best effort in the RESPONSE sense only: failing to register must not make
   // Telegram retry an update that was otherwise handled. The first version
@@ -169,6 +174,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
           // Attributed only for a private chat. A group is not one person, and
           // saying it is would page a room.
           p_subject: chat.type === 'private' ? SUBJECT : null,
+          // A group has a name and Grant will recognise it by that, not by a
+          // negative fourteen-digit id.
+          p_title: chat.title ?? null,
         }),
       })
       registration = response.ok ? 'ok' : `http_${String(response.status)}`
