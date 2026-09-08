@@ -35,7 +35,7 @@ on:
         required: true
         default: send-code
         type: choice
-        options: [status, send-code, send-then-sms, resend, sign-in]
+        options: [status, send-code, send-then-sms, resend, sign-in, make-spares]
       phone:
         description: 'Full international number, e.g. +34603834206 (send-code only)'
         required: false
@@ -47,6 +47,11 @@ on:
       password:
         description: 'Two-step verification password, only if you have one set'
         required: false
+        type: string
+      spares:
+        description: 'make-spares only: how many unassigned bots to create (1-10)'
+        required: false
+        default: '2'
         type: string
 
 concurrency:
@@ -87,6 +92,7 @@ jobs:
           PHONE: ${{ inputs.phone }}
           CODE: ${{ inputs.code }}
           PASSWORD: ${{ inputs.password }}
+          SPARES: ${{ inputs.spares }}
         run: |
           set -euo pipefail
           case "$STEP" in
@@ -122,6 +128,11 @@ jobs:
               else
                 npm run telegram:login -- --code "$CODE"
               fi
+              ;;
+            make-spares)
+              # Create unassigned bots with bots.createBot — the whole reason
+              # the login exists. `spares` says how many; default 2.
+              npm run telegram:bots -- --spares "${SPARES:-2}"
               ;;
             *) echo "unknown step: $STEP"; exit 2 ;;
           esac
