@@ -150,29 +150,34 @@ export const usernameFree = async (client: TelegramClient, username: string): Pr
 /**
  * Create a bot and return its Bot API token.
  *
- * `managerId` is the bot that will be allowed to manage this one. Telegram
- * requires one; the pager is the natural choice here because it is the one bot
- * guaranteed to exist and not to be retired with a staff member.
+ * `managerUsername` is the bot that will be allowed to manage this one.
+ * Telegram requires one; the pager is the natural choice because it is the one
+ * bot guaranteed to exist and not to be retired with a staff member.
  */
 export const createBot = async (
   client: TelegramClient,
-  options: { name: string; username: string; managerId: string },
+  options: { name: string; username: string; managerUsername: string },
 ): Promise<CreatedBot> => {
   if (!/bot$/i.test(options.username)) {
     throw new Error(`Telegram requires a bot username to end in "bot": ${options.username}`)
   }
   if (!(await usernameFree(client, options.username))) throw new UsernameTaken(options.username)
 
-  // `managerId` takes an EntityLike, so the numeric bot id is enough — the
-  // library resolves it. The first version passed a pre-resolved InputPeer
-  // under a key called `manager`, which the type refused: the field is
-  // `managerId`, and the compiler naming the right one is the schema doing its
-  // job.
+  // The manager is named by USERNAME, not by numeric id.
+  //
+  // A bare id looks like it should work — the field takes an EntityLike — and
+  // it failed on the first real run with "Could not find the input entity for
+  // {userId: 8967954396}". MTProto does not address a peer by id alone: it
+  // needs an (id, access_hash) pair, and a session created minutes ago has
+  // never seen that bot, so it holds no hash for it. A username can be
+  // resolved from nothing, via contacts.resolveUsername, which is precisely
+  // what usernames are for in this protocol.
+  const manager = await client.getInputEntity(options.managerUsername)
   const created = (await client.invoke(
     new Api.bots.CreateBot({
       name: options.name,
       username: options.username,
-      managerId: Number(options.managerId),
+      managerId: manager,
     }),
   )) as { id?: unknown }
 
@@ -183,9 +188,12 @@ export const createBot = async (
     throw new Error('bots.createBot returned no bot id')
   }
 
-  const exported = (await client.invoke(new Api.bots.ExportBotToken({ bot: Number(botId) }))) as {
-    token?: string
-  }
+  // Same reasoning as the manager, and the bot we just made is if anything
+  // more certain to have no cached hash — it did not exist a second ago. Its
+  // username is the one thing we do know.
+  const exported = (await client.invoke(
+    new Api.bots.ExportBotToken({ bot: await client.getInputEntity(options.username) }),
+  )) as { token?: string }
   const token = String(exported.token ?? '')
   if (token === '') throw new Error('bots.exportBotToken returned no token')
 

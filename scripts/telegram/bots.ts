@@ -161,12 +161,18 @@ if (account.session === '') {
   process.exit(1)
 }
 
-/** The pager manages every bot this makes: it is the one that is never retired. */
-const managerId = String(
-  (await db.execute(`select bot_id from public.telegram_bots where is_pager limit 1`)).rows[0]
-    ?.bot_id ?? '',
+/**
+ * The pager manages every bot this makes: it is the one never retired.
+ *
+ * Read as a USERNAME. A numeric id cannot be resolved by a session that has
+ * never seen the peer — MTProto addresses peers by (id, access_hash) — and the
+ * first real run failed on exactly that.
+ */
+const managerUsername = String(
+  (await db.execute(`select username from public.telegram_bots where is_pager limit 1`)).rows[0]
+    ?.username ?? '',
 )
-if (managerId === '') {
+if (managerUsername === '') {
   console.error('no pager bot recorded — one bot must exist to manage the others')
   process.exit(1)
 }
@@ -185,7 +191,7 @@ const make = async (username: string, name: string, staffSlug: string | null): P
   }
 
   try {
-    const bot = await createBot(client, { name, username, managerId })
+    const bot = await createBot(client, { name, username, managerUsername })
     // Token to the vault BEFORE the row, so a crash between them leaves a
     // secret nobody reads rather than a row pointing at a secret that is not
     // there — the second would make the roster try to send through it.
