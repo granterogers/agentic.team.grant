@@ -59,6 +59,8 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   setup: { fn: 'hq_setup' },
   // What each kind of work costs, measured and modelled (§11).
   cost: { fn: 'hq_cost_per_outcome', args: { p_days: 30 } },
+  // Which bot speaks as whom, and which are spare.
+  bots: { fn: 'hq_bots' },
 }
 
 /**
@@ -92,6 +94,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
   staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
+  // Hand a bot to someone, or back to the pool. `p_staff_slug` is optional
+  // BECAUSE null is the meaningful value — it is how a bot is freed.
+  bot_assign: { fn: 'hq_bot_assign', required: ['p_username'] },
   staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.

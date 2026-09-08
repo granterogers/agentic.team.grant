@@ -408,6 +408,9 @@ label.tool input { width: 17px; height: 17px; flex: none; }
 .gsvc .ok { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #0a7f5a;
   background: rgba(10, 127, 90, 0.12); border-radius: 999px; padding: 2px 8px; }
 @media (prefers-color-scheme: dark) { .gsvc .ok { color: #58d0a6; } }
+/* Which bot speaks as a person: a picker, not a label. */
+.botpick { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.botpick select { font-size: 12.5px; min-height: 34px; max-width: 220px; }
 .est { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
@@ -1048,9 +1051,27 @@ function staff(d) {
   const base = d.avatar_base || ''
   const people = (d.staff || []).map((s) => {
     const src = base && s.avatar_ref ? base + '/' + s.avatar_ref : ''
-    const bot = s.telegram_username
-      ? `<a href="https://t.me/${esc(s.telegram_username)}" target="_blank" rel="noopener">@${esc(s.telegram_username)}</a>`
-      : '<span class="m">no bot yet</span>'
+    /*
+      Which bot speaks as this person, as a picker rather than a fact.
+
+      Grant: *"I'd like to be able to dynamically add and remove staff."* A bot
+      cannot be deleted and a username is claimed for ever, so hiring must not
+      consume one and firing must hand it back. That makes assignment — not
+      creation — the primitive worth exposing, and it is instant, reversible
+      and cannot fail.
+    */
+    const mine = (d.bots || []).find((b) => b.staff_slug === s.slug)
+    const spares = (d.bots || []).filter((b) => b.spare)
+    const options = [
+      `<option value="">— none —</option>`,
+      ...(mine ? [`<option value="${esc(mine.username)}" selected>@${esc(mine.username)}</option>`] : []),
+      ...spares.map((b) => `<option value="${esc(b.username)}">@${esc(b.username)} (spare)</option>`),
+    ].join('')
+    const bot = `<span class="botpick">
+      <select data-bot-for="${esc(s.slug)}" aria-label="Which bot speaks as ${esc(s.name)}">${options}</select>
+      ${mine ? `<a href="https://t.me/${esc(mine.username)}" target="_blank" rel="noopener">open chat</a>` : ''}
+      <span data-bot-said="${esc(s.slug)}" class="m"></span>
+    </span>`
     const pron = ['she/her', 'he/him', 'they/them'].map((p) =>
       `<option value="${p}"${s.pronouns === p ? ' selected' : ''}>${p}</option>`).join('')
     return `<div class="person" data-slug="${esc(s.slug)}"${s.active ? '' : ' data-retired="1"'}>
@@ -1135,6 +1156,29 @@ function wireTeam() {
       box.disabled = false
     }
   }
+  for (const sel of document.querySelectorAll('[data-bot-for]')) {
+    sel.onchange = async () => {
+      const slug = sel.dataset.botFor
+      const said = document.querySelector(`[data-bot-said="${slug}"]`)
+      sel.disabled = true
+      if (said) said.textContent = 'Saving…'
+      try {
+        // Freeing the previous bot first, because the RPC refuses to give a
+        // person a second bot — one each, so "who is this from" always has an
+        // answer. Selecting "none" is only the free.
+        const previous = sel.dataset.was
+        if (previous) await act('bot_assign', { p_username: previous, p_staff_slug: null })
+        if (sel.value) await act('bot_assign', { p_username: sel.value, p_staff_slug: slug })
+        show('staff')
+      } catch (e) {
+        if (said) said.textContent = e.message
+        sel.disabled = false
+      }
+    }
+    // Remember what it held, so a change knows which bot to hand back.
+    sel.dataset.was = sel.value
+  }
+
   for (const b of document.querySelectorAll('[data-retire]')) {
     b.onclick = async () => {
       b.disabled = true

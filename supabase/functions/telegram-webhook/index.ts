@@ -270,6 +270,44 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // Failures are swallowed on purpose. The kick is an accelerator, not the
   // delivery mechanism — pg_cron runs the same pass every minute and Actions
   // behind that, so a kick that fails costs latency and nothing else.
+  // A voice note needs something that can hear, and right now there may be
+  // nothing.
+  //
+  // Grant asked to stop using GitHub Actions for any process, and
+  // transcription is the one thing with nowhere else to go: faster-whisper is
+  // Python in a subprocess, and the edge runtime has neither. So rather than
+  // accept the note, queue it, and leave it unanswered — which is exactly the
+  // ten-minute silence he complained about this morning — the bot says so, at
+  // once, in the chat he sent it to.
+  //
+  // 0133's `voice.transcription` decides. 'none' means say so; anything else
+  // means carry on and let the runner path below handle it.
+  if (command.voice_file_id !== null) {
+    const refusal = (await rpcOne('voice_refusal', { p_bot_id: claimed })) as {
+      refuse?: boolean
+      token?: string
+    } | null
+    if (refusal?.refuse === true && typeof refusal.token === 'string' && refusal.token !== '') {
+      const [chatId, messageId] = String(command.origin_ref).split(':')
+      await fetch(`https://api.telegram.org/bot${refusal.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          ...(messageId !== undefined && /^\d+$/.test(messageId)
+            ? { reply_to_message_id: Number(messageId), allow_sending_without_reply: true }
+            : {}),
+          text:
+            '🎧 I cannot turn voice notes into words at the moment — the machine ' +
+            'that did the listening has been switched off to stop it running up a ' +
+            'bill.\n\nSend it as text and I will act on it straight away. Ask Claude to ' +
+            'turn transcription back on when you have decided how.',
+        }),
+      }).catch(() => undefined)
+      return Response.json({ ok: true, refused: 'no transcription available', queued: null })
+    }
+  }
+
   // A voice note needs a worker that can hear.
   //
   // The Edge worker cannot: transcription shells out to faster-whisper so

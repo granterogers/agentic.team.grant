@@ -1,9 +1,28 @@
 name: CI
 
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTOMATIC TRIGGERS REMOVED — 2026-09-08
+#
+# Grant: *"stop using github actions completely please, find another way to do
+# thing... for any process."* He had used 1,800 of the account's 2,000 monthly
+# minutes, and the spending was mine: a five-minute worker cron and a ten-minute
+# sync cron between them made 432 runs a day.
+#
+# Every schedule and every push trigger in this repository is gone. What each
+# workflow did now runs somewhere free, or is written down in
+# `.github/workflows/README.md` as a decision waiting on Grant. `workflow_dispatch`
+# is deliberately left in place: a workflow that cannot be run by hand is a
+# workflow nobody can fall back to, and a button nobody presses costs nothing.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# CI in particular: the checks still run, on every change, in the session that
+# makes the change — `npm run lint && npm run typecheck && npm run test &&
+# npm run check:migrations && npm run check:secrets` before every push. That is
+# strictly earlier feedback than CI gave; what is lost is the independent second
+# opinion on a machine that is not mine, which is a real loss and a cheap one to
+# accept while the budget is the binding constraint.
 on:
-  push:
-    branches: ['**']
-  pull_request:
   workflow_dispatch:
 
 # A newer push to the same ref makes the older run irrelevant.
