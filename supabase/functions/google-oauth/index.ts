@@ -67,7 +67,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const config = (await rpc('hq_google')) as {
     client_id?: string
     redirect_uri?: string
-    scopes?: string
     has_secret?: boolean
   }
 
@@ -82,11 +81,36 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // --- start ---------------------------------------------------------------
 
   if (path === '' || path === '/' || path === '/start') {
+    // Which service's permission to ask for.
+    //
+    // Grant: *"if someone wants to add connection to Gmail, connection to
+    // Google Calendar, you just click on a button and it brings up the Google
+    // authenticator."* That is one consent screen per service, asking only for
+    // what that service needs — so the scopes come from the row, not from one
+    // global string that every button would have to share.
+    //
+    // The slug arrives in a query string, which is not a trusted input: it is
+    // resolved through `google_service_scopes`, which returns empty for
+    // anything it does not recognise. An unknown service therefore asks for no
+    // permission rather than asking for someone else's.
+    const service = url.searchParams.get('service') ?? 'calendar'
+    const scopes = String(await rpc('google_service_scopes', { p_slug: service }))
+    if (scopes === '') {
+      return page(
+        'Unknown service',
+        `<h1>No such service</h1><p>Nothing here is called ${service.replace(
+          /[^a-z0-9_-]/gi,
+          '',
+        )}, or it is switched off.</p>`,
+        400,
+      )
+    }
+
     const consent = new URL('https://accounts.google.com/o/oauth2/v2/auth')
     consent.searchParams.set('client_id', String(config.client_id))
     consent.searchParams.set('redirect_uri', String(config.redirect_uri))
     consent.searchParams.set('response_type', 'code')
-    consent.searchParams.set('scope', String(config.scopes))
+    consent.searchParams.set('scope', scopes)
     // Both are required for an unattended worker. See the header: without
     // `prompt=consent` a second run returns no refresh token and the connection
     // silently expires within the hour.

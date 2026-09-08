@@ -378,6 +378,41 @@ describe('failover — a rate-limited free model is normal, not fatal', () => {
     expect(usage.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('attributes the usage row to the job, not just to the thread', async () => {
+    // The defect this pins: `account()` took a correlation id and nothing
+    // else, so every row the worker ever wrote had a null `job_id`. 49 rows
+    // out of 172 in production had one, and all 49 came from two avatar
+    // scripts filling it in by hand.
+    //
+    // A correlation id cannot stand in for it. One correlation id covers a
+    // parent job and every child it spawns, so "the job with that correlation
+    // id" is not a job — which is why cost per outcome needs this column and
+    // could not be computed from what was there.
+    const db = new FakeDb([model('first/one:free')])
+    const { impl } = scripted([() => answered('first/one:free')])
+    const jobId = '11111111-2222-3333-4444-555555555555'
+    const correlationId = '99999999-8888-7777-6666-555555555555'
+    await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES, jobId, correlationId })
+
+    const usage = db.calls('inference_usage')
+    expect(usage.length).toBeGreaterThanOrEqual(1)
+    const insert = usage.join('\n')
+    expect(insert).toContain(jobId)
+    expect(insert).toContain(correlationId)
+  })
+
+  it('leaves job_id null rather than inventing one when the caller has no job', async () => {
+    // A generated uuid here would be worse than a null: it would look like an
+    // attribution and join to nothing, and the coverage figure on the cost
+    // page — which is the thing that tells Grant how much to trust the
+    // number — would read 100% while being entirely wrong.
+    const db = new FakeDb([model('first/one:free')])
+    const { impl } = scripted([() => answered('first/one:free')])
+    await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES })
+    const insert = db.calls('inference_usage').join('\n')
+    expect(insert).toContain('null::uuid')
+  })
+
   it('stops after the attempt budget rather than walking the whole registry', async () => {
     const db = new FakeDb([
       model('a/one:free'),

@@ -98,7 +98,10 @@ export interface Plan {
  * and propose creating it.
  */
 const NAME_ENDS = String.raw`["”']?\s*(?=[.,;!?]|$|\band\b|\bthen\b|\bwith\b|\bso\b)`
-const NAME = String.raw`["“']?([A-Za-z0-9][A-Za-z0-9 &._-]{1,48}?)`
+// Not `String.raw`: this fragment contains no escape sequence, and biome
+// rejects a raw string that has nothing to keep raw. `NAME_ENDS` above does
+// (\s, \b) and stays raw.
+const NAME = `["“']?([A-Za-z0-9][A-Za-z0-9 &._-]{1,48}?)`
 
 const NEW_PROJECT = new RegExp(
   String.raw`\bnew\b[^.]{0,40}?\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,

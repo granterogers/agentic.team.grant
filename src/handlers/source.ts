@@ -170,6 +170,7 @@ export function sourceHandler(deps: {
         ],
         maxTokens: 2_000,
         correlationId: job.correlationId,
+        jobId: job.jobId,
       })
 
       return {

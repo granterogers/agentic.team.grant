@@ -1,0 +1,116 @@
+name: Telegram login
+
+# Sign the installation into Grant's Telegram account, from somewhere with a
+# real network.
+#
+# ## Why this is a workflow and not a command
+#
+# `bots.createBot` needs MTProto, and MTProto is not HTTP. The environment
+# Claude runs in tunnels HTTPS through a proxy and nothing else: a socket to a
+# Telegram data centre opens and then no bytes flow in either direction —
+# measured, not assumed. A GitHub runner has ordinary egress, so the login
+# happens here.
+#
+# ## Two steps, because the code arrives on a phone
+#
+# `send-code` asks Telegram to send one and parks the in-flight state in the
+# vault. `sign-in` finishes. Telegram gives that state a few minutes, so run
+# the second within about five of the first; if it expires, send another code.
+#
+# ## What is visible and what is not
+#
+# The phone number and the code are masked out of the log. They are still
+# inputs, so they appear in the run's own parameters in the Actions UI — that
+# is Grant's own repository, the code is single-use and expires in minutes, and
+# the alternative (a repository secret per attempt) is worse ceremony for the
+# same exposure. The SESSION, which is the credential that actually matters,
+# never appears anywhere: it is written straight to the vault and the script
+# has no flag that would print it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: 'send-code first, then sign-in'
+        required: true
+        default: send-code
+        type: choice
+        options: [status, send-code, sign-in]
+      phone:
+        description: 'Full international number, e.g. +34603834206 (send-code only)'
+        required: false
+        type: string
+      code:
+        description: 'The digits Telegram sent to your Telegram app (sign-in only)'
+        required: false
+        type: string
+      password:
+        description: 'Two-step verification password, only if you have one set'
+        required: false
+        type: string
+
+concurrency:
+  # Never two logins at once: the second would overwrite the first's in-flight
+  # state and both would fail on a code that no longer matches its hash.
+  group: telegram-login
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  login:
+    name: ${{ inputs.step }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - name: Mask the inputs
+        run: |
+          # Before anything else can echo them. `add-mask` replaces the value
+          # with *** everywhere in this job's log from here on.
+          [ -n "${{ inputs.phone }}" ] && echo "::add-mask::${{ inputs.phone }}"
+          [ -n "${{ inputs.code }}" ] && echo "::add-mask::${{ inputs.code }}"
+          [ -n "${{ inputs.password }}" ] && echo "::add-mask::${{ inputs.password }}"
+          echo "masked"
+
+      - name: Run the step
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF || 'baujwlzcziasnfhhkchg' }}
+          STEP: ${{ inputs.step }}
+          PHONE: ${{ inputs.phone }}
+          CODE: ${{ inputs.code }}
+          PASSWORD: ${{ inputs.password }}
+        run: |
+          set -euo pipefail
+          case "$STEP" in
+            status)
+              npm run telegram:login -- --status
+              ;;
+            send-code)
+              if [ -z "$PHONE" ]; then echo "phone is required for send-code"; exit 2; fi
+              npm run telegram:login -- --phone "$PHONE"
+              ;;
+            sign-in)
+              if [ -z "$CODE" ]; then echo "code is required for sign-in"; exit 2; fi
+              if [ -n "$PASSWORD" ]; then
+                npm run telegram:login -- --code "$CODE" --password "$PASSWORD"
+              else
+                npm run telegram:login -- --code "$CODE"
+              fi
+              ;;
+            *) echo "unknown step: $STEP"; exit 2 ;;
+          esac
+
+      - name: What exists now
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF || 'baujwlzcziasnfhhkchg' }}
+        run: npm run telegram:bots -- --status

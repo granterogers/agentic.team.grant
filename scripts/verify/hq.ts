@@ -63,6 +63,19 @@ const get = async (
   return { status: response.status, body: await response.text() }
 }
 
+/** The write side, which the read helper cannot reach. */
+const post = async (
+  action: string,
+  args: Record<string, unknown>,
+): Promise<{ status: number; body: string }> => {
+  const response = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ action, args }),
+  })
+  return { status: response.status, body: await response.text() }
+}
+
 // ===========================================================================
 // Who can read it
 // ===========================================================================
@@ -346,6 +359,142 @@ record(
   'the connections payload carries no credential (§25)',
   connLeaks.length === 0 ? 'clean' : `LEAKED: ${connLeaks.join(', ')}`,
   connLeaks.length === 0,
+)
+
+// ===========================================================================
+// Per-person tool grants: the global table stays the ceiling (§11)
+// ===========================================================================
+
+const teamBody = await get('?section=team')
+const team = (JSON.parse(teamBody.body || '{}') as { data?: { staff?: Record<string, unknown>[] } })
+  .data
+const ruby = (team?.staff ?? []).find((p) => p.slug === 'growth-director') as
+  | {
+      tools?: { tool: string; granted: boolean; available: boolean; unavailable_because?: string }[]
+      skills?: string[]
+    }
+  | undefined
+
+record(
+  'the team payload carries skills and tools, so the page makes one call and not nine',
+  `${String(ruby?.skills?.length ?? 0)} skill(s), ${String(ruby?.tools?.length ?? 0)} tool(s)`,
+  (ruby?.tools?.length ?? 0) > 0 && Array.isArray(ruby?.skills),
+)
+
+// The ungranted rows have to travel too. A permission screen that lists only
+// what is granted cannot be used to grant anything.
+const blocked = ruby?.tools?.find((t) => t.tool === 'gmail.send')
+record(
+  'a tool switched off for everyone is still listed, with the reason',
+  `available=${String(blocked?.available)} reason=${String(blocked?.unavailable_because ?? '').slice(0, 30)}…`,
+  blocked !== undefined &&
+    blocked.available === false &&
+    String(blocked.unavailable_because ?? '').length > 20,
+)
+
+// The check that matters. A per-staff grant must not be a second place that
+// can say yes: `gmail.send` is disabled by policy and granting it here has to
+// be REFUSED, not accepted and quietly ignored.
+const widen = await post('staff_tool_set', {
+  p_slug: 'growth-director',
+  p_tool: 'gmail.send',
+  p_granted: true,
+})
+const widenSaid = String(widen.body)
+record(
+  'granting a globally disabled tool is refused, not accepted and ignored',
+  widenSaid.includes('switched off for everyone')
+    ? 'refused, with the reason'
+    : widenSaid.slice(0, 60),
+  widenSaid.includes('switched off for everyone'),
+)
+const stillBlocked = String(
+  (await db.execute(`select app.staff_may_use('growth-director', 'gmail.send')::text as v`)).rows[0]
+    ?.v ?? 'x',
+)
+record(
+  'and the permission function still says no afterwards',
+  `staff_may_use = ${stillBlocked}`,
+  stillBlocked === 'false',
+)
+
+// CONTROL: an enabled tool CAN be revoked and re-granted, so the refusal above
+// is the policy working rather than the whole endpoint being broken.
+await post('staff_tool_set', { p_slug: 'growth-director', p_tool: 'web.search', p_granted: false })
+const revoked = String(
+  (await db.execute(`select app.staff_may_use('growth-director', 'web.search')::text as v`)).rows[0]
+    ?.v ?? 'x',
+)
+await post('staff_tool_set', { p_slug: 'growth-director', p_tool: 'web.search', p_granted: true })
+const restored = String(
+  (await db.execute(`select app.staff_may_use('growth-director', 'web.search')::text as v`)).rows[0]
+    ?.v ?? 'x',
+)
+record(
+  'CONTROL: an allowed tool revokes and re-grants, so the refusal above discriminates',
+  `revoked=${revoked} restored=${restored}`,
+  revoked === 'false' && restored === 'true',
+)
+
+// ===========================================================================
+// Cost per outcome: measured and modelled must stay distinguishable (§11)
+// ===========================================================================
+
+const costResponse = await get('?section=cost')
+const cost =
+  (JSON.parse(costResponse.body || '{}') as { data?: Record<string, unknown> }).data ?? {}
+record(
+  'the cost section is served',
+  `http ${String(costResponse.status)}`,
+  costResponse.status === 200,
+)
+
+// The two figures are the whole point. A single "cost" number here would be
+// either a measured figure inflated by prices nobody paid, or a modelled
+// figure that hides real spend the day real spend starts — §11 exists to stop
+// exactly that, and this is the check that the shape still honours it.
+const totals = (cost.totals ?? {}) as Record<string, unknown>
+record(
+  'spend is reported twice: what was charged, and what it would have cost',
+  `spent_usd=${String(totals.spent_usd)} modelled_usd=${String(totals.modelled_usd)}`,
+  'spent_usd' in totals && 'modelled_usd' in totals,
+)
+record(
+  'and each carries a sentence saying which it is, on the page not in a footnote',
+  `${String(cost.measured_note ?? '').slice(0, 40)}…`,
+  String(cost.measured_note ?? '').length > 40 && String(cost.modelled_note ?? '').length > 40,
+)
+
+// The honesty column. Until the router started writing `inference_usage.job_id`
+// this read 28%, and a page that divided by the jobs it happened to know about
+// would have reported a cost far too low while looking perfectly healthy.
+const coverage = (cost.coverage ?? {}) as Record<string, unknown>
+record(
+  'the page says what share of model calls it could attribute at all',
+  `${String(coverage.attributed_pct)}% of ${String(coverage.total_calls)} calls`,
+  typeof coverage.attributed_pct === 'number' && typeof coverage.unattributed_calls === 'number',
+)
+
+const byKind = (cost.by_kind ?? []) as { kind?: string; modelled_usd_each?: unknown }[]
+record(
+  'CONTROL: there is real per-kind data behind it, so the checks above are not passing on an empty object',
+  `${String(byKind.length)} kinds, e.g. ${String(byKind[0]?.kind ?? 'none')}`,
+  byKind.length > 0 && byKind.every((k) => k.modelled_usd_each !== undefined),
+)
+
+// A price with no source is a number with a dollar sign in front of it.
+const priceSources = String(
+  (
+    await db.execute(
+      `select count(*) filter (where source_url is null or source_url = '')::int as bad,
+              count(*)::int as total from public.model_prices`,
+    )
+  ).rows[0]?.bad ?? 'x',
+)
+record(
+  'every modelled price says where it came from',
+  priceSources === '0' ? 'all sourced' : `${priceSources} with no source`,
+  priceSources === '0',
 )
 
 // ===========================================================================

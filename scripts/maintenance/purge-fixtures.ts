@@ -19,6 +19,16 @@
  *
  * ## The convention this enforces
  *
+ * ## What this does NOT do, and where that is handled
+ *
+ * It does not touch Slack. A fixture project creates real channels in Grant's
+ * workspace, and retiring the project here left them sitting in his sidebar —
+ * which is how `slack_office_verification_fixture_11321918` survived long
+ * enough for him to complain about it by name. Channels are archived by
+ * `npm run slack:tidy -- --go`, which runs immediately after this in
+ * `verify:db` because it needs the Slack client and this script deliberately
+ * has no credentials beyond the database.
+ *
  * A fixture project's slug **must** start with one of `FIXTURE_PREFIXES`. That
  * is the whole contract: a verification script picks a prefixed slug, and this
  * purge can find it afterwards whether or not the script survived to clean up.

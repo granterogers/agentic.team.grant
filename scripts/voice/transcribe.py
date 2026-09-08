@@ -1,6 +1,6 @@
 """Transcribe an audio file locally. One path in, one JSON object out.
 
-    python3 scripts/voice/transcribe.py /path/to/audio.oga
+    python3 scripts/voice/transcribe.py /path/to/audio.oga ["vocabulary, hints"]
 
 ## Why locally, which was not the first choice
 
@@ -19,14 +19,50 @@ So the audio never leaves our own compute. `faster-whisper` runs on the same
 GitHub Actions runner as the worker, the model is a ~140MB download cached
 between runs, and a minute of speech transcribes in a few seconds on CPU.
 
-## `base.en` rather than something larger
+## The vocabulary hint
 
-A measured trade, not a guess about quality: the input is one person dictating
-an instruction in English, to a phone. `base.en` handles that, and `small.en`
-costs four times the compute for a difference that does not change which job
-gets enqueued. If a transcript ever routes wrongly, this constant is the first
-thing to raise — which is why it is a constant and why it reads from the
-environment.
+Grant sent a voice note saying "a new NotebookLM project called Wellness Legacy
+course" and Whisper heard **"a new Not-to-But project"**. The Chief of Staff
+then answered a question nobody had asked, because the one noun that said what
+the request was about had been destroyed before she saw it.
+
+That is not a model-size problem, it is a prior-context problem: Whisper has no
+idea this installation talks about NotebookLM, Notion, Supabase and eight people
+with specific names. `initial_prompt` is exactly the mechanism for telling it —
+the words are treated as preceding context, which biases the decoder towards
+spelling them correctly when it hears something close.
+
+The caller assembles the list from the database (staff names, project names,
+connector names), so it is current rather than a constant that goes stale the
+first time someone is hired.
+
+## `small.en`, because `base.en` was measured and found wanting
+
+This said `base.en`, on the reasoning that one person dictating English to a
+phone does not need more, and that `small.en` costs four times the compute "for
+a difference that does not change which job gets enqueued". It also said that
+if a transcript ever routed wrongly, this constant is the first thing to raise.
+
+A transcript routed wrongly. Re-running Grant's actual 36-second note through
+every combination gives:
+
+    base.en,  beam 1, no hint   "a new Not-to-But project"      (what shipped)
+    base.en,  beam 5, no hint   "a new not-to-boot project"
+    base.en,  beam 5, hinted    "a new Notebook project" — but the tail
+                                degraded: "Wellness Legacy, of course... give
+                                me your thoughts on that. Access on this
+                                project and from the team members."
+    small.en, beam 5, no hint   "a new not to boot project"
+    small.en, beam 5, hinted    "a new Notebook project called Wellness Legacy,
+                                of course. Open up this project and from that
+                                create a new project in Notion based around
+                                that and give me your thoughts on this project
+                                and from the team members."
+
+So it takes BOTH. The hint is what recovers the proper noun — no model size
+finds "Notebook" in that audio without it — and the larger model is what keeps
+the rest of the sentence intact while doing so. The original trade was a
+reasonable guess and it was wrong; this one is measured.
 """
 
 from __future__ import annotations
@@ -35,7 +71,7 @@ import json
 import os
 import sys
 
-MODEL = os.environ.get("VOICE_MODEL", "base.en")
+MODEL = os.environ.get("VOICE_MODEL", "small.en")
 
 
 def emit(payload: object) -> None:
@@ -55,6 +91,10 @@ def main() -> None:
     path = sys.argv[1]
     if not os.path.exists(path):
         die(f"no such file: {path}")
+    # Optional, and deliberately positional rather than a flag: there is one
+    # caller and a flag would be ceremony. Empty means no hint, which is the
+    # behaviour this had before.
+    vocabulary = sys.argv[2].strip() if len(sys.argv) > 2 else ""
 
     try:
         from faster_whisper import WhisperModel
@@ -66,9 +106,20 @@ def main() -> None:
 
     try:
         model = WhisperModel(MODEL, device="cpu", compute_type="int8")
-        # `vad_filter` drops the silence at either end of a phone recording,
-        # which is most of a short voice note and most of its runtime.
-        segments, info = model.transcribe(path, vad_filter=True, beam_size=1)
+        segments, info = model.transcribe(
+            path,
+            # `vad_filter` drops the silence at either end of a phone
+            # recording, which is most of a short voice note and most of
+            # its runtime.
+            vad_filter=True,
+            # 5, not 1. Greedy decoding was picking the first plausible
+            # word and "Not-to-But" is what that sounds like. A voice note
+            # is seconds of audio and this is a few seconds of CPU on a
+            # runner that is otherwise idle — the cheapest accuracy
+            # available.
+            beam_size=5,
+            initial_prompt=vocabulary or None,
+        )
         text = " ".join(s.text.strip() for s in segments).strip()
     except Exception as exc:  # noqa: BLE001 - the boundary reports, never crashes
         die(f"{type(exc).__name__}: {exc}")
@@ -80,6 +131,9 @@ def main() -> None:
         "language": getattr(info, "language", None),
         "seconds": round(float(getattr(info, "duration", 0.0) or 0.0), 1),
         "model": MODEL,
+        # Reported so a bad transcript can be diagnosed without guessing
+        # whether the hint reached it.
+        "hinted": bool(vocabulary),
     })
 
 

@@ -57,6 +57,8 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },
+  // What each kind of work costs, measured and modelled (§11).
+  cost: { fn: 'hq_cost_per_outcome', args: { p_days: 30 } },
 }
 
 /**
@@ -87,6 +89,9 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // be: outputs, routing decisions and deliveries all name a staff member, and
   // a roster that can lose a row is a history that stops explaining itself.
   staff_update: { fn: 'hq_staff_update', required: ['p_slug'] },
+  // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
+  // the two, and refuses a grant for a globally disabled tool (§11).
+  staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
   staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.
