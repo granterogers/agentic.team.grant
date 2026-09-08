@@ -392,11 +392,21 @@ documentation set of §30 — including the handoff guide for another coding age
 scenarios work reliably:
 
 1. The Money Mastery source-to-notification-to-voice-conversation flow, all 21
-   steps.
+   steps. **Harnessed 2026-09-08** — `npm run verify:scenario-a`. A real run:
+   it reads a live notebook, stores a real document in a real project,
+   convenes the team, and spends real inference. Its first run found three
+   defects that every per-segment check had missed, which is the argument for
+   having it: no output had ever been attributed to a member of staff (736 of
+   736 null), the event ledger had never recorded a single action by the
+   working system (75 events, all from verification suites), and §22 A's own
+   sentence — *"what was Research going on about?"* — was classified as a
+   request for work because the imperative list contained the word "research"
+   and so did the Research Director's title.
 2. The **cross-interface delegation test**: the same instruction via Slack and
    via Voice produces identical backend behaviour. Automated as an equality
    assertion on the normalized command, modulo `origin_channel`, `origin_ref`
-   and `command_id`.
+   and `command_id`. **Passing** — `npm run verify:cross-interface`, 10/10,
+   across Slack, Telegram and Voice.
 
 ---
 

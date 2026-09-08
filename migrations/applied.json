@@ -136,5 +136,6 @@
   "0135_a_voice_the_edge_can_hear.sql": "b5f84d4d3a387d9bc7063e73d288c62e377e14c265daeed4eba1d7fcb6138316",
   "0136_one_room_and_one_voice.sql": "cc4d8d722761ce0c65e14396dfd7e4f84aa5d64ade9e9c59997e2a7cb15dfda5",
   "0137_work_a_worker_cannot_do.sql": "7b04a264cc53929ad2031c77ef31df9f8698f43bafc44241fefaa04225487cb0",
-  "0138_discovery_needs_no_machine.sql": "fe93244b6d5ef4cf9c5de62e908655045946e3162b3094e1005e012cfceaeffc"
+  "0138_discovery_needs_no_machine.sql": "fe93244b6d5ef4cf9c5de62e908655045946e3162b3094e1005e012cfceaeffc",
+  "0139_asking_about_someone_is_not_asking_for_work.sql": "f270d5a897769907d68aa998103493c0d1a029b9feaf47d072b15ebc2436e1ad"
 }

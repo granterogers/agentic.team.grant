@@ -179,6 +179,71 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
   }))
 }
 
+/**
+ * Put a job's outcome on the event ledger.
+ *
+ * §6 makes the ledger the spine of the system and §22 A requires *"all actions
+ * versioned"*. The first live run of the Scenario A harness found 75 events in
+ * the table and every single one written by a verification suite — 736
+ * outputs, 269 deliveries, and not one action by the working system. The
+ * ledger worked perfectly and nothing had ever used it.
+ *
+ * ## What is recorded, and what deliberately is not
+ *
+ * One event per job outcome, not one per state transition.
+ * `job_state_transitions` already holds every transition and is append-only;
+ * duplicating it here would make the ledger a second copy of a table nobody
+ * reads rather than a record of what the office DID.
+ *
+ * `rationale_summary` carries a fixed sentence, never the finding's text and
+ * never the model's reasoning. §6 is explicit that there is nowhere for
+ * chain-of-thought to go, and a free-form summary is exactly that hole. The
+ * body lives in `outputs`, which is where it belongs and where provenance
+ * sits beside it.
+ *
+ * ## Why it cannot fail the job
+ *
+ * The work is done and delivered by the time this runs. A ledger write that
+ * threw would turn a finished piece of work into a failed one and lose it,
+ * which is a worse outcome than an unrecorded event — so the failure is
+ * returned as a note and the job stands.
+ */
+const recordOnLedger = async (
+  db: SqlExecutor,
+  job: Job,
+  what: string,
+  detail: string,
+): Promise<string | null> => {
+  try {
+    await db.execute(`
+      select public.append_event(
+        ${lit(job.correlationId)}::uuid,
+        -- 'agent': the office did this, not Grant and not a cron. The check
+        -- constraint allows user, agent and system, and a research finding is
+        -- the middle one by any reading.
+        'agent',
+        coalesce(app.staff_behind_job(${lit(job.jobId)}::uuid), 'office'),
+        ${lit(job.kind)},
+        ${lit(what)},
+        -- A finding is not reversible: it was produced, and un-producing it is
+        -- not a thing. What IS reversible is the message about it, and that is
+        -- undo_offers, which has its own deadline and its own record. (No
+        -- backticks in a comment inside a template literal: they end the
+        -- string, and the error surfaces two hundred lines away.)
+        false,
+        ${job.projectId === null ? 'null' : `${lit(job.projectId)}::uuid`},
+        null, null,
+        ${lit(detail)},
+        '[]'::jsonb, null, null, null,
+        ${lit(job.jobId)}::uuid
+      )
+    `)
+    return null
+  } catch (error) {
+    return `ledger not written: ${(error as Error).message.slice(0, 120)}`
+  }
+}
+
 export const dequeue = async (
   db: SqlExecutor,
   workerId: string,
@@ -339,9 +404,22 @@ export const runJob = async (
 
   const { rows } = await db.execute(`
     insert into public.outputs
-      (job_id, body, confidence, evidence, sources, contradictions, deterministic, model)
+      (job_id, staff_id, body, confidence, evidence, sources, contradictions,
+       deterministic, model)
     values
-      (${lit(job.jobId)}::uuid, ${lit(output.body)},
+      (${lit(job.jobId)}::uuid,
+       -- WHO did this. 736 outputs were written before this line existed, every
+       -- one of them attributed to nobody, while §9 makes staff identities and
+       -- §22 A requires "correct staff identity". The notifier had always
+       -- resolved a name for display and nothing had ever persisted it, so the
+       -- author of a finding survived exactly as long as the Slack message did.
+       --
+       -- app.staff_behind_job rather than a copy of its lineage walk: it
+       -- knows about the parent chain and the duty fallback, and 0106 exists
+       -- because a second copy did not.
+       (select st.staff_id from public.staff st
+         where st.slug = app.staff_behind_job(${lit(job.jobId)}::uuid)),
+       ${lit(output.body)},
        ${lit(output.confidence)}::public.confidence_level,
        ${lit(output.evidence)}::public.evidence_type,
        ${lit(JSON.stringify(output.sources))}::jsonb,
@@ -413,13 +491,25 @@ export const runJob = async (
 
   await moveTo(db, job.jobId, 'complete', notified.note.slice(0, 200))
 
+  const ledgerNote = await recordOnLedger(
+    db,
+    job,
+    'finding.committed',
+    gate.exempt
+      ? 'Committed without review: a deterministic operation, exempt under §16.'
+      : 'Committed after quality review.',
+  )
+
   const reviewNote = gate.exempt
     ? 'committed without review (deterministic path)'
     : 'committed after review'
   return {
     jobId: job.jobId,
     finalState: 'complete',
-    note: `${reviewNote}; ${notified.note}`,
+    // The ledger note only appears when the write FAILED. A silent ledger is
+    // how this went unnoticed for 736 outputs, and a line that says "ledger
+    // written" every time is a line nobody reads.
+    note: `${reviewNote}; ${notified.note}${ledgerNote === null ? '' : `; ${ledgerNote}`}`,
   }
 }
 

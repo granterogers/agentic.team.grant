@@ -42,6 +42,19 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
  */
 export interface ResultContext {
   readonly staff: StaffPresentation | null
+  /**
+   * The author's row id, beside their presentation.
+   *
+   * Separate from `StaffPresentation` on purpose: that type is about how a
+   * person LOOKS in Slack — name, title, face — and is built by scripts that
+   * have no job and no row to hand. An id is not presentation.
+   *
+   * It exists because `deliveries.staff_id` was passed `null` at every call
+   * site. The first live Scenario A run found 253 of 269 deliveries with no
+   * author, which is §22 A's "correct staff identity" satisfied on screen and
+   * nowhere that outlives the message.
+   */
+  readonly staffId: string | null
   /** False for §10-substantive output that has not been reviewed. */
   readonly reviewed: boolean
   readonly actions: readonly ActionId[]
@@ -75,17 +88,18 @@ export async function resultContext(
   // face, beside eight introductions that each had both. Only the function
   // knew about that fallback; the copy here did not.
   const staffRow = await db.execute(`
-    select st.slug, st.name, st.title, st.avatar_ref
+    select st.staff_id::text as staff_id, st.slug, st.name, st.title, st.avatar_ref
       from public.staff st
      where st.slug = app.staff_behind_job(${lit(job.jobId)}::uuid)
   `)
   const raw = staffRow.rows[0] as
-    | { slug: string; name: string; title: string; avatar_ref: string | null }
+    | { staff_id: string; slug: string; name: string; title: string; avatar_ref: string | null }
     | undefined
   const staff: StaffPresentation | null =
     raw === undefined
       ? null
       : { slug: raw.slug, name: raw.name, title: raw.title, avatarRef: raw.avatar_ref }
+  const staffId = raw === undefined ? null : raw.staff_id
 
   // Read from the output row rather than inferred from the production path.
   // §16 exempts a deterministic output from review, which is not the same as it
@@ -114,7 +128,7 @@ export async function resultContext(
     select app.open_approval_for_job(${lit(job.jobId)}::uuid) as id
   `)
   if ((asking.rows[0] as { id?: string | null } | undefined)?.id != null) {
-    return { staff, reviewed, actions: ['approve', 'decline'], projectUrl }
+    return { staff, staffId, reviewed, actions: ['approve', 'decline'], projectUrl }
   }
 
   // Undo is offered only when there is something to undo — an offer that does
@@ -135,7 +149,7 @@ export async function resultContext(
       (action !== 'open_project' || projectUrl !== null),
   )
 
-  return { staff, reviewed, actions, projectUrl }
+  return { staff, staffId, reviewed, actions, projectUrl }
 }
 
 export interface CombinedOptions {
@@ -252,6 +266,7 @@ export function pagerChannel(
         outputId,
         staffName: context.staff?.name ?? null,
         staffTitle: context.staff?.title ?? null,
+        staffId: context.staffId,
         reviewed: context.reviewed,
         severity,
         actions: context.actions,

@@ -101,6 +101,8 @@ export class TelegramPager {
     readonly outputId: string
     readonly staffName: string | null
     readonly staffTitle: string | null
+    /** The author's row id, so the delivery records who it came from. */
+    readonly staffId: string | null
     readonly reviewed: boolean
     readonly severity: PagerSeverity
     readonly actions: readonly ActionId[]
@@ -202,6 +204,7 @@ export class TelegramPager {
       accountRef: this.options.botId,
       targetRef: chatId,
       purpose: 'result',
+      staffId: input.staffId,
       correlationId: input.job.correlationId,
       jobId: input.job.jobId,
       body: {

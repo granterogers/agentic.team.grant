@@ -227,7 +227,7 @@ export function slackChannel(
         threadTs: target.threadTs,
         purpose: 'result',
         staff: context.staff,
-        staffId: null,
+        staffId: context.staffId,
         correlationId: job.correlationId,
         jobId: job.jobId,
         message: {

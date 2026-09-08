@@ -81,6 +81,7 @@
     "verify:notion": "tsx scripts/verify/notion.ts",
     "telegram:roster": "tsx scripts/telegram/roster.ts",
     "telegram:configure-staff": "tsx scripts/telegram/configure-staff.ts",
+    "verify:scenario-a": "tsx scripts/verify/scenario-a.ts",
     "verify:cross-interface": "tsx scripts/verify/cross-interface.ts",
     "verify:chaos": "tsx scripts/verify/chaos.ts",
     "verify:security": "tsx scripts/verify/security.ts",

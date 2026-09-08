@@ -530,6 +530,7 @@ const pageInput = {
   outputId: '00000000-0000-0000-0000-000000000000',
   staffName: 'Research Director',
   staffTitle: 'Research Director',
+  staffId: null,
   reviewed: true,
   actions: [...ACTIONS],
 }
