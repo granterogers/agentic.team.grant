@@ -36,7 +36,18 @@
 import { ManagementApiExecutor } from '../../../src/db/executor.ts'
 import { buildPass } from '../../../src/office/pass.ts'
 
-declare const Deno: { env: { get: (k: string) => string | undefined } }
+declare const Deno: {
+  env: { get: (k: string) => string | undefined }
+  /**
+   * Declared optional on purpose. Subprocess spawning is a Deno API that the
+   * edge runtime does not grant, and the capability probe below is the whole
+   * point: the type says "this may not be here", which is exactly the fact.
+   */
+  Command?: new (
+    command: string,
+    options: { args: string[] },
+  ) => { output: () => Promise<{ success: boolean }> }
+}
 
 // Not `SUPABASE_*`: that prefix is reserved for the platform's own injected
 // variables and the secrets API rejects the whole batch with a 400 if you use
@@ -90,14 +101,43 @@ const secretMatches = async (presented: string): Promise<boolean> => {
  */
 let running = false
 
+/**
+ * Can this runtime turn a voice note into words?
+ *
+ * Asked, not assumed. The answer decides whether the edge worker may take a
+ * voice job at all, and guessing it wrong in either direction is expensive: say
+ * yes wrongly and every voice note fails on the fast path; say no wrongly and
+ * every voice note waits for a runner that fires six times in fourteen hours.
+ */
+const canTranscribe = async (): Promise<boolean> => {
+  const Command = Deno.Command
+  if (Command === undefined) return false
+  try {
+    return (await new Command('python3', { args: ['-c', 'import faster_whisper'] }).output())
+      .success
+  } catch {
+    return false
+  }
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === 'GET') {
     // Says whether it COULD run, and nothing about what is queued. An
     // unauthenticated caller learning the queue depth is a probing aid.
+    //
+    // `can_transcribe` is here because it is the one capability that differs
+    // between the two places a pass runs. Transcription shells out to
+    // faster-whisper (`scripts/voice/transcribe.py`) — deliberately, so
+    // Grant's voice never leaves our own compute — and this runtime has no
+    // subprocesses and no Python. Reported rather than assumed: a voice note
+    // silently failing on the fast path and only working when a GitHub runner
+    // happens to fire is precisely the class of bug this whole change exists
+    // to remove.
     return json({
       ok: true,
       endpoint: 'worker',
       configured: PROJECT_REF !== '' && ACCESS_TOKEN !== '' && KICK_SECRET !== '',
+      can_transcribe: await canTranscribe(),
     })
   }
 
@@ -118,6 +158,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
       log: (line) => lines.push(line),
       max: MAX_JOBS,
       deadlineMs: DEADLINE_MS,
+      // Asked, not assumed — and the answer is no here. An untranscribed voice
+      // note is therefore left for the runner that can hear it (0125), instead
+      // of being claimed and failed three times by the worker that cannot.
+      canTranscribe: await canTranscribe(),
     })
     const result = await pass()
     return json({ ok: true, ...result, log: lines })

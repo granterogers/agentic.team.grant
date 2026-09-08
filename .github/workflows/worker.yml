@@ -29,6 +29,20 @@ on:
     # delays the losers.
     - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
   workflow_dispatch:
+  # The Telegram webhook POSTs this the instant a VOICE note lands.
+  #
+  # Typed messages never come this way: the Edge worker answers those in the
+  # time one model call takes. Voice needs a runner because transcription runs
+  # faster-whisper in a subprocess, and the edge runtime has neither Python nor
+  # subprocesses — it reports `can_transcribe: false` about itself, and 0125
+  # stops it claiming a job it would only fail.
+  #
+  # This exists because the cron above is a wish. It says every five minutes and
+  # over the fourteen hours before Grant complained it ran six times; GitHub
+  # documents schedules as best-effort and drops frequent ones first.
+  # `repository_dispatch` is not a schedule and starts a run in seconds.
+  repository_dispatch:
+    types: [voice-note]
 
 concurrency:
   # Never two workers at once. The engine would survive it — `dequeue_job`
@@ -75,14 +89,19 @@ jobs:
           # relax that for. Pinned for the same reason as the line above.
           pip install --quiet "faster-whisper==1.1.1"
 
-      # ~140MB, downloaded from Hugging Face on first use. Cached because
-      # fetching it every five minutes is both slow and rude, and because a
+      # ~460MB for small.en, downloaded from Hugging Face on first use. Cached
+      # because fetching it on every run is both slow and rude, and because a
       # rate-limited download would surface as "the bot ignored my voice note".
+      #
+      # The key names the model. It has to: base.en was cached under the old
+      # key, and leaving the key alone while changing the model would restore
+      # the wrong weights and quietly undo the fix — a cache hit on the thing
+      # that was measured to be wrong.
       - name: Cache the speech model
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: whisper-base-en-v1
+          key: whisper-small-en-v1
 
       - name: Work
         env:

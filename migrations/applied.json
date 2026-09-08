@@ -122,5 +122,7 @@
   "0121_the_queue_gets_a_heartbeat.sql": "50dca0dd11f353405c6de2f6b082462f0466bb706c3654a8bd47f62eb45d0238",
   "0122_a_heartbeat_that_does_not_hang_up.sql": "7e9e4a6d2ba969a3d2938fdb829c9135ec8ea6a13bfc87c059906a393edd374d",
   "0123_one_button_per_google_service.sql": "5ff501640cac5b8db712631de68fcb82f4ac97fc53f551e97135995405361937",
-  "0124_a_place_for_the_telegram_account.sql": "9334036df4560f536b7aca69259cb132ea3f25347f3a9a6aaf52d2e031065f25"
+  "0124_a_place_for_the_telegram_account.sql": "9334036df4560f536b7aca69259cb132ea3f25347f3a9a6aaf52d2e031065f25",
+  "0125_a_worker_that_cannot_hear.sql": "d1ed3bf5f8c3295820c37432c36072d48ea59f7dbc714f1ec3aafb7e4bf53d64",
+  "0126_waking_a_runner_that_can_hear.sql": "0445bb89e69cd0008146709fb9434ac248c5f18fa52ae737915c1f33be8b93d6"
 }

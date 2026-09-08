@@ -6,12 +6,29 @@
  * don't need to see the transcription, but the receiving bots need to obviously
  * be able to work on that."*
  *
- * Two requirements in that sentence and the second is the interesting one. The
- * transcript is not a deliverable, it is an INPUT — so nothing here echoes it
- * back. It goes into `inbound_commands.transcript` because Postgres is
- * canonical and a command whose text nobody can read afterwards is a command
- * that cannot be audited, and then it becomes the instruction. Grant sees the
- * answer, not the transcription.
+ * ## He has since reversed the "I don't need to see the transcription" part
+ *
+ * Grant: *"Whenever I send a voice note to an agent, I want to see the
+ * transcription immediately so I can see what's actually been heard, and then
+ * it can give me the interpretation. Because I just sent a voice note to one of
+ * the agents and it doesn't seem to have understood what I've asked at all. So
+ * I want to check if it's simply a transcription problem or if it's just too
+ * stupid to understand what I'm saying."*
+ *
+ * He was right to suspect it, and the answer was transcription. He said "a new
+ * NotebookLM project called Wellness Legacy course" and Whisper wrote **"a new
+ * Not-to-But project"**. The Chief of Staff never saw the word that said what
+ * the request was about, and answered a question nobody had asked.
+ *
+ * That is the whole argument for echoing it. A wrong answer with no visible
+ * input is indistinguishable from a stupid colleague; the same wrong answer
+ * with "Heard: …" above it is a one-second diagnosis. The transcript is still
+ * an INPUT rather than a deliverable — it is echoed as evidence of what was
+ * received, not offered as the work.
+ *
+ * It goes into `inbound_commands.transcript` because Postgres is canonical and
+ * a command whose text nobody can read afterwards is a command that cannot be
+ * audited, and then it becomes the instruction.
  *
  * ## The audio does not leave our own compute
  *
@@ -61,6 +78,8 @@ export interface Transcript {
   readonly seconds: number
   readonly language: string | null
   readonly model: string
+  /** Whether a vocabulary hint reached the decoder. Diagnostic, not decorative. */
+  readonly hinted: boolean
 }
 
 /**
@@ -73,7 +92,7 @@ export interface Transcript {
 export async function transcribeTelegramVoice(
   token: string,
   fileId: string,
-  options: { readonly seconds?: number } = {},
+  options: { readonly seconds?: number; readonly vocabulary?: readonly string[] } = {},
 ): Promise<Transcript> {
   const declared = options.seconds ?? 0
   if (declared > MAX_VOICE_SECONDS) {
@@ -113,7 +132,12 @@ export async function transcribeTelegramVoice(
 
     let stdout: string
     try {
-      const result = await run('python3', ['scripts/voice/transcribe.py', path], {
+      // The vocabulary is passed as one argument, capped, because it becomes
+      // Whisper's `initial_prompt` and that has a real token budget — a list
+      // long enough to fill it would push out the audio's own context and make
+      // the transcript worse, not better.
+      const hint = (options.vocabulary ?? []).join(', ').slice(0, 400)
+      const result = await run('python3', ['scripts/voice/transcribe.py', path, hint], {
         maxBuffer: 8 * 1024 * 1024,
         timeout: TRANSCRIBE_TIMEOUT_MS,
       })
@@ -134,6 +158,7 @@ export async function transcribeTelegramVoice(
       seconds?: number
       language?: string | null
       model?: string
+      hinted?: boolean
       error?: string
     }
     if (parsed.ok !== true) throw new VoiceNoteError(String(parsed.error ?? 'unknown failure'))
@@ -151,6 +176,7 @@ export async function transcribeTelegramVoice(
       seconds: Number(parsed.seconds ?? declared),
       language: parsed.language ?? null,
       model: String(parsed.model ?? 'unknown'),
+      hinted: parsed.hinted === true,
     }
   } finally {
     await rm(dir, { recursive: true, force: true })

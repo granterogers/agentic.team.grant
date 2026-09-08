@@ -25,9 +25,20 @@
  * A voice note arrives with no words in it: `voice_file_id` and nothing else.
  * The first thing this handler does is turn it into words, on our own hardware
  * (`src/voice/inbound.ts`), record them against the command, and then carry on
- * exactly as though Grant had typed them. He asked not to be shown the
- * transcription, so nothing echoes it — the answer is the answer to what he
- * said, which is the only evidence that it was heard correctly he needs.
+ * exactly as though Grant had typed them.
+ *
+ * The second thing it does is send the words back, before acting on them. This
+ * reverses the original instruction, and the reason is worth keeping: he said
+ * *"I don't need to see the transcription"* and then, later, *"I want to see the
+ * transcription immediately... I want to check if it's simply a transcription
+ * problem or if it's just too stupid to understand what I'm saying."*
+ *
+ * Between those two sentences, Whisper turned "a new NotebookLM project" into
+ * "a new Not-to-But project" and the Chief of Staff answered a question nobody
+ * had asked. The old reasoning — that the answer is evidence enough of being
+ * heard — is only true while transcription is right; the moment it is wrong,
+ * a wrong answer with no visible input is indistinguishable from a stupid
+ * colleague.
  *
  * ## Links
  *
@@ -294,7 +305,26 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
     ...(payload.voice_seconds === null || payload.voice_seconds === undefined
       ? {}
       : { seconds: payload.voice_seconds }),
+    vocabulary: await spokenVocabulary(db),
   })
+
+  // Say what was heard, before doing anything with it.
+  //
+  // Grant: *"I want to see the transcription immediately so I can see what's
+  // actually been heard, and then it can give me the interpretation... I want
+  // to check if it's simply a transcription problem or if it's just too stupid
+  // to understand what I'm saying."*
+  //
+  // Sent here rather than alongside the answer, because the point is that it
+  // arrives FIRST: an echo delivered with the reply tells him what went wrong
+  // after he has already read a wrong reply, which is most of the annoyance.
+  //
+  // Fire-and-forget and never fatal — see `echoTranscript`.
+  // `origin_ref` is `chatId:messageId` (src/channels/telegram.ts). Both halves
+  // are useful: the chat to send to, and the message to reply UNDER, so the
+  // echo threads beneath the voice note it belongs to instead of arriving as a
+  // loose line in the conversation.
+  await echoTranscript(token, String(payload.origin_ref ?? ''), heard)
 
   await db.execute(`
     update public.inbound_commands
@@ -313,6 +343,81 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
      where job_id = ${lit(job.jobId)}::uuid
   `)
   return heard.text
+}
+
+/**
+ * The words this installation says that a general speech model has never heard.
+ *
+ * Whisper turned "NotebookLM" into "Not-to-But" and the Chief of Staff answered
+ * a question nobody asked. That is not a model-size problem — it is that the
+ * decoder had no reason to believe "NotebookLM" was a word. `initial_prompt`
+ * fixes exactly this by supplying prior context.
+ *
+ * Assembled from the database rather than hard-coded, so hiring someone or
+ * naming a project makes their name transcribable without a code change. The
+ * fixed nouns are the ones no table holds.
+ */
+async function spokenVocabulary(db: SqlExecutor): Promise<string[]> {
+  // Ordered most-specific first: the hint has a token budget and the caller
+  // truncates, so the words most likely to be mangled must come before the
+  // ones a general model already knows.
+  const fixed = ['NotebookLM', 'Notion', 'Supabase', 'Slack', 'Telegram', 'OpenRouter', 'Team HQ']
+  try {
+    const { rows } = await db.execute(`
+      select name from public.staff where active
+      union
+      select name from public.projects where status = 'active'
+    `)
+    return [...fixed, ...rows.map((r) => String(r.name)).filter((n) => n !== '')]
+  } catch {
+    // A hint is an improvement, not a dependency. If this query fails the
+    // transcription still runs, just without the help.
+    return fixed
+  }
+}
+
+/**
+ * Tell Grant what was heard, immediately, from the bot he spoke to.
+ *
+ * Never throws and never blocks the work. The echo is a diagnostic: a voice
+ * note that gets answered but not echoed is the old behaviour, and an echo that
+ * could fail the job would make a diagnostic aid into a new way to lose a
+ * request.
+ */
+async function echoTranscript(
+  token: string,
+  originRef: string,
+  heard: { text: string; seconds: number; hinted: boolean },
+): Promise<void> {
+  const [chatId, messageId] = originRef.split(':')
+  if (chatId === undefined || chatId === '') return
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        // Threaded under the voice note. `allow_sending_without_reply` so a
+        // deleted original degrades to a loose message rather than to nothing.
+        ...(messageId === undefined || messageId === '' || !/^\d+$/.test(messageId)
+          ? {}
+          : {
+              reply_to_message_id: Number(messageId),
+              allow_sending_without_reply: true,
+            }),
+        // Quoted, so it is unmistakably a repeat of his words rather than the
+        // bot saying something. The seconds are there because a transcript
+        // much shorter than the recording is its own kind of wrong.
+        text:
+          `🎧 Heard (${String(Math.round(heard.seconds))}s): “${heard.text}”\n\n` +
+          'Working on it — if that is not what you said, send it again and ignore ' +
+          'what comes back.',
+        disable_notification: true,
+      }),
+    })
+  } catch {
+    // Deliberately swallowed. See the note above.
+  }
 }
 
 /** A project the message could be about. */
@@ -799,8 +904,28 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'asking. If you are inferring rather than reporting, say so inside the ' +
                     'sentence rather than as a disclaimer at the end.' +
                     (context === ''
-                      ? ' Nothing in our own records matched this, so answer from general ' +
-                        'knowledge and open by saying our records had nothing on it.'
+                      ? // Nothing matched. The old wording here said "answer
+                        // from general knowledge", and that is how Grant asked
+                        // about a NotebookLM project we hold nothing on and
+                        // got four sentences about mindfulness, wellness
+                        // stipends and leadership buy-in — none of it from
+                        // anywhere, all of it plausible. §10 wants evidence;
+                        // an invented answer that opens with "our records had
+                        // nothing" still reads as an answer.
+                        //
+                        // So: general knowledge is permitted for a general
+                        // question, and refused for a specific one. If he
+                        // names a thing — a project, a document, a notebook —
+                        // and we hold nothing about it, the useful reply is
+                        // that we cannot see it and a question about where it
+                        // is. Not an essay about what it might contain.
+                        ' Nothing in our own records matched this. Say so first. ' +
+                        'If the message names something specific we do not hold — a ' +
+                        'project, a document, a notebook, a file — then do NOT describe ' +
+                        'or speculate about what it might contain. Say you cannot see it ' +
+                        'and ask where it is or how to reach it. Only answer from general ' +
+                        'knowledge if the question is a general one that does not depend ' +
+                        'on anything of ours.'
                       : ' Numbered excerpts from our documents follow. Prefer them, cite them ' +
                         'as [1], [2], and say plainly when they do not answer the question.'),
                 },

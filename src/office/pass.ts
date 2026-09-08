@@ -75,6 +75,15 @@ export interface PassOptions {
    * runner, which has minutes.
    */
   readonly deadlineMs?: number
+  /**
+   * Whether this runtime can transcribe a voice note.
+   *
+   * The Edge Function cannot: transcription shells out to faster-whisper so
+   * that Grant's voice never leaves our own compute, and that runtime has no
+   * subprocesses and no Python. It reports the fact at
+   * `GET /functions/v1/worker` rather than assuming it.
+   */
+  readonly canTranscribe?: boolean
 }
 
 export interface PassResult {
@@ -201,6 +210,7 @@ export const buildPass = async (
     const done = await drain(db, workerId, handlers, review, max, {
       notify,
       onStart: (job) => announceStart(db, job),
+      canTranscribe: options.canTranscribe ?? true,
       ...(deadline === undefined
         ? {}
         : { stopStartingAfter: (): boolean => Date.now() - started > deadline }),

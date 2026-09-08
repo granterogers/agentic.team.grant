@@ -58,6 +58,33 @@ const WORKER_KICK_SECRET = Deno.env.get('WORKER_KICK_SECRET') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 /** Never echo a reason to an unauthenticated caller — it is a probing aid. */
+
+/**
+ * Call one `public.*` RPC with the service key and return its JSON.
+ *
+ * Returns null on any failure rather than throwing. Every caller here is
+ * optional extra behaviour on a webhook that must answer Telegram quickly and
+ * must never lose a message — a configuration read that raises would turn a
+ * missing setting into a dropped voice note.
+ */
+const rpcOne = async (fn: string, args: Record<string, unknown> = {}): Promise<unknown> => {
+  try {
+    const response = await fetch(`${DB_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(args),
+    })
+    if (!response.ok) return null
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
 const unauthorized = (): Response => new Response('unauthorized', { status: 401 })
 
 Deno.serve(async (request: Request): Promise<Response> => {
@@ -243,6 +270,41 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // Failures are swallowed on purpose. The kick is an accelerator, not the
   // delivery mechanism — pg_cron runs the same pass every minute and Actions
   // behind that, so a kick that fails costs latency and nothing else.
+  // A voice note needs a worker that can hear.
+  //
+  // The Edge worker cannot: transcription shells out to faster-whisper so
+  // Grant's voice never leaves our own compute, and that runtime has no
+  // subprocesses and no Python — it says so itself at GET /worker. 0125 stops
+  // it claiming the job; this starts something that can take it.
+  //
+  // `repository_dispatch` is the one Actions trigger that is not a schedule:
+  // a POST starts a run in seconds, where the cron ran six times in fourteen
+  // hours. Skipped silently when no token is configured — the note is then
+  // picked up on the next cron, which is late but never lost (§18).
+  let woke = false
+  if (queued !== null && command.voice_file_id !== null) {
+    const gh = (await rpcOne('github_dispatch')) as { repository?: string; token?: string }
+    if (typeof gh?.token === 'string' && gh.token !== '' && typeof gh.repository === 'string') {
+      woke = true
+      const dispatch = fetch(`https://api.github.com/repos/${gh.repository}/dispatches`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${gh.token}`,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'ai-team-hq-webhook',
+        },
+        // No payload beyond the type. The job is already in the queue; the
+        // runner's job is to drain it, not to be told what is in it.
+        body: JSON.stringify({ event_type: 'voice-note' }),
+      }).catch(() => undefined)
+      const keep = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+        .EdgeRuntime?.waitUntil
+      if (keep === undefined) void dispatch
+      else keep(dispatch)
+    }
+  }
+
   let kicked = false
   if (queued !== null && WORKER_URL !== '' && WORKER_KICK_SECRET !== '') {
     kicked = true
@@ -260,6 +322,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   return Response.json({
     ok: true,
     kicked,
+    woke,
     dedupe_key: command.dedupe_key,
     registration,
     addressed_to: speaker.staff_slug ?? '(the pager)',
