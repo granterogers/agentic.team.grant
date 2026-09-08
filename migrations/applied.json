@@ -137,5 +137,8 @@
   "0136_one_room_and_one_voice.sql": "cc4d8d722761ce0c65e14396dfd7e4f84aa5d64ade9e9c59997e2a7cb15dfda5",
   "0137_work_a_worker_cannot_do.sql": "7b04a264cc53929ad2031c77ef31df9f8698f43bafc44241fefaa04225487cb0",
   "0138_discovery_needs_no_machine.sql": "fe93244b6d5ef4cf9c5de62e908655045946e3162b3094e1005e012cfceaeffc",
-  "0139_asking_about_someone_is_not_asking_for_work.sql": "f270d5a897769907d68aa998103493c0d1a029b9feaf47d072b15ebc2436e1ad"
+  "0139_asking_about_someone_is_not_asking_for_work.sql": "f270d5a897769907d68aa998103493c0d1a029b9feaf47d072b15ebc2436e1ad",
+  "0140_the_notebook_can_be_written_to_from_anywhere.sql": "4fdd363752757f42a47964ec077d050dd0b048d2d4d70d009a905f01aa8dd017",
+  "0141_something_takes_a_copy_again.sql": "f300b39cb985a5dca5f00eee82149b20133109d49361bff720cdc8be95966f7f",
+  "0142_the_setup_page_knows_about_the_group.sql": "24683138956786900c8d529a7272890d19ff58986e7c60911550222205c649bd"
 }

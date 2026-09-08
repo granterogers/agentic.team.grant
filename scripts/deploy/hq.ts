@@ -187,6 +187,12 @@ if (project === undefined) {
 
 const html = await readFile('web/hq/index.html', 'utf8')
 const reader = await readFile('api/notebook.py', 'utf8')
+// The write side, and the script it spawns. `act.py` ships as a plain file
+// rather than being reimplemented in the function: fourteen actions with a
+// docstring per mistake already made, and two copies would drift on the first
+// library update.
+const writer = await readFile('api/notebook-act.py', 'utf8')
+const actScript = await readFile('scripts/notebook/act.py', 'utf8')
 const requirements = await readFile('requirements.txt', 'utf8')
 const vercelConfig = await readFile('vercel.json', 'utf8')
 const deployment = await fetch('https://api.vercel.com/v13/deployments', {
@@ -198,17 +204,48 @@ const deployment = await fetch('https://api.vercel.com/v13/deployments', {
     files: [
       { file: 'index.html', data: html },
       { file: 'api/notebook.py', data: reader },
+      { file: 'api/notebook-act.py', data: writer },
+      { file: 'scripts/notebook/act.py', data: actScript },
       { file: 'requirements.txt', data: requirements },
       { file: 'vercel.json', data: vercelConfig },
     ],
     projectSettings: { framework: null },
   }),
 })
-const page = (await deployment.json()) as { url?: string; error?: { message?: string } }
+const page = (await deployment.json()) as {
+  id?: string
+  url?: string
+  error?: { message?: string }
+}
 if (!deployment.ok) {
   console.error(`page deploy failed: ${JSON.stringify(page.error ?? page).slice(0, 200)}`)
   process.exit(1)
 }
+// Wait for it to be READY before asking what it serves.
+//
+// This deployment has a build step now — the Python functions in `api/` — so
+// the URL answers before the build finishes, with a 19KB "deploying" page that
+// is a perfectly good 200. Two deploys in a row reported "NOT THE PAGE" and
+// exited 1 while the deployment was in fact fine, which is a check that cries
+// wolf: run it twice and you learn to ignore it.
+const deploymentId = String(page.id ?? '')
+if (deploymentId !== '') {
+  const started = Date.now()
+  let state = 'BUILDING'
+  while (state !== 'READY' && state !== 'ERROR' && Date.now() - started < 240_000) {
+    await new Promise((r) => setTimeout(r, 5_000))
+    const poll = await fetch(`https://api.vercel.com/v13/deployments/${deploymentId}`, {
+      headers: { Authorization: `Bearer ${vercelToken}` },
+    })
+    state = String(((await poll.json()) as { readyState?: string }).readyState ?? 'UNKNOWN')
+  }
+  console.log(`  build:  ${state} after ${String(Math.round((Date.now() - started) / 1000))}s`)
+  if (state === 'ERROR') {
+    console.error('the deployment failed to build')
+    process.exit(1)
+  }
+}
+
 // The page, checked by what it serves rather than by its status. A 302 to an
 // auth wall is a 200 as far as `deployment.ok` is concerned.
 const served = await fetch(`https://${String(page.url)}`, { redirect: 'follow' })
@@ -266,6 +303,41 @@ if (jar === '') {
   )
   if (count < 0) {
     console.error('the notebook reader is deployed but cannot read — see the message above')
+    process.exit(1)
+  }
+}
+
+// The writer, proved with an action that changes nothing.
+//
+// `notebooks` goes through the same auth, the same spawn and the same JSON
+// relay as `add_text` does — so it proves the transport without putting a
+// deployment probe's leavings in Grant's notebook. A write is exercised when
+// he asks for one, not by a deploy script.
+const writerBase = `https://${String(page.url)}/api/notebook-act`
+const writerLive = await fetch(writerBase)
+const writerLiveBody = (await writerLive.json().catch(() => ({}))) as { configured?: boolean }
+console.log(
+  `  writer: http ${String(writerLive.status)} configured=${String(writerLiveBody.configured)}`,
+)
+if (jar !== '') {
+  const acted = await fetch(writerBase, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${readerSecret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'notebooks', args: { notebook_id: 'any' }, storage_state: jar }),
+  })
+  const actedBody = (await acted.json().catch(() => ({}))) as {
+    ok?: boolean
+    error?: string
+    notebooks?: unknown[]
+  }
+  console.log(
+    `  writer: http ${String(acted.status)} ok=${String(actedBody.ok)} ` +
+      (actedBody.ok === true
+        ? `${String(actedBody.notebooks?.length ?? 0)} notebook(s) through the write path`
+        : `error=${String(actedBody.error).slice(0, 140)}`),
+  )
+  if (actedBody.ok !== true) {
+    console.error('the notebook writer is deployed but cannot act — see the message above')
     process.exit(1)
   }
 }

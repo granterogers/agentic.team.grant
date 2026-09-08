@@ -215,6 +215,15 @@ const recordOnLedger = async (
   detail: string,
 ): Promise<string | null> => {
   try {
+    // `from public.jobs` with a predicate, rather than a bare select: it makes
+    // the whole thing conditional in one statement, and the condition is that
+    // this is work Grant asked for rather than the suite testing itself.
+    //
+    // The ledger was 75 rows and every one of them was a verification fixture
+    // (see the header). Fixing that by writing real events and ALSO writing a
+    // fixture event per probe would leave it just as unreadable — the daily
+    // capacity report learned the same lesson about `requested_by` and reports
+    // 20 finished jobs instead of 101.
     await db.execute(`
       select public.append_event(
         ${lit(job.correlationId)}::uuid,
@@ -237,6 +246,9 @@ const recordOnLedger = async (
         '[]'::jsonb, null, null, null,
         ${lit(job.jobId)}::uuid
       )
+      from public.jobs j
+       where j.job_id = ${lit(job.jobId)}::uuid
+         and coalesce(j.requested_by, '') not ilike '%verif%'
     `)
     return null
   } catch (error) {

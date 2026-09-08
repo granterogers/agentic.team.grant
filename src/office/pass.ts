@@ -42,6 +42,7 @@ import { combinedNotifier, pagerChannel } from '../channels/notify.ts'
 import { announceStart } from '../channels/progress.ts'
 import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { backupHandler } from '../handlers/backup.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
@@ -108,6 +109,8 @@ export interface PassOptions {
    * and the bundle would fail to load rather than degrade.
    */
   readonly notebook?: SyncHandlerDeps['adapter']
+  /** Which Supabase project this is. Only the backup needs to name it. */
+  readonly projectRef?: string
 }
 
 export interface PassResult {
@@ -191,6 +194,20 @@ export const buildPass = async (
   const review: Reviewer = () =>
     Promise.resolve({ status: 'approved' as const, notes: 'Deterministic notebook operation.' })
 
+  // Storage needs the service role key and the vault is where it lives. Read
+  // here rather than in the handler: §15 keeps credential lookup in the
+  // composition root, and a handler that reaches the vault itself is a handler
+  // that cannot be tested without one.
+  const projectRef = options.projectRef ?? 'baujwlzcziasnfhhkchg'
+  const serviceKey = String(
+    (
+      await db.execute(`
+        select coalesce(decrypted_secret, '') as k from vault.decrypted_secrets
+         where name = 'supabase.service_role_key'
+      `)
+    ).rows[0]?.k ?? '',
+  )
+
   const orKey = options.openRouterKey ?? ''
   const vaultKey = String(
     (
@@ -208,6 +225,10 @@ export const buildPass = async (
     capacityHandler(db),
     calendarHandler(db),
     mailHandler(db),
+    // §16's nightly copy. Registered unconditionally: the handler reports
+    // "no storage key" as an outcome rather than failing, because a backup
+    // that silently does not happen is the failure this whole thing is about.
+    backupHandler({ db, projectRef, serviceKey }),
     // §22 A's first clause — a source arriving is noticed — but only where the
     // notebook can actually be read. See `notebook` in the options above.
     syncHandler({

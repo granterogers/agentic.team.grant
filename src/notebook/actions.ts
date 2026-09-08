@@ -26,6 +26,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { SqlExecutor } from '../db/executor.ts'
+import { AmbiguousWriteError } from './adapter.ts'
 
 const run = promisify(execFile)
 
@@ -107,29 +108,30 @@ export class NotebookActionError extends Error {
   }
 }
 
-export class NotebookActions {
-  private constructor(private readonly storageState: string) {}
+/**
+ * How an action reaches Python.
+ *
+ * Two ways, one contract. `act.py` prints a single JSON object either way —
+ * this type is the seam, and it exists because the runtime under the office
+ * changed without the actions changing at all.
+ */
+export interface ActionTransport {
+  readonly name: string
+  perform(action: string, args: Record<string, unknown>): Promise<Record<string, unknown>>
+}
 
-  /**
-   * Build from the vault, or null when there is no credential.
-   *
-   * Null rather than throwing: no credential is a normal state — the
-   * integration is §17-disableable and was off for two days this week — and a
-   * caller that must handle "off" anyway should not also handle an exception.
-   */
-  static async fromVault(db: SqlExecutor): Promise<NotebookActions | null> {
-    const { rows } = await db.execute(
-      `select decrypted_secret as s from vault.decrypted_secrets
-        where name = 'notebook.storage_state'`,
-    )
-    const state = rows[0]?.s === undefined ? '' : String(rows[0].s)
-    return state === '' ? null : new NotebookActions(state)
-  }
+/**
+ * Spawn `act.py` here.
+ *
+ * The original arrangement, kept for a runtime that has Python — a developer
+ * machine, this sandbox, the verification suite. Not available in Deno, which
+ * is why the HTTP transport below exists.
+ */
+class SubprocessTransport implements ActionTransport {
+  readonly name = 'subprocess'
+  constructor(private readonly storageState: string) {}
 
-  private async act(
-    action: string,
-    args: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
+  async perform(action: string, args: Record<string, unknown>) {
     let stdout: string
     try {
       const result = await run(
@@ -145,7 +147,13 @@ export class NotebookActions {
       )
       stdout = result.stdout
     } catch (error) {
-      const e = error as { stdout?: string; message?: string }
+      const e = error as { stdout?: string; message?: string; killed?: boolean }
+      // A killed process is §7's ambiguous write, not a failure: the write may
+      // have reached Google before the timeout, and asking again is how one
+      // source becomes three.
+      if (e.killed === true) {
+        throw new AmbiguousWriteError(action, JSON.stringify(args).slice(0, 60))
+      }
       // The runner prints `{"ok":false,…}` and exits 1 for a handled failure,
       // so its stdout is worth reading even on a non-zero exit.
       const text = (e.stdout ?? '').trim()
@@ -169,7 +177,130 @@ export class NotebookActions {
 
     const start = stdout.indexOf('{')
     if (start === -1) throw new NotebookActionError(action, 'the runner produced no JSON')
-    const parsed = JSON.parse(stdout.slice(start)) as Record<string, unknown>
+    return JSON.parse(stdout.slice(start)) as Record<string, unknown>
+  }
+}
+
+/**
+ * Ask the Vercel function to spawn it instead.
+ *
+ * Plain `fetch`, so it works in Deno — which is the whole reason it exists.
+ * `api/notebook-act.py` runs the same `act.py` and relays its JSON verbatim,
+ * so what comes back here is what the subprocess transport would have
+ * produced.
+ */
+class HttpActionTransport implements ActionTransport {
+  readonly name = 'http'
+  constructor(
+    private readonly endpoint: string,
+    private readonly secret: string,
+    private readonly storageState: string,
+  ) {}
+
+  async perform(action: string, args: Record<string, unknown>) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), ACTION_TIMEOUT_MS)
+    let response: Response
+    try {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, args, storage_state: this.storageState }),
+        signal: controller.signal,
+      })
+    } catch (error) {
+      // We never heard back. For a WRITE that is ambiguous by definition, and
+      // §7 is explicit that it must not be blindly retried.
+      throw new AmbiguousWriteError(
+        action,
+        `${(error as Error).message.slice(0, 60)} ${JSON.stringify(args).slice(0, 40)}`,
+      )
+    } finally {
+      clearTimeout(timer)
+    }
+
+    const text = await response.text()
+    let parsed: { ok?: boolean; error?: string; quota?: boolean; timeout?: boolean }
+    try {
+      parsed = JSON.parse(text) as typeof parsed
+    } catch {
+      throw new NotebookActionError(
+        action,
+        `the writer answered ${String(response.status)} with ${text.slice(0, 120)}`,
+      )
+    }
+
+    // The function's own word for "it may have happened".
+    if (parsed.timeout === true) {
+      throw new AmbiguousWriteError(action, String(parsed.error ?? '').slice(0, 60))
+    }
+    if (parsed.ok !== true) {
+      throw new NotebookActionError(
+        action,
+        String(parsed.error ?? `http ${String(response.status)}`).slice(0, 300),
+        parsed.quota === true,
+      )
+    }
+    return parsed as Record<string, unknown>
+  }
+}
+
+export class NotebookActions {
+  private constructor(private readonly transport: ActionTransport) {}
+
+  /** Which way this instance reaches Python. Reported, never assumed. */
+  get via(): string {
+    return this.transport.name
+  }
+
+  /**
+   * Build from the vault, or null when there is no credential.
+   *
+   * Null rather than throwing: no credential is a normal state — the
+   * integration is §17-disableable and was off for two days this week — and a
+   * caller that must handle "off" anyway should not also handle an exception.
+   *
+   * HTTP wins when it is configured, on every runtime rather than only on the
+   * ones with no Python. One transport in use everywhere is one transport that
+   * gets exercised; a fallback that only runs on a developer machine is a
+   * fallback nobody finds out is broken.
+   */
+  static async fromVault(db: SqlExecutor): Promise<NotebookActions | null> {
+    const { rows } = await db.execute(`
+      select
+        (select decrypted_secret from vault.decrypted_secrets
+          where name = 'notebook.storage_state') as jar,
+        (select decrypted_secret from vault.decrypted_secrets
+          where name = 'notebook.reader_secret') as secret,
+        (select value #>> '{}' from public.system_config
+          where key = 'notebook.writer_url') as url
+    `)
+    const row = rows[0] as { jar?: string | null; secret?: string | null; url?: string | null }
+    const state = String(row?.jar ?? '')
+    if (state === '') return null
+
+    const secret = String(row?.secret ?? '')
+    const url = String(row?.url ?? '')
+    return new NotebookActions(
+      secret === '' || url === ''
+        ? new SubprocessTransport(state)
+        : new HttpActionTransport(url, secret, state),
+    )
+  }
+
+  /**
+   * One action, whichever way this instance reaches Python.
+   *
+   * Kept as a method rather than inlined at fourteen call sites: it is the
+   * single place a failure becomes a typed error, and §7's distinction
+   * between "it failed" and "it may have happened" is the reason that place
+   * has to be single.
+   */
+  private async act(
+    action: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const parsed = await this.transport.perform(action, args)
     if (parsed.ok !== true) {
       throw new NotebookActionError(
         action,

@@ -32,6 +32,7 @@ import { DeliveryService } from '../../src/channels/delivery.ts'
 import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { hold, release } from '../../src/jobs/quiet.ts'
 import type { HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { NotionClient } from '../../src/notion/api.ts'
 import { listShared } from '../../src/notion/sync.ts'
@@ -59,6 +60,19 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   supabase,
 )
+// Hold the office still, as `verify:jobs`, `verify:sync`, `verify:slack` and
+// `verify:worker` already do. This suite drives jobs THROUGH the state machine
+// by hand and then asks what recovery made of them, so a heartbeat sweeping the
+// same rows a second earlier does not make it flaky — it makes it wrong, and it
+// did: the §18 crash-after-commit case failed with "no output to deliver"
+// because another worker recovered the job in the gap between the fixture
+// reaching `notifying` and the fixture writing its output.
+//
+// The one suite that manipulates in-flight state was the one suite without
+// this, which is the sort of gap that only shows up once something else starts
+// running every minute (see `src/jobs/quiet.ts`).
+await hold(db, 600)
+
 const one = async (sql: string): Promise<Record<string, unknown> | undefined> =>
   (await db.execute(sql)).rows[0] as Record<string, unknown> | undefined
 
@@ -636,5 +650,7 @@ await db.execute(`
   update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid;
 `)
 console.log('fixtures removed.')
+
+await release(db)
 
 if (failed.length > 0) process.exit(1)
