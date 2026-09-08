@@ -210,10 +210,29 @@ if (parent === undefined) {
   )
 
   const second = await syncNotion(db, notion, projectId)
+  // Asserted on the ROWS, not on `added`.
+  //
+  // `added === 0` was the obvious assertion and it is sensitive to something
+  // that has nothing to do with fingerprints: `/search` is eventually
+  // consistent across every shared page, not only the one this suite just
+  // made, so any page whose index lands between the two syncs is a legitimate
+  // `added=1` and a red check. The wait loop above only waits for OUR page.
+  //
+  // The property actually being tested is that a page already stored is not
+  // stored again. That is a statement about `documents`, and it is exact:
+  // no `external_ref` twice, and nothing already held rewritten.
+  const duplicated = await one(`
+    select count(*)::int as n from (
+      select external_ref from public.documents
+       where project_id = ${lit(projectId)}::uuid and connector = ${lit(CONNECTOR)}
+       group by external_ref having count(*) > 1
+    ) d
+  `)
   record(
     'syncing again changes nothing — a fingerprint, not a timestamp, decides',
-    `added=${String(second.added)} changed=${String(second.changed)} unchanged=${String(second.unchanged)}`,
-    second.added === 0 && second.changed === 0 && second.unchanged >= 1,
+    `changed=${String(second.changed)} unchanged=${String(second.unchanged)}; ` +
+      `${String(duplicated?.n)} duplicated ref(s)`,
+    second.changed === 0 && second.unchanged >= 1 && Number(duplicated?.n) === 0,
   )
 
   const hits = (await db.execute(`select * from app.search_documents(${lit(MARKER)}, null, 10)`))

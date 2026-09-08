@@ -65,7 +65,11 @@ describe('the sealed vault', () => {
 
   it.skipIf(!haveOpenssl)('is decrypted by the real openssl binary', async () => {
     const secrets = [
-      { name: 'slack.bot_token', value: 'xoxb-not-a-real-token', description: 'the office' },
+      // Deliberately NOT shaped like a real credential. The first version used
+      // a plausible Slack token and `check:secrets` failed the build, which is
+      // the scanner doing exactly its job — a fixture is not a reason to teach
+      // it to ignore a shape.
+      { name: 'slack.bot_token', value: 'FIXTURE-office-value', description: 'the office' },
       { name: 'awkward', value: "quotes ' and \\ and \n newline", description: '' },
     ]
     const sealed = await buildVaultExport(secrets)
@@ -97,7 +101,7 @@ describe('the sealed vault', () => {
     }
     expect(payload.items).toHaveLength(2)
     expect(payload.items[0]?.name).toBe('slack.bot_token')
-    expect(payload.items[0]?.notes).toContain('xoxb-not-a-real-token')
+    expect(payload.items[0]?.notes).toContain('FIXTURE-office-value')
     // The value that would break a naive quoting scheme, round-tripped.
     expect(payload.items[1]?.notes).toContain("quotes ' and \\ and \n newline")
   })
