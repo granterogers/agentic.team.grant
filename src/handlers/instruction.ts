@@ -823,6 +823,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               ],
               maxTokens: 2_000,
               correlationId: job.correlationId,
+              jobId: job.jobId,
             })
 
       // §5: the decision is recorded with its reason, through the same

@@ -99,6 +99,19 @@ export interface CompletionRequest {
   readonly maxTokens?: number
   /** Ties the call to a job for usage accounting and the ledger. */
   readonly correlationId?: string
+  /**
+   * The job this call is being made for.
+   *
+   * Separate from `correlationId` because they answer different questions. A
+   * correlation id is a THREAD — a parent job and every child it spawns share
+   * one, so it says "which conversation", never "which piece of work". Cost
+   * per outcome needs the second, and until this field existed the only
+   * writers that filled `inference_usage.job_id` were two avatar scripts
+   * passing it by hand: 49 rows out of 172, none of them from the worker.
+   * A column that exists, is read, and is never written by the production
+   * path is the same defect shape as `outputs.staff_id` was.
+   */
+  readonly jobId?: string
 }
 
 export interface CompletionResult {
@@ -335,7 +348,7 @@ export class ProviderRouter {
         provider.provider,
         model,
         String(payload.error.code) === '429' ? 'rate_limited' : 'provider_error',
-        request.correlationId,
+        request,
       )
       throw new Error(`provider ${provider.provider} refused: ${message}`)
     }
@@ -350,7 +363,7 @@ export class ProviderRouter {
         provider.provider,
         (error as PaidCallPreventedError).message.slice(0, 400),
       )
-      await this.account(provider.provider, model, 'refused_paid', request.correlationId)
+      await this.account(provider.provider, model, 'refused_paid', request)
       throw error
     }
 
@@ -362,16 +375,10 @@ export class ProviderRouter {
       // and must not trip the breaker — the provider did its job. Recording
       // success keeps the breaker honest about availability.
       await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
-      await this.account(
-        provider.provider,
-        payload.model ?? model,
-        'empty_completion',
-        request.correlationId,
-        {
-          prompt: payload.usage?.prompt_tokens ?? 0,
-          completion: payload.usage?.completion_tokens ?? 0,
-        },
-      )
+      await this.account(provider.provider, payload.model ?? model, 'empty_completion', request, {
+        prompt: payload.usage?.prompt_tokens ?? 0,
+        completion: payload.usage?.completion_tokens ?? 0,
+      })
       throw new EmptyCompletionError(
         payload.model ?? model,
         choice?.finish_reason ?? 'unknown',
@@ -380,7 +387,7 @@ export class ProviderRouter {
     }
 
     await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
-    await this.account(provider.provider, payload.model ?? model, 'ok', request.correlationId, {
+    await this.account(provider.provider, payload.model ?? model, 'ok', request, {
       prompt: payload.usage?.prompt_tokens ?? 0,
       completion: payload.usage?.completion_tokens ?? 0,
     })
@@ -413,7 +420,7 @@ export class ProviderRouter {
     provider: string,
     modelId: string,
     outcome: UsageOutcome,
-    correlationId: string | undefined,
+    request: Pick<CompletionRequest, 'correlationId' | 'jobId'>,
     tokens: { prompt: number; completion: number } = { prompt: 0, completion: 0 },
   ): Promise<void> {
     // No correlation id means no job to attribute this to. Recorded anyway,
@@ -424,7 +431,8 @@ export class ProviderRouter {
       await recordUsage(this.db, {
         provider,
         modelId,
-        correlationId: correlationId ?? crypto.randomUUID(),
+        correlationId: request.correlationId ?? crypto.randomUUID(),
+        jobId: request.jobId,
         outcome,
         promptTokens: tokens.prompt,
         completionTokens: tokens.completion,

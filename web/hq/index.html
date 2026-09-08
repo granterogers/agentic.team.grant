@@ -296,6 +296,33 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
   background: var(--bg); flex: none; }
 .person .n { font-weight: 600; }
 .empty { color: var(--muted); padding: 6px 2px; }
+/* --- cost bars ---------------------------------------------------------
+   A horizontal bar per row, drawn with a div rather than SVG. The categories
+   are job kinds with long names, and a horizontal bar is the one chart shape
+   where a long label needs no rotation, no truncation and no legend.
+
+   Every bar carries its number beside it. A chart Grant has to hover to read
+   is a chart that tells him nothing on a phone, and he asked for this
+   "graphically as well as numerically" — as well as, not instead of. */
+.bars { display: grid; gap: 7px; }
+.bars .barrow { display: grid; grid-template-columns: minmax(96px, 30%) 1fr auto; gap: 10px;
+  align-items: center; font-size: 12.5px; }
+.bars .barlabel { color: var(--ink); overflow-wrap: anywhere; }
+.bars .bartrack { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 5px; height: 16px; overflow: hidden; }
+.bars .barfill { height: 100%; border-radius: 4px 0 0 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+/* A row whose value is zero still gets a visible sliver, so the row reads as
+   "measured and zero" rather than as "failed to draw". */
+.bars .barfill.zero { background: var(--line); }
+.bars .barval { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.grid th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 6px 0;
+  border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.grid td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums; }
+table.grid td:first-child, table.grid th:first-child { overflow-wrap: anywhere; }
+.tablewrap { overflow-x: auto; }
 .est { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
@@ -517,7 +544,7 @@ const MENU = [
   ['Start', [['setup', 'Set up'], ['help', 'Help']]],
   ['Do', [['talk', 'Talk to team'], ['overview', 'Today'], ['projects', 'Projects']]],
   ['See', [['output', 'Output'], ['activity', 'Activity'], ['staff', 'The team']]],
-  ['Health', [['connections', 'Connections'], ['usage', 'Usage'], ['trends', 'Trends']]],
+  ['Health', [['connections', 'Connections'], ['usage', 'Usage'], ['cost', 'Cost'], ['trends', 'Trends']]],
   ['Advanced', [['settings', 'Settings']]],
 ]
 const TABS = MENU.flatMap(([, items]) => items)
@@ -540,6 +567,11 @@ const GUIDE = {
     title: 'Help',
     what: 'What this is, how the pieces fit together, and how to set it up from nothing.',
     todo: 'Read the first section if you are new. The rest is reference — come back to it when something surprises you.',
+  },
+  cost: {
+    title: 'Cost',
+    what: 'What each kind of work costs to produce: what was actually charged, and what the same work would have cost on a paid model.',
+    todo: 'Read the two columns as two different things. Spent is real money and is currently zero because every model here is free. Modelled is what it would cost if it were not — that is the number to look at before turning anything paid on.',
   },
   talk: {
     title: 'Talk to team',
@@ -1925,7 +1957,145 @@ function help() {
     </div></section>`
 }
 
-const VIEWS = { setup, help, talk, overview, trends, staff, activity, usage, connections, projects, output, settings }
+
+/* --- Cost -----------------------------------------------------------------
+   Grant: *"Cost per outcome. Yes. This is... I want this for sure. You can
+   show it graphically as well as numerically on the front end."*
+
+   Two figures, never added together, and §11 is the reason the page is shaped
+   this way rather than showing one big number:
+
+     * SPENT is measured. It is what a provider charged. It is currently $0.00
+       across the board, because layer 4 of the router throws on any call a
+       provider prices above zero, so a paid call cannot complete. That zero is
+       a fact and the page says so in words — a reader who does not know the
+       free-tier rule reads $0.00 as a broken query.
+     * MODELLED is what the same tokens would have cost on a paid model, from
+       the published prices in `model_prices`. It was never charged, and the
+       badge says ESTIMATED on every block that carries it.
+
+   The coverage card is not decoration either. Until the router fix in this
+   same change, `inference_usage.job_id` was written by two avatar scripts and
+   nothing else, so most calls cannot be attributed to a finished job at all.
+   A cost-per-outcome page that quietly divides by the jobs it happens to know
+   about would report a cost far too low and look completely healthy doing it.
+*/
+function cost(d) {
+  const money = (v) => '$' + Number(v ?? 0).toFixed(2)
+  // Four decimals for a per-item figure: at these volumes two decimals round
+  // every row to $0.00 and the chart becomes a row of empty tracks.
+  const fine = (v) => '$' + Number(v ?? 0).toFixed(4)
+  const cov = d.coverage || {}
+  const tot = d.totals || {}
+  const kinds = d.by_kind || []
+  const staff = d.by_staff || []
+
+  const bars = (rows, label, value, format) => {
+    if (!rows.length) return '<div class="empty">Nothing finished in this window yet.</div>'
+    const max = Math.max(...rows.map((r) => Number(value(r)) || 0), 0)
+    return `<div class="bars">${rows.map((r) => {
+      const v = Number(value(r)) || 0
+      // Width against the largest row, not against the total: the question a
+      // reader has here is "which of these costs most", and a share-of-total
+      // bar answers a different one and answers it badly when one row
+      // dominates.
+      const pct = max === 0 ? 0 : Math.max(2, Math.round((v / max) * 100))
+      return `<div class="barrow">
+        <span class="barlabel">${esc(label(r))}</span>
+        <span class="bartrack"><span class="barfill${v === 0 ? ' zero' : ''}" style="width:${pct}%"></span></span>
+        <span class="barval">${esc(format(v))}</span>
+      </div>`
+    }).join('')}</div>`
+  }
+
+  const kindRows = kinds.map((k) => `<tr>
+      <td>${esc(k.kind)}</td>
+      <td>${k.outcomes}</td>
+      <td>${k.calls}</td>
+      <td>${Number(k.tokens ?? 0).toLocaleString()}</td>
+      <td>${k.avg_secs === null || k.avg_secs === undefined ? '—' : k.avg_secs + 's'}</td>
+      <td>${esc(money(k.spent_usd))}</td>
+      <td>${esc(fine(k.modelled_usd))}</td>
+      <td>${esc(fine(k.modelled_usd_each))}</td>
+    </tr>`).join('')
+
+  const staffRows = staff.map((x) => `<tr>
+      <td>${esc(x.name)}</td>
+      <td>${x.outcomes}</td>
+      <td>${esc(money(x.spent_usd))}</td>
+      <td>${esc(fine(x.modelled_usd))}</td>
+    </tr>`).join('')
+
+  const pct = cov.attributed_pct ?? 0
+  const gap = pct >= 90 ? '' : `
+    <div class="meta" style="margin-top:10px">
+      ${cov.unattributed_calls ?? 0} of ${cov.total_calls ?? 0} model calls in this window
+      cannot be tied to a finished job, so the per-kind figures below are lower than the
+      truth by roughly ${esc(fine(cov.unattributed_modelled_usd))}. Calls made before
+      job attribution was fixed have no job recorded; this figure should climb on its own
+      as new work runs.
+    </div>`
+
+  return `
+    <section class="card wide" data-card="cost-totals">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>Last ${esc(String(d.window_days ?? 30))} days</h2>
+      <div class="body">
+        <div class="tiles">
+          <div class="tile"><b>${tot.outcomes ?? 0}</b><span>finished</span></div>
+          <div class="tile"><b>${tot.calls ?? 0}</b><span>model calls</span></div>
+          <div class="tile"><b>${Number(tot.tokens ?? 0).toLocaleString()}</b><span>tokens</span></div>
+          <div class="tile"><b>${esc(money(tot.spent_usd))}</b><span>spent</span></div>
+          <div class="tile"><b>${esc(fine(tot.modelled_usd))}</b><span>modelled</span></div>
+        </div>
+        <div class="meta" style="margin-top:10px">${esc(d.measured_note ?? '')}</div>
+        <div class="meta" style="margin-top:6px">${esc(d.modelled_note ?? '')}</div>
+        ${gap}
+      </div>
+    </section>
+
+    <section class="card wide" data-card="cost-by-kind">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>Cost per outcome, by kind of work<span class="est">ESTIMATED</span></h2>
+      <div class="body">
+        ${bars(kinds, (k) => k.kind, (k) => k.modelled_usd_each, fine)}
+        <div class="meta" style="margin-top:10px">Modelled cost of one finished item of each kind.</div>
+      </div>
+    </section>
+
+    <section class="card wide" data-card="cost-volume">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>How much of each got finished</h2>
+      <div class="body">
+        ${bars(kinds, (k) => k.kind, (k) => k.outcomes, (v) => String(v))}
+      </div>
+    </section>
+
+    <section class="card wide" data-card="cost-by-staff">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>By who produced it<span class="est">ESTIMATED</span></h2>
+      <div class="body">
+        ${bars(staff, (x) => x.name, (x) => x.modelled_usd, fine)}
+        ${staffRows ? `<div class="tablewrap"><table class="grid">
+          <thead><tr><th>Who</th><th>Finished</th><th>Spent</th><th>Modelled</th></tr></thead>
+          <tbody>${staffRows}</tbody></table></div>` : ''}
+      </div>
+    </section>
+
+    <section class="card wide" data-card="cost-table">
+      <span class="drag" title="Move up">⌃</span>
+      <h2>The numbers</h2>
+      <div class="body">
+        ${kindRows ? `<div class="tablewrap"><table class="grid">
+          <thead><tr><th>Kind of work</th><th>Finished</th><th>Calls</th><th>Tokens</th>
+            <th>Avg time</th><th>Spent</th><th>Modelled</th><th>Modelled each</th></tr></thead>
+          <tbody>${kindRows}</tbody></table></div>`
+          : '<div class="empty">Nothing finished in this window yet.</div>'}
+      </div>
+    </section>`
+}
+
+const VIEWS = { setup, help, talk, overview, trends, staff, activity, usage, cost, connections, projects, output, settings }
 
 /*
   The Projects tab's buttons.

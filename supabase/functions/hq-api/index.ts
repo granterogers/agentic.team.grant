@@ -57,6 +57,8 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },
+  // What each kind of work costs, measured and modelled (§11).
+  cost: { fn: 'hq_cost_per_outcome', args: { p_days: 30 } },
 }
 
 /**

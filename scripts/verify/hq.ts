@@ -349,6 +349,67 @@ record(
 )
 
 // ===========================================================================
+// Cost per outcome: measured and modelled must stay distinguishable (§11)
+// ===========================================================================
+
+const costResponse = await get('?section=cost')
+const cost =
+  (JSON.parse(costResponse.body || '{}') as { data?: Record<string, unknown> }).data ?? {}
+record(
+  'the cost section is served',
+  `http ${String(costResponse.status)}`,
+  costResponse.status === 200,
+)
+
+// The two figures are the whole point. A single "cost" number here would be
+// either a measured figure inflated by prices nobody paid, or a modelled
+// figure that hides real spend the day real spend starts — §11 exists to stop
+// exactly that, and this is the check that the shape still honours it.
+const totals = (cost.totals ?? {}) as Record<string, unknown>
+record(
+  'spend is reported twice: what was charged, and what it would have cost',
+  `spent_usd=${String(totals.spent_usd)} modelled_usd=${String(totals.modelled_usd)}`,
+  'spent_usd' in totals && 'modelled_usd' in totals,
+)
+record(
+  'and each carries a sentence saying which it is, on the page not in a footnote',
+  `${String(cost.measured_note ?? '').slice(0, 40)}…`,
+  String(cost.measured_note ?? '').length > 40 && String(cost.modelled_note ?? '').length > 40,
+)
+
+// The honesty column. Until the router started writing `inference_usage.job_id`
+// this read 28%, and a page that divided by the jobs it happened to know about
+// would have reported a cost far too low while looking perfectly healthy.
+const coverage = (cost.coverage ?? {}) as Record<string, unknown>
+record(
+  'the page says what share of model calls it could attribute at all',
+  `${String(coverage.attributed_pct)}% of ${String(coverage.total_calls)} calls`,
+  typeof coverage.attributed_pct === 'number' && typeof coverage.unattributed_calls === 'number',
+)
+
+const byKind = (cost.by_kind ?? []) as { kind?: string; modelled_usd_each?: unknown }[]
+record(
+  'CONTROL: there is real per-kind data behind it, so the checks above are not passing on an empty object',
+  `${String(byKind.length)} kinds, e.g. ${String(byKind[0]?.kind ?? 'none')}`,
+  byKind.length > 0 && byKind.every((k) => k.modelled_usd_each !== undefined),
+)
+
+// A price with no source is a number with a dollar sign in front of it.
+const priceSources = String(
+  (
+    await db.execute(
+      `select count(*) filter (where source_url is null or source_url = '')::int as bad,
+              count(*)::int as total from public.model_prices`,
+    )
+  ).rows[0]?.bad ?? 'x',
+)
+record(
+  'every modelled price says where it came from',
+  priceSources === '0' ? 'all sourced' : `${priceSources} with no source`,
+  priceSources === '0',
+)
+
+// ===========================================================================
 
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
