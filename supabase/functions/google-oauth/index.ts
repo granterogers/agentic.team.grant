@@ -98,9 +98,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (scopes === '') {
       return page(
         'Unknown service',
-        `<h1>No such service</h1><p>Nothing here is called ${
-          service.replace(/[^a-z0-9_-]/gi, '')
-        }, or it is switched off.</p>`,
+        `<h1>No such service</h1><p>Nothing here is called ${service.replace(
+          /[^a-z0-9_-]/gi,
+          '',
+        )}, or it is switched off.</p>`,
         400,
       )
     }

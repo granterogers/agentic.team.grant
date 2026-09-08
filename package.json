@@ -100,7 +100,9 @@
     "telegram:recover-chats": "tsx scripts/telegram/recover-chats.ts",
     "verify:oauth": "tsx scripts/verify/oauth.ts",
     "deploy:worker": "tsx scripts/deploy/worker.ts",
-    "deploy:google": "tsx scripts/deploy/google.ts"
+    "deploy:google": "tsx scripts/deploy/google.ts",
+    "telegram:login": "tsx scripts/telegram/login.ts",
+    "telegram:bots": "tsx scripts/telegram/bots.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
@@ -111,6 +113,7 @@
     "vitest": "^3.0.5"
   },
   "dependencies": {
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "teleproto": "^1.229.0"
   }
 }
