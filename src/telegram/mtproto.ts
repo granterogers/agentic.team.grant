@@ -16,6 +16,20 @@
  * that credential is read, and reviewing "what can act as Grant" is reading
  * this file.
  *
+ * ## Where this can actually run
+ *
+ * Not in the environment Claude works in. That tunnels HTTPS through a proxy
+ * and nothing else: a socket to a Telegram data centre opens, the first
+ * MTProto bytes go out, and nothing ever comes back — measured with a raw
+ * socket rather than inferred from a library timeout. MTProto is not HTTP, and
+ * a WebSocket transport does not help because the proxy only relays CONNECT
+ * tunnels for TLS it recognises.
+ *
+ * So anything in this file runs on a GitHub runner (`.github/workflows/
+ * telegram-login.yml`) or on a machine with ordinary egress. That is a
+ * property of where it runs, not of the code, which is why the code says
+ * nothing about it and this comment does.
+ *
  * ## Why the session is a string in the vault
  *
  * The alternative is a session file on disk, which is what every MTProto

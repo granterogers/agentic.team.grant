@@ -41,6 +41,13 @@ on:
   # over the fourteen hours before Grant complained it ran six times; GitHub
   # documents schedules as best-effort and drops frequent ones first.
   # `repository_dispatch` is not a schedule and starts a run in seconds.
+  #
+  # NOTE, learned by testing it: `repository_dispatch` only starts workflows
+  # that exist on the DEFAULT BRANCH. The API accepted the POST with a 204 and
+  # started nothing, because this trigger was only on the feature branch at the
+  # time. A 204 means "your event was accepted", never "a run began" — so the
+  # fast path for voice notes is inert until this file is merged to the default
+  # branch, and the cron is what carries them until then.
   repository_dispatch:
     types: [voice-note]
 
