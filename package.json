@@ -104,7 +104,8 @@
     "telegram:login": "tsx scripts/telegram/login.ts",
     "telegram:bots": "tsx scripts/telegram/bots.ts",
     "verify:mail": "tsx scripts/verify/mail.ts",
-    "telegram:avatars": "tsx scripts/telegram/avatars.ts"
+    "telegram:avatars": "tsx scripts/telegram/avatars.ts",
+    "telegram:rollcall": "tsx scripts/telegram/roll-call.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
