@@ -127,5 +127,6 @@
   "0126_waking_a_runner_that_can_hear.sql": "0445bb89e69cd0008146709fb9434ac248c5f18fa52ae737915c1f33be8b93d6",
   "0127_the_mail_the_team_can_see.sql": "d28a0b2b143101c3ad08dc14a29a08c37a426c26cf85dfb9195bdf96e4a98df3",
   "0128_repair_the_dequeue_i_broke.sql": "7664b990ee397acdc94269c6a32ba59105748946bdb56609f6f4e5d8d5199274",
-  "0129_a_worker_that_can_be_asked_to_wait.sql": "bade1ea39171384c688dc1c940f01c33e5d9a7cb06dc865814da20e3d03254f9"
+  "0129_a_worker_that_can_be_asked_to_wait.sql": "bade1ea39171384c688dc1c940f01c33e5d9a7cb06dc865814da20e3d03254f9",
+  "0130_the_setup_page_knows_about_mail.sql": "a18ab1069ea79706593b346dc647d0cf3a5e2850c09febe043459485657149de"
 }

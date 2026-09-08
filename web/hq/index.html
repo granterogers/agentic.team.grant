@@ -1943,7 +1943,7 @@ function setup(d) {
         <div class="m">${esc(s.does)}</div>
         <div class="m" style="opacity:.75">${esc(s.detail || '')}</div>
         ${s.key === 'google' ? googleBlock(d.google || {}) : ''}
-        ${s.key === 'calendar' ? calendarToggle(d) : ''}
+        ${readingToggle(d, s.key)}
       </div>
       ${
         // No pill for a row that carries its own controls. Google's action is
@@ -2077,14 +2077,34 @@ function googleBlock(g) {
 }
 
 /* A service is a switch once the account is connected — never another sign-in. */
-function calendarToggle(d) {
+/*
+  The switch for a service that reads something.
+
+  Was `calendarToggle`, hard-coded to one key. Gmail arrived with the same
+  shape — connected is permission, switched on is instruction, and §17 wants
+  both separately switchable — and a second copy of this function would be the
+  second place to forget that a connection is not consent to read.
+
+  So: a table of the services that have a reading switch, and one function.
+  A service missing from the table simply gets no switch, which is right for
+  Drive and YouTube until something actually reads them.
+*/
+const READING_SWITCH = {
+  calendar: { setting: 'calendar.enabled', reads: 'your diary' },
+  gmail: { setting: 'gmail.enabled', reads: 'your inbox' },
+}
+
+function readingToggle(d, key) {
+  const spec = READING_SWITCH[key]
+  if (spec === undefined) return ''
   if (!(d.google || {}).has_refresh_token) {
-    return '<div class="m" style="margin-top:6px">Sign in with Google above to switch this on.</div>'
+    return `<div class="m" style="margin-top:6px">Connect Google above, then you can switch reading ${esc(spec.reads)} on.</div>`
   }
-  const on = (d.settings || {})['calendar.enabled'] === true
+  const on = (d.settings || {})[spec.setting] === true
   return `<div class="row" style="margin-top:8px">
-    <button class="mini" id="cal-toggle" data-to="${on ? 'false' : 'true'}">${on ? 'Switch off' : 'Switch on'}</button>
-    <span id="cal-said" class="m"></span>
+    <button class="mini" data-reading="${esc(key)}" data-setting="${esc(spec.setting)}"
+            data-to="${on ? 'false' : 'true'}">${on ? 'Stop reading' : `Start reading ${esc(spec.reads)}`}</button>
+    <span data-reading-said="${esc(key)}" class="m">${on ? `Reading ${esc(spec.reads)} every hour.` : 'Connected, but not reading anything yet.'}</span>
   </div>`
 }
 
@@ -2112,17 +2132,18 @@ function wireSetup() {
     }
   }
 
-  const cal = document.getElementById('cal-toggle')
-  if (cal) {
-    cal.onclick = async () => {
-      cal.disabled = true
-      said('cal-said', 'Saving…')
+  for (const b of document.querySelectorAll('[data-reading]')) {
+    b.onclick = async () => {
+      const key = b.dataset.reading
+      const said = document.querySelector(`[data-reading-said="${key}"]`)
+      b.disabled = true
+      if (said) said.textContent = 'Saving…'
       try {
-        await act('set_setting', { p_key: 'calendar.enabled', p_value: cal.dataset.to })
+        await act('set_setting', { p_key: b.dataset.setting, p_value: b.dataset.to })
         show('setup')
       } catch (e) {
-        said('cal-said', e.message)
-        cal.disabled = false
+        if (said) said.textContent = e.message
+        b.disabled = false
       }
     }
   }
