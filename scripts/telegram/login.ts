@@ -196,6 +196,62 @@ if (phone !== undefined) {
   process.exit(0)
 }
 
+// --- step 1b: ask Telegram to try a different route -------------------------
+//
+// `SentCodeTypeApp` means the code goes as a message INSIDE Telegram, to a
+// session already logged in on that number — and never as an SMS. Grant got
+// nothing twice, which means either he is not looking at the right account or
+// no session of that account is reachable. `auth.resendCode` is the only way to
+// ask Telegram to escalate: it returns whatever channel it chose this time,
+// which is usually SMS once the in-app attempt has been made.
+//
+// Uses the SAME phone_code_hash and session as the send, which is why the
+// in-flight state has to be stored rather than held in a process.
+if (process.argv.includes('--resend')) {
+  const row = (
+    await db.execute(
+      `select decrypted_secret as v from vault.decrypted_secrets where name = 'telegram.login_state'`,
+    )
+  ).rows[0]
+  if (row?.v === undefined) {
+    console.error('no login in flight — run the send-code step first')
+    process.exit(1)
+  }
+  const st = JSON.parse(String(row.v)) as { phone: string; hash: string; session: string }
+  const client = await connect({ ...account, session: st.session })
+  try {
+    const again = (await client.invoke(
+      new Api.auth.ResendCode({ phoneNumber: st.phone, phoneCodeHash: st.hash }),
+    )) as { type?: { className?: string; length?: number }; phoneCodeHash?: string }
+    const kind = String(again.type?.className ?? 'unknown').replace(/^[a-z]+\./, '')
+    console.log(`Telegram resent it as: ${kind} (${String(again.type?.length ?? '?')} digits)`)
+    console.log(
+      kind === 'SentCodeTypeSms'
+        ? '  → check your PHONE for a text message.'
+        : kind === 'SentCodeTypeCall' || kind === 'SentCodeTypeMissedCall'
+          ? '  → expect a phone CALL.'
+          : '  → still in-app: open Telegram and look in the chat named "Telegram".',
+    )
+    // The hash can change on a resend. Storing the new one, or the sign-in
+    // would present a hash Telegram has forgotten.
+    if (typeof again.phoneCodeHash === 'string' && again.phoneCodeHash !== '') {
+      await putSecret(
+        db,
+        'telegram.login_state',
+        JSON.stringify({ ...st, hash: again.phoneCodeHash, at: new Date().toISOString() }),
+        'In-flight Telegram login. Short-lived; deleted the moment sign-in succeeds.',
+      )
+      console.log('  (new code hash stored)')
+    }
+  } catch (error) {
+    console.error(`Telegram refused to resend: ${(error as Error).message.slice(0, 200)}`)
+    await client.disconnect()
+    process.exit(1)
+  }
+  await client.disconnect()
+  process.exit(0)
+}
+
 // --- step 2: sign in --------------------------------------------------------
 
 const code = arg('code')

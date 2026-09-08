@@ -35,7 +35,7 @@ on:
         required: true
         default: send-code
         type: choice
-        options: [status, send-code, sign-in]
+        options: [status, send-code, resend, sign-in]
       phone:
         description: 'Full international number, e.g. +34603834206 (send-code only)'
         required: false
@@ -96,6 +96,11 @@ jobs:
             send-code)
               if [ -z "$PHONE" ]; then echo "phone is required for send-code"; exit 2; fi
               npm run telegram:login -- --phone "$PHONE"
+              ;;
+            resend)
+              # Asks Telegram to try a DIFFERENT channel for the code already
+              # in flight — usually SMS once the in-app attempt has been made.
+              npm run telegram:login -- --resend
               ;;
             sign-in)
               if [ -z "$CODE" ]; then echo "code is required for sign-in"; exit 2; fi
