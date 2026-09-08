@@ -48,6 +48,7 @@ import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
+import { notionSyncHandler } from '../handlers/notion-sync.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
@@ -247,6 +248,9 @@ export const buildPass = async (
         ).rows[0]?.slack_app_id ?? '',
       ),
     }),
+    // The other corpus. Twenty pages shared with the integration and never
+    // once read by anything outside a verification run.
+    notionSyncHandler(db),
     // §22 A's first clause — a source arriving is noticed — but only where the
     // notebook can actually be read. See `notebook` in the options above.
     syncHandler({

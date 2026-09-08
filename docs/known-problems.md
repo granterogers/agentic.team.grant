@@ -1,6 +1,6 @@
 # Known problems
 
-**Last verified: 2026-09-07.** Everything here was checked, not assumed. Where
+**Last verified: 2026-09-09.** Everything here was checked, not assumed. Where
 something is unknown, it says unknown rather than guessing.
 
 Ordered by what would hurt most. `npm run inventory` regenerates the credential
@@ -85,8 +85,48 @@ remembers. The nightly backup still excludes `vault` and still should, so until
 this is on the same schedule as the dump, a secret added on Tuesday is not in
 any export until someone runs the command.
 
-**What has to happen:** put it on the backup cron, and import the file Grant
-already has.
+**What has to happen:** put it on the same schedule as the database backup, and
+import the file Grant already has.
+
+**Update, 2026-09-09.** The database backup itself now HAS a schedule again —
+`nightly-backup`, a duty, into a private Supabase bucket, with the restore
+rehearsed (`npm run backup:rehearse`, 8/8). The vault export is still the
+manual half: its handler would need `openssl` replaced with Web Crypto to run
+in the worker, and enabling it means a copy of every credential arriving on
+Telegram weekly without anyone asking first. Built when Grant says so, not
+before.
+
+---
+
+## Fixed overnight, 2026-09-09
+
+Kept here for one read, then they move to `defects-fixed.md`. All four were
+found by running something end to end rather than by reading code.
+
+- **No output had ever been attributed to anybody.** 736 of 736 outputs with a
+  null `staff_id`, and 253 of 269 deliveries with no author, while §9 makes
+  staff identities and §22 A requires "correct staff identity". A name was
+  resolved for display and never persisted, so the author of a finding
+  survived exactly as long as the Slack message did. It also silently broke
+  the voice path: the query answering *"what was Research going on about?"*
+  inner-joins outputs to staff.
+
+- **The event ledger had never recorded a single action by the working
+  system.** 75 events, every one written by a verification suite, none with a
+  related job. §6 makes the ledger the spine; the table worked perfectly and
+  nothing had ever used it.
+
+- **§22 A's own sentence was classified as a request for work.** 0105's
+  imperative phrase list contains "research", and so does the Research
+  Director's title, so asking what Research had been doing was delegated back
+  to the office instead of answered. Fixed in 0139 with three conditions at
+  once, and 0105's own examples asserted unmoved.
+
+- **`verify:chaos` was the one suite that drove jobs through the state machine
+  by hand and the one suite that did not hold the queue still.** The
+  crash-after-commit case failed at random because a heartbeat worker
+  recovered the job in the gap between the fixture reaching `notifying` and
+  the fixture writing its output.
 
 ---
 

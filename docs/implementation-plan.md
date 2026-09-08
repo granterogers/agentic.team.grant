@@ -388,6 +388,19 @@ Full failure injection across every integration, security review, backup restore
 rehearsal, provider failover, crash recovery, regression suite, and the
 documentation set of §30 — including the handoff guide for another coding agent.
 
+**Where it stands, 2026-09-09.**
+
+| Item | State |
+|---|---|
+| Failure injection | `verify:chaos`, 21/21 — Slack down, Telegram down, Notion down, provider down, crash after commit, partial transaction, duplicate cross-interface delivery |
+| Provider failover | Injected and passing. `verify:router` rate-limits the first model and asserts the answer came from a different one; `verify:chaos` takes the provider down entirely and asserts the router raises rather than returning an empty answer as though it were one |
+| Crash recovery | `verify:chaos` §18 case: a worker dying between commit and delivery resumes DELIVERY, does not redo the work, and does not duplicate the output |
+| Backup | Nightly duty since 0141, into a private bucket. First copy 15,918 rows across 64 tables |
+| Restore rehearsal | `npm run backup:rehearse`, 8/8, all 15,918 rows loaded into a scratch schema and the schema dropped. In `verify:db` so it stays exercised |
+| Regression suite | `npm run verify:all` — unit 770, plus ~30 live suites |
+| Security review | Not done as a distinct pass. `verify:security` covers RLS, vault isolation and role separation |
+| §30 documentation set | Partial |
+
 **Exit — §31's completion criteria.** V1 is done only when both end-to-end
 scenarios work reliably:
 
