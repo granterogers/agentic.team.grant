@@ -53,6 +53,7 @@ import { planHandler } from '../handlers/plan.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
+import { vaultExportHandler } from '../handlers/vault-export.ts'
 import type { Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
@@ -251,6 +252,11 @@ export const buildPass = async (
     // The other corpus. Twenty pages shared with the integration and never
     // once read by anything outside a verification run.
     notionSyncHandler(db),
+    // Registered though its duty is off: the handler being absent is what made
+    // 0133 seed the duty disabled in the first place, and a handler nobody can
+    // reach is a handler nobody finds out is broken. Switching the duty on is
+    // one UPDATE.
+    vaultExportHandler(db),
     // §22 A's first clause — a source arriving is noticed — but only where the
     // notebook can actually be read. See `notebook` in the options above.
     syncHandler({
