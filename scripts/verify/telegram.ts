@@ -289,7 +289,7 @@ const pressUpdate = await deliverUpdate({
 })
 const pressRow = await one<{ action: string; compensates: string | null }>(`
   select callback_action as action, compensates_event_id::text as compensates
-  from public.inbound_commands where dedupe_key = ${lit(`telegram:callback:cb-${stamp}`)}
+  from public.inbound_commands where dedupe_key = ${lit(`telegram:callback:${BOT_ID}:cb-${stamp}`)}
 `)
 record(
   'a button press composed here is understood by the deployed adapter',
@@ -308,7 +308,7 @@ const undoUpdate = await deliverUpdate({
 })
 const undoRow = await one<{ action: string; compensates: string | null }>(`
   select callback_action as action, compensates_event_id::text as compensates
-  from public.inbound_commands where dedupe_key = ${lit(`telegram:callback:cb-undo-${stamp}`)}
+  from public.inbound_commands where dedupe_key = ${lit(`telegram:callback:${BOT_ID}:cb-undo-${stamp}`)}
 `)
 record(
   'an Undo press stores WITHOUT writing a correlation into the events foreign key',
