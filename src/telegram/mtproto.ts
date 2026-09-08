@@ -7,6 +7,18 @@
  *
  *   https://core.telegram.org/api/bots/managed-bots
  *
+ * ## The one BotFather step, and it is once
+ *
+ * The claim needs narrowing, because the first real call refused with
+ * MANAGER_PERMISSION_MISSING. `bots.createBot` needs a MANAGER bot, and the
+ * manager must carry `user.bot_can_manage_bots`, which is toggled in BotFather
+ * and nowhere else. It also cannot be the user: only a bot can manage bots.
+ *
+ * So: one bot, one toggle, once. Every bot created after that needs no
+ * BotFather at all, which is what "dynamically add and remove staff" actually
+ * required. `ManagerCannotManage` below turns the underscored constant into
+ * those three steps, because an error naming a flag is not an instruction.
+ *
  * ## Why this is the only file that touches MTProto
  *
  * Everything else in this project speaks to Telegram over the Bot API — a
@@ -128,6 +140,35 @@ export interface CreatedBot {
   readonly token: string
 }
 
+/**
+ * The manager bot has not been allowed to manage bots.
+ *
+ * Telegram: MANAGER_PERMISSION_MISSING means "the bot passed to `manager_id`
+ * does not have the `user.bot_can_manage_bots` flag set", and that flag is
+ * toggled in BotFather and nowhere else.
+ *
+ * So there IS one BotFather step after all — exactly one, once, for the single
+ * bot that manages the others. Every bot created afterwards needs none. That
+ * is a smaller claim than "BotFather is not the only way" but it is the true
+ * one, and it is worth the error saying so rather than leaving a bare
+ * MANAGER_PERMISSION_MISSING for someone to search for.
+ */
+export class ManagerCannotManage extends Error {
+  constructor(readonly managerUsername: string) {
+    super(
+      `@${managerUsername} is not allowed to manage bots yet. This is the one ` +
+        'BotFather step, and it is once only:\n' +
+        '  1. Open https://t.me/BotFather\n' +
+        '  2. Send /mybots and choose @' +
+        managerUsername +
+        '\n' +
+        '  3. Bot Settings → look for the bot-management permission and turn it ON\n' +
+        'Then every bot after this one is created without BotFather.',
+    )
+    this.name = 'ManagerCannotManage'
+  }
+}
+
 export class UsernameTaken extends Error {
   constructor(readonly username: string) {
     super(`@${username} is not available`)
@@ -173,13 +214,23 @@ export const createBot = async (
   // resolved from nothing, via contacts.resolveUsername, which is precisely
   // what usernames are for in this protocol.
   const manager = await client.getInputEntity(options.managerUsername)
-  const created = (await client.invoke(
-    new Api.bots.CreateBot({
-      name: options.name,
-      username: options.username,
-      managerId: manager,
-    }),
-  )) as { id?: unknown }
+  let created: { id?: unknown }
+  try {
+    created = (await client.invoke(
+      new Api.bots.CreateBot({
+        name: options.name,
+        username: options.username,
+        managerId: manager,
+      }),
+    )) as { id?: unknown }
+  } catch (error) {
+    // Named, because the raw error is an underscored constant with no hint of
+    // what to do, and what to do is a single toggle in one place.
+    if (/MANAGER_PERMISSION_MISSING/.test((error as Error).message)) {
+      throw new ManagerCannotManage(options.managerUsername)
+    }
+    throw error
+  }
 
   // The method returns the created bot as a User. Its id is what everything
   // else keys on, so a response without one is a failure however it looks.

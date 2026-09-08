@@ -25,6 +25,7 @@ import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import {
   connect,
   createBot,
+  ManagerCannotManage,
   putSecret,
   readAccount,
   TelegramAccountMissing,
@@ -210,6 +211,12 @@ const make = async (username: string, name: string, staffSlug: string | null): P
     if (error instanceof UsernameTaken) {
       console.error(`@${username} is taken — pick another`)
       return
+    }
+    if (error instanceof ManagerCannotManage) {
+      // Fatal rather than skipped: every subsequent creation would fail the
+      // same way, and ten identical errors hide the one instruction.
+      console.error(`\n${error.message}\n`)
+      process.exit(1)
     }
     throw error
   }
