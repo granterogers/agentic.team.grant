@@ -35,7 +35,7 @@ on:
         required: true
         default: send-code
         type: choice
-        options: [status, send-code, resend, sign-in]
+        options: [status, send-code, send-then-sms, resend, sign-in]
       phone:
         description: 'Full international number, e.g. +34603834206 (send-code only)'
         required: false
@@ -96,6 +96,19 @@ jobs:
             send-code)
               if [ -z "$PHONE" ]; then echo "phone is required for send-code"; exit 2; fi
               npm run telegram:login -- --phone "$PHONE"
+              ;;
+            send-then-sms)
+              # Send, then immediately ask Telegram to escalate.
+              #
+              # `resend` on its own failed with PHONE_CODE_EXPIRED, because the
+              # code it was escalating had been sent ninety minutes earlier.
+              # Telegram will only re-route a code that is still live, so the
+              # two calls have to happen seconds apart — which means one job,
+              # not two runs minutes apart at a human's pace.
+              if [ -z "$PHONE" ]; then echo "phone is required"; exit 2; fi
+              npm run telegram:login -- --phone "$PHONE"
+              echo "--- escalating ---"
+              npm run telegram:login -- --resend
               ;;
             resend)
               # Asks Telegram to try a DIFFERENT channel for the code already
