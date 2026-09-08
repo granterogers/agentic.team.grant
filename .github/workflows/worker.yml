@@ -24,10 +24,22 @@ name: Worker
 # `npm run work` is also safe to run by hand while iterating, and does one pass.
 on:
   schedule:
-    # :02 and every five minutes after. Off the hour, and off the sync's :07,
-    # because every cron on the hour contends with every other and GitHub
-    # delays the losers.
-    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+    # ONCE A DAY, and that is a safety net rather than the schedule.
+    #
+    # This was every five minutes — 288 runs a day — and it burned 90% of the
+    # account's 2,000 monthly Actions minutes in under a week. Grant got the
+    # warning email; the bill was mine.
+    #
+    # It is redundant now. Since 0121 the office runs as a Supabase Edge
+    # Function that pg_cron kicks every minute, which costs nothing and is
+    # more reliable than this cron ever was: the five-minute schedule actually
+    # fired six times in fourteen hours, which is what started all of this.
+    #
+    # What still needs a RUNNER is transcription — faster-whisper needs a
+    # subprocess and Python, and the edge runtime has neither — and that comes
+    # in through `repository_dispatch` below, on demand, when a voice note
+    # actually arrives. A voice note costs one run. An idle day costs one run.
+    - cron: '41 5 * * *'
   workflow_dispatch:
   # The Telegram webhook POSTs this the instant a VOICE note lands.
   #

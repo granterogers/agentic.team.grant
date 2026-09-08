@@ -14,7 +14,13 @@ on:
   schedule:
     # :07 and :37 rather than :00 and :30. Every cron on the hour contends with
     # every other cron on the hour, and GitHub delays the losers.
-    - cron: '7,17,27,37,47,57 * * * *'
+    # Hourly, not every ten minutes.
+    #
+    # Six runs an hour is 144 a day, and together with the worker's 288 it used
+    # 90% of the month's Actions minutes in under a week. Discovery finding a
+    # new source ten minutes sooner is worth very little; an account with no
+    # Actions minutes left is worth a great deal less than that.
+    - cron: '7 * * * *'
   workflow_dispatch:
 
 concurrency:

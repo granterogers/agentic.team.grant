@@ -14,21 +14,24 @@ concurrency:
 permissions:
   contents: read
 
+# ONE job, not five.
+#
+# The checks used to be a four-way matrix plus a separate secret scan, on the
+# reasoning that every check should report independently so one failure cannot
+# hide the others. That reasoning is still sound and it is not worth what it
+# costs: GitHub bills per JOB and rounds each one up to a whole minute, so a
+# push that does eight seconds of linting was charged five minutes. Grant hit
+# 90% of the account's 2,000 monthly minutes, and this was a large part of it.
+#
+# The independence is kept by `continue-on-error` on each step plus a final
+# gate: every check still runs even when an earlier one fails, every result is
+# still visible by name in the log, and the job still fails if any of them did.
+# What is lost is five separate green ticks in the PR view. What is gained is
+# roughly a fifth of the bill.
 jobs:
   verify:
-    name: ${{ matrix.check.name }}
+    name: checks
     runs-on: ubuntu-latest
-    strategy:
-      # Every check reports independently. One failure must not hide the others,
-      # because "lint failed so we never learned whether tests pass" costs a
-      # whole cycle.
-      fail-fast: false
-      matrix:
-        check:
-          - { name: lint, run: npm run lint }
-          - { name: typecheck, run: npm run typecheck }
-          - { name: test, run: npm run test }
-          - { name: migrations, run: npm run check:migrations }
     steps:
       - uses: actions/checkout@v5
 
@@ -39,14 +42,44 @@ jobs:
 
       - run: npm ci
 
-      - run: ${{ matrix.check.run }}
+      - id: lint
+        continue-on-error: true
+        run: npm run lint
 
-  secrets:
-    name: secret scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      # Deliberately not given any secrets. The scan compares tracked files
-      # against the environment it runs in, so handing it credentials would be
-      # the one way to make it leak them.
-      - run: python3 scripts/secret-scan.py
+      - id: typecheck
+        continue-on-error: true
+        run: npm run typecheck
+
+      - id: test
+        continue-on-error: true
+        run: npm run test
+
+      - id: migrations
+        continue-on-error: true
+        run: npm run check:migrations
+
+      # Deliberately given no secrets. The scan compares tracked files against
+      # the environment it runs in, so handing it credentials would be the one
+      # way to make it leak them. It needs no npm install either.
+      - id: secrets
+        continue-on-error: true
+        run: python3 scripts/secret-scan.py
+
+      # The gate. Named results, then a non-zero exit if any of them failed —
+      # `continue-on-error` marks a step's outcome without failing the job, so
+      # without this the job would be green with a red step in it, which is the
+      # worst of both.
+      - name: Results
+        run: |
+          fail=0
+          for check in lint typecheck test migrations secrets; do
+            case "$check" in
+              lint)       r='${{ steps.lint.outcome }}' ;;
+              typecheck)  r='${{ steps.typecheck.outcome }}' ;;
+              test)       r='${{ steps.test.outcome }}' ;;
+              migrations) r='${{ steps.migrations.outcome }}' ;;
+              secrets)    r='${{ steps.secrets.outcome }}' ;;
+            esac
+            if [ "$r" = "success" ]; then echo "✅ $check"; else echo "❌ $check ($r)"; fail=1; fi
+          done
+          exit "$fail"
