@@ -99,7 +99,8 @@
     "team:hello": "tsx scripts/staff/say-hello.ts",
     "telegram:recover-chats": "tsx scripts/telegram/recover-chats.ts",
     "verify:oauth": "tsx scripts/verify/oauth.ts",
-    "deploy:worker": "tsx scripts/deploy/worker.ts"
+    "deploy:worker": "tsx scripts/deploy/worker.ts",
+    "deploy:google": "tsx scripts/deploy/google.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

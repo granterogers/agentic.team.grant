@@ -120,5 +120,6 @@
   "0119_skills_and_what_each_person_may_touch.sql": "085bb8af08ffddfbe3bcbd3e9575919fd7ec3b08e38f7483f47ddd9cbe9b4489",
   "0120_the_team_page_shows_skills_and_tools.sql": "29602b73d2ac86bdd339311168047ce2b53bb64c6ae9ac48fec0ed3688b7baa4",
   "0121_the_queue_gets_a_heartbeat.sql": "50dca0dd11f353405c6de2f6b082462f0466bb706c3654a8bd47f62eb45d0238",
-  "0122_a_heartbeat_that_does_not_hang_up.sql": "7e9e4a6d2ba969a3d2938fdb829c9135ec8ea6a13bfc87c059906a393edd374d"
+  "0122_a_heartbeat_that_does_not_hang_up.sql": "7e9e4a6d2ba969a3d2938fdb829c9135ec8ea6a13bfc87c059906a393edd374d",
+  "0123_one_button_per_google_service.sql": "5ff501640cac5b8db712631de68fcb82f4ac97fc53f551e97135995405361937"
 }

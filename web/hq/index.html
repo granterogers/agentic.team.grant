@@ -399,6 +399,15 @@ label.tool input { width: 17px; height: 17px; flex: none; }
 .askform button { min-height: 44px; flex: none; }
 .askform .mic { width: 48px; padding: 0; font-size: 18px; }
 .askform .mic.on { background: var(--accent); color: #fff; border-color: transparent; }
+/* One Google service per row: what it is, what it gives them, one button. */
+.gsvc { border-top: 1px solid var(--line); padding: 11px 0; display: grid; gap: 4px; }
+.gsvc:first-of-type { border-top: 0; }
+.gsvc-t { display: flex; align-items: center; gap: 8px; }
+.gsvc .go { justify-self: start; margin-top: 4px; }
+.gsvc .go.again { background: none; color: var(--muted); border: 1px solid var(--line); }
+.gsvc .ok { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #0a7f5a;
+  background: rgba(10, 127, 90, 0.12); border-radius: 999px; padding: 2px 8px; }
+@media (prefers-color-scheme: dark) { .gsvc .ok { color: #58d0a6; } }
 .est { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
@@ -1980,37 +1989,77 @@ function setup(d) {
   to copy in the order Google asks for them.
 */
 function googleBlock(g) {
-  if (g.has_refresh_token) {
-    return `<div class="m" style="margin-top:8px">
-      Signed in. Turning a Google service on below asks for that service's
-      permission and nothing more.
-      <button class="mini" id="google-forget">Sign out</button>
-    </div>`
+  /*
+    Grant, twice: *"it should be just, like, if someone wants to add connection
+    to Gmail, connection to Google Calendar, you just click on a button, and
+    then it brings up the Google authenticator in the browser. You connect to
+    your account, and then it's done, like so many Apple applications do."*
+
+    So that is what this is: a row per service, one button each, straight to
+    Google. What made it complicated before was not Google — it was that all
+    four services shared one scope string in Advanced Settings, so adding Gmail
+    meant editing a setting by hand and signing in again.
+
+    The one-time registration above it is genuinely unavoidable. Google has no
+    public API for creating an OAuth client (the only programmatic one is
+    locked to Identity-Aware Proxy with an unchangeable redirect URI), so every
+    application that offers "Sign in with Google" was registered by hand once,
+    by the company that shipped it. This one is Grant's. Said plainly, with the
+    exact values to paste, and never shown again once it is done.
+  */
+  const start = API.replace(/\/hq-api$/, '/google-oauth/start')
+
+  const services = (g.services || []).map((s) => `
+    <div class="gsvc">
+      <div class="gsvc-t">
+        <b>${esc(s.name)}</b>
+        ${s.connected ? '<span class="ok">Connected</span>' : ''}
+      </div>
+      <div class="m">${esc(s.does)}</div>
+      <a class="go${s.connected ? ' again' : ''}" href="${esc(start)}?service=${esc(s.slug)}">
+        ${s.connected ? 'Reconnect' : 'Connect'}
+      </a>
+    </div>`).join('')
+
+  if (g.ready) {
+    return `
+      <div class="stepbox">
+        <div class="m">Press Connect and Google asks you to approve that one service.
+          Nothing else changes — connecting Gmail cannot disconnect your calendar.</div>
+        ${services}
+        ${g.has_refresh_token
+          ? `<div class="row" style="margin-top:10px">
+               <button class="mini" id="google-forget">Disconnect Google entirely</button>
+               <span class="m">Removes the stored permission for every service above.</span>
+             </div>`
+          : ''}
+      </div>`
   }
-  const ready = g.client_id && g.has_secret
+
   return `
     <div class="stepbox">
-      ${
-        ready
-          ? ''
-          : `<details${g.client_id ? '' : ' open'}>
-        <summary>First time only: register this app with Google</summary>
-        <p class="m">Google will not let any application read your data until an
-          app is registered under your own account. Every desktop app you have
-          signed into with Google did this once too — theirs was registered by
-          the company that made it. This one is yours, so it is yours to make.
-          Five minutes, once, and then everything Google is a single button.</p>
+      <details open>
+        <summary>One thing first, once — register this app with Google</summary>
+        <p class="m">Google will not let any application touch your data until that
+          application is registered. Every "Sign in with Google" button you have ever
+          pressed works because the company that made the app did this once, years ago.
+          There is no way to do it by API — Google does not offer one. This app is
+          yours, so it is yours to register: about five minutes, once, and then every
+          Google service below is a single button, forever, including for anyone you
+          set this up for later.</p>
         <ol class="m">
-          <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com/apis/credentials</a>
-              and create an <b>OAuth client ID</b> of type <b>Web application</b>.</li>
-          <li>Under <b>Authorised redirect URIs</b>, paste this exactly:</li>
+          <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com/apis/credentials</a>,
+              press <b>Create credentials → OAuth client ID</b>, and choose type
+              <b>Web application</b>.</li>
+          <li>Under <b>Authorised redirect URIs</b> press <b>Add URI</b> and paste this
+              exactly:</li>
         </ol>
         <input readonly value="${esc(g.redirect_uri || '')}" onclick="this.select()">
         <ol class="m" start="3">
-          <li>Copy the client ID and client secret it gives you into the two boxes below.</li>
+          <li>Press <b>Create</b>. Google shows a client ID and a client secret. Paste
+              both here and press Save.</li>
         </ol>
-      </details>`
-      }
+      </details>
       <label class="fld"><span>Client ID</span>
         <input id="g-id" value="${esc(g.client_id || '')}" placeholder="…apps.googleusercontent.com" autocomplete="off">
       </label>
@@ -2021,11 +2070,7 @@ function googleBlock(g) {
       </label>
       <div class="row">
         <button id="g-save">Save</button>
-        ${
-          ready
-            ? `<a class="mini go" href="${esc(API.replace(/\/hq-api$/, '/google-oauth/start'))}">Sign in with Google →</a>`
-            : '<span class="m">Save both, then a Sign in button appears here.</span>'
-        }
+        <span class="m">Save both and the Connect buttons appear here.</span>
         <span id="g-said" class="m"></span>
       </div>
     </div>`
