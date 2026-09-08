@@ -89,6 +89,109 @@ export interface Transcript {
  * the database, and so the caller is forced to answer "which bot?" — a voice
  * note to Ines is fetched with Ines's token, and there is no default.
  */
+/**
+ * Where the words come from.
+ *
+ * Two routes, because the two places a pass runs can do different things. A
+ * GitHub runner can spawn Python; the Supabase Edge Function cannot, and since
+ * Grant switched Actions off the edge is the only place left — so the API
+ * route is not a fallback, it is the main one.
+ */
+export interface Transcriber {
+  readonly mode: 'none' | 'runner' | 'api'
+  readonly baseUrl?: string
+  readonly model?: string
+  readonly key?: string
+}
+
+/**
+ * Transcribe over HTTP, OpenAI-shaped.
+ *
+ * `fetch` and nothing else, deliberately: this has to run inside Deno on the
+ * edge, where there are no subprocesses and no filesystem worth the name.
+ *
+ * The vocabulary goes in as `prompt`, which is the same lever `initial_prompt`
+ * was locally and for the same reason — "NotebookLM" is not a word any general
+ * speech model expects, and it became "Not-to-But" without it.
+ */
+export async function transcribeOverApi(
+  audio: Uint8Array,
+  filename: string,
+  transcriber: Transcriber,
+  vocabulary: readonly string[] = [],
+): Promise<Transcript> {
+  const { baseUrl, model, key } = transcriber
+  if (baseUrl === undefined || model === undefined || key === undefined || key === '') {
+    throw new VoiceNoteError('the speech service is not configured')
+  }
+
+  const form = new FormData()
+  form.append('file', new File([audio], filename, { type: 'audio/ogg' }))
+  form.append('model', model)
+  form.append('response_format', 'json')
+  // English, said out loud. Left to guess, a short note in accented English is
+  // occasionally detected as something else and comes back translated.
+  form.append('language', 'en')
+  const hint = vocabulary.join(', ').slice(0, 400)
+  if (hint !== '') form.append('prompt', hint)
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/audio/transcriptions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  })
+  const body = (await response.json().catch(() => ({}))) as {
+    text?: string
+    error?: { message?: string }
+  }
+  if (!response.ok || body.error !== undefined) {
+    throw new VoiceNoteError(
+      `the speech service refused (${String(response.status)}): ` +
+        `${String(body.error?.message ?? 'no reason given')}`.slice(0, 240),
+    )
+  }
+  const text = String(body.text ?? '').trim()
+  if (text === '') throw new VoiceNoteError('there were no words in it that I could make out')
+
+  return {
+    text,
+    // The API reports no duration, and inventing one would put a number in the
+    // ledger that nothing measured.
+    seconds: 0,
+    language: 'en',
+    model,
+    hinted: hint !== '',
+  }
+}
+
+/** Fetch the audio Telegram is holding. Shared by both routes. */
+export async function fetchTelegramAudio(
+  token: string,
+  fileId: string,
+): Promise<{ bytes: Uint8Array; filename: string }> {
+  const meta = (await (
+    await fetch(`https://api.telegram.org/bot${token}/getFile`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId }),
+    })
+  ).json()) as { ok?: boolean; description?: string; result?: { file_path?: string } }
+
+  if (meta.ok !== true || meta.result?.file_path === undefined) {
+    throw new VoiceNoteError(`Telegram would not give us the file: ${String(meta.description)}`)
+  }
+  const audio = await fetch(
+    `https://api.telegram.org/file/bot${token}/${String(meta.result.file_path)}`,
+  )
+  if (!audio.ok) {
+    throw new VoiceNoteError(`downloading the file returned ${String(audio.status)}`)
+  }
+  return {
+    bytes: new Uint8Array(await audio.arrayBuffer()),
+    filename: String(meta.result.file_path).split('/').pop() ?? 'note.oga',
+  }
+}
+
 export async function transcribeTelegramVoice(
   token: string,
   fileId: string,

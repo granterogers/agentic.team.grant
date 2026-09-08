@@ -132,5 +132,6 @@
   "0131_a_bot_can_change_hands.sql": "880f3dfe0e50dba172de6098c7943bb592ae7f9b7d9bcd9fa4e2862b55f609f6",
   "0132_the_team_page_knows_which_bot_is_whose.sql": "5c005c77bd07c4a7968fef1e423461f67901d45508665a4d7aa0048dd5b96afc",
   "0133_the_office_keeps_its_own_time.sql": "854a7a8439735f31d2dd10c2d1c03b0fe9adb2c63696b239d13fdc434b1d1352",
-  "0134_saying_i_cannot_hear_you.sql": "dbfc9571a4cebc944278977cc876c01bf42bdfcc07e392578302a86efa9b783f"
+  "0134_saying_i_cannot_hear_you.sql": "dbfc9571a4cebc944278977cc876c01bf42bdfcc07e392578302a86efa9b783f",
+  "0135_a_voice_the_edge_can_hear.sql": "b5f84d4d3a387d9bc7063e73d288c62e377e14c265daeed4eba1d7fcb6138316"
 }

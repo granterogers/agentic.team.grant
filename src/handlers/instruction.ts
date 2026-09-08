@@ -83,7 +83,13 @@ import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
-import { transcribeTelegramVoice } from '../voice/inbound.ts'
+import {
+  fetchTelegramAudio,
+  type Transcriber,
+  transcribeOverApi,
+  transcribeTelegramVoice,
+  VoiceNoteError,
+} from '../voice/inbound.ts'
 import { allowance, describe } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -301,12 +307,39 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
     throw new Error('a voice note arrived on a bot whose token we cannot resolve')
   }
 
-  const heard = await transcribeTelegramVoice(token, String(payload.voice_file_id), {
-    ...(payload.voice_seconds === null || payload.voice_seconds === undefined
-      ? {}
-      : { seconds: payload.voice_seconds }),
-    vocabulary: await spokenVocabulary(db),
-  })
+  // Which route can turn this into words.
+  //
+  // Two, because the two places a pass runs can do different things: a GitHub
+  // runner can spawn faster-whisper, the Edge Function cannot. Since Grant
+  // switched Actions off, 'api' is the live one — and it is also the faster
+  // one, because it runs where the webhook already kicks rather than waiting
+  // for a runner to boot and download a model.
+  const vocabulary = await spokenVocabulary(db)
+  const raw = (await db.execute(`select app.voice_transcriber() as j`)).rows[0]?.j
+  const transcriber = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Transcriber
+
+  if (transcriber.mode === 'none') {
+    // Never a silent park. The webhook says this at the door too (0134); this
+    // is the second gate, for a note that got past it because the mode changed
+    // between arrival and work.
+    throw new VoiceNoteError(
+      'nothing is configured to turn voice notes into words — send it as text, ' +
+        'or set voice.transcription in Settings',
+    )
+  }
+
+  const heard =
+    transcriber.mode === 'api'
+      ? await (async () => {
+          const { bytes, filename } = await fetchTelegramAudio(token, String(payload.voice_file_id))
+          return transcribeOverApi(bytes, filename, transcriber, vocabulary)
+        })()
+      : await transcribeTelegramVoice(token, String(payload.voice_file_id), {
+          ...(payload.voice_seconds === null || payload.voice_seconds === undefined
+            ? {}
+            : { seconds: payload.voice_seconds }),
+          vocabulary,
+        })
 
   // Say what was heard, before doing anything with it.
   //

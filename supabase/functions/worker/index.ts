@@ -109,12 +109,34 @@ let running = false
  * yes wrongly and every voice note fails on the fast path; say no wrongly and
  * every voice note waits for a runner that fires six times in fourteen hours.
  */
-const canTranscribe = async (): Promise<boolean> => {
+const canTranscribe = async (db: ManagementApiExecutor): Promise<boolean> => {
+  // Route one: a subprocess running faster-whisper. Never available here — no
+  // Python, no subprocesses — but asked rather than assumed, because the same
+  // function is the honest answer on any runtime.
   const Command = Deno.Command
-  if (Command === undefined) return false
+  if (Command !== undefined) {
+    try {
+      if (
+        (await new Command('python3', { args: ['-c', 'import faster_whisper'] }).output()).success
+      ) {
+        return true
+      }
+    } catch {
+      // Fall through to route two.
+    }
+  }
+
+  // Route two: an HTTP speech service (0135). This one IS available here, and
+  // it is why voice notes work again after Grant switched Actions off — the
+  // edge can make an API call even though it cannot spawn a process.
   try {
-    return (await new Command('python3', { args: ['-c', 'import faster_whisper'] }).output())
-      .success
+    const { rows } = await db.execute('select app.voice_transcriber() as j')
+    const raw = rows[0]?.j
+    const t = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+      mode?: string
+      key?: string
+    }
+    return t?.mode === 'api' && typeof t.key === 'string' && t.key !== ''
   } catch {
     return false
   }
@@ -137,7 +159,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       ok: true,
       endpoint: 'worker',
       configured: PROJECT_REF !== '' && ACCESS_TOKEN !== '' && KICK_SECRET !== '',
-      can_transcribe: await canTranscribe(),
+      can_transcribe: await canTranscribe(new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)),
     })
   }
 
@@ -180,7 +202,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // Asked, not assumed — and the answer is no here. An untranscribed voice
       // note is therefore left for the runner that can hear it (0125), instead
       // of being claimed and failed three times by the worker that cannot.
-      canTranscribe: await canTranscribe(),
+      canTranscribe: await canTranscribe(db),
     })
     const result = await pass()
     return json({ ok: true, ...result, log: lines })
