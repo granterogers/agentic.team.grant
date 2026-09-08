@@ -23,6 +23,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { count } from '../text/plain.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -207,7 +208,9 @@ export async function refreshCalendar(
 
   return {
     ok: true,
-    note: `${String(stored)} event(s) over ${String(days)} days${removed === 0 ? '' : `, ${String(removed)} gone`}`,
+    note: `${count(stored, 'event', 'events')} over the next ${String(days)} days${
+      removed === 0 ? '' : `, and ${count(removed, 'that has', 'that have')} come off the diary`
+    }`,
     seen: events.length,
     stored,
     removed,

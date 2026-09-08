@@ -27,6 +27,7 @@
  * liability that grows every hour whether or not anyone reads it.
  */
 import type { SqlExecutor } from '../db/executor.ts'
+import { count } from '../text/plain.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -232,7 +233,9 @@ export async function refreshMail(
     note:
       stored === 0 && removed === 0
         ? 'nothing new in the inbox'
-        : `${String(stored)} message(s) cached, ${String(removed)} no longer there`,
+        : `${count(stored, 'message', 'messages')}${
+            removed === 0 ? '' : `, and ${count(removed, 'one', 'ones')} no longer there`
+          }`,
     seen: ids.length,
     stored,
     removed,

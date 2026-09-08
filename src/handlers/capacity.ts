@@ -28,6 +28,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { count } from '../text/plain.ts'
 
 interface Day {
   jobs_done: number
@@ -41,14 +42,32 @@ interface Day {
   instructions: number
 }
 
+/**
+ * Work this system did for Grant, as opposed to work it did to test itself.
+ *
+ * The first version of the daily report told him 129 things had failed
+ * yesterday. 96 of those were `verification.probe` rows retired by
+ * `verify:jobs`, and most of the rest were fixtures from `verify:worker` and
+ * `verify:agents` — a report counting its own test suite, which is a report
+ * that cries wolf every morning until nobody reads it.
+ *
+ * `requested_by` separates them cleanly: every suite stamps its own name there
+ * ('phase-1-verification', 'verify:worker', 'verify:agents'). Matching on that
+ * rather than on job kind, because kinds like `research.live` are used by both
+ * the suite and the real thing, and the requester never is.
+ */
+const NOT_A_TEST = "coalesce(requested_by, '') not ilike '%verif%'"
+
 /** One number per question, all over the same window, in one round trip. */
 const DAY = `
   select
     (select count(*)::int from public.jobs
-      where state = 'complete' and finished_at > app.now_utc() - interval '24 hours')
+      where state = 'complete' and finished_at > app.now_utc() - interval '24 hours'
+        and ${NOT_A_TEST})
       as jobs_done,
     (select count(*)::int from public.jobs
-      where state = 'failed' and finished_at > app.now_utc() - interval '24 hours')
+      where state = 'failed' and finished_at > app.now_utc() - interval '24 hours'
+        and ${NOT_A_TEST})
       as jobs_failed,
     -- inference_usage, not inference_calls. The first version guessed the name
     -- from the concept and the handler failed on its first real firing; the
@@ -75,9 +94,6 @@ const DAY = `
       where received_at > app.now_utc() - interval '24 hours') as instructions
 `
 
-const plural = (n: number, one: string, many: string): string =>
-  `${String(n)} ${n === 1 ? one : many}`
-
 export function capacityHandler(db: SqlExecutor): Handler {
   return {
     kind: 'office.capacity_report',
@@ -98,56 +114,82 @@ export function capacityHandler(db: SqlExecutor): Handler {
       }
       const nb = meter.a ?? {}
 
-      const lines: string[] = [
-        `**Yesterday.** ${plural(Number(day.jobs_done), 'piece', 'pieces')} of work finished` +
-          (Number(day.jobs_failed) === 0
-            ? ' and nothing failed.'
-            : `, and ${plural(Number(day.jobs_failed), 'failed', 'failed')}.`),
-      ]
+      /*
+        Written as a colleague's morning note, not a status board.
 
+        It used to be six lines each opening `**Something.**` — a bold label
+        with a full stop after it, which is a report format. Grant: *"I want
+        messages in general from everyone to be more human and easier to
+        read."* So: the important thing first, plain sentences, and the
+        quiet parts left out entirely rather than printed as zeroes.
+
+        The strongest version of "easier to read" is fewer lines. A day with
+        nothing wrong should be two sentences, not six headings saying nothing
+        happened.
+      */
+      const lines: string[] = []
+
+      // What needs him, first, because it is the only part that is an ask.
+      if (Number(day.blockers) > 0) {
+        lines.push(
+          `Morning. ${count(Number(day.blockers), 'decision is', 'decisions are')} waiting on you` +
+            (Number(day.blockers_overdue) === 0
+              ? '.'
+              : `, and ${String(day.blockers_overdue)} of those are past a real deadline.`),
+        )
+      } else {
+        lines.push('Morning. Nothing is waiting on you.')
+      }
+
+      // Then what we did. One sentence, and the failures only if there were any.
       lines.push(
-        `**Inference.** ${plural(Number(day.model_calls), 'model call', 'model calls')}, ` +
-          (Number(day.spend) === 0
-            ? 'costing nothing — everything ran on a free model.'
-            : `costing $${Number(day.spend).toFixed(4)}.`),
+        Number(day.jobs_failed) === 0
+          ? `We finished ${count(Number(day.jobs_done), 'piece', 'pieces')} of work yesterday, ` +
+              'and nothing failed.'
+          : // NOT "n of them failed". Finished and failed are separate counts
+            // over the same window, and the first draft read "We finished 101
+            // pieces of work yesterday. 129 of them failed." — which is not
+            // merely clumsy, it is arithmetic nonsense and would make a reader
+            // distrust every other number in the note.
+            `We finished ${count(Number(day.jobs_done), 'piece', 'pieces')} of work yesterday, ` +
+              `and ${count(Number(day.jobs_failed), 'one', 'others')} failed.`,
       )
 
-      // The one estimate in the report, and it says so in the same sentence
-      // rather than in a footnote nobody reads.
-      if (nb.window_ceiling !== undefined) {
+      // Undelivered messages are the failure that looks like silence, so they
+      // get their own line. When everything arrived, that is not news.
+      if (Number(day.undelivered) > 0) {
         lines.push(
-          `**Notebook.** ${String(nb.window_spent)} of ${String(nb.window_ceiling)} used in the ` +
-            `current window and ${String(nb.week_spent)} of ${String(nb.week_ceiling)} this week — ` +
-            'our own count, not Google’s, because they publish no usage API. The ceiling is ' +
-            (nb.ceiling_is_measured === true
-              ? 'what a refusal actually measured.'
-              : 'still a guess until a refusal measures it.') +
-            (nb.blocked_until === null || nb.blocked_until === undefined
-              ? ''
-              : ` They are refusing us until ${new Date(nb.blocked_until).toUTCString()}.`),
+          `${count(Number(day.undelivered), 'message', 'messages')} we sent never arrived. ` +
+            'That is the one that looks like silence from your end, so it is worth a look.',
         )
       }
 
-      lines.push(
-        Number(day.undelivered) === 0
-          ? `**Messages.** ${plural(Number(day.delivered), 'message', 'messages')} sent, all of them arrived.`
-          : `**Messages.** ${plural(Number(day.delivered), 'message', 'messages')} arrived and ` +
-              `${plural(Number(day.undelivered), 'did not', 'did not')} — an undelivered message ` +
-              'is the failure that looks like silence, so this is the line to act on.',
-      )
+      // Cost, only when there is any. "Costing nothing" every single morning
+      // is a line that trains you to stop reading.
+      if (Number(day.spend) > 0) {
+        lines.push(
+          `${count(Number(day.model_calls), 'model call', 'model calls')}, ` +
+            `costing $${Number(day.spend).toFixed(4)}.`,
+        )
+      }
 
-      lines.push(
-        Number(day.blockers) === 0
-          ? '**Waiting on you.** Nothing.'
-          : `**Waiting on you.** ${plural(Number(day.blockers), 'decision', 'decisions')}` +
-              (Number(day.blockers_overdue) === 0
-                ? '.'
-                : `, ${String(day.blockers_overdue)} of them past a real deadline.`),
-      )
-
-      lines.push(
-        `**You sent us** ${plural(Number(day.instructions), 'message', 'messages')} in the last day.`,
-      )
+      // Notebook, only when it is close to a limit or actually refusing.
+      // The full accounting lives on the Usage page; this is a nudge.
+      if (nb.window_ceiling !== undefined) {
+        const spent = Number(nb.window_spent ?? 0)
+        const ceiling = Number(nb.window_ceiling)
+        const blocked = nb.blocked_until !== null && nb.blocked_until !== undefined
+        if (blocked) {
+          lines.push(
+            `Notebook is refusing us until ${new Date(String(nb.blocked_until)).toUTCString()}.`,
+          )
+        } else if (ceiling > 0 && spent / ceiling > 0.7) {
+          lines.push(
+            `We are ${String(spent)} of ${String(ceiling)} through what we think Notebook ` +
+              'allows. That ceiling is our own guess — Google publish no usage figure.',
+          )
+        }
+      }
 
       return {
         body: lines.join('\n\n'),

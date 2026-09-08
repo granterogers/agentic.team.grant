@@ -85,7 +85,7 @@ import type { ProviderRouter } from '../providers/router.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
 import {
   fetchTelegramAudio,
-  type Transcriber,
+  readTranscriber,
   transcribeOverApi,
   transcribeTelegramVoice,
   VoiceNoteError,
@@ -315,8 +315,7 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   // one, because it runs where the webhook already kicks rather than waiting
   // for a runner to boot and download a model.
   const vocabulary = await spokenVocabulary(db)
-  const raw = (await db.execute(`select app.voice_transcriber() as j`)).rows[0]?.j
-  const transcriber = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Transcriber
+  const transcriber = await readTranscriber(db)
 
   if (transcriber.mode === 'none') {
     // Never a silent park. The webhook says this at the door too (0134); this
@@ -926,11 +925,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         'mind and checks you have followed — read the latest message as a ' +
                         'continuation, not as a fresh request, and do not repeat what you ' +
                         'have already said.\n\n') +
+                    // Grant: *"I want messages in general from everyone to be
+                    // more human and easier to read."* Two things, and the
+                    // second was the one being missed: the replies were
+                    // already conversational and they arrived as a single
+                    // 120-word block, which on a phone is a wall.
                     'Write like a person messaging a person. Use contractions. Start with ' +
                     'the answer, not a restatement of the question. Have an opinion where ' +
                     'you have one and say so when you do not. A dry aside is fine if it is ' +
-                    'actually dry. Under 120 words, first person, no bullet points, no ' +
-                    'headings.\n\n' +
+                    'actually dry.\n\n' +
+                    'Make it EASY TO READ on a phone. Short sentences — if one has two ' +
+                    'halves joined by "and", it is usually two sentences. Break the reply ' +
+                    'into two or three short paragraphs with a blank line between them, one ' +
+                    'thought each. A single dense block is a message he will skim and ' +
+                    'misread. Under 120 words in total, first person, no bullet points, no ' +
+                    'headings, no bold.\n\n' +
                     'Never write: "I hope this helps", "Let me know if", "Certainly", "As ' +
                     'an AI", "I have drafted", "Here is a summary of". Do not sign your ' +
                     'name — the chat already shows who you are. Do not thank him for ' +

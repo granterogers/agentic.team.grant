@@ -57,6 +57,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import type { SqlExecutor } from '../db/executor.ts'
 
 const run = promisify(execFile)
 
@@ -105,6 +106,34 @@ export interface Transcriber {
 }
 
 /**
+ * Read the configured transcriber, mapping SQL's names to the code's.
+ *
+ * Exists because the first version did not: `app.voice_transcriber()` returns
+ * `base_url` and the interface says `baseUrl`, so the cast compiled, the field
+ * was silently undefined, and every transcription failed with "the speech
+ * service is not configured" while the service was configured perfectly well.
+ *
+ * A cast across a naming convention is not a type check, it is a wish. The
+ * mapping is written out here, once, where both callers get it.
+ */
+export const readTranscriber = async (db: SqlExecutor): Promise<Transcriber> => {
+  const raw = (await db.execute('select app.voice_transcriber() as j')).rows[0]?.j
+  const row = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as {
+    mode?: string
+    base_url?: string
+    model?: string
+    key?: string
+  }
+  const mode = row.mode === 'api' || row.mode === 'runner' ? row.mode : 'none'
+  return {
+    mode,
+    ...(row.base_url === undefined ? {} : { baseUrl: row.base_url }),
+    ...(row.model === undefined ? {} : { model: row.model }),
+    ...(row.key === undefined || row.key === null ? {} : { key: row.key }),
+  }
+}
+
+/**
  * Transcribe over HTTP, OpenAI-shaped.
  *
  * `fetch` and nothing else, deliberately: this has to run inside Deno on the
@@ -126,7 +155,15 @@ export async function transcribeOverApi(
   }
 
   const form = new FormData()
-  form.append('file', new File([audio], filename, { type: 'audio/ogg' }))
+  // `.ogg`, not Telegram's `.oga`.
+  //
+  // A Telegram voice note is Ogg Opus and arrives named `.oga`, which is a
+  // perfectly ordinary extension for it and is NOT on the list the speech
+  // service accepts: "file must be one of [flac mp3 mp4 mpeg mpga m4a ogg opus
+  // wav webm]". The bytes were always fine; only the name was wrong, which is
+  // the kind of rejection that reads like a codec problem and is not one.
+  const named = filename.replace(/\.oga$/i, '.ogg')
+  form.append('file', new File([audio], named, { type: 'audio/ogg' }))
   form.append('model', model)
   form.append('response_format', 'json')
   // English, said out loud. Left to guess, a short note in accented English is
