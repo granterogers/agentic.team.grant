@@ -96,9 +96,19 @@ const WORKSPACE: Record<string, string> = {
   'the-floor': 'the_floor',
 }
 
-/** Left behind by a verification run that did not finish. */
+/**
+ * Left behind by a verification run that did not finish.
+ *
+ * `[-_]` everywhere a separator can appear, and not by taste. This pattern was
+ * written with hyphens, and then Grant asked for underscores in channel names —
+ * so the provisioner started producing `slack_office_verification_fixture_…`
+ * and this stopped matching it. Two verification channels sat live in his
+ * workspace until he said *"I don't want a bunch of weird alphanumeric channel
+ * names"*, which is a cleanup rule broken by the change it was supposed to
+ * survive.
+ */
 const FIXTURE =
-  /^(slack-office-verification-fixture|proj-fixture-slack-office|gate\d-probe|probe\d?-)/
+  /^(slack[-_]office[-_]verification[-_]fixture|proj[-_]fixture[-_]slack[-_]office|gate\d[-_]probe|probe\d?[-_])/
 
 interface Plan {
   id: string
@@ -113,6 +123,17 @@ const live = (await slack.call('conversations.list', {
   types: 'public_channel,private_channel',
   exclude_archived: 'true',
 })) as { body: { channels?: { id: string; name: string }[] } }
+
+/**
+ * The names already in use, so a rename cannot be planned into a collision.
+ *
+ * `the-floor` and `the_floor` both existed: the underscore convention created
+ * the second, the first was never cleaned up, and planning a rename of one onto
+ * the other is a Slack `name_taken` error at the point of writing. A duplicate
+ * whose correct name is already taken is not a rename, it is a leftover — so it
+ * is archived instead, which is reversible and gets it out of the sidebar.
+ */
+const takenNames = new Set((live.body.channels ?? []).map((c) => c.name))
 
 const plans: Plan[] = []
 for (const channel of live.body.channels ?? []) {
@@ -130,13 +151,24 @@ for (const channel of live.body.channels ?? []) {
   }
 
   if (WORKSPACE[channel.name] !== undefined) {
-    plans.push({
-      id: channel.id,
-      from: channel.name,
-      to: WORKSPACE[channel.name] as string,
-      action: 'rename',
-      why: 'a workspace room, renamed to the underscore convention',
-    })
+    const want = WORKSPACE[channel.name] as string
+    plans.push(
+      takenNames.has(want)
+        ? {
+            id: channel.id,
+            from: channel.name,
+            to: null,
+            action: 'archive',
+            why: `a duplicate — ${want} already exists and is the live one`,
+          }
+        : {
+            id: channel.id,
+            from: channel.name,
+            to: want,
+            action: 'rename',
+            why: 'a workspace room, renamed to the underscore convention',
+          },
+    )
     continue
   }
 

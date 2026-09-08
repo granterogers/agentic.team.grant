@@ -48,6 +48,8 @@ import { instructionHandler } from '../handlers/instruction.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { sourceHandler } from '../handlers/source.ts'
+import type { Reviewer } from '../jobs/worker.ts'
+import { drain } from '../jobs/worker.ts'
 import { ProviderRouter } from '../providers/router.ts'
 import { SlackClient } from '../slack/api.ts'
 import { narrateHandoffs } from '../slack/narrate.ts'
@@ -56,8 +58,6 @@ import { SlackOffice } from '../slack/office.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { TelegramPager } from '../telegram/pager.ts'
 import { pagerBot } from '../telegram/roster.ts'
-import type { Reviewer } from '../jobs/worker.ts'
-import { drain } from '../jobs/worker.ts'
 
 export interface PassOptions {
   /** Where progress goes. The edge function has no stdout worth the name. */
