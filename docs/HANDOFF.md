@@ -4,7 +4,7 @@
 handoff; the dated ones remain as history and you do not need them.
 
 **Branch:** `claude/phase-7-communications-kh8ow8` — everything committed and
-pushed. **Written:** 2026-09-05, revised 2026-09-07.
+pushed. **Written:** 2026-09-05, revised 2026-09-09.
 
 **Starting a new session or a new environment?** Read
 [`new-environment.md`](new-environment.md) first — it is four commands and the
@@ -35,36 +35,38 @@ Then run `npm run inventory` before trusting any credential.
 
 ## Where it stands
 
+**Revised 2026-09-09.**
+
 | Phase | |
 |---|---|
 | 0–6 | ✅ complete |
-| 7 · communications | ✅ complete. All eight bots exist, answer, and have introduced themselves to Grant individually on both surfaces |
-| 8 · Team HQ | ✅ deployed and redesigned — grouped menus, and every tab says what it is for and what to do |
-| 9 · Google ecosystem | 🟡 **plumbing built, readers not written.** OAuth start/callback, the four-step setup on the Settings page, and a refresh token in the vault. Calendar, Gmail and Drive have no reader yet, and it waits on Grant creating an OAuth client in a project he owns |
-| · knowledge layer | ✅ ADR-0013 built. Notion connected and syncing 15 pages |
-| 10 · hardening | ✅ §18 covered except case 7, which is not yet real; §31 equality live; a security pass over the public surface |
+| 7 · communications | ✅ complete. All eight bots exist, answer, wear their own face, and write in a voice a person would use |
+| 8 · Team HQ | ✅ deployed and redesigned — grouped menus, plain English, and a real voice call on the Talk page |
+| 9 · Google ecosystem | ✅ Calendar, Gmail, Drive and YouTube connected per-service; calendar and mail have readers and refresh hourly |
+| · knowledge layer | ✅ ADR-0013 built. Notebook reads AND writes now run over HTTPS with no subprocess (0138, 0140); Notion has a duty as of 0146 |
+| 10 · hardening | ✅ §18 covered including case 7; both §22 scenarios harnessed and passing; backup taken nightly and restore rehearsed |
 | · the office acting | ✅ an instruction becomes work, is said back before it runs, and every generation is gated on Grant |
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
-| · recurring duties | 🟡 **dispatcher built (0098–0101), one duty seeded.** The daily capacity report §22 names. Briefings, weekly reviews and self-improvement proposals are rows nobody has written |
+| · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-101 migrations · 752 unit tests · 25 live suites, 458 checks, all green (plus
-`verify:transitions`, which compares the two state machines rather than
-counting).
+146 migrations · 770 unit tests · ~30 live suites, all green.
 
-**The gap that matters most, and it is not code.** `.github/workflows/worker.yml`
-and `vault-export.yml` live only on this branch, and GitHub schedules workflows
-from the **default branch** only. So the worker has never run on a timer: every
-message to a staff bot is accepted, filed, and ignored until someone runs
-`npm run work` by hand. PR #2 fixes it by existing. Until it merges, run the
-worker yourself.
+**There is no cron and no GitHub Actions.** Grant switched Actions off on
+2026-09-08 — *"for any process"* — and everything scheduled moved to
+`pg_cron` poking a Supabase Edge Function every minute, which then fires
+whatever duties are due. Three capabilities silently stopped when Actions went
+(the worker, the notebook reads, the backup) and each was found separately;
+if something looks like it has not run since 2026-09-08, that is the first
+thing to suspect.
 
-**What Phase 10 has cost so far, which is the argument for doing it:** three
+**What Phase 10 has cost so far, which is the argument for doing it:** seven
 real defects, none of which any existing suite could see. The router made one
-attempt at one model, so a single 429 failed a whole job. §31's exit criterion
-could not hold as written, because `actor` is channel-native. And a job that
-crashed after committing was re-run from scratch and produced a second
-output — the exact duplicate substantive work §18 forbids. Each was found by
-writing the test the spec asked for, not by reading the code.
+attempt at one model. §31's exit criterion could not hold as written. A job
+that crashed after committing produced a second output. No output had ever
+been attributed to anybody. The event ledger had never recorded a real action.
+§22's own sentence was classified as a request for work. And the Set up page
+showed a green light for a backup that had stopped happening. Every one was
+found by running the thing end to end, not by reading the code.
 
 ---
 
@@ -130,33 +132,40 @@ working.
 
 ## Waiting on Grant
 
-Do not add to this list in chat. It lives in
-[`known-problems.md`](known-problems.md) and in `npm run inventory`, and the
-reason is that surfacing needs one per turn is exactly what went wrong this
-week.
+**Revised 2026-09-09.** Do not add to this list in chat. It lives here, in
+[`known-problems.md`](known-problems.md) and on the Set up page, and the reason
+is that surfacing needs one per turn is exactly what went wrong that week.
 
-1. **Add the MCP server to Claude.** The token is on your phone. Settings →
-   Connectors → Add custom connector, paste the URL and the `Authorization:
-   Bearer …` header. Five read-only tools over the projects, the corpus, the
-   staff and recent work — see
-   [`adr/0014`](adr/0014-the-team-attaches-to-projects.md). ChatGPT gets its own
-   token with `npm run deploy:mcp -- --client=chatgpt "ChatGPT"`.
-2. **Share some Notion pages with the integration.** In Notion: open a page →
-   ⋯ → Connections → add **Agentic Team Grant**. Child pages come with it; a
-   database has to be shared itself. Then `npm run notion:sync`. This is the
-   only thing the connector waits on — the token is in the vault and works.
-3. **Two Telegram bots left** — Quality and Comms. Five arrived on 2026-09-06
-   and are registered, configured and answering. Roster and the one manual
-   cosmetic step (BotFather `/setuserpic`) at
-   [`telegram-bot-roster.md`](telegram-bot-roster.md).
-4. **Rotate the Notion token when convenient.** It was pasted into a chat
-   transcript on 2026-09-06, which is durable and searchable. Nothing is known
-   to have leaked and the integration is scoped to what you share with it, so
-   this is hygiene rather than an incident.
+1. **Make the Telegram office group.** Telegram does not let a bot create one,
+   so this step cannot be automated. New group → add all eight bots
+   (`@agenticteamgrantbot` and the seven `@atg_*_bot`) → call it AI Team HQ.
+   They register themselves on being added (`my_chat_member`, 0136), and the
+   routing already exists: the Chief of Staff reaches Grant directly, everyone
+   else moves into the room the moment it exists. It also appears on the Set up
+   page as of 0142.
+2. **Say which project Notion pages belong to.** Twenty items are shared and
+   the duty reads them hourly, but it will not choose where to file somebody's
+   own notes. Set `notion.project_slug` and it starts.
+3. **Decide whether `vault-export` runs weekly.** It is the last duty still
+   disabled. Enabling it means a copy of every credential arriving on Telegram
+   every week — which is the only thing that would survive losing the Supabase
+   project, and also a weekly credential broadcast. His call, and it needs
+   `openssl` replaced with Web Crypto first so it can run in the worker.
+4. **Add the MCP server to Claude,** if it is still wanted. The token is on
+   your phone. Settings → Connectors → Add custom connector, paste the URL and
+   the `Authorization: Bearer …` header.
+5. **Rotate the Notion token when convenient.** It was pasted into a chat
+   transcript on 2026-09-06, which is durable and searchable. Hygiene rather
+   than an incident.
 
-**Settled on 2026-09-06, recorded so they are not re-asked:** Backblaze is safe
-(its own password, no Google SSO); Google Cloud TTS is parked; the ownership of
-the OpenRouter, OpenAI and Groq accounts is parked.
+**Settled, recorded so they are not re-asked:** Backblaze is safe (its own
+password, no Google SSO); Google Cloud TTS is parked; the ownership of the
+OpenRouter, OpenAI and Groq accounts is parked; voice is required (Grant,
+2026-09-07) and is built; GitHub Actions is off for every process.
+
+**No longer waiting:** all eight Telegram bots exist, are configured, answer,
+and wear their own face. Notion pages are shared. The Google OAuth client
+exists and all four services are connected.
 
 ---
 
@@ -192,31 +201,31 @@ solved.
 
 ## §22 completion, measured rather than felt
 
-The spec says V1 is complete only when **both** scenarios work reliably. Each is
-broken into its own clauses below, because "nearly there" is a feeling and this
-is a list.
+**Revised 2026-09-09.** Both scenarios now have live harnesses, and the tables
+below are what those harnesses report rather than a reading of the code. Run
+them: `npm run verify:scenario-a` and `npm run verify:cross-interface`.
 
-### A — source to conversation
+### A — source to conversation · `verify:scenario-a`, 20/20
 
 | clause | |
 |---|---|
 | Grant adds a source from his phone | ✅ paste a link to any bot |
-| detected within the sync interval | 🟡 the worker is not scheduled — PR #2 |
+| detected within the sync interval | ✅ `discovery-sync`, hourly, since 0138 — reads run over HTTPS now, so the Edge worker can do them |
 | Research analyses it | ✅ |
 | justified specialists consulted | ✅ the cap, the justification and the refusal to convene are all enforced |
 | Quality/Risk reviews | ✅ |
 | findings written back | ✅ as a document; NOT into the notebook — ADR-0013 retired that |
 | operational metadata in Postgres | ✅ |
-| Slack project channel, correct staff identity | ✅ |
+| Slack project channel, correct staff identity | ✅ — and it was NOT, until 2026-09-09. 736 of 736 outputs had a null `staff_id`; a name was resolved for display and never persisted |
 | Telegram notified where policy warrants | ✅ |
-| react / respond / Undo | ✅ six buttons, all acted on |
-| **Talk to Team — a live voice conversation** | ❌ **not built.** See below |
-| Chief explains from real state, "bring Finance in" | 🟡 works by text; the voice path does not exist |
+| react / respond / Undo | ✅ six buttons, all acted on; `undo_offers` idempotent |
+| **Talk to Team — a live voice conversation** | ✅ Realtime over WebRTC, barge-in, live transcript, and an `ask_the_team` tool that reaches the office |
+| Chief explains from real state, "bring Finance in" | ✅ — and §22's literal sentence was being delegated instead of answered until 0139 |
 | work continues autonomously | ✅ |
-| all actions versioned | ✅ |
-| usage in-app and in the daily capacity report | ✅ as of 0098–0101 |
+| all actions versioned | ✅ — and the ledger had never recorded a single action by the working system until 2026-09-09. 75 events, all of them fixtures |
+| usage in-app and in the daily capacity report | ✅ |
 
-### B — cross-interface delegation
+### B — cross-interface delegation · `verify:cross-interface`, 10/10
 
 | clause | |
 |---|---|
@@ -228,34 +237,24 @@ is a list.
 | returns progress to the right Slack thread | ✅ |
 | places rich artifacts in the notebook | 🟡 audio overviews and mind maps yes; slide decks fail every time |
 | notifies Telegram only per policy | ✅ |
-| **the same instruction through Voice** | ❌ **not built** |
+| **the same instruction through Voice** | ✅ asserted as an equality on the stored row, modulo the channel-native fields |
 | generated code in an isolated workspace or branch | ❌ not built, and nothing generates code yet |
 
-### The one thing standing between here and V1
+### What is actually left
 
-**Voice is not a command source.** What exists is a Gate-1 POC page, an
-ephemeral-credential minting endpoint, and voice *notes* — spoken instructions
-sent to a bot, transcribed locally, acted on. That is genuinely useful and it is
-not what §22 asks for: "Talk to Team" is a live conversation in which Grant
-interrupts, redirects and brings someone else in, and §22 B requires the same
-instruction spoken to take the same canonical path as the same instruction
-typed.
+Voice was the answer to the tension this section used to describe — Grant
+settled it with three words, *"Voice is required"*, and it is built. What
+remains is smaller and none of it is a scenario clause:
 
-It is also the only §18 case still uncovered (case 7, *Realtime unavailable*),
-which becomes testable the moment there is a session to fail.
-
-**There is a real tension in the spec here, and it needs Grant.** §12 calls
-voice "optional premium". §22 makes it a completion criterion for both
-scenarios. Those cannot both be true, and the answer changes what "done" means:
-
-- if voice is required, V1 is one substantial build away — a Realtime session
-  over WebRTC, ephemeral credentials, and the canonical command layer reached
-  from a third adapter;
-- if §12 wins and voice notes are accepted as the voice surface, then apart from
-  Phase 9's readers, the slide decks and the code workspace, **V1 is done**.
-
-Nobody but Grant can settle that, and it should not be settled by whoever picks
-this up next quietly assuming one.
+- **the code workspace** (§22 B's last line), which nothing needs yet because
+  nothing generates code
+- **slide decks**, which fail upstream at Google
+- **`vault-export`**, the last duty still seeded disabled: it needs `openssl`
+  replaced with Web Crypto to run in the worker, and switching it on means a
+  copy of every credential arriving on Telegram weekly, which is Grant's call
+- **a security review as a distinct pass** — `verify:security` covers RLS,
+  vault isolation and role separation, but nobody has sat down and tried to
+  break it on purpose
 
 ---
 
