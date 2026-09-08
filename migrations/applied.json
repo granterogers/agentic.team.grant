@@ -116,5 +116,7 @@
   "0115_the_settings_page_shows_them_all.sql": "e70a7ab36654c990eed0665455fe362a8d296dc2faf9786d41afbdebcb67bc7b",
   "0116_a_check_that_cannot_write.sql": "c48e4b1b2394ad1e5f1532ad6f38a8eb7fb7d49e7563591ca847a98b93ef3473",
   "0117_repair_what_the_probe_wrote.sql": "dd21e184577387bf3d81cb8bf3e9262c85a3a797d83dea91c0904282c3f73a0c",
-  "0118_what_each_outcome_actually_costs.sql": "db5fbbc23c80826d85582bef3c971321093d3d5d9954ba727c0ca6a9504a11ca"
+  "0118_what_each_outcome_actually_costs.sql": "db5fbbc23c80826d85582bef3c971321093d3d5d9954ba727c0ca6a9504a11ca",
+  "0119_skills_and_what_each_person_may_touch.sql": "085bb8af08ffddfbe3bcbd3e9575919fd7ec3b08e38f7483f47ddd9cbe9b4489",
+  "0120_the_team_page_shows_skills_and_tools.sql": "29602b73d2ac86bdd339311168047ce2b53bb64c6ae9ac48fec0ed3688b7baa4"
 }

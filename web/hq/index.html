@@ -323,6 +323,19 @@ table.grid td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line);
   font-variant-numeric: tabular-nums; }
 table.grid td:first-child, table.grid th:first-child { overflow-wrap: anywhere; }
 .tablewrap { overflow-x: auto; }
+.flab { display: block; margin-top: 8px; font-size: 12px; color: var(--ink); }
+details.tools { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; }
+details.tools summary { padding: 8px 10px; cursor: pointer; font-size: 12.5px;
+  color: var(--muted); min-height: 38px; display: flex; align-items: center; }
+details.tools[open] summary { border-bottom: 1px solid var(--line); }
+.toolbody { padding: 8px 10px 10px; display: grid; gap: 10px; }
+.toolgroup { display: grid; gap: 2px; }
+label.tool { display: flex; gap: 8px; align-items: center; min-height: 38px;
+  font-size: 12.5px; cursor: pointer; }
+/* Disabled rows stay legible. Greying a row to the point of unreadability
+   hides the reason it is greyed, which is the only useful thing about it. */
+label.tool.off { color: var(--muted); cursor: not-allowed; }
+label.tool input { width: 17px; height: 17px; flex: none; }
 .est { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
   border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
@@ -803,6 +816,53 @@ function overview(d) {
     ${calendar}`
 }
 
+/*
+  What one person is allowed to touch.
+
+  Grant: *"I'd like to be able to give them the ability to interact with other
+  tools... let's say the marketing guy should be able to go away and use image
+  editing APIs."*
+
+  A checkbox per tool, saved on the tick rather than on Save. The name and the
+  remit are a form you fill in and submit; a permission is a switch, and a
+  switch that needs a second press to take effect is a switch you cannot trust
+  the position of.
+
+  Tools switched off for everyone are shown, disabled, with the reason. Hiding
+  them would turn "why can't Ruby send email" into a question with no answer on
+  the page — and §11 disables gmail.send by policy precisely so the answer is
+  written down rather than remembered.
+*/
+const LEVEL_NAMES = ['Reads only', 'Writes internally', 'Acts outside', 'Needs approval']
+
+function toolBox(s) {
+  const tools = s.tools || []
+  if (!tools.length) return ''
+  const held = tools.filter((t) => t.granted).length
+  const groups = [0, 1, 2, 3].map((lvl) => {
+    const rows = tools.filter((t) => t.level === lvl)
+    if (!rows.length) return ''
+    return `<div class="toolgroup"><span class="m">${esc(LEVEL_NAMES[lvl])}</span>${rows.map((t) => `
+      <label class="tool${t.available ? '' : ' off'}"${t.available ? '' : ` title="${esc(t.unavailable_because || 'switched off')}"`}>
+        <input type="checkbox" data-tool="${esc(t.tool)}" data-for="${esc(s.slug)}"
+          ${t.granted ? 'checked' : ''}${t.available ? '' : ' disabled'}>
+        <span>${esc(t.description)}</span>
+      </label>`).join('')}</div>`
+  }).join('')
+  return `<details class="tools">
+    <summary>Tools — ${held} of ${tools.length} allowed</summary>
+    <div class="toolbody">${groups}
+      <div class="meta">Ticking saves immediately. A greyed row is switched off for
+        everyone by policy; granting it here cannot turn it on.</div>
+      <div class="meta"><b>Not yet in force.</b> These grants are recorded and the
+        permission check is built, but no part of the team chooses its own tools yet —
+        every job runs a fixed code path. Set them how you want them; they take effect
+        when tool-choosing arrives, and saying so here beats a switch that looks live
+        and is not.</div>
+    </div>
+  </details>`
+}
+
 function staff(d) {
   /*
     Grant: "with regards to the actual members of staff, there should be
@@ -837,6 +897,11 @@ function staff(d) {
         </div>
         <input data-f="p_title" value="${esc(s.title)}" aria-label="Role">
         <textarea data-f="p_remit" rows="2" aria-label="What they do">${esc(s.responsibilities || '')}</textarea>
+        <label class="flab">Skills <span class="m">— comma separated, up to twelve. This shapes how they write and what they think they are for. It grants nothing.</span></label>
+        <input data-f="p_skills" value="${esc((s.skills || []).join(', '))}" aria-label="Skills" placeholder="e.g. positioning, image editing, campaign copy">
+        <label class="flab">How they talk <span class="m">— one line, in your words.</span></label>
+        <input data-f="p_style" value="${esc(s.communication_style || '')}" aria-label="How they talk">
+        ${toolBox(s)}
         <div class="m" style="margin-top:6px">${bot} · convened for ${s.convened_for} job${s.convened_for === 1 ? '' : 's'}${s.permanent ? '' : ' · temporary'}</div>
         <div class="row" style="margin-top:6px">
           <button class="mini" data-save="${esc(s.slug)}">Save</button>
@@ -848,8 +913,10 @@ function staff(d) {
     </div>`
   }).join('')
   return `<section class="card wide" data-card="team"><h2>The team</h2>
-    <p class="meta">First names only. Change one and press Save; the new name is
-      what they sign messages with everywhere.</p>
+    <p class="meta">First names only. Change a name, role, remit, skills or voice and
+      press Save; it is what they sign messages with everywhere. Tools are different —
+      those save the moment you tick them, because a permission you have to remember to
+      submit is a permission you cannot trust the state of.</p>
     <div class="body"><div class="staff">${people}</div></div>
   </section>`
 }
@@ -877,6 +944,30 @@ function wireTeam() {
         said(slug, e.message)
       }
       b.disabled = false
+    }
+  }
+  for (const box of document.querySelectorAll('[data-tool]')) {
+    box.onchange = async () => {
+      const slug = box.dataset.for
+      // Optimistic and then corrected, rather than optimistic and hoped for.
+      // The RPC refuses a grant for a globally disabled tool, and a checkbox
+      // left ticked after a refusal is a lie about what someone can do.
+      box.disabled = true
+      said(slug, 'Saving…')
+      try {
+        await act('staff_tool_set', {
+          p_slug: slug, p_tool: box.dataset.tool, p_granted: box.checked,
+        })
+        const label = box.closest('details').querySelector('summary')
+        const all = box.closest('.toolbody').querySelectorAll('[data-tool]')
+        const held = [...all].filter((x) => x.checked).length
+        label.textContent = `Tools — ${held} of ${all.length} allowed`
+        said(slug, 'Saved.')
+      } catch (e) {
+        box.checked = !box.checked
+        said(slug, e.message)
+      }
+      box.disabled = false
     }
   }
   for (const b of document.querySelectorAll('[data-retire]')) {
