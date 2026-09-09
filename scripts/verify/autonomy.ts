@@ -20,6 +20,7 @@
 import { generateBriefing, localDate } from '../../src/briefings/compose.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor, SqlExecutionError } from '../../src/db/executor.ts'
+import { hold, release } from '../../src/jobs/quiet.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -30,6 +31,15 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+
+// Hold the office still, as `verify:jobs`, `verify:chaos` and the rest do.
+//
+// This suite creates a duty and then asks the dispatcher to fire it. Since
+// seven duties went live the heartbeat runs `fireDueDuties` every minute, so a
+// real worker was firing the fixture duty in the gap — and the suite's own
+// dispatch then correctly answered `already_fired` with no job id, which read
+// as the dispatcher being broken.
+await hold(db, 600)
 
 const run = Date.now().toString(36)
 interface Check {
@@ -292,7 +302,10 @@ record(
   'responsibilities',
   'the dispatcher fires a due duty and produces a real job',
   `${String(fired.length)} row(s), outcome=${String(fired[0]?.outcome)}`,
-  fired.length === 1 && fired[0]?.outcome === 'fired' && fired[0]?.fired_job_id !== null,
+  // `!== null` alone let an ABSENT id through — `undefined !== null` is true —
+  // so the check passed and the next query ran against the string
+  // "undefined". A check that cannot fail is worse than no check.
+  fired.length === 1 && fired[0]?.outcome === 'fired' && typeof fired[0]?.fired_job_id === 'string',
 )
 
 // The job it made must be a job, not a claim that one was made.
@@ -669,5 +682,7 @@ try {
 } catch (error) {
   console.log(`\ncleanup did not complete: ${(error as Error).message.slice(0, 200)}`)
 }
+
+await release(db)
 
 if (failed.length > 0) process.exit(1)
