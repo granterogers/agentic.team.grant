@@ -42,6 +42,7 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import type { ProviderRouter } from '../providers/router.ts'
+import { scrub } from './scrub.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -141,7 +142,9 @@ export async function say(
       maxTokens: 1_500,
       ...(options.model === undefined ? {} : { model: options.model }),
     })
-    const said = completion.content.trim()
+    // Scaffolding out before the numeric guard: a control token is not a
+    // number, and a reply that is nothing but one should fall back.
+    const said = scrub(completion.content)
     if (said === '') return options.fallback
 
     // Every number in the sentence has to have come from the facts.

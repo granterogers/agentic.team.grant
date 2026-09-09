@@ -40,6 +40,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
+import { scrub } from '../text/scrub.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -174,7 +175,7 @@ export function sourceHandler(deps: {
       })
 
       return {
-        body: completion.content.trim(),
+        body: scrub(completion.content),
         // The document is in front of it; the comparison is a judgement.
         confidence: hits.length === 0 ? 'medium' : 'high',
         evidence: 'inferred',

@@ -31,6 +31,7 @@
  */
 import type { SqlExecutor } from '../db/executor.ts'
 import { EmptyCompletionError, type ProviderRouter } from '../providers/router.ts'
+import { scrub } from '../text/scrub.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -189,7 +190,7 @@ export const generateBrief = async (
     maxTokens: 2_000,
   })
 
-  const text = completion.content.trim()
+  const text = scrub(completion.content)
   // The database CHECK requires 50 characters. Failing here with a clear
   // message beats a constraint violation that names a column.
   if (text.length < 50) {

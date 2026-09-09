@@ -92,6 +92,7 @@ import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
+import { scrub } from '../text/scrub.ts'
 import {
   fetchTelegramAudio,
   readTranscriber,
@@ -1191,11 +1192,17 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         false sentence — so the sentence is contradicted, in the same message,
         by the registry that knows.
       */
-      const denied = contradictsReality(completion.content, reach)
+      // Scaffolding out FIRST, before anything else looks at the text. A free
+      // model that wanted a tool it was not offered emitted `<dots_function_call>`
+      // straight into a Telegram message to Grant, and everything after that
+      // token is the model talking to a harness that is not there.
+      const said = scrub(completion.content)
+
+      const denied = contradictsReality(said, reach)
       const answer =
         denied === null
-          ? completion.content.trim()
-          : `${completion.content.trim()}\n\n(Correction, from the system rather than from me: ` +
+          ? said
+          : `${said}\n\n(Correction, from the system rather than from me: ` +
             `${denied} IS connected and reachable right now. If I said otherwise above, ` +
             `ignore it — the honest version is that I could not find what you asked about, ` +
             `not that I cannot get in.)`
