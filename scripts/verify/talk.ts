@@ -473,6 +473,73 @@ try {
   )
 }
 
+/*
+  The preflight, from the page's real origin.
+
+  Grant: *"talk to the team does not work 'failed to fetch' in either desktop
+  or mobile."* The phone button had been dead for weeks. `VOICE_ALLOWED_ORIGIN`
+  held a single origin — the voice proof-of-concept's Vercel URL — while the
+  page had moved to `ai-team-hq.vercel.app`, so the browser refused every
+  preflight before any JavaScript ran, and `fetch` threw `TypeError: Failed to
+  fetch`, which is what a browser says for a CORS refusal and is
+  indistinguishable, from the page, from being offline.
+
+  Every existing check passed throughout. The deploy probe minted a credential
+  happily, because a server-side `fetch` sends no `Origin` and is therefore not
+  subject to the thing that was broken. That is the lesson worth encoding: a
+  probe that does not do what a browser does certifies the wrong thing.
+
+  So this one sends the `Origin` and asserts on the header the browser would
+  actually enforce — and asserts the other direction too, because an endpoint
+  that hands a credential to any page that asks is a different bug with the
+  same green tick. It takes no authentication, so origin is the only thing
+  between a stranger's page and a session minted on Grant's OpenAI key.
+*/
+const MINT = `https://${REF}.supabase.co/functions/v1/voice-token`
+const PAGE_ORIGIN = 'https://ai-team-hq.vercel.app'
+
+const allowOriginFor = async (origin: string): Promise<string> => {
+  const response = await fetch(MINT, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: origin,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type',
+    },
+  })
+  return response.headers.get('access-control-allow-origin') ?? '(none)'
+}
+
+try {
+  const allowed = await allowOriginFor(PAGE_ORIGIN)
+  record(
+    'the browser is allowed to mint a call credential from the real page',
+    `allow-origin=${allowed}`,
+    allowed === PAGE_ORIGIN || allowed === '*',
+  )
+} catch (error) {
+  record(
+    'the browser is allowed to mint a call credential from the real page',
+    `unreachable: ${(error as Error).message}`,
+    false,
+  )
+}
+
+try {
+  const allowed = await allowOriginFor('https://not-our-page.example.com')
+  record(
+    'and a page that is not ours is refused the same credential',
+    `allow-origin=${allowed}`,
+    allowed !== 'https://not-our-page.example.com' && allowed !== '*',
+  )
+} catch (error) {
+  record(
+    'and a page that is not ours is refused the same credential',
+    `unreachable: ${(error as Error).message}`,
+    false,
+  )
+}
+
 // ===========================================================================
 
 const passed = checks.filter((c) => c.passed).length

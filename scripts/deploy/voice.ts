@@ -17,6 +17,17 @@ if (supabaseToken === undefined || supabaseToken === '') {
   process.exit(2)
 }
 const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+
+/**
+ * The pages allowed to mint a voice credential.
+ *
+ * The canonical HQ page first, because a browser gets one origin and an
+ * unmatched request is answered with this one. Vercel preview deployments get
+ * their own hostnames and are deliberately NOT here: this endpoint takes no
+ * authentication, so the allowlist is the only thing between a stranger's page
+ * and a credential minted against Grant's OpenAI key.
+ */
+const PAGE_ORIGINS = ['https://ai-team-hq.vercel.app']
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 
@@ -38,9 +49,17 @@ if (token === '') {
 const setSecrets = await fetch(`${api}/secrets`, {
   method: 'POST',
   headers: { Authorization: `Bearer ${supabaseToken}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify([{ name: 'HQ_API_TOKEN', value: token }]),
+  body: JSON.stringify([
+    { name: 'HQ_API_TOKEN', value: token },
+    // Set here, on every deploy, because setting it by hand is how it broke.
+    // It held one origin — the voice proof-of-concept's Vercel URL — while the
+    // page moved to `ai-team-hq.vercel.app`, so the browser refused every
+    // preflight and the phone button reported "Failed to fetch" on desktop and
+    // mobile alike. Nothing in the repository set it, so nothing could notice.
+    { name: 'VOICE_ALLOWED_ORIGIN', value: PAGE_ORIGINS.join(',') },
+  ]),
 })
-console.log(`function secret set: http ${String(setSecrets.status)}`)
+console.log(`function secrets set: http ${String(setSecrets.status)}`)
 
 const entrypoint = await readFile('supabase/functions/voice/index.ts', 'utf8')
 const form = new FormData()
@@ -122,6 +141,31 @@ console.log(`voice-token v${String(mintResult.version)} ${String(mintResult.stat
 // Behaviour again: a mint that returns a credential but silently dropped the
 // tools is a call where Claire cannot reach the team, and it looks identical
 // from the outside until you ask her to do something.
+// The preflight, from the page's real origin.
+//
+// This is the check whose absence let the CORS misconfiguration live: the
+// probe below sends no `Origin`, so it succeeded every single time while the
+// browser was being refused. A server-side probe that does not do what the
+// browser does is a probe that certifies the wrong thing.
+const preflight = await fetch(`https://${ref}.supabase.co/functions/v1/voice-token`, {
+  method: 'OPTIONS',
+  headers: {
+    Origin: PAGE_ORIGINS[0] ?? '',
+    'Access-Control-Request-Method': 'POST',
+    'Access-Control-Request-Headers': 'content-type',
+  },
+})
+const allowOrigin = preflight.headers.get('access-control-allow-origin') ?? ''
+console.log(`  preflight:       http ${String(preflight.status)} allow-origin=${allowOrigin}`)
+if (allowOrigin !== PAGE_ORIGINS[0] && allowOrigin !== '*') {
+  console.error(
+    `the page at ${String(PAGE_ORIGINS[0])} would be refused by the browser ` +
+      `(allow-origin came back as "${allowOrigin}"). The phone button would say ` +
+      '"Failed to fetch".',
+  )
+  process.exit(1)
+}
+
 const mintProbe = await fetch(`https://${ref}.supabase.co/functions/v1/voice-token`, {
   method: 'POST',
 })

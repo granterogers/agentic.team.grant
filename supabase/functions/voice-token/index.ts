@@ -38,12 +38,61 @@ const MODEL = Deno.env.get('VOICE_MODEL') ?? 'gpt-realtime-2.1-mini'
 // Grant can change who he is talking to without a deploy.
 const VOICE = Deno.env.get('VOICE_NAME') ?? 'marin'
 
-const ALLOWED_ORIGIN = Deno.env.get('VOICE_ALLOWED_ORIGIN') ?? '*'
+/**
+ * Which pages may mint a credential.
+ *
+ * ## The bug this replaces
+ *
+ * Grant: *"talk to the team does not work 'failed to fetch' in either desktop
+ * or mobile."*
+ *
+ * `VOICE_ALLOWED_ORIGIN` held ONE origin, and it held the wrong one: the URL of
+ * the voice proof-of-concept's Vercel deployment, set by hand the day CORS was
+ * tightened. The HQ page has lived at `ai-team-hq.vercel.app` since. So every
+ * preflight from the real page was answered with an origin that was not the
+ * real page's, the browser refused the response before any JavaScript saw it,
+ * and `fetch` threw `TypeError: Failed to fetch` — which is what a browser says
+ * for a CORS refusal and is indistinguishable, from the page, from being
+ * offline.
+ *
+ * Nothing in the repository set that variable, so nothing could notice it had
+ * gone stale. `scripts/deploy/voice.ts` now sets it on every deploy and
+ * `scripts/verify/voice.ts` probes a preflight from the real page origin, so
+ * the next time this rots it is a failing check rather than a phone button that
+ * does nothing.
+ *
+ * ## A list, echoed, rather than one value
+ *
+ * A browser accepts exactly one origin in the header, so serving several means
+ * echoing back whichever one asked — hence the allowlist and the `Vary`. The
+ * allowlist matters because this endpoint takes no authentication: origin is
+ * the only thing standing between a stranger's page and a credential minted
+ * against Grant's OpenAI key.
+ */
+const ALLOWED_ORIGINS = (Deno.env.get('VOICE_ALLOWED_ORIGIN') ?? '*')
+  .split(',')
+  .map((o) => o.trim())
+  .filter((o) => o !== '')
 
-const cors = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+const corsFor = (request: Request): Record<string, string> => {
+  const asked = request.headers.get('origin') ?? ''
+  const allowed = ALLOWED_ORIGINS.includes('*')
+    ? asked === ''
+      ? '*'
+      : asked
+    : ALLOWED_ORIGINS.includes(asked)
+      ? asked
+      : // No match: answer with the first configured origin. The browser will
+        // refuse it, which is the intended outcome — but the response is a
+        // well-formed refusal rather than a header the caller can misread.
+        (ALLOWED_ORIGINS[0] ?? 'null')
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    // Without this a shared cache can hand one origin's response to another.
+    Vary: 'Origin',
+  }
 }
 
 /**
@@ -105,6 +154,7 @@ const TOOLS = [
 ]
 
 Deno.serve(async (request: Request): Promise<Response> => {
+  const cors = corsFor(request)
   if (request.method === 'OPTIONS') return new Response(null, { headers: cors })
 
   if (request.method !== 'POST') {
