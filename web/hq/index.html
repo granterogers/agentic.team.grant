@@ -2396,6 +2396,27 @@ function routing(d) {
     ['blocker', 'Only when the team is stuck on you'],
   ]
 
+  /*
+    The switch Grant asked for after the Finance Director's daily report
+    reached him in the office group.
+
+    Separate from "who can message you directly", and the separation is the
+    point: that one decides WHICH CHAT somebody lands in, and it was already set
+    to the chief — which routed everybody else into the group he is a member of.
+    Redirecting a message he can still read is not silence.
+  */
+  const quiet = d.only_chief_speaks === true
+  const chief = `
+    <label class="fld"><span>Who sends you Telegram messages at all</span>
+      <select data-routing="only_chief_speaks">
+        <option value="true"${quiet ? ' selected' : ''}>Only the Chief of Staff</option>
+        <option value="false"${quiet ? '' : ' selected'}>Anyone on the team</option>
+      </select>
+      <em>The rest still do the work and still write it up — you just read it
+      here instead of being messaged. To stop the work itself, switch the duty
+      off below.</em>
+    </label>`
+
   const who = `
     <label class="fld"><span>Who can message you directly</span>
       <select data-routing="direct_to_grant">
@@ -2438,6 +2459,7 @@ function routing(d) {
 
   return `
     <section class="card wide"><h2>Who messages you, and where</h2><div class="body">
+      ${chief}
       ${who}
       ${loud}
       <p class="meta" id="routing-said"></p>

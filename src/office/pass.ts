@@ -168,13 +168,16 @@ export const buildPass = async (
         (select slack_app_id from public.slack_app_credentials
           where enabled and revoked_at is null limit 1) as slack_app_id,
         (select value #>> '{}' from public.system_config
-          where key = 'telegram.pager_floor') as pager_floor
+          where key = 'telegram.pager_floor') as pager_floor,
+        (select value #>> '{}' from public.system_config
+          where key = 'telegram.only_chief_speaks') as only_chief_speaks
     `)
   ).rows[0] as {
     service_key?: string
     vault_key?: string
     slack_app_id?: string
     pager_floor?: string
+    only_chief_speaks?: string
   }
 
   const serviceKey = String(setup?.service_key ?? '')
@@ -219,7 +222,25 @@ export const buildPass = async (
     // lands in Grant's private chat or in the office group — and that is the
     // whole of "only the chief of staff messages me directly".
     const pagers = new Map<string, TelegramPager>()
+
+    /*
+      Only the chief speaks (0165).
+
+      `direct_to_grant` decides WHICH CHAT somebody lands in, and it was already
+      set to the chief — which routed everyone else into the office group, which
+      Grant is a member of. Redirecting a message he can still read is not
+      silence, and the Finance Director's daily report arriving in the group is
+      what made that obvious.
+
+      So this is the other question: whether they send at all. Returning null
+      means no Telegram delivery for that person. The work still runs and the
+      output is still written — the dashboard shows everything — and the
+      `duty:<slug>` switches on the same page are how he stops the work itself.
+    */
+    const onlyChief = String(setup?.only_chief_speaks ?? '') === 'true'
+
     const pagerFor = async (staffSlug: string | null): Promise<TelegramPager | null> => {
+      if (onlyChief && staffSlug !== null && staffSlug !== 'chief-of-staff') return null
       const bot = staffSlug === null ? pager : ((await botForStaff(db, staffSlug)) ?? pager)
       const existing = pagers.get(bot.botId)
       if (existing !== undefined) return existing
