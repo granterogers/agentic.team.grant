@@ -523,6 +523,46 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
   await page.evaluate(`window.__EMIT({ type: 'response.created' })`)
   await page.waitForTimeout(100)
 
+  /*
+    A breath is not an interruption.
+
+    Grant: *"its cutting out a lot when she talks"*. The first version of the
+    barge-in fix cancelled the response on every `input_audio_buffer.
+    speech_started`, which is the VAD's suspicion rather than a fact — on a
+    speakerphone it fires on her own voice, on a breath, on a chair — so she
+    was chopped off mid-word several times a sentence.
+
+    So this asserts the shape of the fix rather than its existence: a
+    speech_started sends NOTHING, and it is `conversation.item.truncated` — the
+    server saying it HAS cut her off — that drops the queued audio. Checked
+    before the stop-button assertions because it must hold while she is still
+    talking.
+  */
+  await page.evaluate(`window.__SENT = []`)
+  await page.evaluate(`window.__EMIT({ type: 'input_audio_buffer.speech_started' })`)
+  await page.waitForTimeout(150)
+  const onBreath = (await page.evaluate(`window.__SENT`)) as string[]
+  record(
+    'call · a breath does not cut her off mid-word',
+    onBreath.length === 0 ? 'nothing sent' : `sent ${onBreath.join(', ')}`,
+    onBreath.length === 0,
+  )
+
+  await page.evaluate(`window.__EMIT({ type: 'conversation.item.truncated' })`)
+  await page.waitForTimeout(150)
+  const onReal = (await page.evaluate(`window.__SENT`)) as string[]
+  record(
+    'call · but a real interruption drops the audio still queued',
+    onReal.join(', ') || '(nothing sent)',
+    onReal.includes('output_audio_buffer.clear'),
+  )
+
+  // Re-armed, because the truncation above cleared it: the stop checks below
+  // need a response actually in flight to cancel.
+  await page.evaluate(`window.__SENT = []`)
+  await page.evaluate(`window.__EMIT({ type: 'response.created' })`)
+  await page.waitForTimeout(100)
+
   await page.locator('#call').tap()
   await page.waitForTimeout(500)
 

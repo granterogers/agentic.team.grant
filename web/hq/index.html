@@ -2299,13 +2299,25 @@ function wireTalk() {
     order — the local pause is the backstop, not the mechanism, because a
     backstop alone leaves the server still generating.
   */
-  const silence = () => {
+  const emit = (event) => {
     try {
-      if (channel?.readyState === 'open') {
-        if (answering) channel.send(JSON.stringify({ type: 'response.cancel' }))
-        channel.send(JSON.stringify({ type: 'output_audio_buffer.clear' }))
-      }
+      if (channel?.readyState === 'open') channel.send(JSON.stringify(event))
     } catch (e) { /* the channel is going away anyway */ }
+  }
+
+  /*
+    Throw away audio the server has already sent us.
+
+    WebRTC-specific: `output_audio_buffer.clear` stops what is queued for
+    playback. It does NOT stop the server generating — that is
+    `response.cancel`, and the two are kept apart deliberately. See the note on
+    `speech_started` below for what happens when they are not.
+  */
+  const dropBufferedAudio = () => { emit({ type: 'output_audio_buffer.clear' }) }
+
+  const silence = () => {
+    if (answering) emit({ type: 'response.cancel' })
+    dropBufferedAudio()
     answering = false
   }
 
@@ -2395,11 +2407,31 @@ function wireTalk() {
         answering = false
         break
       case 'input_audio_buffer.speech_started':
-        // Talking over her cuts her off. `interrupt_response` on the session
-        // tells the server to stop generating; this clears what it already
-        // sent, which is the part the listener actually hears.
-        silence()
+        /*
+          Grant: *"its cutting out a lot when she talks"*.
+
+          This used to call `silence()` — cancel the response and dump the
+          audio — on every one of these events. Which sounds right and is
+          badly wrong, because `speech_started` is the VAD's *suspicion* that
+          someone has begun speaking, not a fact. On a call played through a
+          speaker it fires on her own voice getting past echo cancellation, on
+          a breath, on a chair. Every false positive chopped her off
+          mid-word, which is exactly what he heard, and it was me who put it
+          there an hour earlier.
+
+          Deciding whether an interruption really happened is the server's
+          job: it has both audio streams and `interrupt_response: true` says
+          to act on it. So this now only reports what is happening, and the
+          audio is dropped on `conversation.item.truncated` — the server
+          saying it HAS cut her off, rather than a guess that it might.
+        */
         state.textContent = 'Listening…'
+        break
+      case 'conversation.item.truncated':
+        // She really was interrupted. Now the queued audio is stale, and
+        // playing it out is the several-seconds-behind effect.
+        dropBufferedAudio()
+        answering = false
         break
       case 'input_audio_buffer.speech_stopped':
         state.textContent = 'On a call with Claire.'
