@@ -1644,13 +1644,57 @@ function projects(list) {
   */
   const rows = Array.isArray(list) ? list : []
 
-  const attachments = (p) => (p.attachments || []).map((a) =>
-    `<div class="conn">
-       <span class="lamp ${a.role === 'home' ? 'ok' : ''}" aria-hidden="true"></span>
-       <span class="who"><b>${esc(a.display_name || a.external_ref)}</b>
-         <span>${esc(a.connector)} · ${esc(a.role)}${a.artifact_kind ? ' · ' + esc(a.artifact_kind) : ''}</span></span>
-       <span class="st"><button class="mini" data-detach="${esc(a.attachment_id)}">Detach</button></span>
-     </div>`).join('') || '<div class="empty">Nothing attached.</div>'
+  /*
+    What the project IS connected to, and what it is not.
+
+    Grant, §3: *"If a project exists in Supabase but has no corresponding
+    Notebook or Notion counterpart, this should be visible and repairable."*
+    This card used to list only the attachments a project HAS, so the absence
+    of a Notion page — the thing he actually wanted to see — looked exactly
+    like a project that had never needed one.
+
+    `app.project_connections` (0158) returns every first-class connector with
+    the project's standing, so the missing ones are rows too. Five states, and
+    they are five because collapsing any pair of them costs something:
+
+      connected  fine
+      broken     attached, but the service is not answering — needs a
+                 credential, not an attachment
+      wanted     he means to, and has not
+      declined   he decided against it, and should stop being asked
+      missing    nobody has considered it
+
+    A missing row offers three answers, not two. "Not now" is the option that
+    stops the interface nagging about a decision he already made.
+  */
+  const LAMP = { connected: 'ok', broken: 'bad', wanted: 'warn', declined: '', missing: '' }
+  const SAYS = {
+    connected: 'connected',
+    broken: 'not answering',
+    wanted: 'you wanted this',
+    declined: 'left disconnected',
+    missing: 'not connected',
+  }
+
+  const connections = (p) => (p.connections || []).map((c) => {
+    const acted = c.state === 'connected' || c.state === 'broken'
+      ? `<button class="mini" data-detach="${esc(attachmentIdFor(p, c.connector))}">Detach</button>`
+      : c.state === 'declined'
+        ? `<button class="mini" data-choose="${esc(p.slug)}|${esc(c.connector)}|clear">Reconsider</button>`
+        : `<button class="mini" data-choose="${esc(p.slug)}|${esc(c.connector)}|declined">Not now</button>`
+    return `<div class="conn">
+       <span class="lamp ${LAMP[c.state] || ''}" aria-hidden="true"></span>
+       <span class="who"><b>${esc(c.name)}</b>
+         <span>${esc(SAYS[c.state] || c.state)}${c.detail ? ' · ' + esc(c.detail) : ''}</span></span>
+       <span class="st">${acted}</span>
+     </div>`
+  }).join('') || '<div class="empty">No connectors are available.</div>'
+
+  /* A detach needs the attachment, and the connection row carries the
+     connector. One lookup rather than widening the SQL, because the
+     attachments are already in the payload. */
+  const attachmentIdFor = (p, connector) =>
+    ((p.attachments || []).find((a) => a.connector === connector) || {}).attachment_id || ''
 
   const channels = (p) => (p.channels || []).length === 0
     ? '<span class="m">no channels yet — the team makes them when it has something to say</span>'
@@ -1666,13 +1710,14 @@ function projects(list) {
           <button class="mini" data-rename="${esc(p.slug)}" data-name="${esc(p.name)}">Rename</button>
         </div>
         <div style="margin-bottom:10px">${channels(p)}</div>
-        ${attachments(p)}
+        ${connections(p)}
         <div class="addrow">
           <select data-conn="${esc(p.slug)}">
             <option value="notion">Notion</option>
             <option value="notebooklm">NotebookLM</option>
+            <option value="github">GitHub</option>
           </select>
-          <input data-ref="${esc(p.slug)}" placeholder="Paste the Notion link or notebook id">
+          <input data-ref="${esc(p.slug)}" placeholder="Paste the link, notebook id, or owner/repo">
           <select data-role="${esc(p.slug)}">
             <option value="source">reads from</option>
             <option value="home">writes to</option>
@@ -1691,6 +1736,7 @@ function projects(list) {
           <select id="np-conn">
             <option value="notion">Notion</option>
             <option value="notebooklm">NotebookLM</option>
+            <option value="github">GitHub</option>
           </select>
           <input id="np-ref" placeholder="Notion link or notebook id">
           <button class="mini" id="np-go">Create</button>
@@ -2855,6 +2901,36 @@ function wireProjects() {
       b.disabled = true
       try { await act('detach', { p_attachment_id: b.dataset.detach }); show('projects') }
       catch (e) { fail(e); b.disabled = false }
+    }
+  }
+
+  /*
+    "Not now", and "Reconsider".
+
+    §3's fifth option: *"deliberately leave it disconnected."* Without somewhere
+    to put that answer the only way to stop being asked about a connector is to
+    connect something you do not want, and the interface nags forever about a
+    decision already made.
+
+    No confirmation either way. Both directions are one click to undo, and
+    neither touches a document.
+  */
+  for (const b of document.querySelectorAll('[data-choose]')) {
+    b.onclick = async () => {
+      const [slug, connector, choice] = b.dataset.choose.split('|')
+      b.disabled = true
+      try {
+        // A reason only when declining. "Reconsider" is not a decision that
+        // needs explaining, and a prompt on it would be friction for nothing.
+        const why = choice === 'declined'
+          ? prompt('Why leave this one disconnected? (optional — it is shown later)') ?? ''
+          : ''
+        await act('connection_choose', {
+          p_slug: slug, p_connector: connector, p_choice: choice,
+          ...(why.trim() === '' ? {} : { p_reason: why.trim() }),
+        })
+        show('projects')
+      } catch (e) { fail(e); b.disabled = false }
     }
   }
 

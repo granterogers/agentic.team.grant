@@ -90,6 +90,13 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
   attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
   detach: { fn: 'hq_detach', required: ['p_attachment_id'] },
+  // Recording that a project deliberately has no Notion page — §3's fifth
+  // option, and the only one that does not end in an attachment. `p_reason` is
+  // optional because "not now" is a complete answer on its own.
+  connection_choose: {
+    fn: 'hq_connection_choose',
+    required: ['p_slug', 'p_connector', 'p_choice'],
+  },
   // One setter over an allow-list of six keys, enforced in the function rather
   // than here — the page is not the only thing that could call this, and a
   // guard in the caller is a guard in one of the callers.
