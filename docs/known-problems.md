@@ -98,6 +98,54 @@ before.
 
 ---
 
+## Fixed 2026-09-09, Phase 1 — the front end, measured
+
+The audit of the 21-section specification found three front-end defects that
+were numbers rather than opinions, and one reason they had survived: **777 unit
+tests and no browser test**. Nothing here had ever opened the page.
+
+**The page overflowed sideways on a phone.** Connections tab, iPhone 14: 533px
+of content inside a 390px viewport. The cause was a grid blowout — a grid item's
+default `min-width: auto` means one un-wrappable string widens the track, which
+widens every card, which widens the page. The string was a note about a parked
+service. Fixed at every level that could still blow out: `minmax(0, 1fr)` on the
+`main` track, `min-width: 0` on `.card` and on `.conn .st`, `overflow-wrap:
+anywhere` inside cards, and `minmax(min(96px, 100%), 1fr)` on the tile grid.
+
+**Text below the legible floor.** 10.5px and 11.5px on every tab at every
+viewport — seven rules, all now at 12px or above.
+
+**Controls below the touch floor.** Rename 69×26, Detach 62×26, Switch on/off
+55×36, Connect Google 126×30, the pronoun picker 89×35, and the menu opener at
+42px. All now 44px on any narrow screen or coarse pointer.
+
+Two things worth recording about how that last fix went, because both were found
+by the check rather than by looking:
+
+- The first version keyed on width alone (`max-width: 759px`). `verify:ui` then
+  failed the **iPad**, which is 810px, has no mouse, and was still being handed
+  26px buttons. The rule is now width **or** a coarse pointer.
+- The first two versions enumerated selectors and missed four controls each
+  time. It now names controls by what they are, and sets the floor with
+  `!important` — the one place in the stylesheet that uses it — because six
+  narrower rules written before anyone measured the page on a phone would
+  otherwise win the specificity argument, and a floor that loses an argument is
+  not a floor.
+
+**And the harness, which is the durable half.** `npm run verify:ui` drives
+iPhone 14, iPad and desktop across all eleven tabs (36 checks) asserting no
+overflow, no text under 12px, no target under 44px on touch, and no uncaught
+JavaScript. `npm run verify:talk` drives Talk to Team with real taps and real
+key presses (24 checks): text entry, the keyboard send key, an empty submission,
+a delegated answer, the office returning an error, the network dropping,
+recovery after each, a refused microphone, a mint that fails, and the deployed
+functions being ACTIVE and refusing an unauthenticated caller. Both are in
+`verify:db`, so the suite now fails on a layout regression.
+
+Grant: *"Do not consider this resolved simply because the component renders."*
+Talk to Team was, in fact, fine on mobile — it lays out and works at 390px. What
+was broken was that nobody could have known.
+
 ## Fixed 2026-09-09, second pass
 
 Grant reported two symptoms — "a lot of repetition from one of the bots" and
