@@ -103,6 +103,32 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
+  /*
+    Looking something up, as opposed to asking for it to be done.
+
+    Grant: *"the voice doesn't seem to have access to any of the project
+    data.. this is critical."* He was right, and the cause was that this
+    endpoint had exactly one behaviour — record the utterance and either match
+    it against `voice_answer`'s pattern list or delegate it. On a call, asking
+    what is going on with a project got "I have put that to the team, the
+    answer appears in Slack", about a fact one select away.
+
+    This is a READ and nothing else. It writes no command, starts no job and
+    makes no decision, so §5's rule that adapters may only translate is intact:
+    `app.voice_lookup` is canonical-layer state and this hands it over. The
+    write path below is untouched.
+
+    Deliberately not recorded in `inbound_commands`. A question Claire asks on
+    Grant's behalf mid-sentence is not an instruction from Grant, and logging
+    it as one would put words in his mouth in the table the whole office reads.
+  */
+  if (url.pathname.endsWith('/look')) {
+    const asked = (await request.json().catch(() => ({}))) as { about?: unknown }
+    const about = typeof asked.about === 'string' ? asked.about.trim() : ''
+    const found = await rpc('voice_lookup', { p_about: about })
+    return json({ found })
+  }
+
   const body = (await request.json().catch(() => ({}))) as {
     said?: unknown
     session?: unknown

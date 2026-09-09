@@ -478,6 +478,18 @@ details.qa p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; max-wid
    on this page pressed while looking at something else, so it says what it is
    doing in a word and in a colour, and the words appear underneath either way
    — a browser that will not speak still shows every reply. */
+/* Grant: *"i dont need to see the text .. just the voice is fine"*. So the
+   call IS the page: one large target, one line of state, and the transcript
+   gone. Typing stays behind a disclosure because it is the only way through
+   when a microphone is refused, and a page that offers no way through is worse
+   than one with a link on it. */
+.callstage { display: grid; justify-items: center; gap: 18px; text-align: center;
+  padding: 26px 0 8px; }
+.callstage .talkstate { max-width: 34ch; font-size: 15px; }
+.typeinstead { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.typeinstead > summary { cursor: pointer; color: var(--muted); font-size: 13px;
+  min-height: 34px; display: flex; align-items: center; }
+.typeinstead .askform { margin-top: 8px; }
 .talkwrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
 .mic {
   appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 600;
@@ -2140,17 +2152,20 @@ function wireSettings() {
 
 function talk() {
   return `<section class="card wide" data-card="talk"><h2>Talk to the team</h2><div class="body">
-      <div class="talkwrap">
-        <button type="button" id="call" class="mic" title="Start a voice call with Claire">📞</button>
-        <div class="talkstate" id="talkstate">Press the phone to call Claire, your chief of
-          staff. She can hear you the whole time — talk over her if she is going on.</div>
+      <div class="callstage">
+        <button type="button" id="call" class="mic" title="Call Claire">📞</button>
+        <div class="talkstate" id="talkstate">Press to call Claire. She knows what the
+          office has been doing — ask her, tell her, interrupt her.</div>
       </div>
-      <form class="askform" id="askform">
-        <input id="asktext" placeholder="…or type it instead"
-               aria-label="What you want to say" autocomplete="off" enterkeyhint="send">
-        <button type="submit" id="asksend">Send</button>
-      </form>
-      <div id="turns" class="turns"></div>
+      <details class="typeinstead" id="typeinstead">
+        <summary>Type instead</summary>
+        <form class="askform" id="askform">
+          <input id="asktext" placeholder="Say it here"
+                 aria-label="What you want to say" autocomplete="off" enterkeyhint="send">
+          <button type="submit" id="asksend">Send</button>
+        </form>
+        <div id="turns" class="turns"></div>
+      </details>
     </div></section>`
 }
 
@@ -2172,6 +2187,14 @@ function wireTalk() {
   let stream = null
   let channel = null
   let onCall = false
+  // The element her voice comes out of. It used to be a `const` inside the
+  // connect block, which is the whole of the "stop talking doesn't work" bug —
+  // see `hangUp`.
+  let speaker = null
+  // Whether there is a response in flight to cancel. `response.cancel` with
+  // nothing running comes back as an error event, which would surface to Grant
+  // as "something went wrong on the call" every time he took a breath.
+  let answering = false
 
   const show = (who, text, cls) => {
     const el = document.createElement('div')
@@ -2189,8 +2212,36 @@ function wireTalk() {
     answers or takes it on. Two implementations would drift, and the one that
     drifted would be the voice one, which is the one nobody reads the logs of.
   */
+  const VOICE = API.replace(/\/hq-api$/, '/voice')
+
+  /*
+    Looking something up, which is a different thing from asking for work.
+
+    Grant: *"the voice doesn't seem to have access to any of the project
+    data.. this is critical … it should be the true voice of 'claire' fully
+    aware of everything."*
+
+    She had one tool and it delegated, so a question of fact came back as "I
+    have put that to the team, the answer appears in Slack" — on a phone call,
+    about something one select away. `/look` is a read of canonical state and
+    returns in about a second, which is what makes it usable mid-sentence.
+  */
+  const lookUp = async (about) => {
+    const r = await fetch(VOICE + '/look', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ about }),
+    })
+    const body = await r.json()
+    if (!r.ok) throw new Error(body.error || ('The office returned ' + r.status))
+    return body.found
+  }
+
   const askOffice = async (said) => {
-    const r = await fetch(API.replace(/\/hq-api$/, '/voice') + '/turn', {
+    const r = await fetch(VOICE + '/turn', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + (localStorage.getItem(KEY) || ''),
@@ -2231,11 +2282,44 @@ function wireTalk() {
 
   // --- the call -------------------------------------------------------------
 
+  /*
+    Stop, and mean it.
+
+    Grant: *"also stop talking doesnt work"*.
+
+    Closing the peer connection stops audio ARRIVING. It does nothing about the
+    audio already handed to the `<audio>` element, which happily plays out its
+    buffer — several seconds of Claire finishing her sentence after he pressed
+    stop. And the element was a `const` scoped inside the connect block, so
+    nothing outside it could have paused it even if it had thought to.
+
+    So: cancel the response at the server, clear the audio the server has
+    already sent (`output_audio_buffer.clear` is the WebRTC-specific event for
+    exactly this), then tear down, then silence the element locally. In that
+    order — the local pause is the backstop, not the mechanism, because a
+    backstop alone leaves the server still generating.
+  */
+  const silence = () => {
+    try {
+      if (channel?.readyState === 'open') {
+        if (answering) channel.send(JSON.stringify({ type: 'response.cancel' }))
+        channel.send(JSON.stringify({ type: 'output_audio_buffer.clear' }))
+      }
+    } catch (e) { /* the channel is going away anyway */ }
+    answering = false
+  }
+
   const hangUp = (why) => {
     onCall = false
+    silence()
     try { channel?.close() } catch (e) { /* already gone */ }
     try { pc?.close() } catch (e) { /* already gone */ }
     stream?.getTracks().forEach((t) => t.stop())
+    if (speaker !== null) {
+      speaker.pause()
+      speaker.srcObject = null
+      speaker = null
+    }
     pc = null; stream = null; channel = null
     callBtn.classList.remove('on')
     callBtn.textContent = '📞'
@@ -2253,18 +2337,34 @@ function wireTalk() {
     without that second `response.create` she calls the tool and then says
     nothing, which sounds exactly like a crash.
   */
-  const runTool = async (callId, argsJson) => {
-    let said = ''
-    try { said = String(JSON.parse(argsJson).said || '') } catch (e) { said = '' }
-    if (said !== '') show('Claire → the team', said, 'delegated')
+  const runTool = async (callId, name, argsJson) => {
+    let args = {}
+    try { args = JSON.parse(argsJson) || {} } catch (e) { args = {} }
 
     let result
-    try {
-      const body = await askOffice(said)
-      result = { ok: true, did: body.did, answer: body.speak }
-    } catch (e) {
-      result = { ok: false, error: e.message }
+    if (name === 'look_up') {
+      // Instant, and she keeps talking through it — so the status line says
+      // what she is doing rather than the page going quiet.
+      state.textContent = 'Looking that up…'
+      try {
+        result = { ok: true, found: await lookUp(String(args.about || '')) }
+      } catch (e) {
+        result = { ok: false, error: e.message }
+      }
+      state.textContent = onCall ? 'On a call with Claire.' : 'Ask another.'
+    } else {
+      const said = String(args.said || '')
+      if (said !== '') show('Claire → the team', said, 'delegated')
+      state.textContent = 'Claire is putting that to the team…'
+      try {
+        const body = await askOffice(said)
+        result = { ok: true, did: body.did, answer: body.speak }
+      } catch (e) {
+        result = { ok: false, error: e.message }
+      }
+      state.textContent = onCall ? 'On a call with Claire.' : 'Ask another.'
     }
+
     channel?.send(JSON.stringify({
       type: 'conversation.item.create',
       item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) },
@@ -2286,14 +2386,23 @@ function wireTalk() {
         if (ev.transcript) show('You', ev.transcript)
         break
       case 'response.function_call_arguments.done':
-        state.textContent = 'Claire is putting that to the team…'
-        runTool(ev.call_id, ev.arguments)
+        runTool(ev.call_id, ev.name, ev.arguments)
+        break
+      case 'response.created':
+        answering = true
+        break
+      case 'response.done':
+        answering = false
         break
       case 'input_audio_buffer.speech_started':
+        // Talking over her cuts her off. `interrupt_response` on the session
+        // tells the server to stop generating; this clears what it already
+        // sent, which is the part the listener actually hears.
+        silence()
         state.textContent = 'Listening…'
         break
       case 'input_audio_buffer.speech_stopped':
-        state.textContent = 'On a call with Claire. Talk over her if she is going on.'
+        state.textContent = 'On a call with Claire.'
         break
       case 'error':
         show('Claire', 'Something went wrong on the call: ' +
@@ -2326,9 +2435,9 @@ function wireTalk() {
       })
 
       pc = new RTCPeerConnection()
-      const audio = new Audio()
-      audio.autoplay = true
-      pc.ontrack = (e) => { audio.srcObject = e.streams[0] }
+      speaker = new Audio()
+      speaker.autoplay = true
+      pc.ontrack = (e) => { if (speaker !== null) speaker.srcObject = e.streams[0] }
       pc.addTrack(stream.getTracks()[0])
       // A dropped connection must not leave the button saying "on a call".
       pc.onconnectionstatechange = () => {
@@ -2354,7 +2463,7 @@ function wireTalk() {
       if (!sdp.ok) throw new Error('the call would not connect (' + sdp.status + ')')
       await pc.setRemoteDescription({ type: 'answer', sdp: await sdp.text() })
 
-      state.textContent = 'On a call with Claire. Just start talking.'
+      state.textContent = 'On a call with Claire. Talk over her whenever you like.'
     } catch (e) {
       const why = e.name === 'NotAllowedError'
         ? 'The microphone was refused. Allow it for this site, then press the phone again.'

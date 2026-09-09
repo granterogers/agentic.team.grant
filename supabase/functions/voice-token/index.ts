@@ -69,6 +69,9 @@ const VOICE = Deno.env.get('VOICE_NAME') ?? 'marin'
  * the only thing standing between a stranger's page and a credential minted
  * against Grant's OpenAI key.
  */
+const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+
 const ALLOWED_ORIGINS = (Deno.env.get('VOICE_ALLOWED_ORIGIN') ?? '*')
   .split(',')
   .map((o) => o.trim())
@@ -115,19 +118,49 @@ const INSTRUCTIONS =
   'You have seven directors: Tom on strategy, Emma on research, Daniel on ' +
   'finance and data, Marcus on operations, Ruby on growth and marketing, ' +
   'Oliver on communications and creative, Grace on quality and risk.\n\n' +
-  'When Grant asks for something that is real work — research, analysis, a ' +
-  'draft, a decision to be looked into — use the ask_the_team tool. Say what ' +
-  'you are doing in a few words BEFORE you call it ("Right, I will put that ' +
-  'to Emma"), call it, then tell him what came back in one or two sentences. ' +
-  'Use it for anything about the current state of his projects too: you do ' +
-  'not know that from memory, the office does.\n\n' +
-  'Do not use the tool for chit-chat, for clarifying what he means, or for ' +
-  'anything you can answer in a sentence. Ask a clarifying question when the ' +
-  'ask is genuinely ambiguous — once, not three times.\n\n' +
-  'If something fails, say so plainly and say what you will do about it. ' +
+  'You have TWO tools and they are for different things.\n\n' +
+  'look_up — to FIND OUT. A project, a colleague, what is in flight, what is ' +
+  'waiting on him, what someone reported. It comes back in a second or two ' +
+  'with real state, so use it freely rather than guessing or apologising. ' +
+  'You may call it mid-sentence; keep talking while it runs.\n\n' +
+  'ask_the_team — to MAKE SOMETHING HAPPEN. Research, analysis, a draft, a ' +
+  'decision to be looked into, a change to be made. This starts real work and ' +
+  'takes minutes, so say what you are doing in a few words BEFORE you call it ' +
+  '("Right, I will put that to Emma"), then tell him what came back.\n\n' +
+  'The difference matters: looking something up and telling him is instant, ' +
+  'and putting it to the team is not. Never delegate a question you can look ' +
+  'up. Never pretend to answer something that is actually work.\n\n' +
+  'Below is the state of play as of the moment this call started. It is real ' +
+  'and it is yours — you are not a switchboard, you run this office and you ' +
+  'know what is in it. Speak from it directly. If he asks about something not ' +
+  'in it, or asks for detail, look it up rather than saying you do not know.' +
+  '\n\nIf something fails, say so plainly and say what you will do about it. ' +
   'Never say "I hope this helps", "let me know if", or "as an AI".'
 
 const TOOLS = [
+  {
+    type: 'function',
+    name: 'look_up',
+    description:
+      'Find out something real, now. A project by any name Grant uses for it, ' +
+      'a colleague and what they last reported, what is in flight, what is ' +
+      'waiting on him. Returns canonical state in about a second. Use this ' +
+      'for every question of fact — never delegate one.',
+    parameters: {
+      type: 'object',
+      properties: {
+        about: {
+          type: 'string',
+          description:
+            'What to look up, in his words — a project name, a person, or the ' +
+            'question itself. Leave it vague and you get the state of play, ' +
+            'which is a fine answer to "what is going on".',
+        },
+      },
+      required: ['about'],
+      additionalProperties: false,
+    },
+  },
   {
     type: 'function',
     name: 'ask_the_team',
@@ -164,10 +197,54 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return Response.json({ error: 'voice is not configured' }, { status: 503, headers: cors })
   }
 
+  /*
+    What she knows before he speaks.
+
+    Grant: *"the voice doesn't seem to have access to any of the project
+    data.. this is critical … it should be the true voice of 'claire' fully
+    aware of everything."*
+
+    She had one tool that delegated, so asked what was going on she either
+    recited a canned sentence or promised a Slack message about a fact one
+    select away. Briefing the session with real state at mint time is the
+    difference between a chief of staff and a switchboard: the answer to "what
+    have we got on" is in her head when she picks up, at no round-trip cost.
+
+    Failure here is not fatal. A call with a stale brief and working tools is
+    far better than no call, so a failed read logs and continues rather than
+    taking voice down — but it is NOT silent, because a Claire who has
+    forgotten the office should say so rather than improvise.
+  */
+  let stateBrief = ''
+  try {
+    const read = await fetch(`${DB_URL}/rest/v1/rpc/voice_state`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    })
+    if (read.ok) {
+      stateBrief = `\n\n--- THE STATE OF PLAY ---\n${JSON.stringify(await read.json())}`
+    } else {
+      console.error(`voice_state came back ${read.status}`)
+    }
+  } catch (error) {
+    console.error(`voice_state unreachable: ${(error as Error).message}`)
+  }
+  const instructions =
+    stateBrief === ''
+      ? `${INSTRUCTIONS}\n\nYou could not read the office's state when this call ` +
+        'started. Say so if he asks about anything current, and use look_up — that ' +
+        'may still work.'
+      : INSTRUCTIONS + stateBrief
+
   const session = {
     type: 'realtime',
     model: MODEL,
-    instructions: INSTRUCTIONS,
+    instructions,
     audio: {
       input: {
         // Grant, about the Telegram notes: he wants to see what was heard, so
@@ -178,7 +255,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
         // Semantic turn detection ends his turn on meaning rather than on a
         // gap, which is the difference between being interrupted mid-thought
         // and being allowed to think.
-        turn_detection: { type: 'semantic_vad' },
+        // Grant: *"also stop talking doesnt work"*. Talking over her did not
+        // cut her off, because nothing had asked the server to stop the
+        // response when his speech starts — `interrupt_response` was left at
+        // whatever the API's default happened to be. Stated explicitly, so it
+        // is a decision rather than a default that can move under us.
+        turn_detection: { type: 'semantic_vad', interrupt_response: true },
       },
       output: { voice: VOICE },
     },
@@ -203,7 +285,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     console.error(
       `full session rejected: ${minted.status} ${(await minted.clone().text()).slice(0, 300)}`,
     )
-    minted = await mint({ session: { type: 'realtime', model: MODEL, instructions: INSTRUCTIONS } })
+    minted = await mint({ session: { type: 'realtime', model: MODEL, instructions } })
     degraded = true
   }
 

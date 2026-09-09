@@ -138,6 +138,27 @@ const openTalk = async (device: Record<string, unknown>) => {
   return { context, page, reached }
 }
 
+/**
+ * Open the typing fallback.
+ *
+ * Grant: *"i dont need to see the text .. just the voice is fine"*. So the
+ * transcript is gone and typing lives behind a disclosure — it is still the
+ * only way through when a microphone is refused, which is why it is behind a
+ * summary rather than deleted.
+ *
+ * Every typing check below therefore opens it first, the way a person would.
+ * The check that it is CLOSED to begin with is a separate assertion, because
+ * "the page does not show him text he did not ask for" is the requirement and
+ * a helper that quietly opens it would hide a regression in exactly that.
+ */
+const openTyping = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Promise<void> => {
+  await page.evaluate(`(() => {
+    const d = document.getElementById('typeinstead');
+    if (d) d.open = true;
+  })()`)
+  await page.waitForTimeout(150)
+}
+
 /** The turns list, newest first, as the reader sees it. */
 const turnsOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Promise<string[]> =>
   (await page.evaluate(
@@ -160,6 +181,28 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
     reached ? 'reached' : 'no menu item opens it',
     reached,
   )
+
+  /*
+    Voice first, and no wall of text.
+
+    Grant, after the call finally connected: *"i dont need to see the text ..
+    just the voice is fine"*. The transcript used to be the bulk of this view.
+  */
+  const voiceFirst = (await page.evaluate(`(() => {
+    const d = document.getElementById('typeinstead');
+    const call = document.getElementById('call');
+    const turns = document.querySelectorAll('#turns .turn').length;
+    return { closed: !!d && !d.open, hasCall: !!call, turns };
+  })()`)) as { closed: boolean; hasCall: boolean; turns: number }
+  record(
+    'mobile · the call is the page — no transcript until he asks for one',
+    voiceFirst.hasCall
+      ? `typing ${voiceFirst.closed ? 'folded away' : 'OPEN by default'}, ${String(voiceFirst.turns)} turns shown`
+      : 'no call button at all',
+    voiceFirst.hasCall && voiceFirst.closed && voiceFirst.turns === 0,
+  )
+
+  await openTyping(page)
 
   const shape = (await page.evaluate(`(() => {
     const box = document.getElementById('asktext');
@@ -383,6 +426,7 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
   })
   record('desktop · the Talk tab opens', reached ? 'reached' : 'no control opens it', reached)
 
+  await openTyping(page)
   await page.locator('#asktext').click()
   await page.locator('#asktext').fill('what is everyone doing')
   await page.locator('#asksend').click()
@@ -399,6 +443,113 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
     turns[0]?.includes('one decision waiting') === true &&
       String(turns[1]).includes('what is everyone doing'),
   )
+  await context.close()
+}
+
+/*
+  Stop, and the silence that must follow it.
+
+  Grant: *"also stop talking doesnt work"*.
+
+  Two separate faults, and the checks below separate them because the fixes
+  are in different places. Closing the peer connection stopped audio ARRIVING
+  and did nothing about the audio already handed to the `<audio>` element,
+  which played out its buffer — several seconds of Claire finishing her
+  sentence after he pressed stop. And the element was scoped inside the
+  connect block, so nothing outside it could pause it anyway.
+
+  This is the one check in the file that needs the call to have CONNECTED, so
+  the peer connection is stubbed: a real one cannot complete a handshake
+  against a stubbed SDP endpoint, and the thing under test is not WebRTC — it
+  is what the page does with the data channel and the speaker when he says
+  stop. What is asserted is exactly what a listener would notice: the server
+  is told to stop generating, the audio it already sent is discarded, and the
+  element is paused.
+*/
+{
+  const { context, page } = await openTalk(devices['iPhone 14'])
+
+  await page.evaluate(`(() => {
+    window.__SENT = [];
+    window.__PAUSED = 0;
+    const RealAudio = window.Audio;
+    window.Audio = function () {
+      const a = new RealAudio();
+      const pause = a.pause.bind(a);
+      a.pause = () => { window.__PAUSED += 1; pause(); };
+      return a;
+    };
+    window.RTCPeerConnection = function () {
+      const self = this;
+      this.connectionState = 'connected';
+      this.ontrack = null;
+      this.onconnectionstatechange = null;
+      this.addTrack = () => {};
+      this.close = () => { self.connectionState = 'closed'; };
+      this.createDataChannel = () => {
+        const ch = {
+          readyState: 'open',
+          send: (m) => window.__SENT.push(JSON.parse(m).type),
+          close: () => { ch.readyState = 'closed'; },
+          onmessage: null,
+        };
+        // How the checks below play a server event into the page, which is the
+        // only way to put the call into the state stop has to get it out of.
+        window.__EMIT = (ev) => { if (ch.onmessage) ch.onmessage({ data: JSON.stringify(ev) }); };
+        return ch;
+      };
+      this.createOffer = async () => ({ type: 'offer', sdp: 'v=0' });
+      this.setLocalDescription = async () => {};
+      this.setRemoteDescription = async () => {};
+    };
+  })()`)
+
+  await page.locator('#call').tap()
+  // Longer than the other call checks: this one waits for the whole connect
+  // sequence — microphone, offer, SDP exchange — rather than for it to fail
+  // early, and the stubbed AudioContext is the slowest part of it.
+  await page.waitForTimeout(2_500)
+  const onCall = await stateOn(page)
+  record(
+    'call · a connected call says so',
+    onCall.slice(0, 60),
+    onCall.toLowerCase().includes('on a call'),
+  )
+
+  // She is mid-answer. Without this the page has nothing to cancel, and a
+  // `response.cancel` sent into silence comes back as an error event — which
+  // Grant would see as "something went wrong on the call" every time he took
+  // a breath. That is why `answering` is tracked at all.
+  await page.evaluate(`window.__EMIT({ type: 'response.created' })`)
+  await page.waitForTimeout(100)
+
+  await page.locator('#call').tap()
+  await page.waitForTimeout(500)
+
+  const sent = (await page.evaluate(`window.__SENT`)) as string[]
+  const paused = (await page.evaluate(`window.__PAUSED`)) as number
+  record(
+    'call · stop tells the server to stop generating',
+    sent.join(', ') || '(nothing was sent)',
+    sent.includes('response.cancel'),
+  )
+  record(
+    'call · and discards the audio it had already sent',
+    sent.includes('output_audio_buffer.clear') ? 'cleared' : 'never cleared — she plays on',
+    sent.includes('output_audio_buffer.clear'),
+  )
+  record(
+    'call · and pauses the speaker, so she stops mid-word',
+    `paused ${String(paused)}x`,
+    paused >= 1,
+  )
+  const after = await stateOn(page)
+  record(
+    'call · and the button offers to call again',
+    after.slice(0, 60),
+    after.toLowerCase().includes('call again') || after.toLowerCase().includes('press the phone'),
+  )
+
   await context.close()
 }
 
