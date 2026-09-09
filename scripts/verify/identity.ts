@@ -99,10 +99,19 @@ for (const [a, b, why] of [
 // ===========================================================================
 
 {
+  // Projects whose name is theirs alone. Two projects CAN share a name — that
+  // is what forcing a create means — and then the phrase belongs to whichever
+  // claimed it, by design: one phrase, one project. Asserting over the shared
+  // ones would be asserting that the uniqueness rule does not hold.
   const missing = await all(`
     select p.slug, p.name
       from public.projects p
      where p.status = 'active'
+       and not exists (
+         select 1 from public.projects q
+          where q.status = 'active' and q.project_id <> p.project_id
+            and app.normalise_name(q.name) = app.normalise_name(p.name)
+       )
        and not exists (
          select 1 from app.resolve_project_by_name(p.name) r
           where r.project_id = p.project_id and r.confidence >= 0.90
@@ -168,8 +177,14 @@ const alias = `the ${run} thing`
     added?.ok === true,
   )
 
+  // ORDER BY, because the function's `distinct on (project_id)` obliges it to
+  // order by project_id — the rows come back in id order, not best-first. The
+  // first version of this check omitted it, read an arbitrary row, and reported
+  // a working alias as broken.
   const found = await all(
-    `select r.project_id::text p, r.confidence::float8 c, r.how from app.resolve_project_by_name(${lit(alias)}) r`,
+    `select r.project_id::text p, r.confidence::float8 c, r.how
+       from app.resolve_project_by_name(${lit(alias)}) r
+      order by r.confidence desc`,
   )
   record(
     'and the project is then found by it',
@@ -293,30 +308,83 @@ const alias = `the ${run} thing`
   )
   record('with nothing to go on it still asks', String(blank?.p ?? 'null'), blank?.p === null)
 
-  // An unambiguous name in the message resolves it.
-  const named = await one(
-    `select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(`have a look at the ${run} thing`)})::text as p`,
+  // A name on its own resolves it.
+  const bare = await one(
+    `select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(alias)})::text as p`,
   )
   record(
-    'an unambiguous name in the message resolves it',
-    String(named?.p ?? 'null').slice(0, 8),
-    String(named?.p) === projectId,
+    'a name on its own resolves the project',
+    String(bare?.p ?? 'null').slice(0, 8),
+    String(bare?.p) === projectId,
   )
 
-  // Two confident matches must NOT resolve. A coin toss here is the failure
-  // this whole migration exists to prevent, and it is the assertion most likely
-  // to rot if the thresholds are ever "tidied up".
-  const ambiguous = await one(`
+  // And a name INSIDE a sentence, which is the only way anybody actually says
+  // it. This is what 0156 exists for: the first version matched the whole
+  // utterance as one string, so "the wellness thing" worked and "have a look at
+  // the wellness thing" found nothing.
+  const inSentence = await one(`
     select app.resolve_project('telegram_chat', ${lit(scope)}, null,
-      ${lit(`Fixture identity ${run}`)})::text as p
+      ${lit(`can you have a look at ${alias} before tomorrow`)})::text as p
   `)
-  const matches = await all(
-    `select 1 from app.resolve_project_by_name(${lit(`Fixture identity ${run}`)}) r where r.confidence >= 0.90`,
+  record(
+    'and a name buried in a sentence resolves it too',
+    String(inSentence?.p ?? 'null').slice(0, 8),
+    String(inSentence?.p) === projectId,
+  )
+
+  // But a short one does not get found by accident inside unrelated words.
+  const shortAlias = await one(
+    `select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+       'we should talk about the hq and the roadmap')::text as p`,
   )
   record(
-    'a name that matches two projects resolves to neither',
-    `${String(matches.length)} confident matches → ${String(ambiguous?.p ?? 'null')}`,
-    matches.length > 1 && ambiguous?.p === null,
+    'and a stray word in a sentence does not resolve anything',
+    String(shortAlias?.p ?? 'null'),
+    shortAlias?.p === null,
+  )
+
+  // The guard against guessing, tested at the level where it can actually fire.
+  //
+  // The first version of this check tried to construct two confident matches
+  // for one phrase and could not — which turned out to be the interesting
+  // result. Every route that clears 0.90 goes through a globally unique key:
+  // slug is unique, and `project_aliases.normalised` is unique across the whole
+  // table. A project's own name is an alias row, so the phrase is claimed the
+  // moment the project exists. **At most one project can reach 0.90 on any
+  // phrase, by construction** — and that is a better property than handling the
+  // ambiguity gracefully.
+  //
+  // What remains reachable, and is the realistic failure, is a phrase with no
+  // confident match and several plausible ones. The temptation there is to take
+  // the best fuzzy candidate. That is precisely how work lands in the wrong
+  // project while looking entirely reasonable, so it must return null.
+  const vague = `fixture identity`
+  const close = await all(
+    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(vague)}) r
+      order by r.confidence desc`,
+  )
+  const confident = close.filter((c) => Number(c.c) >= 0.9)
+  const plausible = close.filter((c) => Number(c.c) >= 0.55)
+  const guessed = await one(`
+    select app.resolve_project('telegram_chat', ${lit(scope)}, null, ${lit(vague)})::text as p
+  `)
+  record(
+    'a phrase with no confident match resolves to nobody, however plausible the near misses',
+    `${String(plausible.length)} plausible, ${String(confident.length)} confident → ${String(guessed?.p ?? 'null')}`,
+    confident.length === 0 && plausible.length > 0 && guessed?.p === null,
+  )
+
+  // And the invariant that makes the two-confident-match case unreachable, so a
+  // future change that drops the unique index fails here rather than silently
+  // reintroducing the coin toss.
+  const uniq = await one(`
+    select count(*) n from pg_indexes
+     where schemaname = 'public' and indexname = 'project_aliases_normalised_uniq'
+  `)
+  record(
+    'and one phrase can still only ever mean one project',
+    Number(uniq?.n) === 1 ? 'the global uniqueness index is in place' : 'THE UNIQUE INDEX IS GONE',
+    Number(uniq?.n) === 1,
   )
 
   // An explicit id still wins over everything, including a contradicting name.
@@ -354,7 +422,7 @@ const alias = `the ${run} thing`
 
 await db.execute(`
   update public.projects set status = 'archived', updated_at = app.now_utc()
-   where slug like ${lit(`fixture-identity-%${run}`)} or slug like ${lit(`fixture-identity-${run}%`)}
+   where slug like ${lit(`fixture-identity-%${run}%`)} or slug like ${lit(`fixture-identity-${run}%`)}
 `)
 
 const passed = checks.filter((c) => c.passed).length

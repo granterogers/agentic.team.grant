@@ -150,5 +150,9 @@
   "0149_grant_was_queuing_behind_the_housekeeping.sql": "f1d8433fa75ca7a141ac64ff377018c3b774c5275d6b2f9c94e996279d42180d",
   "0150_how_long_the_thinking_took.sql": "a28c19473dc918c841e0d7bfe8ae8289805ebbcb4f6d4c23bc6375728f272fc8",
   "0151_who_messages_you_and_where.sql": "569e980ac1f08e81a3627730b0e81c9929838101a9c4a3d5fb712cdfb9c6175e",
-  "0152_a_better_pen_when_he_wants_one.sql": "578a210914048a258d97d2443c9fa9d01b25464a1bb7ef1f3c40100e417a165b"
+  "0152_a_better_pen_when_he_wants_one.sql": "578a210914048a258d97d2443c9fa9d01b25464a1bb7ef1f3c40100e417a165b",
+  "0153_a_name_is_a_way_to_find_a_project.sql": "50ad1c8e8e69eabd7a9fc098d09eeac04e8b76eb56a7df03ce08eaf2a147fe05",
+  "0154_the_old_signature_was_still_answering.sql": "782baffc28f08101863a0da4a1645453a7075b0ec05e451d23b782f5a6f5ca2b",
+  "0155_there_is_no_min_of_a_uuid.sql": "2d827979e6faa864bd6d44bc47cc88ea74e108d890058463c3300bfb1bea21a5",
+  "0156_the_name_is_inside_the_sentence.sql": "71d27c14fa2c3105e00566ef3bebd623f588fdfbd82f907d9f789ed51eba4135"
 }
