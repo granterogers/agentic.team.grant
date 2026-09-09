@@ -202,7 +202,10 @@ const output = (): HandlerOutput =>
     subject: `chaos-${run}`,
   })
   const notifier = combinedNotifier(
-    [slackChannel(db, brokenOffice, { teamId }), pagerChannel(workingPager, 'important')],
+    [
+      slackChannel(db, brokenOffice, { teamId }),
+      pagerChannel(async () => workingPager, 'important'),
+    ],
     db,
   )
   // A real output row too, for the same reason: `outputId` is resolved by the

@@ -585,10 +585,11 @@ const channels = [slackChannel(db, office, { teamId: TEAM_ID })]
 if (telegramToken !== undefined && telegramToken !== '') {
   channels.push(
     pagerChannel(
-      new TelegramPager(db, new TelegramClient(telegramToken), {
-        botId: process.env.TELEGRAM_BOT_ID ?? '8967954396',
-        subject: 'nobody-registered-here',
-      }),
+      async () =>
+        new TelegramPager(db, new TelegramClient(telegramToken), {
+          botId: process.env.TELEGRAM_BOT_ID ?? '8967954396',
+          subject: 'nobody-registered-here',
+        }),
       'important',
     ),
   )

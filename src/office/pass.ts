@@ -64,7 +64,7 @@ import { slackChannel } from '../slack/notifier.ts'
 import { SlackOffice } from '../slack/office.ts'
 import { TelegramClient } from '../telegram/api.ts'
 import { TelegramPager } from '../telegram/pager.ts'
-import { pagerBot } from '../telegram/roster.ts'
+import { botForStaff, pagerBot } from '../telegram/roster.ts'
 
 export interface PassOptions {
   /** Where progress goes. The edge function has no stdout worth the name. */
@@ -175,15 +175,23 @@ export const buildPass = async (
 
   const pager = await pagerBot(db)
   if (pager !== null) {
-    channels.push(
-      pagerChannel(
-        new TelegramPager(db, new TelegramClient(pager.token), {
-          botId: pager.botId,
-          subject: 'grant',
-        }),
-        'important',
-      ),
-    )
+    // One pager per bot, built once and reused. `app.telegram_chat_for`
+    // answers per bot (0136), so which bot carries a result decides whether it
+    // lands in Grant's private chat or in the office group — and that is the
+    // whole of "only the chief of staff messages me directly".
+    const pagers = new Map<string, TelegramPager>()
+    const pagerFor = async (staffSlug: string | null): Promise<TelegramPager | null> => {
+      const bot = staffSlug === null ? pager : ((await botForStaff(db, staffSlug)) ?? pager)
+      const existing = pagers.get(bot.botId)
+      if (existing !== undefined) return existing
+      const made = new TelegramPager(db, new TelegramClient(bot.token), {
+        botId: bot.botId,
+        subject: 'grant',
+      })
+      pagers.set(bot.botId, made)
+      return made
+    }
+    channels.push(pagerChannel(pagerFor, 'important'))
   }
 
   // The reply channel goes FIRST. An instruction that arrived in a Telegram
@@ -285,6 +293,20 @@ export const buildPass = async (
     // between "it works" and "it works eventually".
     const pressed = await processCallbacks(db, { subject: 'grant' })
     for (const p of pressed) log(`button ${p.action}: ${p.outcome} — ${p.note.slice(0, 100)}`)
+
+    // An instruction that never became a job, before anything else.
+    //
+    // The floor under the adapters (0148). Slack stored thirty commands over
+    // three days and enqueued none of them, and nothing noticed because a
+    // filed command looks exactly like a handled one unless you join it to
+    // `jobs`. Never fatal: a sweep that throws must not stop the queue being
+    // drained.
+    try {
+      const swept = Number((await db.execute('select app.enqueue_orphans() as n')).rows[0]?.n ?? 0)
+      if (swept > 0) log(`swept ${String(swept)} instruction(s) that had no job`)
+    } catch (error) {
+      log(`orphan sweep: ${(error as Error).message.slice(0, 100)}`)
+    }
 
     // Recurring duties before the drain, so one fired this pass is worked this
     // pass.

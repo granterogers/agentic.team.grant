@@ -87,6 +87,7 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
         return {
           ...base,
           body: 'No enabled Slack install, so there is nothing to keep alive.',
+          announce: false,
         } satisfies HandlerOutput
       }
 
@@ -99,6 +100,7 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
             'tokens cannot be renewed. Regenerating the pair is a human step: ' +
             'https://api.slack.com/apps → Your App Configuration Tokens.',
           confidence: 'high',
+          announce: true,
         } satisfies HandlerOutput
       }
 
@@ -111,7 +113,9 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
         const hours = Math.round(secondsUntilExpiry(expiresAt) / 360) / 10
         return {
           ...base,
+          // Every four hours, three times out of four. Not news.
           body: `Slack tokens are good for another ${String(hours)} hours. Left alone.`,
+          announce: false,
         } satisfies HandlerOutput
       }
 
@@ -132,6 +136,7 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
               : 'The token we hold still works until it expires, and this will be ' +
                 'tried again shortly.'),
           confidence: 'high',
+          announce: true,
         } satisfies HandlerOutput
       }
 
@@ -139,6 +144,9 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
       return {
         ...base,
         body: `Slack tokens renewed. Good for another ${String(hours)} hours.`,
+        // Twice a day at most, and it is the kind of maintenance worth seeing
+        // happen — an absence of these is how you find out it stopped.
+        announce: true,
       } satisfies HandlerOutput
     },
   }

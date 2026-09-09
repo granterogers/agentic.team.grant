@@ -31,6 +31,47 @@ const SIGNING_SECRET = Deno.env.get('SLACK_SIGNING_SECRET') ?? ''
 const BOT_USER_ID = Deno.env.get('SLACK_BOT_USER_ID') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+/**
+ * Where to kick the worker, and what to present when kicking it.
+ *
+ * The Telegram webhook has done this since Grant said *"I need the response to
+ * be pretty much instant"*. Slack never did, so a message typed in the office
+ * waited for the next pg_cron tick — up to a minute before the pass even
+ * starts, and longer than that end to end.
+ *
+ * Grant, on both surfaces: *"I need any messages that I send either in
+ * Telegram or in Slack to be responded to within, say, a minute."* One
+ * mechanism, both doors.
+ *
+ * Empty means no kick, and the queue still drains on the slower path — a
+ * missing secret must degrade to "late", never to "lost" (§18).
+ */
+const WORKER_URL = Deno.env.get('WORKER_URL') ?? ''
+const WORKER_KICK_SECRET = Deno.env.get('WORKER_KICK_SECRET') ?? ''
+
+/**
+ * Start the work now, without waiting for it.
+ *
+ * Deliberately not awaited. Slack retries an event it does not get a 200 for
+ * within three seconds, and a retried event is a second copy of the message;
+ * a pass can take a minute. `waitUntil` keeps the runtime alive after the
+ * response has gone, which is exactly the shape needed.
+ *
+ * Failures are swallowed: the kick is an accelerator, not the delivery
+ * mechanism.
+ */
+const kickWorker = (): boolean => {
+  if (WORKER_URL === '' || WORKER_KICK_SECRET === '') return false
+  const kick = fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${WORKER_KICK_SECRET}` },
+  }).catch(() => undefined)
+  const keepAlive = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime?.waitUntil
+  if (keepAlive === undefined) void kick
+  else keepAlive(kick)
+  return true
+}
 
 /** Never echo a reason to an unauthenticated caller — it is a probing aid. */
 const unauthorized = (): Response => new Response('unauthorized', { status: 401 })
@@ -95,6 +136,21 @@ const storeCommand = async (
     // The Slack-specific half. Best effort *in the response sense only*: if it
     // fails the canonical command is still stored, which is the row that must
     // never be lost. Slack routing can be re-derived; an instruction cannot.
+    // And the thing that makes it WORK.
+    //
+    // This call was missing entirely. A message typed in Slack was stored as a
+    // canonical command and nothing ever turned it into a job — 30 of them
+    // going back three days, filed and never answered. The Telegram webhook
+    // has called this since 0072 and the voice endpoint since 0102; Slack, the
+    // surface §12 calls "the office", never did.
+    //
+    // Only for something that IS an instruction: a reaction, a join notice and
+    // a button press are canonical commands too, and none of them is work.
+    // Button presses go through `processCallbacks` at the top of every pass.
+    if (command.instruction !== null && command.instruction.trim() !== '') {
+      await rest('rpc/enqueue_inbound', { p_command_id: commandId })
+    }
+
     await rest('inbound_commands_slack', {
       command_id: commandId,
       team_id: command.slack.team_id,
@@ -218,5 +274,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return Response.json({ ok: true, dedupe_key: command.dedupe_key, duplicate: true })
   }
 
-  return Response.json({ ok: true, dedupe_key: command.dedupe_key })
+  // Only for a message that was actually stored. Kicking on a duplicate would
+  // start a pass for work already queued or already done.
+  return Response.json({ ok: true, dedupe_key: command.dedupe_key, kicked: kickWorker() })
 })

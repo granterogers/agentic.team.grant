@@ -48,6 +48,25 @@ export interface Job {
 /** What a handler produces. Deliberately the same shape §16 requires. */
 export interface HandlerOutput {
   readonly body: string
+  /**
+   * Whether this outcome is worth telling anyone about.
+   *
+   * Undefined leaves the job's own flag alone, which is what every handler
+   * meant before this existed. `false` says "nothing happened" and suppresses
+   * every channel; `true` says the opposite for a job whose flag is off.
+   *
+   * It belongs on the OUTPUT because the handler is the only thing that knows.
+   * A duty that read the notebooks and found nothing is not news; the same duty
+   * finding three new sources is. Deciding that from the job kind — which is
+   * what `jobs.announce` alone can do — gets one of those two wrong, and it got
+   * the common one wrong: Marcus told Grant "Looked through 2 notebooks.
+   * Nothing new." on Telegram AND Slack, hourly, for a day.
+   *
+   * Before this, `calendar.ts` and `mail.ts` each wrote the same UPDATE by
+   * hand. Two copies were tolerable; six would be the version somebody
+   * forgets, which is how the hourly repetition happened.
+   */
+  readonly announce?: boolean
   readonly confidence: Confidence
   readonly evidence: Evidence
   readonly sources: readonly string[]
@@ -456,6 +475,16 @@ export const runJob = async (
     returning output_id::text as id
   `)
   const outputId = String(rows[0]?.id)
+
+  // Before the notifier is anywhere near it. `combinedNotifier` reads
+  // `jobs.announce` as its first act, so a handler's verdict has to be on the
+  // row by then rather than passed alongside it.
+  if (output.announce !== undefined) {
+    await db.execute(
+      `update public.jobs set announce = ${output.announce ? 'true' : 'false'}
+        where job_id = ${lit(job.jobId)}::uuid`,
+    )
+  }
 
   await moveTo(db, job.jobId, 'output_created')
   await moveTo(db, job.jobId, 'quality_review')

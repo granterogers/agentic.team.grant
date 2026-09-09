@@ -83,6 +83,7 @@ export function notionSyncHandler(db: SqlExecutor): Handler {
             (settings.disabled_reason === null || settings.disabled_reason === undefined
               ? '.'
               : `: ${String(settings.disabled_reason)}`),
+          announce: false,
         } satisfies HandlerOutput
       }
 
@@ -93,6 +94,7 @@ export function notionSyncHandler(db: SqlExecutor): Handler {
           body:
             'There is no Notion token in the vault, so the pages you have shared ' +
             'cannot be read.',
+          announce: true,
         } satisfies HandlerOutput
       }
 
@@ -105,6 +107,10 @@ export function notionSyncHandler(db: SqlExecutor): Handler {
             'which project they belong to.\n\n' +
             'Tell me the project and I will keep it up to date from then on — it is ' +
             'the `notion.project_slug` setting.',
+          // Said ONCE where he will find it — the Set up page — rather than
+          // every two hours on two surfaces. A question repeated hourly is
+          // not more likely to be answered; it is less.
+          announce: false,
         } satisfies HandlerOutput
       }
 
@@ -122,6 +128,7 @@ export function notionSyncHandler(db: SqlExecutor): Handler {
             `The project set for Notion pages, "${slug}", is not an active project. ` +
             'Nothing was read — pointing this at the wrong place is worse than ' +
             'pointing it nowhere.',
+          announce: true,
         } satisfies HandlerOutput
       }
 
@@ -144,6 +151,7 @@ export function notionSyncHandler(db: SqlExecutor): Handler {
             ? ''
             : `\n\n${count(result.skipped.length, 'page was', 'pages were')} left out: ` +
               `${result.skipped.slice(0, 4).join('; ')}.`),
+        announce: parts.length > 0 || result.skipped.length > 0,
       } satisfies HandlerOutput
     },
   }

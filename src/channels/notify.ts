@@ -242,9 +242,28 @@ export function combinedNotifier(
   }
 }
 
-/** Adapt a `TelegramPager` to the combined notifier's shape. */
+/**
+ * Adapt a `TelegramPager` to the combined notifier's shape.
+ *
+ * ## Why the pager is chosen per job rather than once
+ *
+ * It used to be one `TelegramPager` built on the pager bot, so every result
+ * from every member of staff arrived in Grant's private chat from the same
+ * account. Once the office group existed that was exactly wrong: he asked for
+ * *"only the chief of staff should message me directly"*, and the routing to
+ * make that true already exists in `app.telegram_chat_for` (0136) — but it
+ * answers PER BOT, and a single pager bot only ever asks it one question.
+ *
+ * So the bot is looked up from whoever did the work. Marcus's result goes out
+ * on Marcus's bot, which routes to the group; Claire's goes out on hers, which
+ * routes to Grant. The rule lives in one place and this just stops bypassing
+ * it.
+ *
+ * Falling back to the pager when the job belongs to nobody, which is the case
+ * the pager was built for.
+ */
 export function pagerChannel(
-  pager: TelegramPager,
+  pagerFor: (staffSlug: string | null) => Promise<TelegramPager | null>,
   severity: PagerSeverity = 'routine',
 ): {
   readonly name: string
@@ -259,8 +278,12 @@ export function pagerChannel(
   return {
     name: 'telegram',
     surface: 'telegram',
-    notify: async (job, output, outputId, context) =>
-      pager.page({
+    notify: async (job, output, outputId, context) => {
+      const pager = await pagerFor(context.staff?.slug ?? null)
+      if (pager === null) {
+        return { delivered: false, note: 'no telegram bot for this job, and no pager' }
+      }
+      return await pager.page({
         job,
         output,
         outputId,
@@ -270,6 +293,7 @@ export function pagerChannel(
         reviewed: context.reviewed,
         severity,
         actions: context.actions,
-      }),
+      })
+    },
   }
 }

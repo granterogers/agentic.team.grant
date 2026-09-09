@@ -92,6 +92,7 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
           ...base,
           body: 'Notebook is switched off, so there was nothing to look for.',
           evidence: 'verified',
+          announce: false,
         } satisfies HandlerOutput
       }
 
@@ -118,6 +119,7 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
             ...base,
             body: 'A sync was already running, so this one stood down.',
             evidence: 'verified',
+            announce: false,
           } satisfies HandlerOutput
         }
         throw error
@@ -127,6 +129,9 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
         return {
           ...base,
           body: `Could not read the notebooks this time: ${outcome.detail}`,
+          // News. Not being able to see is the one outcome of this duty that
+          // is worth interrupting someone over.
+          announce: true,
           // `verified` and `high`, which looks wrong for a failure and is not:
           // the claim being made is about the ATTEMPT, and we know exactly
           // what happened to it. The run is recorded as failed in
@@ -163,7 +168,15 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
               : ` ${count(outcome.sourcesRemoved, 'source', 'sources')} we had before ` +
                 'is no longer listed, which is noted rather than acted on.')
 
-      return { ...base, body, evidence: 'verified' } satisfies HandlerOutput
+      // Hourly, and almost always "nothing new". Announcing that is how a
+      // channel stops being read — Marcus said it to Grant on two surfaces
+      // every hour for a day before this line existed.
+      return {
+        ...base,
+        body,
+        evidence: 'verified',
+        announce: parts.length > 0,
+      } satisfies HandlerOutput
     },
   }
 }

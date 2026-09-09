@@ -231,7 +231,7 @@ if (pager !== null) {
   const telegram = new TelegramClient(pager.token)
   channels.push(
     pagerChannel(
-      new TelegramPager(db, telegram, { botId: pager.botId, subject: 'grant' }),
+      async () => new TelegramPager(db, telegram, { botId: pager.botId, subject: 'grant' }),
       // Above the pager floor, because the point of running this is that the
       // phone buzzes. A routine result deliberately would not.
       'important',

@@ -84,6 +84,7 @@
     "backup:rehearse": "tsx scripts/backup/rehearse-restore.ts",
     "backup:store-key": "tsx scripts/backup/store-key.ts",
     "backup:now": "tsx scripts/backup/take.ts",
+    "verify:latency": "tsx scripts/verify/latency.ts",
     "verify:scenario-a": "tsx scripts/verify/scenario-a.ts",
     "verify:cross-interface": "tsx scripts/verify/cross-interface.ts",
     "verify:chaos": "tsx scripts/verify/chaos.ts",

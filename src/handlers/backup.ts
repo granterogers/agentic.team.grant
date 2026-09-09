@@ -74,6 +74,9 @@ export function backupHandler(deps: BackupDeps): Handler {
             'Management API but it has to be put somewhere, and that needs the ' +
             'service role key in the vault as `supabase.service_role_key`.',
           confidence: 'high',
+          // A backup that did not happen is the one thing here worth saying
+          // out loud. An unnoticed absence of backups is the whole failure.
+          announce: true,
         } satisfies HandlerOutput
       }
 
@@ -96,6 +99,9 @@ export function backupHandler(deps: BackupDeps): Handler {
           'It holds no credentials, and it lives in the same Supabase project it ' +
           'came from — so it survives losing the code or this machine, and not ' +
           'losing the project.',
+        // Nightly and identical. The Set up page carries "last taken 18
+        // minutes ago" for whoever wants to check.
+        announce: false,
       } satisfies HandlerOutput
     },
   }

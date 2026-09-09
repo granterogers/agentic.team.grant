@@ -145,5 +145,6 @@
   "0144_the_backups_row_was_green_for_the_wrong_reason.sql": "470fedb2b9123ccc9bf5d42bff1c5cf686676805bbf646f3b8b0ba65f8b1c450",
   "0145_that_is_not_english.sql": "eddc995c26c8f2807f93f7f4985c3008f9a63b2a50a6fe5694ba2eb28836875d",
   "0146_the_notes_nobody_read.sql": "c7420251aea6fdeb779110638bc263c795511746c0fbe3f88043b72d50afe440",
-  "0147_a_worker_should_not_take_what_it_cannot_do.sql": "9e49075cb72fff95b57047a253a16ee6fd2eed192c1a1765598b1fce29b252f8"
+  "0147_a_worker_should_not_take_what_it_cannot_do.sql": "9e49075cb72fff95b57047a253a16ee6fd2eed192c1a1765598b1fce29b252f8",
+  "0148_an_instruction_that_never_became_work.sql": "1145bf00dac622ef41b670f08da2705e67fa8c48c553bd1a92f5320a87153969"
 }
