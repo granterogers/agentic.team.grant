@@ -44,8 +44,8 @@ describe('structure survives the crossing', () => {
   it('reads a checklist as one, because a coaching curriculum is full of them', () => {
     const blocks = toBlocks('- [ ] not yet\n- [x] done')
     expect(blocks.map((b) => b.type)).toEqual(['to_do', 'to_do'])
-    expect((blocks[0]?.to_do as { checked: boolean }).checked).toBe(false)
-    expect((blocks[1]?.to_do as { checked: boolean }).checked).toBe(true)
+    expect((blocks[0]?.to_do as { checked: boolean } | undefined)?.checked).toBe(false)
+    expect((blocks[1]?.to_do as { checked: boolean } | undefined)?.checked).toBe(true)
   })
 
   it('flattens a heading deeper than Notion goes rather than losing it', () => {
@@ -59,7 +59,7 @@ describe('structure survives the crossing', () => {
     expect(blocks[0]?.type).toBe('code')
     // Notion rejects an unknown language outright, so an unrecognised one has
     // to become plain text rather than be passed through.
-    expect((blocks[0]?.code as { language: string }).language).toBe('plain text')
+    expect((blocks[0]?.code as { language: string } | undefined)?.language).toBe('plain text')
     expect(textOf(blocks[0] as Record<string, unknown>)).toBe('nuqneH')
   })
 

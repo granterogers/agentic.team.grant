@@ -111,7 +111,9 @@ describe('a brief is not a request for one artifact', () => {
 
   it('still reads the short request it was written for', () => {
     // The guards must not cost the case this table exists for.
-    const asked = notebookRequest('Generate an audio overview in our Google notebook for this project')
+    const asked = notebookRequest(
+      'Generate an audio overview in our Google notebook for this project',
+    )
     expect(asked?.kinds).toEqual(['audio'])
   })
 

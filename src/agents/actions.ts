@@ -137,7 +137,8 @@ const looksLikeABrief = (instruction: string): boolean => {
  * Only the 60 characters before the phrase are examined. A "such as" four
  * sentences earlier is about something else.
  */
-const AS_AN_EXAMPLE = /(?:\(|\bsuch as\b|\blike\b|\bincluding\b|\be\.g\.|\bfor example\b|\bany\b)[^)]{0,60}$/i
+const AS_AN_EXAMPLE =
+  /(?:\(|\bsuch as\b|\blike\b|\bincluding\b|\be\.g\.|\bfor example\b|\bany\b)[^)]{0,60}$/i
 
 const mentionedNotAsked = (text: string, at: number): boolean =>
   AS_AN_EXAMPLE.test(text.slice(Math.max(0, at - 60), at))

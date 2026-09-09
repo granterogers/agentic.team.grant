@@ -128,3 +128,45 @@ export function connectRequest(instruction: string): ConnectRequest | null {
   if (!WIRE_UP.test(instruction)) return null
   return { what: 'notion', named: namedSpace(instruction) }
 }
+
+/**
+ * Reading "populate Notion" as a thing to do, separately from "connect it".
+ *
+ * ## Why this is its own table
+ *
+ * Grant sent the Chief of Staff a long brief — *"use your connection to the
+ * notebook 'Legacy Coaching Course' as a means to fully populate the
+ * corresponding teamspace in Notion: so create tasks, fully populate docs…"* —
+ * and got a paragraph back describing what it would do. Then, a day later,
+ * looking at the teamspace: *"notion is still empty.. you need to check against
+ * the results of what im asking."*
+ *
+ * `connectRequest` would not have caught it and should not: that one attaches
+ * databases, and it deliberately refuses briefs, because a twenty-line brief
+ * that mentions Notion in passing must not silently rewire a workspace.
+ *
+ * But a brief is exactly the shape this request arrives in. Populating is what
+ * you ask for at length. So this one does NOT bail on length — it requires an
+ * explicit fill verb aimed at Notion instead, which is the narrower filter and
+ * the one that matches how the sentence was actually written.
+ *
+ * ## Still safe to be wrong about
+ *
+ * Every page it writes is matched on title first and left alone if it exists,
+ * so the worst case of a false positive is pages appearing in a workspace he
+ * asked to have pages in — recoverable, unlike attaching the wrong database.
+ */
+const FILL_UP =
+  /\b(?:populate|fill(?:\s+(?:up|in|out))?|import|build\s+out|flesh\s+out|write\s+(?:it\s+)?(?:in)?to|push\s+(?:it\s+)?(?:in)?to|create\s+(?:the\s+)?(?:pages|docs|tasks|projects))\b/i
+
+/**
+ * Is this an instruction to put our material into Notion?
+ *
+ * Deliberately not gated on `looksLikeABrief`, unlike `connectRequest` — see
+ * above. Still gated on being an instruction rather than a question.
+ */
+export function populateRequest(instruction: string): boolean {
+  if (ASKING_ABOUT.test(instruction)) return false
+  if (!NOTION.test(instruction)) return false
+  return FILL_UP.test(instruction)
+}

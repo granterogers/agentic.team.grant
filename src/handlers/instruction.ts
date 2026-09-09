@@ -74,7 +74,7 @@
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { capabilityBrief, contradictsReality, reachNow, verbsNow } from '../agents/capability.ts'
-import { connectRequest } from '../agents/connect.ts'
+import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -951,28 +951,61 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         about" when the chat is about nothing in particular is how a project
         gets attached to the wrong workspace.
       */
+      /*
+        "Populate the Notion teamspace from the course."
+
+        Not a separate branch, because the brief that asked for it reads as
+        BOTH: it says "use ... Notion", so `connectRequest` catches it, and it
+        says "fully populate", so `populateRequest` does too. Both readings are
+        right — he is asking for a workspace to be connected and then filled —
+        and treating them as rival matches is how the first version would have
+        attached three databases and left them empty, which is exactly the
+        thing he complained about.
+
+        So it is a sequence, not a choice. Adopt runs first because attaching is
+        the precondition; the import follows a minute later so it finds the
+        attachments waiting rather than racing them.
+      */
+      const fill = populateRequest(instruction)
       const wire = connectRequest(instruction)
-      if (wire !== null && job.projectId !== null && job.projectId !== undefined) {
+      if ((wire !== null || fill) && job.projectId !== null && job.projectId !== undefined) {
         // A child of this job, so it inherits the correlation id, the priority
         // and — the part that matters — the project this instruction resolved
         // to. `enqueue_job` does not exist; `enqueue_child` is how the office
         // hangs follow-up work off the thing that asked for it.
-        await deps.db.execute(`
-          select app.enqueue_child(
-            ${lit(job.jobId)}::uuid,
-            'office.notion_adopt',
-            '{}'::jsonb,
-            interval '0',
-            true,
-            ${lit(job.projectId)}::uuid
-          )
-        `)
+        if (wire !== null) {
+          await deps.db.execute(`
+            select app.enqueue_child(
+              ${lit(job.jobId)}::uuid,
+              'office.notion_adopt',
+              '{}'::jsonb,
+              interval '0',
+              true,
+              ${lit(job.projectId)}::uuid
+            )
+          `)
+        }
+        if (fill) {
+          await deps.db.execute(`
+            select app.enqueue_child(
+              ${lit(job.jobId)}::uuid,
+              'office.notion_import',
+              '{}'::jsonb,
+              interval ${wire === null ? "'0'" : "'1 minute'"},
+              true,
+              ${lit(job.projectId)}::uuid
+            )
+          `)
+        }
+        const said = fill
+          ? 'On it — putting the material we hold into Notion as Projects, Docs and Tasks. ' +
+            'I will come back with what I created and the links.'
+          : wire?.named === null || wire?.named === undefined
+            ? 'Right — wiring this project up to the Notion databases we already have. ' +
+              'I will say what I attached.'
+            : `Right — wiring this project up to ${wire.named} in Notion. I will say what I attached.`
         return {
-          body:
-            wire.named === null
-              ? 'Right — wiring this project up to the Notion databases we already have. ' +
-                'I will say what I attached.'
-              : `Right — wiring this project up to ${wire.named} in Notion. I will say what I attached.`,
+          body: said,
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],

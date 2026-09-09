@@ -49,6 +49,7 @@ import { instructionHandler } from '../handlers/instruction.ts'
 import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
+import { notionImportHandler } from '../handlers/notion-import.ts'
 import { notionSyncHandler } from '../handlers/notion-sync.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
@@ -307,6 +308,10 @@ export const buildPass = async (
     // "Use the Notion you already have" — a configuration change the office can
     // now make, rather than one that needed a terminal (0164).
     notionAdoptHandler({ db }),
+    // And the composition of everything else: source material actually landing
+    // in Notion as pages. Every capability existed and nothing put them
+    // together, which is why the teamspace stayed empty (0166).
+    notionImportHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is

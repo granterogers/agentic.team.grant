@@ -172,6 +172,32 @@ export function notionAdoptHandler(deps: NotionAdoptDeps): Handler {
       }
       if (parts.length === 0) parts.push('Nothing to attach — it is already wired up.')
 
+      /*
+        Grant: *"can't it list the available teamspaces and ask me which one to
+        use?"*
+
+        Not teamspaces — Notion's API has no such object, on any version. A
+        database inside a teamspace reports its parent as `workspace` and the
+        words `teamspace`, `space_id` and `section` appear nowhere in the
+        payload, so there is nothing to enumerate and I will not invent a list
+        that looks authoritative and is guesswork.
+
+        What IS enumerable is every database shared with the integration, which
+        is the thing a write actually needs. So the answer to his question is
+        yes, one level down: here is the real list, and if the right one is not
+        on it the reason is that it has not been shared, which is the sentence
+        that follows.
+      */
+      const placed = new Set(attached)
+      const rest = shared.filter((s) => !placed.has(s.title))
+      if (rest.length > 0) {
+        parts.push(
+          `Everything else shared with us: ${rest.map((s) => s.title).join(', ')}. Say the ` +
+            'word if one of those should be the Projects, Tasks or Docs database instead — ' +
+            'Notion has no teamspace in its API, so these databases are as far as I can see.',
+        )
+      }
+
       return {
         ...base,
         body: parts.join('\n\n'),

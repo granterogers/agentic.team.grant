@@ -2,7 +2,7 @@
  * "Wire this up" — including the sentence that got a paragraph instead.
  */
 import { describe, expect, it } from 'vitest'
-import { connectRequest, namedSpace } from '../../src/agents/connect.ts'
+import { connectRequest, namedSpace, populateRequest } from '../../src/agents/connect.ts'
 
 describe('the sentences Grant actually sent', () => {
   it('reads an explicit "work with the notion you have"', () => {
@@ -83,5 +83,52 @@ describe('what must not trigger a configuration change', () => {
 
   it('ignores talking about Notion without a verb', () => {
     expect(connectRequest('notion is looking a bit empty')).toBeNull()
+  })
+})
+
+/**
+ * The brief that came back as prose while the teamspace stayed empty.
+ *
+ * *"notion is still empty.. you need to check against the results of what im
+ * asking."* These are the sentences that must reach `office.notion_import`.
+ */
+describe('asking for Notion to be filled', () => {
+  const brief =
+    "use your connection to the notebook 'Legacy Coaching Course' as a means to fully " +
+    'populate the corresponding teamspace in Notion: so create tasks, fully populate docs ' +
+    'on Notion format to be easily viewable based on what is present in the notebook, ' +
+    "break down the teamspace into 'notion projects' based on the coaching curriculum"
+
+  it('reads the brief he actually sent', () => {
+    expect(populateRequest(brief)).toBe(true)
+  })
+
+  it('overlaps with connectRequest, which is why order matters', () => {
+    // The brief says "use ... Notion", so the wire-up table reads it too — it
+    // is one long line rather than the multi-sentence shape `looksLikeABrief`
+    // recognises. Both readings are defensible and neither is wrong: he is
+    // asking for a workspace to be connected AND filled.
+    //
+    // So this is not a conflict to be settled by tightening a regex, it is a
+    // sequence: attach first, then write. `instruction.ts` enqueues both in
+    // that order, and this test exists so a change to either table shows up as
+    // a decision rather than as an empty teamspace.
+    expect(connectRequest(brief)).not.toBeNull()
+    expect(populateRequest(brief)).toBe(true)
+  })
+
+  it('reads the short forms too', () => {
+    expect(populateRequest('populate Notion from what we have')).toBe(true)
+    expect(populateRequest('import the course into Notion')).toBe(true)
+    expect(populateRequest('build out the Notion pages')).toBe(true)
+  })
+
+  it('leaves questions about Notion alone', () => {
+    expect(populateRequest('can you populate Notion with this?')).toBe(false)
+    expect(populateRequest('what would you put into Notion?')).toBe(false)
+  })
+
+  it('does not fire on a sentence with no Notion in it', () => {
+    expect(populateRequest('populate the spreadsheet from the notebook')).toBe(false)
   })
 })

@@ -108,7 +108,7 @@ describe('single and multi-part', () => {
       expect(out.parts).toBe(1)
       expect(h.sends).toHaveLength(1)
       expect(h.calls[0]?.endpoint).toBe('/file_uploads')
-      expect((h.calls[0]?.body as { mode: string }).mode).toBe('single_part')
+      expect((h.calls[0]?.body as { mode: string } | undefined)?.mode).toBe('single_part')
       // No completion call for a single part.
       expect(h.calls.some((c) => c.endpoint.includes('/complete'))).toBe(false)
     } finally {
@@ -123,7 +123,7 @@ describe('single and multi-part', () => {
       const out = await uploadFile(h.client, 'big.mp4', big)
       expect(out.parts).toBe(Math.ceil(big.length / PART_SIZE))
       expect(h.sends).toHaveLength(out.parts)
-      expect((h.calls[0]?.body as { mode: string }).mode).toBe('multi_part')
+      expect((h.calls[0]?.body as { mode: string } | undefined)?.mode).toBe('multi_part')
       // Multi-part is not finished until it is completed.
       expect(h.calls.some((c) => c.endpoint.includes('/complete'))).toBe(true)
     } finally {
