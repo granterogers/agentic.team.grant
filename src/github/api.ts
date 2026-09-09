@@ -135,19 +135,70 @@ export class GitHubClient {
   private constructor(private readonly token: string | null) {}
 
   /**
-   * A client, authenticated if there is a token to authenticate with.
+   * A client, authenticated if the vault holds anything that can authenticate.
+   *
+   * ## Why this is a list and not a name
+   *
+   * The first version asked for `github.token`, found nothing, and reported
+   * "no token — it is Grant's to create". A GitHub token had been in the vault
+   * for days as `github.dispatch_token`. His reply: *"I already gave you a
+   * token ages ago.. you need to bake this in so you don't forget again."*
+   *
+   * A single hard-coded name turns "we have no credential" into a claim about
+   * one guess. The order below is preference, and `usingSecret` reports which
+   * one answered, so the claim is always checkable. 0159 adds
+   * `app.vault_inventory()` for the same reason at the system level.
+   *
+   * ## Why a write-scoped token is acceptable here
+   *
+   * `github.dispatch_token` carries contents:write on one repository, and using
+   * it for reads looks like a least-privilege violation. It is not, quite:
+   * nothing in this file writes, so the client cannot exercise that scope, and
+   * `github.write` is registered at risk 3 and disabled (0157). Reporting no
+   * credential when one exists is the worse failure, and it is the one that
+   * actually happened. If a write method is ever added here, this fallback has
+   * to go first.
    *
    * Never null: an unauthenticated client can still read public repositories,
    * and "GitHub is unavailable" is a much stronger claim than "we have no
-   * token". `authenticated` says which one this is, so a caller that needs to
-   * explain a 404 can say whether a private repository was even possible.
+   * token". `authenticated` says which one this is, so a caller explaining a
+   * 404 can say whether a private repository was even possible.
    */
+  static readonly SECRET_NAMES = [
+    // Purpose-made for §8: read-only, scoped to the repositories Grant picks.
+    'github.read_token',
+    'github.token',
+    // Made for repository_dispatch (0126) and scoped to this repository only.
+    // It authenticates, so it beats nothing; it cannot see any other repo.
+    'github.dispatch_token',
+  ] as const
+
+  private static resolvedFrom: string | null = null
+
   static async fromVault(db: SqlExecutor): Promise<GitHubClient> {
+    const names = GitHubClient.SECRET_NAMES.map((n) => `'${n}'`).join(', ')
     const { rows } = await db.execute(`
-      select decrypted_secret as t from vault.decrypted_secrets where name = 'github.token'
+      select name, decrypted_secret as t
+        from vault.decrypted_secrets
+       where name in (${names})
     `)
-    const token = String((rows[0] as { t?: string } | undefined)?.t ?? '')
-    return new GitHubClient(token === '' ? null : token)
+    const held = new Map(
+      (rows as { name: string; t: string }[]).map((r) => [String(r.name), String(r.t)]),
+    )
+    for (const name of GitHubClient.SECRET_NAMES) {
+      const token = held.get(name)
+      if (token !== undefined && token !== '') {
+        GitHubClient.resolvedFrom = name
+        return new GitHubClient(token)
+      }
+    }
+    GitHubClient.resolvedFrom = null
+    return new GitHubClient(null)
+  }
+
+  /** Which vault secret the last `fromVault` used, so a report can say so. */
+  static get usingSecret(): string | null {
+    return GitHubClient.resolvedFrom
   }
 
   /** For tests and for the one-off scripts. */

@@ -112,10 +112,52 @@ const client = await GitHubClient.fromVault(db)
 record(
   'a client exists whether or not there is a token',
   client.authenticated
-    ? 'authenticated — the vault has github.token'
+    ? `authenticated with \`${String(GitHubClient.usingSecret)}\``
     : 'unauthenticated (public reads only, 60/hour)',
   true,
 )
+
+/*
+  What the vault holds for GitHub, listed rather than remembered.
+
+  This row exists because of a specific mistake: the client asked for
+  `github.token`, found nothing, and this check reported that no GitHub
+  credential existed. `github.dispatch_token` had been in the vault for days.
+  Grant: *"I already gave you a token ages ago.. you need to bake this in so you
+  don't forget again."*
+
+  Enumerating is the fix. A future reader sees every GitHub secret the vault
+  holds and what each is for, so "we have no token" can never again be a claim
+  about one guessed name.
+*/
+{
+  const held = (
+    await db.execute(
+      `select name, coalesce(description, '-') as description from app.vault_inventory()
+        where service = 'github'`,
+    )
+  ).rows as { name: string; description: string }[]
+  record(
+    'and every GitHub credential the vault holds is listed, not guessed at',
+    held.length === 0
+      ? 'the vault holds none'
+      : held.map((h) => `${h.name} — ${h.description.slice(0, 60)}`).join(' ;; '),
+    true,
+  )
+
+  // The honest caveat. `github.dispatch_token` authenticates as granterogers
+  // and is scoped to THIS repository with contents:write — made for
+  // repository_dispatch (0126). It is better than nothing and it is not what §8
+  // needs, because a token scoped to one repository cannot see Rest Timer
+  // whatever it is allowed to do here.
+  if (GitHubClient.usingSecret === 'github.dispatch_token') {
+    skip(
+      'reading any repository other than this one',
+      'the only GitHub credential is github.dispatch_token, scoped to this ' +
+        'repository — §8 needs a read-only token covering the repos Grant picks',
+    )
+  }
+}
 
 // The one repository reachable from here. Read from config rather than
 // hard-coded, so this follows the deployment.

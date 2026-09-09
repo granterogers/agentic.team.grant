@@ -330,6 +330,62 @@ for (const name of [
   unverifiable(name, false, 'superseded by the vault — the backup workflow reads from there')
 }
 
+// --- what the vault actually holds ------------------------------------------
+//
+// The section this file needed from the day it was written, and did not have.
+//
+// Everything above audits ENVIRONMENT VARIABLES. Nothing enumerated the vault,
+// so "do we have a credential for X?" was never a lookup — it was somebody
+// remembering. The header of this file says the same mistake had happened three
+// times; the fourth was the GitHub client asking for `github.token`, not
+// finding it, and reporting that no GitHub credential existed while
+// `github.dispatch_token` sat in the vault.
+//
+// Names, purposes, sizes and ages. Never a value and never a prefix of one:
+// four characters of a token is a real narrowing of a search space, and this
+// output should be safe to paste anywhere.
+
+try {
+  const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN ?? ''
+  if (supabaseToken === '') {
+    console.log('\n(no SUPABASE_ACCESS_TOKEN, so the vault was not enumerated)')
+  } else {
+    const { ManagementApiExecutor } = await import('../../src/db/executor.ts')
+    const vaultDb = new ManagementApiExecutor(
+      process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
+      supabaseToken,
+    )
+    const held = (await vaultDb.execute('select * from app.vault_inventory()')).rows as {
+      service: string
+      name: string
+      description: string | null
+      bytes: number
+      age_days: number
+    }[]
+
+    console.log('\n## In the vault\n')
+    console.log('| secret | for | bytes | age |')
+    console.log('|---|---|---|---|')
+    for (const v of held) {
+      console.log(
+        `| \`${v.name}\` | ${(v.description ?? '—').slice(0, 78)} | ${String(v.bytes)} | ${String(v.age_days)}d |`,
+      )
+    }
+    const services = [...new Set(held.map((v) => v.service))]
+    console.log(
+      `\n${String(held.length)} secret(s) across ${String(services.length)} service(s): ${services.join(', ')}`,
+    )
+    console.log(
+      'Before saying a credential does not exist, read this table. Do not test ' +
+        'one guessed name — that is how github.dispatch_token went unnoticed.',
+    )
+  }
+} catch (error) {
+  // Never fatal. This is a report, and an audit that cannot run because its
+  // newest section threw is worse than one missing a section.
+  console.log(`\n(the vault could not be enumerated: ${(error as Error).message.slice(0, 90)})`)
+}
+
 // --- report ----------------------------------------------------------------
 const ICON: Record<State, string> = {
   WORKING: '✅',

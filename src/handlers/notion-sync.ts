@@ -18,10 +18,28 @@
  * choice puts his personal pages into a work project and starts the team
  * reading them.
  *
- * So it is `notion.project_slug` in `system_config`, unset by default, and
- * this handler says so in a sentence rather than guessing. A duty that reports
- * "tell me where these should go" every hour is mildly annoying; a duty that
- * picks for him is a mess to undo.
+ * It used to be one global setting, `notion.project_slug`, which was wrong in
+ * two ways at once. It could only ever name ONE project, and its name did not
+ * describe what it held — Grant: *"Configuration and database fields must use
+ * terminology that reflects what they actually reference."*
+ *
+ * The mapping belongs per project, and the place for it already existed:
+ * a `project_attachments` row with `connector = 'notion'`. A project with a
+ * Notion attachment is synced; a project without one is skipped rather than
+ * guessed at. 0161 removed the global key.
+ *
+ * ## Teamspaces, and why none of this stores a teamspace id
+ *
+ * Grant's model is that a top-level Agentic project corresponds to a Notion
+ * Teamspace, with Notion "Projects" as initiatives inside it. That is the
+ * canonical hierarchy and it stays canonical — but Notion's public API exposes
+ * no teamspace whatsoever: no endpoint, no field, and a database living in a
+ * teamspace reports its parent as the workspace. Probed on both 2022-06-28 and
+ * 2025-09-03 before this was designed.
+ *
+ * So the durable handles are the DATABASE ids in `project_attachments`, and the
+ * teamspace is carried as a name on the project for the human mapping. A column
+ * called `teamspace_id` would have repeated the exact mistake being fixed.
  *
  * ## What happens the first time it runs
  *
@@ -56,8 +74,6 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const settings = (
         await db.execute(`
           select
-            (select value #>> '{}' from public.system_config
-              where key = 'notion.project_slug') as slug,
             -- knowledge_connectors, which is where §8's kill-switch actually
             -- lives for a connector. There is no notion.enabled in
             -- system_config and inventing one would have made a switch that
@@ -70,7 +86,6 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
               where name = 'notion.integration_token') as token
         `)
       ).rows[0] as {
-        slug?: string | null
         enabled?: boolean
         disabled_reason?: string | null
         token?: string | null
@@ -100,41 +115,49 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
         } satisfies HandlerOutput
       }
 
-      const slug = String(settings.slug ?? '')
-      if (slug === '') {
+      // Every project that has said where its Notion lives. Not one global
+      // setting: a system with four top-level projects has four teamspaces, and
+      // a single key could only ever name one of them.
+      const attached = (
+        await db.execute(`
+          select distinct p.project_id::text as id, p.name
+            from public.projects p
+            join public.project_attachments a using (project_id)
+           where p.status = 'active' and a.connector = 'notion' and a.enabled
+           order by p.name
+        `)
+      ).rows as { id: string; name: string }[]
+
+      if (attached.length === 0) {
         return {
           ...base,
           body:
-            'Your Notion pages are shared and ready to read, and nobody has said ' +
-            'which project they belong to.\n\n' +
-            'Tell me the project and I will keep it up to date from then on — it is ' +
-            'the `notion.project_slug` setting.',
-          // Said ONCE where he will find it — the Set up page — rather than
-          // every two hours on two surfaces. A question repeated hourly is
-          // not more likely to be answered; it is less.
+            'Your Notion pages are shared and ready to read, and no project says ' +
+            'which of them are its own.\n\n' +
+            'Attach a Notion database to a project on the Projects page and I will ' +
+            'keep it up to date from then on.',
+          // Said once, where he will find it, rather than every two hours on two
+          // surfaces. A question repeated hourly is not more likely to be
+          // answered; it is less.
           announce: false,
         } satisfies HandlerOutput
       }
 
-      const project = (
-        await db.execute(`
-          select project_id::text as id, name from public.projects
-           where slug = '${slug.replace(/'/g, "''")}' and status = 'active'
-        `)
-      ).rows[0] as { id?: string; name?: string } | undefined
-
-      if (project?.id === undefined) {
-        return {
-          ...base,
-          body:
-            `The project set for Notion pages, "${slug}", is not an active project. ` +
-            'Nothing was read — pointing this at the wrong place is worse than ' +
-            'pointing it nowhere.',
-          announce: true,
-        } satisfies HandlerOutput
+      // Summed across projects, because the duty runs once and reports once.
+      const client = new NotionClient(token)
+      const result = { added: 0, changed: 0, shared: 0, skipped: [] as string[] }
+      const filed: string[] = []
+      for (const project of attached) {
+        const one = await syncNotion(db, client, project.id)
+        result.added += one.added
+        result.changed += one.changed
+        result.shared += one.shared
+        result.skipped.push(...one.skipped)
+        if (one.added > 0 || one.changed > 0) filed.push(project.name)
       }
-
-      const result = await syncNotion(db, new NotionClient(token), project.id)
+      const project = {
+        name: filed.length > 0 ? filed.join(' and ') : attached.map((a) => a.name).join(' and '),
+      }
 
       const parts: string[] = []
       if (result.added > 0) parts.push(count(result.added, 'new page', 'new pages'))
