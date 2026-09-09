@@ -510,6 +510,94 @@ details.qa p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; max-wid
 .turn.bad span { color: var(--bad); }
 
 /* ---------------------------------------------------------------------------
+   A project, as a picture.
+
+   Grant sketched a node diagram: the project at the centre, its services
+   radiating out with lines between. Drawn as SVG that needs layout arithmetic,
+   and needs it again at every width, and at 390px a radial diagram is four
+   labels overlapping a circle.
+
+   So the geometry is CSS. The hub is a block, the services are a grid, and the
+   connecting lines are borders on the service rows. It reads as a node diagram
+   at every width, reflows rather than rescaling, keeps the text as real text,
+   and has no arithmetic to get wrong.
+
+   Phone: services stack under the hub, wires run down.
+   760px and up: services sit beside the hub, wires run across — his sketch.
+--------------------------------------------------------------------------- */
+.graph { display: grid; gap: 10px; }
+.hub {
+  border: 1px solid var(--accent); border-radius: 12px; padding: 11px 13px;
+  background: var(--accent-soft); display: grid; gap: 2px; align-content: center;
+}
+.hub b { font-size: 15px; letter-spacing: -0.01em; }
+.hub span { color: var(--muted); font-size: 12.5px; }
+.nodes { display: grid; gap: 8px; }
+
+.node {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line); border-radius: 11px; padding: 9px 11px;
+  background: var(--panel-2); min-width: 0;
+}
+/* The wire. A short run of border from the hub's edge to the node, solid when
+   something is attached and dashed when nothing is — one more channel carrying
+   the same fact as the lamp colour, because §2 asks for connected and
+   disconnected to be visually obvious and roughly one man in twelve cannot
+   separate the red from the green. */
+.node .wire {
+  position: absolute; left: 22px; top: -9px; height: 9px; width: 0;
+  border-left: 2px solid var(--line);
+}
+.node .badge {
+  flex: none; width: 30px; height: 30px; border-radius: 9px; display: grid;
+  place-items: center; border: 1px solid var(--line); background: var(--panel);
+  color: var(--muted);
+}
+.mk { width: 17px; height: 17px; display: block; }
+.nlabel { min-width: 0; flex: 1; display: grid; gap: 1px; }
+.nlabel b { font-weight: 600; font-size: 14px; }
+.nlabel span { color: var(--muted); font-size: 12.5px; }
+
+/* State, on the badge and the wire together. */
+.n-connected .badge { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.n-connected .wire  { border-left-color: var(--good); }
+.n-broken .badge    { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.n-broken .wire     { border-left-color: var(--bad); }
+.n-broken           { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.n-wanted .badge    { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.n-wanted .wire     { border-left-style: dashed; border-left-color: var(--warn); }
+.n-missing .wire, .n-declined .wire { border-left-style: dashed; }
+.n-missing .badge, .n-declined .badge { opacity: 0.7; }
+/* Declined is a decision, not a gap. It recedes rather than nagging. */
+.n-declined { opacity: 0.62; }
+
+@media (min-width: 760px) {
+  /* The hub beside its services, which is the shape he drew. */
+  .proj .graph { grid-template-columns: minmax(0, 0.9fr) minmax(0, 2fr); gap: 0 26px; align-items: center; }
+  .proj .nodes { gap: 9px; }
+  .proj .node .wire {
+    left: -26px; top: 50%; height: 0; width: 26px;
+    border-left: 0; border-top: 2px solid var(--line);
+  }
+  .proj .n-connected .wire { border-top-color: var(--good); }
+  .proj .n-broken .wire    { border-top-color: var(--bad); }
+  .proj .n-wanted .wire    { border-top-style: dashed; border-top-color: var(--warn); }
+  .proj .n-missing .wire, .proj .n-declined .wire { border-top-style: dashed; }
+}
+
+/* Everything you do occasionally and read never. §5's progressive disclosure:
+   the picture is the important information, and this is the rest. */
+details.more { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+details.more > summary {
+  cursor: pointer; color: var(--muted); font-size: 13px; list-style: none;
+  padding: 4px 0; min-height: 32px; display: flex; align-items: center;
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: '▸ '; margin-right: 6px; }
+details.more[open] > summary::before { content: '▾ '; }
+.lbl { color: var(--muted); font-size: 12px; margin-right: 6px; }
+
+/* ---------------------------------------------------------------------------
    The touch floor.
 
    Grant: *"poorly adapted to mobile"* — and the specific, measurable half of
@@ -805,9 +893,14 @@ const GUIDE = {
   },
   projects: {
     title: 'Projects',
-    one: 'The things being worked on, and what is attached to each',
-    what: 'Every project the team works on, what is attached to each, and how much of it has been read in.',
-    todo: 'You can start a project here and attach a notebook or a Notion page to it. Naming one is a real commitment — everything filed afterwards goes to whichever project is current.',
+    one: 'What you are working on, and what each is wired up to',
+    // Two short lines where there were five. §5: *"overloaded; text-heavy."*
+    // The picture below now says what the paragraph used to, and a paragraph
+    // that restates the diagram beneath it is the diagram not being trusted.
+    // What is worth saying once is what the lines MEAN, because that is the
+    // only part of a drawing a reader cannot work out by looking.
+    what: 'What you are working on, and what each project is wired up to.',
+    todo: 'Solid lines are connected, dashed are not. “Not now” stops it asking about one you do not want.',
   },
   output: {
     title: 'Work they finished',
@@ -876,7 +969,7 @@ const HINTS = {
   'google': 'Four steps, once. Calendar and Drive need an OAuth client from your own Google Cloud project.',
   'this database': 'Facts about the database this page is talking to. Read-only on purpose.',
   'where things should live': 'Declared intent, not live state. Changing one tells the next run where to look.',
-  'new project': 'Starting a project is a real commitment — everything filed afterwards goes to whichever project is current.',
+  'new project': 'Everything filed afterwards goes to whichever project is current.',
 }
 
 function shell(active) {
@@ -1631,42 +1724,74 @@ function connections(d) {
     </section>`
 }
 
-function projects(list) {
-  /*
-    Grant: "the idea with this entire project is that it's customizable and
-    theoretically I could give the repo to somebody else and they could run it
-    for their own projects." So nothing about a project is baked in, and this
-    is where it stops needing a terminal.
+/*
+  Service marks, drawn rather than fetched.
 
-    A project cannot be created without a source, here as in the database
-    (0067): a project attached to nothing has nothing to read and nowhere to
-    write. The form says so rather than letting the server refuse it.
-  */
+  Grant, §2: *"show me the actual service logos and icons rather than text
+  labels... visual comprehension rather than textual explanation."* The card
+  used to render a connector as the string `notebooklm · source`, which is the
+  opposite of that.
+
+  Inline SVG, because the page's CSP admits no external images and a dashboard
+  that needs the network to draw its own icons is a dashboard that renders
+  broken on a train.
+
+  Monochrome, in `currentColor`, which is a deliberate trade. Full-brand colour
+  is more instantly recognisable in isolation and much worse here: the marks sit
+  in a row where COLOUR CARRIES STATE — green connected, red not answering,
+  amber waiting on him — and a permanently black GitHub mark beside a red Notion
+  one would be read as GitHub being fine. The silhouette does the recognising
+  and the colour does the reporting, and neither has to fight the other.
+*/
+const MARKS = {
+  github: '<path d="M12 1.5A10.5 10.5 0 0 0 8.68 22c.53.1.72-.23.72-.5v-1.8c-2.92.63-3.54-1.4-3.54-1.4-.48-1.22-1.17-1.55-1.17-1.55-.95-.65.08-.64.08-.64 1.06.07 1.61 1.09 1.61 1.09.94 1.6 2.46 1.14 3.06.87.1-.68.37-1.14.66-1.4-2.33-.27-4.78-1.17-4.78-5.19 0-1.15.41-2.08 1.08-2.82-.11-.27-.47-1.34.1-2.79 0 0 .88-.28 2.88 1.07a9.9 9.9 0 0 1 5.24 0c2-1.35 2.88-1.07 2.88-1.07.57 1.45.21 2.52.1 2.79.67.74 1.08 1.67 1.08 2.82 0 4.03-2.45 4.92-4.79 5.18.38.33.71.97.71 1.96v2.9c0 .28.19.61.73.5A10.5 10.5 0 0 0 12 1.5Z"/>',
+  notion: '<path d="M4.2 3.3 15.4 2.5c1.4-.12 1.75-.04 2.62.6l3.05 2.15c.6.44.8.55.8 1.02v13.2c0 .87-.32 1.38-1.42 1.46l-13 .79c-.83.04-1.23-.08-1.67-.64l-2.4-3.1c-.48-.64-.68-1.11-.68-1.67V4.72c0-.71.32-1.3 1.5-1.42Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.1 7.6v8.2l1.9-.1V10l4.1 5.6 1.8-.1V7.3l-1.8.1v5.4L10.1 7.5Z"/>',
+  notebooklm: '<path d="M5 3.2h11.2c1 0 1.8.8 1.8 1.8v14c0 1-.8 1.8-1.8 1.8H5Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 3.2v17.6" stroke="currentColor" stroke-width="1.6"/><path d="M2.6 6.6h2.4M2.6 12h2.4M2.6 17.4h2.4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="m12.4 8.2 1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1Z"/>',
+}
+const mark = (connector) =>
+  `<svg class="mk" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">${
+    MARKS[connector] ?? '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>'
+  }</svg>`
+
+/*
+  Projects, as a picture.
+
+  Grant asked for the home screen to become *"My Projects"*, for a project and
+  the things it is connected to to be *"visually represented"*, and to be able
+  to *"understand the state of a project visually within seconds."* What was
+  here was a form with two text rows above it.
+
+  ## Why this is not an SVG graph
+
+  His sketch is a node diagram — the project at the centre, its services
+  radiating out. Drawn literally in SVG that needs layout maths, and it needs it
+  again at every width, and a radial diagram at 390px is four labels overlapping
+  a circle.
+
+  So the geometry is CSS: the hub is a block, the services are a grid beside or
+  beneath it, and the connecting lines are borders on the service rows. It reads
+  as a node diagram at every width, it reflows instead of rescaling, the text
+  stays real text, and there is no arithmetic to get wrong. On a phone the
+  services stack under the hub; from 760px they sit beside it and the lines run
+  horizontally, which is the shape he drew.
+
+  ## What the lines say
+
+  Solid means attached. Dashed means not. That is one more channel carrying the
+  same fact as the lamp and the wording, deliberately — §2 asks for connected
+  and disconnected to be *"visually obvious"*, and about one man in twelve
+  cannot separate the red lamp from the green one.
+
+  ## Progressive disclosure
+
+  §5: *"progressive disclosure — surface the important information first, with
+  the ability to expand for detail."* The picture is the important information.
+  Attaching, renaming, aliases and channels are all things you do occasionally
+  and read never, so they live behind a summary that says what is inside.
+*/
+function projects(list) {
   const rows = Array.isArray(list) ? list : []
 
-  /*
-    What the project IS connected to, and what it is not.
-
-    Grant, §3: *"If a project exists in Supabase but has no corresponding
-    Notebook or Notion counterpart, this should be visible and repairable."*
-    This card used to list only the attachments a project HAS, so the absence
-    of a Notion page — the thing he actually wanted to see — looked exactly
-    like a project that had never needed one.
-
-    `app.project_connections` (0158) returns every first-class connector with
-    the project's standing, so the missing ones are rows too. Five states, and
-    they are five because collapsing any pair of them costs something:
-
-      connected  fine
-      broken     attached, but the service is not answering — needs a
-                 credential, not an attachment
-      wanted     he means to, and has not
-      declined   he decided against it, and should stop being asked
-      missing    nobody has considered it
-
-    A missing row offers three answers, not two. "Not now" is the option that
-    stops the interface nagging about a decision he already made.
-  */
   const LAMP = { connected: 'ok', broken: 'bad', wanted: 'warn', declined: '', missing: '' }
   const SAYS = {
     connected: 'connected',
@@ -1676,54 +1801,80 @@ function projects(list) {
     missing: 'not connected',
   }
 
-  const connections = (p) => (p.connections || []).map((c) => {
-    const acted = c.state === 'connected' || c.state === 'broken'
+  /* A detach needs the attachment id; the connection row carries the connector.
+     One lookup, because the attachments are already in the payload. */
+  const attachmentIdFor = (p, connector) =>
+    ((p.attachments || []).find((a) => a.connector === connector) || {}).attachment_id || ''
+
+  const node = (p, c) => {
+    const live = c.state === 'connected' || c.state === 'broken'
+    const act = live
       ? `<button class="mini" data-detach="${esc(attachmentIdFor(p, c.connector))}">Detach</button>`
       : c.state === 'declined'
         ? `<button class="mini" data-choose="${esc(p.slug)}|${esc(c.connector)}|clear">Reconsider</button>`
         : `<button class="mini" data-choose="${esc(p.slug)}|${esc(c.connector)}|declined">Not now</button>`
-    return `<div class="conn">
-       <span class="lamp ${LAMP[c.state] || ''}" aria-hidden="true"></span>
-       <span class="who"><b>${esc(c.name)}</b>
-         <span>${esc(SAYS[c.state] || c.state)}${c.detail ? ' · ' + esc(c.detail) : ''}</span></span>
-       <span class="st">${acted}</span>
-     </div>`
-  }).join('') || '<div class="empty">No connectors are available.</div>'
+    return `<div class="node n-${esc(c.state)}">
+      <span class="wire" aria-hidden="true"></span>
+      <span class="badge">${mark(c.connector)}</span>
+      <span class="nlabel">
+        <b>${esc(c.name)}</b>
+        <span>${esc(SAYS[c.state] || c.state)}${c.detail ? ' · ' + esc(c.detail) : ''}</span>
+      </span>
+      ${act}
+    </div>`
+  }
 
-  /* A detach needs the attachment, and the connection row carries the
-     connector. One lookup rather than widening the SQL, because the
-     attachments are already in the payload. */
-  const attachmentIdFor = (p, connector) =>
-    ((p.attachments || []).find((a) => a.connector === connector) || {}).attachment_id || ''
+  const graph = (p) => {
+    const cs = p.connections || []
+    const on = cs.filter((c) => c.state === 'connected').length
+    return `<div class="graph">
+      <div class="hub">
+        <b>${esc(p.name)}</b>
+        <span>${on} of ${cs.length} connected · ${p.documents} document(s)</span>
+      </div>
+      <div class="nodes">${cs.map((c) => node(p, c)).join('')}</div>
+    </div>`
+  }
 
-  const channels = (p) => (p.channels || []).length === 0
-    ? '<span class="m">no channels yet — the team makes them when it has something to say</span>'
-    : (p.channels || []).map((c) => `<span class="pill">#${esc(c.name)}</span>`).join(' ')
+  const details = (p) => {
+    const channels = (p.channels || []).length === 0
+      ? '<span class="m">No channels yet — the team makes them when it has something to say.</span>'
+      : (p.channels || []).map((c) => `<span class="pill">#${esc(c.name)}</span>`).join(' ')
+    const aliases = (p.aliases || []).length === 0
+      ? '<span class="m">No other names yet. It learns them as you use them.</span>'
+      : (p.aliases || []).map((a) => `<span class="pill">${esc(a.alias)}</span>`).join(' ')
+    return `<details class="more">
+      <summary>Names, channels and attaching something</summary>
+      <div class="meta" style="margin:10px 0 8px">
+        <code>${esc(p.slug)}</code>
+        <button class="mini" data-rename="${esc(p.slug)}" data-name="${esc(p.name)}">Rename</button>
+      </div>
+      ${p.description ? `<p class="m" style="margin:0 0 8px">${esc(p.description)}</p>` : ''}
+      <div style="margin-bottom:8px"><span class="lbl">Also called</span> ${aliases}</div>
+      <div style="margin-bottom:10px"><span class="lbl">Channels</span> ${channels}</div>
+      <div class="addrow">
+        <select data-conn="${esc(p.slug)}">
+          <option value="notion">Notion</option>
+          <option value="notebooklm">NotebookLM</option>
+          <option value="github">GitHub</option>
+        </select>
+        <input data-ref="${esc(p.slug)}" placeholder="Paste the link, notebook id, or owner/repo">
+        <select data-role="${esc(p.slug)}">
+          <option value="source">reads from</option>
+          <option value="home">writes to</option>
+        </select>
+        <button class="mini" data-attach="${esc(p.slug)}">Attach</button>
+      </div>
+    </details>`
+  }
 
   const cards = rows.map((p) => `
-    <section class="card" data-card="project-${esc(p.slug)}">
+    <section class="card wide proj" data-card="project-${esc(p.slug)}">
       <span class="drag" title="Move up">⌃</span>
       <h2>${esc(p.name)}</h2>
       <div class="body">
-        <div class="meta" style="margin-bottom:8px">
-          <code>${esc(p.slug)}</code> · ${p.documents} document(s)
-          <button class="mini" data-rename="${esc(p.slug)}" data-name="${esc(p.name)}">Rename</button>
-        </div>
-        <div style="margin-bottom:10px">${channels(p)}</div>
-        ${connections(p)}
-        <div class="addrow">
-          <select data-conn="${esc(p.slug)}">
-            <option value="notion">Notion</option>
-            <option value="notebooklm">NotebookLM</option>
-            <option value="github">GitHub</option>
-          </select>
-          <input data-ref="${esc(p.slug)}" placeholder="Paste the link, notebook id, or owner/repo">
-          <select data-role="${esc(p.slug)}">
-            <option value="source">reads from</option>
-            <option value="home">writes to</option>
-          </select>
-          <button class="mini" data-attach="${esc(p.slug)}">Attach</button>
-        </div>
+        ${graph(p)}
+        ${details(p)}
       </div>
     </section>`).join('')
 
@@ -1742,8 +1893,7 @@ function projects(list) {
           <button class="mini" id="np-go">Create</button>
         </div>
         <div class="meta" style="margin-top:8px">
-          A project needs at least one source. There is nothing to read or write
-          without one, so this will not create one in isolation.
+          It needs at least one source — there is nothing to read or write without one.
         </div>
         <div class="err" id="np-err" hidden></div>
       </div>
@@ -3118,9 +3268,18 @@ async function show(section) {
 async function landing() {
   try {
     const setup = await load('setup')
-    return (setup.needs_you ?? 0) > 0 ? 'setup' : 'overview'
+    // Projects, not Today. Grant, §1: *"The home screen should be radically
+    // simplified. It should primarily show My Projects."* Today is a good page
+    // and it is a page about the QUEUE — what is waiting, what is running, what
+    // got done — which is the system describing itself. Projects is the page
+    // about his work.
+    //
+    // Set up still wins when something is actually broken, because a landing
+    // that shows projects while three services are unconfigured is the page
+    // answering a question he did not ask.
+    return (setup.needs_you ?? 0) > 0 ? 'setup' : 'projects'
   } catch {
-    return 'overview'
+    return 'projects'
   }
 }
 
