@@ -143,9 +143,20 @@ is that surfacing needs one per turn is exactly what went wrong that week.
    routing already exists: the Chief of Staff reaches Grant directly, everyone
    else moves into the room the moment it exists. It also appears on the Set up
    page as of 0142.
-2. **Say which project Notion pages belong to.** Twenty items are shared and
-   the duty reads them hourly, but it will not choose where to file somebody's
-   own notes. Set `notion.project_slug` and it starts.
+2. **Make a Notion Teamspace for each project, and share a database from it.**
+   Answered on 2026-09-09 and now prompted rather than remembered. Notion's
+   public API exposes no teamspace at all — no endpoint, no field, and a
+   database inside one reports its parent as the workspace — so this genuinely
+   cannot be automated and never will be until Notion adds it. Every project
+   without a Notion attachment now reads `wanted` on the Projects page with the
+   steps attached: make the teamspace, put a database in it, share that
+   database with the Agentic integration, attach it to the project. After that
+   the team can write into it unaided.
+
+   `notion.project_slug` is gone (0161). It could only ever name one project,
+   and it was named for something it did not hold — Grant: *"Configuration and
+   database fields must use terminology that reflects what they actually
+   reference."* The mapping is per project now, in `project_attachments`.
 3. **Decide whether `vault-export` runs weekly.** It is the last duty still
    disabled. Enabling it means a copy of every credential arriving on Telegram
    every week — which is the only thing that would survive losing the Supabase
@@ -157,6 +168,29 @@ is that surfacing needs one per turn is exactly what went wrong that week.
 5. **Rotate the Notion token when convenient.** It was pasted into a chat
    transcript on 2026-09-06, which is durable and searchable. Hygiene rather
    than an incident.
+6. **A read-only GitHub token, if "look at my Rest Timer repo" should work.**
+   `github.dispatch_token` is in the vault, authenticates as `granterogers`,
+   and is scoped to THIS repository with contents:write — it was made for
+   `repository_dispatch` (0126). It is what the read client uses, and it cannot
+   see any other repository whatever it is allowed to do here. A fine-grained
+   token with Contents/Metadata/Issues read-only across the repos he picks
+   would close §8. Steps are in the 2026-09-09 audit.
+7. **A CoachAccountable API key, if the team should update coaching records.**
+   Researched rather than assumed: CoachAccountable has had a full REST API
+   since 2015, with `Client.update`, `Action.add`, `Metric.addData`,
+   `Session.add` and webhooks. Profile icon → Settings → System → API Access
+   gives an API ID and a private key. That is strictly better than the
+   login-and-scrape he asked for — no password stored, revocable, structured,
+   and it does not break when they change their HTML.
+
+**Notion is no longer a read-only integration.** As of 2026-09-09 the client
+speaks API `2026-03-11` and can create pages, append and update blocks, set
+properties and relations, upload and attach files (audio becomes an audio block,
+not a download link), read a database schema before writing to it, and archive
+reversibly. `notionCapabilities()` answers "do we have a token / what can I do /
+is this read-only" without asking anybody. The full matrix, the three things
+Notion genuinely cannot do, and the two breaking changes the version bump
+brought are in [`notion-capability-matrix.md`](notion-capability-matrix.md).
 
 **Settled, recorded so they are not re-asked:** Backblaze is safe (its own
 password, no Google SSO); Google Cloud TTS is parked; the ownership of the
