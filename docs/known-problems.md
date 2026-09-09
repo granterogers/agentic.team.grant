@@ -98,6 +98,44 @@ before.
 
 ---
 
+## Fixed 2026-09-09, second pass
+
+Grant reported two symptoms — "a lot of repetition from one of the bots" and
+"I need messages answered within a minute". They were six defects.
+
+- **A message typed in Slack never became work.** `slack-events` stored the
+  canonical command and never called `enqueue_inbound`. Thirty instructions
+  over three days, filed and never answered. Telegram has made that call since
+  0072 and voice since 0102. `app.enqueue_orphans` is now the floor under all
+  three.
+
+- **Slack never kicked the worker either**, so even once enqueued it waited
+  for the next tick.
+
+- **Grant was queuing behind the housekeeping.** Duties take priority 100 and
+  his instructions were given 150 — and lower is sooner. Every calendar
+  refresh outranked a message he was waiting on (0149).
+
+- **The worker was phoning its own database long-distance.** Every query went
+  over the Management API at ~1.5s each, so an empty pass cost 17–22 seconds.
+  The edge worker runs on Supabase's own network and now connects directly;
+  an empty pass is under a second. ADR-0007 still holds — it is about the
+  sandbox, which still cannot do this.
+
+  Measured, end to end through the deployed webhooks: Telegram 25.6s → 11.6s,
+  Slack 72.1s → 15.8s. `npm run verify:latency`.
+
+- **Marcus would not stop talking.** 0101 rewrote the duty dispatcher and
+  changed `announce` from false to true on the way past. Handlers now say
+  whether their own outcome is worth announcing; "nothing new" is silent.
+
+- **And he was messaging the wrong place.** Every result went out on the pager
+  bot, so work by any staff member arrived in Grant's private chat. The bot is
+  now chosen from whoever did the work, which is what makes 0136's routing
+  real.
+
+---
+
 ## Fixed overnight, 2026-09-09
 
 Kept here for one read, then they move to `defects-fixed.md`. All four were
