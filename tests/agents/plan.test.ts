@@ -6,7 +6,12 @@
  * tested only on tidied-up sentences is a planner tested on nothing.
  */
 import { describe, expect, it } from 'vitest'
-import { describePlan, readPlan } from '../../src/agents/plan.ts'
+import {
+  createsSomething,
+  describePlan,
+  needsGrantToChoose,
+  readPlan,
+} from '../../src/agents/plan.ts'
 
 const VOICE =
   'I want you to push this video into a new, into the notebook project called AI Learning, ' +
@@ -167,5 +172,72 @@ describe('a project named without the word "new"', () => {
       expect(first?.kind, text).toBe('project')
       expect(first?.kind === 'project' && first.name, text).toBe('Research')
     }
+  })
+})
+
+describe('a project name that matches more than one thing', () => {
+  /*
+    The defect this closes, in Grant's words: he referred conversationally to a
+    wellness project when a related one already existed, and the system made a
+    second one.
+
+    Resolution was an exact match on the normalised name, so anything short of
+    exact was a miss, and a miss meant `create_project`. `ai-learning-2` is
+    still in the database because of it, next to three notebooks called some
+    version of "AI Learning".
+
+    The step below is what a near miss becomes instead: a question that names
+    the candidates, and a plan that will not run until it is answered.
+  */
+  const ambiguous = {
+    instruction: 'look at the wellness project and tell me what is left',
+    steps: [
+      {
+        kind: 'ambiguous_project' as const,
+        name: 'the wellness project',
+        candidates: [
+          { name: 'Wellness & Health', slug: 'wellness-health' },
+          { name: 'Wellbeing tracker', slug: 'wellbeing-tracker' },
+        ],
+      },
+      { kind: 'ask' as const },
+    ],
+  }
+
+  it('names the candidates rather than counting them', () => {
+    const said = describePlan(ambiguous as never)
+    // Counting them ("that matches 2 projects") makes him go and look. Naming
+    // them lets him answer from where he is standing.
+    expect(said).toContain('Wellness & Health')
+    expect(said).toContain('Wellbeing tracker')
+    expect(said).toContain('Which one')
+  })
+
+  it('quotes back what he actually said, not a normalised form of it', () => {
+    expect(describePlan(ambiguous as never)).toContain('the wellness project')
+  })
+
+  it('offers "new" as an answer, because sometimes it is', () => {
+    // §4 is about not creating duplicates, not about refusing to create. If the
+    // question cannot be answered "no, a new one", it is a trap.
+    expect(describePlan(ambiguous as never).toLowerCase()).toContain('new one')
+  })
+
+  it('stops the plan even though it creates nothing', () => {
+    expect(needsGrantToChoose(ambiguous as never)).toBe(true)
+    // And it is NOT the create gate: no notebook is made by asking a question,
+    // so a plan held for this reason must not be described as one that creates.
+    expect(createsSomething(ambiguous as never)).toBe(false)
+  })
+
+  it('leaves an unambiguous plan free to run', () => {
+    const resolved = {
+      instruction: 'look at AI learning',
+      steps: [
+        { kind: 'use_project' as const, name: 'AI learning', notebookRef: 'nb-1' },
+        { kind: 'ask' as const },
+      ],
+    }
+    expect(needsGrantToChoose(resolved as never)).toBe(false)
   })
 })

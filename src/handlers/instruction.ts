@@ -75,7 +75,14 @@
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
-import { createsSomething, describePlan, type Plan, readPlan, type Step } from '../agents/plan.ts'
+import {
+  createsSomething,
+  describePlan,
+  needsGrantToChoose,
+  type Plan,
+  readPlan,
+  type Step,
+} from '../agents/plan.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -747,19 +754,50 @@ async function resolveProjects(db: SqlExecutor, plan: Plan): Promise<Plan> {
 
   const normalise = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ').trim()
 
-  // Ours: a project we already run, with a notebook attached.
-  const { rows } = await db.execute(`
-    select p.name, a.external_ref
-      from public.projects p
-      join public.project_attachments a using (project_id)
-     where p.status = 'active' and a.connector = 'notebooklm' and a.enabled
-  `)
-  const mine = new Map(
-    (rows as { name: string; external_ref: string }[]).map((r) => [
-      normalise(r.name),
-      r.external_ref,
-    ]),
-  )
+  /*
+    Ours, resolved by NAME rather than by exact string equality.
+
+    This used to be a `Map` keyed on the lowercased, space-collapsed project
+    name, and a lookup that missed became `create_project`. That is a defensible
+    rule right up until the words are slightly different from the name — "the
+    wellness project" against a project called "Wellness & Health" — at which
+    point every near miss silently becomes a new project. It is how
+    `ai-learning-2` got made, and how three notebooks called some version of
+    "AI Learning" got made.
+
+    `app.resolve_project_by_name` (0153) does the same exact match first, then
+    aliases Grant has taught it, then trigram similarity, and returns SCORED
+    candidates rather than a yes or no. The thresholds below are this caller's
+    to choose, and they are deliberately not the same as the ones the dashboard
+    uses: filing work against the wrong project is worse than asking.
+  */
+  const CERTAIN = 0.9
+  const WORTH_ASKING = 0.55
+
+  const candidatesFor = async (
+    name: string,
+  ): Promise<{ project_id: string; slug: string; name: string; confidence: number }[]> => {
+    const { rows } = await db.execute(`
+      select r.project_id::text, r.slug, r.name, r.confidence::float8 as confidence
+        from app.resolve_project_by_name(${lit(name)}) r
+       order by r.confidence desc
+       limit 5
+    `)
+    return rows as { project_id: string; slug: string; name: string; confidence: number }[]
+  }
+
+  /** The notebook attached to a project we already run, if it has one. */
+  const notebookFor = async (projectId: string): Promise<string | null> => {
+    const { rows } = await db.execute(`
+      select a.external_ref
+        from public.project_attachments a
+       where a.project_id = ${lit(projectId)}::uuid
+         and a.connector = 'notebooklm' and a.enabled
+       limit 1
+    `)
+    const ref = (rows[0] as { external_ref?: string } | undefined)?.external_ref
+    return ref === undefined ? null : String(ref)
+  }
 
   // Grant's, when ours does not have it. One network call, only when needed.
   let theirs: Map<string, string> | null = null
@@ -787,17 +825,37 @@ async function resolveProjects(db: SqlExecutor, plan: Plan): Promise<Plan> {
       steps.push(step)
       continue
     }
-    const key = normalise(step.name)
-    const ours = mine.get(key)
-    if (ours !== undefined) {
-      steps.push({ kind: 'use_project', name: step.name, notebookRef: ours })
+    const found = await candidatesFor(step.name)
+    const certain = found.filter((c) => c.confidence >= CERTAIN)
+
+    // Exactly one confident match is the ordinary case, and it resolves.
+    if (certain.length === 1 && certain[0] !== undefined) {
+      const ref = await notebookFor(certain[0].project_id)
+      if (ref !== null) {
+        steps.push({ kind: 'use_project', name: certain[0].name, notebookRef: ref })
+        continue
+      }
+    }
+
+    // Two confident matches, or one that is only close, is a question. Note
+    // that this fires BEFORE the round trip to Google: if we already have
+    // something plausibly by that name, whether Grant also has a stray notebook
+    // called it is not the question that needs answering.
+    const worth = found.filter((c) => c.confidence >= WORTH_ASKING)
+    if (certain.length > 1 || (certain.length === 0 && worth.length > 0)) {
+      steps.push({
+        kind: 'ambiguous_project',
+        name: step.name,
+        candidates: worth.slice(0, 3).map((c) => ({ name: c.name, slug: c.slug })),
+      })
       continue
     }
-    const found = (await google()).get(key)
+
+    const theirs = (await google()).get(normalise(step.name))
     steps.push(
-      found === undefined
+      theirs === undefined
         ? { kind: 'create_project', name: step.name }
-        : { kind: 'use_project', name: step.name, notebookRef: found },
+        : { kind: 'use_project', name: step.name, notebookRef: theirs },
     )
   }
 
@@ -848,10 +906,17 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             ${lit(job.jobId)}::uuid,
             ${lit(`Carry out ${String(plan.steps.length)} steps: ${plan.instruction.slice(0, 160)}`)},
             ${lit(
-              createsSomething(plan)
-                ? 'This CREATES a new project and a new notebook in your Google account. ' +
+              needsGrantToChoose(plan)
+                ? // Asked first, because it is the one that cannot be answered by
+                  // approving. A plan that does not know which project it is for
+                  // has nowhere to put the work.
+                  'One of these names matches something you already have. Tell me which ' +
+                    'project you meant and I will carry on — approving this as it stands ' +
+                    'would file the work against a guess.'
+                : createsSomething(plan)
+                  ? 'This CREATES a new project and a new notebook in your Google account. ' +
                     'Nothing by that name exists — say so if you meant an existing one.'
-                : 'Several steps, so I would rather check I have understood before starting any of them.',
+                  : 'Several steps, so I would rather check I have understood before starting any of them.',
             )},
             'office.execute_plan'
           )

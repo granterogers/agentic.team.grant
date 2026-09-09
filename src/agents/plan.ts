@@ -66,6 +66,24 @@ export type Step =
    */
   | { readonly kind: 'project'; readonly name: string }
   | { readonly kind: 'use_project'; readonly name: string; readonly notebookRef: string }
+  /**
+   * It matched more than one thing, or matched one thing loosely, and the
+   * difference is Grant's to settle.
+   *
+   * The gap this closes: resolution used to be an exact match on a normalised
+   * name, so "the wellness project" against a project actually called "Wellness
+   * & Health" missed — and a miss meant `create_project`. Every near miss was
+   * therefore a new project, which is precisely how `ai-learning-2` and three
+   * notebooks called some version of "AI Learning" came to exist.
+   *
+   * Near misses now land here instead. This step never runs; it is a question,
+   * and the plan holding it waits.
+   */
+  | {
+      readonly kind: 'ambiguous_project'
+      readonly name: string
+      readonly candidates: readonly { readonly name: string; readonly slug: string }[]
+    }
   | { readonly kind: 'create_project'; readonly name: string }
   | { readonly kind: 'add_source'; readonly link: FoundLink }
   | { readonly kind: 'attach'; readonly link: FoundLink }
@@ -256,6 +274,14 @@ export function describePlan(plan: Plan): string {
           `${n} ⚠️ Start a BRAND NEW project called “${step.name}” with a new notebook — ` +
           'you have nothing by that name. Say so if you meant an existing one.'
         )
+      case 'ambiguous_project':
+        // Named rather than counted. "That matches 2 projects" makes him go and
+        // look; naming them lets him answer from where he is standing.
+        return (
+          `${n} ❓ You said “${step.name}”, and I already have ` +
+          `${step.candidates.map((c) => `“${c.name}”`).join(' and ')}. ` +
+          'Which one — or is this a new one?'
+        )
       case 'attach':
         return `${n} Attach that ${step.link.kind === 'notion' ? 'Notion page' : 'notebook'} to it.`
       case 'add_source':
@@ -280,6 +306,16 @@ export function describePlan(plan: Plan): string {
 /** True when the plan will create something in Grant's Google account. */
 export const createsSomething = (plan: Plan): boolean =>
   plan.steps.some((s) => s.kind === 'create_project')
+
+/**
+ * True when the plan cannot proceed until Grant answers a question in it.
+ *
+ * Distinct from `createsSomething`, which is about consequence. This is about
+ * possibility: an ambiguous project creates nothing and costs nothing, and it
+ * still cannot run, because there is no way to file the work.
+ */
+export const needsGrantToChoose = (plan: Plan): boolean =>
+  plan.steps.some((s) => s.kind === 'ambiguous_project')
 
 /** The link a plan's `ask` step should be answered against, if any. */
 export const firstSource = (plan: Plan): FoundLink | null => {

@@ -525,21 +525,26 @@ details.qa p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; max-wid
    box and its microphone — because those were the two somebody had used on a
    phone and noticed.
 
-   Width OR a coarse pointer, and the `or` was put there by evidence. The first
-   version of this block keyed on width alone (`max-width: 759px`) on the
-   argument that a narrow laptop window deserves the same generous controls. It
-   does — but `verify:ui` then failed the iPad, which is 810px wide, has no
-   mouse, and was still being handed 26px buttons. A tablet is a thing people
-   prod with a thumb at any width, so the pointer has to be asked about too.
+   Keyed on the POINTER, not the width, and it took two corrections to get here.
 
-   `max-width: 1039px` rather than 759px for the width half: 1040px is where the
-   desktop sidebar appears, and that is the real boundary between "held" and
-   "sat in front of".
+   The first version used `max-width: 759px`, on the argument that a narrow
+   laptop window deserves the same generous controls. `verify:ui` then failed
+   the iPad — 810px wide, no mouse, still being handed 26px buttons. So the
+   second version asked about width OR a coarse pointer, and `verify:hq` failed
+   that one for a different reason: this stylesheet is mobile-first by
+   invariant, the desktop rules are the additions inside `min-width` blocks, and
+   a `max-width` query is the thing that quietly turns that inside out.
+
+   Both checks were right, and between them they name the correct rule. A touch
+   target is about the THUMB, which is what `pointer: coarse` asks about — it
+   catches the phone and the tablet at any width, and it leaves a narrow
+   mouse-driven window alone, which never needed 44px in the first place. The
+   width was always a proxy for the question, and a worse one.
 
    `inline-flex` on the small buttons because `min-height` on an `inline-block`
    grows the box and leaves the label sitting at the top of it.
 --------------------------------------------------------------------------- */
-@media (max-width: 1039px), (pointer: coarse) {
+@media (pointer: coarse) {
   .mini {
     min-height: 44px; padding: 5px 14px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -2872,8 +2877,73 @@ function wireProjects() {
       box.hidden = true
       if (!name || !ref) { box.textContent = 'A name and a source are both required.'; box.hidden = false; return }
       go.disabled = true
-      try { await act('create_project', { p_name: name, p_connector: conn, p_ref: ref }); show('projects') }
+      try {
+        const r = await act('create_project', { p_name: name, p_connector: conn, p_ref: ref })
+        // 0153: the create path no longer absorbs a name collision by
+        // appending a number. When something already answers to this name it
+        // says so and creates nothing, and the choice is Grant's.
+        if (r && r.needs_confirmation) { askWhichProject(r, { name, conn, ref, go }); return }
+        show('projects')
+      }
       catch (e) { fail(e); go.disabled = false }
+    }
+  }
+}
+
+/*
+  "There is already something by that name."
+
+  The half of §4 Grant can see. The database now refuses to make a second
+  project quietly (0153) and hands back the candidates instead; this is where a
+  person meets that refusal, and it has to offer a way forward or it is just an
+  error message with extra steps.
+
+  Three answers, and all three are real:
+
+    - it IS that one          → attach the source to it, which is what he meant
+    - it is genuinely new     → create it, with p_force
+    - neither                 → close, change the name, try again
+
+  Attaching rather than creating is the whole point. His words: *"Do not
+  automatically create duplicates simply because a connection is currently
+  missing."* The inverse holds too — when the project exists and the source is
+  the new thing, the source is what should be added.
+*/
+function askWhichProject(answer, ctx) {
+  const box = document.getElementById('np-err')
+  if (!box) return
+  const candidates = answer.candidates || []
+
+  box.hidden = false
+  box.innerHTML =
+    `<p style="margin:0 0 10px;color:var(--ink)">${esc(answer.question ||
+      'There is already something by that name.')}</p>` +
+    `<div class="row" style="flex-wrap:wrap;gap:8px">` +
+    candidates.map((c, i) =>
+      `<button class="mini" data-pick="${i}">Use “${esc(c.name)}”</button>`).join('') +
+    `<button class="mini" data-pick="new">No — “${esc(ctx.name)}” is new</button>` +
+    `</div>`
+
+  const finish = () => { ctx.go.disabled = false; show('projects') }
+
+  for (const b of box.querySelectorAll('[data-pick]')) {
+    b.onclick = async () => {
+      for (const other of box.querySelectorAll('[data-pick]')) other.disabled = true
+      try {
+        if (b.dataset.pick === 'new') {
+          await act('create_project', {
+            p_name: ctx.name, p_connector: ctx.conn, p_ref: ctx.ref, p_force: true,
+          })
+        } else {
+          // The source he was adding, added to the project he actually meant.
+          const chosen = candidates[Number(b.dataset.pick)]
+          await act('attach', { p_slug: chosen.slug, p_connector: ctx.conn, p_ref: ctx.ref })
+        }
+        finish()
+      } catch (e) {
+        box.textContent = e.message
+        ctx.go.disabled = false
+      }
     }
   }
 }

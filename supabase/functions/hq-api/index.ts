@@ -82,6 +82,10 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
  * corpus is kept.
  */
 const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[] }>> = {
+  // `p_force` is optional and deliberately not required: without it the RPC
+  // returns the candidates and creates nothing (0153), which is the behaviour
+  // every caller should get by default. Passing it is a person having looked at
+  // those candidates and said "no, a new one".
   create_project: { fn: 'hq_create_project', required: ['p_name', 'p_connector', 'p_ref'] },
   rename_project: { fn: 'hq_rename_project', required: ['p_slug', 'p_name'] },
   attach: { fn: 'hq_attach', required: ['p_slug', 'p_connector', 'p_ref'] },
