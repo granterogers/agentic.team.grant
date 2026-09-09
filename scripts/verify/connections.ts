@@ -94,9 +94,21 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
   // The row that matters most is the one for a connector the project has never
   // heard of — that is the whole of §3.
   record(
-    'a connector the project has never used is still listed, as missing',
-    `notion=${stateOf(rows, 'notion')}, github=${stateOf(rows, 'github')}`,
-    stateOf(rows, 'notion') === 'missing' && stateOf(rows, 'github') === 'missing',
+    'a connector the project has never used is still listed',
+    `github=${stateOf(rows, 'github')}`,
+    stateOf(rows, 'github') === 'missing',
+  )
+
+  // Notion is the exception, and deliberately so (0163). Grant asked to be
+  // PROMPTED to create a teamspace for each new project, because Notion's API
+  // cannot create one. So a new project starts at `wanted` rather than
+  // `missing`: a job with his name on it rather than a suggestion nobody has
+  // considered. If this ever reads `missing` again, the prompt has been lost.
+  const notion = rows.find((r) => r.connector === 'notion')
+  record(
+    'a new project asks him for the one thing only he can make — a Notion teamspace',
+    `notion=${String(notion?.state)} — ${String(notion?.detail).slice(0, 54)}`,
+    notion?.state === 'wanted' && String(notion?.detail).toLowerCase().includes('teamspace'),
   )
 
   // `upload` and `mcp` are how a document arrives, not somewhere a project
@@ -178,6 +190,10 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
     'clearing a decision returns it to never-considered, not to a third state',
     stateOf(rows, 'notion'),
     stateOf(rows, 'notion') === 'missing',
+  )
+  // And put the prompt back, since clearing it is what this check just tested.
+  await db.execute(
+    `select app.hq_connection_choose(${lit(slug)}, 'notion', 'wanted', 'needs a teamspace')`,
   )
 }
 
