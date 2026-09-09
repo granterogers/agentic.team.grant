@@ -149,5 +149,6 @@
   "0148_an_instruction_that_never_became_work.sql": "1145bf00dac622ef41b670f08da2705e67fa8c48c553bd1a92f5320a87153969",
   "0149_grant_was_queuing_behind_the_housekeeping.sql": "f1d8433fa75ca7a141ac64ff377018c3b774c5275d6b2f9c94e996279d42180d",
   "0150_how_long_the_thinking_took.sql": "a28c19473dc918c841e0d7bfe8ae8289805ebbcb4f6d4c23bc6375728f272fc8",
-  "0151_who_messages_you_and_where.sql": "569e980ac1f08e81a3627730b0e81c9929838101a9c4a3d5fb712cdfb9c6175e"
+  "0151_who_messages_you_and_where.sql": "569e980ac1f08e81a3627730b0e81c9929838101a9c4a3d5fb712cdfb9c6175e",
+  "0152_a_better_pen_when_he_wants_one.sql": "578a210914048a258d97d2443c9fa9d01b25464a1bb7ef1f3c40100e417a165b"
 }

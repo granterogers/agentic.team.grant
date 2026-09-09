@@ -80,6 +80,8 @@ export interface SayOptions {
   readonly fallback: string
   /** Rough ceiling. Spoken registers want fewer; a report can take more. */
   readonly words?: number
+  /** Which model writes it. Undefined uses the ordinary failover order. */
+  readonly model?: string | undefined
 }
 
 /**
@@ -102,7 +104,12 @@ export async function say(
     (who.responsibilities === null ? '' : `Your remit: ${who.responsibilities} `) +
     (who.style === null ? '' : `How you talk: ${who.style} `) +
     'You are writing to Grant, who runs the place. He is a colleague you know ' +
-    'well, not a customer.\n\n' +
+    'well, not a customer, and he is your boss.\n\n' +
+    'You are REPORTING, not instructing. Tell him what happened. Do not open ' +
+    'with an imperative — "Make the decision now", "Approve the request", ' +
+    '"Review that" are all wrong, because you do not give him orders and ' +
+    'because you would be inventing an action nobody described. If something ' +
+    'is waiting on him, say that it is waiting on him.\n\n' +
     'Write like a person, in one or two short sentences. Contractions. No ' +
     'greeting, no sign-off, no "just checking in" — he can see who it is ' +
     'from.\n\n' +
@@ -132,12 +139,63 @@ export async function say(
       // models count reasoning tokens in the same budget, and a tight ceiling
       // produces an empty completion rather than a short message.
       maxTokens: 1_500,
+      ...(options.model === undefined ? {} : { model: options.model }),
     })
     const said = completion.content.trim()
-    return said === '' ? options.fallback : said
+    if (said === '') return options.fallback
+
+    // Every number in the sentence has to have come from the facts.
+    //
+    // The first live preview produced "We finished 96 pieces yesterday, two
+    // failed" — correct — and, in the same paragraph, "No one else needs a
+    // meeting", which nobody had said anything about. §11 draws a hard line
+    // between a measured figure and a modelled one, and a free-tier model told
+    // not to invent will still occasionally invent.
+    //
+    // A prose check is not possible; a NUMBER check is, and numbers are the
+    // dangerous class. A stray clause is embarrassing. A stray figure is a lie
+    // about the state of his business, and it arrives looking exactly like the
+    // true ones beside it.
+    const known = new Set(numbersIn(options.facts.join(' ')))
+    const invented = numbersIn(said).filter((n) => !known.has(n))
+    if (invented.length > 0) return options.fallback
+
+    return said
   } catch {
     return options.fallback
   }
+}
+
+/**
+ * Every number in a string, as written.
+ *
+ * Words as well as digits, because "two failed" and "2 failed" are the same
+ * claim and a check that only saw digits would pass the one that was spelled
+ * out. Small words only: nobody writes "three hundred and seventy-one" in a
+ * status note, and the digits catch that case anyway.
+ */
+const WORD_NUMBERS: Readonly<Record<string, string>> = {
+  zero: '0',
+  one: '1',
+  two: '2',
+  three: '3',
+  four: '4',
+  five: '5',
+  six: '6',
+  seven: '7',
+  eight: '8',
+  nine: '9',
+  ten: '10',
+  eleven: '11',
+  twelve: '12',
+}
+
+const numbersIn = (text: string): string[] => {
+  const digits = [...text.matchAll(/\d+(?:\.\d+)?/g)].map((m) => m[0].replace(/\.0+$/, ''))
+  const words = [...text.toLowerCase().matchAll(/\b[a-z]+\b/g)]
+    .map((m) => WORD_NUMBERS[m[0]])
+    .filter((n): n is string => n !== undefined)
+  return [...digits, ...words]
 }
 
 /**
@@ -155,5 +213,29 @@ export async function sayAs(
   options: SayOptions,
 ): Promise<string> {
   if (router === null) return options.fallback
-  return await say(router, await speaker(db, slug), options)
+  const [who, model] = await Promise.all([speaker(db, slug), writingModel(db)])
+  return await say(router, who, { ...options, model })
+}
+
+/**
+ * The model that writes what Grant reads, if one has been named.
+ *
+ * Empty — the default — means the ordinary failover order, which today is
+ * whatever free models OpenRouter has. Those are enough to vary a sentence and
+ * not enough to reliably write a good one: two previews of the same morning
+ * note came back as "One decision is waiting on you. We logged 96 items
+ * yesterday, but 2 failed…" and "Decision: review the two unsent messages…".
+ * The first reads like Claire. The second does not.
+ *
+ * That gap is a model, not a prompt, and closing it costs money — which is
+ * decision D2, still open, and Grant's. This setting is here so the answer is
+ * a config change rather than a code change: name a model and the writing
+ * path uses it, while everything else stays free.
+ */
+const writingModel = async (db: SqlExecutor): Promise<string | undefined> => {
+  const { rows } = await db.execute(`
+    select value #>> '{}' as m from public.system_config where key = 'voice.writing_model'
+  `)
+  const model = String((rows[0] as { m?: string } | undefined)?.m ?? '')
+  return model === '' ? undefined : model
 }
