@@ -161,5 +161,6 @@
   "0160_one_ai_learning.sql": "fd748616d523b02bc1012216a4cf3758f5743e241b5fb27812da46e3a62794c6",
   "0161_a_teamspace_is_not_a_project.sql": "afcaeed92ce46ecf37f518fe59cef4d4cadbb648a0df8442a03f87547beef04f",
   "0162_the_message_named_the_thing.sql": "5a535d5f993d8e3e9cc5a9fb7b4c26d2a70180983a292078c135a7b5e99312d0",
-  "0163_notion_can_be_written_to.sql": "dcb06dc0733e99add7d2d6091bccb45cbaa91829fed8a67ed113079fddaa1dc9"
+  "0163_notion_can_be_written_to.sql": "dcb06dc0733e99add7d2d6091bccb45cbaa91829fed8a67ed113079fddaa1dc9",
+  "0164_a_fixture_is_not_a_project.sql": "24153df7ac03a68e4b42a51822fb7e2ac793317dd28b5396ea6b63b03a4edc5d"
 }

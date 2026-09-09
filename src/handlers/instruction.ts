@@ -74,6 +74,7 @@
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { capabilityBrief, contradictsReality, reachNow, verbsNow } from '../agents/capability.ts'
+import { connectRequest } from '../agents/connect.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -936,6 +937,50 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // Does this carry a link? A link is the more specific reading and is
       // checked first: "add this video and make an audio overview" is two
       // instructions, and the link half must not be lost to the artifact half.
+      /*
+        "Wire this up to Notion."
+
+        Checked before the link and artifact paths because it is the most
+        specific reading: a message that says connect/attach/use AND names
+        Notion is asking for a configuration change, and the alternative
+        readings would answer it with prose. Grant said "just work with what you
+        have for now" and got a paragraph, because nothing could act on it.
+
+        Only when a project is known. Wiring up "whichever project this chat is
+        about" when the chat is about nothing in particular is how a project
+        gets attached to the wrong workspace.
+      */
+      const wire = connectRequest(instruction)
+      if (wire !== null && job.projectId !== null && job.projectId !== undefined) {
+        // A child of this job, so it inherits the correlation id, the priority
+        // and — the part that matters — the project this instruction resolved
+        // to. `enqueue_job` does not exist; `enqueue_child` is how the office
+        // hangs follow-up work off the thing that asked for it.
+        await deps.db.execute(`
+          select app.enqueue_child(
+            ${lit(job.jobId)}::uuid,
+            'office.notion_adopt',
+            '{}'::jsonb,
+            interval '0',
+            true,
+            ${lit(job.projectId)}::uuid
+          )
+        `)
+        return {
+          body:
+            wire.named === null
+              ? 'Right — wiring this project up to the Notion databases we already have. ' +
+                'I will say what I attached.'
+              : `Right — wiring this project up to ${wire.named} in Notion. I will say what I attached.`,
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'deterministic_retrieval',
+          model: null,
+        } satisfies HandlerOutput
+      }
+
       const sent = linkRequest(instruction)
       const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
 

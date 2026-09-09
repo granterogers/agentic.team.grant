@@ -48,6 +48,7 @@ import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
+import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
 import { notionSyncHandler } from '../handlers/notion-sync.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
@@ -282,6 +283,9 @@ export const buildPass = async (
     // The other corpus. Twenty pages shared with the integration and never
     // once read by anything outside a verification run.
     notionSyncHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
+    // "Use the Notion you already have" — a configuration change the office can
+    // now make, rather than one that needed a terminal (0164).
+    notionAdoptHandler({ db }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is
