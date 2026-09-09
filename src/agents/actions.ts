@@ -101,10 +101,53 @@ export interface NotebookRequest {
  * Empty when it asks for none — which is the common case and must stay cheap:
  * every message to every bot passes through here.
  */
+/**
+ * A brief is not a request for one artifact.
+ *
+ * Grant sent a twenty-five-line instruction about populating a Notion teamspace
+ * from a notebook. It contained the word "create" and, inside a parenthesis
+ * listing things to fetch, the phrase "audio overviews". Both patterns matched,
+ * and the whole brief became a single request to generate an audio overview —
+ * in the wrong project.
+ *
+ * The table below is a good way to read *"make an audio overview"*. It has no
+ * way to tell whether the phrase is the request or one clause of twenty, and
+ * that is what these two guards are for.
+ *
+ * Counted rather than judged: bullet lines and sentences are things a regex can
+ * be wrong about in only one direction, and a long instruction misread as a
+ * conversation is recoverable — it gets planned or answered — while a long
+ * instruction misread as one artifact starts something nobody asked for.
+ */
+const looksLikeABrief = (instruction: string): boolean => {
+  const bullets = (instruction.match(/^\s*(?:[-*•]|\d+[.)])\s+\S/gm) ?? []).length
+  const sentences = (instruction.match(/[.!?](?:\s|$)/g) ?? []).length
+  const lines = instruction.split('\n').filter((l) => l.trim() !== '').length
+  return bullets >= 3 || sentences >= 6 || lines >= 8
+}
+
+/**
+ * Named as an example rather than asked for.
+ *
+ * *"pull the files it has generated (audio overviews and the like)"* mentions
+ * an audio overview; it does not ask for one. The tell is the company the
+ * phrase keeps — a parenthesis, or one of the words English uses to introduce
+ * an example.
+ *
+ * Only the 60 characters before the phrase are examined. A "such as" four
+ * sentences earlier is about something else.
+ */
+const AS_AN_EXAMPLE = /(?:\(|\bsuch as\b|\blike\b|\bincluding\b|\be\.g\.|\bfor example\b|\bany\b)[^)]{0,60}$/i
+
+const mentionedNotAsked = (text: string, at: number): boolean =>
+  AS_AN_EXAMPLE.test(text.slice(Math.max(0, at - 60), at))
+
 export function notebookRequest(instruction: string): NotebookRequest | null {
   const text = instruction.toLowerCase()
   if (ASKING_ABOUT.test(instruction)) return null
   if (!MAKE.test(text)) return null
+  // A brief goes to planning or to a person, never to the artifact table.
+  if (looksLikeABrief(instruction)) return null
 
   const named = NOTEBOOK.test(text)
   const found: { kind: RequestedKind; at: number }[] = []
@@ -113,6 +156,7 @@ export function notebookRequest(instruction: string): NotebookRequest | null {
     for (const phrase of pattern.phrases) {
       const match = phrase.exec(text)
       if (match !== null) {
+        if (mentionedNotAsked(text, match.index)) continue
         found.push({ kind: pattern.kind, at: match.index })
         break
       }

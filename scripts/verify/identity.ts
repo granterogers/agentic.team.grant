@@ -387,6 +387,66 @@ const alias = `the ${run} thing`
     Number(uniq?.n) === 1,
   )
 
+  /*
+    An identifier in the words outranks the switch.
+
+    The failure this closes, exactly: Grant sent the Chief of Staff a brief
+    opening "Take the Legacy Coaching Course notebook (id 8c9022a1-…)" and the
+    work was filed against "AI learning", because that was the current project
+    for his chat. The message carried the exact id of an attached notebook and
+    the resolver never looked at it (0162).
+  */
+  const attachedRef = (await one(`
+      select a.external_ref, p.project_id::text pid
+        from public.project_attachments a
+        join public.projects p using (project_id)
+       where p.status = 'active' and a.enabled and a.connector = 'notebooklm'
+       limit 1
+    `)) as { external_ref?: string; pid?: string } | undefined
+
+  if (attachedRef?.external_ref === undefined) {
+    record('an id in the message outranks the switch', 'no attached notebook to test with', false)
+  } else {
+    // The switch points at the fixture; the sentence names a different
+    // project's notebook by id. The id must win.
+    await db.execute(`
+      insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+      values ('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid, 'verify', 'verify:identity')
+    `)
+    const byRef = await one(`
+      select app.resolve_project('telegram_chat', ${lit(scope)}, null,
+        ${lit(`have a look at the notebook (id ${attachedRef.external_ref}) and tell me what is in it`)}
+      )::text as p
+    `)
+    record(
+      'an identifier in the message outranks the current project',
+      `switch=${projectId.slice(0, 8)} → resolved=${String(byRef?.p ?? 'null').slice(0, 8)}`,
+      String(byRef?.p) === String(attachedRef.pid) && String(byRef?.p) !== projectId,
+    )
+
+    // And a sentence with no identifier still respects the switch, or the fix
+    // has simply broken the thing it sits above.
+    const noRef = await one(
+      `select app.resolve_project('telegram_chat', ${lit(scope)}, null, 'how is that going')::text as p`,
+    )
+    record(
+      'and a sentence with no identifier still respects the switch',
+      String(noRef?.p ?? 'null').slice(0, 8),
+      String(noRef?.p) === projectId,
+    )
+    await db.execute(`delete from public.project_switches where scope_ref = ${lit(scope)}`)
+  }
+
+  // An identifier we do not hold resolves to nothing — it never invents.
+  const unknown = await all(
+    `select 1 from app.references_in('look at 11111111-2222-3333-4444-555555555555')`,
+  )
+  record(
+    'an identifier we are not attached to resolves to nothing',
+    `${String(unknown.length)} match(es)`,
+    unknown.length === 0,
+  )
+
   // An explicit id still wins over everything, including a contradicting name.
   const explicit = await one(`
     select app.resolve_project('telegram_chat', ${lit(scope)}, ${lit(projectId)}::uuid,

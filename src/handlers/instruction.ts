@@ -73,6 +73,7 @@
  */
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
+import { capabilityBrief, contradictsReality, reachNow } from '../agents/capability.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -960,6 +961,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
       const context = contextBlock(hits)
+      // Asked once per answer rather than described in the prompt as a
+      // constant: a connector switched off an hour ago must change what she
+      // says she can do.
+      const reach = confirmation !== null ? [] : await reachNow(deps.db)
 
       const completion =
         confirmation !== null
@@ -1010,6 +1015,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'name — the chat already shows who you are. Do not thank him for ' +
                     'asking. If you are inferring rather than reporting, say so inside the ' +
                     'sentence rather than as a disclaimer at the end.' +
+                    // What the team can actually reach, from the registry that
+                    // knows. Placed immediately before the no-context branch
+                    // because that branch is where the false claim came from:
+                    // told to say she could not see a notebook, Claire
+                    // generalised to "I don't have integration access".
+                    `\n\n${capabilityBrief(reach)}` +
                     (context === ''
                       ? // Nothing matched. The old wording here said "answer
                         // from general knowledge", and that is how Grant asked
@@ -1115,8 +1126,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       }
       if (completion === null) throw new Error('no completion and no confirmation')
 
+      /*
+        And the guard, because the brief above is an instruction and not a
+        guarantee.
+
+        Same shape as the numeric check in `src/text/voice.ts`, for the same
+        reason: on a free model, "do not invent" is followed most of the time.
+        A stray clause is embarrassing; a stray claim that the team cannot
+        reach Notion is Grant believing his integration is broken and going to
+        look at it.
+
+        Corrected rather than suppressed. The reply is usually right about
+        everything else, and dropping it would lose a good answer over one
+        false sentence — so the sentence is contradicted, in the same message,
+        by the registry that knows.
+      */
+      const denied = contradictsReality(completion.content, reach)
+      const answer =
+        denied === null
+          ? completion.content.trim()
+          : `${completion.content.trim()}\n\n(Correction, from the system rather than from me: ` +
+            `${denied} IS connected and reachable right now. If I said otherwise above, ` +
+            `ignore it — the honest version is that I could not find what you asked about, ` +
+            `not that I cannot get in.)`
+
       return {
-        body: completion.content.trim(),
+        body: answer,
         confidence: 'medium',
         evidence: 'inferred',
         sources: sourceRefs(hits),
