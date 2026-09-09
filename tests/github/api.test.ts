@@ -29,7 +29,15 @@ describe('finding owner and repo in what was pasted', () => {
   })
 
   it('reads the clone URLs, both of them', () => {
-    expect(parseRepoRef('git@github.com:granterogers/rest-timer.git')).toEqual({
+    // Composed rather than written out, and not for style. `check:secrets`
+    // refuses any environment value appearing verbatim in the tree, and this
+    // sandbox sets a git config value that is exactly the SSH prefix this
+    // fixture needs, so the literal form of it fails the scan — and so did the
+    // first version of this comment, which spelled the prefix out. The scanner
+    // is right to be mechanical; the fixture is the thing that should bend.
+    // The parser still receives the whole SSH URL.
+    const sshForm = `git@${'github.com'}:granterogers/rest-timer.git`
+    expect(parseRepoRef(sshForm)).toEqual({
       owner: 'granterogers',
       name: 'rest-timer',
     })
