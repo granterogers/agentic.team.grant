@@ -19,7 +19,32 @@
  */
 
 /** The version this client is written against. Changing it is a code change. */
-export const NOTION_VERSION = '2022-06-28'
+/**
+ * The API version every call is made at.
+ *
+ * Moved from `2022-06-28` on 2026-09-09, and the move buys two things that
+ * cannot be had on the old version:
+ *
+ * **File uploads.** `POST /v1/file_uploads` requires `2026-03-11`. On the old
+ * version there is no upload endpoint at all, so "attach the audio overviews to
+ * Notion" was impossible rather than unimplemented.
+ *
+ * **Multi-source databases.** From `2025-09-03` a database can hold several
+ * data sources, and Notion's own upgrade guide is explicit that an old
+ * connection BREAKS against one — creating pages, querying, and relations all
+ * fail once a second source is added to a database somebody is using. That is a
+ * failure that arrives later, caused by something Grant does in the Notion UI,
+ * with nothing in our code having changed.
+ *
+ * Verified live against this workspace before switching: search returns 200 on
+ * all three versions with our token, and at `2026-03-11` the six workspace
+ * databases come back as `data_source` objects.
+ *
+ * The cost is that `database_id` is no longer the id to use for querying or for
+ * parenting a page — `data_source_id` is. Both call sites that cared were
+ * changed with this constant.
+ */
+export const NOTION_VERSION = '2026-03-11'
 
 const BASE = 'https://api.notion.com/v1'
 
@@ -79,6 +104,21 @@ export class NotionClient {
     this.maxRateLimitRetries = options.maxRateLimitRetries ?? 3
     this.maxRetryAfterSeconds = options.maxRetryAfterSeconds ?? 30
     this.baseUrl = options.baseUrl ?? BASE
+  }
+
+  /**
+   * Auth and version, without a content type.
+   *
+   * A file upload is `multipart/form-data` sent to a URL Notion hands back,
+   * rather than JSON sent to a path, so it cannot go through `call`. It still
+   * has to carry the same credentials and the same API version, and those are
+   * this class's business — `src/notion/files.ts` should not learn the token.
+   *
+   * No `Content-Type`: `fetch` sets it from the `FormData`, including the
+   * boundary, and a hand-set one omits the boundary and produces a 400.
+   */
+  uploadHeaders(): Record<string, string> {
+    return { Authorization: `Bearer ${this.token}`, 'Notion-Version': NOTION_VERSION }
   }
 
   async call(

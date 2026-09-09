@@ -103,7 +103,7 @@ export async function reachNow(db: SqlExecutor): Promise<Reach[]> {
  * reaching a service is a fact about our wiring, and only one of them is hers
  * to report.
  */
-export function capabilityBrief(reach: readonly Reach[]): string {
+export function capabilityBrief(reach: readonly Reach[], verbs: readonly Verb[] = []): string {
   if (reach.length === 0) return ''
   const can = reach.filter((r) => r.reachable).map((r) => r.service)
   const cannot = reach.filter((r) => !r.reachable)
@@ -115,12 +115,72 @@ export function capabilityBrief(reach: readonly Reach[]): string {
     (cannot.length === 0
       ? ''
       : `Not reachable: ${cannot.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
+    (verbs.length === 0
+      ? ''
+      : `${verbs.map((v) => `${v.service} — you can ${v.can.join(', ')}.`).join(' ')} `) +
     'Never claim you cannot reach one of the reachable services, and never say ' +
     'you lack access or an integration for one. If our records hold nothing ' +
     'about the thing being asked about, say THAT — "I have nothing on it here" ' +
     'is true and useful; "I do not have access to Notion" is a different claim ' +
-    'and it is not yours to make.'
+    'and it is not yours to make. ' +
+    // The specific sentence Grant objected to, forbidden by name.
+    'And do not offer to produce something "ready for you to add" when you can ' +
+    'add it yourself — if a verb above covers it, use it.'
   )
+}
+
+/** What a service can actually be made to DO, as opposed to merely reached. */
+export interface Verb {
+  readonly service: string
+  readonly can: readonly string[]
+}
+
+/**
+ * The verbs, from the tool registry rather than from a live call.
+ *
+ * Reachability is a fact about right now and worth asking the network for.
+ * Which operations exist is a fact about this repository and about what Grant
+ * has permitted, both of which are in the database — so this costs one query
+ * rather than a round trip to Notion on every answer.
+ *
+ * The distinction matters for the sentence it produces. "Notion is reachable"
+ * did not stop Claire offering to write an outline for Grant to paste in; "you
+ * can create pages, upload files and set relations in Notion" is the sentence
+ * that does.
+ */
+export async function verbsNow(db: SqlExecutor): Promise<Verb[]> {
+  const { rows } = await db.execute(`
+    select tool from public.tool_permissions where enabled and level <= 2 order by tool
+  `)
+  const enabled = new Set((rows as { tool: string }[]).map((r) => String(r.tool)))
+  const verbs: Verb[] = []
+
+  if (enabled.has('notion.write')) {
+    verbs.push({
+      service: 'Notion',
+      can: [
+        'create pages in any shared data source',
+        'append and update blocks',
+        'set properties and relations',
+        'upload and attach files including audio and video',
+        'archive a page (reversibly)',
+        'read a database schema before writing to it',
+      ],
+    })
+  }
+  if (enabled.has('notebook.write')) {
+    verbs.push({
+      service: 'Google NotebookLM',
+      can: ['add sources and notes', 'generate artifacts'],
+    })
+  }
+  if (enabled.has('github.read')) {
+    verbs.push({
+      service: 'GitHub',
+      can: ['read repositories, branches, README, the source tree, issues and releases'],
+    })
+  }
+  return verbs
 }
 
 /**

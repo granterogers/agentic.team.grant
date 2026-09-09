@@ -14,7 +14,21 @@ describe('structure survives the crossing', () => {
   it('keeps headings, lists, quotes and rules apart', () => {
     // Grant: "Structured pages, not dumps of source text." A page that is one
     // enormous paragraph is exactly the dump he does not want.
-    const md = ['# Curriculum', '', 'Intro line.', '', '- one', '- two', '', '1. first', '2. second', '', '> a quote', '', '---'].join('\n')
+    const md = [
+      '# Curriculum',
+      '',
+      'Intro line.',
+      '',
+      '- one',
+      '- two',
+      '',
+      '1. first',
+      '2. second',
+      '',
+      '> a quote',
+      '',
+      '---',
+    ].join('\n')
     expect(types(md)).toEqual([
       'heading_1',
       'paragraph',

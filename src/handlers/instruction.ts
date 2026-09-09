@@ -73,7 +73,7 @@
  */
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
-import { capabilityBrief, contradictsReality, reachNow } from '../agents/capability.ts'
+import { capabilityBrief, contradictsReality, reachNow, verbsNow } from '../agents/capability.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -965,6 +965,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // constant: a connector switched off an hour ago must change what she
       // says she can do.
       const reach = confirmation !== null ? [] : await reachNow(deps.db)
+      // What each reachable service can be made to DO. Read from the tool
+      // registry rather than the network, so it costs a query and not a round
+      // trip — and because "Notion is reachable" was never the sentence that
+      // stopped Claire offering Grant an outline to paste in himself.
+      const verbs = confirmation !== null ? [] : await verbsNow(deps.db)
 
       const completion =
         confirmation !== null
@@ -1020,7 +1025,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     // because that branch is where the false claim came from:
                     // told to say she could not see a notebook, Claire
                     // generalised to "I don't have integration access".
-                    `\n\n${capabilityBrief(reach)}` +
+                    `\n\n${capabilityBrief(reach, verbs)}` +
                     (context === ''
                       ? // Nothing matched. The old wording here said "answer
                         // from general knowledge", and that is how Grant asked

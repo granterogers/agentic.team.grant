@@ -285,7 +285,10 @@ console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)}
 
 if (createdPageId !== null) {
   // Notion has no delete; archiving is what the UI's "delete" does.
-  await notion.call(`/pages/${createdPageId}`, { method: 'PATCH', body: { archived: true } })
+  // `in_trash`, not `archived`. At 2026-03-11 Notion rejects the old property
+  // outright — "body.archived should be not present" — rather than ignoring it,
+  // so an archive written the 2022 way fails loudly. Confirmed live.
+  await notion.call(`/pages/${createdPageId}`, { method: 'PATCH', body: { in_trash: true } })
   console.log('verification page archived in Notion.')
 }
 await db.execute(`

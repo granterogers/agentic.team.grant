@@ -208,8 +208,19 @@ const KNOWN_LANGUAGES = new Set([
 ])
 
 export interface NewPage {
-  /** A database id to add a row to, or a page id to nest under. */
-  readonly parent: { readonly database?: string; readonly page?: string }
+  /**
+   * Where the page goes.
+   *
+   * `dataSource` is the current shape: from 2025-09-03 a database is a
+   * container and the queryable thing inside it — the thing a row belongs to —
+   * is a data source. `database` is kept for a workspace still on the old
+   * model, and `page` nests one page under another.
+   */
+  readonly parent: {
+    readonly dataSource?: string
+    readonly database?: string
+    readonly page?: string
+  }
   readonly title: string
   /** Markdown. Converted here so no caller has to know Notion's shapes. */
   readonly body?: string
@@ -239,12 +250,19 @@ export interface WrittenPage {
  */
 export async function createPage(client: NotionClient, page: NewPage): Promise<WrittenPage> {
   const blocks = page.body === undefined ? [] : toBlocks(page.body)
-  const titleKey = page.titleProperty ?? (page.parent.database === undefined ? 'title' : 'Name')
+  // A page nested under a page uses `title`; a row in a database uses whatever
+  // that database calls its title property. `structure.schemaOf` reads the real
+  // name, and 'Name' is only the fallback when nobody looked.
+  const titleKey =
+    page.titleProperty ??
+    (page.parent.dataSource === undefined && page.parent.database === undefined ? 'title' : 'Name')
 
   const parent =
-    page.parent.database === undefined
-      ? { page_id: String(page.parent.page) }
-      : { database_id: page.parent.database }
+    page.parent.dataSource !== undefined
+      ? { data_source_id: page.parent.dataSource }
+      : page.parent.database !== undefined
+        ? { database_id: page.parent.database }
+        : { page_id: String(page.parent.page) }
 
   const created = await client.call('/pages', {
     method: 'POST',
@@ -287,4 +305,103 @@ export async function updatePage(
   properties: Record<string, unknown>,
 ): Promise<void> {
   await client.call(`/pages/${pageId}`, { method: 'PATCH', body: { properties } })
+}
+
+/**
+ * Move a page to the trash.
+ *
+ * `in_trash`, not `archived`. At 2026-03-11 Notion rejects the old property
+ * outright — *"body.archived should be not present"* — rather than ignoring it,
+ * so an archive written the 2022 way fails loudly. Confirmed against the live
+ * API before this was written.
+ *
+ * Reversible, and deliberately the strongest thing this module can do. §13 puts
+ * destruction in the highest tier and Notion has no hard delete over the API
+ * anyway, so the worst a mistake here can be is a page Grant restores.
+ */
+export async function archivePage(client: NotionClient, pageId: string): Promise<void> {
+  await client.call(`/pages/${pageId}`, { method: 'PATCH', body: { in_trash: true } })
+}
+
+/** Put one back. The other half of a reversible operation actually being one. */
+export async function restorePage(client: NotionClient, pageId: string): Promise<void> {
+  await client.call(`/pages/${pageId}`, { method: 'PATCH', body: { in_trash: false } })
+}
+
+/** Archive a single block — a paragraph, an image — rather than a whole page. */
+export async function archiveBlock(client: NotionClient, blockId: string): Promise<void> {
+  await client.call(`/blocks/${blockId}`, { method: 'PATCH', body: { archived: true } })
+}
+
+/**
+ * Rewrite one block's text, keeping the block.
+ *
+ * Distinct from archiving and re-appending, which loses the block's position
+ * and any children under it. A correction to a paragraph should stay where the
+ * paragraph was.
+ */
+export async function updateBlock(
+  client: NotionClient,
+  blockId: string,
+  type: string,
+  text: string,
+): Promise<void> {
+  await client.call(`/blocks/${blockId}`, {
+    method: 'PATCH',
+    body: { [type]: { rich_text: richText(text) } },
+  })
+}
+
+/**
+ * Point one page's relation property at others.
+ *
+ * The join that makes a curriculum navigable rather than a pile of pages: a
+ * Task belongs to a Project, a Doc supports a Project. Notion stores it as a
+ * list of page ids on a property whose name is per-database, which is why the
+ * property has to be named by the caller and is worth reading from the schema
+ * rather than guessing.
+ *
+ * Replaces rather than appends, because that is what the API does and pretending
+ * otherwise would make "set the relation" mean two things.
+ */
+export async function relate(
+  client: NotionClient,
+  pageId: string,
+  property: string,
+  relatedPageIds: readonly string[],
+): Promise<void> {
+  await client.call(`/pages/${pageId}`, {
+    method: 'PATCH',
+    body: { properties: { [property]: { relation: relatedPageIds.map((id) => ({ id })) } } },
+  })
+}
+
+/**
+ * Create it, unless it is already there.
+ *
+ * Grant: *"Avoid duplicate creation when rerunning an import."* An import gets
+ * rerun — it failed halfway, or he asked again — and the failure mode of not
+ * handling that is two of everything in his workspace, which is tedious to undo
+ * by hand.
+ *
+ * Matched on title within the target data source, because that is the one
+ * property every data source has. Returns the existing page untouched rather
+ * than updating it: a rerun should be safe, and "safe" means it does not
+ * silently overwrite something he edited in between.
+ */
+export async function createPageIfAbsent(
+  client: NotionClient,
+  page: NewPage & { parent: { dataSource: string } },
+): Promise<WrittenPage & { existed: boolean }> {
+  const { findByTitle } = await import('./structure.ts')
+  const existing = await findByTitle(
+    client,
+    page.parent.dataSource,
+    page.title,
+    page.titleProperty ?? 'Name',
+  )
+  if (existing !== null) {
+    return { id: existing.id, url: existing.url ?? '', blocks: 0, existed: true }
+  }
+  return { ...(await createPage(client, page)), existed: false }
 }

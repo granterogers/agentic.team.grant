@@ -62,7 +62,11 @@ export const fingerprintContent = async (content: string): Promise<string> => {
 export async function listShared(notion: NotionClient): Promise<readonly NotionObject[]> {
   const found: NotionObject[] = []
   for await (const raw of notion.paginate('/search', {})) {
-    const object = raw.object === 'database' ? 'database' : 'page'
+    // From 2025-09-03 a queryable collection comes back as `data_source`
+    // rather than `database`; a database is now the container that holds one
+    // or more of them. Both are accepted so a workspace part-way through
+    // Notion's own migration still reads.
+    const object = raw.object === 'data_source' || raw.object === 'database' ? 'database' : 'page'
     found.push({
       id: String(raw.id),
       object,
@@ -121,7 +125,10 @@ export async function fetchBlocks(
 export async function pageText(notion: NotionClient, object: NotionObject): Promise<string> {
   if (object.object === 'database') {
     const rows: string[] = []
-    for await (const raw of notion.paginate(`/databases/${object.id}/query`, {})) {
+    // `/data_sources/:id/query`, not `/databases/:id/query`. The id search
+    // returns at this version IS a data source id, and asking the databases
+    // endpoint for it is a 404 — confirmed live before changing this.
+    for await (const raw of notion.paginate(`/data_sources/${object.id}/query`, {})) {
       const title = titleOf(raw)
       if (title !== '') rows.push(`- ${title}`)
     }
