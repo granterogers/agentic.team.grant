@@ -38,7 +38,13 @@
  * archive: retention is Grant's decision, not a script's.
  */
 
-import { checksum, downloadArchive, listArchives, readArchive } from '../../src/backup/portable.ts'
+import {
+  checksum,
+  downloadArchive,
+  listArchives,
+  readArchive,
+  tablesToBackUp,
+} from '../../src/backup/portable.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -120,9 +126,23 @@ record(
   tables.length > 0,
 )
 
-// Every table that exists live must be IN the archive. A backup missing a
-// table is the defect this rehearsal exists to find, and it is invisible from
-// the archive alone.
+/*
+  Two different questions, which the first version of this check confused.
+
+  **Would tonight's backup cover everything?** That is about the BUILDER, and it
+  is the defect worth catching — a table quietly excluded is invisible until
+  somebody needs it back. Asked of `tablesToBackUp`, the same function the
+  builder uses, so the answer cannot drift from the behaviour.
+
+  **Does the stored archive contain everything that exists now?** It cannot, and
+  should not be expected to: any migration that adds a table between the last
+  nightly run and this check leaves the archive legitimately behind.
+  `project_aliases` (0153) tripped exactly that and was reported as a missing
+  table, which is the wrong defect — and worse, a check that fails for a routine
+  reason is a check people learn to ignore, hiding the real one.
+
+  So the first is asserted and the second is reported.
+*/
 const live = (
   await db.execute(`
     select table_schema || '.' || table_name as t
@@ -130,13 +150,28 @@ const live = (
      where table_schema in ('public', 'app') and table_type = 'BASE TABLE'
   `)
 ).rows.map((r) => String(r.t))
-const missing = live.filter((t) => !tables.includes(t))
+
+const wouldCover = (await tablesToBackUp(db)).map((t) => `${t.table_schema}.${t.table_name}`)
+const skipped = live.filter((t) => !wouldCover.includes(t))
 record(
-  'every table in the database is in it',
-  missing.length === 0
-    ? `${String(live.length)} table(s), none missing`
-    : `missing: ${missing.slice(0, 6).join(', ')}`,
-  missing.length === 0,
+  'the next backup would contain every table in the database',
+  skipped.length === 0
+    ? `${String(live.length)} table(s), none skipped`
+    : `WOULD SKIP: ${skipped.slice(0, 6).join(', ')}`,
+  skipped.length === 0,
+)
+
+const newer = live.filter((t) => !tables.includes(t))
+record(
+  'and the stored copy is either current or honestly behind',
+  newer.length === 0
+    ? `current — all ${String(live.length)} tables present`
+    : `${String(newer.length)} table(s) created since it was taken (${newer.slice(0, 4).join(', ')}) — ` +
+        "tonight's run picks them up",
+  // Never a failure. The archive being older than the schema is what an archive
+  // IS; the only thing that would make it one is the builder skipping a table,
+  // which is the check above.
+  true,
 )
 
 // --- and now actually load it ----------------------------------------------

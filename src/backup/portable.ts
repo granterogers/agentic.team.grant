@@ -84,8 +84,25 @@ const sha256 = async (bytes: Uint8Array): Promise<string> => {
  * Whole tables, no WHERE clause anywhere. This is a backup: a filter here is a
  * row somebody does not get back.
  */
-export async function buildArchive(db: SqlExecutor, projectRef: string): Promise<Archive> {
-  const tables = (
+/**
+ * Every table a backup must contain.
+ *
+ * Exported, and separate from `buildArchive`, so the rehearsal can ask "would
+ * tonight's backup cover everything?" without building one.
+ *
+ * That distinction turned out to matter. The rehearsal used to answer the
+ * coverage question by comparing the STORED archive's table list against the
+ * live schema — which fails, correctly and uselessly, every time a migration
+ * adds a table between the last nightly run and the check. `project_aliases`
+ * (0153) tripped it that way: the builder was fine, the archive was simply
+ * older than the table. A check that cannot tell "the backup skips this" from
+ * "the backup predates this" is reporting the wrong defect, and the one it
+ * hides is the serious one.
+ */
+export async function tablesToBackUp(
+  db: SqlExecutor,
+): Promise<{ table_schema: string; table_name: string }[]> {
+  return (
     await db.execute(`
       select table_schema, table_name
         from information_schema.tables
@@ -94,6 +111,10 @@ export async function buildArchive(db: SqlExecutor, projectRef: string): Promise
        order by table_schema, table_name
     `)
   ).rows as { table_schema: string; table_name: string }[]
+}
+
+export async function buildArchive(db: SqlExecutor, projectRef: string): Promise<Archive> {
+  const tables = await tablesToBackUp(db)
 
   const data: Record<string, unknown[]> = {}
   let rows = 0

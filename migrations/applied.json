@@ -155,5 +155,6 @@
   "0154_the_old_signature_was_still_answering.sql": "782baffc28f08101863a0da4a1645453a7075b0ec05e451d23b782f5a6f5ca2b",
   "0155_there_is_no_min_of_a_uuid.sql": "2d827979e6faa864bd6d44bc47cc88ea74e108d890058463c3300bfb1bea21a5",
   "0156_the_name_is_inside_the_sentence.sql": "71d27c14fa2c3105e00566ef3bebd623f588fdfbd82f907d9f789ed51eba4135",
-  "0157_github_becomes_a_connector.sql": "1642699c49883aeec7bd5500fd1301dc089f8a89f747f9ba2c3890416f29e4ff"
+  "0157_github_becomes_a_connector.sql": "1642699c49883aeec7bd5500fd1301dc089f8a89f747f9ba2c3890416f29e4ff",
+  "0158_what_a_project_is_not_connected_to.sql": "0a2e4cb4af609414e92f72566efb310abbb54a99190766d80da8d46e75a396c2"
 }

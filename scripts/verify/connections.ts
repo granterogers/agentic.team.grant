@@ -61,15 +61,24 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 // A project with nothing attached
 // ===========================================================================
 
-const slug = `fixture-conn-${run}`
 const made = (
   await one(
     `select app.hq_create_project(${lit(`Fixture connections ${run}`)}, 'upload', ${lit(`ref-${run}`)}, null, true) as r`,
   )
-)?.r as { project_id?: string }
+)?.r as { project_id?: string; slug?: string }
 const projectId = String(made?.project_id ?? '')
-record('a fixture project exists to ask about', projectId.slice(0, 8), projectId !== '')
-if (projectId === '') process.exit(1)
+// Read back, not assumed. The first version of this file guessed the slug from
+// the run id, but the slug is derived from the NAME — so every call taking a
+// slug failed with "no such project", and one of them PASSED on that failure
+// because it only asserted that AN error came back. A check that accepts any
+// error accepts the wrong one.
+const slug = String(made?.slug ?? '')
+record(
+  'a fixture project exists to ask about',
+  `${slug} (${projectId.slice(0, 8)})`,
+  projectId !== '' && slug !== '',
+)
+if (projectId === '' || slug === '') process.exit(1)
 
 const connectionsFor = async (id: string): Promise<Record<string, unknown>[]> =>
   all(
@@ -206,7 +215,9 @@ const stateOf = (rows: Record<string, unknown>[], connector: string): string =>
     contradiction?.error === undefined
       ? 'it was allowed'
       : String(contradiction.error).slice(0, 60),
-    contradiction?.error !== undefined,
+    // Asserting WHICH refusal, not merely that one happened — "no such project"
+    // is also an error and would sail straight through a looser check.
+    String(contradiction?.error ?? '').includes('already attached'),
   )
 }
 
