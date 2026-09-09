@@ -36,9 +36,11 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
 import { syncNotion } from '../notion/sync.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 import { count, list } from '../text/plain.ts'
+import { sayAs } from '../text/voice.ts'
 
-export function notionSyncHandler(db: SqlExecutor): Handler {
+export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null = null): Handler {
   return {
     kind: 'office.notion_sync',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -138,20 +140,40 @@ export function notionSyncHandler(db: SqlExecutor): Handler {
       if (result.added > 0) parts.push(count(result.added, 'new page', 'new pages'))
       if (result.changed > 0) parts.push(count(result.changed, 'change', 'changes'))
 
+      const plain =
+        (parts.length === 0
+          ? `Read through ${count(result.shared, 'shared page', 'shared pages')}. Nothing new.`
+          : `${list(parts)} from ${count(result.shared, 'shared page', 'shared pages')}, ` +
+            `filed under ${String(project.name)}.`) +
+        // Named rather than counted. "3 skipped" tells him nothing he can act
+        // on; the titles and reasons tell him whether it matters.
+        (result.skipped.length === 0
+          ? ''
+          : `\n\n${count(result.skipped.length, 'page was', 'pages were')} left out: ` +
+            `${result.skipped.slice(0, 4).join('; ')}.`)
+
+      const announce = parts.length > 0 || result.skipped.length > 0
       return {
         ...base,
-        body:
-          (parts.length === 0
-            ? `Read through ${count(result.shared, 'shared page', 'shared pages')}. Nothing new.`
-            : `${list(parts)} from ${count(result.shared, 'shared page', 'shared pages')}, ` +
-              `filed under ${String(project.name)}.`) +
-          // Named rather than counted. "3 skipped" tells him nothing he can act
-          // on; the titles and reasons tell him whether it matters.
-          (result.skipped.length === 0
-            ? ''
-            : `\n\n${count(result.skipped.length, 'page was', 'pages were')} left out: ` +
-              `${result.skipped.slice(0, 4).join('; ')}.`),
-        announce: parts.length > 0 || result.skipped.length > 0,
+        body: announce
+          ? await sayAs(db, router, 'operations-director', {
+              purpose:
+                'Tell Grant what came in from his Notion pages. He writes notes ' +
+                'there; this is you noticing them, not announcing a milestone.',
+              facts: [
+                `${String(result.shared)} page(s) are shared with the integration`,
+                `${String(result.added)} were new`,
+                `${String(result.changed)} had changed since last time`,
+                `they are filed under the project "${String(project.name)}"`,
+                ...(result.skipped.length === 0
+                  ? []
+                  : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
+              ],
+              fallback: plain,
+              words: 50,
+            })
+          : plain,
+        announce,
       } satisfies HandlerOutput
     },
   }

@@ -28,7 +28,9 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
+import { sayAs } from '../text/voice.ts'
 
 interface Day {
   jobs_done: number
@@ -94,7 +96,20 @@ const DAY = `
       where received_at > app.now_utc() - interval '24 hours') as instructions
 `
 
-export function capacityHandler(db: SqlExecutor): Handler {
+export function capacityHandler(
+  db: SqlExecutor,
+  /**
+   * Who writes it. Null leaves the assembled version, which is correct and
+   * reads like a form.
+   *
+   * The header below argues that a model asked to SUMMARISE these numbers
+   * would turn "35 of 40 by our own count" into "35 of 40 remaining", and that
+   * argument still holds — which is why the model is never shown the numbers
+   * to summarise. It is handed the finished sentences as facts and asked to
+   * say them as Claire would. §11's line stays on this side of the boundary.
+   */
+  router: ProviderRouter | null = null,
+): Handler {
   return {
     kind: 'office.capacity_report',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -191,8 +206,22 @@ export function capacityHandler(db: SqlExecutor): Handler {
         }
       }
 
+      const assembled = lines.join('\n\n')
+
       return {
-        body: lines.join('\n\n'),
+        // Grant: *"you were supposed to make these people pass the Turing
+        // test."* A morning note that opens "Morning. Nothing is waiting on
+        // you." every single day for a month is the clearest possible tell
+        // that nobody wrote it. Claire writes it now, from these exact lines.
+        body: await sayAs(db, router, 'chief-of-staff', {
+          purpose:
+            'Write Grant his morning note. You send this every day, so vary ' +
+            'it — some mornings there is something to remark on and most ' +
+            'there is not. Lead with whatever actually matters today.',
+          facts: lines,
+          fallback: assembled,
+          words: 90,
+        }),
         confidence: 'high',
         // Every figure is counted from our own tables. The one inference in it
         // — the notebook ceiling — is labelled as one inside the sentence.

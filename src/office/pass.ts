@@ -63,6 +63,7 @@ import { narrateHandoffs } from '../slack/narrate.ts'
 import { slackChannel } from '../slack/notifier.ts'
 import { SlackOffice } from '../slack/office.ts'
 import { TelegramClient } from '../telegram/api.ts'
+import type { PagerSeverity } from '../telegram/pager.ts'
 import { TelegramPager } from '../telegram/pager.ts'
 import { botForStaff, pagerBot } from '../telegram/roster.ts'
 
@@ -148,6 +149,38 @@ export const buildPass = async (
   /** Set when Slack is installed, so the narrator can run after the drain. */
   let floor: (() => Promise<void>) | null = null
 
+  const projectRef = options.projectRef ?? 'baujwlzcziasnfhhkchg'
+
+  // Two secrets and the Slack app id, in ONE round trip.
+  //
+  // Every query here is an HTTPS call to the Management API (ADR-0007), so
+  // three of them is three times the latency of one for no reason — and the
+  // measurement that prompted this said setup was six seconds of a
+  // twenty-second empty pass.
+  const setup = (
+    await db.execute(`
+      select
+        (select coalesce(decrypted_secret, '') from vault.decrypted_secrets
+          where name = 'supabase.service_role_key') as service_key,
+        (select coalesce(app.resolve_secret(secret_ref), '') from public.providers
+          where provider = 'openrouter' and secret_ref is not null) as vault_key,
+        (select slack_app_id from public.slack_app_credentials
+          where enabled and revoked_at is null limit 1) as slack_app_id,
+        (select value #>> '{}' from public.system_config
+          where key = 'telegram.pager_floor') as pager_floor
+    `)
+  ).rows[0] as {
+    service_key?: string
+    vault_key?: string
+    slack_app_id?: string
+    pager_floor?: string
+  }
+
+  const serviceKey = String(setup?.service_key ?? '')
+  const orKey = options.openRouterKey ?? ''
+  const vaultKey = String(setup?.vault_key ?? '')
+  const cannotThink = orKey === '' && vaultKey === ''
+
   const botToken = String(
     (
       await db.execute(
@@ -196,7 +229,15 @@ export const buildPass = async (
       pagers.set(bot.botId, made)
       return made
     }
-    channels.push(pagerChannel(pagerFor, 'important'))
+    // The floor Grant set, and 'routine' when he has not.
+    //
+    // It used to be 'important', fixed at this call site, which meant the
+    // office and the pager carried the identical sentence seconds apart. A
+    // handler that wants to interrupt him says so now; this is the bar for a
+    // handler with no opinion, and 0151 put it on the Settings page where he
+    // can move it.
+    const floorSetting = String(setup?.pager_floor ?? 'routine')
+    channels.push(pagerChannel(pagerFor, floorSetting as PagerSeverity))
   }
 
   // The reply channel goes FIRST. An instruction that arrived in a Telegram
@@ -215,35 +256,11 @@ export const buildPass = async (
   // here rather than in the handler: §15 keeps credential lookup in the
   // composition root, and a handler that reaches the vault itself is a handler
   // that cannot be tested without one.
-  const projectRef = options.projectRef ?? 'baujwlzcziasnfhhkchg'
-
-  // Two secrets and the Slack app id, in ONE round trip.
-  //
-  // Every query here is an HTTPS call to the Management API (ADR-0007), so
-  // three of them is three times the latency of one for no reason — and the
-  // measurement that prompted this said setup was six seconds of a
-  // twenty-second empty pass.
-  const setup = (
-    await db.execute(`
-      select
-        (select coalesce(decrypted_secret, '') from vault.decrypted_secrets
-          where name = 'supabase.service_role_key') as service_key,
-        (select coalesce(app.resolve_secret(secret_ref), '') from public.providers
-          where provider = 'openrouter' and secret_ref is not null) as vault_key,
-        (select slack_app_id from public.slack_app_credentials
-          where enabled and revoked_at is null limit 1) as slack_app_id
-    `)
-  ).rows[0] as { service_key?: string; vault_key?: string; slack_app_id?: string }
-
-  const serviceKey = String(setup?.service_key ?? '')
-  const orKey = options.openRouterKey ?? ''
-  const vaultKey = String(setup?.vault_key ?? '')
-  const cannotThink = orKey === '' && vaultKey === ''
 
   const handlers = [
     ...notebookHandlers(db),
     planHandler(db),
-    capacityHandler(db),
+    capacityHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     calendarHandler(db),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
@@ -257,10 +274,14 @@ export const buildPass = async (
     // Read from the install rather than pasted in: there is exactly one
     // enabled Slack app (§9's "V1 is ONE app") and it knows its own id. Came
     // back with the secrets above, in the same round trip.
-    slackRotationHandler({ db, appId: String(setup?.slack_app_id ?? '') }),
+    slackRotationHandler({
+      db,
+      appId: String(setup?.slack_app_id ?? ''),
+      router: cannotThink ? null : new ProviderRouter(db, orKey),
+    }),
     // The other corpus. Twenty pages shared with the integration and never
     // once read by anything outside a verification run.
-    notionSyncHandler(db),
+    notionSyncHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is
@@ -270,6 +291,7 @@ export const buildPass = async (
     // notebook can actually be read. See `notebook` in the options above.
     syncHandler({
       db,
+      router: cannotThink ? null : new ProviderRouter(db, orKey),
       adapter:
         options.notebook ??
         (async () => {

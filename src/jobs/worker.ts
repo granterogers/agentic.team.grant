@@ -33,6 +33,7 @@
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import type { PagerSeverity } from '../telegram/pager.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -67,6 +68,19 @@ export interface HandlerOutput {
    * forgets, which is how the hourly repetition happened.
    */
   readonly announce?: boolean
+  /**
+   * How loudly. `routine` is Slack only; `important` and above buzz a phone.
+   *
+   * Undefined means routine, which is the important half of this: §12 gives
+   * Telegram ONE interrupting voice and Slack the running detail, and until
+   * now every notification was sent at a fixed `important` — so the office and
+   * the pager received the identical sentence, seconds apart, forever.
+   *
+   * Grant, looking at the result: *"there's a lot of mindless repetition on
+   * Telegram and Slack."* The two surfaces are supposed to carry different
+   * things. Making a handler ASK to interrupt is what makes that true.
+   */
+  readonly severity?: PagerSeverity
   readonly confidence: Confidence
   readonly evidence: Evidence
   readonly sources: readonly string[]

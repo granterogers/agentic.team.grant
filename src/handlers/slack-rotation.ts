@@ -41,15 +41,20 @@
 
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 import { rotateAndPersist, secondsUntilExpiry, shouldRotate } from '../slack/rotation.ts'
+import { sayAs } from '../text/voice.ts'
 
 export interface SlackRotationDeps {
   readonly db: SqlExecutor
   readonly appId: string
+  /** Who writes it, when there is something to say. See `src/text/voice.ts`. */
+  readonly router?: ProviderRouter | null
 }
 
 export function slackRotationHandler(deps: SlackRotationDeps): Handler {
   const { db, appId } = deps
+  const router = deps.router ?? null
   return {
     kind: 'office.slack_rotate',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -100,7 +105,10 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
             'tokens cannot be renewed. Regenerating the pair is a human step: ' +
             'https://api.slack.com/apps → Your App Configuration Tokens.',
           confidence: 'high',
+          // Only a human can regenerate the pair, and the window is twelve
+          // hours. That earns an interruption.
           announce: true,
+          severity: 'important',
         } satisfies HandlerOutput
       }
 
@@ -128,25 +136,54 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
       if (outcome.kind === 'failed') {
         return {
           ...base,
-          body:
-            `Could not renew the Slack tokens: ${outcome.error}\n\n` +
-            (outcome.needsHuman
-              ? 'The refresh token itself is dead, so no retry will fix it. Regenerate ' +
-                'the pair at https://api.slack.com/apps → Your App Configuration Tokens.'
-              : 'The token we hold still works until it expires, and this will be ' +
-                'tried again shortly.'),
+          body: await sayAs(db, router, 'operations-director', {
+            purpose:
+              'Tell Grant the Slack tokens could not be renewed, and what that ' +
+              'means for him. This one is worth his attention — say what he ' +
+              'has to do, if anything, and keep the link exactly as given.',
+            facts: [
+              `the renewal failed with: ${outcome.error}`,
+              outcome.needsHuman
+                ? 'the refresh token itself is dead, so retrying cannot fix it'
+                : 'the token we already hold still works until it expires, and this will retry',
+              outcome.needsHuman
+                ? 'a human must regenerate the pair at https://api.slack.com/apps under Your App Configuration Tokens'
+                : 'no action is needed from Grant yet',
+            ],
+            fallback:
+              `Could not renew the Slack tokens: ${outcome.error}\n\n` +
+              (outcome.needsHuman
+                ? 'The refresh token itself is dead, so no retry will fix it. Regenerate ' +
+                  'the pair at https://api.slack.com/apps → Your App Configuration Tokens.'
+                : 'The token we hold still works until it expires, and this will be ' +
+                  'tried again shortly.'),
+            words: 60,
+          }),
           confidence: 'high',
           announce: true,
+          severity: outcome.needsHuman ? 'important' : 'routine',
         } satisfies HandlerOutput
       }
 
       const hours = Math.round(secondsUntilExpiry(outcome.expiresAt) / 360) / 10
+      const plain = `Slack tokens renewed. Good for another ${String(hours)} hours.`
       return {
         ...base,
-        body: `Slack tokens renewed. Good for another ${String(hours)} hours.`,
-        // Twice a day at most, and it is the kind of maintenance worth seeing
-        // happen — an absence of these is how you find out it stopped.
-        announce: true,
+        // Silent, and that is the real answer to Grant's complaint.
+        //
+        // The first attempt at this was to have Marcus WRITE the sentence
+        // instead of templating it, and three runs produced "Renewed Slack
+        // tokens; they last about 12 hours", "Renewed Slack tokens – they last
+        // about 12 hours", "Slack tokens renewed; new pair valid ~12 hrs".
+        // Varied, and still obviously not a person.
+        //
+        // Because the tell was never the phrasing. It is that a colleague does
+        // not message you twice a day to say a background token was renewed.
+        // No wording passes that test; not sending it does. It shows on the
+        // Set up page for anyone who wants to check, and it speaks up when it
+        // FAILS, which is the case that needs a human.
+        body: plain,
+        announce: false,
       } satisfies HandlerOutput
     },
   }

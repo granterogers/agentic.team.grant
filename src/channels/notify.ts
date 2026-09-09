@@ -264,6 +264,15 @@ export function combinedNotifier(
  */
 export function pagerChannel(
   pagerFor: (staffSlug: string | null) => Promise<TelegramPager | null>,
+  /**
+   * Used only when the handler did not say.
+   *
+   * It used to be the ONLY answer, fixed at `important` by the caller, so
+   * every job in the building buzzed Grant's phone with the same sentence
+   * Slack had just received. The handler knows whether its outcome is worth
+   * interrupting somebody over; this is the floor under a handler that has no
+   * opinion.
+   */
   severity: PagerSeverity = 'routine',
 ): {
   readonly name: string
@@ -291,7 +300,7 @@ export function pagerChannel(
         staffTitle: context.staff?.title ?? null,
         staffId: context.staffId,
         reviewed: context.reviewed,
-        severity,
+        severity: output.severity ?? severity,
         actions: context.actions,
       })
     },

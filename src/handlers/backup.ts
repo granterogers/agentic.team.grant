@@ -75,8 +75,10 @@ export function backupHandler(deps: BackupDeps): Handler {
             'service role key in the vault as `supabase.service_role_key`.',
           confidence: 'high',
           // A backup that did not happen is the one thing here worth saying
-          // out loud. An unnoticed absence of backups is the whole failure.
+          // out loud, and worth a phone buzzing: an unnoticed absence of
+          // backups is the whole failure mode, and it needs him to act.
           announce: true,
+          severity: 'important',
         } satisfies HandlerOutput
       }
 

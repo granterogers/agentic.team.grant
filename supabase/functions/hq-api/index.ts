@@ -61,6 +61,9 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   cost: { fn: 'hq_cost_per_outcome', args: { p_days: 30 } },
   // Which bot speaks as whom, and which are spare.
   bots: { fn: 'hq_bots' },
+  // Who may message Grant directly, how loud a thing has to be to reach his
+  // phone, and which recurring duties run at all (0151).
+  routing: { fn: 'hq_routing' },
 }
 
 /**
@@ -104,6 +107,10 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // The way back out. There was a way in and none out, which made a consent
   // granted through a browser effectively permanent from this page's side.
   forget_google: { fn: 'hq_forget_google', required: [] },
+  // One setter over three kinds of routing change, allow-listed inside the
+  // function for the same reason `set_setting` is: the page is not the only
+  // possible caller.
+  routing_set: { fn: 'hq_routing_set', required: ['p_what', 'p_value'] },
 }
 
 /**

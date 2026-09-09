@@ -564,7 +564,7 @@ const ago = (iso) => {
   reading the console, which is the step the method calls "render it and look at
   it" and the step that is easiest to skip.
 */
-const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'team', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects', output: 'artifacts', settings: 'settings' }
+const SECTION_FOR = { overview: 'overview', trends: 'series', staff: 'team', activity: 'activity', usage: 'usage', connections: 'connections', projects: 'projects', output: 'artifacts', settings: 'settings', routing: 'routing' }
 
 /* Configuration. The only writing this page does — see the endpoint's comment
    on why configuring is allowed where acting is not. */
@@ -653,6 +653,7 @@ const MENU = [
   ['Setting up', [
     ['setup', 'Set up'],
     ['help', 'Help — what all this is'],
+    ['routing', 'Who messages you, and where'],
     ['settings', 'Advanced settings'],
   ]],
 ]
@@ -738,6 +739,12 @@ const GUIDE = {
     one: 'Every outside service and whether it is answering',
     what: 'Every outside service this depends on — Google, Notion, Slack, Telegram, the model providers — and whether it answered when last asked.',
     todo: 'A red light is the first thing to fix: everything downstream of it will fail in ways that look like something else. Each row says when it was last checked, so a stale green is not a green.',
+  },
+  routing: {
+    title: 'Who messages you, and where',
+    one: 'Turn the noise up or down without asking me',
+    what: 'Three dials. Who is allowed to message you directly rather than posting in the team group; how important something has to be before it reaches your phone at all; and which of the recurring jobs run.',
+    todo: 'If the team is talking too much, raise the bar for what reaches your phone — everything below it still appears in Slack, so nothing is lost, it just stops buzzing. Switching a job off stops the WORK, not only the message, so each one says what it does.',
   },
   settings: {
     title: 'Advanced settings',
@@ -2064,6 +2071,129 @@ function wireTalk() {
 
 
 
+
+/*
+  Who messages you, and where.
+
+  Grant: *"we should include routing options in the front end."*
+
+  Everything on this page already existed and none of it was reachable: who
+  may write to his private chat, how loud a thing must be to reach his phone,
+  and which recurring jobs run at all. All three were mine to change and his
+  to live with, which is backwards — he had spent two days telling me the team
+  talks too much.
+
+  Three controls, and each says what happens when you move it. A dial with no
+  stated consequence is a dial nobody touches.
+*/
+function routing(d) {
+  const people = d.people || []
+  const duties = d.duties || []
+  const group = d.office_group || {}
+  const direct = d.direct_to_grant ?? ''
+  const floor = d.pager_floor ?? 'important'
+
+  const LOUDNESS = [
+    ['trivial', 'Everything, including things nobody would act on'],
+    ['routine', 'Anything the team finished'],
+    ['important', 'Things worth looking at today'],
+    ['urgent', 'Things that need you now'],
+    ['blocker', 'Only when the team is stuck on you'],
+  ]
+
+  const who = `
+    <label class="fld"><span>Who can message you directly</span>
+      <select data-routing="direct_to_grant">
+        <option value=""${direct === '' ? ' selected' : ''}>Anyone on the team</option>
+        ${people
+          .map(
+            (p) =>
+              `<option value="${esc(p.slug)}"${direct === p.slug ? ' selected' : ''}>Only ${esc(p.name)} — ${esc(p.title)}</option>`,
+          )
+          .join('')}
+      </select>
+      <em>${
+        group.exists
+          ? 'Everyone else posts in ' + esc(group.title || 'the team group') + ' instead.'
+          : 'There is no team group yet, so everyone reaches you directly until there is one.'
+      }</em>
+    </label>`
+
+  const loud = `
+    <label class="fld"><span>How loud before it reaches your phone</span>
+      <select data-routing="pager_floor">
+        ${LOUDNESS.map(
+          ([k, label]) =>
+            `<option value="${k}"${floor === k ? ' selected' : ''}>${esc(label)}</option>`,
+        ).join('')}
+      </select>
+      <em>Everything quieter still appears in Slack. Nothing is lost by raising
+        this — it stops buzzing, it does not stop happening.</em>
+    </label>`
+
+  const duty = (r) => `
+    <div class="svc">
+      <span class="lamp ${r.enabled ? 'ok' : ''}" aria-hidden="true"></span>
+      <span class="who"><b>${esc(r.slug.replace(/-/g, ' '))}</b>
+        <span>${esc(r.what || '')}</span>
+        <span class="meta">${esc(r.owner || 'nobody')} · every ${String(Math.round((r.every_minutes || 0) / 60) || 1)}h · last ran ${esc(r.last_run || 'never')}</span></span>
+      <button type="button" class="ghost" data-duty="${esc(r.slug)}" data-to="${r.enabled ? 'off' : 'on'}">
+        ${r.enabled ? 'Switch off' : 'Switch on'}</button>
+    </div>`
+
+  return `
+    <section class="card wide"><h2>Who messages you, and where</h2><div class="body">
+      ${who}
+      ${loud}
+      <p class="meta" id="routing-said"></p>
+    </div></section>
+
+    <section class="card wide"><h2>What runs on its own</h2><div class="body">
+      <p class="meta">Switching one off stops the work, not only the message.
+        A job that finds nothing says nothing either way.</p>
+      ${duties.map(duty).join('')}
+    </div></section>`
+}
+
+function wireRouting() {
+  const said = document.getElementById('routing-said')
+  const tell = (text) => {
+    if (said !== null) said.textContent = text
+  }
+
+  for (const select of document.querySelectorAll('[data-routing]')) {
+    select.onchange = async () => {
+      const what = select.getAttribute('data-routing')
+      tell('Saving…')
+      try {
+        await act('routing_set', { p_what: what, p_value: select.value })
+        tell('Saved. It applies to the next thing the team finishes.')
+      } catch (e) {
+        tell('Could not save that: ' + e.message)
+      }
+    }
+  }
+
+  for (const button of document.querySelectorAll('[data-duty]')) {
+    button.onclick = async () => {
+      const slug = button.getAttribute('data-duty')
+      const to = button.getAttribute('data-to')
+      button.disabled = true
+      tell('Saving…')
+      try {
+        await act('routing_set', { p_what: 'duty:' + slug, p_value: to })
+        // Reloaded rather than toggled in place: the lamp, the button and the
+        // "last ran" line all move together, and three hand-updated bits of
+        // DOM is three chances to show a state the database does not have.
+        await show('routing')
+      } catch (e) {
+        tell('Could not save that: ' + e.message)
+        button.disabled = false
+      }
+    }
+  }
+}
+
 /*
   Set up — the page that answers "what should I do".
 
@@ -2587,7 +2717,7 @@ function cost(d) {
     </section>`
 }
 
-const VIEWS = { setup, help, talk, overview, trends, staff, activity, usage, cost, connections, projects, output, settings }
+const VIEWS = { setup, help, talk, routing, overview, trends, staff, activity, usage, cost, connections, projects, output, settings }
 
 /*
   The Projects tab's buttons.
@@ -2719,6 +2849,7 @@ async function show(section) {
     if (section === 'setup') wireSetup()
     if (section === 'projects') wireProjects()
     if (section === 'settings') wireSettings()
+    if (section === 'routing') wireRouting()
     if (section === 'staff') wireTeam()
     explain(main)
     armSparklines(main)

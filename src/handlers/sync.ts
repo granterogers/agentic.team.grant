@@ -52,10 +52,19 @@ import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { type NotebookAdapter, UnavailableNotebookAdapter } from '../notebook/adapter.ts'
 import { notebookEnabled } from '../notebook/sync-queue.ts'
 import { type RemoteNotebook, runSync, SyncAlreadyRunningError } from '../projects/sync.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
+import { sayAs } from '../text/voice.ts'
 
 export interface SyncHandlerDeps {
   readonly db: SqlExecutor
+  /**
+   * Who writes the message, when there is one worth writing.
+   *
+   * Null means the template speaks instead. See `src/text/voice.ts`: the
+   * facts are the handler's either way; only the sentence changes.
+   */
+  readonly router?: ProviderRouter | null
   /**
    * How to build the live adapter, injected.
    *
@@ -74,6 +83,7 @@ export interface SyncHandlerDeps {
 
 export function syncHandler(deps: SyncHandlerDeps): Handler {
   const { db, adapter, workerId } = deps
+  const router = deps.router ?? null
   return {
     kind: 'office.sync',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -171,11 +181,31 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
       // Hourly, and almost always "nothing new". Announcing that is how a
       // channel stops being read — Marcus said it to Grant on two surfaces
       // every hour for a day before this line existed.
+      const announce = parts.length > 0
       return {
         ...base,
-        body,
+        // Written by Marcus when it is going to reach anybody, and left as the
+        // template when it is not — there is no point spending a model call on
+        // a sentence nobody will read.
+        body: announce
+          ? await sayAs(db, router, 'operations-director', {
+              purpose:
+                'Tell Grant what turned up in his notebooks. This is a routine ' +
+                'hourly check and most of them find nothing, so keep it brief ' +
+                'and do not make it sound like an event.',
+              facts: [
+                `${String(outcome.notebooksSeen)} notebook(s) were read`,
+                `${String(outcome.projectsCreated)} new project(s)`,
+                `${String(outcome.sourcesAdded)} new source(s)`,
+                `${String(outcome.sourcesChanged)} source(s) changed`,
+                `${String(outcome.sourcesRemoved)} source(s) we held are no longer listed`,
+              ],
+              fallback: body,
+              words: 45,
+            })
+          : body,
         evidence: 'verified',
-        announce: parts.length > 0,
+        announce,
       } satisfies HandlerOutput
     },
   }
