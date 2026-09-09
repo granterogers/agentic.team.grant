@@ -31,6 +31,14 @@ export interface UsageRecord {
    * `null` is precisely when the figure must not be called authoritative.
    */
   readonly providerReportedCost: number | null
+  /**
+   * Wall-clock milliseconds, request to last byte.
+   *
+   * Optional because a call that failed before it was sent has no answer, and
+   * a zero there would drag every average it appears in towards a speed
+   * nothing achieved. Null is the honest value for "we do not know".
+   */
+  readonly latencyMs?: number | undefined
 }
 
 /**
@@ -49,13 +57,15 @@ export const recordUsage = async (db: SqlExecutor, record: UsageRecord): Promise
   await db.execute(`
     insert into public.inference_usage
       (provider, model_id, correlation_id, job_id, outcome,
-       prompt_tokens, completion_tokens, cost_usd, provider_reported_cost, provenance)
+       prompt_tokens, completion_tokens, cost_usd, provider_reported_cost, provenance,
+       latency_ms)
     values
       (${lit(record.provider)}, ${lit(record.modelId)}, ${lit(record.correlationId)},
        ${nullableLit(record.jobId)}::uuid, ${lit(record.outcome)},
        ${String(record.promptTokens ?? 0)}, ${String(record.completionTokens ?? 0)},
        ${String(reported ?? 0)}, ${reported === null ? 'null' : String(reported)},
-       ${lit(provenanceFor(reported))}::public.usage_provenance)
+       ${lit(provenanceFor(reported))}::public.usage_provenance,
+       ${record.latencyMs === undefined ? 'null' : String(Math.round(record.latencyMs))})
   `)
 }
 

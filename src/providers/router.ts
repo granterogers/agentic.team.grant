@@ -326,7 +326,13 @@ export class ProviderRouter {
       }
     }
     let payload: ProviderResponse
+    let startedAt = Date.now()
     try {
+      // The clock starts here and not a line earlier: what is being measured
+      // is how long the provider takes, not how long this function takes to
+      // resolve a key. `app.model_speed` reads the result and it is the basis
+      // for any future "which model answers Grant" decision (0150).
+      startedAt = Date.now()
       const response = await this.fetchImpl(`${provider.base_url}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -375,10 +381,17 @@ export class ProviderRouter {
       // and must not trip the breaker — the provider did its job. Recording
       // success keeps the breaker honest about availability.
       await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
-      await this.account(provider.provider, payload.model ?? model, 'empty_completion', request, {
-        prompt: payload.usage?.prompt_tokens ?? 0,
-        completion: payload.usage?.completion_tokens ?? 0,
-      })
+      await this.account(
+        provider.provider,
+        payload.model ?? model,
+        'empty_completion',
+        request,
+        {
+          prompt: payload.usage?.prompt_tokens ?? 0,
+          completion: payload.usage?.completion_tokens ?? 0,
+        },
+        Date.now() - startedAt,
+      )
       throw new EmptyCompletionError(
         payload.model ?? model,
         choice?.finish_reason ?? 'unknown',
@@ -387,10 +400,17 @@ export class ProviderRouter {
     }
 
     await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
-    await this.account(provider.provider, payload.model ?? model, 'ok', request, {
-      prompt: payload.usage?.prompt_tokens ?? 0,
-      completion: payload.usage?.completion_tokens ?? 0,
-    })
+    await this.account(
+      provider.provider,
+      payload.model ?? model,
+      'ok',
+      request,
+      {
+        prompt: payload.usage?.prompt_tokens ?? 0,
+        completion: payload.usage?.completion_tokens ?? 0,
+      },
+      Date.now() - startedAt,
+    )
 
     return {
       model: payload.model ?? model,
@@ -422,6 +442,7 @@ export class ProviderRouter {
     outcome: UsageOutcome,
     request: Pick<CompletionRequest, 'correlationId' | 'jobId'>,
     tokens: { prompt: number; completion: number } = { prompt: 0, completion: 0 },
+    latencyMs?: number,
   ): Promise<void> {
     // No correlation id means no job to attribute this to. Recorded anyway,
     // under a generated one: an unattributed call is still a call, and
@@ -439,6 +460,7 @@ export class ProviderRouter {
         // OpenRouter's free tier reports no cost, and §11 says that is exactly
         // when a figure must not be called authoritative. `null` carries that.
         providerReportedCost: null,
+        latencyMs,
       })
     } catch {
       // Deliberately swallowed. See the note above.

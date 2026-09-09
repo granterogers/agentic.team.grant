@@ -73,11 +73,17 @@ const secret = async (name: string): Promise<string> =>
  * measured. Returns null on timeout, which is a result and not an error.
  */
 const timeToAnswer = async (dedupeKey: string, startedAt: number): Promise<number | null> => {
-  for (let waited = 0; waited < BUDGET_MS + 30_000; waited += 1_000) {
+  for (let waited = 0; waited < BUDGET_MS + 60_000; waited += 1_000) {
+    // The job FINISHING, not the output row appearing.
+    //
+    // The first version stopped at the output, which is written before the
+    // notifier runs — so it reported 42 seconds for a message that reached
+    // Grant at 66. A latency check that stops before the last step measures
+    // the part of the work that is not the part he is waiting for.
     const row = await one(`
-      select o.output_id from public.inbound_commands c
-        join public.outputs o on o.job_id = c.job_id
-       where c.dedupe_key = ${lit(dedupeKey)}
+      select j.finished_at from public.inbound_commands c
+        join public.jobs j on j.job_id = c.job_id
+       where c.dedupe_key = ${lit(dedupeKey)} and j.state = 'complete'
        limit 1
     `)
     if (row !== undefined) return Date.now() - startedAt
@@ -132,6 +138,26 @@ record(
 )
 
 // ===========================================================================
+// And how long Telegram took
+// ===========================================================================
+//
+// Measured BEFORE Slack is sent, one surface at a time.
+//
+// The first version fired both and then waited for both, so the second
+// message queued behind the first and the number reported for it was
+// contention rather than latency. Two people messaging at once is a real case
+// and worth its own check one day; it is not the case Grant described.
+
+const telegramMs = await timeToAnswer(telegramKey, telegramStart)
+record(
+  'a Telegram message is answered inside a minute',
+  telegramMs === null
+    ? 'no answer within two minutes'
+    : `${String(Math.round(telegramMs / 100) / 10)}s`,
+  telegramMs !== null && telegramMs <= BUDGET_MS,
+)
+
+// ===========================================================================
 // Slack
 // ===========================================================================
 //
@@ -173,22 +199,13 @@ record(
 )
 
 // ===========================================================================
-// And how long each took
+// And how long Slack took
 // ===========================================================================
-
-const telegramMs = await timeToAnswer(telegramKey, telegramStart)
-record(
-  'a Telegram message is answered inside a minute',
-  telegramMs === null
-    ? 'no answer within 90 seconds'
-    : `${String(Math.round(telegramMs / 100) / 10)}s`,
-  telegramMs !== null && telegramMs <= BUDGET_MS,
-)
 
 const slackMs = await timeToAnswer(String(slackBody.dedupe_key ?? ''), slackStart)
 record(
   'a Slack message is answered inside a minute',
-  slackMs === null ? 'no answer within 90 seconds' : `${String(Math.round(slackMs / 100) / 10)}s`,
+  slackMs === null ? 'no answer within two minutes' : `${String(Math.round(slackMs / 100) / 10)}s`,
   slackMs !== null && slackMs <= BUDGET_MS,
 )
 

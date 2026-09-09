@@ -138,6 +138,11 @@ export const buildPass = async (
 ): Promise<() => Promise<PassResult>> => {
   const log = options.log ?? ((): void => {})
   const max = options.max ?? 10
+  // Timings in the log, because Grant asked for a reply inside a minute and
+  // "it feels slow" cannot be acted on. Every query here is an HTTPS round
+  // trip to the Management API (ADR-0007), so a pass is mostly latency and
+  // the only way to know which part is to say.
+  const buildStartedAt = Date.now()
 
   const channels = []
   /** Set when Slack is installed, so the narrator can run after the drain. */
@@ -199,6 +204,7 @@ export const buildPass = async (
   // pager to a message sent to Ines would be a colleague answering through a
   // switchboard. Everything else still gets its usual delivery.
   const notify = combinedNotifier([replyChannel(db), ...channels], db)
+  log(`setup: channels ready at ${String(Date.now() - buildStartedAt)}ms`)
 
   // Notebook operations are deterministic — the notebook accepted the source or
   // it did not — and §16 exempts those from review.
@@ -210,24 +216,28 @@ export const buildPass = async (
   // composition root, and a handler that reaches the vault itself is a handler
   // that cannot be tested without one.
   const projectRef = options.projectRef ?? 'baujwlzcziasnfhhkchg'
-  const serviceKey = String(
-    (
-      await db.execute(`
-        select coalesce(decrypted_secret, '') as k from vault.decrypted_secrets
-         where name = 'supabase.service_role_key'
-      `)
-    ).rows[0]?.k ?? '',
-  )
 
+  // Two secrets and the Slack app id, in ONE round trip.
+  //
+  // Every query here is an HTTPS call to the Management API (ADR-0007), so
+  // three of them is three times the latency of one for no reason — and the
+  // measurement that prompted this said setup was six seconds of a
+  // twenty-second empty pass.
+  const setup = (
+    await db.execute(`
+      select
+        (select coalesce(decrypted_secret, '') from vault.decrypted_secrets
+          where name = 'supabase.service_role_key') as service_key,
+        (select coalesce(app.resolve_secret(secret_ref), '') from public.providers
+          where provider = 'openrouter' and secret_ref is not null) as vault_key,
+        (select slack_app_id from public.slack_app_credentials
+          where enabled and revoked_at is null limit 1) as slack_app_id
+    `)
+  ).rows[0] as { service_key?: string; vault_key?: string; slack_app_id?: string }
+
+  const serviceKey = String(setup?.service_key ?? '')
   const orKey = options.openRouterKey ?? ''
-  const vaultKey = String(
-    (
-      await db.execute(`
-        select coalesce(app.resolve_secret(secret_ref), '') as k
-          from public.providers where provider = 'openrouter' and secret_ref is not null
-      `)
-    ).rows[0]?.k ?? '',
-  )
+  const vaultKey = String(setup?.vault_key ?? '')
   const cannotThink = orKey === '' && vaultKey === ''
 
   const handlers = [
@@ -244,19 +254,10 @@ export const buildPass = async (
     // the refresh token is single-use. A GitHub Actions cron used to renew
     // them; since it went, they have survived on whichever verification run
     // happened to rotate one.
-    slackRotationHandler({
-      db,
-      // Read from the install rather than pasted in: there is exactly one
-      // enabled Slack app (§9's "V1 is ONE app") and it knows its own id.
-      appId: String(
-        (
-          await db.execute(`
-            select slack_app_id from public.slack_app_credentials
-             where enabled and revoked_at is null limit 1
-          `)
-        ).rows[0]?.slack_app_id ?? '',
-      ),
-    }),
+    // Read from the install rather than pasted in: there is exactly one
+    // enabled Slack app (§9's "V1 is ONE app") and it knows its own id. Came
+    // back with the secrets above, in the same round trip.
+    slackRotationHandler({ db, appId: String(setup?.slack_app_id ?? '') }),
     // The other corpus. Twenty pages shared with the integration and never
     // once read by anything outside a verification run.
     notionSyncHandler(db),
@@ -287,7 +288,11 @@ export const buildPass = async (
         ]),
   ]
 
+  log(`setup: done at ${String(Date.now() - buildStartedAt)}ms`)
+
   return async (): Promise<PassResult> => {
+    const passStartedAt = Date.now()
+    const at = (what: string): void => log(`${what} at ${String(Date.now() - passStartedAt)}ms`)
     // Button presses first. Approving a generation enqueues it, so pressing the
     // button and getting the artifact in the same pass is the difference
     // between "it works" and "it works eventually".
@@ -313,6 +318,7 @@ export const buildPass = async (
     const duties = await fireDueDuties(db)
     for (const fired of duties) log(`duty: ${fired}`)
 
+    at('drain starts')
     const started = Date.now()
     const deadline = options.deadlineMs
     const done = await drain(db, workerId, handlers, review, max, {
@@ -324,12 +330,19 @@ export const buildPass = async (
         ? {}
         : { stopStartingAfter: (): boolean => Date.now() - started > deadline }),
     })
+    at('drain done')
     for (const r of done) log(`${r.jobId.slice(0, 8)} ${r.finalState}: ${r.note.slice(0, 120)}`)
 
     // Never fatal. A narration channel that fails takes nothing with it: the
     // work is done and delivered, and the running commentary is the least
     // important thing here.
-    if (floor !== null) {
+    // Only when something happened. `narrateHandoffs` costs nine seconds of a
+    // twenty-two second empty pass — it re-reads recent decisions and asks
+    // Slack about the channel — and on a pass that handled nothing there is by
+    // definition nothing new to narrate. Grant is waiting at the other end of
+    // this; the running commentary can wait for a pass that has something to
+    // comment on.
+    if (floor !== null && done.length > 0) {
       try {
         await floor()
       } catch (error) {

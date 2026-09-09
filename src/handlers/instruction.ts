@@ -988,6 +988,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ),
                 { role: 'user', content: instruction },
               ],
+              // 2,000, and NOT the 400 that looked obviously better.
+              //
+              // The prompt asks for under 120 words — about 180 tokens — so a
+              // 400 ceiling read as generous and was tried, to cut the time
+              // Grant spends watching a typing indicator. It made every reply
+              // slower.
+              //
+              // `completion_tokens` on these models counts REASONING tokens as
+              // well as the answer. Capped at 400, `cohere/north-mini-code`
+              // spent the budget thinking and returned nothing: three
+              // `empty_completion` rows at exactly 400 tokens, each one six to
+              // nine seconds, each one failing over to the next model. A
+              // measure meant to save thirty seconds cost fifteen.
+              //
+              // 0150 added `latency_ms` precisely so this kind of change is
+              // decided by measurement rather than by how sensible it sounds.
               maxTokens: 2_000,
               correlationId: job.correlationId,
               jobId: job.jobId,

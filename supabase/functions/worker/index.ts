@@ -33,8 +33,10 @@
  * is fire-and-forget for that reason, and this function returns as soon as the
  * pass is done — it is never in the webhook's critical path.
  */
+import type { SqlExecutor } from '../../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../../src/db/executor.ts'
 import { buildPass } from '../../../src/office/pass.ts'
+import { PostgresExecutor } from './pg.ts'
 
 declare const Deno: {
   env: { get: (k: string) => string | undefined }
@@ -100,6 +102,44 @@ const secretMatches = async (presented: string): Promise<boolean> => {
  * which would burn the wall-clock budget on contention.
  */
 let running = false
+
+/**
+ * A kick that arrived while a pass was already running.
+ *
+ * Dropping it cost Grant a minute. Measured: a Slack message sent while the
+ * worker was mid-pass answered in 72 seconds, because the kick was refused and
+ * the message waited for the next heartbeat — against a budget of sixty.
+ *
+ * So the kick is remembered instead. When the current pass finishes, one more
+ * runs immediately. A flag rather than a counter on purpose: ten kicks during
+ * one pass need one more pass, not ten, and the pass drains up to `MAX_JOBS`
+ * anyway.
+ */
+let kickPending = false
+
+/**
+ * What this runtime can do, worked out once.
+ *
+ * `canTranscribe` tries a subprocess and then makes a network call to the
+ * speech API; `canSubprocess` tries to spawn Python. Neither answer can change
+ * while an instance lives, and both were being computed on every single kick —
+ * several seconds of a twenty-second empty pass, on the path Grant is waiting
+ * on.
+ *
+ * Cached per instance rather than in the database on purpose: it is a fact
+ * about THIS runtime, and a new instance should work it out for itself rather
+ * than inherit another one's answer.
+ */
+let capabilities: { transcribe: boolean; subprocess: boolean } | null = null
+
+/**
+ * The fast way to the database, once per instance.
+ *
+ * `undefined` means not tried yet, `null` means tried and unavailable — the
+ * distinction matters, because retrying a failed connection on every kick
+ * would cost the ten seconds it was meant to save.
+ */
+let direct: PostgresExecutor | null | undefined
 
 /**
  * Can this runtime spawn a local process at all?
@@ -181,6 +221,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
       configured: PROJECT_REF !== '' && ACCESS_TOKEN !== '' && KICK_SECRET !== '',
       can_transcribe: await canTranscribe(new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)),
       can_subprocess: await canSubprocess(),
+      // Whether a direct database connection is available here, never its
+      // value. ADR-0007 rules out raw TCP from a Claude Code session; this is
+      // a different runtime, on Supabase's own network, and every query going
+      // over the Management API instead costs about a second and a half.
+      db_url_present: (Deno.env.get('SUPABASE_DB_URL') ?? '') !== '',
+      // Which way this instance reaches the database. Reported because a
+      // silent fall back to the slow path is the kind of thing that gets
+      // discovered as "it feels sluggish again" three weeks later.
+      db: direct === undefined ? 'not tried yet' : direct === null ? 'management api' : 'direct',
     })
   }
 
@@ -191,7 +240,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: 'not configured' }, 503)
   }
 
-  if (running) return json({ ok: true, skipped: 'a pass is already running' })
+  if (running) {
+    kickPending = true
+    return json({ ok: true, skipped: 'a pass is already running; queued one behind it' })
+  }
 
   // Held? Then hold, whoever asked.
   //
@@ -202,7 +254,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // random once a pass began running every minute: recovery moved a job to
   // `retrying` exactly as designed, and the heartbeat had already promoted it
   // to `queued` before the suite looked.
-  const db = new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)
+  // Direct to Postgres where possible, over the Management API where not.
+  // See `pg.ts`: this is the difference between an empty pass costing
+  // seventeen seconds and costing one, and the fallback means a failure here
+  // is slow rather than broken.
+  if (direct === undefined) {
+    direct = await PostgresExecutor.connect(Deno.env.get('SUPABASE_DB_URL') ?? '')
+  }
+  const db: SqlExecutor = direct ?? new ManagementApiExecutor(PROJECT_REF, ACCESS_TOKEN)
   try {
     const { rows } = await db.execute('select app.worker_paused() as held')
     if (rows[0]?.held === true) return json({ ok: true, skipped: 'the office is paused' })
@@ -214,6 +273,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   running = true
 
+  if (capabilities === null) {
+    // Both at once: they are independent, and the second is not waiting on the
+    // first to finish talking to a speech API.
+    const [transcribe, subprocess] = await Promise.all([canTranscribe(db), canSubprocess()])
+    capabilities = { transcribe, subprocess }
+  }
+
   const lines: string[] = []
   try {
     const pass = await buildPass(db, `edge-${crypto.randomUUID().slice(0, 8)}`, {
@@ -223,10 +289,27 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // Asked, not assumed — and the answer is no here. An untranscribed voice
       // note is therefore left for the runner that can hear it (0125), instead
       // of being claimed and failed three times by the worker that cannot.
-      canTranscribe: await canTranscribe(db),
-      canSubprocess: await canSubprocess(),
+      canTranscribe: capabilities.transcribe,
+      canSubprocess: capabilities.subprocess,
     })
-    const result = await pass()
+    let result = await pass()
+
+    // Anything that arrived while that ran gets a pass of its own, now, rather
+    // than waiting up to a minute for the heartbeat. Bounded to two extra
+    // rounds: a steady stream of kicks should be absorbed by the heartbeat and
+    // the next request, not by one invocation running until the platform
+    // kills it.
+    for (let extra = 0; extra < 2 && kickPending; extra += 1) {
+      kickPending = false
+      lines.push('another kick arrived while that ran — going again')
+      const again = await pass()
+      result = {
+        ...again,
+        handled: result.handled + again.handled,
+        buttons: result.buttons + again.buttons,
+      }
+    }
+
     return json({ ok: true, ...result, log: lines })
   } catch (error) {
     // Returned rather than thrown, so a kick that fails leaves a readable
@@ -234,5 +317,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ ok: false, error: (error as Error).message.slice(0, 300), log: lines }, 500)
   } finally {
     running = false
+    kickPending = false
   }
 })
