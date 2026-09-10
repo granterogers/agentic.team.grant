@@ -1,0 +1,29 @@
+name: Feature
+description: Something the system should be able to do and cannot.
+labels: ["feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible today. Grant's own words if you have them.
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What is true once this is done, described from outside the code.
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >
+        Checkable statements. Prefer ones a harness can assert over ones a
+        person has to judge — and say plainly which are which.
+      value: |
+        - [ ] 
+  - type: textarea
+    id: notes
+    attributes:
+      label: Technical notes, dependencies, blockers

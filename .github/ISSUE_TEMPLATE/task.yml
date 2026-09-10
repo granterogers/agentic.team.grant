@@ -1,0 +1,26 @@
+name: Technical task
+description: Refactor, migration, infrastructure, technical debt.
+labels: ["technical-debt"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this exists. Link the Issue or PR that produced it.
+    validations: { required: true }
+  - type: textarea
+    id: work
+    attributes:
+      label: The work
+    validations: { required: true }
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      value: |
+        - [ ] 
+  - type: input
+    id: risk
+    attributes:
+      label: Breaking-change risk
+      description: What could stop working, and how you would know.

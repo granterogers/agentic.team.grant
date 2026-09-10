@@ -1,0 +1,29 @@
+name: Bug
+description: Something is broken, or behaves differently from what it claims.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: The observed behaviour, and where you saw it.
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen instead
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: >
+        Exact steps, or the command. A failing check from `npm run verify:*` is
+        the strongest possible form of this.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >
+        Output, a screenshot, a job id, a migration number. Never a token,
+        secret or credential — name where it lives instead of pasting it.
