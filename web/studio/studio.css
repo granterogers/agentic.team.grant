@@ -779,3 +779,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .shell.shut .crew .face { margin-left: 0; }
 .shell.shut .mate { justify-content: center; }
 @media (max-width: 860px) { .railtoggle { display: none; } .shell.shut { grid-template-columns: minmax(0, 1fr); } }
+
+/* --- a real rendered page --------------------------------------------------
+   Sits over the drawn one rather than replacing it in the DOM, so nothing is
+   ever empty and a file that will not parse simply keeps its drawing. Fades in
+   over 260ms: an instant swap between two similar images reads as a glitch. */
+.realpage {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: top center; display: block;
+  animation: pagein .26s ease both;
+}
+@keyframes pagein { from { opacity: 0 } to { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .realpage { animation: none } }
+.bigpage .realpage { object-fit: contain; object-position: center; background: #fff; }

@@ -13,6 +13,7 @@ import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
 import { pageSvg } from './page.js'
+import { paint } from './pdf.js'
 import { SPRING, carry, pressable, spring } from './motion.js'
 
 const $ = (sel, root = document) => root.querySelector(sel)
@@ -667,7 +668,17 @@ function render() {
     b.addEventListener('click', () => openContact(byId(state.project).contacts[Number(b.dataset.contact)]))
   }
 
-  for (const b of root.querySelectorAll('[data-doc]')) {
+  /*
+    Real pages, over the drawn ones.
+
+    The drawn page is already in the DOM, so the gallery is complete before any
+    PDF is fetched; each real render lands on top when it is ready. Nothing
+    jumps, nothing is empty, and a file that will not parse simply never
+    replaces its drawing.
+  */
+  for (const [i, b] of [...root.querySelectorAll('[data-doc]')].entries()) {
+    const doc = byId(state.project).documents[Number(b.dataset.doc)]
+    if (doc?.file) paint($('.page', b), doc.file, 320)
     tiltable($('.page', b), { max: 7, scale: 1.03 })
     b.addEventListener('click', () => openDoc(byId(state.project).documents[Number(b.dataset.doc)], b))
   }
@@ -857,12 +868,13 @@ function openDoc(doc, from) {
       <div class="t-label">${esc(doc.origin)}</div>
       <h2 class="t-title" style="margin:var(--s2) 0 var(--s3)">${esc(doc.title)}</h2>
       <p class="t-meta">${esc(doc.size)}</p>
-      <div class="bigpage">${pageSvg(doc.title, doc.kind)}</div>
+      <div class="bigpage" data-bigpage>${pageSvg(doc.title, doc.kind)}</div>
     </div>
     <button class="close" aria-label="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
+  if (doc.file) paint($('[data-bigpage]', v), doc.file, 760)
   const page = $('.page', from)
   carry('doc-open', page, () => { v.hidden = false })
   $('.close', v).addEventListener('click', () => carry('doc-open', page, () => { v.hidden = true }))
