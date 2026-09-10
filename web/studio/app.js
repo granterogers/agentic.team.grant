@@ -184,8 +184,9 @@ function dashboard() {
         ${p.modules.length > 0 ? `<section class="section">
           <header><h2 class="t-title">Modules</h2></header>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:var(--s3)">
-            ${p.modules.map((m) => `<div style="background:var(--surface);border:1px solid var(--edge);
-              border-radius:var(--r-card);padding:var(--s3) var(--s4);box-shadow:var(--lift-1)">
+            ${p.modules.map((m) => `<div class="module" style="--dot:${
+              m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
+            }">
               <div class="t-label" style="color:${
                 m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
               }">${m.state === 'done' ? 'Done' : m.state === 'doing' ? 'In hand' : 'Not started'}</div>

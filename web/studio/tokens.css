@@ -23,11 +23,49 @@
 
   --good: #2F7355;  --warn: #A2620A;  --bad: #A8342C;
 
-  /* Depth: one hairline and one soft shadow. Never a stack. */
-  --lift-1: 0 1px 2px rgb(25 24 19 / .05);
-  --lift-2: 0 2px 4px rgb(25 24 19 / .05), 0 8px 24px -12px rgb(25 24 19 / .18);
-  --lift-3: 0 8px 16px rgb(25 24 19 / .09), 0 32px 64px -24px rgb(25 24 19 / .28);
+  /*
+    Depth, rebuilt.
+
+    The first version was one hairline and one soft shadow, on the reasoning
+    that restraint reads as expensive. Grant, looking at it: *"still very basic
+    indeed.. i want drop shadows.. textured background.. embossing,
+    transparency, etc.. the WOW factor."* That was my taste overriding his
+    brief, and §14 is his brief.
+
+    So each level is now a STACK, in the way a real object is lit: a tight
+    contact shadow where it meets the surface, a wide soft ambient shadow for
+    the room, a bright inset along the top edge where light catches, and a
+    faint dark inset along the bottom so the object has thickness. Four
+    components rather than one, which is the difference between a rectangle
+    with a shadow and something that looks pressed out of the page.
+  */
+  --emboss:  inset 0 1px 0 rgb(255 255 255 / .95), inset 0 -1px 0 rgb(25 24 19 / .05);
+  --lift-1:
+    0 1px 1px rgb(25 24 19 / .04),
+    0 2px 4px rgb(25 24 19 / .04),
+    0 6px 14px -6px rgb(25 24 19 / .10),
+    var(--emboss);
+  --lift-2:
+    0 1px 1px rgb(25 24 19 / .05),
+    0 3px 6px rgb(25 24 19 / .06),
+    0 12px 28px -8px rgb(25 24 19 / .18),
+    0 24px 48px -20px rgb(25 24 19 / .16),
+    var(--emboss);
+  --lift-3:
+    0 2px 4px rgb(25 24 19 / .07),
+    0 8px 18px rgb(25 24 19 / .10),
+    0 28px 56px -12px rgb(25 24 19 / .26),
+    0 56px 96px -32px rgb(25 24 19 / .30),
+    var(--emboss);
+  /* A pressed-IN surface: wells, inputs, the track of a progress bar. */
+  --engrave: inset 0 1px 3px rgb(25 24 19 / .10), inset 0 -1px 0 rgb(255 255 255 / .7);
   --paper-edge: inset 0 1px 0 rgb(255 255 255 / .9);
+  /* Frosted glass, for anything that floats over content. */
+  --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+  /* The light falling on the page. White on paper; a faint warm lift in the
+     dark theme, where a white wash reads as a smudge across the top rather
+     than as illumination. */
+  --wash: rgb(255 255 255 / .55);
 
   /* Space: deliberately non-linear. Equal steps are what make a layout read
      as generated. */
@@ -60,10 +98,33 @@
 
     --good: #4BBD8C;  --warn: #E0A45C;  --bad: #F0796E;
 
-    --lift-1: 0 1px 2px rgb(0 0 0 / .4);
-    --lift-2: 0 2px 4px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
-    --lift-3: 0 8px 16px rgb(0 0 0 / .5), 0 32px 64px -24px rgb(0 0 0 / .8);
+    /*
+      In the dark theme the emboss inverts: light no longer comes from a room,
+      it comes from the screen, so the highlight is a faint white rim rather
+      than a bright edge and the shadow does most of the work.
+    */
+    --emboss:  inset 0 1px 0 rgb(255 255 255 / .07), inset 0 -1px 0 rgb(0 0 0 / .5);
+    --lift-1:
+      0 1px 1px rgb(0 0 0 / .3),
+      0 2px 5px rgb(0 0 0 / .3),
+      0 6px 16px -6px rgb(0 0 0 / .5),
+      var(--emboss);
+    --lift-2:
+      0 1px 2px rgb(0 0 0 / .35),
+      0 4px 8px rgb(0 0 0 / .35),
+      0 14px 32px -8px rgb(0 0 0 / .6),
+      0 28px 56px -20px rgb(0 0 0 / .5),
+      var(--emboss);
+    --lift-3:
+      0 2px 6px rgb(0 0 0 / .4),
+      0 10px 24px rgb(0 0 0 / .5),
+      0 32px 64px -12px rgb(0 0 0 / .7),
+      0 64px 110px -32px rgb(0 0 0 / .6),
+      var(--emboss);
+    --engrave: inset 0 1px 4px rgb(0 0 0 / .55), inset 0 -1px 0 rgb(255 255 255 / .05);
     --paper-edge: inset 0 1px 0 rgb(255 255 255 / .06);
+    --glass: color-mix(in srgb, var(--surface) 70%, transparent);
+    --wash: rgb(150 190 170 / .05);
   }
 }
 

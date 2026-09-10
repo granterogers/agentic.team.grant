@@ -2,8 +2,25 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+/*
+  A textured ground.
+
+  Grant asked for texture, and a flat fill is the thing that makes a page read
+  as a document rather than as a surface. Two layers: a fine fibre grain from
+  SVG turbulence, and a very wide soft vignette so the middle of the page is
+  fractionally lighter than its corners — the way paper under a lamp is. Both
+  are almost subliminal at 100%; remove them and the page goes dead, which is
+  how you know they are doing something.
+
+  Data URI rather than a file: no request, and it cannot 404.
+*/
 body {
-  background: var(--ground); color: var(--ink);
+  background-color: var(--ground);
+  background-image:
+    radial-gradient(120% 90% at 50% 0%, var(--wash) 0%, transparent 62%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  background-attachment: fixed, fixed;
+  color: var(--ink);
   font: 400 15.5px/1.55 var(--text);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
@@ -83,16 +100,32 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* Status has one fixed home, and is empty when nothing waits. */
 .attention {
   display: flex; align-items: center; gap: var(--s3);
-  background: var(--surface); border: 1px solid var(--edge);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface) 52%);
+  border: 1px solid var(--edge);
   border-left: 3px solid var(--warn); border-radius: var(--r-card);
-  padding: var(--s3) var(--s4); margin-bottom: var(--s5);
+  padding: var(--s4); margin-bottom: var(--s5);
+  box-shadow: var(--lift-1);
 }
+/* Buttons are pressed out of the surface, and press back in. */
 .btn {
   display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px;
   padding: 0 var(--s4); border-radius: var(--r-control);
-  border: 1px solid var(--edge); background: var(--surface); font-weight: 500;
+  border: 1px solid var(--edge); font-weight: 500;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 6%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .16s, transform .16s;
 }
-.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
+.btn:hover { box-shadow: var(--lift-2); transform: translateY(-1px); }
+.btn:active { box-shadow: var(--engrave); transform: translateY(1px); }
+.btn.primary {
+  color: var(--on-accent); border-color: transparent; font-weight: 600;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 84%, #fff) 0%, var(--accent) 62%);
+  box-shadow:
+    0 1px 2px rgb(25 24 19 / .18),
+    0 6px 16px -6px color-mix(in srgb, var(--accent) 55%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / .35);
+}
 
 /* --- portfolio ------------------------------------------------------------
    An editorial spread, not a grid. Iteration 1 was a left sidebar plus a
@@ -107,15 +140,25 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .rest { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s4); }
 
 .project {
-  display: block; width: 100%; text-align: left; background: var(--surface);
+  display: block; width: 100%; text-align: left;
+  /* A surface with a gradient, not a fill: light falls off down the card, so
+     the top edge reads as catching the light and the bottom as in shade. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%) 0%, var(--surface) 46%);
   border: 1px solid var(--edge); border-radius: var(--r-card); overflow: hidden;
-  box-shadow: var(--lift-1); transition: box-shadow .2s, transform .2s;
-  color: var(--hue);
+  box-shadow: var(--lift-1); color: var(--hue);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .24s cubic-bezier(.2,.7,.3,1);
 }
-.project:hover { box-shadow: var(--lift-2); transform: translateY(-2px); }
+.project:hover { box-shadow: var(--lift-2); transform: translateY(-4px) scale(1.004); }
+.project:active { box-shadow: var(--lift-1); transform: translateY(-1px); }
 .project .cover {
   position: relative; overflow: hidden; background: var(--hue);
   display: flex; align-items: flex-end; padding: var(--s3); height: 118px;
+  /* Inset, so the artwork reads as printed into the card rather than laid on
+     top of it — and a bright hairline where the two meet. */
+  box-shadow:
+    inset 0 -1px 0 rgb(255 255 255 / .22),
+    inset 0 12px 28px -14px rgb(0 0 0 / .45);
 }
 .project .body { padding: var(--s4); display: grid; gap: var(--s3); color: var(--ink); }
 
@@ -138,25 +181,45 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   color: color-mix(in srgb, var(--ground) 82%, transparent); }
 .cover > .chips { position: relative; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; position: relative; }
-.chip { background: color-mix(in srgb, var(--ground) 92%, transparent); color: var(--ink);
-  border-radius: 5px; padding: 4px 8px; font: 600 11px/1 var(--text);
-  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.chip {
+  background: color-mix(in srgb, var(--ground) 62%, transparent);
+  backdrop-filter: blur(10px) saturate(160%);
+  color: var(--ink); border: 1px solid rgb(255 255 255 / .35);
+  border-radius: 6px; padding: 4px 9px; font: 600 11px/1 var(--text);
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+  box-shadow: 0 2px 6px rgb(0 0 0 / .18), inset 0 1px 0 rgb(255 255 255 / .5); }
 .bar { display: flex; align-items: center; gap: var(--s2); }
-.bar .track { flex: 1; height: 5px; border-radius: 3px; background: var(--sunken); overflow: hidden; }
-.bar .fill { height: 100%; border-radius: 3px; background: var(--hue); }
+.bar .track { flex: 1; height: 7px; border-radius: 4px; background: var(--sunken);
+  overflow: hidden; box-shadow: var(--engrave); }
+.bar .fill { height: 100%; border-radius: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hue) 82%, #fff) 0%, var(--hue) 70%);
+  box-shadow: 0 1px 2px rgb(25 24 19 / .25), inset 0 1px 0 rgb(255 255 255 / .45); }
 .facts { display: flex; gap: var(--s4); }
 
 /* --- documents: the covers ARE the interface ----------------------------- */
 .docgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: var(--s4); }
 .doc { display: grid; gap: var(--s2); text-align: left; width: 100%; }
+/*
+  A document is a sheet of paper.
+
+  Warm-white with a faint fibre texture of its own, a light gradient down the
+  face, and a shadow that is tight at the bottom edge and soft further out —
+  the way a sheet resting on a desk actually casts. On hover it lifts and
+  rotates a fraction of a degree, because a picked-up sheet is never square.
+*/
 .doc .page {
-  aspect-ratio: 3/4; border-radius: 8px; background: var(--surface);
-  box-shadow: var(--lift-1), var(--paper-edge);
-  padding: 13px 12px; display: flex; flex-direction: column; gap: 4px;
+  aspect-ratio: 3/4; border-radius: 7px;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(172deg, rgb(255 255 255 / .5) 0%, transparent 44%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='90' height='90' filter='url(%23p)' opacity='0.05'/%3E%3C/svg%3E");
+  box-shadow: var(--lift-1);
+  padding: 14px 13px; display: flex; flex-direction: column; gap: 4px;
   position: relative; overflow: hidden;
-  transition: box-shadow .18s, transform .18s;
+  transition: box-shadow .26s cubic-bezier(.2,.7,.3,1), transform .26s cubic-bezier(.2,.7,.3,1);
 }
-.doc:hover .page { box-shadow: var(--lift-2), var(--paper-edge); transform: translateY(-3px); }
+.doc:hover .page { box-shadow: var(--lift-3); transform: translateY(-6px) rotate(-.5deg) scale(1.02); }
+.doc:active .page { box-shadow: var(--lift-2); transform: translateY(-2px) rotate(-.2deg); }
 .doc .rule { height: 3px; border-radius: 2px; background: var(--sunken); }
 .doc .rule.h { height: 4px; background: var(--edge); }
 .kind { position: absolute; right: 9px; bottom: 9px; border-radius: 3px;
@@ -184,17 +247,22 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .section > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
 
 /* --- project cover, in the dashboard -------------------------------------- */
-.hero { height: 176px; border-radius: var(--r-sheet); background: var(--hue);
+.hero { height: 208px; border-radius: var(--r-sheet); background: var(--hue);
   position: relative; overflow: hidden; display: flex; align-items: flex-end;
-  padding: var(--s4); margin-bottom: var(--s5); }
+  padding: var(--s4); margin-bottom: var(--s5);
+  box-shadow: var(--lift-2), inset 0 16px 40px -18px rgb(0 0 0 / .5),
+              inset 0 -1px 0 rgb(255 255 255 / .2); }
 .hero { color: var(--hue); }
 .hero > .chips { position: relative; }
 
 /* --- the document viewer -------------------------------------------------- */
 .viewer { position: fixed; inset: 0; z-index: 40; display: grid;
-  place-items: center; padding: var(--s5); background: rgb(20 20 15 / .55); }
+  place-items: center; padding: var(--s5);
+  background: rgb(20 20 15 / .48); backdrop-filter: blur(6px) saturate(120%); }
 .viewer[hidden] { display: none; }
-.sheet { background: var(--surface); border-radius: var(--r-sheet);
+.sheet {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 5%), var(--surface) 40%);
+  border: 1px solid var(--edge); border-radius: var(--r-sheet);
   box-shadow: var(--lift-3); width: min(720px, 100%); max-height: 86vh;
   overflow: auto; padding: var(--s5); }
 .close { position: absolute; top: var(--s4); right: var(--s4); width: 44px; height: 44px;
@@ -264,3 +332,19 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   }
   .navitem { justify-content: center; flex: 1; min-height: 48px; border-radius: 10px; }
 }
+/* --- module cards ----------------------------------------------------------
+   Pressed out of the page like everything else, with a coloured edge on the
+   left carrying the status so the state is legible before the label is read. */
+.module {
+  position: relative;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface) 50%);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  padding: var(--s3) var(--s4) var(--s3) calc(var(--s4) + 4px);
+  box-shadow: var(--lift-1); overflow: hidden;
+  transition: box-shadow .2s, transform .2s;
+}
+.module::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--dot); box-shadow: 0 0 10px -1px var(--dot);
+}
+.module:hover { box-shadow: var(--lift-2); transform: translateY(-2px); }

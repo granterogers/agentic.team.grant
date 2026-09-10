@@ -92,20 +92,45 @@ export function coverSvg(slug, { w = 800, h = 400, dense = false } = {}) {
   )
 
   const id = `g-${slug.replace(/[^a-z0-9]/gi, '')}`
+  // Two light sources placed by the seed, so no two covers are lit the same.
+  const lx = (18 + rand() * 64).toFixed(0)
+  const ly = (10 + rand() * 40).toFixed(0)
+
   return `<svg class="art" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice"
        aria-hidden="true" focusable="false">
     <defs>
+      <!-- The glow under everything: a soft light source, so the field is lit
+           rather than filled. -->
+      <radialGradient id="${id}-lit" cx="${lx}%" cy="${ly}%" r="82%">
+        <stop offset="0%" stop-color="currentColor" stop-opacity="0.55"/>
+        <stop offset="55%" stop-color="currentColor" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+      </radialGradient>
+      <!-- The sheen over everything: a raking highlight across the top left,
+           which is what makes a flat shape look like a surface. -->
+      <linearGradient id="${id}-sheen" x1="0" y1="0" x2="0.7" y2="1">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.30"/>
+        <stop offset="42%" stop-color="#fff" stop-opacity="0.04"/>
+        <stop offset="100%" stop-color="#000" stop-opacity="0.18"/>
+      </linearGradient>
+      <!-- Softened, not blurred. At 1.2% of height the bands dissolved into
+           gradient washes and the strata reading was lost; 0.4% keeps the edges
+           legible while taking the vector hardness off them. -->
+      <filter id="${id}-soft"><feGaussianBlur stdDeviation="${(h * 0.004).toFixed(1)}"/></filter>
       <filter id="${id}" x="0" y="0" width="100%" height="100%">
-        <!-- Grain. Depth and atmosphere over a flat fill, per the direction. -->
-        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="${
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" seed="${
           Math.floor(rand() * 100)
         }" result="n"/>
         <feColorMatrix in="n" type="saturate" values="0"/>
-        <feComponentTransfer><feFuncA type="linear" slope="0.055"/></feComponentTransfer>
+        <feComponentTransfer><feFuncA type="linear" slope="0.085"/></feComponentTransfer>
         <feComposite operator="in" in2="SourceGraphic"/>
       </filter>
     </defs>
-    <g>${paths.join('')}</g>
-    <rect width="${w}" height="${h}" filter="url(#${id})" opacity="0.9"/>
+    <rect width="${w}" height="${h}" fill="url(#${id}-lit)"/>
+    <!-- The strata, softened a touch so the edges read as depth of field
+         rather than as vector cut-outs. -->
+    <g filter="url(#${id}-soft)">${paths.join('')}</g>
+    <rect width="${w}" height="${h}" fill="url(#${id}-sheen)"/>
+    <rect width="${w}" height="${h}" filter="url(#${id})" opacity="0.95"/>
   </svg>`
 }
