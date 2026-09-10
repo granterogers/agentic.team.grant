@@ -172,5 +172,8 @@
   "0171_a_task_is_a_first_class_thing.sql": "209b59faf87b2824fcf65583a646fad4791c31a87fb729f2724eff7517e39d46",
   "0172_reading_and_writing_tasks.sql": "978747211eebdbaacba62d44a00956ad383c37f7e0fe0d587a2a00f18fa9e1c5",
   "0173_a_fixture_flag_you_cannot_forget.sql": "30301ed3464b5ad379252178d8ff945ff7dd36426e5944d0ff32435deff2d303",
-  "0174_a_projects_tasks_are_its_own.sql": "712f1c4beebdcbca3065bfa5ae3bf63e4277e583a1a61cc77babf1038dd85361"
+  "0174_a_projects_tasks_are_its_own.sql": "712f1c4beebdcbca3065bfa5ae3bf63e4277e583a1a61cc77babf1038dd85361",
+  "0175_a_document_is_an_asset.sql": "3153ab70fe640850ca9f4ffa541c324be406de514e35b197e1eec829f0093c03",
+  "0176_reaching_the_graph.sql": "65271697f203db87d4f5218239896c2e85c638f2ca6b14449919cd33350f197c",
+  "0177_a_document_grant_made_himself.sql": "e4c01cb42b96fe8965d2c846a6e725f2f62bf90e4866a467387e8392ea274313"
 }
