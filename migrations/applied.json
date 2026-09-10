@@ -168,5 +168,9 @@
   "0167_claire_can_see_the_place.sql": "68d8ae2cc75726217769a344b34f9359fcd49b111737798eae5e7e740396878b",
   "0168_a_probe_is_not_a_failure.sql": "b2dc1b13eb66043997efc9f85e7798cf928e51d8c9d4bcb5d0f417126511d704",
   "0169_a_mirror_is_not_a_second_source.sql": "7bdbe411daa078715992a700014d091fea7c6fe387d815d654d974ee9d3bc5aa",
-  "0170_what_the_build_is_doing.sql": "8929f571b6a3907f2683d355e21a19ce91005d34e2bc221c39f7d709bcd30e49"
+  "0170_what_the_build_is_doing.sql": "8929f571b6a3907f2683d355e21a19ce91005d34e2bc221c39f7d709bcd30e49",
+  "0171_a_task_is_a_first_class_thing.sql": "209b59faf87b2824fcf65583a646fad4791c31a87fb729f2724eff7517e39d46",
+  "0172_reading_and_writing_tasks.sql": "978747211eebdbaacba62d44a00956ad383c37f7e0fe0d587a2a00f18fa9e1c5",
+  "0173_a_fixture_flag_you_cannot_forget.sql": "30301ed3464b5ad379252178d8ff945ff7dd36426e5944d0ff32435deff2d303",
+  "0174_a_projects_tasks_are_its_own.sql": "712f1c4beebdcbca3065bfa5ae3bf63e4277e583a1a61cc77babf1038dd85361"
 }
