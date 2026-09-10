@@ -224,8 +224,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .doc .rule.h { height: 4px; background: var(--edge); }
 .kind { position: absolute; right: 9px; bottom: 9px; border-radius: 3px;
   padding: 2px 5px; font: 700 8.5px/1.3 var(--text); letter-spacing: .06em; color: #fff; }
-.kind.pdf { background: #A8342C; } .kind.doc { background: #2A5FA8; }
-.kind.made { background: var(--accent); color: var(--on-accent); }
+/* `k-` prefixed, because `.kind.doc` also matched the CARD class `.doc` — which
+   is `display: grid; width: 100%` — so a Word document's badge stretched into a
+   blue bar across the bottom of its cover while PDF badges were fine. A
+   modifier that collides with a component name is a bug waiting for the one
+   value that triggers it. */
+.kind.k-pdf { background: #A8342C; } .kind.k-doc { background: #2A5FA8; }
+.kind.k-made { background: var(--accent); color: var(--on-accent); }
 
 /* --- tasks ---------------------------------------------------------------- */
 .tasks { display: grid; }
@@ -348,3 +353,96 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: var(--dot); box-shadow: 0 0 10px -1px var(--dot);
 }
 .module:hover { box-shadow: var(--lift-2); transform: translateY(-2px); }
+
+/* ==========================================================================
+   Iteration 4 — alive
+   Grant: "pushed a lot further .. get creative!"
+   ========================================================================== */
+
+/* --- the glare -------------------------------------------------------------
+   A specular highlight that follows the pointer across a card. Driven by --gx
+   and --gy from alive.js, so the light and the tilt agree — two effects that
+   disagree read as two effects; agreeing, they read as one surface. */
+.project, .doc .page, .module {
+  --gx: 50%; --gy: 50%; --glare: 0;
+  transform-style: preserve-3d;
+}
+.project::after, .doc .page::after, .module::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+  border-radius: inherit;
+  background: radial-gradient(420px circle at var(--gx) var(--gy),
+    rgb(255 255 255 / .16) 0%, rgb(255 255 255 / .05) 34%, transparent 62%);
+  opacity: var(--glare);
+  transition: opacity .35s ease;
+  mix-blend-mode: soft-light;
+}
+.project { position: relative; }
+.doc .page::after { background: radial-gradient(260px circle at var(--gx) var(--gy),
+  rgb(255 255 255 / .28) 0%, transparent 58%); }
+
+/* Tilt needs the transition off while the pointer drives it, or every frame
+   fights the easing. alive.js sets the transform inline; this only smooths the
+   return to rest. */
+.project { transition: box-shadow .28s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1); }
+.project:hover { transition-duration: .28s, .12s; }
+
+/* --- ambient tint ----------------------------------------------------------
+   The ground shifts a few percent towards the hue of whatever is in front of
+   you. Imperceptible in a still; obvious when it changes. */
+:root[data-tint] body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  opacity: .10; transition: background 1.1s ease, opacity 1.1s ease;
+  background: radial-gradient(90% 60% at 50% -8%, var(--tint-hue, transparent), transparent 70%);
+}
+:root[data-tint="p-rust"]  { --tint-hue: oklch(0.62 0.13 30);  }
+:root[data-tint="p-amber"] { --tint-hue: oklch(0.62 0.13 80);  }
+:root[data-tint="p-moss"]  { --tint-hue: oklch(0.62 0.13 148); }
+:root[data-tint="p-slate"] { --tint-hue: oklch(0.62 0.13 248); }
+:root[data-tint="p-iris"]  { --tint-hue: oklch(0.62 0.13 295); }
+:root[data-tint="p-plum"]  { --tint-hue: oklch(0.62 0.13 345); }
+
+/* --- letterpress display ---------------------------------------------------
+   The display face is cut INTO the paper: a highlight below the glyph and a
+   shadow above, which is what an intaglio impression does to light. Only in
+   the light theme — in the dark it becomes an emboss instead, raised rather
+   than cut, because a cut in a dark surface has nothing to catch. */
+.t-display, .t-title {
+  text-shadow: 0 1px 0 rgb(255 255 255 / .85), 0 -1px 1px rgb(25 24 19 / .10);
+}
+@media (prefers-color-scheme: dark) {
+  .t-display, .t-title {
+    text-shadow: 0 1px 0 rgb(0 0 0 / .6), 0 -1px 0 rgb(255 255 255 / .07);
+  }
+}
+
+/* --- bloom on the accent ---------------------------------------------------
+   Anything that is the one interactive colour gets a faint halo of itself, the
+   way a lit thing bleeds into what is around it. */
+.btn.primary { position: relative; }
+.btn.primary::before {
+  content: ''; position: absolute; inset: -6px; border-radius: inherit; z-index: -1;
+  background: var(--accent); filter: blur(14px); opacity: .34;
+  transition: opacity .25s;
+}
+.btn.primary:hover::before { opacity: .5; }
+.navitem[aria-current="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
+
+/* --- paper stacks unevenly -------------------------------------------------
+   A fixed sub-degree rotation per sheet from alive.js, so a row of documents
+   reads as a pile someone put down rather than a grid someone aligned. */
+.doc .page { transform: rotate(var(--rest-tilt, 0deg)); }
+.doc:hover .page { transform: translateY(-6px) rotate(calc(var(--rest-tilt, 0deg) - .5deg)) scale(1.03); }
+.doc:active .page { transform: translateY(-2px) rotate(var(--rest-tilt, 0deg)) scale(1.005); }
+
+/* --- the crew, breathing ---------------------------------------------------
+   A busy agent's ring already pulses. Give the whole mark a faint glow of its
+   own hue so presence reads at the edge of vision, which is where §14A's
+   "ambient, never modal" actually lives. */
+.face.busy { box-shadow: 0 0 14px -2px var(--hue), inset 0 1px 0 rgb(255 255 255 / .3); }
+.face { box-shadow: inset 0 1px 0 rgb(255 255 255 / .25), 0 1px 2px rgb(0 0 0 / .2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .project::after, .doc .page::after, .module::after { display: none; }
+  .doc:hover .page { transform: rotate(var(--rest-tilt, 0deg)); }
+  :root[data-tint] body::before { transition: none; }
+}

@@ -8,6 +8,7 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
+import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
 import { SPRING, carry, pressable, spring } from './motion.js'
 
@@ -41,7 +42,7 @@ const cover = (d) => {
   }
   const rules = (d.lines ?? [80, 96, 88])
     .map((w, i) => `<div class="rule${i === 0 ? ' h' : ''}" style="width:${w}%"></div>`).join('')
-  const badge = d.kind === 'made' ? 'made' : d.kind
+  const badge = `k-${d.kind === 'made' ? 'made' : d.kind}`
   const label = d.kind === 'made' ? 'MADE' : d.kind.toUpperCase()
   return `<div class="page">${rules}<span class="kind ${badge}">${label}</span></div>`
 }
@@ -230,6 +231,10 @@ function dashboard() {
 function render() {
   const root = $('#root')
   root.innerHTML = rail() + (state.view === 'project' ? dashboard() : portfolio())
+  // The room takes its colour from whatever is in front of you.
+  ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
+  breathe(root)
+  scatter(root)
 
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
@@ -240,13 +245,15 @@ function render() {
   // Project → dashboard. The cover art is the shared element: it grows and
   // moves to the hero slot, and the browser pairs them by view-transition-name.
   for (const b of root.querySelectorAll('[data-open]')) {
-    pressable(b)
+    tiltable(b, { max: b.classList.contains('lead') ? 3.2 : 5 })
     b.addEventListener('click', () => {
       carry(null, null, () => { state.project = b.dataset.open; state.view = 'project'; render() })
     })
   }
 
   // Tasks complete optimistically: the row changes now, the network catches up.
+  for (const m of root.querySelectorAll('.module')) tiltable(m, { max: 3, scale: 1.006 })
+
   for (const b of root.querySelectorAll('[data-task]')) {
     b.addEventListener('click', () => {
       const i = Number(b.dataset.task)
@@ -264,7 +271,7 @@ function render() {
   }
 
   for (const b of root.querySelectorAll('[data-doc]')) {
-    pressable(b)
+    tiltable($('.page', b), { max: 7, scale: 1.03 })
     b.addEventListener('click', () => openDoc(byId(state.project).documents[Number(b.dataset.doc)], b))
   }
 }

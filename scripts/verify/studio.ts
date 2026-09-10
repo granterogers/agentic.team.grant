@@ -71,10 +71,48 @@ for (const [size, opts] of SIZES) {
     }
 
     await shoot('portfolio')
+
+    /*
+      Hover states, captured deliberately.
+
+      Iteration 4 added pointer-tracked tilt and a specular highlight, and a
+      still of the page at rest shows none of it — which would have had Grant
+      judging an iteration with its whole point missing. `mouse.move` twice,
+      because a single move fires no `pointermove` on an element the cursor is
+      already inside.
+    */
+    if (size === 'desktop') {
+      const card = page.locator('[data-open="ai-learning"]')
+      const box = await card.boundingBox()
+      if (box) {
+        await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+        await page.mouse.move(box.x + box.width * 0.28, box.y + box.height * 0.3)
+        await page.waitForTimeout(500)
+        await shoot('portfolio-hover')
+      }
+    }
+
     // Into a project, which is the shared-element transition.
     await page.locator('[data-open="legacy-coaching-course"]').click()
     await page.waitForTimeout(900)
     await shoot('project')
+
+    if (size === 'desktop') {
+      const doc = page.locator('[data-doc="0"] .page')
+      // Scroll it into view first: boundingBox() happily returns coordinates
+      // for something below the fold, so the capture came back showing the top
+      // of the page with the hover applied to something nobody could see.
+      await doc.scrollIntoViewIfNeeded()
+      await page.waitForTimeout(300)
+      const box = await doc.boundingBox()
+      if (box) {
+        await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+        await page.mouse.move(box.x + box.width * 0.32, box.y + box.height * 0.26)
+        await page.waitForTimeout(500)
+        await shoot('document-hover')
+      }
+    }
+
     // And a document, which is the second one.
     await page.locator('[data-doc="0"]').click()
     await page.waitForTimeout(700)
