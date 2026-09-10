@@ -75,13 +75,13 @@ const FIND = `(() => {
 })()`
 
 const browser = await chromium.launch()
-for (const tab of ['board', 'team', 'chat', 'people']) {
+for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']) {
   const ctx = await browser.newContext({ ...devices['iPhone 14'] })
   const page = await ctx.newPage()
   await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(700)
   console.log(`\n--- portfolio`)
-  if (tab === 'board') console.log(await page.evaluate(FIND))
+  if (tab === 'overview') console.log(await page.evaluate(FIND))
   await page.locator('.project[data-open="legacy-coaching-course"]').click()
   await page.waitForTimeout(600)
   await page.locator(`[role="tab"][data-tab="${tab}"]`).click()

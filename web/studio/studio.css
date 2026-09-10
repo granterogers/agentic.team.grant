@@ -1279,6 +1279,22 @@ body::after {
     and the portfolio already shows the team.
   */
   .rail .team { display: none; }
+
+  /*
+    The switcher, on a 390px strip.
+
+    Adding it put five children in a row that already had no slack, and the
+    document went 4px wide — small enough to look like nothing and enough to
+    make the whole page scroll sideways.
+
+    Inside a project the wordmark's words are the least useful thing in the
+    rail: the glyph already says which application this is, and the switcher
+    says the thing you actually need, which is which project you are in. So the
+    words go and the switcher takes the space.
+  */
+  .rail:has(.switcher) .wordmark > span:last-child { display: none; }
+  .rail .switcher { flex: 1 1 auto; min-width: 0; }
+  .switchmenu { left: 0; right: auto; width: min(280px, calc(100vw - 32px)); }
 }
 
 /* The composer, on a phone. The placeholder is two lines at 390px, so the box
