@@ -1,17 +1,32 @@
 # Handover
 
-> **2026-09-10 — GitHub is now the operational record.**
+> **Read `CLAUDE.md` first.** It is the standing brief — Grant's own
+> instructions, the hard constraints, the traps this repository has already
+> fallen into, and how to run and verify everything. This document is only the
+> current state.
 >
-> This document summarises state. It is no longer where actionable work lives:
-> that is [Issues](https://github.com/granterogers/agentic.team.grant/issues),
-> organised under milestones M0–v1.0. If you are picking this project up, read
-> `docs/integration-assessment-2026-09-10.md` first — it says what exists, what
-> is missing, and the two decisions waiting on Grant.
+> **Actionable work lives in
+> [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
+> milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
-> **Two things are blocking, and both are recorded as Issues:**
-> [#7](https://github.com/granterogers/agentic.team.grant/issues/7) there is no
-> `main` branch, and [#8](https://github.com/granterogers/agentic.team.grant/issues/8)
-> the Notion sync is duplicating documents.
+> ## State as of 2026-09-10
+>
+> | | |
+> |---|---|
+> | Tests | 859 passing · `verify:hq` 40/40 · `verify:ui` 36/36 · `verify:talk` 34/34 |
+> | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
+> | Migrations | 170 applied |
+> | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
+> | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
+>
+> **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
+> GitHub PAT (#18). Neither blocks development.
+>
+> **Recently landed:** the frontend build prompt persisted to
+> `docs/spec/` · integration assessment · GitHub as the operational record
+> (19 labels, 5 milestones, templates, 14 Issues) · the Notion document
+> duplication fixed at the root (#8) · phone notifications (`npm run notify`) ·
+> the build diary (`npm run step`, visible at *What Claude is building*).
 
 # Start here
 
