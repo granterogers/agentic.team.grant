@@ -8,7 +8,8 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
-import { PALETTES, TEXTURES, appearance, apply } from './appearance.js'
+import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
+import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
 import { pageSvg } from './page.js'
@@ -18,7 +19,7 @@ const $ = (sel, root = document) => root.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-const state = { view: 'portfolio', project: null, done: new Set() }
+const state = { view: 'portfolio', project: null, done: new Set(), label: null }
 
 // --- pieces -----------------------------------------------------------------
 
@@ -84,6 +85,17 @@ const taskRow = (t, i) => {
 
 function rail() {
   return `<aside class="rail">
+    <!--
+      Grant: *"sidebars and such should be collapsible"*. Collapsed, the rail
+      keeps every control and drops every word — icons, project dots and faces
+      stay, so it is a narrower rail rather than a hidden one. The state is
+      remembered, because a person who collapses a sidebar means it.
+    -->
+    <button class="railtoggle" data-rail aria-label="Collapse the sidebar">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+        <path d="M14 6l-6 6 6 6"/></svg>
+    </button>
     <div class="wordmark">
       <span class="glyph"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
         stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -94,6 +106,13 @@ function rail() {
       </span>
     </div>
     <nav class="navgroup">
+      <button class="navitem home" data-go="people" aria-current="${state.view === 'people'}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5"/>
+          <path d="M16 5.2a3.2 3.2 0 010 5.6M18 19c0-2.4-1-4-2.6-4.6"/></svg>
+        People
+      </button>
       <button class="navitem home" data-go="portfolio" aria-current="${state.view === 'portfolio'}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
@@ -125,6 +144,22 @@ function rail() {
       else collapses into a quiet strip underneath. That is presence being
       ambient — you see the shape of the office without reading it.
     -->
+    <!--
+      Grant: *"of course the talk to team button should be prominent"*. It was a
+      secondary button in a page header, competing with New project. It is the
+      one control he uses when he does not want to use the interface at all, so
+      it lives in the rail, it is the only filled thing in it, and it survives
+      the rail collapsing.
+    -->
+    <button class="callbtn" data-call>
+      <span class="ring"></span>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
+        <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
+      <span class="lbl">Talk to the team</span>
+    </button>
+
     <button class="navitem settings-open" data-settings>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
@@ -195,6 +230,12 @@ function contactCard(c, i) {
         <span class="stage s-${esc(c.stage)}">${esc(stage)}</span>
       </span>
       <span class="t-meta">${esc(c.role)}${bits.length > 0 ? ` · ${esc(bits.join(' · '))}` : ''}</span>
+      ${(() => {
+        const on = people.labelsOn(c.name)
+        return on.length === 0 ? '' :
+          `<span class="tags">${on.map((l) =>
+            `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>`
+      })()}
       ${c.next ? `<span class="next">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -232,6 +273,63 @@ function card(p, lead) {
   </button>`
 }
 
+/*
+  Everyone, across every project.
+
+  Grant: *"there should also be dedicated contact sections"*. A contact belongs
+  to a project, but a person does not — Ben referring someone to the coaching
+  course is the same Ben who might turn up on a second project later. So this
+  view is the union, grouped by the label he has put on them, with the project
+  they came from as a note rather than as the organising idea.
+*/
+function everyone() {
+  const all = PROJECTS.flatMap((p) => p.contacts.map((c) => ({ ...c, from: p.name })))
+  const defined = people.labels()
+  const chosen = state.label
+
+  const shown = chosen === null
+    ? all
+    : all.filter((c) => people.labelsOn(c.name).some((l) => l.id === chosen))
+
+  return `<main class="main">
+    <div class="head">
+      <div>
+        <h1 class="t-display">People</h1>
+        <p class="t-lead" style="margin:var(--s2) 0 0">Everyone across every project.
+          Labels are yours — rename them, add your own, delete the ones you do not use.</p>
+      </div>
+      <button class="btn primary" data-label-edit>Edit labels</button>
+    </div>
+
+    <div class="filters">
+      <button class="pill ${chosen === null ? 'on' : ''}" data-filter="">All
+        <span class="n">${all.length}</span></button>
+      ${defined.map((l) => {
+        const n = all.filter((c) => people.labelsOn(c.name).some((x) => x.id === l.id)).length
+        return `<button class="pill ${l.hue} ${chosen === l.id ? 'on' : ''}" data-filter="${l.id}">
+          <span class="swatchdot"></span>${esc(l.name)}<span class="n">${n}</span></button>`
+      }).join('')}
+    </div>
+
+    ${
+      shown.length === 0
+        ? `<div class="empty"><p class="t-meta">Nobody carries that label yet. Open a
+             person and tick it, or add a different one.</p></div>`
+        : `<div class="peoplegrid">${shown.map((c, i) => `
+            <button class="pcard ${c.hue}" data-person="${esc(c.name)}">
+              <span class="disc big">${esc(c.name[0])}</span>
+              <span class="pbody">
+                <b>${esc(c.name)}</b>
+                <span class="t-meta">${esc(c.role)}${c.org ? ` · ${esc(c.org)}` : ''}</span>
+                <span class="tags">${people.labelsOn(c.name).map((l) =>
+                  `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>
+                <span class="t-meta from">${esc(c.from)}</span>
+              </span>
+            </button>`).join('')}</div>`
+    }
+  </main>`
+}
+
 function portfolio() {
   return `<main class="main">
     <div class="head">
@@ -240,7 +338,6 @@ function portfolio() {
         <p class="t-lead" style="margin:var(--s2) 0 0">Three projects. One thing waiting on you,
           and the team finished nine things overnight.</p>
       </div>
-      <button class="btn primary">Call Claire</button>
     </div>
     ${attention()}
     <div class="portfolio">
@@ -401,6 +498,29 @@ function settingsSheet() {
         </div>
       </div>
 
+      <div class="setgroup">
+        <span class="t-label">Your own texture</span>
+        <div class="ownrow">
+          ${now.own ? `<button class="swatch ${now.texture === 'own' ? 'on' : ''}"
+              data-texture-pick="own" style="max-width:180px">
+              <span class="texpreview" style="background-image:url('${now.own}');
+                    background-size:cover"></span>
+              <b>${esc(now.ownName || 'Uploaded')}</b>
+              <span class="t-meta">Yours</span>
+            </button>` : ''}
+          <label class="dropzone">
+            <input type="file" accept="image/*" data-texture-file hidden>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="M12 16V4M12 4L7 9M12 4l5 5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+            <span><b>Upload a texture</b>
+              <span class="t-meta">Any image. It is shrunk and stored on this device.</span></span>
+          </label>
+          ${now.own ? '<button class="link add" data-texture-clear>Remove</button>' : ''}
+        </div>
+        <p class="t-meta" id="texerr" hidden></p>
+      </div>
+
       <p class="t-meta" style="margin-top:var(--s4)">Light and dark follow your system
         setting. Every palette has both.</p>
     </div>
@@ -420,13 +540,40 @@ function settingsSheet() {
   for (const b of v.querySelectorAll('[data-texture-pick]')) {
     b.addEventListener('click', () => pick('texture', b.dataset.texturePick))
   }
+  const file = $('[data-texture-file]', v)
+  file?.addEventListener('change', async () => {
+    const chosen = file.files?.[0]
+    if (!chosen) return
+    const err = $('#texerr', v)
+    err.hidden = true
+    const out = await readTexture(chosen)
+    if (out.error) { err.textContent = out.error; err.hidden = false; return }
+    apply({ ...appearance(), texture: 'own', own: out.data, ownName: out.name })
+    settingsSheet()
+    v.hidden = false
+  })
+  $('[data-texture-clear]', v)?.addEventListener('click', () => {
+    apply({ ...appearance(), texture: 'plaster', own: null, ownName: '' })
+    settingsSheet()
+    v.hidden = false
+  })
+
   $('.close', v).addEventListener('click', () => { v.hidden = true })
   v.addEventListener('click', (e) => { if (e.target === v) v.hidden = true })
 }
 
+/** Remembered, because a person who collapses a sidebar means it. */
+const railShut = () => {
+  try { return localStorage.getItem('studio.rail') === 'shut' } catch { return false }
+}
+
 function render() {
   const root = $('#root')
-  root.innerHTML = rail() + (state.view === 'project' ? dashboard() : portfolio())
+  root.classList.toggle('shut', railShut())
+  root.innerHTML = rail() + (
+    state.view === 'project' ? dashboard()
+    : state.view === 'people' ? everyone()
+    : portfolio())
   // The room takes its colour from whatever is in front of you.
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
   breathe(root)
@@ -434,7 +581,7 @@ function render() {
 
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
-      carry(null, null, () => { state.view = b.dataset.go === 'portfolio' ? 'portfolio' : state.view; render() })
+      carry(null, null, () => { state.view = b.dataset.go; state.label = null; render() })
     })
   }
 
@@ -466,8 +613,33 @@ function render() {
     })
   }
 
+  $('[data-rail]', root)?.addEventListener('click', () => {
+    try { localStorage.setItem('studio.rail', railShut() ? 'open' : 'shut') } catch { /* fine */ }
+    render()
+  })
+  $('[data-call]', root)?.addEventListener('click', () => {
+    // The prototype has no call; saying so is better than a dead button.
+    const s = $('.talkstate', root)
+    if (s) s.textContent = 'Calling Claire…'
+  })
+
   for (const b of root.querySelectorAll('[data-settings]')) {
     b.addEventListener('click', () => { settingsSheet(); $('#settings').hidden = false })
+  }
+
+  for (const b of root.querySelectorAll('[data-filter]')) {
+    b.addEventListener('click', () => { state.label = b.dataset.filter || null; render() })
+  }
+  for (const b of root.querySelectorAll('[data-label-edit]')) {
+    b.addEventListener('click', () => { labelEditor() })
+  }
+  for (const b of root.querySelectorAll('[data-person]')) {
+    tiltable(b, { max: 4 })
+    b.addEventListener('click', () => {
+      const all = PROJECTS.flatMap((p) => p.contacts)
+      const c = all.find((x) => x.name === b.dataset.person)
+      if (c) openContact(c)
+    })
   }
 
   for (const b of root.querySelectorAll('[data-contact]')) {
@@ -521,6 +693,43 @@ function openContact(c) {
         ${row('Last spoke', c.last)}
         ${row('Next', c.next ? `${c.next}${c.nextDue ? ` — ${c.nextDue}` : ''}` : '')}
       </div>
+      ${(() => {
+        const extra = people.fieldsOn(c.name)
+        return extra.length === 0 ? '' : `<div class="fields">${extra.map((f, i) =>
+          `<div class="field">
+             <span class="t-label">${esc(f.label)}</span>
+             <span class="withx">${esc(f.value)}
+               <button class="x" data-drop-field="${i}" aria-label="Remove ${esc(f.label)}">×</button>
+             </span>
+           </div>`).join('')}</div>`
+      })()}
+
+      <!--
+        Adding a field.
+
+        Grant: *"metadata fields should be dynamically added/removed on the UI
+        anyway"*. Two inputs and a button rather than a modal, because the whole
+        interaction is "this person has a Zoom handle and there is nowhere to
+        put it" and anything heavier than typing it in place is in the way.
+      -->
+      <form class="addfield" data-add-field>
+        <input name="label" placeholder="Field name" aria-label="Field name" maxlength="32">
+        <input name="value" placeholder="Value" aria-label="Value" maxlength="120">
+        <button class="btn" type="submit">Add field</button>
+      </form>
+
+      <div class="field" style="margin-top:var(--s4);align-items:flex-start">
+        <span class="t-label">Labels</span>
+        <span class="tagpick">
+          ${people.labels().map((l) => {
+            const on = people.labelsOn(c.name).some((x) => x.id === l.id)
+            return `<button class="tag ${l.hue} ${on ? 'on' : 'off'}"
+                     data-toggle-label="${l.id}">${esc(l.name)}</button>`
+          }).join('')}
+          <button class="tag add" data-label-edit>Edit labels</button>
+        </span>
+      </div>
+
       ${
         c.docs.length === 0
           ? ''
@@ -537,6 +746,88 @@ function openContact(c) {
   carry(null, null, () => { v.hidden = false })
   $('.close', v).addEventListener('click', () => { v.hidden = true })
   v.addEventListener('click', (e) => { if (e.target === v) v.hidden = true })
+
+  for (const b of v.querySelectorAll('[data-toggle-label]')) {
+    b.addEventListener('click', () => {
+      people.toggleLabel(c.name, b.dataset.toggleLabel)
+      openContact(c)            // redraw the sheet
+      render()                  // and the rows behind it
+      $('#viewer').hidden = false
+    })
+  }
+  for (const b of v.querySelectorAll('[data-drop-field]')) {
+    b.addEventListener('click', () => {
+      people.removeField(c.name, Number(b.dataset.dropField))
+      openContact(c)
+      $('#viewer').hidden = false
+    })
+  }
+  const form = $('[data-add-field]', v)
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const label = form.label.value.trim()
+    const value = form.value.value.trim()
+    if (label === '') return
+    people.addField(c.name, label, value)
+    openContact(c)
+    $('#viewer').hidden = false
+  })
+  for (const b of v.querySelectorAll('[data-label-edit]')) {
+    b.addEventListener('click', () => { labelEditor(() => { openContact(c); $('#viewer').hidden = false }) })
+  }
+}
+
+/*
+  Defining the labels themselves.
+
+  Grant: *"let me define those labels myself in the UI"*. Rename in place,
+  delete, add — and deleting one takes it off everybody rather than leaving an
+  id nothing resolves. Colour is picked from the same six project hues, so a
+  label he invents looks like it belongs.
+*/
+function labelEditor(after) {
+  const v = $('#settings')
+  const draw = () => {
+    v.innerHTML = `<div class="sheet">
+        <h2 class="t-title" style="margin:0">Labels</h2>
+        <p class="t-meta" style="margin:6px 0 var(--s4)">Yours to name. Deleting one removes
+          it from everybody.</p>
+        <div class="labellist">
+          ${people.labels().map((l) => `
+            <div class="labelrow ${l.hue}">
+              <span class="swatchdot"></span>
+              <input value="${esc(l.name)}" data-rename="${l.id}" aria-label="Label name" maxlength="24">
+              <button class="x" data-remove="${l.id}" aria-label="Delete ${esc(l.name)}">×</button>
+            </div>`).join('')}
+        </div>
+        <form class="addfield" data-add-label style="margin-top:var(--s4)">
+          <input name="name" placeholder="New label" aria-label="New label" maxlength="24">
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+      </div>
+      <button class="close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>`
+
+    for (const i of v.querySelectorAll('[data-rename]')) {
+      i.addEventListener('change', () => { people.renameLabel(i.dataset.rename, i.value.trim() || 'Label') })
+    }
+    for (const b of v.querySelectorAll('[data-remove]')) {
+      b.addEventListener('click', () => { people.removeLabel(b.dataset.remove); draw() })
+    }
+    const f = $('[data-add-label]', v)
+    f?.addEventListener('submit', (e) => {
+      e.preventDefault()
+      const name = f.name.value.trim()
+      if (name === '') return
+      people.addLabel(name)
+      draw()
+    })
+    $('.close', v).addEventListener('click', () => { v.hidden = true; render(); after?.() })
+  }
+  draw()
+  v.hidden = false
 }
 
 function openDoc(doc, from) {

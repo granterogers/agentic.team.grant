@@ -133,6 +133,26 @@ for (const [size, opts] of SIZES) {
       }
     }
 
+    // The People view and a collapsed rail — both are whole states that a
+    // portfolio capture cannot show.
+    if (size === 'desktop') {
+      await page.locator('[data-go="people"]').click()
+      await page.waitForTimeout(500)
+      await shoot('people')
+      await page.locator('[data-rail]').click()
+      await page.waitForTimeout(600)
+      await shoot('rail-collapsed')
+      await page.locator('[data-rail]').click()
+      await page.waitForTimeout(500)
+      await page
+        .locator('.project[data-open="legacy-coaching-course"], [data-go="portfolio"]')
+        .first()
+        .click()
+      await page.waitForTimeout(400)
+      await page.locator('.project[data-open="legacy-coaching-course"]').click()
+      await page.waitForTimeout(600)
+    }
+
     // Contacts, which sit below the fold in the right-hand column.
     if (size === 'desktop') {
       const contacts = page.locator('.contacts')

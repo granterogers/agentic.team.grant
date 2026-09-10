@@ -598,3 +598,142 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background-color: var(--sunken); background-image: var(--tex, none);
   background-size: var(--tex-size, auto);
 }
+
+/* --- labels, and the fields you add ---------------------------------------
+   A label is a small piece of the person's own colour. `off` is the unselected
+   state in the picker: outlined rather than filled, so ticking one is a change
+   in weight rather than a change in kind. */
+.tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.tag {
+  font: 600 11px/1 var(--display); font-stretch: 104%;
+  font-variant-caps: all-small-caps; letter-spacing: .05em;
+  padding: 4px 9px; border-radius: 999px;
+  background: color-mix(in srgb, var(--hue) 16%, transparent);
+  color: color-mix(in srgb, var(--hue) 82%, var(--ink));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 28%, transparent);
+}
+.tagpick { display: flex; flex-wrap: wrap; gap: 6px; }
+.tagpick .tag { min-height: 32px; display: inline-flex; align-items: center; cursor: pointer; }
+.tagpick .tag.off { background: transparent; color: var(--ink-3);
+  box-shadow: inset 0 0 0 1px var(--edge); }
+.tagpick .tag.off:hover { color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--ink-3); }
+.tag.add { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--edge);
+  border-style: dashed; }
+
+.withx { display: inline-flex; align-items: center; gap: var(--s2); }
+.x { width: 24px; height: 24px; border-radius: 6px; color: var(--ink-3);
+  font: 400 17px/1 var(--text); display: grid; place-items: center; }
+.x:hover { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }
+
+.addfield { display: flex; gap: var(--s2); margin-top: var(--s3); flex-wrap: wrap; }
+.addfield input {
+  flex: 1; min-width: 130px; min-height: 44px; font: 400 16px/1 var(--text);
+  padding: 0 var(--s3); border-radius: var(--r-control); color: var(--ink);
+  border: 1px solid var(--edge); background: var(--sunken); box-shadow: var(--engrave);
+}
+.addfield input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px; }
+
+.labellist { display: grid; gap: var(--s2); }
+.labelrow { display: flex; align-items: center; gap: var(--s3); }
+.labelrow input { flex: 1; min-height: 44px; font: 500 15px/1 var(--text); color: var(--ink);
+  padding: 0 var(--s3); border-radius: var(--r-control); border: 1px solid var(--edge);
+  background: var(--surface); }
+.swatchdot { width: 12px; height: 12px; border-radius: 4px; flex: none;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--hue) 72%, #fff), var(--hue));
+  box-shadow: 0 0 8px -2px var(--hue), inset 0 1px 0 rgb(255 255 255 / .4); }
+
+/* --- People ---------------------------------------------------------------- */
+.filters { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s5); }
+.pill {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 40px;
+  padding: 0 var(--s3); border-radius: 999px; font: 500 13.5px/1 var(--text);
+  border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--lift-1);
+}
+.pill.on { border-color: color-mix(in srgb, var(--hue, var(--accent)) 55%, transparent);
+  background: color-mix(in srgb, var(--hue, var(--accent)) 12%, var(--surface)); }
+.pill .n { font-size: 12px; color: var(--ink-3); }
+.peoplegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: var(--s4); }
+.pcard {
+  display: flex; gap: var(--s3); align-items: flex-start; text-align: left;
+  padding: var(--s4); border-radius: var(--r-card); border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1); position: relative;
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
+}
+.pcard:hover { box-shadow: var(--lift-2); }
+.pbody { min-width: 0; display: grid; gap: 3px; }
+.pbody b { font: 600 15.5px/1.2 var(--text); }
+.pbody .from { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+
+/* --- uploading a texture ---------------------------------------------------- */
+.ownrow { display: flex; gap: var(--s3); align-items: stretch; flex-wrap: wrap; }
+.dropzone {
+  display: flex; align-items: center; gap: var(--s3); cursor: pointer;
+  padding: var(--s3) var(--s4); border-radius: var(--r-card);
+  border: 1px dashed var(--edge); color: var(--ink-2); min-height: 76px; flex: 1; min-width: 240px;
+  background: color-mix(in srgb, var(--sunken) 50%, transparent);
+}
+.dropzone:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
+.dropzone span { display: grid; gap: 2px; }
+.dropzone b { font: 600 14px/1.2 var(--text); }
+
+/* --- Talk to the team -------------------------------------------------------
+   The one control used when the interface itself is not wanted, so it is the
+   only filled thing in the rail and the only thing with a pulse. */
+.callbtn {
+  position: relative; display: flex; align-items: center; gap: 11px;
+  min-height: 52px; padding: 0 var(--s4); border-radius: 12px;
+  color: var(--on-accent); font: 600 15px/1 var(--text); text-align: left;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, #fff) 0%, var(--accent) 62%);
+  box-shadow:
+    0 1px 2px rgb(25 24 19 / .2),
+    0 8px 22px -8px color-mix(in srgb, var(--accent) 62%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / .38);
+  transition: transform .18s, box-shadow .18s;
+}
+.callbtn:hover { transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgb(25 24 19 / .2),
+              0 14px 30px -8px color-mix(in srgb, var(--accent) 70%, transparent),
+              inset 0 1px 0 rgb(255 255 255 / .42); }
+.callbtn:active { transform: translateY(1px); box-shadow: var(--engrave); }
+.callbtn .ring {
+  position: absolute; inset: -3px; border-radius: 15px; pointer-events: none;
+  border: 1.5px solid var(--accent); opacity: .5;
+  animation: callring 3.2s ease-out infinite;
+}
+@keyframes callring {
+  0% { transform: scale(1); opacity: .45 }
+  70%, 100% { transform: scale(1.06); opacity: 0 }
+}
+@media (prefers-reduced-motion: reduce) { .callbtn .ring { animation: none; opacity: .3 } }
+
+/* --- a collapsible rail ------------------------------------------------------
+   Collapsed it keeps every control and drops every word: a narrower rail, not
+   a hidden one, so nothing has to be reopened to be reached. */
+.railtoggle {
+  position: absolute; top: var(--s3); right: -13px; z-index: 5;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--edge); color: var(--ink-2);
+  display: grid; place-items: center; box-shadow: var(--lift-1);
+  transition: transform .3s cubic-bezier(.2,.8,.3,1);
+}
+.railtoggle:hover { color: var(--accent); border-color: var(--accent); }
+.rail { position: sticky; }
+.shell { transition: grid-template-columns .34s cubic-bezier(.2,.8,.3,1); }
+.shell.shut { grid-template-columns: 74px minmax(0, 1fr); }
+.shell.shut .railtoggle { transform: rotate(180deg); }
+.shell.shut .rail { padding-left: var(--s3); padding-right: var(--s3); align-items: center; }
+.shell.shut .brandline,
+.shell.shut .navitem span:not(.dot):not(.swatchdot),
+.shell.shut .callbtn .lbl,
+.shell.shut .mate .what,
+.shell.shut .crew .rest-note,
+.shell.shut .wordmark > span:last-child { display: none; }
+.shell.shut .navitem { justify-content: center; padding: 9px 0; }
+.shell.shut .navitem.proj { padding: 9px 0; }
+.shell.shut .callbtn { justify-content: center; padding: 0; }
+.shell.shut .crew { flex-direction: column; gap: 4px; }
+.shell.shut .crew .face { margin-left: 0; }
+.shell.shut .mate { justify-content: center; }
+@media (max-width: 860px) { .railtoggle { display: none; } .shell.shut { grid-template-columns: minmax(0, 1fr); } }
