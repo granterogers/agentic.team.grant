@@ -268,7 +268,14 @@ export async function transcribeTelegramVoice(
   try {
     const name = String(meta.result.file_path).split('/').pop() ?? 'note.oga'
     const path = join(dir, name)
-    await writeFile(path, Buffer.from(await audio.arrayBuffer()), { mode: 0o600 })
+    // `Uint8Array`, not `Buffer` — the third time this repository has been bitten
+    // by the same thing, after `channels/telegram.ts` and `slack/signature.ts`,
+    // both of which carry the note. `Buffer` is a Node global and not a Deno
+    // one, this module is reached from `handlers/instruction.ts`, and that runs
+    // in the Deno worker. Every unit test passed under Node while a real voice
+    // note from Grant on 8 September failed with `Buffer is not defined`.
+    // Line 227 of this very file already did it correctly.
+    await writeFile(path, new Uint8Array(await audio.arrayBuffer()), { mode: 0o600 })
 
     let stdout: string
     try {

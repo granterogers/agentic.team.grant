@@ -58,7 +58,17 @@ interface Day {
  * rather than on job kind, because kinds like `research.live` are used by both
  * the suite and the real thing, and the requester never is.
  */
-const NOT_A_TEST = "coalesce(requested_by, '') not ilike '%verif%'"
+/*
+  0168 replaced this local rule with a generated column.
+
+  `not ilike '%verif%'` caught `verify:worker` and missed `phase-1-verification`,
+  `gate-2`, `probe` and every `verification.probe` kind — which is how 264
+  harness failures were reported to Grant as the office falling over. The column
+  is derived from the same convention, in one place, and `app.office_health`
+  reads it, so the report, the dashboard and the voice call cannot drift into
+  three answers.
+*/
+const NOT_A_TEST = 'not is_fixture'
 
 /** One number per question, all over the same window, in one round trip. */
 const DAY = `
@@ -85,9 +95,16 @@ const DAY = `
     -- Failed only. 'suppressed' is a decision, not a failure, and 'claimed' is
     -- a delivery still in flight — counting either as undelivered would make
     -- the one line worth acting on the one line that is always non-zero.
-    (select count(*)::int from public.deliveries
-      where state = 'failed'
-        and updated_at > app.now_utc() - interval '24 hours') as undelivered,
+    -- Grant, sent a report of messages that "never arrived": *"why is this guy
+    -- messaging?"* They had never been sent to him. Every one was a harness
+    -- delivery to an invented chat id like -1009999123, failing with
+    -- chat_not_found exactly as its test intended. A delivery belonging to a
+    -- fixture job is not a delivery that went missing.
+    (select count(*)::int from public.deliveries d
+      left join public.jobs j on j.job_id = d.job_id
+      where d.state = 'failed'
+        and coalesce(j.is_fixture, false) = false
+        and d.updated_at > app.now_utc() - interval '24 hours') as undelivered,
     (select count(*)::int from public.blockers where state = 'open') as blockers,
     (select count(*)::int from public.blockers
       where state = 'open' and real_deadline is not null and real_deadline < app.now_utc())

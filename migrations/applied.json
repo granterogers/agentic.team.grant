@@ -165,5 +165,6 @@
   "0164_a_fixture_is_not_a_project.sql": "24153df7ac03a68e4b42a51822fb7e2ac793317dd28b5396ea6b63b03a4edc5d",
   "0165_only_the_chief_speaks.sql": "66b6f004ff4f7a21a83a83bce69ce2f3c83b02e74d448c87c11fb5122c28f632",
   "0166_a_capability_is_not_a_result.sql": "54f2ae7c85ad4b4052cf33b5aaf545dd5f2542cb17ac9f28faa21af27b550b29",
-  "0167_claire_can_see_the_place.sql": "68d8ae2cc75726217769a344b34f9359fcd49b111737798eae5e7e740396878b"
+  "0167_claire_can_see_the_place.sql": "68d8ae2cc75726217769a344b34f9359fcd49b111737798eae5e7e740396878b",
+  "0168_a_probe_is_not_a_failure.sql": "b2dc1b13eb66043997efc9f85e7798cf928e51d8c9d4bcb5d0f417126511d704"
 }
