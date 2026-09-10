@@ -4,9 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#f7f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1b26" media="(prefers-color-scheme: dark)">
 <title>Team HQ</title>
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230f1115'/><text y='68' x='50' font-size='58' text-anchor='middle' fill='%23e7e9ee'>◆</text></svg>">
+<!-- Two faces, two jobs: Jost is the geometric grotesque nearest the brand's
+     Brandon Grotesque and carries headings and labels; Inter carries body and
+     every number, because it has real tabular figures. `display=swap` so a slow
+     font request delays nothing, and both have full fallback stacks in the CSS
+     so a failed one is a slightly different page rather than a broken one. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23333345'/><text y='70' x='50' font-size='60' text-anchor='middle' fill='%23f95411'>◆</text></svg>">
 <style>
 /*
   Mobile-first, and the desktop rules are the additions rather than the other
@@ -36,42 +45,98 @@
   that a UI accent does not, and re-pointing it at the indigo would be claiming
   a check that was never run on it.
 */
+/*
+  The look.
+
+  Grant: *"overall front end graphics, interface, fonts, colors, are so dated
+  ... the whole thing needs to go up several levels on multiple counts."*
+
+  He was right and the diagnosis is specific rather than a matter of taste. It
+  was the default 2020 admin dashboard: system font stack, indigo-to-violet
+  gradient, every card the same weight in a uniform grid, drop shadows doing the
+  work that hierarchy should. Nothing in it had been decided; it had been
+  reached for.
+
+  ## Where the palette comes from
+
+  INNERGY's own — corporate dark `#333345` and the orange `#F95411`, per the
+  Winter 2025 manual — rather than a fourth colour scheme invented for a fourth
+  surface. The manual's logo lockup is deliberately NOT here: this is Grant's
+  own team's HQ, not an INNERGY product, and stamping the wordmark on it would
+  claim something untrue. The palette is a family resemblance; the logo is an
+  assertion of authorship.
+
+  Status colours stay green/amber/red because they are semantics, not brand
+  accents — a "good" lamp in brand orange is not on-brand, it is unreadable.
+  They are pulled toward the warm end so they sit in the same room as the
+  orange rather than beside it.
+
+  ## Type
+
+  Two faces with different jobs. **Jost** is the geometric grotesque nearest to
+  the manual's Brandon Grotesque, and it carries headings, labels and the small
+  uppercase micro-type that echoes the wordmark's letterspacing. **Inter**
+  carries body and — the reason it is here rather than one family doing both —
+  every number, because it has real tabular figures and a dashboard is mostly
+  numbers that must line up in a column.
+
+  Both have a full fallback stack taken from the manual's own, so a failed font
+  request is a slightly different page rather than Times New Roman.
+*/
 :root {
-  --bg: #f2f4f9; --panel: #ffffff; --panel-2: #f8f9fc;
-  --ink: #12141c; --muted: #5a6072;
-  --line: #e2e5ee; --accent: #4f46e5; --accent-2: #7c3aed;
-  --accent-soft: rgba(79, 70, 229, 0.10);
-  --warn: #b45309; --bad: #be123c; --good: #0f766e;
-  /* Validated against the light surface: inside the lightness band, above the
-     chroma floor, over 3:1 contrast. Not eyeballed — the palette validator was
-     run, and the lighter step FAILED the dark band at L 0.703, which is why the
-     dark series colour below is a different value. */
-  --series: #2f6df6;
-  --shadow: 0 1px 2px rgba(16, 20, 40, 0.04), 0 10px 28px -16px rgba(16, 20, 40, 0.18);
-  --radius: 14px;
+  /* Warm paper rather than the cold blue-grey it was. */
+  --bg: #f7f6f4; --panel: #ffffff; --panel-2: #faf9f7;
+  --ink: #23232f; --muted: #6b6b7d;
+  --line: #e6e4e0;
+  --accent: #d8410c;          /* the brand orange, darkened to clear 4.5:1 on paper */
+  --accent-2: #e4323e;        /* the gradient's other end */
+  --accent-soft: rgba(216, 65, 12, 0.09);
+  /* Warm-shifted status. Amber and crimson are close cousins of the accent by
+     design; the accent only ever appears on a control, never on a lamp. */
+  --warn: #a2620a; --bad: #b31d2e; --good: #2f7355;
+  /* Charts answer to the palette validator, not to the brand: inside the
+     lightness band, above the chroma floor, over 3:1 on this ground. */
+  --series: #c2410c;
+  /* Almost no shadow. The old one was doing the job that a border and space
+     should do, and it is the single thing that reads most as "2020 dashboard". */
+  --shadow: 0 1px 2px rgba(35, 35, 47, 0.04);
+  --radius: 12px;
   --pad: 16px;
+  --display: "Jost", "Century Gothic", Futura, "Avenir Next", Avenir, system-ui, sans-serif;
+  --text: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-synthesis-weight: none;
 }
+/*
+  Dark, built from the corporate dark rather than from black.
+
+  `#333345` is the manual's own background colour, so the dark theme is the
+  brand's own dark instead of a blue-black chosen to look like everyone else's.
+  The ground goes a step below it so panels can BE it and still separate.
+*/
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0d14; --panel: #14171f; --panel-2: #1a1e28;
-    --ink: #e8eaf2; --muted: #98a0b4;
-    --line: #252a36; --accent: #a5b4fc; --accent-2: #c4b5fd;
-    --accent-soft: rgba(165, 180, 252, 0.12);
-    --warn: #f0b47a; --bad: #fb7185; --good: #2dd4a7;
-    /* #5c8cf5, not the accent: the lighter step is outside the dark lightness
-       band. A chart colour and a UI accent answer to different checks and are
-       allowed to differ. */
-    --series: #5c8cf5;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -18px rgba(0, 0, 0, 0.8);
+    --bg: #1b1b26; --panel: #24242f; --panel-2: #2b2b38;
+    --ink: #ecebe8; --muted: #9d9db0;
+    --line: #353544;
+    --accent: #ff7a4d;        /* lifted for contrast on the dark ground */
+    --accent-2: #ff9f6b;
+    --accent-soft: rgba(255, 122, 77, 0.14);
+    --warn: #e0a45c; --bad: #f87171; --good: #4bbd8c;
+    --series: #ff8a5c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg); color: var(--ink);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* 15.5px, not 15. A dashboard read on a phone at arm's length was a size too
+     small everywhere, and raising the base is worth more than any other single
+     change here. */
+  font: 15.5px/1.55 var(--text);
   -webkit-font-smoothing: antialiased;
+  /* Numbers line up in columns and stop jittering as they tick. */
+  font-variant-numeric: tabular-nums;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 header {
@@ -85,15 +150,22 @@ header {
 /* The mark. A gradient square with a diamond in it — enough to make the tab
    and the home-screen icon recognisable at a glance, and cheap: two elements
    and no image request. */
+/* The gradient is the brand's own — #E4323E to #F65524 — rather than the
+   indigo-to-violet that every admin template ships with. */
 .mark {
-  width: 28px; height: 28px; border-radius: 9px; flex: none;
-  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  width: 30px; height: 30px; border-radius: 9px; flex: none;
+  background: linear-gradient(135deg, #e4323e, #f65524);
   display: grid; place-items: center; color: #fff; font-size: 14px;
-  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 2px 10px -3px rgba(228, 50, 62, 0.5);
 }
 .brand { min-width: 0; }
-h1 { font-size: 16px; margin: 0; letter-spacing: -0.015em; line-height: 1.15; }
-.brand span { display: block; color: var(--muted); font-size: 12.5px; }
+/* The wordmark's own treatment — letterspaced, weighted, geometric — without
+   the wordmark. It is what makes the top of the page read as designed rather
+   than as a default. */
+h1 { font-family: var(--display); font-size: 15px; font-weight: 600; margin: 0;
+  letter-spacing: 0.13em; text-transform: uppercase; line-height: 1.2; }
+.brand span { display: block; color: var(--muted); font-size: 12.5px;
+  letter-spacing: 0.01em; margin-top: 1px; }
 #stamp { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums;
   white-space: nowrap; }
 
@@ -124,6 +196,7 @@ h1 { font-size: 16px; margin: 0; letter-spacing: -0.015em; line-height: 1.15; }
 .menubtn .bars { display: grid; gap: 3px; flex: none; }
 .menubtn .bars i { display: block; width: 15px; height: 2px; border-radius: 2px;
   background: var(--accent); }
+.menubtn { font-family: var(--display); letter-spacing: 0.01em; }
 .menubtn .where { flex: 1; }
 .menubtn .caret { color: var(--muted); font-size: 12px; flex: none; }
 
@@ -152,7 +225,8 @@ h1 { font-size: 16px; margin: 0; letter-spacing: -0.015em; line-height: 1.15; }
 
 nav { display: block; }
 nav .grp { display: block; margin: 14px 0 0; }
-nav .lbl { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+nav .lbl { display: block; font-family: var(--display); font-weight: 600; font-size: 12px;
+  letter-spacing: 0.13em; text-transform: uppercase;
   color: var(--muted); margin: 0 0 6px; }
 nav button {
   appearance: none; display: block; width: 100%; text-align: left;
@@ -188,13 +262,17 @@ main { padding: var(--pad); display: grid; grid-template-columns: minmax(0, 1fr)
   answer on most of them and the one a dashboard usually leaves him to infer.
 */
 .lede { padding: 14px var(--pad) 0; max-width: 74ch; }
-.lede h2 { margin: 0 0 3px; font-size: 19px; letter-spacing: -0.02em; }
-.lede p { margin: 0 0 7px; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+/* The one genuinely large thing on any page. Everything else was competing at
+   the same weight, which is the other half of why it read as flat. */
+.lede h2 { font-family: var(--display); font-weight: 600; margin: 0 0 5px;
+  font-size: 27px; letter-spacing: -0.015em; line-height: 1.15; }
+.lede p { margin: 0 0 8px; color: var(--muted); font-size: 14px; line-height: 1.6;
+  max-width: 62ch; }
 /* The second half — what to do — carries a rule so the two sentences are not
    two paragraphs of equal weight saying different kinds of thing. */
 .lede p.todo {
   margin: 0; color: var(--ink); border-left: 2px solid var(--accent);
-  padding-left: 10px;
+  padding-left: 12px;
 }
 
 @media (min-width: 1040px) {
@@ -246,7 +324,7 @@ main { padding: var(--pad); display: grid; grid-template-columns: minmax(0, 1fr)
 }
 .card {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 15px; box-shadow: var(--shadow);
+  border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
   /* See `main`. A card is a grid item, and a grid item that may not shrink is
      the thing that pushed the page sideways. */
   min-width: 0;
@@ -256,7 +334,8 @@ main { padding: var(--pad); display: grid; grid-template-columns: minmax(0, 1fr)
    refuses to split a single very long token when it is the only thing on the
    line, which is exactly the case that overflowed. */
 .card, .card * { overflow-wrap: anywhere; }
-.card h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em;
+.card h2 { font-family: var(--display); font-weight: 600;
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.11em;
   color: var(--muted); margin: 0 0 4px; font-weight: 600; }
 /* A line under the heading saying what the card is. Injected from HINTS after
    render, so a view function does not have to carry its own documentation and
@@ -275,9 +354,17 @@ main { padding: var(--pad); display: grid; grid-template-columns: minmax(0, 1fr)
    row and a single digit gets 300px of card to itself, which is the opposite of
    the "desktop information density" §25 asks for. */
 @media (min-width: 760px) { .tiles { grid-template-columns: repeat(auto-fill, minmax(112px, 0.2fr)); } }
-.tile { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-.tile b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.tile span { color: var(--muted); font-size: 12px; }
+/* A tile is a number and its name, and the number is the content — so it gets
+   real size and the label gets pushed down to micro-type. At 22px against a
+   15px page the two were nearly the same thing, which is why every readout
+   looked like a form. */
+.tile { background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 12px 11px; }
+.tile b { display: block; font-family: var(--display); font-weight: 500; font-size: 30px;
+  line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.025em; }
+.tile span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px;
+  font-family: var(--display); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.09em; line-height: 1.3; }
 .tile.bad b { color: var(--bad); } .tile.warn b { color: var(--warn); }
 ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 li { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); }
@@ -298,7 +385,7 @@ li .m, .meta { color: var(--muted); font-size: 12.5px; }
   pair is the commonest accessibility failure in a status page, and roughly one
   man in twelve cannot tell these two apart.
 */
-.lamp { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block;
+.lamp { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block;
   background: var(--muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent); }
 .lamp.ok { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
 .lamp.bad { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); }
@@ -433,9 +520,10 @@ label.tool input { width: 17px; height: 17px; flex: none; }
 .gsvc-t { display: flex; align-items: center; gap: 8px; }
 .gsvc .go { justify-self: start; margin-top: 4px; }
 .gsvc .go.again { background: none; color: var(--muted); border: 1px solid var(--line); }
-.gsvc .ok { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; color: #0a7f5a;
-  background: rgba(10, 127, 90, 0.12); border-radius: 999px; padding: 2px 8px; }
-@media (prefers-color-scheme: dark) { .gsvc .ok { color: #58d0a6; } }
+.gsvc .ok { font-family: var(--display); font-size: 12px; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--good);
+  background: color-mix(in srgb, var(--good) 13%, transparent);
+  border-radius: 999px; padding: 3px 9px; }
 /* Which bot speaks as a person: a picker, not a label. */
 .botpick { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .botpick select { font-size: 12.5px; min-height: 34px; max-width: 220px; }
@@ -689,7 +777,11 @@ details.more[open] > summary::before { content: '▾ '; }
   box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
 @media (prefers-color-scheme: dark) { .gate button { color: #0b0d14; } }
 .err { color: var(--bad); font-size: 13px; margin-top: 10px; }
-footer { color: var(--muted); font-size: 12px; padding: 4px var(--pad) 28px; }
+/* A measure, because a 1440px window was setting this in one 200-character
+   line. Prose has a comfortable width and it is not the width of the monitor —
+   the same reason `.lede p` is capped. */
+footer { color: var(--muted); font-size: 12.5px; line-height: 1.6;
+  padding: 10px var(--pad) 30px; max-width: 76ch; }
 
 /* --- charts ------------------------------------------------------------
    A sparkline, not a chart with axes: the tile's big number IS the last
@@ -710,7 +802,8 @@ footer { color: var(--muted); font-size: 12px; padding: 4px var(--pad) 28px; }
   border-radius: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tip.on { opacity: 1; }
 .chartrow { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
-.chartrow b { font-size: 24px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.chartrow b { font-family: var(--display); font-weight: 500; font-size: 30px;
+  letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
 .chartrow span { color: var(--muted); font-size: 12.5px; }
 details.values { margin-top: 8px; }
 details.values summary { color: var(--muted); font-size: 12px; cursor: pointer; min-height: 24px; }
