@@ -66,6 +66,9 @@
      dark theme, where a white wash reads as a smudge across the top rather
      than as illumination. */
   --wash: rgb(255 255 255 / .55);
+  /* The weather in the ground. Barely nameable on their own. */
+  --field-a: oklch(0.93 0.028 200 / .55);
+  --field-b: oklch(0.94 0.030 65 / .55);
 
   /* Space: deliberately non-linear. Equal steps are what make a layout read
      as generated. */
@@ -74,8 +77,25 @@
 
   --r-control: 6px; --r-card: 10px; --r-sheet: 14px;
 
-  --display: "Fraunces", Georgia, "Times New Roman", serif;
-  --text: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /*
+    Bodoni Moda for display, Schibsted Grotesk for everything else.
+
+    Grant on the previous pairing: *"the font choice still reeks of typical
+    AI"*. Fraunces and Inter (in any cut) are the default of this moment, which
+    is exactly the problem — they are what a generated interface looks like.
+
+    Bodoni is a didone: extreme thick-thin contrast, unbracketed hairline
+    serifs, vertical stress. It is a fashion-magazine face, it is two centuries
+    old, and nothing about it reads as generated. Its optical-size axis matters
+    here: at 44px the hairlines are the point, and at 20px the same family
+    thickens them so the word does not disintegrate.
+
+    Schibsted Grotesk carries everything else — a Scandinavian newspaper
+    grotesk with a slightly narrow set and open apertures, so it stays legible
+    small and does not look like the system font.
+  */
+  --display: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
+  --text: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   color-scheme: light dark;
 }
@@ -125,6 +145,8 @@
     --paper-edge: inset 0 1px 0 rgb(255 255 255 / .06);
     --glass: color-mix(in srgb, var(--surface) 70%, transparent);
     --wash: rgb(150 190 170 / .05);
+    --field-a: oklch(0.34 0.035 215 / .30);
+    --field-b: oklch(0.32 0.030 55 / .26);
   }
 }
 

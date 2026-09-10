@@ -1,0 +1,7 @@
+Bodoni Moda — Copyright (c) Indestructible Type
+Schibsted Grotesk — Copyright (c) Schibsted Media Group
+
+Both licensed under the SIL Open Font License, Version 1.1.
+https://scripts.sil.org/OFL
+
+These files are the latin subsets, redistributed unmodified under that licence.

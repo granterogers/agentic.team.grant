@@ -23,6 +23,7 @@ const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.woff2': 'font/woff2',
 }
 
 const server = createServer(async (req, res) => {
@@ -82,7 +83,7 @@ for (const [size, opts] of SIZES) {
       already inside.
     */
     if (size === 'desktop') {
-      const card = page.locator('[data-open="ai-learning"]')
+      const card = page.locator('.project[data-open="ai-learning"]')
       const box = await card.boundingBox()
       if (box) {
         await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
@@ -93,7 +94,7 @@ for (const [size, opts] of SIZES) {
     }
 
     // Into a project, which is the shared-element transition.
-    await page.locator('[data-open="legacy-coaching-course"]').click()
+    await page.locator('.project[data-open="legacy-coaching-course"]').click()
     await page.waitForTimeout(900)
     await shoot('project')
 

@@ -10,6 +10,7 @@
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
+import { pageSvg } from './page.js'
 import { SPRING, carry, pressable, spring } from './motion.js'
 
 const $ = (sel, root = document) => root.querySelector(sel)
@@ -40,11 +41,9 @@ const cover = (d) => {
            stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
         <path d="M3 12h2l2-5 3 11 3-14 3 12 2-4h3"/></svg></div>`
   }
-  const rules = (d.lines ?? [80, 96, 88])
-    .map((w, i) => `<div class="rule${i === 0 ? ' h' : ''}" style="width:${w}%"></div>`).join('')
   const badge = `k-${d.kind === 'made' ? 'made' : d.kind}`
   const label = d.kind === 'made' ? 'MADE' : d.kind.toUpperCase()
-  return `<div class="page">${rules}<span class="kind ${badge}">${label}</span></div>`
+  return `<div class="page">${pageSvg(d.title, d.kind)}<span class="kind ${badge}">${label}</span></div>`
 }
 
 const docCard = (d, i) => `
@@ -85,9 +84,27 @@ function rail() {
       </span>
     </div>
     <nav class="navgroup">
-      <button class="navitem" data-go="portfolio" aria-current="${state.view === 'portfolio'}">Projects</button>
-      <button class="navitem" data-go="docs" aria-current="${state.view === 'docs'}">Documents</button>
-      <button class="navitem" data-go="tasks" aria-current="${state.view === 'tasks'}">Tasks</button>
+      <button class="navitem home" data-go="portfolio" aria-current="${state.view === 'portfolio'}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
+        All projects
+      </button>
+      <!--
+        Projects are the top tier, and everything else hangs off one.
+
+        Grant: *"project choice is the top tier.. and from each project flows
+        tasks, documents, etc"*. The first version had Projects, Documents and
+        Tasks as three peers in the rail, which said the opposite — that a
+        document is a thing you browse globally and a project is one lens on it.
+        Here the rail lists the actual projects, and Documents and Tasks exist
+        only inside one.
+      -->
+      ${PROJECTS.map((p) => `
+        <button class="navitem proj ${p.hue}" data-open="${p.slug}"
+                aria-current="${state.view === 'project' && state.project === p.slug}">
+          <span class="dot"></span>${esc(p.name)}
+        </button>`).join('')}
     </nav>
     <div>
       <div class="t-label" style="margin-bottom:10px">The team</div>
@@ -121,7 +138,6 @@ function card(p, lead) {
   return `<button class="project ${p.hue} ${lead ? 'lead' : ''}" data-open="${p.slug}">
     <span class="cover" style="view-transition-name:cover-${p.slug}">
       ${coverSvg(p.slug, { dense: lead })}
-      <span class="chips">${p.connectors.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>
     </span>
     <span class="body">
       <span>
@@ -138,6 +154,7 @@ function card(p, lead) {
       </span>` : ''}
       <span class="facts t-meta" style="font-size:12.5px">
         <span>${p.docs} ${p.docs === 1 ? 'doc' : 'docs'}</span>
+        ${p.total > 0 ? `<span>${p.total} tasks</span>` : ''}
         ${p.next ? `<span style="color:var(--warn);font-weight:500">${esc(p.next)}</span>` : ''}
       </span>
     </span>
@@ -171,7 +188,6 @@ function dashboard() {
       Projects</button>
     <div class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
       ${coverSvg(p.slug, { dense: true })}
-      <span class="chips">${p.connectors.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>
     </div>
     <div class="head">
       <div>
@@ -179,6 +195,24 @@ function dashboard() {
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(p.purpose)}</p>
       </div>
       <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
+    </div>
+    <!--
+      Where the connectors live now.
+
+      Grant: *"the source of truth is our own internally defined projects.. with
+      connections to notebook, notion, etc as optional"*. So they are not a
+      badge on the cover as though the project belonged to Notion — they are a
+      line under the project's own name saying what it is additionally joined
+      up to, including when the answer is nothing.
+    -->
+    <div class="links">
+      <span class="t-label">Also connected to</span>
+      ${
+        p.connectors.length === 0
+          ? '<span class="t-meta">Nothing yet — this project stands on its own.</span>'
+          : p.connectors.map((c) => `<span class="link">${esc(c)}</span>`).join('')
+      }
+      <button class="link add">+ Connect something</button>
     </div>
     <div class="spread">
       <div class="stack">
@@ -245,7 +279,7 @@ function render() {
   // Project → dashboard. The cover art is the shared element: it grows and
   // moves to the hero slot, and the browser pairs them by view-transition-name.
   for (const b of root.querySelectorAll('[data-open]')) {
-    tiltable(b, { max: b.classList.contains('lead') ? 3.2 : 5 })
+    if (!b.classList.contains('proj')) tiltable(b, { max: b.classList.contains('lead') ? 3.2 : 5 })
     b.addEventListener('click', () => {
       carry(null, null, () => { state.project = b.dataset.open; state.view = 'project'; render() })
     })
@@ -289,10 +323,7 @@ function openDoc(doc, from) {
       <div class="t-label">${esc(doc.origin)}</div>
       <h2 class="t-title" style="margin:var(--s2) 0 var(--s3)">${esc(doc.title)}</h2>
       <p class="t-meta">${esc(doc.size)}</p>
-      <div style="margin-top:var(--s4);display:grid;gap:var(--s2)">
-        ${(doc.lines ?? [80, 96, 88, 92, 64, 88, 76]).map((w, i) =>
-          `<div class="rule${i === 0 ? ' h' : ''}" style="width:${w}%;background:var(--sunken)"></div>`).join('')}
-      </div>
+      <div class="bigpage">${pageSvg(doc.title, doc.kind)}</div>
     </div>
     <button class="close" aria-label="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"

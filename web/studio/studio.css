@@ -16,10 +16,22 @@ html, body { margin: 0; padding: 0; }
 */
 body {
   background-color: var(--ground);
+  /*
+    A soft ground.
+
+    Grant: *"background is still solid color rather than soft color"*. Three
+    overlapping wide radial fields at very low opacity, in hues either side of
+    the ground's own, so the page has weather in it — lighter towards the top
+    where the light is, cooler bottom-left, warmer bottom-right. None of them
+    is nameable as a colour; together they stop the surface being one flat
+    value, which is what "solid" means and what reads as cheap.
+  */
   background-image:
     radial-gradient(120% 90% at 50% 0%, var(--wash) 0%, transparent 62%),
+    radial-gradient(70% 55% at 8% 88%, var(--field-a) 0%, transparent 70%),
+    radial-gradient(80% 60% at 96% 72%, var(--field-b) 0%, transparent 72%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-  background-attachment: fixed, fixed;
+  background-attachment: fixed, fixed, fixed, fixed;
   color: var(--ink);
   font: 400 15.5px/1.55 var(--text);
   font-variant-numeric: tabular-nums;
@@ -446,3 +458,39 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   .doc:hover .page { transform: rotate(var(--rest-tilt, 0deg)); }
   :root[data-tint] body::before { transition: none; }
 }
+
+/* --- projects in the rail --------------------------------------------------
+   The top tier. A project is reachable from anywhere; documents and tasks are
+   not, because they only exist inside one. */
+.navitem.home { color: var(--ink-2); font-weight: 500; }
+.navitem.proj { padding-left: 10px; gap: 10px; font-size: 14px; min-height: 40px; }
+.navitem.proj .dot {
+  width: 9px; height: 9px; border-radius: 3px; flex: none;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--hue) 70%, #fff), var(--hue));
+  box-shadow: 0 0 8px -1px var(--hue), inset 0 1px 0 rgb(255 255 255 / .4);
+}
+.navitem.proj[aria-current="true"] { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+
+/* --- connectors, as optional attachments ----------------------------------
+   Under the project's own name, never on its cover. Ours is the source of
+   truth; these are things it happens to be joined to. */
+.links { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  margin: calc(var(--s4) * -1) 0 var(--s5); }
+.links .t-label { margin-right: var(--s1); }
+.link {
+  font: 500 12.5px/1 var(--text); color: var(--ink-2);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 6%), var(--surface));
+  border: 1px solid var(--edge); border-radius: 999px; padding: 7px 12px;
+  box-shadow: var(--lift-1); min-height: 34px; display: inline-flex; align-items: center;
+}
+.link.add { color: var(--ink-3); border-style: dashed; box-shadow: none; background: transparent; }
+.link.add:hover { color: var(--accent); border-color: var(--accent); border-style: solid; }
+
+/* --- drawn first pages -----------------------------------------------------
+   The SVG fills the sheet; padding comes from the page's own margins so the
+   proportions are a real document's, not a card's. */
+.doc .page { padding: 0; }
+.pg { display: block; width: 100%; height: 100%; }
+.bigpage { margin-top: var(--s4); border-radius: 6px; overflow: hidden;
+  background: var(--surface); box-shadow: var(--lift-1); aspect-ratio: 3/4; max-height: 46vh; }
+.bigpage .pg { height: 100%; }
