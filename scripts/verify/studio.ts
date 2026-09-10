@@ -112,7 +112,8 @@ for (const [size, opts] of SIZES) {
       }
     }
 
-    // Into a project, which is the shared-element transition.
+    // Into a project, which is the shared-element transition. Everything after
+    // this — People, contacts, documents — only exists inside one.
     await page.locator('.project[data-open="legacy-coaching-course"]').click()
     await page.waitForTimeout(900)
     await shoot('project')
@@ -133,10 +134,14 @@ for (const [size, opts] of SIZES) {
       }
     }
 
-    // The People view and a collapsed rail — both are whole states that a
-    // portfolio capture cannot show.
+    /*
+      People is reached from INSIDE a project now, not from the top of the rail
+      — Grant: "people is a subset of each project.. not merged". The old
+      selector was a global nav item that no longer exists, which is exactly the
+      kind of thing a capture script catches and a code review does not.
+    */
     if (size === 'desktop') {
-      await page.locator('[data-go="people"]').click()
+      await page.locator('[data-people]').first().click()
       await page.waitForTimeout(500)
       await shoot('people')
       await page.locator('[data-rail]').click()
@@ -144,12 +149,7 @@ for (const [size, opts] of SIZES) {
       await shoot('rail-collapsed')
       await page.locator('[data-rail]').click()
       await page.waitForTimeout(500)
-      await page
-        .locator('.project[data-open="legacy-coaching-course"], [data-go="portfolio"]')
-        .first()
-        .click()
-      await page.waitForTimeout(400)
-      await page.locator('.project[data-open="legacy-coaching-course"]').click()
+      await page.locator('.navitem.proj[data-open="legacy-coaching-course"]').click()
       await page.waitForTimeout(600)
     }
 

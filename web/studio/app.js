@@ -106,13 +106,6 @@ function rail() {
       </span>
     </div>
     <nav class="navgroup">
-      <button class="navitem home" data-go="people" aria-current="${state.view === 'people'}">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-          <circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5"/>
-          <path d="M16 5.2a3.2 3.2 0 010 5.6M18 19c0-2.4-1-4-2.6-4.6"/></svg>
-        People
-      </button>
       <button class="navitem home" data-go="portfolio" aria-current="${state.view === 'portfolio'}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
@@ -133,7 +126,10 @@ function rail() {
         <button class="navitem proj ${p.hue}" data-open="${p.slug}"
                 aria-current="${state.view === 'project' && state.project === p.slug}">
           <span class="dot"></span>${esc(p.name)}
-        </button>`).join('')}
+        </button>
+        ${state.project === p.slug && state.view !== 'portfolio' ? `
+          <button class="navitem sub ${state.view === 'people' ? 'on' : ''}" data-people="${p.slug}">
+            People<span class="n">${p.contacts.length}</span></button>` : ''}`).join('')}
     </nav>
     <!--
       The team, as people.
@@ -274,38 +270,45 @@ function card(p, lead) {
 }
 
 /*
-  Everyone, across every project.
+  A project's people.
 
-  Grant: *"there should also be dedicated contact sections"*. A contact belongs
-  to a project, but a person does not — Ben referring someone to the coaching
-  course is the same Ben who might turn up on a second project later. So this
-  view is the union, grouped by the label he has put on them, with the project
-  they came from as a note rather than as the organising idea.
+  Corrected: Grant, on the first version — *"remember people is a subset of each
+  project.. not merged"*. I had built the union across every project, which
+  quietly asserts that a person is a global record a project happens to
+  reference. He is saying the opposite, and it matches the rest of the model:
+  the project is the source of truth, and a contact belongs to one the way a
+  document does.
+
+  So this is the same view, scoped. It reads the project you are in, and the
+  rail reaches it per project rather than once at the top.
 */
-function everyone() {
-  const all = PROJECTS.flatMap((p) => p.contacts.map((c) => ({ ...c, from: p.name })))
+function projectPeople() {
+  const p = byId(state.project)
   const defined = people.labels()
   const chosen = state.label
-
   const shown = chosen === null
-    ? all
-    : all.filter((c) => people.labelsOn(c.name).some((l) => l.id === chosen))
+    ? p.contacts
+    : p.contacts.filter((c) => people.labelsOn(c.name).some((l) => l.id === chosen))
 
   return `<main class="main">
+    <button class="btn" data-open="${p.slug}" style="margin-bottom:var(--s4)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      ${esc(p.name)}</button>
     <div class="head">
       <div>
         <h1 class="t-display">People</h1>
-        <p class="t-lead" style="margin:var(--s2) 0 0">Everyone across every project.
+        <p class="t-lead" style="margin:var(--s2) 0 0">Everyone on ${esc(p.name)}.
           Labels are yours — rename them, add your own, delete the ones you do not use.</p>
       </div>
-      <button class="btn primary" data-label-edit>Edit labels</button>
+      <button class="btn" data-label-edit>Edit labels</button>
     </div>
 
     <div class="filters">
       <button class="pill ${chosen === null ? 'on' : ''}" data-filter="">All
-        <span class="n">${all.length}</span></button>
+        <span class="n">${p.contacts.length}</span></button>
       ${defined.map((l) => {
-        const n = all.filter((c) => people.labelsOn(c.name).some((x) => x.id === l.id)).length
+        const n = p.contacts.filter((c) => people.labelsOn(c.name).some((x) => x.id === l.id)).length
         return `<button class="pill ${l.hue} ${chosen === l.id ? 'on' : ''}" data-filter="${l.id}">
           <span class="swatchdot"></span>${esc(l.name)}<span class="n">${n}</span></button>`
       }).join('')}
@@ -313,9 +316,12 @@ function everyone() {
 
     ${
       shown.length === 0
-        ? `<div class="empty"><p class="t-meta">Nobody carries that label yet. Open a
-             person and tick it, or add a different one.</p></div>`
-        : `<div class="peoplegrid">${shown.map((c, i) => `
+        ? `<div class="empty"><p class="t-meta">${
+            p.contacts.length === 0
+              ? 'Nobody on this project yet. Add the people it is actually about.'
+              : 'Nobody here carries that label yet. Open someone and tick it.'
+          }</p><button class="btn">Add someone</button></div>`
+        : `<div class="peoplegrid">${shown.map((c) => `
             <button class="pcard ${c.hue}" data-person="${esc(c.name)}">
               <span class="disc big">${esc(c.name[0])}</span>
               <span class="pbody">
@@ -323,7 +329,7 @@ function everyone() {
                 <span class="t-meta">${esc(c.role)}${c.org ? ` · ${esc(c.org)}` : ''}</span>
                 <span class="tags">${people.labelsOn(c.name).map((l) =>
                   `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>
-                <span class="t-meta from">${esc(c.from)}</span>
+                ${c.next ? `<span class="t-meta from">Next: ${esc(c.next)}</span>` : ''}
               </span>
             </button>`).join('')}</div>`
     }
@@ -413,9 +419,9 @@ function dashboard() {
         <section class="section">
           <header>
             <h2 class="t-title">Contacts</h2>
-            <span class="t-meta">${
-              p.contacts.length === 0 ? 'none yet' : `${p.contacts.length} people`
-            }</span>
+            <button class="link" data-people="${p.slug}">${
+              p.contacts.length === 0 ? 'none yet' : `all ${p.contacts.length}`
+            }</button>
           </header>
           ${
             p.contacts.length === 0
@@ -474,10 +480,20 @@ function settingsSheet() {
           ${PALETTES.map((p) => `
             <button class="swatch ${now.palette === p.id ? 'on' : ''}"
                     data-palette-pick="${p.id}" data-palette="${p.id}">
-              <span class="chips3">
-                <i style="background:var(--ground)"></i>
-                <i style="background:var(--surface)"></i>
-                <i style="background:var(--accent)"></i>
+              <!--
+                A miniature of the actual interface, not three colour bars.
+                Grant: *"your sample palettes and textures don't look like
+                anything"* — and he was right: three chips tell you the hues
+                exist, not what living in them is like. This is a ground, a
+                card on it, two lines of type and the accent, at 1/8 scale.
+              -->
+              <span class="mini">
+                <span class="mini-card">
+                  <span class="mini-art"></span>
+                  <span class="mini-l1"></span>
+                  <span class="mini-l2"></span>
+                </span>
+                <span class="mini-btn"></span>
               </span>
               <b>${esc(p.name)}</b>
               <span class="t-meta">${esc(p.note)}</span>
@@ -491,7 +507,7 @@ function settingsSheet() {
           ${TEXTURES.map((t) => `
             <button class="swatch ${now.texture === t.id ? 'on' : ''}"
                     data-texture-pick="${t.id}">
-              <span class="texpreview" data-texture="${t.id}"></span>
+              <span class="texpreview" data-texture="${t.id}"><i></i></span>
               <b>${esc(t.name)}</b>
               <span class="t-meta">${esc(t.note)}</span>
             </button>`).join('')}
@@ -613,6 +629,12 @@ function render() {
     })
   }
 
+  for (const b of root.querySelectorAll('[data-people]')) {
+    b.addEventListener('click', () => {
+      carry(null, null, () => { state.project = b.dataset.people; state.view = 'people'; state.label = null; render() })
+    })
+  }
+
   $('[data-rail]', root)?.addEventListener('click', () => {
     try { localStorage.setItem('studio.rail', railShut() ? 'open' : 'shut') } catch { /* fine */ }
     render()
@@ -636,8 +658,7 @@ function render() {
   for (const b of root.querySelectorAll('[data-person]')) {
     tiltable(b, { max: 4 })
     b.addEventListener('click', () => {
-      const all = PROJECTS.flatMap((p) => p.contacts)
-      const c = all.find((x) => x.name === b.dataset.person)
+      const c = byId(state.project).contacts.find((x) => x.name === b.dataset.person)
       if (c) openContact(c)
     })
   }

@@ -590,13 +590,55 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .swatch.on { border-color: var(--accent); box-shadow: var(--lift-2), inset 0 0 0 1px var(--accent); }
 .swatch b { font: 600 14px/1.2 var(--text); }
 .swatch .t-meta { font-size: 12px; }
-.chips3 { display: flex; width: 100%; height: 40px; border-radius: 7px; overflow: hidden;
-  box-shadow: var(--engrave); }
-.chips3 i { flex: 1; }
-.texpreview {
-  width: 100%; height: 40px; border-radius: 7px; box-shadow: var(--engrave);
-  background-color: var(--sunken); background-image: var(--tex, none);
+/*
+  Previews that show something.
+
+  Grant: *"your sample palettes and textures don't look like anything"*. Three
+  colour bars told you which hues a palette contains, which is not the question
+  — the question is what it is like to look at. So a palette preview is a
+  miniature of the real thing: the ground, a card sitting on it with its own
+  artwork and two lines of type, and the accent. And a texture preview is now
+  tall enough, on the palette's own ground, with the contrast pushed so a weave
+  is visible at 90px rather than theoretically present.
+*/
+.mini {
+  position: relative; display: block; width: 100%; height: 78px;
+  border-radius: 8px; overflow: hidden; box-shadow: var(--engrave);
+  background-color: var(--ground); background-image: var(--tex, none);
   background-size: var(--tex-size, auto);
+}
+.mini-card {
+  position: absolute; left: 8px; right: 8px; top: 9px; height: 48px;
+  border-radius: 5px; background: var(--surface); border: 1px solid var(--edge);
+  box-shadow: 0 1px 3px rgb(0 0 0 / .12); overflow: hidden;
+}
+.mini-art { position: absolute; left: 0; top: 0; bottom: 0; width: 42%;
+  background: linear-gradient(150deg,
+    color-mix(in srgb, var(--accent) 60%, #fff), var(--accent)); }
+.mini-l1 { position: absolute; left: 47%; right: 7px; top: 13px; height: 5px;
+  border-radius: 3px; background: var(--ink); opacity: .72; }
+.mini-l2 { position: absolute; left: 47%; right: 22%; top: 24px; height: 4px;
+  border-radius: 2px; background: var(--ink-3); opacity: .6; }
+.mini-btn { position: absolute; left: 8px; bottom: 8px; width: 34px; height: 11px;
+  border-radius: 999px; background: var(--accent);
+  box-shadow: 0 1px 4px -1px var(--accent); }
+
+.texpreview {
+  position: relative; width: 100%; height: 90px; border-radius: 8px;
+  overflow: hidden; box-shadow: var(--engrave);
+  background-color: var(--ground);
+}
+/* The texture on its own layer at raised contrast: at the opacity the page
+   uses it is invisible in a 90px box, and a preview you cannot see is worse
+   than no preview. */
+.texpreview i {
+  position: absolute; inset: 0; display: block;
+  background-image: var(--tex, none); background-size: var(--tex-size, auto);
+  filter: contrast(2.4) brightness(.94);
+}
+.texpreview::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgb(255 255 255 / .35), transparent 60%);
 }
 
 /* --- labels, and the fields you add ---------------------------------------
