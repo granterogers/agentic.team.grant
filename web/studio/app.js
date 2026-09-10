@@ -8,6 +8,7 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
+import { coverSvg } from './cover.js'
 import { SPRING, carry, pressable, spring } from './motion.js'
 
 const $ = (sel, root = document) => root.querySelector(sel)
@@ -107,6 +108,41 @@ function attention() {
   </div>`
 }
 
+/*
+  A project card.
+
+  `lead` is the first project: art at a real size beside the words rather than
+  above them, everything a step up the ramp. The difference is the composition
+  saying which project matters before anything is read.
+*/
+function card(p, lead) {
+  const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0
+  return `<button class="project ${p.hue} ${lead ? 'lead' : ''}" data-open="${p.slug}">
+    <span class="cover" style="view-transition-name:cover-${p.slug}">
+      ${coverSvg(p.slug, { dense: lead })}
+      <span class="chips">${p.connectors.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>
+    </span>
+    <span class="body">
+      <span>
+        <span class="${lead ? 't-title' : ''}" style="display:block;${
+          lead ? '' : 'font:600 16px/1.25 var(--text);'
+        }">${esc(p.name)}</span>
+        <span class="${lead ? 't-lead' : 't-meta'}" style="display:block;margin-top:${lead ? '8px' : '4px'}">${
+          esc(p.purpose)
+        }</span>
+      </span>
+      ${p.total > 0 ? `<span class="bar">
+        <span class="track"><span class="fill" style="width:${pct}%"></span></span>
+        <span class="t-meta" style="font-size:12px">${p.done}/${p.total}</span>
+      </span>` : ''}
+      <span class="facts t-meta" style="font-size:12.5px">
+        <span>${p.docs} ${p.docs === 1 ? 'doc' : 'docs'}</span>
+        ${p.next ? `<span style="color:var(--warn);font-weight:500">${esc(p.next)}</span>` : ''}
+      </span>
+    </span>
+  </button>`
+}
+
 function portfolio() {
   return `<main class="main">
     <div class="head">
@@ -119,26 +155,8 @@ function portfolio() {
     </div>
     ${attention()}
     <div class="portfolio">
-      ${PROJECTS.map((p) => `
-        <button class="project ${p.hue}" data-open="${p.slug}">
-          <span class="cover" style="view-transition-name:cover-${p.slug}">
-            <span class="chips">${p.connectors.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>
-          </span>
-          <span class="body">
-            <span>
-              <span class="t-title" style="display:block;font-size:20px">${esc(p.name)}</span>
-              <span class="t-meta" style="display:block;margin-top:4px">${esc(p.purpose)}</span>
-            </span>
-            ${p.total > 0 ? `<span class="bar">
-              <span class="track"><span class="fill" style="width:${Math.round(p.done / p.total * 100)}%"></span></span>
-              <span class="t-meta" style="font-size:12px">${p.done}/${p.total}</span>
-            </span>` : ''}
-            <span class="facts t-meta" style="font-size:12.5px">
-              <span>${p.docs} ${p.docs === 1 ? 'doc' : 'docs'}</span>
-              ${p.next ? `<span style="color:var(--warn);font-weight:500">${esc(p.next)}</span>` : ''}
-            </span>
-          </span>
-        </button>`).join('')}
+      ${card(PROJECTS[0], true)}
+      <div class="rest">${PROJECTS.slice(1).map((p) => card(p, false)).join('')}</div>
     </div>
   </main>`
 }
@@ -151,6 +169,7 @@ function dashboard() {
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
       Projects</button>
     <div class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
+      ${coverSvg(p.slug, { dense: true })}
       <span class="chips">${p.connectors.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>
     </div>
     <div class="head">

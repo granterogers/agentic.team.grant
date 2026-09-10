@@ -202,6 +202,10 @@ Each of these cost real time. They are here so they cost it once.
   to `/data_sources/:id/query`. Notion exposes **no teamspace** on any version.
 - **A document we wrote into a connector is not new material.** See
   `documents.mirrors_document_id` (0169).
+- **`backdrop-filter` breaks `position: fixed` inside it.** It establishes a
+  containing block, so a fixed child anchors to that element instead of the
+  viewport — a bottom navigation bar rendered across the top of the page.
+  `filter`, `transform`, `perspective` and `will-change` all do the same.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

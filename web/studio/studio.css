@@ -14,6 +14,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* --- the ramp. Six steps, wide gaps. ----------------------------------- */
 .t-display { font: 400 44px/1.02 var(--display); letter-spacing: -0.02em; }
+@media (max-width: 760px) { .t-display { font-size: 31px; line-height: 1.08; } }
 .t-title   { font: 400 27px/1.15 var(--display); letter-spacing: -0.015em; }
 .t-lead    { font: 400 17px/1.5 var(--text); color: var(--ink-2); max-width: 62ch; }
 .t-meta    { font: 400 13px/1.45 var(--text); color: var(--ink-2); }
@@ -29,10 +30,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: flex; flex-direction: column; gap: var(--s5);
   position: sticky; top: 0; height: 100vh;
 }
-@media (max-width: 860px) {
-  .rail { position: static; height: auto; border-right: 0;
-          border-bottom: 1px solid var(--edge); gap: var(--s4); }
-}
+
+/*
+  Mobile is composed, not compressed.
+
+  The first attempt let the rail stack above the content, so a phone showed the
+  wordmark, three full-width nav rows and eight team faces — a whole screen of
+  furniture — before a single project. §21 asks for mobile to be intentionally
+  designed and that was a desktop with the columns unstacked.
+
+  So on a phone the rail splits in two. The identity and the team compress into
+  one short header bar, and navigation moves to the bottom where a thumb
+  actually is. Three destinations, permanently visible, nothing scrolling
+  sideways — Grant's objection to the old dashboard was scrolling sideways to
+  find a page whose name you could not see.
+*/
 .wordmark { display: flex; align-items: center; gap: var(--s3); }
 .wordmark .glyph {
   width: 30px; height: 30px; border-radius: 9px; background: var(--accent);
@@ -82,26 +94,53 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
 
-/* --- portfolio ----------------------------------------------------------- */
-.portfolio { display: grid; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); gap: var(--s5); }
+/* --- portfolio ------------------------------------------------------------
+   An editorial spread, not a grid. Iteration 1 was a left sidebar plus a
+   uniform card grid — item one on the no-generic-AI-UI list — and three cards
+   of identical weight said nothing about which project mattered.
+
+   Here the first project is the lead: it spans the full measure, its artwork is
+   large, and everything about it is a size up. The rest sit beneath in a row
+   that is deliberately NOT the same shape. What the page says before you read a
+   word is: this one, then those. */
+.portfolio { display: grid; gap: var(--s5); }
+.rest { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s4); }
+
 .project {
   display: block; width: 100%; text-align: left; background: var(--surface);
   border: 1px solid var(--edge); border-radius: var(--r-card); overflow: hidden;
-  box-shadow: var(--lift-1); transition: box-shadow .18s, transform .18s;
+  box-shadow: var(--lift-1); transition: box-shadow .2s, transform .2s;
+  color: var(--hue);
 }
 .project:hover { box-shadow: var(--lift-2); transform: translateY(-2px); }
-.project .cover { height: 132px; position: relative; overflow: hidden;
-  background: var(--hue); display: flex; align-items: flex-end; padding: var(--s3); }
-.project .cover::after {
-  content: ''; position: absolute; inset: 0; opacity: .17;
-  background-image: radial-gradient(circle at 78% 24%, var(--ground) 0 1.5px, transparent 1.6px);
-  background-size: 15px 15px;
+.project .cover {
+  position: relative; overflow: hidden; background: var(--hue);
+  display: flex; align-items: flex-end; padding: var(--s3); height: 118px;
 }
-.project .body { padding: var(--s4); display: grid; gap: var(--s3); }
+.project .body { padding: var(--s4); display: grid; gap: var(--s3); color: var(--ink); }
+
+/* The lead. Art on the left at a real size, the words beside it — so it reads
+   as a spread rather than as a taller card. */
+.project.lead { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+@media (max-width: 760px) {
+  .project.lead { grid-template-columns: minmax(0, 1fr); }
+  /* Still the lead: its artwork stays taller than the others' so the hierarchy
+     survives the columns collapsing. */
+  .project.lead .cover { min-height: 178px; }
+  .project.lead .body { padding: var(--s4); }
+  .rest { grid-template-columns: minmax(0, 1fr); }
+}
+.project.lead .cover { height: 100%; min-height: 236px; }
+.project.lead .body { padding: var(--s5); align-content: center; gap: var(--s4); }
+
+/* The artwork itself. `currentColor` is the project hue, set on .project. */
+.art { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  color: color-mix(in srgb, var(--ground) 82%, transparent); }
+.cover > .chips { position: relative; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; position: relative; }
 .chip { background: color-mix(in srgb, var(--ground) 92%, transparent); color: var(--ink);
-  border-radius: 5px; padding: 3px 7px; font: 600 11px/1 var(--text);
-  letter-spacing: .06em; text-transform: uppercase; }
+  border-radius: 5px; padding: 4px 8px; font: 600 11px/1 var(--text);
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 .bar { display: flex; align-items: center; gap: var(--s2); }
 .bar .track { flex: 1; height: 5px; border-radius: 3px; background: var(--sunken); overflow: hidden; }
 .bar .fill { height: 100%; border-radius: 3px; background: var(--hue); }
@@ -148,9 +187,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .hero { height: 176px; border-radius: var(--r-sheet); background: var(--hue);
   position: relative; overflow: hidden; display: flex; align-items: flex-end;
   padding: var(--s4); margin-bottom: var(--s5); }
-.hero::after { content: ''; position: absolute; inset: 0; opacity: .17;
-  background-image: radial-gradient(circle at 82% 22%, var(--ground) 0 1.5px, transparent 1.6px);
-  background-size: 16px 16px; }
+.hero { color: var(--hue); }
+.hero > .chips { position: relative; }
 
 /* --- the document viewer -------------------------------------------------- */
 .viewer { position: fixed; inset: 0; z-index: 40; display: grid;
@@ -172,4 +210,57 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .project:hover, .doc:hover .page { transform: none; }
   .face.busy::after { animation: none; opacity: .55; }
+}
+
+
+/* ---------------------------------------------------------------------
+   Mobile overrides live at the END of this file, deliberately.
+
+   A media query adds NO specificity. This block used to sit above the base
+   `.navgroup` rule, so `flex-direction: column` from the base won and the
+   bottom navigation stacked into three full-width rows instead of sitting
+   as a bar. It looked like the media query was not matching; it was
+   matching and losing. Base rules first, overrides last.
+   ------------------------------------------------------------------- */
+@media (max-width: 860px) {
+  .shell { padding-bottom: 76px; }
+  /* Stacked: the sentence gets the full width and the action sits under it,
+     rather than the two fighting over a 390px row. */
+  .attention { flex-wrap: wrap; align-items: flex-start; }
+  .attention > span { flex: 1 1 100%; }
+  .attention .btn { width: 100%; justify-content: center; }
+  .rail {
+    position: sticky; top: 0; z-index: 10; height: auto;
+    border-right: 0; border-bottom: 1px solid var(--edge);
+    flex-direction: row; align-items: center; justify-content: space-between;
+    gap: var(--s3); padding: var(--s3) var(--s4);
+    /*
+      A SOLID background, not a backdrop-filter.
+
+      `backdrop-filter` establishes a containing block for fixed-position
+      descendants, so the bottom navigation inside this element anchored itself
+      to the rail rather than to the viewport and rendered across the top of the
+      page. `filter`, `transform`, `perspective` and `will-change` all do the
+      same thing. The blur is worth nothing here; the working navigation is
+      worth everything.
+    */
+    background: var(--ground);
+  }
+  .rail .t-label { display: none; }
+  .wordmark .glyph { width: 26px; height: 26px; border-radius: 8px; }
+  .crew { margin: 0; flex-wrap: nowrap; gap: 0; }
+  /* Overlapped, so eight faces cost the width of four. */
+  .crew .face { width: 24px; height: 24px; font-size: 10px;
+                margin-left: -7px; border: 1.5px solid var(--ground); }
+  .crew .face:first-child { margin-left: 0; }
+
+  .navgroup {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    flex-direction: row; gap: 0;
+    background: color-mix(in srgb, var(--ground) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-top: 1px solid var(--edge);
+    padding: var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom));
+  }
+  .navitem { justify-content: center; flex: 1; min-height: 48px; border-radius: 10px; }
 }

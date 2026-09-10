@@ -67,10 +67,19 @@
   }
 }
 
-/* Project hues: fixed L and C, hue varying, so none dominates the others. */
-.p-rust  { --hue: oklch(0.62 0.13 25);  }
-.p-amber { --hue: oklch(0.62 0.13 85);  }
-.p-moss  { --hue: oklch(0.62 0.13 145); }
-.p-slate { --hue: oklch(0.62 0.13 205); }
-.p-iris  { --hue: oklch(0.62 0.13 285); }
-.p-plum  { --hue: oklch(0.62 0.13 340); }
+/*
+  Project hues: one L, one C, hue varying — so no project shouts louder than
+  another and the set reads as a family.
+
+  Hue 205 was in the first draft and had to go: at this chroma it renders as a
+  bright teal that fights the moss green two cards away. 248 is a slate blue,
+  which is what the direction actually asked for. Spacing the remaining five
+  evenly around it keeps them distinguishable at thumbnail size, which is the
+  only size that matters for a cover.
+*/
+.p-rust  { --hue: oklch(0.62 0.13 30);  }
+.p-amber { --hue: oklch(0.62 0.13 80);  }
+.p-moss  { --hue: oklch(0.62 0.13 148); }
+.p-slate { --hue: oklch(0.62 0.13 248); }
+.p-iris  { --hue: oklch(0.62 0.13 295); }
+.p-plum  { --hue: oklch(0.62 0.13 345); }
