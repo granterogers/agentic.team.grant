@@ -212,6 +212,59 @@ const taskRow = (t, i) => {
 
 // --- views -------------------------------------------------------------------
 
+
+/*
+  The office, in one line (#40 idea 2).
+
+  Grant asked for the whole product to feel like one thing. The clearest reason
+  it did not was that the portfolio, a project and Settings each showed a
+  different amount of life — Settings showed none at all, which is why it read
+  as a separate application no matter how it was styled.
+
+  So: a hairline strip carrying what the office is doing right now, on every
+  screen. Three facts and no more, because a ribbon that grows into a dashboard
+  is a dashboard nobody asked for:
+
+    what is running    the pulse. Zero is a real state and says so.
+    what is stuck      the only thing here that is ever urgent.
+    what it costs      the £0 constraint, live, because the bad way to find
+                       the edge of a free tier is an invoice.
+
+  It is ambient. Nothing in it blinks for attention unless something is
+  actually blocked, in which case it is the one thing that does.
+*/
+function ribbon() {
+  const running = PROJECTS.flatMap((p) => workspace.rows(p))
+    .filter((r) => r.state === 'working' && r.blocked === undefined).length
+  // Carry the project with each row, so "3 blocked" can take you to one.
+  const stuck = PROJECTS.flatMap((p) => workspace.rows(p).map((r) => ({ ...r, slug: p.slug })))
+    .filter((r) => r.blocked !== undefined)
+  const waiting = PROJECTS.reduce((n, p) => n + workspace.split(p).waiting.length, 0)
+  const busy = CREW.filter((c) => c.state === 'busy')
+
+  return `<div class="ribbon ${stuck.length > 0 ? 'alert' : ''}">
+    <span class="rb">
+      <span class="pulse ${running > 0 ? 'live' : ''}"></span>
+      <span class="t-label">${
+        running === 0 ? 'Nothing running' : `${running} running`
+      }</span>
+    </span>
+    ${busy.length === 0 ? '' : `<span class="rb faces">${busy.map((c) => face(c, 20)).join('')}</span>`}
+    ${waiting === 0 ? '' : `<span class="rb"><span class="t-label warn">${waiting} waiting on you</span></span>`}
+    ${stuck.length === 0 ? '' : `<button class="rb stuck" data-open="${esc(stuck[0].slug)}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+      <span class="t-label">${stuck.length} blocked</span>
+    </button>`}
+    <span class="rb right">
+      <span class="t-label">${esc(config.SPEND.month)} this month</span>
+      <span class="t-meta">of ${esc(config.SPEND.target)}</span>
+    </span>
+  </div>`
+}
+
+
 function rail() {
   return `<aside class="rail">
     <!--
@@ -993,8 +1046,19 @@ function dashboard() {
   const chrome = (spec) => {
     const kind = panels.KINDS.find((k) => k.id === spec.id)
     if (!kind) return ''
+    /*
+      `view-transition-name` pairs this panel with the full section of the same
+      subject (#40 idea 6). Pressing Documents on Overview makes the Documents
+      PANEL grow into the Documents SECTION rather than the page swapping —
+      Grant's *"the item you touched is the item you land in"*, applied across
+      the tab boundary where it was not applied before.
+
+      The name has to be unique per document, which is why only the panels get
+      it and the section claims the same name on the other side of the switch.
+    */
     return `<section class="panel" data-panel="${spec.id}"
-             style="left:calc((100% - 40px)/3 * ${spec.x} + ${spec.x} * 20px);
+             style="view-transition-name:sec-${spec.id};
+                    left:calc((100% - 40px)/3 * ${spec.x} + ${spec.x} * 20px);
                     top:${spec.y}px;
                     width:calc((100% - 40px)/3 * ${spec.w} + ${(spec.w - 1) * 20}px);
                     height:${spec.h}px">
@@ -1077,13 +1141,20 @@ function dashboard() {
     </div>
     ${teamBody}`
 
+  /*
+    The section body claims the panel's transition name, so the browser pairs
+    them and animates one into the other. `sec-documents` is a panel on
+    Overview and the whole gallery in Documents; the browser does the rest.
+  */
+  const named = (id, html) => `<div style="view-transition-name:sec-${id}">${html}</div>`
+
   const body =
     state.tab === 'team' ? team
-    : state.tab === 'documents' ? documentsSection(p)
-    : state.tab === 'tasks' ? tasksSection(p)
-    : state.tab === 'contacts' ? peopleTab(p)
-    : state.tab === 'sources' ? sources(p)
-    : state.tab === 'activity' ? activitySection(p)
+    : state.tab === 'documents' ? named('documents', documentsSection(p))
+    : state.tab === 'tasks' ? named('tasks', tasksSection(p))
+    : state.tab === 'contacts' ? named('contacts', peopleTab(p))
+    : state.tab === 'sources' ? named('links', sources(p))
+    : state.tab === 'activity' ? named('activity', activitySection(p))
     : board
 
   return `<main class="main">
@@ -1526,7 +1597,7 @@ const railShut = () => {
 function render() {
   const root = $('#root')
   root.classList.toggle('shut', railShut())
-  root.innerHTML = rail() + (
+  root.innerHTML = ribbon() + rail() + (
     state.view === 'project' ? dashboard()
     : state.view === 'desk' ? desk()
     : portfolio())
@@ -1721,13 +1792,23 @@ function render() {
     function would be lost on the next paint and silently stop working, which is
     exactly how the deleted `everyone()` bug hid for two commits.
   */
+  /*
+    Section switching is a transition, not a swap (#40 idea 6).
+
+    `carry` with no element still starts a view transition, so every element
+    carrying a `view-transition-name` on both sides is animated between its two
+    positions — the Documents panel on Overview becomes the Documents gallery.
+    Anything unnamed cross-fades, which is the right default for the rest.
+  */
   for (const b of root.querySelectorAll('[data-tab]')) {
     b.addEventListener('click', () => {
-      state.tab = b.dataset.tab
-      // "Talk to the team" is one press: it selects AI Team AND its Chat view.
-      if (b.dataset.sub !== undefined) state.sub = b.dataset.sub
-      rememberTab(state.project, state.tab)
-      render()
+      carry(null, null, () => {
+        state.tab = b.dataset.tab
+        // "Talk to the team" is one press: AI Team AND its Chat view.
+        if (b.dataset.sub !== undefined) state.sub = b.dataset.sub
+        rememberTab(state.project, state.tab)
+        render()
+      })
     })
   }
 
@@ -1735,10 +1816,12 @@ function render() {
   // empty states can send you to the chat from anywhere.
   for (const b of root.querySelectorAll('[data-sub]:not([data-tab])')) {
     b.addEventListener('click', () => {
-      state.sub = b.dataset.sub
-      state.tab = 'team'
-      rememberTab(state.project, 'team')
-      render()
+      carry(null, null, () => {
+        state.sub = b.dataset.sub
+        state.tab = 'team'
+        rememberTab(state.project, 'team')
+        render()
+      })
     })
   }
 

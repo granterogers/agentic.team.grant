@@ -1729,3 +1729,104 @@ body::after {
   font: 620 17px/1 var(--display); font-stretch: 104%;
   font-variant-numeric: tabular-nums; flex: none;
 }
+
+/* --- section transitions (#40 idea 6) ---------------------------------------
+   The View Transitions API pairs elements by `view-transition-name` and
+   animates between their two positions. A panel on Overview and the full
+   section of the same subject share a name, so pressing Documents makes that
+   panel GROW into the gallery rather than the page swapping under you.
+
+   The default cross-fade is 250ms of linear ease, which reads as a slideshow.
+   These durations and curves match `SPRING.move` (288ms, measured) so a
+   section change feels like the same physics as everything else. */
+::view-transition-group(*) {
+  animation-duration: .34s;
+  animation-timing-function: cubic-bezier(.2, .8, .25, 1);
+}
+::view-transition-old(root) { animation-duration: .18s; }
+::view-transition-new(root) { animation-duration: .28s; }
+/* A paired element should not cross-fade WHILE it moves — the fade reads as
+   the thing blinking out and a different thing arriving, which is exactly the
+   impression the pairing exists to avoid. */
+::view-transition-old(root),
+::view-transition-new(root) { mix-blend-mode: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+}
+
+/* --- the office ribbon (#40 idea 2) -----------------------------------------
+   One line across the top of every screen, Settings included. It is the reason
+   Settings stops feeling like a separate application: the same pulse is there.
+
+   It spans both grid columns rather than sitting inside the main area, because
+   the rail is part of the office too and a status line that stops at the rail's
+   edge reads as belonging to the page rather than to the product. */
+
+.shell { grid-template-rows: auto minmax(0, 1fr); }
+.ribbon {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: var(--s4);
+  padding: 7px var(--s4); min-height: 34px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--glass-1);
+  backdrop-filter: var(--blur-1);
+  -webkit-backdrop-filter: var(--blur-1);
+  /*
+    Sticky, because a status line that scrolls away is a status line you check
+    by scrolling up — which is not ambient, it is a chore.
+
+    Sticky is safe here where fixed would not be: `backdrop-filter` establishes
+    a containing block, so a `position: fixed` DESCENDANT would anchor to this
+    strip instead of the viewport. This file has paid for forgetting that once,
+    when the bottom navigation rendered across the top of the page. The ribbon
+    has no fixed children, and sticky positions against the scroll container
+    rather than creating one.
+  */
+  position: sticky; top: 0; z-index: 30;
+  overflow-x: auto; scrollbar-width: none;
+}
+.ribbon::-webkit-scrollbar { display: none; }
+.rb { display: flex; align-items: center; gap: 7px; flex: none; }
+.rb.right { margin-left: auto; gap: 6px; }
+.rb .t-label { color: var(--ink-2); }
+.rb .t-label.warn { color: var(--warn); }
+.rb.faces .face { margin-left: -6px; }
+.rb.faces .face:first-child { margin-left: 0; }
+
+/* The pulse. Slow, small, and off entirely when nothing is running — a heartbeat
+   that beats when the patient is dead is decoration. */
+.pulse {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--ink-3);
+}
+.pulse.live {
+  background: var(--good);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent);
+  animation: pulsering 2.6s cubic-bezier(.2,.7,.3,1) infinite;
+}
+@keyframes pulsering {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px color-mix(in srgb, var(--good) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse.live { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+}
+
+/* Blocked is the only thing in here that is ever urgent, so it is the only
+   thing that is a button and the only thing that carries colour. */
+.ribbon .stuck {
+  display: flex; align-items: center; gap: 6px; flex: none;
+  padding: 4px 10px; border-radius: 999px; min-height: 26px;
+  color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 26%, transparent);
+  transition: background .16s, box-shadow .16s;
+}
+.ribbon .stuck:hover {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  box-shadow: 0 0 16px -4px color-mix(in srgb, var(--warn) 60%, transparent);
+}
+.ribbon .stuck .t-label { color: inherit; }
