@@ -16,6 +16,7 @@
     "check:secrets": "python3 scripts/secret-scan.py",
     "verify": "npm run lint && npm run typecheck && npm run check:migrations && npm run test && npm run check:secrets",
     "migrate": "tsx scripts/migrate.ts",
+    "notify": "tsx scripts/notify.ts",
     "notion:import": "tsx scripts/notion/import.ts",
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",
