@@ -18,6 +18,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "notify": "tsx scripts/notify.ts",
     "step": "tsx scripts/step.ts",
+    "shots": "tsx scripts/verify/studio.ts",
     "notion:import": "tsx scripts/notion/import.ts",
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",

@@ -156,11 +156,24 @@ read as paper instead of as an image in a box.
 
 Springs, not durations. Three tokens, and everything uses one of them.
 
-| Token | Spring | Use |
-|---|---|---|
-| `--spring-snap` | stiffness 520, damping 34 | press, toggle, check — under 150ms felt |
-| `--spring-move` | stiffness 260, damping 28 | layout shifts, reorder, drawer |
-| `--spring-carry` | stiffness 180, damping 26 | shared-element transitions |
+| Token | Spring | Measured | Use |
+|---|---|---|---|
+| `snap` | k 1100, c 54 (ζ 0.81) | **146ms**, no overshoot | press, toggle, check |
+| `move` | k 460, c 38 (ζ 0.89) | **288ms**, no overshoot | layout, reorder, drawer |
+| `carry` | k 320, c 24 (ζ 0.67) | **396ms**, 5.1% overshoot | shared elements |
+
+> These were grid-searched against target settle times and checked against the
+> closed-form overshoot for each damping ratio — not chosen because they looked
+> plausible. The first set was wrong three ways and every fault was found by
+> sampling the output rather than by reading the code: the first keyframe was
+> 7% of the way to target (a visible jump on every animation), the settle test
+> compared a per-second velocity against a per-frame threshold (so every spring
+> ran to near-zero velocity), and integrating at 60Hz bled the bounce away
+> numerically (0% overshoot where theory says 3.4%).
+>
+> `carry` is deliberately the loose one — a shared element that settles back a
+> few percent reads as an object with mass. `snap` is deliberately tight: a
+> checkbox that bounces looks broken.
 
 Rules:
 - **Interruptible.** A second gesture mid-animation retargets; it never queues.

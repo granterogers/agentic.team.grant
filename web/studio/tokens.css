@@ -1,0 +1,76 @@
+/*
+  The design tokens from docs/design/direction.md, and nothing else.
+
+  Separate file on purpose: this is the specification made executable, and it
+  should be readable on its own. If a value here disagrees with direction.md,
+  direction.md is wrong or this is — they are never both right.
+*/
+
+:root {
+  /* --- Paper (light) ------------------------------------------------------
+     Warm, low chroma, so the only saturated thing on screen is a document
+     cover or a project's artwork. */
+  --ground:  #FAF8F4;
+  --surface: #FFFFFF;
+  --sunken:  #F2EFE9;
+  --ink:     #191813;
+  --ink-2:   #6B675C;
+  --ink-3:   #9C9789;
+  --edge:    #E6E1D7;
+  --accent:  #1F5F4B;
+  --accent-wash: rgb(31 95 75 / 0.08);
+  --on-accent: #FAF8F4;
+
+  --good: #2F7355;  --warn: #A2620A;  --bad: #A8342C;
+
+  /* Depth: one hairline and one soft shadow. Never a stack. */
+  --lift-1: 0 1px 2px rgb(25 24 19 / .05);
+  --lift-2: 0 2px 4px rgb(25 24 19 / .05), 0 8px 24px -12px rgb(25 24 19 / .18);
+  --lift-3: 0 8px 16px rgb(25 24 19 / .09), 0 32px 64px -24px rgb(25 24 19 / .28);
+  --paper-edge: inset 0 1px 0 rgb(255 255 255 / .9);
+
+  /* Space: deliberately non-linear. Equal steps are what make a layout read
+     as generated. */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 20px;
+  --s5: 32px; --s6: 52px; --s7: 84px;
+
+  --r-control: 6px; --r-card: 10px; --r-sheet: 14px;
+
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --text: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* --- Studio (dark) — a WARM dark. Blue-black is the single most common
+       tell of a template. */
+    --ground:  #14140F;
+    --surface: #1D1D17;
+    /* Sunken is DARKER than ground, not lighter: a well is a hole. */
+    --sunken:  #100F0B;
+    --ink:     #F0EDE4;
+    --ink-2:   #A5A091;
+    --ink-3:   #726D5F;
+    --edge:    #2C2B23;
+    --accent:  #5FBF96;
+    --accent-wash: rgb(95 191 150 / 0.14);
+    --on-accent: #0F1A15;
+
+    --good: #4BBD8C;  --warn: #E0A45C;  --bad: #F0796E;
+
+    --lift-1: 0 1px 2px rgb(0 0 0 / .4);
+    --lift-2: 0 2px 4px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .7);
+    --lift-3: 0 8px 16px rgb(0 0 0 / .5), 0 32px 64px -24px rgb(0 0 0 / .8);
+    --paper-edge: inset 0 1px 0 rgb(255 255 255 / .06);
+  }
+}
+
+/* Project hues: fixed L and C, hue varying, so none dominates the others. */
+.p-rust  { --hue: oklch(0.62 0.13 25);  }
+.p-amber { --hue: oklch(0.62 0.13 85);  }
+.p-moss  { --hue: oklch(0.62 0.13 145); }
+.p-slate { --hue: oklch(0.62 0.13 205); }
+.p-iris  { --hue: oklch(0.62 0.13 285); }
+.p-plum  { --hue: oklch(0.62 0.13 340); }
