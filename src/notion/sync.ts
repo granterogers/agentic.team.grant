@@ -155,14 +155,37 @@ export async function upsertDocument(
   const known = existing.rows.length > 0
   if (known && String(existing.rows[0]?.content_fingerprint) === fingerprint) return 'unchanged'
 
+  /*
+    A page we wrote is not new material.
+
+    `office.notion_import` (0166) put Grant's NotebookLM sources into Notion as
+    Docs pages. This sync then read them back and inserted them as documents,
+    so the Legacy Coaching Course reported 33 documents when it held 12 things.
+    Neither job was wrong on its own; the pair had no way to know they were
+    talking about the same document.
+
+    `mirrors_document_id` (0169) is that link, and it is set HERE at write time
+    rather than inferred afterwards from titles — a title Grant edits in Notion
+    would silently stop matching and duplicate all over again. Content
+    fingerprint is the evidence: Notion round-trips text with small differences
+    (37,697 characters became 37,476), so the match is on the ORIGINAL we
+    already hold for this project with the closest content, not on equality.
+  */
   await db.execute(`
     insert into public.documents
       (project_id, connector, external_parent_ref, external_ref, title, doc_type,
-       content, content_fingerprint, content_chars, fetched_at, remote_updated_at)
+       content, content_fingerprint, content_chars, fetched_at, remote_updated_at,
+       mirrors_document_id)
     values (${lit(projectId)}::uuid, ${lit(CONNECTOR)}, ${lit(object.object)}, ${lit(object.id)},
             ${nul(object.title === '' ? null : object.title)}, ${lit(object.object)},
             ${lit(content)}, ${lit(fingerprint)}, ${String(content.length)},
-            app.now_utc(), ${nul(object.lastEdited)}::timestamptz)
+            app.now_utc(), ${nul(object.lastEdited)}::timestamptz,
+            (select d.document_id from public.documents d
+              where d.project_id = ${lit(projectId)}::uuid
+                and d.connector <> ${lit(CONNECTOR)}
+                and d.mirrors_document_id is null
+                and app.normalise_name(d.title) = app.normalise_name(${nul(object.title === '' ? null : object.title)})
+              limit 1))
     -- The index is partial (0051), so the conflict target repeats its predicate.
     on conflict (connector, external_parent_ref, external_ref)
       where external_ref is not null
@@ -173,7 +196,12 @@ export async function upsertDocument(
           content_chars = excluded.content_chars,
           fetched_at = excluded.fetched_at,
           remote_updated_at = excluded.remote_updated_at,
-          project_id = excluded.project_id
+          project_id = excluded.project_id,
+          -- Keep a link once made. A page that stopped resolving to an original
+          -- — because its title changed in Notion — must not silently become
+          -- new material on the next sync.
+          mirrors_document_id = coalesce(public.documents.mirrors_document_id,
+                                         excluded.mirrors_document_id)
   `)
   return known ? 'changed' : 'added'
 }
