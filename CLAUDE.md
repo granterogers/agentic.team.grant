@@ -19,8 +19,8 @@ Telegram, Slack, a voice call and a web dashboard.
 | [GitHub Issues](https://github.com/granterogers/agentic.team.grant/issues) | **all actionable work.** Milestones M0 → v1.0 |
 | `docs/HANDOFF.md` | current state, summarised |
 | `docs/integration-assessment-2026-09-10.md` | what exists, what is missing, what was decided |
-| `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements |
-| `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ target IA — projects, assets, the team's in-tray |
+| `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements — **v3, Autonomy** |
+| `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ canonical project IA — hierarchy, assets, the relational graph |
 | `AI_TEAM_HQ_MASTER_SPEC.md` | ⭐ canonical system requirements |
 | `docs/adr/` | why each material decision was made |
 | `docs/architecture.md` | vendor bindings |
@@ -37,11 +37,23 @@ Grant, 10 September 2026, restating it:
 That covers **requests he makes in chat**, not only defects you find. A feature
 he asks for gets an Issue at the moment he asks for it, before you start
 building it — because the risk is not that you forget it this hour, it is that
-the conversation is compacted and it is gone. This has already happened once:
-his *PROJECT DASHBOARD — INFORMATION ARCHITECTURE & UX* specification arrived
-mid-turn, was compacted before it reached the transcript on disk, and the
-verbatim text is **not recoverable**. See the provenance note in
-`docs/spec/project-dashboard-ia-2026-09-10.md`.
+the conversation is compacted and it is gone.
+
+This has already happened. His *PROJECT DASHBOARD — INFORMATION ARCHITECTURE &
+UX* specification arrived mid-turn, was compacted before it reached the
+transcript on disk, and was unrecoverable. A reconstruction stood in for it, a
+day of frontend work was built against the reconstruction, and roughly half of
+that work was specifically wrong — the tab names, the chat's addressing, the
+import step. Grant re-sent the original and both specs are now verbatim.
+
+**Two rules follow, and they are cheap:**
+
+1. Persist a requirements document the moment it arrives, before doing anything
+   with it. A file write costs seconds; rebuilding against a paraphrase costs a
+   day.
+2. **Never condense a requirements document.** The frontend prompt was stored as
+   a tidied summary and read as canonical for a week. Convert the markup, keep
+   every word. If you are writing "the gist is", stop.
 
 ---
 
