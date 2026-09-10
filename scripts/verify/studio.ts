@@ -132,7 +132,7 @@ for (const [size, opts] of SIZES) {
       the next one there. Board is what the "project" capture is of, so say so
       rather than depending on whatever the last run happened to leave behind.
     */
-    await page.locator('[role="tab"][data-tab="board"]').click()
+    await page.locator('[role="tab"][data-tab="overview"]').click()
     await page.waitForTimeout(500)
     await shoot('project')
 
@@ -161,7 +161,7 @@ for (const [size, opts] of SIZES) {
     if (size === 'desktop') {
       await page.locator('[data-people]').first().click()
       await page.waitForTimeout(500)
-      await shoot('people')
+      await shoot('contacts-section')
       await page.locator('[data-rail]').click()
       await page.waitForTimeout(600)
       await shoot('rail-collapsed')
@@ -180,9 +180,17 @@ for (const [size, opts] of SIZES) {
     */
     await page.locator('[role="tab"][data-tab="team"]').click()
     await page.waitForTimeout(600)
+    await shoot('team-board')
+
+    await page.locator('[role="tab"][data-sub="jobs"]').click()
+    await page.waitForTimeout(500)
+    await shoot('active-jobs')
+
+    await page.locator('[role="tab"][data-sub="outputs"]').click()
+    await page.waitForTimeout(500)
     await shoot('team')
 
-    await page.locator('[role="tab"][data-tab="chat"]').click()
+    await page.locator('[role="tab"][data-sub="chat"]').click()
     await page.waitForTimeout(500)
     await shoot('chat-empty')
 
@@ -199,8 +207,9 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('chat')
 
-    await page.locator('[role="tab"][data-tab="board"]').click()
+    await page.locator('[role="tab"][data-tab="documents"]').click()
     await page.waitForTimeout(500)
+    await shoot('documents')
     // The talk action on a document, and where it lands.
     await page.locator('[data-doc="0"]').scrollIntoViewIfNeeded()
     await page.waitForTimeout(200)
@@ -208,18 +217,17 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('talk-about-a-document')
 
-    await page.locator('[role="tab"][data-tab="board"]').click()
+    await page.locator('[role="tab"][data-tab="overview"]').click()
     await page.waitForTimeout(500)
 
-    // Contacts, which sit below the fold in the right-hand column.
-    if (size === 'desktop') {
-      const contacts = page.locator('.contacts')
-      if ((await contacts.count()) > 0) {
-        await contacts.scrollIntoViewIfNeeded()
-        await page.waitForTimeout(300)
-        await shoot('contacts')
-      }
+    for (const section of ['tasks', 'contacts', 'sources', 'activity']) {
+      await page.locator(`[role="tab"][data-tab="${section}"]`).click()
+      await page.waitForTimeout(500)
+      await shoot(section)
     }
+
+    await page.locator('[role="tab"][data-tab="documents"]').click()
+    await page.waitForTimeout(500)
 
     // And a document, which is the second one.
     await page.locator('[data-doc="0"]').scrollIntoViewIfNeeded()

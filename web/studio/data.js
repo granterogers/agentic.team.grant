@@ -62,7 +62,9 @@ export const PROJECTS = [
       { title: 'Conduct first five interviews', due: 'Due 16 September', who: 'claire', state: 'due' },
       { title: 'Prepare interview questions', note: 'Coaching Interview Execution', who: 'emma' },
       { title: 'List 20 real and prospective clients', note: 'Client Vision & Journey Mapping', who: 'emma' },
-      { title: 'Map client answers to the three layers', note: 'Wellness Impact Analysis', who: 'oliver' },
+      { title: 'Map client answers to the three layers', note: 'Wellness Impact Analysis', who: 'oliver',
+        blocked: 'Waiting on the first five interviews' },
+      { title: 'Draft the avatar document', note: 'Ideal Client Avatar', who: 'emma', state: 'doing' },
       { title: 'Complete the Success Identity Quiz', state: 'done' },
       { title: 'Review the Zoom Call interview notes', state: 'done' },
     ],
@@ -118,6 +120,26 @@ export const PROJECTS = [
       },
     ],
     /*
+      What this project points at.
+
+      Two kinds. A CONNECTOR is authenticated and syncs, so it has health and a
+      last-read time and can fail. A REFERENCE is a pointer — it can be right or
+      stale, never broken. The specification lists websites, APIs and external
+      applications alongside NotebookLM and Drive, and none of those are
+      connectors.
+    */
+    sources: [
+      { kind: 'connector', name: 'Notion', what: 'Six module pages, written by the office',
+        health: 'ok', last: '2 days ago', gave: 6 },
+      { kind: 'connector', name: 'NotebookLM', what: 'The interview corpus',
+        health: 'ok', last: '4 hours ago', gave: 12 },
+      { kind: 'reference', name: 'Journey vs Destination (published)', what: 'The piece Priya came through',
+        last: 'Added 3 weeks ago', gave: 0 },
+      { kind: 'reference', name: 'Zoom cloud recordings', what: 'Interview recordings, not yet pulled in',
+        last: 'Added 1 week ago', gave: 0 },
+    ],
+
+    /*
       What the team was asked, and what came back.
 
       Grant: *"a dedciate dashboard per project as its own tab where the teams
@@ -142,6 +164,16 @@ export const PROJECTS = [
         state: 'review', delivered: '2 hours ago',
         output: { title: 'WS02 client list — 22 names', kind: 'doc', size: '2 pages', lines: [90, 74, 96, 60] },
         derived: ['WS02 — Creating Client Vision'],
+      },
+      {
+        id: 'r5', ask: 'Put the six modules into the Wellness Notion space',
+        from: 'Grant · voice', who: 'marcus', asked: '2 days ago',
+        context: null, state: 'working',
+        // The state the first version could not express. A job stopped on a
+        // missing permission read as "in hand", which is the opposite of true.
+        blocked: 'Wellness Notion databases have not been shared with the integration',
+        unblock: 'Ask Marcus what to share',
+        delivered: '', output: null, derived: [],
       },
       {
         id: 'r3', ask: 'Draft the five interview questions for Marcus',
@@ -178,6 +210,12 @@ export const PROJECTS = [
     ],
     contacts: [],
     tasks: [{ title: 'Read the agent-orchestration papers', who: 'tom' }],
+    sources: [
+      { kind: 'connector', name: 'NotebookLM', what: 'Reading list and notes',
+        health: 'ok', last: '1 day ago', gave: 1 },
+      { kind: 'reference', name: 'arXiv — agent orchestration', what: 'Search this weekly',
+        last: 'Added 2 days ago', gave: 0 },
+    ],
     requests: [
       { id: 'r1', ask: 'Compare Monday.com agents against building our own',
         from: 'Grant · voice', who: 'emma', asked: '6 hours ago',
@@ -192,7 +230,12 @@ export const PROJECTS = [
     hue: 'p-amber',
     connectors: [],
     done: 0, total: 0, docs: 0,
-    modules: [], documents: [], tasks: [], activity: [], contacts: [], requests: [],
+    modules: [], documents: [], tasks: [], activity: [], contacts: [],
+    sources: [
+      { kind: 'connector', name: 'Notion', what: 'Nothing can be written until its databases are shared',
+        health: 'blocked', problem: 'Not shared with the integration', last: 'never', gave: 0 },
+    ],
+    requests: [],
   },
 ]
 

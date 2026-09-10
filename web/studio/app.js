@@ -26,24 +26,60 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
 
 const state = {
   view: 'portfolio', project: null, done: new Set(), label: null,
-  // The project's tabs (#30). Board is the default because the arrangeable
-  // dashboard is the thing he asked for and the thing he will look at most.
-  tab: 'board',
+  // The project's sections (#30). Overview is the default: the specification
+  // opens on Current Focus and Project Status, not on a file list.
+  tab: 'overview',
+  // Which of AI Team's four you are looking at.
+  sub: 'board',
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
 }
 
-const TABS = [
-  { id: 'board', name: 'Board' },
-  { id: 'team', name: 'Team' },
-  { id: 'chat', name: 'Chat' },
-  { id: 'people', name: 'People' },
+/*
+  The sections of a project, from the verbatim specification.
+
+  `docs/spec/project-dashboard-ia-2026-09-10.md` — Grant's own left-hand
+  navigation: Overview · AI Team · Documents · Tasks · Contacts · Sources ·
+  Activity, with Project Settings top-right.
+
+  The first version of this was Board · Team · Chat · People, built against a
+  reconstruction of that document while the original was unrecoverable. It was
+  wrong in a way worth naming: it made Chat a peer of Documents. The hierarchy
+  is the claim that *"the Agentic Team is a first-class part of each Project
+  rather than a separate application"*, and a chat tab sitting beside a
+  documents tab says the opposite — that it is a messaging feature bolted on.
+  So Chat moves inside AI Team, where he put it.
+*/
+const SECTIONS = [
+  { id: 'overview', name: 'Overview' },
+  { id: 'team', name: 'AI Team' },
+  { id: 'documents', name: 'Documents' },
+  { id: 'tasks', name: 'Tasks' },
+  { id: 'contacts', name: 'Contacts' },
+  { id: 'sources', name: 'Sources' },
+  { id: 'activity', name: 'Activity' },
 ]
 
-/** Remembered per project, because the tab you left is the tab you meant. */
+/*
+  AI Team's own four, also his:
+
+      ├── Team Board      who is on this project
+      ├── Team Chat       ask one / selected / everyone
+      ├── Active Jobs     running · waiting-blocked · completed
+      └── Agent Outputs   reports · research · plans · files → IMPORT
+
+  Two levels, never three — *"minimal navigation depth"*.
+*/
+const TEAM_VIEWS = [
+  { id: 'board', name: 'Team board' },
+  { id: 'chat', name: 'Chat' },
+  { id: 'jobs', name: 'Active jobs' },
+  { id: 'outputs', name: 'Outputs' },
+]
+
 const tabFor = (slug) => {
-  try { return JSON.parse(localStorage.getItem('studio.tab') ?? '{}')[slug] ?? 'board' }
-  catch { return 'board' }
+  try { return JSON.parse(localStorage.getItem('studio.tab') ?? '{}')[slug] ?? 'overview' }
+  catch { return 'overview' }
 }
 const rememberTab = (slug, tab) => {
   try {
@@ -225,7 +261,7 @@ function rail() {
         </button>
         ${state.project === p.slug && state.view !== 'portfolio' ? `
           <button class="navitem sub ${
-            state.view === 'project' && state.tab === 'people' ? 'on' : ''
+            state.view === 'project' && state.tab === 'contacts' ? 'on' : ''
           }" data-people="${p.slug}">
             People<span class="n">${p.contacts.length}</span></button>` : ''}`).join('')}
     </nav>
@@ -686,6 +722,225 @@ function chatTab(p) {
   </div>`
 }
 
+
+/*
+  Team board — who is on this project.
+
+  The specification lists roles (Chief of Staff, Research, Development, QA), not
+  the eight named staff this office actually has. The staff ARE those roles, so
+  this shows the real people rather than inventing a second vocabulary — but it
+  says what each is doing here, because a board that only lists names is the
+  "eight identical dots" the portraits were introduced to replace.
+*/
+function teamBoard(p) {
+  const here = new Set((p.requests ?? []).map((r) => r.who))
+  for (const a of p.activity) here.add(a.who)
+  const onIt = CREW.filter((c) => here.has(c.slug))
+  const rest = CREW.filter((c) => !here.has(c.slug))
+
+  const jobsFor = (slug) => (p.requests ?? []).filter((r) => r.who === slug)
+
+  const memberCard = (c, active) => {
+    const mine = jobsFor(c.slug)
+    const open = mine.filter((r) => r.state === 'working' || r.state === 'review')
+    return `<article class="member ${c.hue} ${active ? '' : 'quiet'}">
+      ${face(c, 42)}
+      <div class="mwho">
+        <b>${esc(c.name)}</b>
+        <span class="t-meta">${esc(c.role)}</span>
+        <span class="t-meta from">${
+          active
+            ? open.length > 0
+              ? `${open.length} open on this project`
+              : `${mine.length} finished here`
+            : 'Not working on this project'
+        }</span>
+      </div>
+      ${talkBtn('agent', c.slug, c.name)}
+    </article>`
+  }
+
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">Who is on ${esc(p.name)}. Press the
+        talk button on anyone to give them something.</p>
+    </div>
+    <div class="members">${onIt.map((c) => memberCard(c, true)).join('')}</div>
+    ${rest.length === 0 ? '' : `
+      <h3 class="t-label" style="margin:var(--s3) 0 0">Available</h3>
+      <div class="members">${rest.map((c) => memberCard(c, false)).join('')}</div>`}
+  </div>`
+}
+
+/*
+  Active jobs — running, waiting/blocked, completed.
+
+  Waiting/blocked is the reason this section exists. The first version had two
+  states, "in hand" and "needs you", and a job stuck on a missing credential
+  read as in hand — which says the opposite of the truth about it. A blocked job
+  states its blocker and offers the one action that clears it.
+*/
+function activeJobs(p) {
+  const rows = workspace.rows(p)
+  const running = rows.filter((r) => r.state === 'working' && r.blocked === undefined)
+  const blocked = rows.filter((r) => r.blocked !== undefined)
+  const done = rows.filter((r) => r.state !== 'working' && r.blocked === undefined)
+
+  if (rows.length === 0) {
+    return `<div class="tabbody"><div class="empty">
+      <p class="t-meta">No jobs on ${esc(p.name)}. Ask for something in Chat, or
+        press the talk button on any document, person or task.</p>
+      <button class="btn primary" data-sub="chat">Open the chat</button>
+    </div></div>`
+  }
+
+  const job = (r) => {
+    const c = crewBy(r.who)
+    return `<article class="job ${r.blocked !== undefined ? 'p-rust' : r.state === 'working' ? 'p-amber' : 'p-moss'}">
+      ${face(c, 30)}
+      <div class="jbody">
+        <b>${esc(r.ask)}</b>
+        <span class="t-meta">${esc(c.name)} · asked ${esc(r.asked)}${
+          r.context ? ` · about ${esc(r.context.title)}` : ''}</span>
+        ${r.blocked === undefined ? '' :
+          `<span class="blocker">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+            ${esc(r.blocked)}</span>`}
+      </div>
+      ${r.blocked === undefined ? '' :
+        `<button class="btn" data-unblock="${esc(r.id)}">${esc(r.unblock ?? 'Sort it out')}</button>`}
+    </article>`
+  }
+
+  const group = (name, note, list) => list.length === 0 ? '' : `
+    <section class="wgroup">
+      <h3 class="t-label">${esc(name)} <span class="n">${list.length}</span></h3>
+      <p class="t-meta" style="margin:0 0 var(--s3)">${esc(note)}</p>
+      ${list.map(job).join('')}
+    </section>`
+
+  return `<div class="tabbody">
+    ${group('Waiting on something', 'Stopped, and it will not start again on its own.', blocked)}
+    ${group('Running', 'Being worked on now.', running)}
+    ${group('Completed', 'Finished. What came back is under Outputs.', done)}
+  </div>`
+}
+
+/*
+  Sources — what this project points at.
+
+  Two kinds, and the distinction is the point: a CONNECTOR is authenticated and
+  syncs, so it has health and a last-read time and can fail; a REFERENCE is a
+  pointer and can only be right or stale. Showing them identically would make a
+  broken Notion connection look like a bookmark.
+*/
+function sources(p) {
+  const list = p.sources ?? []
+  if (list.length === 0) {
+    return `<div class="tabbody"><div class="empty">
+      <p class="t-meta">${esc(p.name)} stands on its own — nothing outside it feeds in.
+        That is a fine state to be in.</p>
+      <button class="btn">Point it at something</button>
+    </div></div>`
+  }
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">What ${esc(p.name)} reads from. The project
+        is the source of truth; these are optional attachments to it.</p>
+      <button class="btn">Add a source</button>
+    </div>
+    <div class="sourcegrid">${list.map((x) => `
+      <article class="source ${x.kind === 'connector' ? 'live' : ''}">
+        <span class="t-label">${x.kind === 'connector' ? 'Connector' : 'Reference'}</span>
+        <b>${esc(x.name)}</b>
+        <span class="t-meta">${esc(x.what)}</span>
+        <span class="srcfoot">
+          ${x.kind === 'connector'
+            ? `<span class="stage s-${x.health === 'ok' ? 'approved' : 'review'}">${
+                x.health === 'ok' ? `Read ${esc(x.last)}` : esc(x.problem)}</span>`
+            : `<span class="t-meta">${esc(x.last)}</span>`}
+          ${x.gave > 0 ? `<span class="t-meta">${x.gave} documents</span>` : ''}
+        </span>
+      </article>`).join('')}</div>
+  </div>`
+}
+
+/*
+  Tasks, in the states the specification names.
+
+  To-do · In progress · Waiting/blocked · Completed, and who each is assigned
+  to — *"assigned to human"* and *"assigned to agent"* are two of his branches,
+  so the face on a row is doing real work rather than decorating it.
+*/
+function tasksSection(p) {
+  if (p.tasks.length === 0) {
+    return `<div class="tabbody"><div class="empty">
+      <p class="t-meta">Nothing to do on ${esc(p.name)} yet.</p>
+      <button class="btn primary" data-sub="chat">Ask the team to find some</button>
+    </div></div>`
+  }
+  const at = (t, i) => t.state === 'done' || state.done.has(i) ? 'done'
+    : t.blocked !== undefined ? 'blocked'
+    : t.state === 'doing' ? 'doing' : 'todo'
+  const rows = p.tasks.map((t, i) => ({ t, i, at: at(t, i) }))
+  const group = (name, key, note) => {
+    const list = rows.filter((r) => r.at === key)
+    return list.length === 0 ? '' : `
+      <section class="wgroup">
+        <h3 class="t-label">${esc(name)} <span class="n">${list.length}</span></h3>
+        ${note === '' ? '' : `<p class="t-meta" style="margin:0 0 var(--s3)">${esc(note)}</p>`}
+        <div class="tasks">${list.map((r) => taskRow(r.t, r.i)).join('')}</div>
+      </section>`
+  }
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">Everything open on ${esc(p.name)}, and who has it.</p>
+      <button class="btn">Add a task</button>
+    </div>
+    ${group('Waiting or blocked', 'blocked', 'Cannot move until something else does.')}
+    ${group('In progress', 'doing', '')}
+    ${group('To do', 'todo', '')}
+    ${group('Completed', 'done', '')}
+  </div>`
+}
+
+/** The full document gallery, rather than a panel's worth of it. */
+function documentsSection(p) {
+  const docs = allDocs(p)
+  if (docs.length === 0) {
+    return `<div class="tabbody"><div class="empty">
+      <p class="t-meta">Nothing in ${esc(p.name)} yet. Drop a file, or ask the team to make one.</p>
+      <button class="btn primary" data-sub="chat">Ask the team</button>
+    </div></div>`
+  }
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">${docs.length} in ${esc(p.name)}.
+        Anything the team made is here only because you approved it.</p>
+      <button class="btn">Add a document</button>
+    </div>
+    <div class="gallery">${docs.map(docCard).join('')}</div>
+  </div>`
+}
+
+/** What happened, most recent first. */
+function activitySection(p) {
+  if (p.activity.length === 0) {
+    return `<div class="tabbody"><div class="empty">
+      <p class="t-meta">Nothing has happened on ${esc(p.name)} yet.</p>
+    </div></div>`
+  }
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">Who did what on ${esc(p.name)}, and what came of it.</p>
+    </div>
+    <div class="tasks">${PANEL.activity(p)}</div>
+  </div>`
+}
+
+
 function dashboard() {
   const p = byId(state.project)
   const mine = panels.layout(p)
@@ -741,23 +996,50 @@ function dashboard() {
     </div>`
 
   /*
-    Tabs (#30).
+    Seven sections, and AI Team's four inside it (#30).
 
-    The project page was one page, and everything a project has had to fit on it
-    or be left out. That held while a project was a board. It stops holding the
-    moment the same project also has a chat thread, a team in-tray and a people
-    list — three things Grant asked for in one sentence.
-
-    The count on Team is the point of putting it second: it is how he learns
-    something is waiting without opening it.
+    The counts on the section buttons are how Grant learns something is waiting
+    without opening anything — which is the whole reason the specification puts
+    an operational overview first rather than a file list.
   */
   const waiting = workspace.split(p).waiting.length
-  const counts = { team: waiting, chat: 0, people: p.contacts.length, board: 0 }
+  const blocked = workspace.rows(p).filter((r) => r.blocked !== undefined).length
+  const openTasks = p.tasks.filter((t, i) => t.state !== 'done' && !state.done.has(i)).length
+  const counts = {
+    team: waiting + blocked,
+    documents: allDocs(p).length,
+    tasks: openTasks,
+    contacts: p.contacts.length,
+    sources: (p.sources ?? []).length,
+  }
+
+  const teamBody =
+    state.sub === 'chat' ? chatTab(p)
+    : state.sub === 'jobs' ? activeJobs(p)
+    : state.sub === 'outputs' ? teamTab(p)
+    : teamBoard(p)
+
+  const teamCounts = {
+    jobs: blocked,
+    outputs: waiting,
+  }
+
+  const team = `
+    <div class="subnav" role="tablist" aria-label="AI Team">
+      ${TEAM_VIEWS.map((v) => `<button role="tab" class="subtab ${state.sub === v.id ? 'on' : ''}"
+          aria-selected="${state.sub === v.id}" data-sub="${v.id}">${esc(v.name)}${
+            teamCounts[v.id] > 0 ? `<span class="n">${teamCounts[v.id]}</span>` : ''
+          }</button>`).join('')}
+    </div>
+    ${teamBody}`
 
   const body =
-    state.tab === 'team' ? teamTab(p)
-    : state.tab === 'chat' ? chatTab(p)
-    : state.tab === 'people' ? peopleTab(p)
+    state.tab === 'team' ? team
+    : state.tab === 'documents' ? documentsSection(p)
+    : state.tab === 'tasks' ? tasksSection(p)
+    : state.tab === 'contacts' ? peopleTab(p)
+    : state.tab === 'sources' ? sources(p)
+    : state.tab === 'activity' ? activitySection(p)
     : board
 
   return `<main class="main">
@@ -771,12 +1053,21 @@ function dashboard() {
       </div>
       <div class="headctl">
         <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
-        <button class="btn primary" data-tab="chat">Talk to the team</button>
+        <button class="btn primary" data-tab="team" data-sub="chat">Talk to the team</button>
+        <!-- Project Settings, top-right, where the specification's sketch puts it. -->
+        <button class="btn" data-project-settings title="Project settings"
+                aria-label="Project settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.2"/>
+            <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3"/>
+          </svg>
+        </button>
       </div>
     </div>
 
     <div class="tabs" role="tablist" aria-label="${esc(p.name)}">
-      ${TABS.map((t) => `<button role="tab" class="tab ${state.tab === t.id ? 'on' : ''}"
+      ${SECTIONS.map((t) => `<button role="tab" class="tab ${state.tab === t.id ? 'on' : ''}"
           aria-selected="${state.tab === t.id}" data-tab="${t.id}">${esc(t.name)}${
             counts[t.id] > 0 ? `<span class="n">${counts[t.id]}</span>` : ''
           }</button>`).join('')}
@@ -1000,10 +1291,10 @@ function render() {
       carry(null, null, () => {
         state.project = b.dataset.people
         state.view = 'project'
-        state.tab = 'people'
+        state.tab = 'contacts'
         state.label = null
         state.attach = null
-        rememberTab(state.project, 'people')
+        rememberTab(state.project, 'contacts')
         render()
       })
     })
@@ -1083,10 +1374,52 @@ function render() {
   for (const b of root.querySelectorAll('[data-tab]')) {
     b.addEventListener('click', () => {
       state.tab = b.dataset.tab
+      // "Talk to the team" is one press: it selects AI Team AND its Chat view.
+      if (b.dataset.sub !== undefined) state.sub = b.dataset.sub
       rememberTab(state.project, state.tab)
       render()
     })
   }
+
+  // AI Team's own four. A bare data-sub also means "go to AI Team", so the
+  // empty states can send you to the chat from anywhere.
+  for (const b of root.querySelectorAll('[data-sub]:not([data-tab])')) {
+    b.addEventListener('click', () => {
+      state.sub = b.dataset.sub
+      state.tab = 'team'
+      rememberTab(state.project, 'team')
+      render()
+    })
+  }
+
+  /*
+    A blocked job's one action.
+
+    The prototype cannot actually clear a blocker, and pretending otherwise
+    would be the lying button again — so it says what would happen and to whom.
+  */
+  for (const b of root.querySelectorAll('[data-unblock]')) {
+    b.addEventListener('click', () => {
+      const row = workspace.rows(byId(state.project)).find((r) => r.id === b.dataset.unblock)
+      state.attach = row === undefined ? null
+        : { kind: 'request', id: row.id, title: row.ask }
+      state.tab = 'team'
+      state.sub = 'chat'
+      rememberTab(state.project, 'team')
+      render()
+      const say = $('[data-say]')
+      if (say !== null && row !== undefined) {
+        say.value = `This is blocked on: ${row.blocked}. Can you sort it?`
+        say.focus()
+      }
+    })
+  }
+
+  $('[data-project-settings]', root)?.addEventListener('click', () => {
+    // #36. Not built yet, and saying so beats a sheet with nothing in it.
+    const s2 = $('.talkstate', root)
+    if (s2 !== null) s2.textContent = 'Project settings — not built yet (#36)'
+  })
 
   /*
     "Talk to the team about this" (#27).
@@ -1102,8 +1435,9 @@ function render() {
       state.attach = {
         kind: b.dataset.talkKind, id: b.dataset.talkId, title: b.dataset.talkTitle,
       }
-      state.tab = 'chat'
-      rememberTab(state.project, 'chat')
+      state.tab = 'team'
+      state.sub = 'chat'
+      rememberTab(state.project, 'team')
       render()
       $('[data-say]')?.focus()
     })
