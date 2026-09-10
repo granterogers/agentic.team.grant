@@ -102,6 +102,23 @@ Distinct from `telegram.direct_to_grant`, which decides *which chat*.
 `--decision` buzzes; anything else is silent. Use it when blocked or when there
 is something genuinely worth looking at. Do not narrate progress to it.
 
+### Everything in the foreground
+
+> *"I don't like you doing background tasks. Please have all tasks that are
+> being performed shown in the foreground."*
+
+Do not background a command. The only reason to reach for it is the shell's
+two-minute default timeout, and the fix for that is an explicit longer timeout
+on the call — up to ten minutes — not hiding the work.
+
+The commands that actually need it: `verify:ui` (three device profiles in a real
+browser, ~3 min), `verify:talk` (~2 min), a full `deploy:*` with its probes, and
+`npm test` on a cold start. Give those a real timeout and let them print.
+
+If something genuinely cannot finish inside ten minutes, split it — run one
+device profile at a time, deploy one function at a time — rather than
+backgrounding it.
+
 ### Watching the work
 
 > *"I want to see what it is that you're doing... so that I can pop into the
