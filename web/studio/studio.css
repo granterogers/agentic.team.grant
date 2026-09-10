@@ -1898,3 +1898,55 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .cmdwrap, .cmdbar { animation: none; }
 }
+
+/* --- agent identity (#40 idea 4) --------------------------------------------
+   Each of the eight carries an OKLCH hue angle, set inline as `--hue`. Every
+   rule below reads that one variable, so a person's colour appears on their
+   portrait, their job rows, their chat bubbles and anything they made — without
+   a single component knowing anything about agents.
+
+   The point is provenance you recognise before you read it. Oliver made the
+   one-pager; the card's edge is Oliver's violet, and after a week you know that
+   without looking at the caption. */
+
+/* The portrait's ring is the person. */
+.face { box-shadow: 0 0 0 2px color-mix(in srgb, var(--hue) 34%, transparent); }
+.crew .face, .rb.faces .face {
+  box-shadow: 0 0 0 2px var(--ground), 0 0 0 3.5px color-mix(in srgb, var(--hue) 40%, transparent);
+}
+
+/* A job's leading edge is its owner, because state is already said twice — by
+   the group heading and by the blocker line — and colour is the only signal on
+   the row that is not repeated elsewhere. */
+.job { border-left: 3px solid color-mix(in srgb, var(--hue) 58%, transparent); }
+.job.stuck {
+  border-left-color: var(--warn);
+  box-shadow: var(--lift-1), 0 0 24px -8px color-mix(in srgb, var(--warn) 60%, transparent);
+}
+
+/* Their side of the conversation. A hairline, not a fill: eight coloured
+   bubbles in a thread is a parrot, one coloured edge is an attribution. */
+.msg.theirs .mbody { border-left: 2.5px solid color-mix(in srgb, var(--hue) 55%, transparent); }
+.msg.theirs .t-label { color: color-mix(in srgb, var(--hue) 78%, var(--ink-2)); }
+
+/* Anything they made. */
+.woutfile .wpage { border-color: color-mix(in srgb, var(--hue) 40%, var(--edge)); }
+.woutfile .wpage::after {
+  content: ''; position: absolute; inset: auto 0 0 0; height: 3px;
+  background: color-mix(in srgb, var(--hue) 70%, transparent);
+}
+.woutfile .wpage { position: relative; }
+
+/* The team board and the Settings staff list read as one set of eight. */
+.member, .staffcard { border-left: 3px solid color-mix(in srgb, var(--hue) 58%, transparent); }
+
+/*
+  A motion signature.
+
+  Grant asked for a motion signature per agent. A different easing curve per
+  person would be unreadable — nobody perceives eight curves — so the signature
+  is a phase offset on the same breath: whoever is working pulses on their own
+  beat rather than in lockstep with the others. A row of portraits then reads as
+  several people rather than one animation applied eight times.
+*/
+.face.busy { animation-delay: calc(var(--beat, 0) * -370ms); }

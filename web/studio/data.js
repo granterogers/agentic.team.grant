@@ -18,17 +18,45 @@
 */
 const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public/avatars'
 
+/*
+  Eight people, eight hues (#40 idea 4).
+
+  Grant asked for the product to cohere, and one of the ten ways is to give each
+  agent a visual identity used everywhere — the portrait in the rail, the tint
+  on a job they own, their bubble in chat, the border of anything they made. Then
+  provenance is something you recognise before you read it.
+
+  That needs eight DISTINCT hues, and the palette has six. Emma and Ruby were
+  both `p-rust`; Tom and Grace were both `p-slate`. Two people sharing a colour
+  is worse than nobody having one, because it teaches you the colour means
+  nothing.
+
+  So each carries a `tone` — an OKLCH hue angle, spaced around the wheel with
+  gaps where perception is compressed (the greens are further apart in degrees
+  than the blues, because they are closer to the eye). The palette classes stay
+  for projects; this is a separate axis, for people.
+
+  The angles are chosen against the role, not at random: Claire's green is the
+  one the office reads as "in hand"; Grace, who is quality and risk, sits next
+  to the warning amber without being it.
+*/
 export const CREW = [
-  { slug: 'claire', face: `${FACES}/chief-of-staff.jpg`, name: 'Claire', role: 'Chief of Staff', hue: 'p-moss', state: 'busy',
-    doing: 'On a call with you' },
-  { slug: 'emma', face: `${FACES}/research-director.jpg`, name: 'Emma', role: 'Research', hue: 'p-rust', state: 'busy',
-    doing: 'Comparing Monday and Grok' },
-  { slug: 'oliver', face: `${FACES}/communications-director.jpg`, name: 'Oliver', role: 'Communications', hue: 'p-iris', state: 'idle' },
-  { slug: 'tom', face: `${FACES}/strategy-director.jpg`, name: 'Tom', role: 'Strategy', hue: 'p-slate', state: 'idle' },
-  { slug: 'daniel', face: `${FACES}/finance-director.jpg`, name: 'Daniel', role: 'Finance & Data', hue: 'p-plum', state: 'idle' },
-  { slug: 'marcus', face: `${FACES}/operations-director.jpg`, name: 'Marcus', role: 'Operations', hue: 'p-amber', state: 'idle' },
-  { slug: 'ruby', face: `${FACES}/growth-director.jpg`, name: 'Ruby', role: 'Growth', hue: 'p-rust', state: 'idle' },
-  { slug: 'grace', face: `${FACES}/quality-director.jpg`, name: 'Grace', role: 'Quality & Risk', hue: 'p-slate', state: 'idle' },
+  { slug: 'claire', face: `${FACES}/chief-of-staff.jpg`, name: 'Claire', role: 'Chief of Staff',
+    hue: 'p-moss', tone: 152, state: 'busy', doing: 'On a call with you' },
+  { slug: 'emma', face: `${FACES}/research-director.jpg`, name: 'Emma', role: 'Research',
+    hue: 'p-rust', tone: 28, state: 'busy', doing: 'Comparing Monday and Grok' },
+  { slug: 'oliver', face: `${FACES}/communications-director.jpg`, name: 'Oliver', role: 'Communications',
+    hue: 'p-iris', tone: 292, state: 'idle' },
+  { slug: 'tom', face: `${FACES}/strategy-director.jpg`, name: 'Tom', role: 'Strategy',
+    hue: 'p-slate', tone: 248, state: 'idle' },
+  { slug: 'daniel', face: `${FACES}/finance-director.jpg`, name: 'Daniel', role: 'Finance & Data',
+    hue: 'p-plum', tone: 338, state: 'idle' },
+  { slug: 'marcus', face: `${FACES}/operations-director.jpg`, name: 'Marcus', role: 'Operations',
+    hue: 'p-amber', tone: 78, state: 'idle' },
+  { slug: 'ruby', face: `${FACES}/growth-director.jpg`, name: 'Ruby', role: 'Growth',
+    hue: 'p-rust', tone: 4, state: 'idle' },
+  { slug: 'grace', face: `${FACES}/quality-director.jpg`, name: 'Grace', role: 'Quality & Risk',
+    hue: 'p-slate', tone: 196, state: 'idle' },
 ]
 
 export const PROJECTS = [

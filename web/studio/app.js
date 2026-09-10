@@ -119,8 +119,19 @@ const sheet = (el, open) => {
   gone the mark is still a mark, not an empty circle. `loading="lazy"` because
   eight portraits in a rail are not what the first paint is for.
 */
+/*
+  A face, carrying its person's own hue (#40 idea 4).
+
+  `--tone` is set inline from the agent's OKLCH angle and overrides the palette
+  class, so every ring, tint and border derived from `--hue` downstream is that
+  person's colour rather than one of six shared ones. One inline custom property
+  is what makes an identity consistent across eight components without eight
+  components knowing anything about agents.
+*/
 const face = (c, size = 28) =>
-  `<span class="face ${c.hue} ${c.state}" style="width:${size}px;height:${size}px"
+  `<span class="face ${c.hue} ${c.state}" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150});--beat:${
+    CREW.findIndex((x) => x.slug === c.slug)
+  };width:${size}px;height:${size}px"
          title="${esc(c.name)} — ${esc(c.doing ?? c.role)}">${esc(c.name[0])}${
     c.face ? `<img src="${esc(c.face)}" alt="" loading="lazy">` : ''
   }</span>`
@@ -853,7 +864,7 @@ function teamTab(p) {
         <span class="stage s-${esc(r.state)}">${esc(st.name)}</span>
         ${r.output === null || r.output === undefined
           ? `<p class="t-meta">${esc(c.name)} is on it. Nothing to look at yet.</p>`
-          : `<div class="woutfile">
+          : `<div class="woutfile" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
               <span class="wpage">${pageSvg(r.output.title, r.output.kind)}</span>
               <span>
                 <b>${esc(r.output.title)}</b>
@@ -916,7 +927,7 @@ function chatTab(p) {
       </div>`
     }
     const c = crewBy(m.from)
-    return `<div class="msg theirs">
+    return `<div class="msg theirs" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 30)}
       <div class="mbody">
         <span class="t-label">${esc(c.name)} · ${esc(c.role)}</span>
@@ -974,7 +985,8 @@ function teamBoard(p) {
   const memberCard = (c, active) => {
     const mine = jobsFor(c.slug)
     const open = mine.filter((r) => r.state === 'working' || r.state === 'review')
-    return `<article class="member ${c.hue} ${active ? '' : 'quiet'}">
+    return `<article class="member ${c.hue} ${active ? '' : 'quiet'}"
+             style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 42)}
       <div class="mwho">
         <b>${esc(c.name)}</b>
@@ -1027,7 +1039,15 @@ function activeJobs(p) {
 
   const job = (r) => {
     const c = crewBy(r.who)
-    return `<article class="job ${r.blocked !== undefined ? 'p-rust' : r.state === 'working' ? 'p-amber' : 'p-moss'}">
+    /*
+      A job's leading edge is its OWNER's colour, not its state's. State is
+      already said twice — by the group it sits in and by the blocker line — and
+      colouring by state would overwrite the one signal that is not repeated
+      anywhere else on the row. A blocked job keeps the warning treatment
+      through `.blocked` instead.
+    */
+    return `<article class="job ${r.blocked !== undefined ? 'stuck' : ''}"
+             style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 30)}
       <div class="jbody">
         <b>${esc(r.ask)}</b>
@@ -1357,7 +1377,8 @@ function dashboard() {
 */
 function teamTabSettings() {
   const card = (c) => `
-    <article class="staffcard ${c.hue}" data-lift data-edge data-tilt="3.2">
+    <article class="staffcard" data-lift data-edge data-tilt="3.2"
+             style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 46)}
       <div class="sbody">
         <b>${esc(c.name)}</b>
