@@ -124,6 +124,13 @@ backgrounding it.
 > *"I want to see what it is that you're doing... so that I can pop into the
 > application and see what it is you're doing."*
 
+> **Always paste the image URLs into the reply as well.** Grant: *"I can't see
+> anything.. you will always have to give me the image links each time to
+> judge."* A screenshot that only exists on the build page is a screenshot he
+> has to go and find, and he will not. The `--shot` upload prints the public URL
+> — put every one of them in the message, described, so he can click and judge
+> without leaving the conversation.
+
 `npm run step -- "what you are doing" --towards M0` opens a step;
 `--finish <id> --produced "..."` closes it; `--shot path.png` attaches a
 screenshot. It surfaces at **ai-team-hq.vercel.app → What Claude is building**.
