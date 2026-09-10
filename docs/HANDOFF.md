@@ -1,3 +1,18 @@
+# Handover
+
+> **2026-09-10 — GitHub is now the operational record.**
+>
+> This document summarises state. It is no longer where actionable work lives:
+> that is [Issues](https://github.com/granterogers/agentic.team.grant/issues),
+> organised under milestones M0–v1.0. If you are picking this project up, read
+> `docs/integration-assessment-2026-09-10.md` first — it says what exists, what
+> is missing, and the two decisions waiting on Grant.
+>
+> **Two things are blocking, and both are recorded as Issues:**
+> [#7](https://github.com/granterogers/agentic.team.grant/issues/7) there is no
+> `main` branch, and [#8](https://github.com/granterogers/agentic.team.grant/issues/8)
+> the Notion sync is duplicating documents.
+
 # Start here
 
 **For the next session, human or otherwise.** This replaces every earlier
