@@ -561,6 +561,38 @@ details.qa:last-child { border-bottom: 0; }
 details.qa summary { cursor: pointer; font-weight: 600; padding: 9px 0; min-height: 30px; }
 details.qa p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; max-width: 72ch; }
 
+/* --- What Claude is building -------------------------------------------
+   A step is a line and, where the work was visual, a picture. The picture is
+   the point: §14A's loop produces screenshots and they are the only honest
+   report of visual work, so they get real size rather than a thumbnail beside
+   a paragraph. */
+.nowcard { border-left: 3px solid var(--accent); }
+.nowline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 15.5px; }
+.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none;
+  animation: breathing 2s ease-in-out infinite; }
+@keyframes breathing {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+.towards { font-family: var(--display); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+  background: var(--accent-soft); border-radius: 5px; padding: 2px 7px; }
+.bstep { border-top: 1px solid var(--line); padding: 14px 0; }
+.bstep:first-child { border-top: 0; padding-top: 2px; }
+.bmeta { display: flex; align-items: flex-start; gap: 11px; }
+.bmeta > .lamp { margin-top: 6px; }
+.bwho { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.bwho b { font-size: 14.5px; }
+.bwho .towards { justify-self: start; }
+.produced { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.bwhen { flex: none; white-space: nowrap; font-size: 12.5px; }
+/* Wide, because a 200px thumbnail of a dashboard tells you nothing. */
+.bshot { display: block; margin-top: 11px; border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; background: var(--panel-2); }
+.bshot img { display: block; width: 100%; height: auto; }
+
 /* --- Talk to team -------------------------------------------------------
    A big target and an obvious state. The microphone button is the one control
    on this page pressed while looking at something else, so it says what it is
@@ -928,6 +960,7 @@ const MENU = [
     ['overview', 'Today'],
     ['projects', 'Projects'],
     ['talk', 'Talk to the team'],
+    ['build', 'What Claude is building'],
   ]],
   ['What the team did', [
     ['output', 'Work they finished'],
@@ -977,6 +1010,17 @@ const GUIDE = {
     one: 'What each kind of work costs to produce',
     what: 'What each kind of work costs to produce: what was actually charged, and what the same work would have cost on a paid model.',
     todo: 'Read the two columns as two different things. Spent is real money and is currently zero because every model here is free. Modelled is what it would cost if it were not — that is the number to look at before turning anything paid on.',
+  },
+  build: {
+    title: 'What Claude is building',
+    blurb:
+      'The work in progress on the system itself — the step being worked on now, ' +
+      'what it is for, and a picture where the work was visual.',
+    todo:
+      'Nothing to do here. It is a window, not a control: open it to see whether ' +
+      'anything is happening and what it looks like so far, instead of opening a ' +
+      'terminal. A step marked blocked is waiting on you and will also reach you ' +
+      'on Telegram.',
   },
   talk: {
     title: 'Talk to the team',
@@ -2243,6 +2287,82 @@ function wireSettings() {
   her words, so a mishearing is caught at the point it becomes an instruction.
 */
 
+/*
+  What the build is doing.
+
+  Grant: *"I want to see what it is that you're doing ... so that I can pop into
+  the application and see what it is you're doing."*
+
+  The office reports itself everywhere on this page. The session that CHANGES
+  the system did not, so watching it meant opening a terminal — the dependence
+  he has spent weeks reducing.
+
+  Screenshots carry most of the value. §14A's loop produces images, and an image
+  is the only honest report of visual work: "improved the spacing" says nothing
+  and a picture of it can be judged in a second.
+*/
+function build(d) {
+  const now = d.now || null
+  const blocked = d.blocked || []
+  const steps = d.steps || []
+  const today = d.today || {}
+
+  const when = (t) => {
+    if (!t) return ''
+    const mins = Math.round((Date.now() - new Date(t).getTime()) / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return mins + 'm ago'
+    const hrs = Math.round(mins / 60)
+    return hrs < 24 ? hrs + 'h ago' : Math.round(hrs / 24) + 'd ago'
+  }
+
+  const head = now
+    ? `<section class="card wide nowcard"><h2>Working on</h2><div class="body">
+         <div class="nowline"><span class="pulse"></span>
+           <b>${esc(now.headline)}</b>${now.towards ? `<span class="towards">${esc(now.towards)}</span>` : ''}</div>
+         ${now.detail ? `<p class="m">${esc(now.detail)}</p>` : ''}
+         <div class="m">Started ${esc(when(now.since))}</div>
+       </div></section>`
+    : `<section class="card wide"><h2>Working on</h2><div class="body">
+         <div class="m">Nothing in progress right now.</div></div></section>`
+
+  const stuck = blocked.length === 0 ? '' :
+    `<section class="card wide"><h2>Waiting on you</h2><div class="body">
+      ${blocked.map((b) => `<div class="conn"><span class="lamp warn"></span>
+        <div class="who"><b>${esc(b.headline)}</b>
+        <span>${esc(b.detail || '')} — since ${esc(when(b.since))}</span></div></div>`).join('')}
+     </div></section>`
+
+  const row = (s) => {
+    const lamp = s.state === 'done' ? 'ok' : s.state === 'blocked' ? 'warn'
+      : s.state === 'abandoned' ? '' : 'ok'
+    return `<div class="bstep">
+      <div class="bmeta">
+        <span class="lamp ${lamp}"></span>
+        <div class="bwho">
+          <b>${esc(s.headline)}</b>
+          ${s.towards ? `<span class="towards">${esc(s.towards)}</span>` : ''}
+          ${s.detail ? `<span class="m">${esc(s.detail)}</span>` : ''}
+          ${s.produced ? `<span class="produced">${esc(s.produced)}</span>` : ''}
+        </div>
+        <div class="bwhen m">${esc(when(s.started_at))}${
+          s.minutes !== null && s.minutes !== undefined ? ` · ${esc(String(s.minutes))}m` : ''}</div>
+      </div>
+      ${s.shot ? `<a class="bshot" href="${esc(s.shot)}" target="_blank" rel="noopener">
+        <img loading="lazy" src="${esc(s.shot)}" alt="${esc(s.headline)}"></a>` : ''}
+    </div>`
+  }
+
+  return head + stuck + `<section class="card wide"><h2>Steps</h2>
+    <p class="hint">${esc(String(today.done || 0))} finished in the last day.
+      Newest first, with pictures where the work was visual.</p>
+    <div class="body">${
+      steps.length === 0
+        ? '<div class="m">No steps recorded yet.</div>'
+        : steps.map(row).join('')
+    }</div></section>`
+}
+
 function talk() {
   return `<section class="card wide" data-card="talk"><h2>Talk to the team</h2><div class="body">
       <div class="callstage">
@@ -3268,7 +3388,7 @@ function cost(d) {
     </section>`
 }
 
-const VIEWS = { setup, help, talk, routing, overview, trends, staff, activity, usage, cost, connections, projects, output, settings }
+const VIEWS = { setup, help, talk, build, routing, overview, trends, staff, activity, usage, cost, connections, projects, output, settings }
 
 /*
   The Projects tab's buttons.

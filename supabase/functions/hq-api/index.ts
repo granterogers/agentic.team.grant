@@ -64,6 +64,9 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   // Who may message Grant directly, how loud a thing has to be to reach his
   // phone, and which recurring duties run at all (0151).
   routing: { fn: 'hq_routing' },
+  // What the build session is doing, as it does it — so Grant can open the page
+  // instead of a terminal (0170).
+  build: { fn: 'hq_build' },
 }
 
 /**

@@ -167,5 +167,6 @@
   "0166_a_capability_is_not_a_result.sql": "54f2ae7c85ad4b4052cf33b5aaf545dd5f2542cb17ac9f28faa21af27b550b29",
   "0167_claire_can_see_the_place.sql": "68d8ae2cc75726217769a344b34f9359fcd49b111737798eae5e7e740396878b",
   "0168_a_probe_is_not_a_failure.sql": "b2dc1b13eb66043997efc9f85e7798cf928e51d8c9d4bcb5d0f417126511d704",
-  "0169_a_mirror_is_not_a_second_source.sql": "7bdbe411daa078715992a700014d091fea7c6fe387d815d654d974ee9d3bc5aa"
+  "0169_a_mirror_is_not_a_second_source.sql": "7bdbe411daa078715992a700014d091fea7c6fe387d815d654d974ee9d3bc5aa",
+  "0170_what_the_build_is_doing.sql": "8929f571b6a3907f2683d355e21a19ce91005d34e2bc221c39f7d709bcd30e49"
 }
