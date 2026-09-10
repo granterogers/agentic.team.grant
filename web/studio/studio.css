@@ -1382,3 +1382,53 @@ body::after {
 /* Documents, as a gallery rather than a shelf: a section has room to wrap. */
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: var(--s4); }
 @media (max-width: 560px) { .gallery { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); } }
+
+/* --- the project switcher ---------------------------------------------------
+   Grant: "the top left should be the project selector and it should be like a
+   drop down menu that shows other projects. But once the project is selected,
+   everything else on the screen is relevant to that project."
+
+   So it is the largest thing in the rail after the wordmark, and the rail
+   carries nothing else about the project — the tabs own all of that. */
+
+.switcher { position: relative; }
+.switch {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px;
+  padding: 0 12px; border-radius: var(--r-control); text-align: left;
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 6%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .16s, border-color .16s, transform .16s;
+}
+.switch:hover { box-shadow: var(--lift-2); border-color: color-mix(in srgb, var(--hue) 40%, var(--edge)); }
+.switch:active { box-shadow: var(--engrave); transform: translateY(1px); }
+.switch .sname {
+  flex: 1; min-width: 0; font: 600 14.5px/1.25 var(--text); color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.switch svg { flex: none; color: var(--ink-3); }
+.switch .dot, .switchmenu .dot {
+  flex: none; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--hue, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue, var(--accent)) 16%, transparent);
+}
+
+.switchmenu {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 40;
+  display: grid; gap: 2px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--edge);
+  border-radius: var(--r-card); box-shadow: var(--lift-3);
+}
+.switchmenu[hidden] { display: none; }
+.switchmenu button {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px;
+  padding: 7px 10px; border-radius: 8px; text-align: left; color: var(--ink-2);
+}
+.switchmenu button > span:last-child { display: grid; gap: 1px; min-width: 0; }
+.switchmenu b { font: 600 14px/1.25 var(--text); color: var(--ink); }
+.switchmenu button:hover { background: var(--accent-wash); }
+.switchmenu button.on { background: var(--accent-wash); }
+.switchmenu .allprojects {
+  margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--edge);
+  border-radius: 0 0 8px 8px; color: var(--ink-3); font-weight: 500;
+}

@@ -230,6 +230,55 @@ function rail() {
         <span class="brandline">Eight people, one queue</span>
       </span>
     </div>
+
+    <!--
+      The project selector, top left.
+
+      Grant: *"the top left should be the project selector and it should be like
+      a drop down menu that shows other projects. But once the project is
+      selected, everything else on the screen is relevant to that project."*
+
+      The rail used to list every project as a permanent nav item, with the
+      current one's People hanging off it. Two things were wrong with that. It
+      spent the most valuable space in the interface on a choice made once a
+      day; and the People sub-item duplicated the Contacts tab, so the same list
+      had two doors and neither was obviously the real one.
+
+      A switcher says the same thing in one row: which project you are in, and
+      that there are others. Everything below it belongs to that project, and
+      everything belonging to that project is in its tabs — never in both.
+    -->
+    ${state.view === 'project' ? (() => {
+      const p = byId(state.project)
+      return `<div class="switcher">
+        <button class="switch ${p.hue}" data-switch-open aria-haspopup="listbox"
+                aria-expanded="false">
+          <span class="dot"></span>
+          <span class="sname">${esc(p.name)}</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 10l5 5 5-5"/></svg>
+        </button>
+        <div class="switchmenu" data-switch-menu hidden role="listbox">
+          ${PROJECTS.map((x) => `
+            <button role="option" aria-selected="${x.slug === p.slug}"
+                    class="${x.hue} ${x.slug === p.slug ? 'on' : ''}" data-open="${x.slug}">
+              <span class="dot"></span>
+              <span>
+                <b>${esc(x.name)}</b>
+                <span class="t-meta">${x.docs} docs · ${x.total} tasks</span>
+              </span>
+            </button>`).join('')}
+          <button class="allprojects" data-go="portfolio">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
+            All projects
+          </button>
+        </div>
+      </div>`
+    })() : ''}
+
     <nav class="navgroup">
       <button class="navitem home" data-go="portfolio" aria-current="${state.view === 'portfolio'}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -245,25 +294,16 @@ function rail() {
         Desk
       </button>
       <!--
-        Projects are the top tier, and everything else hangs off one.
-
-        Grant: *"project choice is the top tier.. and from each project flows
-        tasks, documents, etc"*. The first version had Projects, Documents and
-        Tasks as three peers in the rail, which said the opposite — that a
-        document is a thing you browse globally and a project is one lens on it.
-        Here the rail lists the actual projects, and Documents and Tasks exist
-        only inside one.
+        Only the two GLOBAL places. A project's own sections live in its tabs
+        and nowhere else — Grant: *"obviously, they don't duplicate things"*.
+        The rail's project list and its People sub-item both said something the
+        tabs already say, so both are gone.
       -->
-      ${PROJECTS.map((p) => `
+      ${state.view === 'project' ? '' : PROJECTS.map((p) => `
         <button class="navitem proj ${p.hue}" data-open="${p.slug}"
-                aria-current="${state.view === 'project' && state.project === p.slug}">
+                aria-current="false">
           <span class="dot"></span>${esc(p.name)}
-        </button>
-        ${state.project === p.slug && state.view !== 'portfolio' ? `
-          <button class="navitem sub ${
-            state.view === 'project' && state.tab === 'contacts' ? 'on' : ''
-          }" data-people="${p.slug}">
-            People<span class="n">${p.contacts.length}</span></button>` : ''}`).join('')}
+        </button>`).join('')}
     </nav>
     <!--
       The team, as people.
@@ -287,7 +327,7 @@ function rail() {
         stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
         <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
-      <span class="lbl">Talk to the team</span>
+      <span class="lbl">Call the team</span>
     </button>
 
     <button class="navitem settings-open" data-settings>
@@ -1053,7 +1093,15 @@ function dashboard() {
       </div>
       <div class="headctl">
         <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
-        <button class="btn primary" data-tab="team" data-sub="chat">Talk to the team</button>
+        <!--
+          There is no "Talk to the team" button here.
+
+          Grant: *"what's the point of having two 'talk to the team' buttons?"*
+          There were two, and worse, they did different things under the same
+          words — the rail's is the voice call, this one opened the text chat.
+          Chat is one tap away in AI Team, so the header keeps only what the
+          tabs cannot say: the project's own settings.
+        -->
         <!-- Project Settings, top-right, where the specification's sketch puts it. -->
         <button class="btn" data-project-settings title="Project settings"
                 aria-label="Project settings">
@@ -1319,6 +1367,33 @@ function render() {
         rememberTab(state.project, 'contacts')
         render()
       })
+    })
+  }
+
+  /*
+    The project switcher.
+
+    Closing on the next click anywhere is registered on `document` with
+    `{ once: true }` AFTER a stopPropagation on the opening press, so the press
+    that opens it is not also the click that closes it.
+  */
+  const swBtn = $('[data-switch-open]', root)
+  const swMenu = $('[data-switch-menu]', root)
+  if (swBtn !== null && swMenu !== null) {
+    swBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const open = swMenu.hidden
+      swMenu.hidden = !open
+      swBtn.setAttribute('aria-expanded', String(open))
+      if (open) {
+        document.addEventListener('click', () => {
+          swMenu.hidden = true
+          swBtn.setAttribute('aria-expanded', 'false')
+        }, { once: true })
+      }
+    })
+    swBtn.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { swMenu.hidden = true; swBtn.setAttribute('aria-expanded', 'false') }
     })
   }
 

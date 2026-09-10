@@ -159,9 +159,26 @@ for (const [size, opts] of SIZES) {
       kind of thing a capture script catches and a code review does not.
     */
     if (size === 'desktop') {
-      await page.locator('[data-people]').first().click()
+      /*
+        Contacts is reached from the project's own tabs now. The rail used to
+        carry a People sub-item under the current project; it duplicated this
+        tab, so Grant asked for it gone — "obviously, they don't duplicate
+        things". A capture script is where a removed selector announces itself.
+      */
+      await page.locator('[role="tab"][data-tab="contacts"]').click()
       await page.waitForTimeout(500)
       await shoot('contacts-section')
+      /*
+        The project switcher, open. It replaced the rail's project list — a
+        still of it closed proves only that a button exists.
+      */
+      await page.locator('[data-switch-open]').click()
+      await page.waitForTimeout(400)
+      await shoot('project-switcher')
+      await page.keyboard.press('Escape')
+      await page.locator('h1').first().click()
+      await page.waitForTimeout(300)
+
       await page.locator('[data-rail]').click()
       await page.waitForTimeout(600)
       await shoot('rail-collapsed')
