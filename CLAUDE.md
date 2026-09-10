@@ -227,6 +227,23 @@ The short version:
 - Grant on the corporate palette: *"Don't use the corporate colors. Use a
   different color scheme."* Two schemes, light and dark.
 
+## Scripting the GitHub API
+
+Build the JSON body **in a file**, never inline in a shell command:
+
+```bash
+cat > /tmp/body.md <<'EOF'
+...markdown, backticks and all...
+EOF
+python3 -c "import json; print(json.dumps({'body': open('/tmp/body.md').read()}))" > /tmp/b.json
+curl -X POST ... -d @/tmp/b.json
+```
+
+Inline `python3 -c "..."` inside double quotes lets the shell expand backticks
+first: an Issue body containing `npm run shots` had that command **executed**
+and its output pasted into the Issue, while every backticked path vanished.
+Issue #22 was filed twice for this reason.
+
 ## Documentation you must keep current
 
 When you finish a piece of work: update the Issue (or close it), update
