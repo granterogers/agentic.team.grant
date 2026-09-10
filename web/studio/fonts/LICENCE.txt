@@ -1,7 +1,24 @@
-Archivo — Copyright (c) Omnibus-Type
-Schibsted Grotesk — Copyright (c) Schibsted Media Group
+Fonts in this directory
+=======================
 
-Both licensed under the SIL Open Font License, Version 1.1.
-https://scripts.sil.org/OFL
+Anybody
+  Copyright The Anybody Project Authors (https://github.com/Etcetera-Type-Co/Anybody)
+  SIL Open Font Licence 1.1
+  https://openfontlicense.org
+  Variable: weight 100-900, width 50%-150%. Latin subset.
 
-These files are the latin subsets, redistributed unmodified under that licence.
+Instrument Sans
+  Copyright The Instrument Sans Project Authors
+  (https://github.com/Instrument/instrument-sans)
+  SIL Open Font Licence 1.1
+  https://openfontlicense.org
+  Variable: weight 400-700, width 75%-100%. Latin subset.
+
+Both are self-hosted rather than linked, because Chromium in the capture
+sandbox cannot reach fonts.googleapis.com — a linked font means every
+screenshot is judged in the fallback face, which is how a typography note
+becomes worthless.
+
+Previously here, and removed 2026-09-10: Archivo and Schibsted Grotesk. Both
+competent neo-grotesques, which was the problem — the same voice twice, and the
+house style of every generated dashboard.

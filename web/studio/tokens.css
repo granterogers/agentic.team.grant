@@ -40,22 +40,32 @@
     with a shadow and something that looks pressed out of the page.
   */
   --emboss:  inset 0 1px 0 rgb(255 255 255 / .95), inset 0 -1px 0 rgb(25 24 19 / .05);
+  /*
+    Deepened 2026-09-10. Grant: *"it really needs to pop."*
+
+    The old values were tasteful to the point of invisibility — `.04` alpha on
+    the contact shadow means a card is separated from the page by a rumour. The
+    fix is not more layers, it is more CONTRAST in the layers that exist: a
+    tighter, darker contact shadow so the card touches the page somewhere
+    definite, and a wider ambient one so it also floats. Both, at once, is what
+    a real object does.
+  */
   --lift-1:
-    0 1px 1px rgb(25 24 19 / .04),
-    0 2px 4px rgb(25 24 19 / .04),
-    0 6px 14px -6px rgb(25 24 19 / .10),
+    0 1px 1.5px rgb(25 24 19 / .07),
+    0 2px 5px rgb(25 24 19 / .07),
+    0 8px 18px -6px rgb(25 24 19 / .16),
     var(--emboss);
   --lift-2:
-    0 1px 1px rgb(25 24 19 / .05),
-    0 3px 6px rgb(25 24 19 / .06),
-    0 12px 28px -8px rgb(25 24 19 / .18),
-    0 24px 48px -20px rgb(25 24 19 / .16),
+    0 1px 2px rgb(25 24 19 / .09),
+    0 4px 8px rgb(25 24 19 / .09),
+    0 14px 32px -8px rgb(25 24 19 / .24),
+    0 28px 56px -20px rgb(25 24 19 / .20),
     var(--emboss);
   --lift-3:
-    0 2px 4px rgb(25 24 19 / .07),
-    0 8px 18px rgb(25 24 19 / .10),
-    0 28px 56px -12px rgb(25 24 19 / .26),
-    0 56px 96px -32px rgb(25 24 19 / .30),
+    0 2px 4px rgb(25 24 19 / .11),
+    0 10px 22px rgb(25 24 19 / .14),
+    0 32px 64px -12px rgb(25 24 19 / .32),
+    0 64px 110px -32px rgb(25 24 19 / .36),
     var(--emboss);
   /* A pressed-IN surface: wells, inputs, the track of a progress bar. */
   --engrave: inset 0 1px 3px rgb(25 24 19 / .10), inset 0 -1px 0 rgb(255 255 255 / .7);
@@ -78,21 +88,65 @@
   --r-control: 6px; --r-card: 10px; --r-sheet: 14px;
 
   /*
+    Glass.
+
+    Grant: *"transparency affects everything... like something you would find in
+    a 3D computer game or the console of Star Trek."*
+
+    The mistake to avoid is glassmorphism everywhere, which §14A rules out by
+    name and which looks cheap for a specific reason: if every surface is
+    translucent, nothing is behind anything, and the effect stops carrying
+    information. So there are three tiers and they mean different things.
+
+      --glass-1  a surface resting ON the page. Barely tinted; you sense the
+                 texture through it rather than see it.
+      --glass-2  a surface FLOATING over content — menus, the rail, sheets.
+                 More blur, more saturation, so what is behind reads as
+                 genuinely behind.
+      --glass-3  a surface COVERING the page. The viewer scrim.
+
+    `--glass-edge` is the lit rim: a hairline of light along the top edge of a
+    translucent panel, which is what actually sells glass. Without it a
+    translucent box reads as a faded box.
+  */
+  --glass-1: color-mix(in srgb, var(--surface) 82%, transparent);
+  --glass-2: color-mix(in srgb, var(--surface) 68%, transparent);
+  --glass-3: color-mix(in srgb, var(--ground) 62%, transparent);
+  --blur-1: saturate(140%) blur(8px);
+  --blur-2: saturate(180%) blur(20px);
+  --glass-edge: inset 0 1px 0 rgb(255 255 255 / .55);
+  /* A coloured halo, used only where something is live or selected — the glow
+     is meaning, not decoration. */
+  --halo: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+          0 0 22px -4px color-mix(in srgb, var(--accent) 45%, transparent);
+
+  /*
     Archivo, in two registers.
 
     Grant on the didone: *"Font is still a bit shitty... I don't like this
     typewriter style. Just something clear and punchy, and it looks
-    professional."* Fair. A didone was the wrong answer to "not generic" — it
-    swapped one costume for another, and its hairlines at small sizes read as
-    fussy rather than fine.
+    professional."* Then, twice more: *"It still looks like you haven't
+    implemented what I said about using a different font. It's still that AI
+    slop font."*
 
-    Archivo has a WIDTH axis as well as a weight one, which is why one family
-    can carry both roles: display is expanded and heavy, text is normal width.
-    The punch comes from width, not decoration. It also ships real small caps
-    and oldstyle figures, which is what #24 idea 3 needs.
+    He was right both times, and the second diagnosis is the useful one.
+    Archivo and Schibsted Grotesk are both neo-grotesques — the same voice at
+    two sizes. A page set that way has no contrast to read, and a neutral
+    grotesque is the house style of every generated dashboard on the internet.
+    Swapping one neutral grotesque for another was never going to answer him.
+
+    **Anybody** for display, because it has a WIDTH axis from 50% to 150% and
+    that axis is the point. Grant asked for *"the console of Star Trek"*; what
+    makes LCARS read as LCARS is very wide, tightly tracked capitals beside
+    condensed labels. One family does both, as one voice.
+
+    **Instrument Sans** for text, because a display face with that much
+    character needs poise beside it rather than competition. Humanist
+    proportions, open apertures, still readable at 13px in a table — which
+    Anybody at any width is not.
   */
-  --display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --text: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --display: "Anybody", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --text: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   color-scheme: light dark;
 }
@@ -121,6 +175,20 @@
       than a bright edge and the shadow does most of the work.
     */
     --emboss:  inset 0 1px 0 rgb(255 255 255 / .07), inset 0 -1px 0 rgb(0 0 0 / .5);
+
+    /*
+      Glass in the dark is the opposite problem. In light, a translucent panel
+      is lighter than the page and the rim is bright. In dark, blur alone makes
+      a panel MUDDY rather than glassy — so the panels are less transparent,
+      the saturation is pushed harder so colour survives behind them, and the
+      rim is a faint white line rather than a bright one.
+    */
+    --glass-1: color-mix(in srgb, var(--surface) 88%, transparent);
+    --glass-2: color-mix(in srgb, var(--surface) 76%, transparent);
+    --glass-3: color-mix(in srgb, var(--ground) 72%, transparent);
+    --blur-1: saturate(170%) blur(10px);
+    --blur-2: saturate(210%) blur(24px);
+    --glass-edge: inset 0 1px 0 rgb(255 255 255 / .09);
     --lift-1:
       0 1px 1px rgb(0 0 0 / .3),
       0 2px 5px rgb(0 0 0 / .3),

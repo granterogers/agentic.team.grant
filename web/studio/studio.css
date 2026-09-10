@@ -30,13 +30,31 @@ a { color: var(--accent); text-decoration: none; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 
 /* --- the ramp. Six steps, wide gaps. ----------------------------------- */
-.t-display { font: 400 44px/1.02 var(--display); letter-spacing: -0.02em; }
-@media (max-width: 760px) { .t-display { font-size: 31px; line-height: 1.08; } }
-.t-title   { font: 400 27px/1.15 var(--display); letter-spacing: -0.015em; }
+/*
+  The ramp uses Anybody's WIDTH axis, which is the whole reason it is here.
+
+  Display is EXPANDED — 116% width at 620 weight with negative tracking, so a
+  heading is wide and tight rather than merely large. Labels are CONDENSED —
+  84% width with wide positive tracking. That opposition, one family pulled to
+  both ends of its own axis, is what reads as a console rather than as a
+  document, and it is a thing a static font simply cannot do.
+*/
+.t-display {
+  font: 620 44px/1.0 var(--display); font-stretch: 116%;
+  letter-spacing: -0.028em;
+}
+@media (max-width: 760px) { .t-display { font-size: 31px; line-height: 1.06; font-stretch: 108%; } }
+.t-title {
+  font: 600 27px/1.12 var(--display); font-stretch: 110%;
+  letter-spacing: -0.02em;
+}
 .t-lead    { font: 400 17px/1.5 var(--text); color: var(--ink-2); max-width: 62ch; }
 .t-meta    { font: 400 13px/1.45 var(--text); color: var(--ink-2); }
-.t-label   { font: 600 12px/1.3 var(--text); letter-spacing: 0.09em;
-             text-transform: uppercase; color: var(--ink-3); }
+/* Condensed, spaced and small — the opposite end of the same axis. */
+.t-label {
+  font: 700 11.5px/1.3 var(--display); font-stretch: 84%;
+  letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3);
+}
 
 /* --- shell --------------------------------------------------------------- */
 .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
@@ -1447,4 +1465,93 @@ body::after {
 .switchmenu .allprojects {
   margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--edge);
   border-radius: 0 0 8px 8px; color: var(--ink-3); font-weight: 500;
+}
+
+/* --- glass, applied ---------------------------------------------------------
+   Grant: "transparency affects everything... like the console of Star Trek."
+
+   Applied to things that FLOAT, and only those. §14A rules out glassmorphism
+   everywhere by name, and the reason is that if every surface is translucent
+   then nothing is behind anything and the effect stops carrying information.
+   A menu over content is glass. A card sitting in the page is not.
+
+   THE TRAP, already paid for once in this repository: `backdrop-filter`
+   establishes a containing block, so a `position: fixed` descendant anchors to
+   the filtered element instead of the viewport. The bottom navigation once
+   rendered across the top of the page for exactly this reason. `filter`,
+   `transform`, `perspective` and `will-change` all do the same. Never put it
+   on an element that contains a fixed child. */
+
+.switchmenu, .addmenu {
+  background: var(--glass-2);
+  backdrop-filter: var(--blur-2);
+  -webkit-backdrop-filter: var(--blur-2);
+  box-shadow: var(--lift-3), var(--glass-edge);
+}
+
+/* The sheets: a viewer or a settings panel is the most "floating" thing here. */
+.sheet {
+  background: var(--glass-2) !important;
+  backdrop-filter: var(--blur-2);
+  -webkit-backdrop-filter: var(--blur-2);
+  box-shadow: var(--lift-3), var(--glass-edge);
+}
+#viewer, #settings {
+  background: var(--glass-3);
+  backdrop-filter: saturate(120%) blur(3px);
+  -webkit-backdrop-filter: saturate(120%) blur(3px);
+}
+
+/* The AI Team chip tray reads as a control surface resting on the page. */
+.subnav {
+  background: var(--glass-1);
+  backdrop-filter: var(--blur-1);
+  -webkit-backdrop-filter: var(--blur-1);
+  box-shadow: var(--glass-edge);
+}
+
+/* The chat thread is a well you look INTO, so it is glass over the texture
+   rather than a painted panel — the grain of the page shows through it. */
+.thread {
+  background: color-mix(in srgb, var(--sunken) 46%, transparent);
+  backdrop-filter: saturate(115%) blur(2px);
+  -webkit-backdrop-filter: saturate(115%) blur(2px);
+  box-shadow: var(--engrave);
+}
+
+/* The composer floats above the thread and takes the lit rim. */
+.composer { box-shadow: var(--lift-2), var(--glass-edge); }
+
+/*
+  No blanket rim rule here, and the reason is worth keeping.
+
+  The first version of this file set `box-shadow: var(--lift-1), var(--glass-edge)`
+  on every card class to add a lit top edge. It did add one — and it OVERWROTE
+  the richer per-component shadows underneath, so `.project` lost its hover
+  lift and the whole portfolio went flat. It made the page shallower while
+  claiming to add depth.
+
+  The rim already exists. `--emboss` is a hairline of light along the top edge
+  and it is baked into `--lift-1`, `--lift-2` and `--lift-3`, so anything using
+  a lift token already has it, at the right strength for its elevation, in both
+  themes. Deepening the whole product is a change to those three tokens — one
+  place — not a new rule naming every card.
+*/
+
+/*
+  Live things glow.
+
+  Only three: an agent currently working, a blocked job, and the call button.
+  A glow that appears on everything is a gradient; a glow that appears on the
+  two things that need you is a signal.
+*/
+.face.busy { box-shadow: var(--halo); }
+.job.p-rust {
+  box-shadow: var(--lift-1), var(--glass-edge),
+              0 0 24px -8px color-mix(in srgb, var(--warn) 60%, transparent);
+}
+.callbtn { box-shadow: var(--lift-2), var(--halo), var(--glass-edge); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Blur is not motion, so it stays. */
 }

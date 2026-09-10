@@ -1,39 +1,54 @@
 /*
-  One family, two registers.
+  Two voices, and neither of them is the default.
 
-  Grant, on Bodoni: *"Font is still a bit shitty... I don't like this typewriter
-  style. Just something clear and punchy, and it looks professional."* Fair —
-  a didone's hairlines at small sizes read as fussy rather than as fine, and
-  the whole face is doing period drama when the page wants confidence.
+  Grant, third time of asking: *"It still looks like you haven't implemented
+  what I said about using a different font. It's still that AI slop font."*
 
-  So: **Archivo**, and only Archivo. It is a variable grotesk with a WIDTH axis
-  as well as a weight one, which is the reason it can carry both roles alone —
-  display is expanded and heavy (punchy, and the width does the work a second
-  family usually does), text is normal width at 400 and 500. One voice, two
-  registers, which reads as deliberate in a way that two unrelated families
-  never quite does.
+  He was right, and the diagnosis matters. Archivo and Schibsted Grotesk are
+  both competent neo-grotesques — which is precisely the problem. They are the
+  same voice at two sizes, so the page had no contrast to read, and a neutral
+  grotesque is the house style of every generated dashboard on the internet.
+  Changing one neutral grotesque for another was never going to answer him.
 
-  It also has real `smcp` small caps and `onum` oldstyle figures, which is what
-  #24's idea 3 needs. `text-transform: uppercase` only makes capitals bigger;
-  drawn small caps are a different set of glyphs with their own proportions.
+  ## Anybody, for display
 
-  Latin subset, SIL Open Font Licence — see LICENCE.txt.
+  A variable font with a WIDTH axis running 50%–150%. That axis is the whole
+  reason it is here. Grant asked for *"the console of Star Trek"*, and what
+  actually makes LCARS read as LCARS is not colour or bevels — it is extremely
+  wide, tightly tracked capitals sitting beside condensed labels. One family
+  with a width axis does both, and does them as one voice rather than two
+  borrowed ones.
+
+  It is also genuinely unusual. Nobody's generated dashboard is set in Anybody.
+
+  ## Instrument Sans, for text
+
+  Because a display face with that much character needs a text face with poise
+  rather than a competitor. Instrument Sans has slightly humanist proportions
+  and open apertures — it stays readable at 13px in a table, which Anybody at
+  any width does not.
+
+  Both are SIL Open Font Licence, latin subset, self-hosted. Self-hosted is not
+  a preference: Chromium in the capture sandbox cannot reach
+  `fonts.googleapis.com`, so a remote font means every screenshot is judged in
+  the fallback face. See LICENCE.txt.
 */
 
 @font-face {
-  font-family: "Archivo";
-  src: url("./archivo-latin.woff2") format("woff2-variations");
-  font-weight: 400 700;
-  font-stretch: 62% 125%;
+  font-family: "Anybody";
+  src: url("./anybody-latin.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-stretch: 50% 150%;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+2074,
                  U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215;
 }
 
 @font-face {
-  font-family: "Schibsted Grotesk";
-  src: url("./schibsted-grotesk-latin.woff2") format("woff2");
+  font-family: "Instrument Sans";
+  src: url("./instrument-sans-latin.woff2") format("woff2-variations");
   font-weight: 400 700;
+  font-stretch: 75% 100%;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+2074,
                  U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215;
