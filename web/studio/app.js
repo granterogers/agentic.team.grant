@@ -163,6 +163,38 @@ function attention() {
   above them, everything a step up the ramp. The difference is the composition
   saying which project matters before anything is read.
 */
+/*
+  A contact.
+
+  Two questions get answered without opening anything: who is this and how do I
+  reach them, and what happens next. Everything else — organisation, place,
+  linked documents, the note — is there when it exists and takes no room when it
+  does not, which is what stops a mostly-empty contact looking like a broken
+  form.
+
+  The initial-in-a-disc rather than a photo: these are Grant's clients, and this
+  is a prototype on invented data. A real one takes a photo if there is one.
+*/
+function contactCard(c, i) {
+  const stage = { active: 'Active', prospect: 'Prospect', dormant: 'Dormant' }[c.stage] ?? c.stage
+  const bits = [c.org, c.where].filter((x) => x !== '' && x !== undefined)
+  return `<button class="contact ${c.hue}" data-contact="${i}">
+    <span class="disc">${esc(c.name[0])}</span>
+    <span class="who">
+      <span class="line1">
+        <b>${esc(c.name)}</b>
+        <span class="stage s-${esc(c.stage)}">${esc(stage)}</span>
+      </span>
+      <span class="t-meta">${esc(c.role)}${bits.length > 0 ? ` · ${esc(bits.join(' · '))}` : ''}</span>
+      ${c.next ? `<span class="next">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        ${esc(c.next)}${c.nextDue ? ` — ${esc(c.nextDue)}` : ''}</span>` : ''}
+    </span>
+    <span class="t-meta when">${esc(c.last)}</span>
+  </button>`
+}
+
 function card(p, lead) {
   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0
   return `<button class="project ${p.hue} ${lead ? 'lead' : ''}" data-open="${p.slug}">
@@ -273,6 +305,24 @@ function dashboard() {
           <div class="tasks">${p.tasks.map(taskRow).join('')}</div>
         </section>
         <section class="section">
+          <header>
+            <h2 class="t-title">Contacts</h2>
+            <span class="t-meta">${
+              p.contacts.length === 0 ? 'none yet' : `${p.contacts.length} people`
+            }</span>
+          </header>
+          ${
+            p.contacts.length === 0
+              ? `<div class="empty">
+                   <p class="t-meta">Nobody on this project yet. Add the people it is
+                     actually about — clients, prospects, whoever sent you something.</p>
+                   <button class="btn">Add someone</button>
+                 </div>`
+              : `<div class="contacts">${p.contacts.map(contactCard).join('')}</div>
+                 <button class="link add" style="justify-self:start">+ Add someone</button>`
+          }
+        </section>
+        <section class="section">
           <header><h2 class="t-title">Lately</h2></header>
           <div class="tasks">
             ${p.activity.map((a) => {
@@ -334,6 +384,10 @@ function render() {
     })
   }
 
+  for (const b of root.querySelectorAll('[data-contact]')) {
+    b.addEventListener('click', () => openContact(byId(state.project).contacts[Number(b.dataset.contact)]))
+  }
+
   for (const b of root.querySelectorAll('[data-doc]')) {
     tiltable($('.page', b), { max: 7, scale: 1.03 })
     b.addEventListener('click', () => openDoc(byId(state.project).documents[Number(b.dataset.doc)], b))
@@ -347,6 +401,58 @@ function render() {
   dims and does not move. Reference 4: the object you touched is the object you
   land in.
 */
+/*
+  The whole record, when you want it.
+
+  A field with nothing in it is omitted rather than shown empty: "Phone —" tells
+  you nothing that the absence of a phone row does not, and four of them make a
+  contact look unfinished when it is simply a person whose number you do not
+  have.
+*/
+function openContact(c) {
+  const v = $('#viewer')
+  const row = (label, value, href) =>
+    value === '' || value === undefined
+      ? ''
+      : `<div class="field"><span class="t-label">${esc(label)}</span>${
+          href ? `<a href="${esc(href)}${esc(value)}">${esc(value)}</a>` : `<span>${esc(value)}</span>`
+        }</div>`
+
+  v.innerHTML = `<div class="sheet ${c.hue}">
+      <div class="chead">
+        <span class="disc big">${esc(c.name[0])}</span>
+        <span>
+          <h2 class="t-title" style="margin:0">${esc(c.name)}</h2>
+          <p class="t-meta" style="margin:4px 0 0">${esc(c.role)}${c.org ? ` · ${esc(c.org)}` : ''}</p>
+        </span>
+        <span class="stage s-${esc(c.stage)}">${esc(c.stage)}</span>
+      </div>
+      ${c.note ? `<p class="t-lead" style="margin:var(--s4) 0 0">${esc(c.note)}</p>` : ''}
+      <div class="fields">
+        ${row('Email', c.email, 'mailto:')}
+        ${row('Phone', c.phone, 'tel:')}
+        ${row('Where', c.where)}
+        ${row('Last spoke', c.last)}
+        ${row('Next', c.next ? `${c.next}${c.nextDue ? ` — ${c.nextDue}` : ''}` : '')}
+      </div>
+      ${
+        c.docs.length === 0
+          ? ''
+          : `<div class="field" style="margin-top:var(--s4)">
+               <span class="t-label">Documents</span>
+               <span class="doclinks">${c.docs.map((d) => `<span class="link">${esc(d)}</span>`).join('')}</span>
+             </div>`
+      }
+    </div>
+    <button class="close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>`
+  carry(null, null, () => { v.hidden = false })
+  $('.close', v).addEventListener('click', () => { v.hidden = true })
+  v.addEventListener('click', (e) => { if (e.target === v) v.hidden = true })
+}
+
 function openDoc(doc, from) {
   const v = $('#viewer')
   v.innerHTML = `<div class="sheet">

@@ -66,6 +66,57 @@ export const PROJECTS = [
       { title: 'Complete the Success Identity Quiz', state: 'done' },
       { title: 'Review the Zoom Call interview notes', state: 'done' },
     ],
+    /*
+      Contacts.
+
+      Grant: *"I want a contacts list per project, all the relevant metadata to
+      fill in."* For a coaching business these are not a CRM bolt-on — they are
+      the work. WS02's open task is literally "list 20 real and prospective
+      clients", and Ben already exists in this project as the person who sent
+      the WhatsApp audio.
+
+      The fields are chosen so the two questions he will actually ask have
+      answers: *who is this and how do I reach them*, and *what happens next*.
+      Everything else is optional and stays out of the way when empty.
+    */
+    contacts: [
+      {
+        name: 'Ben Hartley', role: 'Referrer', org: 'Hartley & Co',
+        stage: 'active', hue: 'p-rust',
+        email: 'ben@hartleyco.example', phone: '+44 7700 900118',
+        where: 'Manchester', last: '3 days ago',
+        next: 'Send the course outline', nextDue: 'This week',
+        docs: ['Whats App Audio From Ben', 'WhatsApp from Ben'],
+        note: 'Sent the voice note that reframed the vision module. Wants a look before it goes out.',
+      },
+      {
+        name: 'Priya Raman', role: 'Prospective client', org: 'Independent',
+        stage: 'prospect', hue: 'p-iris',
+        email: 'priya.raman@example.com', phone: '',
+        where: 'London', last: '2 weeks ago',
+        next: 'Book the opening assessment', nextDue: 'Before 16 Sep',
+        docs: ['WS01 - Legacy Opening Assessment - Getting to know you.pdf'],
+        note: 'Came through the Journey vs Destination piece. Has not filled in the questionnaire.',
+      },
+      {
+        name: 'Marcus Oyelaran', role: 'Client', org: 'Northgate Studios',
+        stage: 'active', hue: 'p-moss',
+        email: 'm.oyelaran@northgate.example', phone: '+44 7700 900243',
+        where: 'Leeds', last: 'Yesterday',
+        next: 'Interview two of five', nextDue: '16 September',
+        docs: ['Zoom Call (Interview Sync)', 'Grant Interview Questions.pdf'],
+        note: 'First of the five interviews. Answers are the basis of the avatar document.',
+      },
+      {
+        name: 'Dana Whitlock', role: 'Past client', org: 'Whitlock Wellness',
+        stage: 'dormant', hue: 'p-slate',
+        email: 'dana@whitlockwellness.example', phone: '',
+        where: 'Bristol', last: '4 months ago',
+        next: '', nextDue: '',
+        docs: [],
+        note: 'Completed the 2025 cohort. Worth asking for a testimonial.',
+      },
+    ],
     activity: [
       { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', when: '2h ago' },
       { who: 'oliver', verb: 'made', what: 'the course one-pager', when: '2d ago' },
@@ -83,6 +134,7 @@ export const PROJECTS = [
     documents: [
       { title: '5 GitHub Repos: Kill AI Slop, Go Viral, Make Money', kind: 'pdf', origin: 'Yours', size: '21,390 words', lines: [80, 96, 88, 92, 64] },
     ],
+    contacts: [],
     tasks: [{ title: 'Read the agent-orchestration papers', who: 'tom' }],
     activity: [{ who: 'tom', verb: 'summarised', what: 'two sources', when: '1d ago' }],
   },
@@ -93,7 +145,7 @@ export const PROJECTS = [
     hue: 'p-amber',
     connectors: [],
     done: 0, total: 0, docs: 0,
-    modules: [], documents: [], tasks: [], activity: [],
+    modules: [], documents: [], tasks: [], activity: [], contacts: [],
   },
 ]
 

@@ -114,6 +114,16 @@ for (const [size, opts] of SIZES) {
       }
     }
 
+    // Contacts, which sit below the fold in the right-hand column.
+    if (size === 'desktop') {
+      const contacts = page.locator('.contacts')
+      if ((await contacts.count()) > 0) {
+        await contacts.scrollIntoViewIfNeeded()
+        await page.waitForTimeout(300)
+        await shoot('contacts')
+      }
+    }
+
     // And a document, which is the second one.
     await page.locator('[data-doc="0"]').click()
     await page.waitForTimeout(700)
