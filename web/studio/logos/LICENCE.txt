@@ -1,0 +1,35 @@
+Service marks in this directory
+===============================
+
+These are simplified, self-drawn SVG marks identifying the services this office
+connects to. They are NOT the vendors' official brand assets.
+
+Why drawn rather than downloaded:
+
+  1. Official brand kits are licensed for identification but carry conditions on
+     colour, clear space and modification that a monochrome/disabled state in a
+     settings list would breach.
+  2. Remote assets do not load in the capture sandbox, so every screenshot would
+     be judged with them missing.
+  3. Each vendor's SVG arrives at a different weight, grid and optical size, so
+     a row of eight looks like eight logos rather than one list.
+
+Each mark is redrawn on a common 24x24 grid at a common stroke weight, using
+`currentColor` so it can take the connected / degraded / off states. They are
+recognisable identifications, used nominatively to say which service a
+connection is to — not reproductions of the trademarks.
+
+If a vendor's brand guidelines require their official asset, replace the mark
+here and record it below with a link to the guidelines and the terms.
+
+  Notion       wordmark N, drawn
+  Google Drive triangle mark, drawn
+  NotebookLM   notebook glyph, drawn
+  Slack        four-lozenge mark, drawn
+  Telegram     paper plane, drawn
+  GitHub       octocat silhouette, simplified, drawn
+  OpenRouter   router glyph, drawn
+  Supabase     lightning/bolt mark, drawn
+  Zoom         camera glyph, drawn
+
+All trademarks are the property of their respective owners.

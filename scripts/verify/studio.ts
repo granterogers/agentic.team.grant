@@ -80,6 +80,9 @@ for (const [size, opts] of SIZES) {
     if (size === 'desktop' && scheme === 'light') {
       await page.locator('[data-settings]').click()
       await page.waitForTimeout(400)
+      // Settings opens on Team now, not on the palette. The picker is a tab in.
+      await page.locator('[data-setting="appearance"]').click()
+      await page.waitForTimeout(400)
       await shoot('appearance')
       await page.locator('[data-palette-pick="clay"]').click()
       await page.locator('[data-texture-pick="plaster"]').click()
@@ -178,6 +181,21 @@ for (const [size, opts] of SIZES) {
       await page.keyboard.press('Escape')
       await page.locator('h1').first().click()
       await page.waitForTimeout(300)
+
+      /*
+        Settings, all six tabs. It is the half of the product Grant said was
+        being left behind, and a capture of only the first tab would prove the
+        least interesting one.
+      */
+      await page.locator('[data-settings]').first().click()
+      await page.waitForTimeout(500)
+      for (const tab of ['team', 'behaviour', 'connections', 'channels', 'models', 'appearance']) {
+        await page.locator(`[data-setting="${tab}"]`).click()
+        await page.waitForTimeout(400)
+        await shoot(`settings-${tab}`)
+      }
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(400)
 
       await page.locator('[data-rail]').click()
       await page.waitForTimeout(600)

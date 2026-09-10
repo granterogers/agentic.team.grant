@@ -300,7 +300,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .project:hover, .doc:hover .page,
-  .member:hover, .job:hover, .source:hover, .wrow:hover { transform: none; }
+  .member:hover, .job:hover, .source:hover, .wrow:hover,
+  [data-lift]:hover { transform: none; }
   .face.busy::after { animation: none; opacity: .55; }
 }
 
@@ -393,19 +394,26 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    and --gy from alive.js, so the light and the tilt agree — two effects that
    disagree read as two effects; agreeing, they read as one surface. */
 /*
-  Every card that lifts belongs on this list.
+  Every card that lifts belongs here — and `[data-lift]` is how a new one joins
+  without editing this rule (#38).
 
-  It IS a list, so a card type added later gets no glare and no depth until
-  somebody remembers — which is exactly what happened to `.member`, `.job`,
-  `.source` and `.wrow` when the sections were built. They looked consistent
-  beside each other and flat beside everything else in the product.
+  This WAS a hand-maintained list of class names, and it failed exactly as a
+  hand-maintained list does: `.member`, `.job`, `.source` and `.wrow` shipped
+  flat because nobody remembered to extend it. They looked consistent beside
+  each other and flat beside everything else in the product, so two rounds of
+  screenshot review passed them.
+
+  The class names stay for what already exists. Anything new marks itself with
+  `data-lift` and inherits the whole treatment — glare, depth, tilt (app.js
+  reads the same attribute) and the reduced-motion opt-out — with no CSS at all.
 */
-.project, .doc .page, .module, .member, .job, .source, .wrow, .pcard {
+.project, .doc .page, .module, .member, .job, .source, .wrow, .pcard, [data-lift] {
   --gx: 50%; --gy: 50%; --glare: 0;
   transform-style: preserve-3d;
 }
 .project::after, .doc .page::after, .module::after,
-.member::after, .job::after, .source::after, .wrow::after, .pcard::after {
+.member::after, .job::after, .source::after, .wrow::after, .pcard::after,
+[data-lift]::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
   border-radius: inherit;
   background: radial-gradient(420px circle at var(--gx) var(--gy),
@@ -414,7 +422,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: opacity .35s ease;
   mix-blend-mode: soft-light;
 }
-.project, .job, .source, .wrow { position: relative; }
+.project, .job, .source, .wrow, [data-lift] { position: relative; }
 .doc .page::after { background: radial-gradient(260px circle at var(--gx) var(--gy),
   rgb(255 255 255 / .28) 0%, transparent 58%); }
 
@@ -484,7 +492,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
      the element. Same list as the one that turns it on. */
   .project::after, .doc .page::after, .module::after,
   .member::after, .job::after, .source::after, .wrow::after,
-  .pcard::after { display: none; }
+  .pcard::after, [data-lift]::after { display: none; }
   .doc:hover .page { transform: rotate(var(--rest-tilt, 0deg)); }
   :root[data-tint] body::before { transition: none; }
 }
@@ -1554,4 +1562,170 @@ body::after {
 
 @media (prefers-reduced-motion: reduce) {
   /* Blur is not motion, so it stays. */
+}
+
+
+/* --- the card, as one thing (#38) -------------------------------------------
+   A card used to be four rules copied per component: the gradient face, the
+   border, the lift, the transition. Four copies is four chances to forget one,
+   and Settings is about to add six screens' worth of new surfaces.
+
+   `data-lift` carries all of it. A new card is `<div data-lift>` and it is
+   correct — face, depth, lit rim, pointer glare, tilt and reduced-motion,
+   without touching this file. `data-lift="quiet"` is the same card at rest,
+   for things that are present but not active. */
+
+[data-lift] {
+  border-radius: var(--r-card);
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1),
+              opacity .24s;
+}
+[data-lift]:hover { box-shadow: var(--lift-2); }
+[data-lift="quiet"] { opacity: .72; box-shadow: none; }
+[data-lift="quiet"]:hover { opacity: 1; box-shadow: var(--lift-1); }
+/* A card whose leading edge carries its subject's colour. */
+[data-lift][data-edge] {
+  border-left: 3px solid color-mix(in srgb, var(--hue, var(--accent)) 55%, transparent);
+}
+
+/* --- Settings ---------------------------------------------------------------
+   Grant: "this level of visual quality should be applied to the settings part
+   as well... I don't want to see some crappy AI slop website."
+
+   So it is built on the same primitives as everything else: `data-lift` cards,
+   the same depth tokens, the same glass, the same type ramp. Nothing here has
+   its own visual language, which is the point — a settings page that looks
+   different is a settings page that feels like a different product. */
+
+.sheet.settings { display: grid; gap: var(--s4); }
+.settabs {
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--edge); margin: 0 calc(var(--s5) * -1);
+  padding: 0 var(--s5);
+}
+.settabs::-webkit-scrollbar { display: none; }
+.settab {
+  position: relative; flex: none; padding: 9px 15px 12px; min-height: 44px;
+  color: var(--ink-2); font: 500 14px/1 var(--text); border-radius: 8px 8px 0 0;
+  white-space: nowrap; transition: color .16s, background .16s;
+}
+.settab:hover { color: var(--ink); background: color-mix(in srgb, var(--sunken) 60%, transparent); }
+.settab.on { color: var(--ink); font-weight: 600; }
+.settab.on::after {
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--ink)));
+}
+.setbody { display: grid; gap: var(--s4); align-content: start; }
+
+/* Team */
+.staffgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: var(--s3); }
+.staffcard { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); }
+.staffcard > .face { flex: none; }
+.sbody { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.sbody b { font: 600 15px/1.25 var(--text); }
+.sctl { flex: none; opacity: 0; transition: opacity .16s; }
+.staffcard:hover .sctl, .staffcard:focus-within .sctl { opacity: 1; }
+@media (pointer: coarse) { .sctl { opacity: 1; } }
+
+/* Behaviour */
+.behaves { display: grid; gap: var(--s3); }
+.behave { padding: var(--s4); display: grid; gap: var(--s3); }
+.behave.row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.bhead { display: grid; gap: 2px; min-width: 0; }
+.bhead b { font: 600 15px/1.3 var(--text); }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s2); }
+.choice {
+  display: grid; gap: 2px; text-align: left; padding: 11px 13px; border-radius: 9px;
+  border: 1px solid var(--edge); background: color-mix(in srgb, var(--sunken) 45%, transparent);
+  min-height: 44px; transition: border-color .16s, background .16s, box-shadow .16s;
+}
+.choice b { font: 600 13.5px/1.25 var(--text); color: var(--ink-2); }
+.choice:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--edge)); }
+.choice.on {
+  background: var(--accent-wash); box-shadow: var(--halo);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.choice.on b { color: var(--ink); }
+
+/* A switch that reads as a physical throw, not a checkbox. */
+.toggle {
+  flex: none; width: 50px; height: 29px; border-radius: 999px; padding: 3px;
+  border: 1px solid var(--edge); background: var(--sunken);
+  box-shadow: var(--engrave); transition: background .22s cubic-bezier(.2,.8,.3,1);
+}
+.toggle .knob {
+  display: block; width: 21px; height: 21px; border-radius: 50%;
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--surface) 92%, #000));
+  box-shadow: var(--lift-1);
+  transition: transform .28s cubic-bezier(.2,.9,.3,1);
+}
+.toggle.on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 82%, #fff), var(--accent));
+  border-color: transparent; box-shadow: var(--halo);
+}
+.toggle.on .knob { transform: translateX(21px); }
+.pillvalue {
+  font: 600 13px/1 var(--display); font-stretch: 88%; letter-spacing: .04em;
+  padding: 8px 12px; border-radius: 999px; background: var(--sunken); color: var(--ink-2);
+  box-shadow: var(--engrave);
+}
+
+/* Connections and channels */
+.servicegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: var(--s3); }
+.service { display: grid; gap: var(--s3); padding: var(--s4); align-content: start; }
+.mark {
+  width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+  color: var(--tint); background: color-mix(in srgb, var(--tint) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tint) 22%, transparent);
+  box-shadow: var(--glass-edge);
+}
+.svbody { display: grid; gap: 2px; min-width: 0; }
+.svbody b { font: 600 15px/1.25 var(--text); }
+.svfoot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dotstate { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ink-3); }
+.service.s-ok .dotstate {
+  background: var(--good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent);
+}
+.service.s-degraded .dotstate {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent);
+}
+/* Disconnected loses its colour entirely — the row should read as absent from
+   across the room, which a coloured logo at 60% opacity does not. */
+.service.s-off { opacity: .68; }
+.service.s-off .mark { color: var(--ink-3); background: var(--sunken); border-color: var(--edge); }
+.btn.small { min-height: 32px; padding: 0 12px; font-size: 13px; }
+
+/* Cost */
+.spendhead {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s5);
+  align-items: center; padding: var(--s5);
+}
+@media (max-width: 640px) { .spendhead { grid-template-columns: minmax(0, 1fr); gap: var(--s3); } }
+.bignum {
+  font: 620 40px/1 var(--display); font-stretch: 116%; letter-spacing: -0.03em;
+  margin: 6px 0 4px;
+}
+.warnbox {
+  display: flex; gap: 9px; margin: 0; padding: 12px 14px; border-radius: 10px;
+  font: 400 13.5px/1.5 var(--text); color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 24%, transparent);
+}
+.warnbox svg { flex: none; margin-top: 2px; }
+.spendrows { display: grid; gap: var(--s2); }
+.spendrow {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+  padding: 13px var(--s4);
+}
+.spendrow > span:first-child { display: grid; gap: 1px; min-width: 0; }
+.spendrow b { font: 500 14.5px/1.3 var(--text); }
+.cost {
+  font: 620 17px/1 var(--display); font-stretch: 104%;
+  font-variant-numeric: tabular-nums; flex: none;
 }

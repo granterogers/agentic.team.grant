@@ -11,6 +11,8 @@ import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
+import * as config from './settings.js'
+import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
 import * as people from './people.js'
@@ -25,6 +27,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
 const state = {
+  // Which Settings tab is open (#39).
+  setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
   // The project's sections (#30). Overview is the default: the specification
   // opens on Current Focus and Project Status, not on a file list.
@@ -1135,17 +1139,201 @@ function dashboard() {
   is drawn from the palette's own tokens by setting `data-palette` on itself, so
   a new palette appears in this list with no code here at all.
 */
-function settingsSheet() {
-  const now = appearance()
-  const v = $('#settings')
-  v.innerHTML = `<div class="sheet wide">
-      <div class="chead">
-        <span style="flex:1;min-width:0">
-          <h2 class="t-title" style="margin:0">Appearance</h2>
-          <p class="t-meta" style="margin:4px 0 0">Changes apply straight away and are
-            remembered on this device.</p>
-        </span>
+
+/*
+  Team — the eight, and adding a ninth.
+
+  Grant: *"one tab for the bot management where you add and remove bots
+  dynamically, that's automatically done."* The database already supports this:
+  `staff.permanent`, `staff.expires_at`, `staff.justification` and
+  `staff.requested_for_job` exist precisely so an agent can be brought in for a
+  piece of work and expire when it is done. What was missing was any way to see
+  or do it.
+*/
+function teamTabSettings() {
+  const card = (c) => `
+    <article class="staffcard ${c.hue}" data-lift data-edge data-tilt="3.2">
+      ${face(c, 46)}
+      <div class="sbody">
+        <b>${esc(c.name)}</b>
+        <span class="t-label">${esc(c.role)}</span>
+        <span class="t-meta">${esc(c.doing ?? 'Available')}</span>
       </div>
+      <div class="sctl">
+        <button class="btn" data-configure="${esc(c.slug)}">Configure</button>
+      </div>
+    </article>`
+
+  return `<div class="setbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">Eight permanent. Bring in a specialist for a
+        piece of work and they leave when it is finished.</p>
+      <button class="btn primary" data-hire>+ Bring someone in</button>
+    </div>
+    <div class="staffgrid">${CREW.map(card).join('')}</div>
+    <p class="t-meta">A temporary agent carries a justification and an expiry, so the
+      office never quietly grows. Removing one is reversible.</p>
+  </div>`
+}
+
+/*
+  Behaviour — how much the office does without asking.
+
+  This is the frontend half of #15. The one that matters is the top one: a
+  system that interrupts on everything is a system you stop reading, and one
+  that interrupts on nothing is one you stop trusting.
+*/
+function behaviourTab() {
+  const row = (b) => {
+    if (b.kind === 'choice') {
+      return `<article class="behave" data-lift data-tilt="1.6">
+        <div class="bhead"><b>${esc(b.name)}</b></div>
+        <div class="choices">
+          ${b.options.map((o) => `
+            <button class="choice ${b.value === o.id ? 'on' : ''}" data-choose="${esc(b.id)}:${esc(o.id)}">
+              <b>${esc(o.name)}</b>
+              <span class="t-meta">${esc(o.note)}</span>
+            </button>`).join('')}
+        </div>
+      </article>`
+    }
+    if (b.kind === 'switch') {
+      return `<article class="behave row" data-lift data-tilt="1.6">
+        <div class="bhead">
+          <b>${esc(b.name)}</b>
+          <span class="t-meta">${esc(b.note)}</span>
+        </div>
+        <button class="toggle ${b.value ? 'on' : ''}" role="switch"
+                aria-checked="${b.value}" data-toggle="${esc(b.id)}"
+                aria-label="${esc(b.name)}"><span class="knob"></span></button>
+      </article>`
+    }
+    return `<article class="behave row" data-lift data-tilt="1.6">
+      <div class="bhead">
+        <b>${esc(b.name)}</b>
+        <span class="t-meta">${esc(b.note)}</span>
+      </div>
+      <span class="pillvalue">${esc(b.value)}</span>
+    </article>`
+  }
+  return `<div class="setbody">
+    <p class="t-lead" style="margin:0">What the team may do on its own, and when it
+      should stop and ask you.</p>
+    <div class="behaves">${config.BEHAVIOURS.map(row).join('')}</div>
+  </div>`
+}
+
+/*
+  Connections — every service, with its real mark.
+
+  The marks are drawn on one 24×24 grid at one weight rather than downloaded,
+  because eight official SVGs arrive at eight different optical sizes and a row
+  of them reads as eight logos instead of one list. See logos/LICENCE.txt.
+
+  A connection that is unwell says what to do about it in the same card. A
+  settings page that reports a problem and leaves you to find the fix is a
+  settings page that has told on itself and helped nobody.
+*/
+function connectionsTab() {
+  const card = (c) => `
+    <article class="service s-${c.state}" data-lift data-tilt="3.4"
+             style="--tint:${esc(c.tint)}">
+      <span class="mark">${c.svg}</span>
+      <div class="svbody">
+        <b>${esc(c.name)}</b>
+        <span class="t-meta">${esc(c.used)}</span>
+        <span class="t-meta from">${esc(c.detail)}</span>
+      </div>
+      <div class="svfoot">
+        <span class="dotstate"></span>
+        <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
+        <span class="t-meta">${esc(c.last)}</span>
+        ${c.fix === undefined ? '' : `<button class="btn small">${esc(c.fix)}</button>`}
+      </div>
+    </article>`
+  const list = config.services()
+  const bad = list.filter((c) => c.state !== 'ok').length
+  return `<div class="setbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">${list.length} services. ${
+        bad === 0 ? 'All of them well.' : `${bad} want looking at.`}</p>
+      <button class="btn">+ Connect something</button>
+    </div>
+    <div class="servicegrid">${list.map(card).join('')}</div>
+  </div>`
+}
+
+/** Channels — which surface reaches Grant, and when. */
+function channelsTab() {
+  return `<div class="setbody">
+    <p class="t-lead" style="margin:0">How the office reaches you. Only the Chief of
+      Staff sends; everyone else still does the work.</p>
+    <div class="servicegrid">
+      ${config.CHANNELS.map((c) => {
+        const m = MARKS[c.key] ?? { svg: '', tint: 'currentColor' }
+        return `<article class="service s-${c.state}" data-lift data-tilt="3.4"
+                 style="--tint:${esc(m.tint)}">
+          <span class="mark">${m.svg}</span>
+          <div class="svbody">
+            <b>${esc(c.name)}</b>
+            <span class="t-meta">${esc(c.role)}</span>
+            <span class="t-meta from">${esc(c.detail)}</span>
+          </div>
+          <div class="svfoot">
+            <span class="dotstate"></span>
+            <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
+          </div>
+        </article>`
+      }).join('')}
+    </div>
+  </div>`
+}
+
+/*
+  Models and cost.
+
+  The £0/month constraint is a hard one, so it is a live number rather than a
+  note in a document. The warning is the useful part: the free tier has an edge
+  and the only bad way to find it is an invoice.
+*/
+function modelsTab() {
+  return `<div class="setbody">
+    <div class="spendhead" data-lift data-tilt="1.2">
+      <div>
+        <span class="t-label">This month</span>
+        <div class="bignum">${esc(config.SPEND.month)}</div>
+        <span class="t-meta">Target: ${esc(config.SPEND.target)}</span>
+      </div>
+      <p class="warnbox">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+        ${esc(config.SPEND.warn)}
+      </p>
+    </div>
+    <div class="spendrows">
+      ${config.SPEND.rows.map((r) => `
+        <div class="spendrow" data-lift data-tilt="1">
+          <span><b>${esc(r.name)}</b><span class="t-meta">${esc(r.note)}</span></span>
+          <span class="cost">${esc(r.cost)}</span>
+        </div>`).join('')}
+    </div>
+  </div>`
+}
+
+
+/*
+  Appearance — one of six tabs now, not the whole of Settings.
+
+  Its contents are unchanged. The swatches were always the right idea: nobody
+  knows what "Clay" looks like from the word, and each one paints itself from
+  its own palette's tokens so a new palette needs no code here.
+*/
+function appearanceTab() {
+  const now = appearance()
+  return `<div class="setbody">
+      <p class="t-lead" style="margin:0 0 var(--s4)">Changes apply straight away and are
+        remembered on this device.</p>
 
       <div class="setgroup">
         <span class="t-label">Palette</span>
@@ -1211,13 +1399,70 @@ function settingsSheet() {
       </div>
 
       <p class="t-meta" style="margin-top:var(--s4)">Light and dark follow your system
-        setting. Every palette has both.</p>
-    </div>
-    <button class="close" aria-label="Close">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>`
+        setting. Every palette has both.</p>    </div>`
+}
 
+
+/*
+  Settings, as a place rather than a sheet.
+
+  Grant: *"I want to see these things properly arranged in a logical way. So
+  like one tab for the bot management where you add and remove bots
+  dynamically... where you can see all the various services that we're
+  connected to. And I want to see it, you know, like the proper logos."*
+
+  Six tabs in the order you need them: who is on the team, how much they do
+  without asking, what they are plugged into, how they reach you, what it
+  costs, and how it looks.
+*/
+function settingsSheet() {
+  const v = $('#settings')
+  const body =
+    state.setting === 'behaviour' ? behaviourTab()
+    : state.setting === 'connections' ? connectionsTab()
+    : state.setting === 'channels' ? channelsTab()
+    : state.setting === 'models' ? modelsTab()
+    : state.setting === 'appearance' ? appearanceTab()
+    : teamTabSettings()
+
+  v.innerHTML = `<div class="sheet wide settings">
+    <div class="chead">
+      <span style="flex:1;min-width:0">
+        <h2 class="t-title" style="margin:0">The office</h2>
+        <p class="t-meta" style="margin:4px 0 0">Everything about how this place
+          runs, and what it is plugged into.</p>
+      </span>
+    </div>
+    <div class="settabs" role="tablist" aria-label="Settings">
+      ${config.TABS.map((t) => `<button role="tab" class="settab ${
+        state.setting === t.id ? 'on' : ''
+      }" aria-selected="${state.setting === t.id}" data-setting="${t.id}">${esc(t.name)}</button>`).join('')}
+    </div>
+    ${body}
+  </div>
+  <button class="close" aria-label="Close">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>`
+
+  for (const b of v.querySelectorAll('[data-setting]')) {
+    b.addEventListener('click', () => { state.setting = b.dataset.setting; settingsSheet(); sheet(v, true) })
+  }
+  for (const el of v.querySelectorAll('[data-lift]')) {
+    tiltable(el, { max: Number(el.dataset.tilt ?? 3), scale: 1.006 })
+  }
+  wireAppearance(v)
+}
+
+/*
+  The appearance controls, wired.
+
+  Split out of the old sheet when Settings became six tabs. Each change applies
+  immediately and redraws, so the tick moves under your finger rather than after
+  a save — a settings panel with a Save button is a settings panel that makes
+  you guess what a palette looks like before committing to it.
+*/
+function wireAppearance(v) {
   const pick = (key, value) => {
     apply({ ...appearance(), [key]: value })
     settingsSheet()          // redraw so the tick moves
@@ -1247,7 +1492,7 @@ function settingsSheet() {
     sheet(v, true)
   })
 
-  $('.close', v).addEventListener('click', () => { sheet(v, false) })
+  $('.close', v)?.addEventListener('click', () => { sheet(v, false) })
   v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 }
 
@@ -1334,6 +1579,14 @@ function render() {
   ]
   for (const [sel, opts] of TILT) {
     for (const el of root.querySelectorAll(sel)) tiltable(el, opts)
+  }
+  /*
+    And anything marked `data-lift`, which is how a new card joins without
+    editing either this array or the CSS (#38). `data-tilt` names the angle;
+    3 degrees is right for most things and is the default.
+  */
+  for (const el of root.querySelectorAll('[data-lift]')) {
+    tiltable(el, { max: Number(el.dataset.tilt ?? 3), scale: 1.006 })
   }
 
   // Tasks complete optimistically: the row changes now, the network catches up.
