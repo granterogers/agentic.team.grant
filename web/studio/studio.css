@@ -3,35 +3,23 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 /*
-  A textured ground.
+  The ground: the palette's colour fields, then the chosen texture over them.
 
-  Grant asked for texture, and a flat fill is the thing that makes a page read
-  as a document rather than as a surface. Two layers: a fine fibre grain from
-  SVG turbulence, and a very wide soft vignette so the middle of the page is
-  fractionally lighter than its corners — the way paper under a lamp is. Both
-  are almost subliminal at 100%; remove them and the page goes dead, which is
-  how you know they are doing something.
-
-  Data URI rather than a file: no request, and it cannot 404.
+  `--tex` and `--tex-size` come from skins.css and change with the picker, so
+  this rule never has to know which texture is on. Fixed attachment on all of
+  it, because a texture that scrolls with the content is wallpaper on a moving
+  sheet rather than a surface the content sits on.
 */
 body {
   background-color: var(--ground);
-  /*
-    A soft ground.
-
-    Grant: *"background is still solid color rather than soft color"*. Three
-    overlapping wide radial fields at very low opacity, in hues either side of
-    the ground's own, so the page has weather in it — lighter towards the top
-    where the light is, cooler bottom-left, warmer bottom-right. None of them
-    is nameable as a colour; together they stop the surface being one flat
-    value, which is what "solid" means and what reads as cheap.
-  */
   background-image:
+    var(--tex, none),
     radial-gradient(120% 90% at 50% 0%, var(--wash) 0%, transparent 62%),
     radial-gradient(70% 55% at 8% 88%, var(--field-a) 0%, transparent 70%),
-    radial-gradient(80% 60% at 96% 72%, var(--field-b) 0%, transparent 72%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-  background-attachment: fixed, fixed, fixed, fixed;
+    radial-gradient(80% 60% at 96% 72%, var(--field-b) 0%, transparent 72%);
+  background-size: var(--tex-size, auto), auto, auto, auto;
+  background-attachment: fixed;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
   color: var(--ink);
   font: 400 15.5px/1.55 var(--text);
   font-variant-numeric: tabular-nums;
@@ -583,4 +571,30 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: grid; gap: var(--s3); justify-items: start;
   padding: var(--s4); border: 1px dashed var(--edge); border-radius: var(--r-card);
   background: color-mix(in srgb, var(--sunken) 55%, transparent);
+}
+
+/* --- the appearance picker -------------------------------------------------
+   Swatches, not names: nobody knows what "Clay" looks like from the word. Each
+   swatch carries its own data-palette so it paints itself from that palette's
+   tokens — a new palette needs no code here. */
+.sheet.wide { width: min(880px, 100%); }
+.setgroup { margin-top: var(--s5); display: grid; gap: var(--s3); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3); }
+.swatch {
+  display: grid; gap: 5px; justify-items: start; text-align: left;
+  padding: var(--s3); border-radius: var(--r-card); border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 5%), var(--surface));
+  box-shadow: var(--lift-1); transition: box-shadow .2s, transform .2s;
+}
+.swatch:hover { box-shadow: var(--lift-2); transform: translateY(-2px); }
+.swatch.on { border-color: var(--accent); box-shadow: var(--lift-2), inset 0 0 0 1px var(--accent); }
+.swatch b { font: 600 14px/1.2 var(--text); }
+.swatch .t-meta { font-size: 12px; }
+.chips3 { display: flex; width: 100%; height: 40px; border-radius: 7px; overflow: hidden;
+  box-shadow: var(--engrave); }
+.chips3 i { flex: 1; }
+.texpreview {
+  width: 100%; height: 40px; border-radius: 7px; box-shadow: var(--engrave);
+  background-color: var(--sunken); background-image: var(--tex, none);
+  background-size: var(--tex-size, auto);
 }

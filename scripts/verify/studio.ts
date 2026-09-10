@@ -73,6 +73,25 @@ for (const [size, opts] of SIZES) {
 
     await shoot('portfolio')
 
+    // The appearance picker, and one alternative palette, so a change to the
+    // skin system is visible in a capture rather than only in the CSS.
+    if (size === 'desktop' && scheme === 'light') {
+      await page.locator('[data-settings]').click()
+      await page.waitForTimeout(400)
+      await shoot('appearance')
+      await page.locator('[data-palette-pick="clay"]').click()
+      await page.locator('[data-texture-pick="plaster"]').click()
+      await page.waitForTimeout(400)
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(300)
+      await shoot('palette-clay')
+      // Back to the default so the rest of the captures are comparable.
+      await page.locator('[data-settings]').click()
+      await page.locator('[data-palette-pick="paper"]').click()
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(300)
+    }
+
     /*
       Hover states, captured deliberately.
 

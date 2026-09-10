@@ -1,0 +1,178 @@
+/*
+  Palettes and textures, as things you can choose.
+
+  Grant: *"textures, colours, etc should all be adjustable in settings.. with a
+  range of palettes and textures, etc to choose from"* — and he sent a board of
+  plaster, stone and canvas references, which are a long way from the fine
+  fibre grain that was here.
+
+  ## Why data attributes rather than classes
+
+  `data-palette` and `data-texture` set tokens, and nothing else in the
+  stylesheet knows a palette exists. Adding one is adding a block here; no
+  component changes. That is the difference between a theme system and a second
+  copy of the CSS.
+
+  Each selector is written twice — `:root[data-palette="x"]` AND
+  `[data-palette="x"]` — deliberately. The first themes the page; the second
+  lets any element carry a palette, which is what makes a swatch in the picker
+  paint itself from the palette it offers. With only the `:root` form the picker
+  showed five identical chips, all in whichever theme was already on.
+
+  ## Why the textures are drawn rather than downloaded
+
+  Every one is SVG turbulence as a data URI: no requests, nothing to 404,
+  nothing to licence, and they recolour with the palette because the fill is a
+  token rather than a photograph. A stock plaster JPEG would look better for
+  one palette and wrong for the other four.
+*/
+
+/* ==========================================================================
+   PALETTES
+   Each sets the same eleven tokens. The dark variant of each lives beside it.
+   ========================================================================== */
+
+/* --- Paper: warm off-white, forest green. The default. ------------------- */
+:root[data-palette="paper"], [data-palette="paper"] {
+  --ground: #FAF8F4; --surface: #FFFFFF; --sunken: #F2EFE9;
+  --ink: #191813; --ink-2: #6B675C; --ink-3: #9C9789; --edge: #E6E1D7;
+  --accent: #1F5F4B; --accent-wash: rgb(31 95 75 / .08); --on-accent: #FAF8F4;
+  --wash: rgb(255 255 255 / .55);
+  --field-a: oklch(0.93 0.028 200 / .55); --field-b: oklch(0.94 0.030 65 / .55);
+  --tex-ink: 25 24 19;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="paper"], [data-palette="paper"] {
+    --ground: #14140F; --surface: #1D1D17; --sunken: #100F0B;
+    --ink: #F0EDE4; --ink-2: #A5A091; --ink-3: #726D5F; --edge: #2C2B23;
+    --accent: #5FBF96; --accent-wash: rgb(95 191 150 / .14); --on-accent: #0F1A15;
+    --wash: rgb(150 190 170 / .05);
+    --field-a: oklch(0.34 0.035 215 / .30); --field-b: oklch(0.32 0.030 55 / .26);
+    --tex-ink: 255 250 240;
+  }
+}
+
+/* --- Slate: cool grey, deep blue. Quiet and technical. ------------------- */
+:root[data-palette="slate"], [data-palette="slate"] {
+  --ground: #F4F5F7; --surface: #FFFFFF; --sunken: #E9EBEF;
+  --ink: #14171C; --ink-2: #5C636E; --ink-3: #8E96A3; --edge: #DDE1E7;
+  --accent: #24486E; --accent-wash: rgb(36 72 110 / .08); --on-accent: #F4F5F7;
+  --wash: rgb(255 255 255 / .6);
+  --field-a: oklch(0.93 0.026 250 / .6); --field-b: oklch(0.94 0.020 190 / .5);
+  --tex-ink: 20 23 28;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="slate"], [data-palette="slate"] {
+    --ground: #0F1216; --surface: #171B21; --sunken: #0B0E11;
+    --ink: #ECEFF3; --ink-2: #9BA3B0; --ink-3: #69717D; --edge: #262C34;
+    --accent: #7FAEE0; --accent-wash: rgb(127 174 224 / .14); --on-accent: #0B141D;
+    --wash: rgb(150 180 220 / .05);
+    --field-a: oklch(0.33 0.035 255 / .32); --field-b: oklch(0.31 0.028 205 / .26);
+    --tex-ink: 235 242 250;
+  }
+}
+
+/* --- Clay: terracotta and sand. Warm, hand-made. ------------------------- */
+:root[data-palette="clay"], [data-palette="clay"] {
+  --ground: #FBF5EF; --surface: #FFFCF9; --sunken: #F2E8DE;
+  --ink: #241A14; --ink-2: #6F5F53; --ink-3: #A39184; --edge: #E8DCD0;
+  --accent: #9A4A25; --accent-wash: rgb(154 74 37 / .09); --on-accent: #FBF5EF;
+  --wash: rgb(255 250 244 / .6);
+  --field-a: oklch(0.94 0.035 45 / .6); --field-b: oklch(0.93 0.028 95 / .5);
+  --tex-ink: 36 26 20;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="clay"], [data-palette="clay"] {
+    --ground: #17110D; --surface: #201812; --sunken: #120C08;
+    --ink: #F5EAE0; --ink-2: #AD9B8C; --ink-3: #7A6A5D; --edge: #302419;
+    --accent: #E08A5C; --accent-wash: rgb(224 138 92 / .15); --on-accent: #1A0F08;
+    --wash: rgb(220 170 130 / .05);
+    --field-a: oklch(0.33 0.045 45 / .3); --field-b: oklch(0.31 0.032 90 / .26);
+    --tex-ink: 252 240 228;
+  }
+}
+
+/* --- Ink: near-black on cream. High contrast, editorial. ----------------- */
+:root[data-palette="ink"], [data-palette="ink"] {
+  --ground: #F6F4EE; --surface: #FFFEFA; --sunken: #EBE7DD;
+  --ink: #101010; --ink-2: #55534C; --ink-3: #918D82; --edge: #DFDACE;
+  --accent: #2E2A6B; --accent-wash: rgb(46 42 107 / .08); --on-accent: #F6F4EE;
+  --wash: rgb(255 255 252 / .6);
+  --field-a: oklch(0.93 0.022 280 / .5); --field-b: oklch(0.94 0.024 70 / .5);
+  --tex-ink: 16 16 16;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="ink"], [data-palette="ink"] {
+    --ground: #0C0C0C; --surface: #161616; --sunken: #070707;
+    --ink: #F3F1EA; --ink-2: #A09D94; --ink-3: #6B6862; --edge: #262523;
+    --accent: #A9A2F0; --accent-wash: rgb(169 162 240 / .14); --on-accent: #0D0B1C;
+    --wash: rgb(200 195 230 / .04);
+    --field-a: oklch(0.32 0.04 285 / .3); --field-b: oklch(0.30 0.025 70 / .24);
+    --tex-ink: 250 248 242;
+  }
+}
+
+/* --- Moss: deep green and stone. ----------------------------------------- */
+:root[data-palette="moss"], [data-palette="moss"] {
+  --ground: #F3F5F0; --surface: #FDFEFB; --sunken: #E6EBE1;
+  --ink: #141A13; --ink-2: #566052; --ink-3: #8B958A; --edge: #DAE1D5;
+  --accent: #3A6B2E; --accent-wash: rgb(58 107 46 / .09); --on-accent: #F3F5F0;
+  --wash: rgb(253 255 250 / .6);
+  --field-a: oklch(0.94 0.030 140 / .6); --field-b: oklch(0.93 0.022 190 / .5);
+  --tex-ink: 20 26 19;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="moss"], [data-palette="moss"] {
+    --ground: #101410; --surface: #181D17; --sunken: #0A0D0A;
+    --ink: #EDF2EA; --ink-2: #9AA697; --ink-3: #687264; --edge: #242B23;
+    --accent: #8CC96F; --accent-wash: rgb(140 201 111 / .14); --on-accent: #0E1509;
+    --wash: rgb(160 200 150 / .05);
+    --field-a: oklch(0.33 0.04 145 / .3); --field-b: oklch(0.31 0.026 195 / .26);
+    --tex-ink: 240 248 236;
+  }
+}
+
+/* ==========================================================================
+   TEXTURES
+   `--tex` is the layer painted over the ground. `--tex-ink` is the palette's
+   own dark, so a texture is never a grey film over a warm page.
+   ========================================================================== */
+
+/* --- None: the fields only. ---------------------------------------------- */
+:root[data-texture="none"], [data-texture="none"] { --tex: none; --tex-size: auto; }
+
+/* --- Grain: fine paper fibre. The old default. --------------------------- */
+:root[data-texture="grain"], [data-texture="grain"] {
+  --tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23t)' opacity='0.05'/%3E%3C/svg%3E");
+  --tex-size: 140px 140px;
+}
+
+/* --- Plaster: mottled, soft-edged, uneven. The reference board's look. ----
+   Low-frequency turbulence at high octaves gives clouded patches rather than
+   even noise, which is what makes plaster read as a surface someone applied. */
+:root[data-texture="plaster"], [data-texture="plaster"] {
+  --tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.018' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='gamma' exponent='1.6' amplitude='1.4'/%3E%3C/feFuncA%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='420' height='420' filter='url(%23t)' opacity='0.16'/%3E%3C/svg%3E");
+  --tex-size: 420px 420px;
+}
+
+/* --- Canvas: a woven grid, warp over weft. ------------------------------- */
+:root[data-texture="canvas"], [data-texture="canvas"] {
+  --tex:
+    repeating-linear-gradient(90deg, rgb(var(--tex-ink) / .035) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, rgb(var(--tex-ink) / .028) 0 1px, transparent 1px 3px);
+  --tex-size: 3px 3px, 3px 3px;
+}
+
+/* --- Stone: coarse, directional, with fracture. -------------------------- */
+:root[data-texture="stone"], [data-texture="stone"] {
+  --tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.04 0.09' numOctaves='4' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.5'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23t)' opacity='0.14'/%3E%3C/svg%3E");
+  --tex-size: 300px 300px;
+}
+
+/* --- Linen: soft irregular weave, warmer than canvas. -------------------- */
+:root[data-texture="linen"], [data-texture="linen"] {
+  --tex:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5 0.02' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23t)' opacity='0.09'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23t)' opacity='0.07'/%3E%3C/svg%3E");
+  --tex-size: 200px 200px, 200px 200px;
+}

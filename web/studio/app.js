@@ -8,6 +8,7 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
+import { PALETTES, TEXTURES, appearance, apply } from './appearance.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
 import { pageSvg } from './page.js'
@@ -124,6 +125,14 @@ function rail() {
       else collapses into a quiet strip underneath. That is presence being
       ambient — you see the shape of the office without reading it.
     -->
+    <button class="navitem settings-open" data-settings>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3"/>
+      </svg>
+      Appearance
+    </button>
     <div class="team">
       <div class="t-label">Working now</div>
       ${CREW.filter((c) => c.state === 'busy').map((c) => `
@@ -342,6 +351,79 @@ function dashboard() {
 
 // --- render and wire ---------------------------------------------------------
 
+/*
+  The appearance picker.
+
+  Swatches rather than names: nobody knows what "Clay" looks like from the word,
+  and a palette you can see is a palette you can choose in a second. Each swatch
+  is drawn from the palette's own tokens by setting `data-palette` on itself, so
+  a new palette appears in this list with no code here at all.
+*/
+function settingsSheet() {
+  const now = appearance()
+  const v = $('#settings')
+  v.innerHTML = `<div class="sheet wide">
+      <div class="chead">
+        <span style="flex:1;min-width:0">
+          <h2 class="t-title" style="margin:0">Appearance</h2>
+          <p class="t-meta" style="margin:4px 0 0">Changes apply straight away and are
+            remembered on this device.</p>
+        </span>
+      </div>
+
+      <div class="setgroup">
+        <span class="t-label">Palette</span>
+        <div class="swatches">
+          ${PALETTES.map((p) => `
+            <button class="swatch ${now.palette === p.id ? 'on' : ''}"
+                    data-palette-pick="${p.id}" data-palette="${p.id}">
+              <span class="chips3">
+                <i style="background:var(--ground)"></i>
+                <i style="background:var(--surface)"></i>
+                <i style="background:var(--accent)"></i>
+              </span>
+              <b>${esc(p.name)}</b>
+              <span class="t-meta">${esc(p.note)}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="setgroup">
+        <span class="t-label">Texture</span>
+        <div class="swatches">
+          ${TEXTURES.map((t) => `
+            <button class="swatch ${now.texture === t.id ? 'on' : ''}"
+                    data-texture-pick="${t.id}">
+              <span class="texpreview" data-texture="${t.id}"></span>
+              <b>${esc(t.name)}</b>
+              <span class="t-meta">${esc(t.note)}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <p class="t-meta" style="margin-top:var(--s4)">Light and dark follow your system
+        setting. Every palette has both.</p>
+    </div>
+    <button class="close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>`
+
+  const pick = (key, value) => {
+    apply({ ...appearance(), [key]: value })
+    settingsSheet()          // redraw so the tick moves
+    v.hidden = false
+  }
+  for (const b of v.querySelectorAll('[data-palette-pick]')) {
+    b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
+  }
+  for (const b of v.querySelectorAll('[data-texture-pick]')) {
+    b.addEventListener('click', () => pick('texture', b.dataset.texturePick))
+  }
+  $('.close', v).addEventListener('click', () => { v.hidden = true })
+  v.addEventListener('click', (e) => { if (e.target === v) v.hidden = true })
+}
+
 function render() {
   const root = $('#root')
   root.innerHTML = rail() + (state.view === 'project' ? dashboard() : portfolio())
@@ -382,6 +464,10 @@ function render() {
           stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>`
       } else if (!check) { box.innerHTML = '' }
     })
+  }
+
+  for (const b of root.querySelectorAll('[data-settings]')) {
+    b.addEventListener('click', () => { settingsSheet(); $('#settings').hidden = false })
   }
 
   for (const b of root.querySelectorAll('[data-contact]')) {
@@ -473,4 +559,5 @@ function openDoc(doc, from) {
   })
 }
 
+apply()
 render()
