@@ -213,6 +213,18 @@ for (const [size, opts] of SIZES) {
       composer, because a still of the button proves nothing about whether the
       context actually travels.
     */
+    /*
+      The command bar (#40 idea 1). Captured mid-query, because a still of an
+      empty bar proves a box exists and nothing about whether it finds anything.
+    */
+    await page.keyboard.press('Control+k')
+    await page.waitForTimeout(350)
+    await page.locator('[data-cmd-input]').type('vision', { delay: 25 })
+    await page.waitForTimeout(400)
+    await shoot('command-bar')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+
     await page.locator('[role="tab"][data-tab="team"]').click()
     await page.waitForTimeout(600)
     await shoot('team-board')

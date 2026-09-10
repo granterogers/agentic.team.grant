@@ -11,6 +11,7 @@ import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
+import * as command from './command.js'
 import * as config from './settings.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
@@ -37,6 +38,8 @@ const state = {
   sub: 'board',
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
+  // The command bar (#40 idea 1): open, what is typed, which row is picked.
+  cmd: { open: false, q: '', at: 0 },
 }
 
 /*
@@ -233,6 +236,137 @@ const taskRow = (t, i) => {
   It is ambient. Nothing in it blinks for attention unless something is
   actually blocked, in which case it is the one thing that does.
 */
+
+/*
+  The command bar (#40 idea 1).
+
+  Grant: *"easy to use, easy to expand."* Both, from one control. It is the
+  fastest route to anything in the product, and anything added later becomes
+  reachable through it without adding a button anywhere.
+
+  The property that makes it worth building rather than a search box: it has no
+  dead end. If what you typed matches nothing, the last row is still **Ask the
+  team** carrying your words — because *"draft the follow-up for Priya"* matches
+  no document and is a perfectly good thing to say. You never have to decide
+  whether you are navigating or asking before you start typing.
+*/
+function commandBar() {
+  if (!state.cmd.open) return ''
+  const p = state.view === 'project' ? byId(state.project) : null
+  const all = command.candidates({
+    projects: PROJECTS,
+    project: p,
+    sections: SECTIONS,
+    settings: config.TABS,
+    crew: CREW,
+    docsFor: allDocs,
+  })
+  const hits = command.search(state.cmd.q, all)
+  const typed = state.cmd.q.trim()
+
+  // Always last, always available. This is the whole idea.
+  const rows = [
+    ...hits,
+    ...(typed === '' ? [] : [{
+      kind: 'ask', id: 'ask', title: typed,
+      hint: p === null ? 'Ask the team — pick a project first' : `Ask the team about ${p.name}`,
+    }]),
+  ]
+  const at = Math.min(state.cmd.at, Math.max(rows.length - 1, 0))
+
+  return `<div class="cmdwrap" data-cmd-wrap>
+    <div class="cmdbar" role="dialog" aria-modal="true" aria-label="Command">
+      <div class="cmdinput">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        <input data-cmd-input type="text" autocomplete="off" spellcheck="false"
+               placeholder="Find anything, or tell the team what to do…"
+               aria-label="Find anything, or tell the team what to do"
+               value="${esc(state.cmd.q)}">
+        <kbd>esc</kbd>
+      </div>
+      ${rows.length === 0 ? `<p class="cmdempty t-meta">Nothing matches. Keep typing and
+        it becomes something to ask the team.</p>` : `
+      <div class="cmdrows" role="listbox">
+        ${rows.map((r, i) => `
+          <button role="option" aria-selected="${i === at}" class="cmdrow ${
+            i === at ? 'on' : ''} ${esc(r.hue ?? '')}" data-cmd-row="${i}">
+            <span class="ckind">${esc(r.kind === 'ask' ? 'Ask' : command.KIND_NAME[r.kind] ?? '')}</span>
+            <span class="ctitle">${esc(r.title)}</span>
+            <span class="chint t-meta">${esc(r.hint ?? '')}</span>
+            ${i === at ? '<kbd class="cgo">↵</kbd>' : ''}
+          </button>`).join('')}
+      </div>`}
+    </div>
+  </div>`
+}
+
+/** What pressing a row does. Kept out of the renderer so it can be read. */
+function runCommand(row) {
+  if (row === undefined) return
+  if (row.kind === 'ask') {
+    if (state.view !== 'project') return
+    chat.send(state.project, row.title, null)
+    state.tab = 'team'
+    state.sub = 'chat'
+    rememberTab(state.project, 'team')
+    closeCmd()
+    render()
+    return
+  }
+  const go = row.go ?? {}
+  closeCmd()
+  if (go.settings !== undefined) {
+    state.setting = go.settings
+    settingsSheet()
+    sheet($('#settings'), true)
+    return
+  }
+  carry(null, null, () => {
+    if (go.project !== undefined) state.project = go.project
+    if (go.view !== undefined) state.view = go.view
+    if (go.tab !== undefined) { state.tab = go.tab; rememberTab(state.project, go.tab) }
+    if (go.sub !== undefined) state.sub = go.sub
+    render()
+  })
+  if (go.doc !== undefined) {
+    const b = $(`[data-doc="${go.doc}"]`)
+    if (b !== null) b.click()
+  }
+  if (go.contact !== undefined) {
+    const c = byId(state.project).contacts[go.contact]
+    if (c !== undefined) openContact(c)
+  }
+}
+
+
+/**
+ * Resolve the highlighted index back to a row and run it.
+ *
+ * Rebuilt rather than stashed on state, because a list held on state is a list
+ * that can disagree with the one on screen — and the disagreement only shows up
+ * as the bar navigating somewhere you did not pick.
+ */
+function pickCommand(index) {
+  const p = state.view === 'project' ? byId(state.project) : null
+  const all = command.candidates({
+    projects: PROJECTS, project: p, sections: SECTIONS,
+    settings: config.TABS, crew: CREW, docsFor: allDocs,
+  })
+  const hits = command.search(state.cmd.q, all)
+  const typed = state.cmd.q.trim()
+  const rows = [
+    ...hits,
+    ...(typed === '' ? [] : [{ kind: 'ask', id: 'ask', title: typed }]),
+  ]
+  runCommand(rows[index])
+}
+
+const openCmd = () => { state.cmd = { open: true, q: '', at: 0 }; render(); $('[data-cmd-input]')?.focus() }
+const closeCmd = () => { state.cmd = { open: false, q: '', at: 0 } }
+
+
 function ribbon() {
   const running = PROJECTS.flatMap((p) => workspace.rows(p))
     .filter((r) => r.state === 'working' && r.blocked === undefined).length
@@ -1597,7 +1731,7 @@ const railShut = () => {
 function render() {
   const root = $('#root')
   root.classList.toggle('shut', railShut())
-  root.innerHTML = ribbon() + rail() + (
+  root.innerHTML = commandBar() + ribbon() + rail() + (
     state.view === 'project' ? dashboard()
     : state.view === 'desk' ? desk()
     : portfolio())
@@ -1783,6 +1917,44 @@ function render() {
       })
     }
   }
+
+  /*
+    The command bar's keyboard, and why it lives on `document`.
+
+    A global shortcut has to work when focus is anywhere — including inside the
+    chat composer — so the listener is on the document, added ONCE at start-up
+    rather than per render. Attaching it in `render()` would add a duplicate on
+    every paint, and by the tenth navigation one keypress would open the bar ten
+    times.
+  */
+  const rowsNow = () => [...document.querySelectorAll('[data-cmd-row]')]
+  for (const b of root.querySelectorAll('[data-cmd-row]')) {
+    b.addEventListener('mousedown', (e) => {
+      e.preventDefault()   // keep focus in the input so a click behaves like Enter
+      pickCommand(Number(b.dataset.cmdRow))
+    })
+  }
+  const input = $('[data-cmd-input]', root)
+  if (input !== null) {
+    // Caret to the end: re-rendering on each keystroke resets it otherwise.
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+    input.addEventListener('input', () => {
+      state.cmd.q = input.value
+      state.cmd.at = 0
+      render()
+    })
+    input.addEventListener('keydown', (e) => {
+      const n = rowsNow().length
+      if (e.key === 'Escape') { e.preventDefault(); closeCmd(); render(); return }
+      if (e.key === 'ArrowDown') { e.preventDefault(); state.cmd.at = (state.cmd.at + 1) % Math.max(n, 1); render(); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); state.cmd.at = (state.cmd.at - 1 + n) % Math.max(n, 1); render(); return }
+      if (e.key === 'Enter') { e.preventDefault(); pickCommand(state.cmd.at) }
+    })
+  }
+  $('[data-cmd-wrap]', root)?.addEventListener('mousedown', (e) => {
+    if (e.target === $('[data-cmd-wrap]', root)) { closeCmd(); render() }
+  })
 
   /*
     Tabs, the talk action, the composer and the in-tray decisions.
@@ -2170,6 +2342,20 @@ function openDoc(doc, from) {
     if (e.target === v) carry('doc-open', page, () => { sheet(v, false) })
   })
 }
+
+/*
+  The global shortcut, registered ONCE.
+
+  `render()` replaces every node in the shell, so a listener attached inside it
+  is added again on every paint — by the tenth navigation one keypress would
+  open the bar ten times. Anything global belongs here, outside the render.
+*/
+document.addEventListener('keydown', (e) => {
+  const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+  if (cmdK) { e.preventDefault(); state.cmd.open ? (closeCmd(), render()) : openCmd(); return }
+  // Escape closes whatever is open, outermost first.
+  if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
+})
 
 apply()
 clock()
