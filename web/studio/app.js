@@ -1265,8 +1265,30 @@ function render() {
     })
   }
 
+  /*
+    Everything that lifts, tilts.
+
+    One place, one list. The section work added five card types and none of them
+    got this, so the team board and the in-tray sat flat in a product where
+    every other card responds to the pointer — which reads as those screens
+    being unfinished rather than as restraint.
+
+    The angles are smaller than a project card's. A project card is an object
+    you pick up; a job row is a line you read, and tilting it as far would turn
+    a list into a fairground.
+  */
+  const TILT = [
+    ['.module', { max: 3, scale: 1.006 }],
+    ['.member', { max: 3.4, scale: 1.008 }],
+    ['.job', { max: 2.2, scale: 1.004 }],
+    ['.source', { max: 4, scale: 1.01 }],
+    ['.wrow', { max: 1.8, scale: 1.003 }],
+  ]
+  for (const [sel, opts] of TILT) {
+    for (const el of root.querySelectorAll(sel)) tiltable(el, opts)
+  }
+
   // Tasks complete optimistically: the row changes now, the network catches up.
-  for (const m of root.querySelectorAll('.module')) tiltable(m, { max: 3, scale: 1.006 })
 
   for (const b of root.querySelectorAll('[data-task]')) {
     b.addEventListener('click', () => {

@@ -281,7 +281,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* --- reduced motion is a real design, not an off switch ------------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
-  .project:hover, .doc:hover .page { transform: none; }
+  .project:hover, .doc:hover .page,
+  .member:hover, .job:hover, .source:hover, .wrow:hover { transform: none; }
   .face.busy::after { animation: none; opacity: .55; }
 }
 
@@ -373,11 +374,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    A specular highlight that follows the pointer across a card. Driven by --gx
    and --gy from alive.js, so the light and the tilt agree — two effects that
    disagree read as two effects; agreeing, they read as one surface. */
-.project, .doc .page, .module {
+/*
+  Every card that lifts belongs on this list.
+
+  It IS a list, so a card type added later gets no glare and no depth until
+  somebody remembers — which is exactly what happened to `.member`, `.job`,
+  `.source` and `.wrow` when the sections were built. They looked consistent
+  beside each other and flat beside everything else in the product.
+*/
+.project, .doc .page, .module, .member, .job, .source, .wrow, .pcard {
   --gx: 50%; --gy: 50%; --glare: 0;
   transform-style: preserve-3d;
 }
-.project::after, .doc .page::after, .module::after {
+.project::after, .doc .page::after, .module::after,
+.member::after, .job::after, .source::after, .wrow::after, .pcard::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
   border-radius: inherit;
   background: radial-gradient(420px circle at var(--gx) var(--gy),
@@ -386,7 +396,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: opacity .35s ease;
   mix-blend-mode: soft-light;
 }
-.project { position: relative; }
+.project, .job, .source, .wrow { position: relative; }
 .doc .page::after { background: radial-gradient(260px circle at var(--gx) var(--gy),
   rgb(255 255 255 / .28) 0%, transparent 58%); }
 
@@ -452,7 +462,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .face { box-shadow: inset 0 1px 0 rgb(255 255 255 / .25), 0 1px 2px rgb(0 0 0 / .2); }
 
 @media (prefers-reduced-motion: reduce) {
-  .project::after, .doc .page::after, .module::after { display: none; }
+  /* The glare follows the pointer, so it is motion whether or not it moves
+     the element. Same list as the one that turns it on. */
+  .project::after, .doc .page::after, .module::after,
+  .member::after, .job::after, .source::after, .wrow::after,
+  .pcard::after { display: none; }
   .doc:hover .page { transform: rotate(var(--rest-tilt, 0deg)); }
   :root[data-tint] body::before { transition: none; }
 }
@@ -1100,8 +1114,9 @@ body::after {
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
   align-items: start; gap: var(--s4);
   padding: var(--s4); border: 1px solid var(--edge); border-radius: var(--r-card);
-  background: var(--surface); box-shadow: var(--lift-1);
-  transition: box-shadow .18s, border-color .18s;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
 }
 .wrow:hover { box-shadow: var(--lift-2); }
 /* The waiting rows carry a hairline of the hue on their leading edge, because
@@ -1316,9 +1331,10 @@ body::after {
 .member {
   position: relative; display: flex; align-items: center; gap: var(--s3);
   padding: var(--s3) var(--s4); border-radius: var(--r-card);
-  border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--lift-1);
+  border: 1px solid var(--edge); background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
   border-left: 3px solid color-mix(in srgb, var(--hue, var(--edge)) 55%, transparent);
-  transition: box-shadow .18s;
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
 }
 .member:hover { box-shadow: var(--lift-2); }
 /* Available, not idle: someone not on this project is not doing nothing. */
@@ -1333,8 +1349,10 @@ body::after {
 .job {
   display: flex; align-items: flex-start; gap: var(--s3);
   padding: var(--s4); border-radius: var(--r-card);
-  border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--lift-1);
+  border: 1px solid var(--edge); background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
   border-left: 3px solid color-mix(in srgb, var(--hue, var(--edge)) 55%, transparent);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
 }
 .job > .face { flex: none; }
 .jbody { flex: 1; min-width: 0; display: grid; gap: 3px; }
@@ -1353,7 +1371,9 @@ body::after {
 .source {
   display: grid; gap: 4px; align-content: start;
   padding: var(--s4); border-radius: var(--r-card);
-  border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--lift-1);
+  border: 1px solid var(--edge); background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
 }
 .source b { font: 600 15px/1.3 var(--text); }
 .source.live { border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); }
