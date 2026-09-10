@@ -21,9 +21,18 @@ const state = { view: 'portfolio', project: null, done: new Set() }
 
 // --- pieces -----------------------------------------------------------------
 
+/*
+  A face, with the real portrait behind it.
+
+  The initial stays as the fallback layer underneath: if the image is slow or
+  gone the mark is still a mark, not an empty circle. `loading="lazy"` because
+  eight portraits in a rail are not what the first paint is for.
+*/
 const face = (c, size = 28) =>
   `<span class="face ${c.hue} ${c.state}" style="width:${size}px;height:${size}px"
-         title="${esc(c.name)} — ${esc(c.doing ?? c.role)}">${esc(c.name[0])}</span>`
+         title="${esc(c.name)} — ${esc(c.doing ?? c.role)}">${esc(c.name[0])}${
+    c.face ? `<img src="${esc(c.face)}" alt="" loading="lazy">` : ''
+  }</span>`
 
 /*
   A document cover.
@@ -80,7 +89,7 @@ function rail() {
         aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 12l7-4M12 12v9M12 12L5 8"/></svg></span>
       <span>
         <span style="display:block;font:600 15px/1.15 var(--text)">Studio</span>
-        <span class="t-meta" style="font-size:12px">Eight people, one queue</span>
+        <span class="brandline">Eight people, one queue</span>
       </span>
     </div>
     <nav class="navgroup">
@@ -106,9 +115,30 @@ function rail() {
           <span class="dot"></span>${esc(p.name)}
         </button>`).join('')}
     </nav>
-    <div>
-      <div class="t-label" style="margin-bottom:10px">The team</div>
-      <div class="crew">${CREW.map((c) => face(c)).join('')}</div>
+    <!--
+      The team, as people.
+
+      Now that there are real portraits (#24 idea 4) the rail can say who is
+      actually doing something rather than showing eight identical dots. Whoever
+      is working gets a row with their face, their name and their work; everyone
+      else collapses into a quiet strip underneath. That is presence being
+      ambient — you see the shape of the office without reading it.
+    -->
+    <div class="team">
+      <div class="t-label">Working now</div>
+      ${CREW.filter((c) => c.state === 'busy').map((c) => `
+        <div class="mate">
+          ${face(c, 34)}
+          <span class="what">
+            <b>${esc(c.name)}</b>
+            <span class="t-meta">${esc(c.doing ?? c.role)}</span>
+          </span>
+        </div>`).join('')}
+      <div class="crew">${CREW.filter((c) => c.state !== 'busy').map((c) => face(c, 26)).join('')}
+        <span class="t-meta rest-note">${
+          CREW.filter((c) => c.state !== 'busy').length
+        } more, quiet</span>
+      </div>
     </div>
   </aside>`
 }
@@ -137,7 +167,7 @@ function card(p, lead) {
   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0
   return `<button class="project ${p.hue} ${lead ? 'lead' : ''}" data-open="${p.slug}">
     <span class="cover" style="view-transition-name:cover-${p.slug}">
-      ${coverSvg(p.slug, { dense: lead })}
+      ${coverSvg(p.slug, { dense: lead, facts: p })}
     </span>
     <span class="body">
       <span>
@@ -187,7 +217,7 @@ function dashboard() {
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
       Projects</button>
     <div class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
-      ${coverSvg(p.slug, { dense: true })}
+      ${coverSvg(p.slug, { dense: true, facts: p })}
     </div>
     <div class="head">
       <div>

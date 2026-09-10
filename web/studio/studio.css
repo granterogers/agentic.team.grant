@@ -198,7 +198,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   backdrop-filter: blur(10px) saturate(160%);
   color: var(--ink); border: 1px solid rgb(255 255 255 / .35);
   border-radius: 6px; padding: 4px 9px; font: 600 11px/1 var(--text);
-  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+  letter-spacing: .04em; font-variant-caps: all-small-caps; white-space: nowrap;
   box-shadow: 0 2px 6px rgb(0 0 0 / .18), inset 0 1px 0 rgb(255 255 255 / .5); }
 .bar { display: flex; align-items: center; gap: var(--s2); }
 .bar .track { flex: 1; height: 7px; border-radius: 4px; background: var(--sunken);
@@ -494,3 +494,35 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .bigpage { margin-top: var(--s4); border-radius: 6px; overflow: hidden;
   background: var(--surface); box-shadow: var(--lift-1); aspect-ratio: 3/4; max-height: 46vh; }
 .bigpage .pg { height: 100%; }
+
+/* --- real portraits --------------------------------------------------------
+   The image sits over the initial, so a slow or missing portrait degrades to
+   the coloured mark rather than to an empty circle. A ring in the agent's own
+   hue keeps the colour coding that the initials were carrying. */
+.face { position: relative; overflow: hidden; }
+.face img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: 50%;
+}
+.face { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--hue) 70%, transparent),
+                    inset 0 1px 0 rgb(255 255 255 / .25), 0 1px 3px rgb(0 0 0 / .28); }
+.face.idle { opacity: .55; filter: saturate(.55); }
+.face.busy { box-shadow: inset 0 0 0 1.5px var(--hue),
+                         0 0 14px -2px var(--hue), 0 1px 3px rgb(0 0 0 / .3); }
+
+/* --- the team, as people ---------------------------------------------------
+   Whoever is working gets a face, a name and a line; the rest collapse into an
+   overlapped strip. Presence you read at a glance rather than a list you scan. */
+.team { display: grid; gap: var(--s3); margin-top: auto; }
+@media (max-width: 860px) { .team { margin-top: 0; } }
+.mate { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mate .what { min-width: 0; display: grid; }
+.mate .what b { font: 600 13.5px/1.25 var(--text); }
+.mate .what .t-meta { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crew .rest-note { font-size: 12px; margin-left: var(--s2); }
+.crew { align-items: center; }
+.crew .face { margin-left: -8px; }
+.crew .face:first-child { margin-left: 0; }
+/* The wordmark strapline was wrapping to two lines in a 220px rail. */
+.wordmark { min-width: 0; }
+.brandline { display: block; font-size: 12px; color: var(--ink-3); white-space: nowrap; }

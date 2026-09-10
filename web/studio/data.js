@@ -7,17 +7,28 @@
   at their real lengths, including the awkward ones.
 */
 
+/*
+  The real portraits.
+
+  #24 idea 4. `scripts/staff/generate-cartoon-avatars.ts` drew these months ago
+  and put them in the `avatars` bucket, where nothing has looked at them since.
+  Eight faces in the rail does more for Grant's *"as close to feeling like a
+  human team as possible"* than any amount of surface polish, and the work was
+  already done.
+*/
+const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public/avatars'
+
 export const CREW = [
-  { slug: 'claire', name: 'Claire', role: 'Chief of Staff', hue: 'p-moss', state: 'busy',
+  { slug: 'claire', face: `${FACES}/chief-of-staff.jpg`, name: 'Claire', role: 'Chief of Staff', hue: 'p-moss', state: 'busy',
     doing: 'On a call with you' },
-  { slug: 'emma', name: 'Emma', role: 'Research', hue: 'p-rust', state: 'busy',
+  { slug: 'emma', face: `${FACES}/research-director.jpg`, name: 'Emma', role: 'Research', hue: 'p-rust', state: 'busy',
     doing: 'Comparing Monday and Grok' },
-  { slug: 'oliver', name: 'Oliver', role: 'Communications', hue: 'p-iris', state: 'idle' },
-  { slug: 'tom', name: 'Tom', role: 'Strategy', hue: 'p-slate', state: 'idle' },
-  { slug: 'daniel', name: 'Daniel', role: 'Finance & Data', hue: 'p-plum', state: 'idle' },
-  { slug: 'marcus', name: 'Marcus', role: 'Operations', hue: 'p-amber', state: 'idle' },
-  { slug: 'ruby', name: 'Ruby', role: 'Growth', hue: 'p-rust', state: 'idle' },
-  { slug: 'grace', name: 'Grace', role: 'Quality & Risk', hue: 'p-slate', state: 'idle' },
+  { slug: 'oliver', face: `${FACES}/communications-director.jpg`, name: 'Oliver', role: 'Communications', hue: 'p-iris', state: 'idle' },
+  { slug: 'tom', face: `${FACES}/strategy-director.jpg`, name: 'Tom', role: 'Strategy', hue: 'p-slate', state: 'idle' },
+  { slug: 'daniel', face: `${FACES}/finance-director.jpg`, name: 'Daniel', role: 'Finance & Data', hue: 'p-plum', state: 'idle' },
+  { slug: 'marcus', face: `${FACES}/operations-director.jpg`, name: 'Marcus', role: 'Operations', hue: 'p-amber', state: 'idle' },
+  { slug: 'ruby', face: `${FACES}/growth-director.jpg`, name: 'Ruby', role: 'Growth', hue: 'p-rust', state: 'idle' },
+  { slug: 'grace', face: `${FACES}/quality-director.jpg`, name: 'Grace', role: 'Quality & Risk', hue: 'p-slate', state: 'idle' },
 ]
 
 export const PROJECTS = [

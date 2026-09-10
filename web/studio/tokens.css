@@ -78,23 +78,20 @@
   --r-control: 6px; --r-card: 10px; --r-sheet: 14px;
 
   /*
-    Bodoni Moda for display, Schibsted Grotesk for everything else.
+    Archivo, in two registers.
 
-    Grant on the previous pairing: *"the font choice still reeks of typical
-    AI"*. Fraunces and Inter (in any cut) are the default of this moment, which
-    is exactly the problem — they are what a generated interface looks like.
+    Grant on the didone: *"Font is still a bit shitty... I don't like this
+    typewriter style. Just something clear and punchy, and it looks
+    professional."* Fair. A didone was the wrong answer to "not generic" — it
+    swapped one costume for another, and its hairlines at small sizes read as
+    fussy rather than fine.
 
-    Bodoni is a didone: extreme thick-thin contrast, unbracketed hairline
-    serifs, vertical stress. It is a fashion-magazine face, it is two centuries
-    old, and nothing about it reads as generated. Its optical-size axis matters
-    here: at 44px the hairlines are the point, and at 20px the same family
-    thickens them so the word does not disintegrate.
-
-    Schibsted Grotesk carries everything else — a Scandinavian newspaper
-    grotesk with a slightly narrow set and open apertures, so it stays legible
-    small and does not look like the system font.
+    Archivo has a WIDTH axis as well as a weight one, which is why one family
+    can carry both roles: display is expanded and heavy, text is normal width.
+    The punch comes from width, not decoration. It also ships real small caps
+    and oldstyle figures, which is what #24 idea 3 needs.
   */
-  --display: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
+  --display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --text: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   color-scheme: light dark;

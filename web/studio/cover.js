@@ -69,22 +69,39 @@ function band(rand, w, h, yTop, thickness) {
  * variation comes from opacity over the hue rather than from computed colours,
  * so the whole thing stays one hue and cannot drift into a second.
  */
-export function coverSvg(slug, { w = 800, h = 400, dense = false } = {}) {
+/**
+ * @param facts  What the project actually contains. #24 idea 2: the artwork is
+ *   a readout, not decoration. Documents set how many strata there are, total
+ *   words their density, and completion decides where the one bright line
+ *   falls. An empty project draws a nearly-empty cover, and a full one draws a
+ *   dense one — so the picture changes as the work does, and you learn to read
+ *   it before you read the numbers beside it.
+ */
+export function coverSvg(slug, { w = 800, h = 400, dense = false, facts = null } = {}) {
   const rand = seeded(slug)
-  const count = dense ? 7 : 5
+  const count = facts
+    ? Math.max(2, Math.min(9, Math.round(2 + (facts.docs ?? 0) * 0.5)))
+    : dense ? 7 : 5
   const paths = []
   let y = -h * 0.15
   for (let i = 0; i < count; i += 1) {
     const thickness = h * (0.08 + rand() * 0.30)
     // Opacity descends down the stack so the composition has a light top and a
-    // dense bottom — a horizon, rather than an even field.
-    const opacity = (0.16 + rand() * 0.30).toFixed(2)
+    // dense bottom — a horizon rather than an even field. Where facts are
+    // known, a project with more material in it is drawn denser.
+    const weight = facts ? Math.min(1, (facts.docs ?? 0) / 12) : 0.55
+    const opacity = (0.10 + weight * 0.16 + rand() * 0.26).toFixed(2)
     paths.push(`<path d="${band(rand, w, h, y, thickness)}" fill="currentColor" opacity="${opacity}"/>`)
     y += thickness * (0.55 + rand() * 0.5)
   }
-  // One thin bright line, placed on a band edge: the highlight that stops the
-  // composition reading as mush, and the only crisp thing in it.
-  const lineY = (h * (0.3 + rand() * 0.4)).toFixed(1)
+  /*
+    One thin bright line: the highlight that stops the composition reading as
+    mush, and the only crisp thing in it. Where progress is known it sits AT
+    that progress — high in the frame when a project has barely started,
+    settling towards the bottom as it finishes. A horizon that rises.
+  */
+  const done = facts && facts.total > 0 ? facts.done / facts.total : null
+  const lineY = (h * (done === null ? 0.3 + rand() * 0.4 : 0.18 + done * 0.62)).toFixed(1)
   paths.push(
     `<path d="M -8 ${lineY} C ${w * 0.4} ${(Number(lineY) - h * 0.06).toFixed(1)}, ` +
       `${w * 0.7} ${(Number(lineY) + h * 0.05).toFixed(1)}, ${w + 8} ${lineY}" ` +
