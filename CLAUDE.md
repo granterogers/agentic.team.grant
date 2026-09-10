@@ -150,7 +150,19 @@ screenshots for visual work** — a sentence about spacing is worth nothing.
 npm run lint && npm run typecheck && npm run test
 npm run check:migrations && npm run check:secrets
 npm run verify:hq && npm run verify:ui && npm run verify:talk   # if UI changed
+npm run shots                                                   # capture web/studio
 ```
+
+`npm run shots` renders the prototype in real Chromium at 1440×900 and iPhone
+14, in both themes, and writes twelve PNGs to `.out/`. It is the capture half of
+§14A's loop — **it does not pass or fail anything.** The critique is done by
+opening the images and looking at them, and then attaching one to a build step
+so Grant can see it too.
+
+> **Webfonts do not load in the build sandbox.** Chromium there cannot reach
+> `fonts.googleapis.com` (curl can — it is a proxy difference), so every capture
+> shows the fallback face. Any observation about typography from a sandbox
+> capture is unreliable until the fonts are self-hosted. Tracked as an Issue.
 
 Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
