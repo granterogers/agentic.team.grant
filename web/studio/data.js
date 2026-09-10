@@ -117,6 +117,48 @@ export const PROJECTS = [
         note: 'Completed the 2025 cohort. Worth asking for a testimonial.',
       },
     ],
+    /*
+      What the team was asked, and what came back.
+
+      Grant: *"a dedciate dashboard per project as its own tab where the teams
+      inputs and outputs can esaily be seen and coordinated"*. A request and the
+      artifact it produced are one record, not two systems that happen to
+      mention each other. `context` is the item the request was started from —
+      the same shape that "talk to the team about this" attaches to a message.
+    */
+    requests: [
+      {
+        id: 'r1', ask: 'Turn the six modules into a one-page course outline I can send out',
+        from: 'Grant · chat', who: 'oliver', asked: '2 days ago',
+        context: { kind: 'project', title: 'Legacy Coaching Course' },
+        state: 'review', delivered: '2 days ago',
+        output: { title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+        derived: ['WS01 — Legacy Opening Assessment', 'Journey VS Destination'],
+      },
+      {
+        id: 'r2', ask: 'Pull every client mentioned in WS02 into the vision map',
+        from: 'Grant · voice', who: 'emma', asked: '2 days ago',
+        context: { kind: 'document', title: 'WS02 — Creating Client Vision' },
+        state: 'review', delivered: '2 hours ago',
+        output: { title: 'WS02 client list — 22 names', kind: 'doc', size: '2 pages', lines: [90, 74, 96, 60] },
+        derived: ['WS02 — Creating Client Vision'],
+      },
+      {
+        id: 'r3', ask: 'Draft the five interview questions for Marcus',
+        from: 'Task · Prepare interview questions', who: 'emma', asked: '4 hours ago',
+        context: { kind: 'contact', title: 'Marcus Oyelaran' },
+        state: 'working', delivered: '',
+        output: null, derived: [],
+      },
+      {
+        id: 'r4', ask: 'Transcribe the WhatsApp note from Ben and tell me what changed',
+        from: 'Grant · chat', who: 'claire', asked: '5 days ago',
+        context: { kind: 'document', title: 'Whats App Audio From Ben' },
+        state: 'approved', delivered: '5 days ago',
+        output: { title: 'Ben Hartley — voice note, transcribed', kind: 'doc', size: '900 words', lines: [88, 92, 70] },
+        derived: ['Whats App Audio From Ben'],
+      },
+    ],
     activity: [
       { who: 'emma', verb: 'pulled', what: 'the WS02 client list into the vision map', when: '2h ago' },
       { who: 'oliver', verb: 'made', what: 'the course one-pager', when: '2d ago' },
@@ -136,6 +178,11 @@ export const PROJECTS = [
     ],
     contacts: [],
     tasks: [{ title: 'Read the agent-orchestration papers', who: 'tom' }],
+    requests: [
+      { id: 'r1', ask: 'Compare Monday.com agents against building our own',
+        from: 'Grant · voice', who: 'emma', asked: '6 hours ago',
+        context: null, state: 'working', delivered: '', output: null, derived: [] },
+    ],
     activity: [{ who: 'tom', verb: 'summarised', what: 'two sources', when: '1d ago' }],
   },
   {
@@ -145,7 +192,7 @@ export const PROJECTS = [
     hue: 'p-amber',
     connectors: [],
     done: 0, total: 0, docs: 0,
-    modules: [], documents: [], tasks: [], activity: [], contacts: [],
+    modules: [], documents: [], tasks: [], activity: [], contacts: [], requests: [],
   },
 ]
 

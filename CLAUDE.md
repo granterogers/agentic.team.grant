@@ -20,6 +20,7 @@ Telegram, Slack, a voice call and a web dashboard.
 | `docs/HANDOFF.md` | current state, summarised |
 | `docs/integration-assessment-2026-09-10.md` | what exists, what is missing, what was decided |
 | `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements |
+| `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ target IA — projects, assets, the team's in-tray |
 | `AI_TEAM_HQ_MASTER_SPEC.md` | ⭐ canonical system requirements |
 | `docs/adr/` | why each material decision was made |
 | `docs/architecture.md` | vendor bindings |
@@ -27,6 +28,20 @@ Telegram, Slack, a voice call and a web dashboard.
 **Issues are the backlog. This file and the handover are not.** If you discover
 work and do not do it, open an Issue — never a TODO comment, never a note in
 prose, never only a sentence to Grant.
+
+Grant, 10 September 2026, restating it:
+
+> *"such things (REQUEST, improvement, etc) should always be placed in the
+> github issues so nothing is list"*
+
+That covers **requests he makes in chat**, not only defects you find. A feature
+he asks for gets an Issue at the moment he asks for it, before you start
+building it — because the risk is not that you forget it this hour, it is that
+the conversation is compacted and it is gone. This has already happened once:
+his *PROJECT DASHBOARD — INFORMATION ARCHITECTURE & UX* specification arrived
+mid-turn, was compacted before it reached the transcript on disk, and the
+verbatim text is **not recoverable**. See the provenance note in
+`docs/spec/project-dashboard-ia-2026-09-10.md`.
 
 ---
 
@@ -179,10 +194,55 @@ Deploys probe themselves and fail when the probe fails:
 
 ---
 
+## Looking is not measuring
+
+`npm run shots` renders the prototype and writes PNGs. It tells you a layout is
+wrong. It does not tell you which box is the wrong size, and reading the CSS
+back to yourself is how you convince yourself it is right twice in a row.
+
+```
+npm run probe -- '.wrow' '.wout' '.woutfile'
+TAB=chat npm run probe -- '.composer' '.thread'
+```
+
+prints the computed box, display, position and overflow of each selector on the
+real page. Reach for it the moment a capture looks wrong — it found a 660px gap
+in one run that three readings of the stylesheet had not.
+
+```
+npm run wide
+```
+
+names what is pushing the page sideways on an iPhone, on every project tab,
+innermost element first. `npm run shots` only tells you THAT the phone
+overflows. This tells you which element, and it filters out the two things that
+always look like overflow and never are: SVG children (their geometry ignores
+the viewport that clips them) and anything inside a scroll container or a fixed
+element.
+
+---
+
 ## Traps this repository has already fallen into
 
 Each of these cost real time. They are here so they cost it once.
 
+- **A media query adds no specificity, so where you write it decides whether
+  it works.** `web/studio/studio.css` has a `@media (max-width: 860px)` block
+  near the top and base rules for `.callbtn`, `.brandline`, `.team` and
+  `.navitem.proj` three hundred lines below it. Every phone rule written in
+  that upper block was silently overridden by source order, and the phone
+  layout stayed broken through a full capture run that reported no errors.
+  **Phone overrides go at the END of the stylesheet.** Bitten twice — the
+  earlier one was `.navgroup`.
+- **A CSS class name defined twice is a bug waiting for the right element.**
+  `.stage` was the small status pill on a contact card AND the desk's pannable
+  surface with `min-height: 420px`. It was harmless for weeks because
+  `min-height` does not apply to a non-replaced inline element and every pill
+  was an inline `<span>`. The in-tray put one in a grid, it was blockified, and
+  it pushed the rest of the row 660px down the page. Second time: `.kind.doc`
+  collided with the card class `.doc` and became `k-pdf` / `k-doc` / `k-made`.
+  Grep for a class name before you invent it, and prefer a prefix
+  (`.wrow`, `.deskstage`) over a good short word.
 - **`Buffer` is a Node global and not a Deno one.** Edge functions run in Deno.
   Use `Uint8Array` and `TextEncoder`. Bitten three times —
   `channels/telegram.ts`, `slack/signature.ts`, `voice/inbound.ts`.

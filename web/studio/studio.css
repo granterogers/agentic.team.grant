@@ -336,6 +336,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
     padding: var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom));
   }
   .navitem { justify-content: center; flex: 1; min-height: 48px; border-radius: 10px; }
+  /*
+    The bottom navigation is FIXED, so anything the browser scrolls to the
+    bottom edge of the viewport lands underneath it. `.shell` reserves the space
+    at the end of the document, which covers a full scroll to the bottom, but
+    not a programmatic `scrollIntoView` on an element mid-page — that stops the
+    moment the element is technically visible, which is exactly where the nav
+    is. The composer is where this bites, because it is the one control you
+    scroll to in order to use.
+  */
+  .composer, .crow textarea { scroll-margin-bottom: 96px; }
 }
 /* --- module cards ----------------------------------------------------------
    Pressed out of the page like everything else, with a coloured edge on the
@@ -870,8 +880,10 @@ body::after {
 .shelf::-webkit-scrollbar { height: 8px; }
 .shelf::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 4px; }
 .shelf::-webkit-scrollbar-track { background: transparent; }
-.shelf > .doc { flex: 0 0 172px; scroll-snap-align: start; }
-@media (max-width: 760px) { .shelf > .doc { flex-basis: 138px; } }
+/* The shelf's children are the talk-action wrappers now, not the cards
+   themselves — the card sizing has to move out with them. */
+.shelf > .withtalk { flex: 0 0 172px; scroll-snap-align: start; }
+@media (max-width: 760px) { .shelf > .withtalk { flex-basis: 138px; } }
 .shelfnav { display: flex; gap: var(--s2); justify-content: flex-end; margin-top: calc(var(--s2) * -1); }
 .shelfbtn {
   width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
@@ -889,7 +901,17 @@ body::after {
    surface inside it is what moves. Both transform-only, so panning a dozen
    cards is one composited layer rather than a dozen repositioned elements. */
 .deskmain { padding-bottom: 0; }
-.stage {
+/*
+  Renamed from `.stage`, which was already the status pill on a contact card.
+
+  The pill is a `<span>`, and `min-height` does not apply to a non-replaced
+  inline element, so the collision was invisible for as long as every pill
+  happened to be inline. The moment one became a grid item — the in-tray puts
+  its state pill in a grid — it was blockified, picked up `min-height: 420px`
+  and pushed the rest of the row 600px down the page. Two unrelated things
+  cannot share a class name and stay correct by luck.
+*/
+.deskstage {
   position: relative; overflow: hidden; cursor: grab;
   height: calc(100vh - 230px); min-height: 420px;
   border-radius: var(--r-sheet); border: 1px solid var(--edge);
@@ -902,7 +924,7 @@ body::after {
   background-size: 34px 34px, 34px 34px;
   box-shadow: var(--engrave);
 }
-.stage.grabbing { cursor: grabbing; }
+.deskstage.grabbing { cursor: grabbing; }
 .surface { position: absolute; inset: 0; will-change: transform; }
 .deskcard {
   position: absolute; width: 268px; cursor: grab; touch-action: none;
@@ -997,4 +1019,258 @@ body::after {
   .panel { position: static; width: auto !important; height: auto !important; }
   .panel > header { cursor: default; }
   .pctl { display: none; }
+}
+
+/* --- tabs, the team in-tray, the chat, the talk action ----------------------
+   Grant, in one sentence: a text chat tab, a talk-about-this button on every
+   item, a workspace for what the team made, and a per-project tab where the
+   team's inputs and outputs are coordinated. Four things, one architecture —
+   see docs/spec/project-dashboard-ia-2026-09-10.md. */
+
+.tabs {
+  display: flex; gap: 2px; margin: var(--s5) 0 var(--s4);
+  border-bottom: 1px solid var(--edge);
+  /* On a phone the tabs scroll rather than wrapping into a second row: two
+     rows of tabs reads as two different navigations. */
+  overflow-x: auto; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  position: relative; flex: none; display: flex; align-items: center; gap: 6px;
+  padding: 10px 16px 12px; min-height: 44px; border-radius: 8px 8px 0 0;
+  color: var(--ink-2); font: 600 14.5px/1 var(--text);
+  transition: color .16s, background .16s;
+}
+.tab:hover { color: var(--ink); background: color-mix(in srgb, var(--sunken) 60%, transparent); }
+.tab.on { color: var(--ink); }
+/* The underline is a child of nothing — it is drawn on the tab and overlaps the
+   border below it, so the selected tab reads as continuous with its panel. */
+.tab.on::after {
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 62%, var(--ink)));
+}
+.tab .n {
+  font: 600 11px/1 var(--display); padding: 3px 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn);
+}
+.tab.on .n { background: var(--accent-wash); color: var(--accent-ink, var(--accent)); }
+
+.tabbody { display: grid; gap: var(--s4); }
+.tabhead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s4); flex-wrap: wrap;
+}
+
+/* The talk action. A sibling of the card, never a child — the cards are
+   buttons, and a button inside a button is invalid. */
+.withtalk { position: relative; display: block; }
+.talkabout {
+  position: absolute; right: 8px; top: 8px; z-index: 2;
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--ink-3); background: color-mix(in srgb, var(--surface) 86%, transparent);
+  border: 1px solid var(--edge); box-shadow: var(--lift-1);
+  opacity: 0; transition: opacity .16s, color .16s, background .16s, transform .16s;
+}
+.withtalk:hover .talkabout,
+.withtalk:focus-within .talkabout,
+.module:hover .talkabout, .module:focus-within .talkabout { opacity: 1; }
+.talkabout:hover {
+  color: var(--on-accent); background: var(--accent); border-color: transparent;
+  transform: scale(1.06);
+}
+.talkabout:focus-visible { opacity: 1; }
+/* Touch has no hover. A permanently visible action is better than an invisible
+   one, and at 30px it does not crowd the card. */
+@media (pointer: coarse) { .talkabout { opacity: .85; } }
+.module { position: relative; }
+.module .talkabout { right: 6px; top: 6px; width: 28px; height: 28px; }
+/* The task row's own face sits on the right, so the action moves in past it. */
+.withtalk .task { padding-right: 44px; }
+.withtalk .contact { padding-right: 46px; }
+
+/* The in-tray. A row is: what was asked → who took it → what came back. */
+.wgroup { display: grid; gap: var(--s3); }
+.wgroup h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.wgroup h3 .n {
+  font: 600 11px/1 var(--display); padding: 3px 7px; border-radius: 999px;
+  background: var(--sunken); color: var(--ink-3);
+}
+.wrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
+  align-items: start; gap: var(--s4);
+  padding: var(--s4); border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface); box-shadow: var(--lift-1);
+  transition: box-shadow .18s, border-color .18s;
+}
+.wrow:hover { box-shadow: var(--lift-2); }
+/* The waiting rows carry a hairline of the hue on their leading edge, because
+   "needs you" should be findable at a glance down a long list. */
+.wrow { border-left: 3px solid color-mix(in srgb, var(--hue, var(--edge)) 50%, transparent); }
+.wask p { margin: 6px 0; font: 500 15px/1.45 var(--text); }
+.warrow { display: grid; justify-items: center; gap: 8px; padding-top: 18px; }
+.wout { display: grid; gap: var(--s3); justify-items: start; }
+.s-review   { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.s-working  { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.s-approved { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.s-discarded{ background: var(--sunken); color: var(--ink-3); }
+.woutfile { display: flex; gap: var(--s3); align-items: flex-start; }
+.woutfile > span:last-child { display: grid; gap: 2px; }
+.woutfile b { font: 600 14.5px/1.3 var(--text); }
+.wpage {
+  flex: none; width: 54px; height: 72px; overflow: hidden; border-radius: 4px;
+  border: 1px solid var(--edge); box-shadow: var(--lift-1); background: var(--surface);
+  display: block;
+}
+.wpage svg { width: 100%; height: 100%; display: block; }
+.wctl { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+/* In the in-tray the action is a control among controls, so it does not hide. */
+.wctl .talkabout { position: static; opacity: 1; }
+
+@media (max-width: 860px) {
+  .wrow { grid-template-columns: minmax(0, 1fr); }
+  .warrow { justify-items: start; padding-top: 0; grid-auto-flow: column; }
+  .warrow svg { transform: rotate(90deg); }
+}
+
+/* The chat. Bounded height so the composer stays put and the thread scrolls
+   under it — a composer that walks down the page as you type is a composer you
+   chase. */
+.chatbody { gap: var(--s3); }
+.thread {
+  display: grid; gap: var(--s4); align-content: start;
+  min-height: 260px; max-height: min(58vh, 560px); overflow-y: auto;
+  padding: var(--s4); border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--sunken) 40%, transparent);
+}
+.msg { display: flex; gap: var(--s3); max-width: 82%; }
+.msg p { margin: 0; font: 400 15px/1.55 var(--text); }
+.msg.mine {
+  margin-left: auto; flex-direction: column; align-items: flex-end; gap: 6px;
+}
+.msg.mine p {
+  padding: 10px 14px; border-radius: 14px 14px 4px 14px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 92%, white), var(--accent));
+  color: var(--on-accent); box-shadow: var(--lift-1);
+}
+/* The portrait must not be squeezed by the bubble beside it — a flex item
+   shrinks by default, and a squashed circle reads as a rendering fault. */
+.msg.theirs > .face { flex: none; }
+.msg.theirs .mbody {
+  display: grid; gap: 4px; padding: 10px 14px; border-radius: 14px 14px 14px 4px;
+  background: var(--surface); border: 1px solid var(--edge); box-shadow: var(--lift-1);
+}
+.pendmark { color: var(--ink-3); font-style: italic; }
+.ctxchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 12.5px/1 var(--text); padding: 5px 9px; border-radius: 999px;
+  background: var(--accent-wash); color: var(--ink-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.ctxchip button {
+  width: 18px; height: 18px; border-radius: 50%; color: var(--ink-3);
+  display: grid; place-items: center; font: 400 14px/1 var(--text);
+}
+.ctxchip button:hover { background: var(--sunken); color: var(--ink); }
+
+.composer {
+  display: grid; gap: var(--s2);
+  padding: var(--s3); border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface); box-shadow: var(--lift-1);
+}
+.composer:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.attached { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.crow { display: flex; align-items: flex-end; gap: var(--s3); }
+.crow textarea {
+  flex: 1; min-width: 0; min-height: 48px; max-height: 160px; resize: none; border: 0;
+  background: transparent; color: var(--ink); padding: 10px 4px;
+  font: 400 15px/1.5 var(--text);
+}
+.crow textarea:focus { outline: none; }
+
+/* --- the phone, last ---------------------------------------------------------
+   These rules are at the END of the stylesheet on purpose.
+
+   The trap this file has already fallen into twice: a media query adds no
+   specificity. The `@media (max-width: 860px)` block near the top is followed
+   by base rules for `.navitem.proj`, `.brandline`, `.team` and `.callbtn`, all
+   of which win on source order alone. Written up there, every rule below was
+   silently ignored and the phone stayed broken through a full capture run. */
+@media (max-width: 860px) {
+  /*
+    The bottom navigation, when there are more than four things in it.
+
+    `flex: 1` divided the bar equally, so six items got 65px each and
+    "Legacy Coaching Course" wrapped to one character per line — the label was
+    a vertical stack of letters. There is no width at which six full project
+    names fit across a 390px phone, so the bar scrolls instead of compressing:
+    every item keeps its own width, nothing wraps, and the row is swipeable.
+  */
+  .navgroup { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+  .navgroup::-webkit-scrollbar { display: none; }
+  .navitem {
+    justify-content: center; flex: none; min-height: 48px; border-radius: 10px;
+    white-space: nowrap; padding: 0 var(--s3);
+  }
+  /* A project's People sub-item is redundant on a phone — it is a tab on the
+     project, one tap away, and in the bar it doubles the width of every
+     project you are looking at. */
+  .navitem.sub { display: none; }
+
+  /*
+    The top strip, for the same reason.
+
+    Four flexible children — the wordmark, the Talk button, Appearance and the
+    team — shared 390px and every one of them shrank below its content. The
+    wordmark is the only thing that should give; the rest keep their width, and
+    the parts that are text-only where an icon will do lose their text.
+  */
+  .rail > * { flex: none; }
+  .railtoggle { display: none; }
+
+  /* The wordmark is the only thing that gives, and it gives by truncating
+     rather than by wrapping — a two-word brand set one letter per line is
+     worse than a brand you cannot fully read. */
+  .rail .wordmark { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .rail .wordmark > span:last-child { min-width: 0; overflow: hidden; }
+  .rail .wordmark > span:last-child > span {
+    display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rail .brandline { display: none; }
+
+  /* Icon-only, because their labels are what pushed the strip past 390px. */
+  .callbtn { width: auto; white-space: nowrap; padding: 0 14px; }
+  .callbtn .lbl { display: none; }
+  /*
+    `width: 100%` is the base `.navitem` rule, written for a vertical rail.
+
+    In the horizontal strip it resolves against the rail itself, so a 35px icon
+    button claimed 390px, the strip measured 439px wide, and the fixed bottom
+    navigation — whose containing block is that strip — inherited the extra 49px
+    and pushed the whole document sideways. One percentage, two symptoms, and
+    neither of them near the rule.
+  */
+  .rail > .navitem { width: auto; }
+  .settings-open { padding: 0 10px; font-size: 0; }
+  .settings-open svg { font-size: 15px; }
+
+  /*
+    Who is working does not appear up here at all.
+
+    Eight faces plus two names is 200px of a 390px strip, and it is ambient
+    information — the least important thing in the rail competing with the two
+    controls that are the most important. It belongs on a screen with room,
+    and the portfolio already shows the team.
+  */
+  .rail .team { display: none; }
+}
+
+/* The composer, on a phone. The placeholder is two lines at 390px, so the box
+   starts at two lines rather than clipping the second, and Send drops beneath
+   it — side by side it left the field about 180px wide. */
+@media (max-width: 560px) {
+  .crow { flex-direction: column; align-items: stretch; }
+  .crow textarea { min-height: 56px; }
+  .crow .btn { justify-content: center; }
 }

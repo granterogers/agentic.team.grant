@@ -127,6 +127,13 @@ for (const [size, opts] of SIZES) {
     // this — People, contacts, documents — only exists inside one.
     await page.locator('.project[data-open="legacy-coaching-course"]').click()
     await page.waitForTimeout(900)
+    /*
+      The tab is remembered per project, so a run that ended on People leaves
+      the next one there. Board is what the "project" capture is of, so say so
+      rather than depending on whatever the last run happened to leave behind.
+    */
+    await page.locator('[role="tab"][data-tab="board"]').click()
+    await page.waitForTimeout(500)
     await shoot('project')
 
     if (size === 'desktop') {
@@ -160,9 +167,49 @@ for (const [size, opts] of SIZES) {
       await shoot('rail-collapsed')
       await page.locator('[data-rail]').click()
       await page.waitForTimeout(500)
-      await page.locator('.navitem.proj[data-open="legacy-coaching-course"]').click()
-      await page.waitForTimeout(600)
     }
+
+    /*
+      The team's in-tray and the chat (#26, #27, #28).
+
+      Both are new tabs on the project, and both are things Grant asked for in
+      one sentence — so both get a capture on every size, not only desktop. The
+      talk action is captured mid-flight, with the item already attached to the
+      composer, because a still of the button proves nothing about whether the
+      context actually travels.
+    */
+    await page.locator('[role="tab"][data-tab="team"]').click()
+    await page.waitForTimeout(600)
+    await shoot('team')
+
+    await page.locator('[role="tab"][data-tab="chat"]').click()
+    await page.waitForTimeout(500)
+    await shoot('chat-empty')
+
+    await page
+      .locator('[data-say]')
+      .fill('Can you turn the WS02 client list into an email I can send?')
+    /*
+      Enter rather than the Send button. On a phone the bottom navigation is
+      fixed, and Playwright's scroll-into-view stops as soon as the button is
+      technically visible — which is underneath it. Enter is also the path a
+      person actually uses, so this tests the more common one.
+    */
+    await page.locator('[data-say]').press('Enter')
+    await page.waitForTimeout(600)
+    await shoot('chat')
+
+    await page.locator('[role="tab"][data-tab="board"]').click()
+    await page.waitForTimeout(500)
+    // The talk action on a document, and where it lands.
+    await page.locator('[data-doc="0"]').scrollIntoViewIfNeeded()
+    await page.waitForTimeout(200)
+    await page.locator('.withtalk:has([data-doc="0"]) .talkabout').click()
+    await page.waitForTimeout(600)
+    await shoot('talk-about-a-document')
+
+    await page.locator('[role="tab"][data-tab="board"]').click()
+    await page.waitForTimeout(500)
 
     // Contacts, which sit below the fold in the right-hand column.
     if (size === 'desktop') {
@@ -175,6 +222,8 @@ for (const [size, opts] of SIZES) {
     }
 
     // And a document, which is the second one.
+    await page.locator('[data-doc="0"]').scrollIntoViewIfNeeded()
+    await page.waitForTimeout(200)
     await page.locator('[data-doc="0"]').click()
     await page.waitForTimeout(700)
     await shoot('document')

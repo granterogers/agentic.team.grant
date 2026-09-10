@@ -10,6 +10,8 @@
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
+import * as chat from './chat.js'
+import * as workspace from './workspace.js'
 import * as panels from './panels.js'
 import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
@@ -22,7 +24,34 @@ const $ = (sel, root = document) => root.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-const state = { view: 'portfolio', project: null, done: new Set(), label: null }
+const state = {
+  view: 'portfolio', project: null, done: new Set(), label: null,
+  // The project's tabs (#30). Board is the default because the arrangeable
+  // dashboard is the thing he asked for and the thing he will look at most.
+  tab: 'board',
+  // The item a chat message is about (#27), until it is sent or removed.
+  attach: null,
+}
+
+const TABS = [
+  { id: 'board', name: 'Board' },
+  { id: 'team', name: 'Team' },
+  { id: 'chat', name: 'Chat' },
+  { id: 'people', name: 'People' },
+]
+
+/** Remembered per project, because the tab you left is the tab you meant. */
+const tabFor = (slug) => {
+  try { return JSON.parse(localStorage.getItem('studio.tab') ?? '{}')[slug] ?? 'board' }
+  catch { return 'board' }
+}
+const rememberTab = (slug, tab) => {
+  try {
+    const all = JSON.parse(localStorage.getItem('studio.tab') ?? '{}')
+    all[slug] = tab
+    localStorage.setItem('studio.tab', JSON.stringify(all))
+  } catch { /* not fatal */ }
+}
 
 /*
   One place that knows whether something is open (#23 idea 6).
@@ -74,17 +103,60 @@ const cover = (d) => {
   return `<div class="page">${pageSvg(d.title, d.kind)}<span class="kind ${badge}">${label}</span></div>`
 }
 
-const docCard = (d, i) => `
+/*
+  "Talk to the team about this" (#27).
+
+  Grant: *"each item (Docs, contacts, todo, etc) has a little button to 'talk to
+  the team about this' and I can send a message that takes the item as context"*.
+
+  One component, so a new item type gets it for nothing. Two details that are
+  the whole point rather than polish:
+
+  - It is a SIBLING of the card, not a child. The cards are `<button>`, and a
+    button inside a button is invalid and behaves differently in every browser.
+  - It carries `kind` and `id`, not a sentence. When this reaches the backend
+    the job gets the id; a description would have to be parsed back.
+*/
+const talkBtn = (kind, id, title) => `
+  <button class="talkabout" data-talk-kind="${esc(kind)}" data-talk-id="${esc(id)}"
+          data-talk-title="${esc(title)}"
+          title="Talk to the team about this" aria-label="Talk to the team about ${esc(title)}">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/>
+    </svg>
+  </button>`
+
+/** A card and its talk action, side by side rather than nested. */
+const withTalk = (html, kind, id, title) =>
+  `<span class="withtalk">${html}${talkBtn(kind, id, title)}</span>`
+
+const docCard = (d, i) => withTalk(`
   <button class="doc" data-doc="${i}">
     ${cover(d)}
     <span style="font-weight:500;font-size:13px;line-height:1.35">${esc(d.title)}</span>
     <span class="t-meta" style="font-size:12px">${esc(d.origin)} · ${esc(d.size)}</span>
-  </button>`
+  </button>`, 'document', String(i), d.title)
+
+/*
+  Every document the project actually has.
+
+  Its own, plus the artifacts the team made that Grant has approved. Everything
+  downstream — the shelf, the viewer, the counts — reads this rather than
+  `p.documents`, so approving something in Team makes it appear here with no
+  second code path.
+*/
+const allDocs = (p) => [
+  ...p.documents,
+  ...workspace.approved(p).map((r) => ({
+    ...r.output, origin: `${crewBy(r.who).name} · ${r.delivered}`,
+  })),
+]
 
 const taskRow = (t, i) => {
   const done = t.state === 'done' || state.done.has(i)
   const who = t.who ? crewBy(t.who) : null
-  return `<button class="task ${done ? 'done' : ''}" data-task="${i}">
+  return withTalk(`<button class="task ${done ? 'done' : ''}" data-task="${i}">
     <span class="box ${t.state === 'due' && !done ? 'due' : ''}">${
       done ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--on-accent)"
         stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>` : ''
@@ -95,7 +167,7 @@ const taskRow = (t, i) => {
               : t.note ? `<span class="t-meta">${esc(t.note)}</span>` : ''}
     </span>
     ${who ? face(who, 22) : ''}
-  </button>`
+  </button>`, 'task', String(i), t.title)
 }
 
 // --- views -------------------------------------------------------------------
@@ -152,7 +224,9 @@ function rail() {
           <span class="dot"></span>${esc(p.name)}
         </button>
         ${state.project === p.slug && state.view !== 'portfolio' ? `
-          <button class="navitem sub ${state.view === 'people' ? 'on' : ''}" data-people="${p.slug}">
+          <button class="navitem sub ${
+            state.view === 'project' && state.tab === 'people' ? 'on' : ''
+          }" data-people="${p.slug}">
             People<span class="n">${p.contacts.length}</span></button>` : ''}`).join('')}
     </nav>
     <!--
@@ -242,7 +316,7 @@ function attention() {
 function contactCard(c, i) {
   const stage = { active: 'Active', prospect: 'Prospect', dormant: 'Dormant' }[c.stage] ?? c.stage
   const bits = [c.org, c.where].filter((x) => x !== '' && x !== undefined)
-  return `<button class="contact ${c.hue}" data-contact="${i}">
+  return withTalk(`<button class="contact ${c.hue}" data-contact="${i}">
     <span class="disc">${esc(c.name[0])}</span>
     <span class="who">
       <span class="line1">
@@ -262,7 +336,7 @@ function contactCard(c, i) {
         ${esc(c.next)}${c.nextDue ? ` — ${esc(c.nextDue)}` : ''}</span>` : ''}
     </span>
     <span class="t-meta when">${esc(c.last)}</span>
-  </button>`
+  </button>`, 'contact', String(i), c.name)
 }
 
 function card(p, lead) {
@@ -326,7 +400,7 @@ function desk() {
       </div>
       <button class="btn" data-go="portfolio">Back to the list</button>
     </div>
-    <div class="stage">
+    <div class="deskstage">
       <div class="surface" data-surface>
         ${PROJECTS.map((p) => `
           <div class="deskcard ${p.hue}" data-card="${p.slug}"
@@ -342,25 +416,17 @@ function desk() {
   </main>`
 }
 
-function projectPeople() {
-  const p = byId(state.project)
+function peopleTab(p) {
   const defined = people.labels()
   const chosen = state.label
   const shown = chosen === null
     ? p.contacts
     : p.contacts.filter((c) => people.labelsOn(c.name).some((l) => l.id === chosen))
 
-  return `<main class="main">
-    <button class="btn" data-open="${p.slug}" style="margin-bottom:var(--s4)">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-      ${esc(p.name)}</button>
-    <div class="head">
-      <div>
-        <h1 class="t-display">People</h1>
-        <p class="t-lead" style="margin:var(--s2) 0 0">Everyone on ${esc(p.name)}.
-          Labels are yours — rename them, add your own, delete the ones you do not use.</p>
-      </div>
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">Everyone on ${esc(p.name)}.
+        Labels are yours — rename them, add your own, delete the ones you do not use.</p>
       <button class="btn" data-label-edit>Edit labels</button>
     </div>
 
@@ -393,7 +459,7 @@ function projectPeople() {
               </span>
             </button>`).join('')}</div>`
     }
-  </main>`
+  </div>`
 }
 
 function portfolio() {
@@ -433,11 +499,23 @@ const PANEL = {
           }">${m.state === 'done' ? 'Done' : m.state === 'doing' ? 'In hand' : 'Not started'}</div>
           <div style="font-weight:600;font-size:14px;margin-top:5px;line-height:1.35">${esc(m.name)}</div>
           <div class="t-meta" style="margin-top:4px">${m.docs} docs · ${m.tasks} tasks</div>
+          ${talkBtn('module', String(m.n), m.name)}
         </div>`).join('')}</div>`,
 
-  documents: (p) => p.documents.length === 0
-    ? `<p class="t-meta">Nothing here yet. Drop a file, or ask the team to make one.</p>`
-    : `<div class="shelf" data-shelf>${p.documents.map(docCard).join('')}</div>`,
+  /*
+    The shelf, plus whatever Grant has approved out of the Team tab.
+
+    This is the other half of the review gate (#28): an artifact the team made
+    is nowhere near the project's documents until it is approved, and the moment
+    it is, it is simply a document. Two shelves for "yours" and "approved" would
+    put the in-tray back in the library.
+  */
+  documents: (p) => {
+    const docs = allDocs(p)
+    return docs.length === 0
+      ? `<p class="t-meta">Nothing here yet. Drop a file, or ask the team to make one.</p>`
+      : `<div class="shelf" data-shelf>${docs.map(docCard).join('')}</div>`
+  },
 
   tasks: (p) => `<div class="tasks">${p.tasks.map(taskRow).join('')}</div>`,
 
@@ -462,6 +540,150 @@ const PANEL = {
 
   note: () => `<textarea class="notepad" placeholder="Anything you want to remember about
 this project…" aria-label="Note"></textarea>`,
+}
+
+
+/*
+  The team's in-tray (#28).
+
+  A request and the artifact it produced are one row, because the question a
+  produced file has to answer is *why does this exist* — and neither an activity
+  feed (outputs without requests) nor a job queue (requests without outputs)
+  answers it.
+
+  Waiting first. Approving is what moves an artifact into the project; until
+  then the project does not have it. That gate is the substance of Grant's word
+  "coordinated" — the two columns are just how you see it.
+*/
+function teamTab(p) {
+  const { all, waiting, working, settled } = workspace.split(p)
+  const crewHere = [...new Set(all.map((r) => r.who))].map(crewBy)
+
+  if (all.length === 0) {
+    return `<div class="tabbody"><div class="empty">
+      <p class="t-meta">The team has nothing in hand on ${esc(p.name)} and has made nothing
+        for it yet. Ask for something in Chat, or press the talk button on any item.</p>
+      <button class="btn primary" data-tab="chat">Open the chat</button>
+    </div></div>`
+  }
+
+  const row = (r) => {
+    const c = crewBy(r.who)
+    const st = workspace.STATE[r.state] ?? workspace.STATE.working
+    return `<article class="wrow ${st.hue}" data-row="${esc(r.id)}">
+      <div class="wask">
+        <span class="t-label">Asked · ${esc(r.asked)}</span>
+        <p>${esc(r.ask)}</p>
+        <span class="t-meta">${esc(r.from)}${
+          r.context ? ` · about ${esc(r.context.title)}` : ''}</span>
+      </div>
+      <div class="warrow" aria-hidden="true">
+        ${face(c, 30)}
+        <svg width="34" height="10" viewBox="0 0 34 10" fill="none" stroke="var(--ink-3)"
+             stroke-width="1.4" stroke-linecap="round"><path d="M1 5h28M25 1l4 4-4 4"/></svg>
+      </div>
+      <div class="wout">
+        <span class="stage s-${esc(r.state)}">${esc(st.name)}</span>
+        ${r.output === null || r.output === undefined
+          ? `<p class="t-meta">${esc(c.name)} is on it. Nothing to look at yet.</p>`
+          : `<div class="woutfile">
+              <span class="wpage">${pageSvg(r.output.title, r.output.kind)}</span>
+              <span>
+                <b>${esc(r.output.title)}</b>
+                <span class="t-meta">${esc(c.name)} · ${esc(r.delivered)} · ${esc(r.output.size)}</span>
+                ${r.derived.length === 0 ? '' :
+                  `<span class="t-meta from">From ${esc(r.derived.join(', '))}</span>`}
+              </span>
+            </div>`}
+        <div class="wctl">
+          ${r.state === 'review' ? `
+            <button class="btn primary" data-decide="approve" data-row-id="${esc(r.id)}">Add to project</button>
+            <button class="btn" data-decide="discard" data-row-id="${esc(r.id)}">Drop</button>` : ''}
+          ${r.state === 'approved' || r.state === 'discarded'
+            ? `<button class="btn" data-decide="reopen" data-row-id="${esc(r.id)}">Undo</button>` : ''}
+          ${talkBtn('request', r.id, r.ask)}
+        </div>
+      </div>
+    </article>`
+  }
+
+  const group = (name, note, rows2) => rows2.length === 0 ? '' : `
+    <section class="wgroup">
+      <h3 class="t-label">${esc(name)} <span class="n">${rows2.length}</span></h3>
+      <p class="t-meta" style="margin:0 0 var(--s3)">${esc(note)}</p>
+      ${rows2.map(row).join('')}
+    </section>`
+
+  return `<div class="tabbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">What the team was asked, and what came back.
+        Nothing they make joins ${esc(p.name)} until you say so.</p>
+      <div class="crew" style="margin:0">${crewHere.map((c) => face(c)).join('')}</div>
+    </div>
+    ${group('Needs you', 'Finished, and waiting on your decision.', waiting)}
+    ${group('In hand', 'Being worked on now.', working)}
+    ${group('Settled', 'Already decided.', settled)}
+  </div>`
+}
+
+/*
+  The chat (#26).
+
+  The same conversation as the call button, in the mode you use when you cannot
+  talk or when you want a record. Per project, and it carries the attached item
+  as a visible, removable chip — invisible context is context you cannot trust.
+
+  The replies here are marked `pending`, and the UI says so, because the
+  prototype has no team behind it. Faking a plausible answer would make the
+  prototype prove something that is not true.
+*/
+function chatTab(p) {
+  const messages = chat.thread(p.slug)
+  const a = state.attach
+
+  const bubble = (m) => {
+    if (m.from === 'grant') {
+      return `<div class="msg mine">
+        ${m.context ? `<span class="ctxchip">${esc(m.context.title)}</span>` : ''}
+        <p>${esc(m.text)}</p>
+      </div>`
+    }
+    const c = crewBy(m.from)
+    return `<div class="msg theirs">
+      ${face(c, 30)}
+      <div class="mbody">
+        <span class="t-label">${esc(c.name)} · ${esc(c.role)}</span>
+        <p>${esc(m.text)}</p>
+        ${m.pending ? `<span class="t-meta pendmark">Prototype — no team behind this yet.
+          Wired up, this becomes a job you can watch in Team.</span>` : ''}
+      </div>
+    </div>`
+  }
+
+  return `<div class="tabbody chatbody">
+    <div class="thread" data-thread>
+      ${messages.length === 0
+        ? `<div class="empty">
+            <p class="t-meta">Nothing said about ${esc(p.name)} yet. Ask for something, or
+              press the talk button on any document, person or task to start with that
+              already attached.</p>
+          </div>`
+        : messages.map(bubble).join('')}
+    </div>
+    <form class="composer" data-composer>
+      ${a === null ? '' : `<div class="attached">
+        <span class="t-label">About</span>
+        <span class="ctxchip">${esc(a.title)}
+          <button type="button" data-unattach aria-label="Remove ${esc(a.title)}">×</button>
+        </span>
+      </div>`}
+      <div class="crow">
+        <textarea data-say rows="1" placeholder="Ask the team, or tell them what to do…"
+                  aria-label="Message the team"></textarea>
+        <button class="btn primary" type="submit">Send</button>
+      </div>
+    </form>
+  </div>`
 }
 
 function dashboard() {
@@ -491,6 +713,53 @@ function dashboard() {
 
   const tallest = mine.reduce((m, s) => Math.max(m, s.y + s.h), 0)
 
+  const board = `
+    <!--
+      Grant: *"this draggable area should be present within the project itself"*.
+      Panels snap to a 24px grid AND to each other's edges, because "nicely
+      arranged" means aligned and a bare grid does not guarantee that — two
+      panels can both be on the grid and still be out of line with each other.
+    -->
+    <div class="tabbody">
+      <div class="tabhead">
+        <p class="t-lead" style="margin:0">Drag a panel by its title. Add what this
+          project needs, drop what it does not.</p>
+        <div class="headctl">
+          ${spare.length === 0 ? '' : `<div class="addpanel">
+            <button class="btn" data-add-open>+ Add panel</button>
+            <div class="addmenu" data-add-menu hidden>
+              ${spare.map((k) => `<button data-add="${k.id}">
+                <b>${esc(k.name)}</b><span class="t-meta">${esc(k.note)}</span></button>`).join('')}
+            </div>
+          </div>`}
+          <button class="btn" data-reset-panels title="Put the panels back">Reset</button>
+        </div>
+      </div>
+      <div class="board" data-board style="height:${Math.max(tallest + 40, 520)}px">
+        ${mine.map(chrome).join('')}
+      </div>
+    </div>`
+
+  /*
+    Tabs (#30).
+
+    The project page was one page, and everything a project has had to fit on it
+    or be left out. That held while a project was a board. It stops holding the
+    moment the same project also has a chat thread, a team in-tray and a people
+    list — three things Grant asked for in one sentence.
+
+    The count on Team is the point of putting it second: it is how he learns
+    something is waiting without opening it.
+  */
+  const waiting = workspace.split(p).waiting.length
+  const counts = { team: waiting, chat: 0, people: p.contacts.length, board: 0 }
+
+  const body =
+    state.tab === 'team' ? teamTab(p)
+    : state.tab === 'chat' ? chatTab(p)
+    : state.tab === 'people' ? peopleTab(p)
+    : board
+
   return `<main class="main">
     <div class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
       ${coverSvg(p.slug, { dense: true, facts: p })}
@@ -502,25 +771,18 @@ function dashboard() {
       </div>
       <div class="headctl">
         <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
-        ${spare.length === 0 ? '' : `<div class="addpanel">
-          <button class="btn" data-add-open>+ Add panel</button>
-          <div class="addmenu" data-add-menu hidden>
-            ${spare.map((k) => `<button data-add="${k.id}">
-              <b>${esc(k.name)}</b><span class="t-meta">${esc(k.note)}</span></button>`).join('')}
-          </div>
-        </div>`}
-        <button class="btn" data-reset-panels title="Put the panels back">Reset</button>
+        <button class="btn primary" data-tab="chat">Talk to the team</button>
       </div>
     </div>
-    <!--
-      Grant: *"this draggable area should be present within the project itself"*.
-      Panels snap to a 24px grid AND to each other's edges, because "nicely
-      arranged" means aligned and a bare grid does not guarantee that — two
-      panels can both be on the grid and still be out of line with each other.
-    -->
-    <div class="board" data-board style="height:${Math.max(tallest + 40, 520)}px">
-      ${mine.map(chrome).join('')}
+
+    <div class="tabs" role="tablist" aria-label="${esc(p.name)}">
+      ${TABS.map((t) => `<button role="tab" class="tab ${state.tab === t.id ? 'on' : ''}"
+          aria-selected="${state.tab === t.id}" data-tab="${t.id}">${esc(t.name)}${
+            counts[t.id] > 0 ? `<span class="n">${counts[t.id]}</span>` : ''
+          }</button>`).join('')}
     </div>
+
+    ${body}
   </main>`
 }
 
@@ -683,7 +945,6 @@ function render() {
   root.innerHTML = rail() + (
     state.view === 'project' ? dashboard()
     : state.view === 'desk' ? desk()
-    : state.view === 'people' ? projectPeople()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
@@ -701,7 +962,15 @@ function render() {
   for (const b of root.querySelectorAll('[data-open]')) {
     if (!b.classList.contains('proj')) tiltable(b, { max: b.classList.contains('lead') ? 3.2 : 5 })
     b.addEventListener('click', () => {
-      carry(null, null, () => { state.project = b.dataset.open; state.view = 'project'; render() })
+      carry(null, null, () => {
+        state.project = b.dataset.open
+        state.view = 'project'
+        state.tab = tabFor(state.project)
+        // An attachment belongs to the project you were in. Carrying it across
+        // would put a Legacy document on a Wellness message.
+        state.attach = null
+        render()
+      })
     })
   }
 
@@ -724,9 +993,19 @@ function render() {
     })
   }
 
+  // The rail reaches People per project — which is now a tab on that project
+  // rather than a view of its own, because People was never a separate place.
   for (const b of root.querySelectorAll('[data-people]')) {
     b.addEventListener('click', () => {
-      carry(null, null, () => { state.project = b.dataset.people; state.view = 'people'; state.label = null; render() })
+      carry(null, null, () => {
+        state.project = b.dataset.people
+        state.view = 'project'
+        state.tab = 'people'
+        state.label = null
+        state.attach = null
+        rememberTab(state.project, 'people')
+        render()
+      })
     })
   }
 
@@ -782,9 +1061,100 @@ function render() {
     for (const card of surface.querySelectorAll('[data-card]')) {
       card.addEventListener('click', () => {
         if (card.classList.contains('lifted')) return
-        carry(null, null, () => { state.project = card.dataset.card; state.view = 'project'; render() })
+        carry(null, null, () => {
+          state.project = card.dataset.card
+          state.view = 'project'
+          state.tab = tabFor(state.project)
+          state.attach = null
+          render()
+        })
       })
     }
+  }
+
+  /*
+    Tabs, the talk action, the composer and the in-tray decisions.
+
+    All four are wired here rather than in their renderers because a full
+    re-render replaces every node — a listener attached inside a template
+    function would be lost on the next paint and silently stop working, which is
+    exactly how the deleted `everyone()` bug hid for two commits.
+  */
+  for (const b of root.querySelectorAll('[data-tab]')) {
+    b.addEventListener('click', () => {
+      state.tab = b.dataset.tab
+      rememberTab(state.project, state.tab)
+      render()
+    })
+  }
+
+  /*
+    "Talk to the team about this" (#27).
+
+    `stopPropagation`, because the button sits beside a card that opens the
+    document viewer and a bare click would do both. The attachment is put on
+    state, the tab switches, and the composer takes focus — the whole action is
+    one press and then typing.
+  */
+  for (const b of root.querySelectorAll('[data-talk-kind]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      state.attach = {
+        kind: b.dataset.talkKind, id: b.dataset.talkId, title: b.dataset.talkTitle,
+      }
+      state.tab = 'chat'
+      rememberTab(state.project, 'chat')
+      render()
+      $('[data-say]')?.focus()
+    })
+  }
+
+  const composer = $('[data-composer]', root)
+  if (composer) {
+    const say = $('[data-say]', composer)
+    const thread = $('[data-thread]', root)
+    // A thread you have to scroll to read is a thread you do not read.
+    if (thread) thread.scrollTop = thread.scrollHeight
+
+    // Grow to fit, up to a point. A one-line box for a paragraph is a box that
+    // hides what you wrote from you.
+    const fit = () => {
+      say.style.height = 'auto'
+      say.style.height = `${Math.min(say.scrollHeight, 160)}px`
+    }
+    say?.addEventListener('input', fit)
+    // Enter sends, Shift+Enter breaks the line — the convention everywhere else.
+    say?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); composer.requestSubmit() }
+    })
+
+    composer.addEventListener('submit', (e) => {
+      e.preventDefault()
+      const text = say.value.trim()
+      if (text === '') return
+      chat.send(state.project, text, state.attach)
+      state.attach = null
+      render()
+      const t = $('[data-thread]')
+      if (t) t.scrollTop = t.scrollHeight
+      $('[data-say]')?.focus()
+    })
+
+    $('[data-unattach]', composer)?.addEventListener('click', () => {
+      state.attach = null
+      render()
+      $('[data-say]')?.focus()
+    })
+  }
+
+  // The review gate. Approving is what moves an artifact into the project.
+  for (const b of root.querySelectorAll('[data-decide]')) {
+    b.addEventListener('click', () => {
+      const verdict = b.dataset.decide
+      workspace.decide(state.project, b.dataset.rowId,
+        verdict === 'approve' ? 'approved' : verdict === 'discard' ? 'discarded' : null)
+      render()
+    })
   }
 
   const board = $('[data-board]', root)
@@ -826,11 +1196,12 @@ function render() {
       shelf.scrollBy({ left: step() * 2, behavior: 'smooth' }))
   }
 
-  for (const [i, b] of [...root.querySelectorAll('[data-doc]')].entries()) {
-    const doc = byId(state.project).documents[Number(b.dataset.doc)]
+  for (const b of root.querySelectorAll('[data-doc]')) {
+    const docs = allDocs(byId(state.project))
+    const doc = docs[Number(b.dataset.doc)]
     if (doc?.file) paint($('.page', b), doc.file, 320)
     tiltable($('.page', b), { max: 7, scale: 1.03 })
-    b.addEventListener('click', () => openDoc(byId(state.project).documents[Number(b.dataset.doc)], b))
+    b.addEventListener('click', () => openDoc(doc, b))
   }
 }
 
