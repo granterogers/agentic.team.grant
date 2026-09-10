@@ -922,3 +922,79 @@ body::after {
   box-shadow: inset 0 -1px 0 rgb(255 255 255 / .22), inset 0 10px 24px -14px rgb(0 0 0 / .45); }
 .deskcard .body { display: grid; gap: 3px; padding: var(--s3) var(--s4) var(--s4); color: var(--ink); }
 .deskcard .body b { font: 600 15.5px/1.2 var(--text); }
+
+/* ==========================================================================
+   A project is an arrangement
+   Grant: "this draggable area should be present within the project itself..
+   where I can make a nicely arranged dashboard"
+   ========================================================================== */
+
+.board { position: relative; width: 100%; }
+.panel {
+  position: absolute; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--r-card); border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .2s, left .22s cubic-bezier(.2,.8,.3,1),
+              top .22s cubic-bezier(.2,.8,.3,1), width .22s cubic-bezier(.2,.8,.3,1);
+}
+.panel:hover { box-shadow: var(--lift-2); }
+/* While held, no transition — the panel must track the pointer exactly, and
+   easing a dragged thing makes it feel like it is on elastic. */
+.panel.lifted {
+  transition: none; z-index: 20; box-shadow: var(--lift-3);
+  transform: rotate(-.4deg) scale(1.01);
+}
+.panel > header {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  cursor: grab; touch-action: none; user-select: none;
+  border-bottom: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--sunken) 45%, transparent);
+}
+.panel.lifted > header { cursor: grabbing; }
+.panel > header h3 { margin: 0; flex: 1; }
+.pctl { display: flex; gap: 2px; opacity: 0; transition: opacity .16s; }
+.panel:hover .pctl, .panel:focus-within .pctl { opacity: 1; }
+.pctl button {
+  width: 28px; height: 28px; border-radius: 6px; color: var(--ink-3);
+  font: 400 15px/1 var(--text); display: grid; place-items: center;
+}
+.pctl button:hover { background: var(--sunken); color: var(--ink); }
+.pctl [data-drop-panel]:hover { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+/* Touch has no hover, so the controls have to be permanently visible there. */
+@media (pointer: coarse) { .pctl { opacity: 1; } }
+
+.pbodywrap { padding: var(--s4); overflow: auto; flex: 1; }
+.pbodywrap .shelf { padding-bottom: 10px; }
+.modgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s3); }
+.notepad {
+  width: 100%; height: 100%; min-height: 120px; resize: none; border: 0;
+  background: transparent; color: var(--ink); font: 400 14.5px/1.6 var(--text);
+}
+.notepad:focus { outline: none; }
+
+.headctl { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.addpanel { position: relative; }
+.addmenu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 244px;
+  display: grid; gap: 2px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--edge);
+  border-radius: var(--r-card); box-shadow: var(--lift-3);
+}
+.addmenu[hidden] { display: none; }
+.addmenu button {
+  display: grid; gap: 1px; text-align: left; padding: 9px 11px; border-radius: 7px;
+  min-height: 44px;
+}
+.addmenu button:hover { background: var(--accent-wash); }
+.addmenu b { font: 600 14px/1.2 var(--text); }
+
+/* On a phone a draggable board is the wrong idea entirely: there is one column,
+   nothing to arrange, and a drag competes with the scroll. Panels stack. */
+@media (max-width: 860px) {
+  .board { height: auto !important; display: grid; gap: var(--s4); }
+  .panel { position: static; width: auto !important; height: auto !important; }
+  .panel > header { cursor: default; }
+  .pctl { display: none; }
+}

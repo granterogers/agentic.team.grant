@@ -10,6 +10,7 @@
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
+import * as panels from './panels.js'
 import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
@@ -412,13 +413,85 @@ function portfolio() {
   </main>`
 }
 
+/*
+  The contents of each panel.
+
+  Split out of `dashboard()` so a panel is a thing that can be positioned,
+  removed and re-added, rather than a section that happens to be in a fixed
+  order. Each takes the project and returns its inside; the chrome — title,
+  grip, controls — is the same for all of them.
+*/
+const PANEL = {
+  modules: (p) => p.modules.length === 0
+    ? `<p class="t-meta">No modules on this project.</p>`
+    : `<div class="modgrid">${p.modules.map((m) => `
+        <div class="module" style="--dot:${
+          m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
+        }">
+          <div class="t-label" style="color:${
+            m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
+          }">${m.state === 'done' ? 'Done' : m.state === 'doing' ? 'In hand' : 'Not started'}</div>
+          <div style="font-weight:600;font-size:14px;margin-top:5px;line-height:1.35">${esc(m.name)}</div>
+          <div class="t-meta" style="margin-top:4px">${m.docs} docs · ${m.tasks} tasks</div>
+        </div>`).join('')}</div>`,
+
+  documents: (p) => p.documents.length === 0
+    ? `<p class="t-meta">Nothing here yet. Drop a file, or ask the team to make one.</p>`
+    : `<div class="shelf" data-shelf>${p.documents.map(docCard).join('')}</div>`,
+
+  tasks: (p) => `<div class="tasks">${p.tasks.map(taskRow).join('')}</div>`,
+
+  contacts: (p) => p.contacts.length === 0
+    ? `<p class="t-meta">Nobody on this project yet.</p>`
+    : `<div class="contacts">${p.contacts.map(contactCard).join('')}</div>`,
+
+  activity: (p) => `<div class="tasks">${p.activity.map((a) => {
+    const c = crewBy(a.who)
+    return `<div class="task" style="cursor:default">${face(c, 22)}
+      <span class="label t-meta" style="color:var(--ink)">
+        <b style="font-weight:600">${esc(c.name)}</b> ${esc(a.verb)} ${esc(a.what)}
+        <span style="color:var(--ink-3)"> · ${esc(a.when)}</span></span></div>`
+  }).join('')}</div>`,
+
+  links: (p) => `<div class="links" style="margin:0">
+      ${p.connectors.length === 0
+        ? '<span class="t-meta">Nothing yet — this project stands on its own.</span>'
+        : p.connectors.map((c) => `<span class="link">${esc(c)}</span>`).join('')}
+      <button class="link add">+ Connect something</button>
+    </div>`,
+
+  note: () => `<textarea class="notepad" placeholder="Anything you want to remember about
+this project…" aria-label="Note"></textarea>`,
+}
+
 function dashboard() {
   const p = byId(state.project)
+  const mine = panels.layout(p)
+  const spare = panels.KINDS.filter((k) => !mine.some((m) => m.id === k.id))
+
+  const chrome = (spec) => {
+    const kind = panels.KINDS.find((k) => k.id === spec.id)
+    if (!kind) return ''
+    return `<section class="panel" data-panel="${spec.id}"
+             style="left:calc((100% - 40px)/3 * ${spec.x} + ${spec.x} * 20px);
+                    top:${spec.y}px;
+                    width:calc((100% - 40px)/3 * ${spec.w} + ${(spec.w - 1) * 20}px);
+                    height:${spec.h}px">
+      <header data-grip>
+        <h3 class="t-label">${esc(kind.name)}</h3>
+        <span class="pctl">
+          <button data-narrower aria-label="Narrower" title="Narrower">−</button>
+          <button data-wider aria-label="Wider" title="Wider">+</button>
+          <button data-drop-panel aria-label="Remove ${esc(kind.name)}" title="Remove">×</button>
+        </span>
+      </header>
+      <div class="pbodywrap">${PANEL[spec.id]?.(p) ?? ''}</div>
+    </section>`
+  }
+
+  const tallest = mine.reduce((m, s) => Math.max(m, s.y + s.h), 0)
+
   return `<main class="main">
-    <button class="btn" data-go="portfolio" style="margin-bottom:var(--s4)">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-      Projects</button>
     <div class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
       ${coverSvg(p.slug, { dense: true, facts: p })}
     </div>
@@ -427,102 +500,26 @@ function dashboard() {
         <h1 class="t-display" style="font-size:38px">${esc(p.name)}</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(p.purpose)}</p>
       </div>
-      <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
+      <div class="headctl">
+        <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
+        ${spare.length === 0 ? '' : `<div class="addpanel">
+          <button class="btn" data-add-open>+ Add panel</button>
+          <div class="addmenu" data-add-menu hidden>
+            ${spare.map((k) => `<button data-add="${k.id}">
+              <b>${esc(k.name)}</b><span class="t-meta">${esc(k.note)}</span></button>`).join('')}
+          </div>
+        </div>`}
+        <button class="btn" data-reset-panels title="Put the panels back">Reset</button>
+      </div>
     </div>
     <!--
-      Where the connectors live now.
-
-      Grant: *"the source of truth is our own internally defined projects.. with
-      connections to notebook, notion, etc as optional"*. So they are not a
-      badge on the cover as though the project belonged to Notion — they are a
-      line under the project's own name saying what it is additionally joined
-      up to, including when the answer is nothing.
+      Grant: *"this draggable area should be present within the project itself"*.
+      Panels snap to a 24px grid AND to each other's edges, because "nicely
+      arranged" means aligned and a bare grid does not guarantee that — two
+      panels can both be on the grid and still be out of line with each other.
     -->
-    <div class="links">
-      <span class="t-label">Also connected to</span>
-      ${
-        p.connectors.length === 0
-          ? '<span class="t-meta">Nothing yet — this project stands on its own.</span>'
-          : p.connectors.map((c) => `<span class="link">${esc(c)}</span>`).join('')
-      }
-      <button class="link add">+ Connect something</button>
-    </div>
-    <div class="spread">
-      <div class="stack">
-        ${p.modules.length > 0 ? `<section class="section">
-          <header><h2 class="t-title">Modules</h2></header>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:var(--s3)">
-            ${p.modules.map((m) => `<div class="module" style="--dot:${
-              m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
-            }">
-              <div class="t-label" style="color:${
-                m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
-              }">${m.state === 'done' ? 'Done' : m.state === 'doing' ? 'In hand' : 'Not started'}</div>
-              <div style="font-weight:600;font-size:14.5px;margin-top:6px;line-height:1.35">${esc(m.name)}</div>
-              <div class="t-meta" style="margin-top:5px">${m.docs} docs · ${m.tasks} tasks</div>
-            </div>`).join('')}
-          </div>
-        </section>` : ''}
-        <section class="section">
-          <header><h2 class="t-title">Documents</h2>
-            <span class="t-meta">Yours, and what the team made</span></header>
-          <!--
-            #23 idea 8. A shelf rather than a grid: you recognise documents by
-            their covers, and a row you flick through suits that far better than
-            a block you scan. Scroll-snap gives it detents, so it comes to rest
-            on a document rather than between two.
-          -->
-          <div class="shelf" data-shelf>${p.documents.map(docCard).join('')}</div>
-          <div class="shelfnav">
-            <button class="shelfbtn" data-shelf-back aria-label="Earlier documents">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-            </button>
-            <button class="shelfbtn" data-shelf-on aria-label="More documents">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-            </button>
-          </div>
-        </section>
-      </div>
-      <div class="stack">
-        <section class="section">
-          <header><h2 class="t-title">Tasks</h2>
-            <span class="t-meta">${p.tasks.filter((t) => t.state !== 'done').length} open</span></header>
-          <div class="tasks">${p.tasks.map(taskRow).join('')}</div>
-        </section>
-        <section class="section">
-          <header>
-            <h2 class="t-title">Contacts</h2>
-            <button class="link" data-people="${p.slug}">${
-              p.contacts.length === 0 ? 'none yet' : `all ${p.contacts.length}`
-            }</button>
-          </header>
-          ${
-            p.contacts.length === 0
-              ? `<div class="empty">
-                   <p class="t-meta">Nobody on this project yet. Add the people it is
-                     actually about — clients, prospects, whoever sent you something.</p>
-                   <button class="btn">Add someone</button>
-                 </div>`
-              : `<div class="contacts">${p.contacts.map(contactCard).join('')}</div>
-                 <button class="link add" style="justify-self:start">+ Add someone</button>`
-          }
-        </section>
-        <section class="section">
-          <header><h2 class="t-title">Lately</h2></header>
-          <div class="tasks">
-            ${p.activity.map((a) => {
-              const c = crewBy(a.who)
-              return `<div class="task" style="cursor:default">
-                ${face(c, 22)}
-                <span class="label t-meta" style="color:var(--ink)">
-                  <b style="font-weight:600">${esc(c.name)}</b> ${esc(a.verb)} ${esc(a.what)}
-                  <span style="color:var(--ink-3)"> · ${esc(a.when)}</span></span></div>`
-            }).join('')}
-          </div>
-        </section>
-      </div>
+    <div class="board" data-board style="height:${Math.max(tallest + 40, 520)}px">
+      ${mine.map(chrome).join('')}
     </div>
   </main>`
 }
@@ -788,6 +785,36 @@ function render() {
         carry(null, null, () => { state.project = card.dataset.card; state.view = 'project'; render() })
       })
     }
+  }
+
+  const board = $('[data-board]', root)
+  if (board) {
+    const p = byId(state.project)
+    const mine = panels.layout(p)
+    panels.wire(board, p, mine, render)
+    $('[data-add-open]', root)?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const menu = $('[data-add-menu]', root)
+      if (menu) menu.hidden = !menu.hidden
+    })
+    for (const b of root.querySelectorAll('[data-add]')) {
+      b.addEventListener('click', () => {
+        const kind = panels.KINDS.find((k) => k.id === b.dataset.add)
+        // A new panel lands at the bottom of the shortest column, which is
+        // where a person would have put it.
+        const y = mine.reduce((m, s2) => Math.max(m, s2.y + s2.h), 0) + 20
+        panels.save(p.slug, [...mine, { id: kind.id, x: 0, y, w: kind.w, h: kind.h }])
+        render()
+      })
+    }
+    $('[data-reset-panels]', root)?.addEventListener('click', () => {
+      panels.reset(p.slug)
+      render()
+    })
+    document.addEventListener('click', () => {
+      const menu = $('[data-add-menu]')
+      if (menu) menu.hidden = true
+    }, { once: true })
   }
 
   const shelf = $('[data-shelf]', root)
