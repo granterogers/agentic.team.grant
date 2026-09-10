@@ -1,0 +1,12 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 1100, "title": "Direction A — Warm editorial" },
+    { "file": "DirectionB.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 1100, "title": "Direction B — Dark studio" },
+    { "file": "ProjectDetail.dc.html", "x": 0, "y": 1260, "w": 1440, "h": 1000, "title": "Direction A — inside a project" }
+  ],
+  "annotations": [
+    { "id": "brief", "x": 0, "y": -200, "w": 460, "text": "Two directions for the dashboard, same real data: your three projects, the Legacy Coaching Course documents, the six modules, real tasks.\n\nPick one and I build it into the actual page." },
+    { "id": "note-a", "x": 1560, "y": -200, "w": 460, "text": "B is denser and more graphic — projects as wide rows rather than cards, numbers up front. Better if you want everything on one screen; less calm." }
+  ],
+  "launch": { "view": "canvas" }
+}

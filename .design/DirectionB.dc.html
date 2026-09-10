@@ -1,0 +1,227 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", "Helvetica Neue", Helvetica, sans-serif;
+      background: #0B0C10; color: #E9E9EE; -webkit-font-smoothing: antialiased; }
+    a { color: #A8FF60; text-decoration: none; } a:hover { color: #C4FF8F; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="min-height: 1100px; background: #0B0C10; padding: 26px 30px 40px;">
+
+  <!-- top bar -->
+  <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 30px;">
+    <div style="display: flex; align-items: center; gap: 11px;">
+      <div style="width: 30px; height: 30px; border-radius: 8px; background: #A8FF60; display: flex; align-items: center; justify-content: center;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B0C10" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 12l7-4M12 12v9M12 12L5 8"/></svg>
+      </div>
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600; letter-spacing: -0.01em;">Team HQ</div>
+    </div>
+
+    <div style="display: flex; gap: 4px; background: #14161C; border: 1px solid #23262F; border-radius: 10px; padding: 4px;">
+      <div style="padding: 7px 14px; border-radius: 7px; background: #23262F; font-size: 13.5px; font-weight: 600; font-family: 'Space Grotesk', sans-serif;">Projects</div>
+      <div style="padding: 7px 14px; border-radius: 7px; font-size: 13.5px; color: #8B8E9B; font-family: 'Space Grotesk', sans-serif;">Docs</div>
+      <div style="padding: 7px 14px; border-radius: 7px; font-size: 13.5px; color: #8B8E9B; font-family: 'Space Grotesk', sans-serif;">Tasks</div>
+      <div style="padding: 7px 14px; border-radius: 7px; font-size: 13.5px; color: #8B8E9B; font-family: 'Space Grotesk', sans-serif;">Money</div>
+    </div>
+
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+      <div style="display: flex;">
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: #A8FF60; color: #0B0C10; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; border: 2px solid #0B0C10;">C</div>
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: #FF7A6B; color: #0B0C10; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; border: 2px solid #0B0C10; margin-left: -9px;">E</div>
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: #7FB3FF; color: #0B0C10; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; border: 2px solid #0B0C10; margin-left: -9px;">O</div>
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: #23262F; color: #8B8E9B; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; border: 2px solid #0B0C10; margin-left: -9px;">+5</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; background: #A8FF60; color: #0B0C10; border-radius: 9px; padding: 0 16px; height: 44px; font-size: 13.5px; font-weight: 700; font-family: 'Space Grotesk', sans-serif;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0B0C10" stroke-width="2.2" stroke-linecap="round"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+        Call Claire
+      </div>
+    </div>
+  </div>
+
+  <!-- headline row -->
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; margin-bottom: 26px; align-items: stretch;">
+    <div>
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 42px; font-weight: 600; line-height: 1.05; letter-spacing: -0.025em;">
+        Three projects,<br><span style="color: #6E7280;">one thing waiting on you.</span>
+      </div>
+      <div style="display: flex; gap: 30px; margin-top: 26px;">
+        <div>
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;">121</div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7280; margin-top: 6px;">Done, 24h</div>
+        </div>
+        <div>
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: #A8FF60;">0</div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7280; margin-top: 6px;">Failed</div>
+        </div>
+        <div>
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;">$11.40</div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7280; margin-top: 6px;">This month</div>
+        </div>
+        <div>
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;">33</div>
+          <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #6E7280; margin-top: 6px;">Documents</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #14161C; border: 1px solid #23262F; border-radius: 14px; padding: 17px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="width: 7px; height: 7px; border-radius: 50%; background: #FFC24B;"></div>
+        <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #8B8E9B;">Waiting on you</div>
+      </div>
+      <div style="font-size: 14px; line-height: 1.5;">Wellness needs its Notion databases shared before anything can be written there.</div>
+      <div style="font-size: 12.5px; color: #6E7280;">Marcus, 2 days ago. Work carries on without it.</div>
+      <div style="margin-top: auto; display: flex; gap: 8px;">
+        <div style="flex: 1; text-align: center; border: 1px solid #2E3240; border-radius: 8px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500;">Show me</div>
+        <div style="flex: 1; text-align: center; background: #23262F; border-radius: 8px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #8B8E9B;">Not now</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- projects as wide graphic rows -->
+  <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px;">
+
+    <div style="display: grid; grid-template-columns: 148px minmax(0, 1fr) 210px 150px; gap: 20px; align-items: center; background: #14161C; border: 1px solid #23262F; border-radius: 14px; padding: 14px; overflow: hidden;">
+      <div style="height: 92px; border-radius: 10px; background: linear-gradient(135deg, #1B3B2A 0%, #2F7A4F 50%, #A8FF60 140%); position: relative; overflow: hidden;">
+        <div style="position: absolute; inset: 0; opacity: 0.2; background-image: radial-gradient(circle at 70% 30%, #0B0C10 0 1.5px, transparent 1.6px); background-size: 13px 13px;"></div>
+      </div>
+      <div style="min-width: 0;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 19px; font-weight: 600; letter-spacing: -0.015em;">Legacy Coaching Course</div>
+        <div style="font-size: 13px; color: #8B8E9B; margin-top: 5px;">Six modules built from the interview corpus</div>
+        <div style="display: flex; gap: 6px; margin-top: 11px;">
+          <div style="border: 1px solid #2E3240; border-radius: 5px; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; color: #8B8E9B;">Notion</div>
+          <div style="border: 1px solid #2E3240; border-radius: 5px; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; color: #8B8E9B;">NotebookLM</div>
+          <div style="border: 1px solid #2E3240; border-radius: 5px; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; color: #8B8E9B;">12 docs</div>
+        </div>
+      </div>
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8B8E9B; margin-bottom: 7px;">
+          <span>9 of 24 done</span><span style="color: #E9E9EE; font-weight: 600;">38%</span>
+        </div>
+        <div style="height: 6px; background: #23262F; border-radius: 3px; overflow: hidden;">
+          <div style="width: 38%; height: 100%; background: #A8FF60; border-radius: 3px;"></div>
+        </div>
+        <div style="font-size: 11.5px; color: #FFC24B; margin-top: 8px;">Next: interviews by 16 Sep</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; justify-content: flex-end;">
+        <div style="display: flex;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: #A8FF60; color: #0B0C10; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid #14161C;">C</div>
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: #FF7A6B; color: #0B0C10; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid #14161C; margin-left: -8px;">E</div>
+        </div>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E7280" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 148px minmax(0, 1fr) 210px 150px; gap: 20px; align-items: center; background: #14161C; border: 1px solid #23262F; border-radius: 14px; padding: 14px; overflow: hidden;">
+      <div style="height: 92px; border-radius: 10px; background: linear-gradient(135deg, #1C2740 0%, #3D5B96 55%, #7FB3FF 130%); position: relative; overflow: hidden;">
+        <div style="position: absolute; inset: 0; opacity: 0.18; background-image: linear-gradient(115deg, transparent 0 46%, #0B0C10 46% 49%, transparent 49%); background-size: 22px 22px;"></div>
+      </div>
+      <div style="min-width: 0;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 19px; font-weight: 600; letter-spacing: -0.015em;">AI learning</div>
+        <div style="font-size: 13px; color: #8B8E9B; margin-top: 5px;">Notes, sources and reading</div>
+        <div style="display: flex; gap: 6px; margin-top: 11px;">
+          <div style="border: 1px solid #2E3240; border-radius: 5px; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; color: #8B8E9B;">NotebookLM</div>
+          <div style="border: 1px solid #2E3240; border-radius: 5px; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 7px; color: #8B8E9B;">1 doc</div>
+        </div>
+      </div>
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8B8E9B; margin-bottom: 7px;">
+          <span>2 of 7 done</span><span style="color: #E9E9EE; font-weight: 600;">29%</span>
+        </div>
+        <div style="height: 6px; background: #23262F; border-radius: 3px; overflow: hidden;">
+          <div style="width: 29%; height: 100%; background: #7FB3FF; border-radius: 3px;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; justify-content: flex-end;">
+        <div style="width: 26px; height: 26px; border-radius: 50%; background: #7FB3FF; color: #0B0C10; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">T</div>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E7280" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- docs strip -->
+  <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;">
+    <div style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600; letter-spacing: -0.015em;">Recent documents</div>
+    <div style="font-size: 12.5px; color: #6E7280;">Made by the team, or read in from your sources</div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 13px;">
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="aspect-ratio: 3/4; border-radius: 9px; background: #14161C; border: 1px solid #23262F; padding: 11px 10px; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden;">
+        <div style="height: 4px; background: #343846; border-radius: 2px; width: 76%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 100%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 92%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 97%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 64%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 88%; margin-top: 5px;"></div>
+        <div style="position: absolute; right: 8px; bottom: 8px; background: #FF5A4B; color: #0B0C10; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 5px; border-radius: 3px;">PDF</div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.35;">WS01 — Opening Assessment</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="aspect-ratio: 3/4; border-radius: 9px; background: #14161C; border: 1px solid #23262F; padding: 11px 10px; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden;">
+        <div style="height: 4px; background: #343846; border-radius: 2px; width: 68%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 100%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 89%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 95%;"></div>
+        <div style="position: absolute; right: 8px; bottom: 8px; background: #4B8DF8; color: #0B0C10; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 5px; border-radius: 3px;">DOC</div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.35;">Grant Rogers Avatar</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="aspect-ratio: 3/4; border-radius: 9px; background: #14161C; border: 1px solid #23262F; padding: 11px 10px; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden;">
+        <div style="height: 4px; background: #343846; border-radius: 2px; width: 82%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 98%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 86%;"></div>
+        <div style="height: 3px; background: #23262F; border-radius: 2px; width: 91%;"></div>
+        <div style="position: absolute; right: 8px; bottom: 8px; background: #FF5A4B; color: #0B0C10; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 5px; border-radius: 3px;">PDF</div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.35;">WS02 — Client Vision</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="aspect-ratio: 3/4; border-radius: 9px; background: linear-gradient(160deg, #1B2430, #2F4256); border: 1px solid #23262F; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7FB3FF" stroke-width="1.7" stroke-linecap="round"><path d="M3 12h2l2-5 3 11 3-14 3 12 2-4h3"/></svg>
+      </div>
+      <div style="font-size: 12px; line-height: 1.35;">Audio from Ben</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="aspect-ratio: 3/4; border-radius: 9px; background: linear-gradient(160deg, #14161C, #1E2129); border: 1px solid #23262F; padding: 11px 10px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #A8FF60;">Made by Oliver</div>
+        <div style="display: flex; gap: 2px; align-items: flex-end; height: 34px;">
+          <div style="flex: 1; height: 45%; background: #2F7A4F; border-radius: 1px;"></div>
+          <div style="flex: 1; height: 72%; background: #2F7A4F; border-radius: 1px;"></div>
+          <div style="flex: 1; height: 58%; background: #2F7A4F; border-radius: 1px;"></div>
+          <div style="flex: 1; height: 96%; background: #A8FF60; border-radius: 1px;"></div>
+          <div style="flex: 1; height: 66%; background: #2F7A4F; border-radius: 1px;"></div>
+        </div>
+        <div style="position: absolute; right: 8px; bottom: 8px; background: #FF5A4B; color: #0B0C10; font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 5px; border-radius: 3px;">PDF</div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.35;">Course one-pager</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="aspect-ratio: 3/4; border-radius: 9px; border: 1px dashed #2E3240; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6E7280" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <div style="font-size: 11px; color: #6E7280;">Drop a file</div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.35; color: #6E7280;">or ask for one</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
