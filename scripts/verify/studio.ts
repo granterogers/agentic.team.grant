@@ -114,6 +114,15 @@ for (const [size, opts] of SIZES) {
       }
     }
 
+    // The desk: a whole mode, and one a portfolio capture cannot show.
+    if (size === 'desktop') {
+      await page.locator('[data-go="desk"]').click()
+      await page.waitForTimeout(700)
+      await shoot('desk')
+      await page.locator('[data-go="portfolio"]').first().click()
+      await page.waitForTimeout(500)
+    }
+
     // Into a project, which is the shared-element transition. Everything after
     // this — People, contacts, documents — only exists inside one.
     await page.locator('.project[data-open="legacy-coaching-course"]').click()

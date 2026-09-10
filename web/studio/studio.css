@@ -792,3 +792,133 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @keyframes pagein { from { opacity: 0 } to { opacity: 1 } }
 @media (prefers-reduced-motion: reduce) { .realpage { animation: none } }
 .bigpage .realpage { object-fit: contain; object-position: center; background: #fff; }
+
+/* ==========================================================================
+   #23 ideas 5, 6 and 7 — parallax, defocus, the time of day
+   ========================================================================== */
+
+/* --- 5. Scroll-linked parallax inside the covers ---------------------------
+   The artwork drifts against its frame at a fraction of page speed, so a cover
+   reads as a window rather than a picture. Scroll-driven animations are
+   baseline CSS: no JavaScript, no scroll listener, and it runs off the main
+   thread — which is why this is affordable on a page with twelve of them. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .project .cover .art,
+    .hero .art {
+      animation: coverdrift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+    @keyframes coverdrift {
+      from { transform: translate3d(0, -7%, 0) scale(1.14); }
+      to   { transform: translate3d(0, 7%, 0) scale(1.14); }
+    }
+    /* Scaled up so the drift never exposes an edge. */
+    .project .cover .art, .hero .art { will-change: transform; }
+  }
+}
+
+/* --- 6. Progressive defocus behind an open document ------------------------
+   The backdrop used to dim. Blurring it by distance is what a camera does, and
+   it reads as depth rather than as an overlay laid on top. The blur is on the
+   shell rather than the backdrop so the sheet itself stays sharp. */
+.shell { transition: filter .34s cubic-bezier(.2,.8,.3,1), transform .34s cubic-bezier(.2,.8,.3,1); }
+body.behind .shell {
+  filter: blur(7px) saturate(.78) brightness(.96);
+  transform: scale(.994);
+  pointer-events: none;
+}
+/* Nearer things stay sharper: the rail is at the edge of vision and goes
+   softest, the main column is what you just came from and goes least. */
+body.behind .rail { filter: blur(3px); }
+@media (prefers-reduced-motion: reduce) {
+  body.behind .shell { filter: brightness(.9); transform: none; }
+}
+/* With the shell defocused the backdrop no longer needs its own blur, which
+   was doubling up and costing a second full-page filter. */
+.viewer { backdrop-filter: none; background: rgb(20 20 15 / .3); }
+
+/* --- 7. The time of day ----------------------------------------------------
+   The ground's colour temperature follows the actual clock: cool and bright at
+   nine, warm and low at seven. Set as a variable by app.js so the value is one
+   number rather than six blocks of CSS. Imperceptible in any one session, and
+   quietly the reason the app feels like it is in the room. */
+body { --hour-warm: 0; }
+body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -2;
+  background: linear-gradient(180deg,
+    rgb(255 214 160 / calc(var(--hour-warm) * .10)) 0%,
+    rgb(255 190 130 / calc(var(--hour-warm) * .05)) 55%,
+    rgb(60 70 120 / calc((1 - var(--hour-warm)) * .035)) 100%);
+  transition: background 4s linear;
+}
+
+/* --- 8. A shelf, not a grid ------------------------------------------------
+   You recognise a document by its cover, and a row you flick through suits
+   that better than a block you scan. Snap points so it rests ON a document
+   rather than between two; overscroll contained so flicking to the end does
+   not start scrolling the page behind it. */
+.shelf {
+  display: flex; gap: var(--s4); overflow-x: auto; overflow-y: visible;
+  scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+  /* Room for the lift-and-rotate on hover, which would otherwise be clipped by
+     the scroll container. */
+  padding: 6px 2px 14px;
+  scrollbar-width: thin; scrollbar-color: var(--edge) transparent;
+}
+.shelf::-webkit-scrollbar { height: 8px; }
+.shelf::-webkit-scrollbar-thumb { background: var(--edge); border-radius: 4px; }
+.shelf::-webkit-scrollbar-track { background: transparent; }
+.shelf > .doc { flex: 0 0 172px; scroll-snap-align: start; }
+@media (max-width: 760px) { .shelf > .doc { flex-basis: 138px; } }
+.shelfnav { display: flex; gap: var(--s2); justify-content: flex-end; margin-top: calc(var(--s2) * -1); }
+.shelfbtn {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  border: 1px solid var(--edge); color: var(--ink-2);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 6%), var(--surface));
+  box-shadow: var(--lift-1); transition: box-shadow .16s, transform .16s, color .16s;
+}
+.shelfbtn:hover { color: var(--accent); box-shadow: var(--lift-2); transform: translateY(-1px); }
+.shelfbtn:active { box-shadow: var(--engrave); transform: translateY(1px); }
+/* On a touch screen the buttons are redundant — a thumb is the control. */
+@media (pointer: coarse) { .shelfnav { display: none; } }
+
+/* --- 9. The desk -----------------------------------------------------------
+   A pannable surface with projects where you left them. The stage clips; the
+   surface inside it is what moves. Both transform-only, so panning a dozen
+   cards is one composited layer rather than a dozen repositioned elements. */
+.deskmain { padding-bottom: 0; }
+.stage {
+  position: relative; overflow: hidden; cursor: grab;
+  height: calc(100vh - 230px); min-height: 420px;
+  border-radius: var(--r-sheet); border: 1px solid var(--edge);
+  background-color: var(--sunken);
+  /* A faint rule grid, so panning has something to move against — without it
+     a surface with three cards on it does not read as moving at all. */
+  background-image:
+    linear-gradient(rgb(var(--tex-ink) / .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--tex-ink) / .045) 1px, transparent 1px);
+  background-size: 34px 34px, 34px 34px;
+  box-shadow: var(--engrave);
+}
+.stage.grabbing { cursor: grabbing; }
+.surface { position: absolute; inset: 0; will-change: transform; }
+.deskcard {
+  position: absolute; width: 268px; cursor: grab; touch-action: none;
+  border-radius: var(--r-card); overflow: hidden; border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1); color: var(--hue);
+  transition: box-shadow .2s, transform .2s;
+}
+.deskcard:hover { box-shadow: var(--lift-2); transform: translateY(-2px); }
+/* Lifted: bigger shadow, a degree of tilt, and the cursor says it is held. */
+.deskcard.lifted {
+  cursor: grabbing; z-index: 10; transition: none;
+  box-shadow: var(--lift-3); transform: rotate(-1.2deg) scale(1.03);
+}
+.deskcard .cover { display: block; position: relative; height: 116px; overflow: hidden;
+  background: var(--hue);
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / .22), inset 0 10px 24px -14px rgb(0 0 0 / .45); }
+.deskcard .body { display: grid; gap: 3px; padding: var(--s3) var(--s4) var(--s4); color: var(--ink); }
+.deskcard .body b { font: 600 15.5px/1.2 var(--text); }

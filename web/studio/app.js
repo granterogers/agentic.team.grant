@@ -9,6 +9,7 @@
 
 import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
+import * as canvasView from './canvas.js'
 import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
@@ -21,6 +22,20 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
 const state = { view: 'portfolio', project: null, done: new Set(), label: null }
+
+/*
+  One place that knows whether something is open (#23 idea 6).
+
+  Every sheet was toggling `hidden` on its own, so the defocus behind them
+  would have had to be repeated five times and would have drifted the first
+  time one of them changed. `behind` on the body is the single fact, and the
+  CSS reads it.
+*/
+const sheet = (el, open) => {
+  el.hidden = !open
+  const anyOpen = !$('#viewer').hidden || !$('#settings').hidden
+  document.body.classList.toggle('behind', anyOpen)
+}
 
 // --- pieces -----------------------------------------------------------------
 
@@ -112,6 +127,13 @@ function rail() {
           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
         All projects
+      </button>
+      <button class="navitem home" data-go="desk" aria-current="${state.view === 'desk'}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <rect x="3" y="4" width="8" height="6" rx="1.5"/><rect x="13" y="7" width="8" height="5" rx="1.5"/>
+          <rect x="5" y="13" width="9" height="7" rx="1.5"/></svg>
+        Desk
       </button>
       <!--
         Projects are the top tier, and everything else hangs off one.
@@ -283,6 +305,42 @@ function card(p, lead) {
   So this is the same view, scoped. It reads the project you are in, and the
   rail reaches it per project rather than once at the top.
 */
+/*
+  The desk (#23 idea 9).
+
+  Projects on a pannable surface, positioned where Grant left them. Offered
+  beside the portfolio rather than instead of it, because the claim that spatial
+  memory beats a list might be false for three projects and obviously true for
+  thirty — and the only way to find out is to have both.
+*/
+function desk() {
+  const pos = canvasView.positions(PROJECTS)
+  return `<main class="main deskmain">
+    <div class="head">
+      <div>
+        <h1 class="t-display">Desk</h1>
+        <p class="t-lead" style="margin:var(--s2) 0 0">Drag a project anywhere. It stays
+          where you put it — nothing tidies itself, because a surface that rearranges
+          is a surface you cannot remember.</p>
+      </div>
+      <button class="btn" data-go="portfolio">Back to the list</button>
+    </div>
+    <div class="stage">
+      <div class="surface" data-surface>
+        ${PROJECTS.map((p) => `
+          <div class="deskcard ${p.hue}" data-card="${p.slug}"
+               style="left:${pos[p.slug].x}px;top:${pos[p.slug].y}px">
+            <span class="cover">${coverSvg(p.slug, { facts: p })}</span>
+            <span class="body">
+              <b>${esc(p.name)}</b>
+              <span class="t-meta">${p.docs} docs · ${p.total} tasks</span>
+            </span>
+          </div>`).join('')}
+      </div>
+    </div>
+  </main>`
+}
+
 function projectPeople() {
   const p = byId(state.project)
   const defined = people.labels()
@@ -408,7 +466,23 @@ function dashboard() {
         <section class="section">
           <header><h2 class="t-title">Documents</h2>
             <span class="t-meta">Yours, and what the team made</span></header>
-          <div class="docgrid">${p.documents.map(docCard).join('')}</div>
+          <!--
+            #23 idea 8. A shelf rather than a grid: you recognise documents by
+            their covers, and a row you flick through suits that far better than
+            a block you scan. Scroll-snap gives it detents, so it comes to rest
+            on a document rather than between two.
+          -->
+          <div class="shelf" data-shelf>${p.documents.map(docCard).join('')}</div>
+          <div class="shelfnav">
+            <button class="shelfbtn" data-shelf-back aria-label="Earlier documents">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <button class="shelfbtn" data-shelf-on aria-label="More documents">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
         </section>
       </div>
       <div class="stack">
@@ -549,7 +623,7 @@ function settingsSheet() {
   const pick = (key, value) => {
     apply({ ...appearance(), [key]: value })
     settingsSheet()          // redraw so the tick moves
-    v.hidden = false
+    sheet(v, true)
   }
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
@@ -567,16 +641,38 @@ function settingsSheet() {
     if (out.error) { err.textContent = out.error; err.hidden = false; return }
     apply({ ...appearance(), texture: 'own', own: out.data, ownName: out.name })
     settingsSheet()
-    v.hidden = false
+    sheet(v, true)
   })
   $('[data-texture-clear]', v)?.addEventListener('click', () => {
     apply({ ...appearance(), texture: 'plaster', own: null, ownName: '' })
     settingsSheet()
-    v.hidden = false
+    sheet(v, true)
   })
 
-  $('.close', v).addEventListener('click', () => { v.hidden = true })
-  v.addEventListener('click', (e) => { if (e.target === v) v.hidden = true })
+  $('.close', v).addEventListener('click', () => { sheet(v, false) })
+  v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
+}
+
+/*
+  The time of day, as one number (#23 idea 7).
+
+  0 at the coolest part of the morning, 1 at the warmest part of the evening,
+  and the CSS mixes two washes from it. One variable rather than six blocks of
+  CSS, because "warmer as the day goes on" is a curve, not five states.
+
+  Re-read every ten minutes. Nobody watches it change and that is the point:
+  it should only ever be noticed as the app not feeling the same at 9pm as it
+  did at 9am.
+*/
+function clock() {
+  const set = () => {
+    const h = new Date().getHours() + new Date().getMinutes() / 60
+    // Coolest around 09:00, warmest around 20:00, wrapping through the night.
+    const warm = 0.5 - 0.5 * Math.cos(((h - 9 + 24) % 24) / 24 * 2 * Math.PI)
+    document.body.style.setProperty('--hour-warm', warm.toFixed(3))
+  }
+  set()
+  setInterval(set, 600_000)
 }
 
 /** Remembered, because a person who collapses a sidebar means it. */
@@ -589,7 +685,8 @@ function render() {
   root.classList.toggle('shut', railShut())
   root.innerHTML = rail() + (
     state.view === 'project' ? dashboard()
-    : state.view === 'people' ? everyone()
+    : state.view === 'desk' ? desk()
+    : state.view === 'people' ? projectPeople()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
@@ -647,7 +744,7 @@ function render() {
   })
 
   for (const b of root.querySelectorAll('[data-settings]')) {
-    b.addEventListener('click', () => { settingsSheet(); $('#settings').hidden = false })
+    b.addEventListener('click', () => { settingsSheet(); sheet($('#settings'), true) })
   }
 
   for (const b of root.querySelectorAll('[data-filter]')) {
@@ -676,6 +773,32 @@ function render() {
     jumps, nothing is empty, and a file that will not parse simply never
     replaces its drawing.
   */
+  /*
+    The shelf's buttons move by one card plus its gap, so a press lands on a
+    document rather than an arbitrary 300px into the row. `scrollBy` with
+    smooth behaviour inherits the platform's own easing, which is closer to
+    right than anything hand-rolled.
+  */
+  const surface = $('[data-surface]', root)
+  if (surface) {
+    canvasView.wire(surface, canvasView.positions(PROJECTS), null)
+    for (const card of surface.querySelectorAll('[data-card]')) {
+      card.addEventListener('click', () => {
+        if (card.classList.contains('lifted')) return
+        carry(null, null, () => { state.project = card.dataset.card; state.view = 'project'; render() })
+      })
+    }
+  }
+
+  const shelf = $('[data-shelf]', root)
+  if (shelf) {
+    const step = () => (shelf.firstElementChild?.getBoundingClientRect().width ?? 200) + 20
+    $('[data-shelf-back]', root)?.addEventListener('click', () =>
+      shelf.scrollBy({ left: -step() * 2, behavior: 'smooth' }))
+    $('[data-shelf-on]', root)?.addEventListener('click', () =>
+      shelf.scrollBy({ left: step() * 2, behavior: 'smooth' }))
+  }
+
   for (const [i, b] of [...root.querySelectorAll('[data-doc]')].entries()) {
     const doc = byId(state.project).documents[Number(b.dataset.doc)]
     if (doc?.file) paint($('.page', b), doc.file, 320)
@@ -775,23 +898,23 @@ function openContact(c) {
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>`
-  carry(null, null, () => { v.hidden = false })
-  $('.close', v).addEventListener('click', () => { v.hidden = true })
-  v.addEventListener('click', (e) => { if (e.target === v) v.hidden = true })
+  carry(null, null, () => { sheet(v, true) })
+  $('.close', v).addEventListener('click', () => { sheet(v, false) })
+  v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 
   for (const b of v.querySelectorAll('[data-toggle-label]')) {
     b.addEventListener('click', () => {
       people.toggleLabel(c.name, b.dataset.toggleLabel)
       openContact(c)            // redraw the sheet
       render()                  // and the rows behind it
-      $('#viewer').hidden = false
+      sheet($('#viewer'), true)
     })
   }
   for (const b of v.querySelectorAll('[data-drop-field]')) {
     b.addEventListener('click', () => {
       people.removeField(c.name, Number(b.dataset.dropField))
       openContact(c)
-      $('#viewer').hidden = false
+      sheet($('#viewer'), true)
     })
   }
   const form = $('[data-add-field]', v)
@@ -802,10 +925,10 @@ function openContact(c) {
     if (label === '') return
     people.addField(c.name, label, value)
     openContact(c)
-    $('#viewer').hidden = false
+    sheet($('#viewer'), true)
   })
   for (const b of v.querySelectorAll('[data-label-edit]')) {
-    b.addEventListener('click', () => { labelEditor(() => { openContact(c); $('#viewer').hidden = false }) })
+    b.addEventListener('click', () => { labelEditor(() => { openContact(c); sheet($('#viewer'), true) }) })
   }
 }
 
@@ -856,10 +979,10 @@ function labelEditor(after) {
       people.addLabel(name)
       draw()
     })
-    $('.close', v).addEventListener('click', () => { v.hidden = true; render(); after?.() })
+    $('.close', v).addEventListener('click', () => { sheet(v, false); render(); after?.() })
   }
   draw()
-  v.hidden = false
+  sheet(v, true)
 }
 
 function openDoc(doc, from) {
@@ -876,12 +999,13 @@ function openDoc(doc, from) {
     </button>`
   if (doc.file) paint($('[data-bigpage]', v), doc.file, 760)
   const page = $('.page', from)
-  carry('doc-open', page, () => { v.hidden = false })
-  $('.close', v).addEventListener('click', () => carry('doc-open', page, () => { v.hidden = true }))
+  carry('doc-open', page, () => { sheet(v, true) })
+  $('.close', v).addEventListener('click', () => carry('doc-open', page, () => { sheet(v, false) }))
   v.addEventListener('click', (e) => {
-    if (e.target === v) carry('doc-open', page, () => { v.hidden = true })
+    if (e.target === v) carry('doc-open', page, () => { sheet(v, false) })
   })
 }
 
 apply()
+clock()
 render()
