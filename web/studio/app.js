@@ -261,6 +261,45 @@ const taskRow = (t, i) => {
   no document and is a perfectly good thing to say. You never have to decide
   whether you are navigating or asking before you start typing.
 */
+
+/*
+  An empty section is a setup screen (#40 idea 7).
+
+  Grant's frontend spec §31A: *"Treat avoidable requests for manual
+  configuration as a design failure: first investigate whether the same outcome
+  can be achieved through existing credentials, repository tooling, an API,
+  CLI, SDK, connector or authorized browser session."*
+
+  Applied to empty states, that rule says something specific. Every empty
+  section in this app used to say a variant of "nothing here yet" — true, and
+  useless, because it leaves the whole job with Grant. The office has eight
+  people who can do most of these jobs. So an empty state offers TWO doors:
+
+    the thing HE would do          add a document, add a person
+    the thing the TEAM can do      go and find them
+
+  and the team's door is first, because that is the one that is new information.
+  He already knows he can add a document.
+
+  A section with nothing in it and nothing the team could do about it — Activity
+  on a brand-new project — gets prose and no buttons. Offering an action that
+  cannot help is worse than offering none.
+*/
+function emptyState({ says, mine, ask }) {
+  return `<div class="empty">
+    <p class="t-lead" style="margin:0">${says}</p>
+    <div class="emptydo">
+      ${ask === undefined ? '' : `<button class="btn primary" data-ask-team="${esc(ask.say)}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/></svg>
+        ${esc(ask.name)}</button>`}
+      ${mine === undefined ? '' : `<button class="btn">${esc(mine)}</button>`}
+    </div>
+  </div>`
+}
+
+
 function commandBar() {
   if (!state.cmd.open) return ''
   const p = state.view === 'project' ? byId(state.project) : null
@@ -720,11 +759,15 @@ function peopleTab(p) {
 
     ${
       shown.length === 0
-        ? `<div class="empty"><p class="t-meta">${
-            p.contacts.length === 0
-              ? 'Nobody on this project yet. Add the people it is actually about.'
-              : 'Nobody here carries that label yet. Open someone and tick it.'
-          }</p><button class="btn">Add someone</button></div>`
+        ? (p.contacts.length === 0
+            ? emptyState({
+                says: 'Nobody on this project yet.',
+                ask: { name: 'Ask the team to find who it is about',
+                       say: `Go through ${p.name}'s documents and messages and list the people it is actually about.` },
+                mine: 'Add someone',
+              })
+            : `<div class="empty"><p class="t-lead" style="margin:0">Nobody here carries that
+                label yet. Open someone and tick it.</p></div>`)
         : `<div class="peoplegrid">${shown.map((c) => `
             <button class="pcard ${c.hue}" data-person="${esc(c.name)}">
               <span class="disc big">${esc(c.name[0])}</span>
@@ -838,11 +881,12 @@ function teamTab(p) {
   const crewHere = [...new Set(all.map((r) => r.who))].map(crewBy)
 
   if (all.length === 0) {
-    return `<div class="tabbody"><div class="empty">
-      <p class="t-meta">The team has nothing in hand on ${esc(p.name)} and has made nothing
-        for it yet. Ask for something in Chat, or press the talk button on any item.</p>
-      <button class="btn primary" data-tab="chat">Open the chat</button>
-    </div></div>`
+    return `<div class="tabbody">${emptyState({
+      says: `The team has nothing in hand on ${esc(p.name)}, and has made nothing for it yet.`,
+      ask: { name: 'Ask them to look at it',
+             say: `Look over ${p.name} and tell me the three things most worth doing next.` },
+      mine: 'Open the chat',
+    })}</div>`
   }
 
   const row = (r) => {
@@ -1030,11 +1074,11 @@ function activeJobs(p) {
   const done = rows.filter((r) => r.state !== 'working' && r.blocked === undefined)
 
   if (rows.length === 0) {
-    return `<div class="tabbody"><div class="empty">
-      <p class="t-meta">No jobs on ${esc(p.name)}. Ask for something in Chat, or
-        press the talk button on any document, person or task.</p>
-      <button class="btn primary" data-sub="chat">Open the chat</button>
-    </div></div>`
+    return `<div class="tabbody">${emptyState({
+      says: `Nobody is working on ${esc(p.name)} right now.`,
+      ask: { name: 'Give them something',
+             say: `What should the team pick up on ${p.name} first?` },
+    })}</div>`
   }
 
   const job = (r) => {
@@ -1090,11 +1134,13 @@ function activeJobs(p) {
 function sources(p) {
   const list = p.sources ?? []
   if (list.length === 0) {
-    return `<div class="tabbody"><div class="empty">
-      <p class="t-meta">${esc(p.name)} stands on its own — nothing outside it feeds in.
-        That is a fine state to be in.</p>
-      <button class="btn">Point it at something</button>
-    </div></div>`
+    return `<div class="tabbody">${emptyState({
+      says: `${esc(p.name)} stands on its own — nothing outside it feeds in. That is a fine
+             state to be in.`,
+      ask: { name: 'Ask the team to go looking',
+             say: `Search Drive, Notion, NotebookLM and GitHub for anything to do with ${p.name}, and tell me what you find before connecting it.` },
+      mine: 'Point it at something',
+    })}</div>`
   }
   return `<div class="tabbody">
     <div class="tabhead">
@@ -1127,10 +1173,12 @@ function sources(p) {
 */
 function tasksSection(p) {
   if (p.tasks.length === 0) {
-    return `<div class="tabbody"><div class="empty">
-      <p class="t-meta">Nothing to do on ${esc(p.name)} yet.</p>
-      <button class="btn primary" data-sub="chat">Ask the team to find some</button>
-    </div></div>`
+    return `<div class="tabbody">${emptyState({
+      says: `Nothing to do on ${esc(p.name)} yet.`,
+      ask: { name: 'Ask the team to work out what is needed',
+             say: `Read everything on ${p.name} and propose the tasks it actually needs, with owners.` },
+      mine: 'Add a task',
+    })}</div>`
   }
   const at = (t, i) => t.state === 'done' || state.done.has(i) ? 'done'
     : t.blocked !== undefined ? 'blocked'
@@ -1161,10 +1209,12 @@ function tasksSection(p) {
 function documentsSection(p) {
   const docs = allDocs(p)
   if (docs.length === 0) {
-    return `<div class="tabbody"><div class="empty">
-      <p class="t-meta">Nothing in ${esc(p.name)} yet. Drop a file, or ask the team to make one.</p>
-      <button class="btn primary" data-sub="chat">Ask the team</button>
-    </div></div>`
+    return `<div class="tabbody">${emptyState({
+      says: `Nothing in ${esc(p.name)} yet.`,
+      ask: { name: 'Ask the team to gather what exists',
+             say: `Find everything already written about ${p.name} — in Drive, Notion and NotebookLM — and bring it in.` },
+      mine: 'Add a document',
+    })}</div>`
   }
   return `<div class="tabbody">
     <div class="tabhead">
@@ -1179,8 +1229,13 @@ function documentsSection(p) {
 /** What happened, most recent first. */
 function activitySection(p) {
   if (p.activity.length === 0) {
+    /*
+      No action offered, deliberately. An empty history is not a thing an agent
+      can fix, and a button that cannot help is worse than no button.
+    */
     return `<div class="tabbody"><div class="empty">
-      <p class="t-meta">Nothing has happened on ${esc(p.name)} yet.</p>
+      <p class="t-lead" style="margin:0">Nothing has happened on ${esc(p.name)} yet.
+        This fills itself in.</p>
     </div></div>`
   }
   return `<div class="tabbody">
@@ -1976,6 +2031,24 @@ function render() {
   $('[data-cmd-wrap]', root)?.addEventListener('mousedown', (e) => {
     if (e.target === $('[data-cmd-wrap]', root)) { closeCmd(); render() }
   })
+
+  /*
+    An empty state's team button actually sends the request (#40 idea 7).
+
+    It does not open the chat and leave Grant to type — that would be the same
+    manual step §31A calls a design failure, dressed as a shortcut. The message
+    is composed, sent, and he lands on the thread watching it happen.
+  */
+  for (const b of root.querySelectorAll('[data-ask-team]')) {
+    b.addEventListener('click', () => {
+      if (state.view !== 'project') return
+      chat.send(state.project, b.dataset.askTeam, null)
+      state.tab = 'team'
+      state.sub = 'chat'
+      rememberTab(state.project, 'team')
+      render()
+    })
+  }
 
   /*
     Tabs, the talk action, the composer and the in-tray decisions.

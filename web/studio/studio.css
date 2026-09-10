@@ -1950,3 +1950,8 @@ kbd {
   several people rather than one animation applied eight times.
 */
 .face.busy { animation-delay: calc(var(--beat, 0) * -370ms); }
+
+/* An empty section offers the team's door first, then yours. */
+.emptydo { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.empty { gap: var(--s4); }
+@media (max-width: 560px) { .emptydo .btn { width: 100%; justify-content: center; } }

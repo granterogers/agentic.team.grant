@@ -267,6 +267,27 @@ for (const [size, opts] of SIZES) {
     await page.locator('[role="tab"][data-tab="overview"]').click()
     await page.waitForTimeout(500)
 
+    /*
+      Wellness is the project with nothing in it, so it is the only place the
+      empty states can actually be seen. Capturing them on Legacy would capture
+      the sections that are full.
+    */
+    if (size === 'desktop' && scheme === 'light') {
+      await page.locator('[data-switch-open]').click()
+      await page.waitForTimeout(300)
+      await page.locator('[data-switch-menu] [data-open="wellness"]').click()
+      await page.waitForTimeout(700)
+      for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
+        await page.locator(`[role="tab"][data-tab="${s}"]`).click()
+        await page.waitForTimeout(350)
+        await shoot(`empty-${s}`)
+      }
+      await page.locator('[data-switch-open]').click()
+      await page.waitForTimeout(300)
+      await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click()
+      await page.waitForTimeout(700)
+    }
+
     for (const section of ['tasks', 'contacts', 'sources', 'activity']) {
       await page.locator(`[role="tab"][data-tab="${section}"]`).click()
       await page.waitForTimeout(500)
