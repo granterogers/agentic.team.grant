@@ -2963,3 +2963,16 @@ kbd {
 }
 .mockbar b { font: 600 12px/1.4 var(--text); letter-spacing: .05em;
   font-variant-caps: all-small-caps; color: var(--warn); }
+
+/* --- a contact is a name and a way to reach them (#100) --------------------
+   The disc is gone: it was the first letter of the name in a 54px circle,
+   standing in for a photograph that does not exist and taking the left third
+   of every card. What replaced it is what was missing — the email, the phone
+   and the Instagram handle were all stored and none of them were on screen. */
+.reach { display: flex; flex-wrap: wrap; gap: 4px var(--s3); margin-top: 2px; }
+.reach a {
+  font: 400 12.5px/1.5 var(--text); color: var(--accent);
+  text-decoration: none; border-bottom: 1px solid transparent; min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reach a:hover { border-bottom-color: currentColor; }

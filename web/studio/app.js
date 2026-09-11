@@ -1081,13 +1081,37 @@ function peopleTab(p) {
             : `<div class="empty"><p class="t-lead" style="margin:0">Nobody here carries that
                 label yet. Open someone and tick it.</p></div>`)
         : `<div class="peoplegrid">${shown.map((c) => `
+            <!--
+              A contact is a name and a way to reach them (#100, #85).
+
+              Grant: "Remove unnecessary people imagery or decorative contact
+              elements." The 54px disc was the first letter of the name in a
+              circle - decoration standing in for a photograph that does not
+              exist, taking the left third of every card.
+
+              What went in its place is the thing that was missing: the email,
+              the phone and the Instagram handle were all stored and NONE of
+              them were on the card. A contact card that does not show how to
+              contact anybody is decoration all the way down.
+
+              Each way of reaching them is a real link, so the card does the
+              job rather than describing it. stopPropagation on the anchors
+              because the card itself opens the person.
+
+              No backticks in this comment. Template literal.
+            -->
             <button class="pcard ${c.hue}" data-person="${esc(c.name)}">
-              <span class="disc big">${esc(c.name[0])}</span>
               <span class="pbody">
                 <b>${esc(c.name)}</b>
-                <span class="t-meta">${esc(c.role)}${c.org ? ` · ${esc(c.org)}` : ''}</span>
+                <span class="t-meta">${esc(c.role ?? '')}${c.org ? ` · ${esc(c.org)}` : ''}</span>
                 <span class="tags">${people.labelsOn(c.name).map((l) =>
                   `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>
+                <span class="reach">
+                  ${c.email ? `<a href="mailto:${esc(c.email)}" data-stop>${esc(c.email)}</a>` : ''}
+                  ${c.phone ? `<a href="tel:${esc(String(c.phone).replace(/\s+/g, ''))}" data-stop>${esc(c.phone)}</a>` : ''}
+                  ${c.instagram ? `<a href="https://instagram.com/${esc(String(c.instagram).replace(/^@/, ''))}"
+                     target="_blank" rel="noopener" data-stop>${esc(c.instagram)}</a>` : ''}
+                </span>
                 ${c.next ? `<span class="t-meta from">Next: ${esc(c.next)}</span>` : ''}
               </span>
             </button>`).join('')}</div>`
@@ -4196,6 +4220,16 @@ function render() {
     leaving it set would mean the next message you typed from Documents was
     silently still about the document you had walked away from.
   */
+  /*
+    A link inside a card that is itself a button (#100).
+
+    Pressing the email opens the mail client; it must not ALSO open the person.
+    One handler over everything marked `data-stop` rather than one per link.
+  */
+  for (const a of root.querySelectorAll('[data-stop]')) {
+    a.addEventListener('click', (e) => { e.stopPropagation() })
+  }
+
   for (const b of root.querySelectorAll('[data-back-out]')) {
     b.addEventListener('click', () => {
       const back = state.attach?.back
