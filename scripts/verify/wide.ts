@@ -84,7 +84,7 @@ for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'source
   if (tab === 'overview') console.log(await page.evaluate(FIND))
   await page.locator('.project[data-open="legacy-coaching-course"]').click()
   await page.waitForTimeout(600)
-  await page.locator(`[role="tab"][data-tab="${tab}"]`).click()
+  await page.locator(`[data-tab="${tab}"]`).click()
   await page.waitForTimeout(600)
   console.log(`--- project · ${tab}`)
   console.log(await page.evaluate(FIND))

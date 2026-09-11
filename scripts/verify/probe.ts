@@ -57,7 +57,7 @@ await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' 
 await page.waitForTimeout(700)
 await page.locator('.project[data-open="legacy-coaching-course"]').click()
 await page.waitForTimeout(700)
-await page.locator(`[role="tab"][data-tab="${tab}"]`).click()
+await page.locator(`[data-tab="${tab}"]`).click()
 await page.waitForTimeout(700)
 
 /*

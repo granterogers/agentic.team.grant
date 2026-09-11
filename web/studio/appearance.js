@@ -30,7 +30,20 @@ export const TEXTURES = [
 ]
 
 const KEY = 'studio.appearance'
-const DEFAULTS = { palette: 'paper', texture: 'plaster', own: null, ownName: '' }
+/*
+  `scheme` is the third state, and 'system' is the honest default (#87).
+
+  Not a boolean. "Dark: on/off" forces a person who is happy following their
+  operating system to pick a side, and then the studio is the one app on the
+  machine that does not go dark at sunset with everything else.
+*/
+export const SCHEMES = [
+  { id: 'system', name: 'Follow the system' },
+  { id: 'light', name: 'Light' },
+  { id: 'dark', name: 'Dark' },
+]
+
+const DEFAULTS = { palette: 'paper', texture: 'plaster', own: null, ownName: '', scheme: 'system' }
 
 /*
   Grant's own texture.
@@ -90,6 +103,7 @@ export function appearance() {
         : DEFAULTS.texture,
       own: typeof saved.own === 'string' ? saved.own : null,
       ownName: saved.ownName ?? '',
+      scheme: SCHEMES.some((x) => x.id === saved.scheme) ? saved.scheme : DEFAULTS.scheme,
     }
   } catch {
     // A private window, or storage blocked. A default is a fine answer.
@@ -101,6 +115,23 @@ export function appearance() {
 export function apply(next = appearance()) {
   document.documentElement.dataset.palette = next.palette
   document.documentElement.dataset.texture = next.texture
+  /*
+    Absent means "follow the system", and absent has to mean literally absent:
+    every dark block in skins.css is guarded `:not([data-scheme="light"])`, so
+    writing `data-scheme="system"` would read as neither light nor dark and
+    quietly work by accident. Delete the attribute instead.
+
+    `color-scheme` goes with it so the browser's own furniture — scrollbars,
+    form controls, the canvas behind the page — follows the choice. Without it
+    a dark page keeps white scrollbars.
+  */
+  if (next.scheme === 'system') {
+    delete document.documentElement.dataset.scheme
+    document.documentElement.style.colorScheme = 'light dark'
+  } else {
+    document.documentElement.dataset.scheme = next.scheme
+    document.documentElement.style.colorScheme = next.scheme
+  }
   /*
     An uploaded texture is set as a variable rather than as another block in
     skins.css, because it is data and skins.css is design. `data-texture="own"`
@@ -115,5 +146,35 @@ export function apply(next = appearance()) {
     root.style.removeProperty('--tex-size')
   }
   try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* not fatal */ }
+  return next
+}
+
+
+/*
+  What the shortcut does (#87).
+
+  Grant: *"Ensure the dark-mode shortcut performs its intended action."*
+
+  From 'system' it goes to whatever the system is NOT, which is what a person
+  pressing a sun icon means: they can see the current theme and they want the
+  other one. Guessing 'dark' unconditionally would be a no-op for anyone
+  already in dark mode, and a control that does nothing on the first press is
+  the bug being fixed.
+*/
+export function systemPrefersDark() {
+  try { return window.matchMedia('(prefers-color-scheme: dark)').matches }
+  catch { return false }
+}
+
+/** The theme actually on screen right now, whatever produced it. */
+export function activeScheme(now = appearance()) {
+  return now.scheme === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : now.scheme
+}
+
+/** Flip it, and return what it became. */
+export function toggleScheme() {
+  const now = appearance()
+  const next = activeScheme(now) === 'dark' ? 'light' : 'dark'
+  apply({ ...now, scheme: next })
   return next
 }

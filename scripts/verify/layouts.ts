@@ -251,7 +251,7 @@ const open = async (page: import('playwright').Page, route: string) => {
   await page.waitForTimeout(450)
   await page.locator('.project[data-open="legacy-coaching-course"]').click()
   await page.waitForTimeout(400)
-  await page.locator(`[role="tab"][data-tab="${route}"]`).click()
+  await page.locator(`[data-tab="${route}"]`).click()
   await page.waitForTimeout(300)
 }
 

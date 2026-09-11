@@ -19,6 +19,26 @@
   paint itself from the palette it offers. With only the `:root` form the picker
   showed five identical chips, all in whichever theme was already on.
 
+  ## Light and dark, and the three states of it (#87)
+
+  There was no manual override at all: every dark block lived only inside
+  `@media (prefers-color-scheme: dark)`, so the theme followed the operating
+  system and nothing else. Grant asked for the dark-mode shortcut to work, and
+  the shortcut could not have worked, because there was nothing for it to set.
+
+  Three states now, which is the standard shape:
+
+    - no `data-scheme` — follow the system, via the media query
+    - `data-scheme="light"` — stay light even if the system is dark, which is
+      why every media query is guarded `:not([data-scheme="light"])`
+    - `data-scheme="dark"` — go dark even if the system is light
+
+  Each palette's dark tokens are therefore written twice, once under the guarded
+  media query and once under the explicit attribute. Generated from one source
+  rather than typed twice: a palette whose two copies drift is a palette that is
+  subtly wrong in exactly one of the three states, which nobody would ever
+  notice.
+
   ## Why the textures are drawn rather than downloaded
 
   Every one is SVG turbulence as a data URI: no requests, nothing to 404,
@@ -42,7 +62,8 @@
   --tex-ink: 25 24 19;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="paper"], [data-palette="paper"] {
+  :root:not([data-scheme="light"])[data-palette="paper"],
+  :root:not([data-scheme="light"]) [data-palette="paper"] {
     --ground: #14140F; --surface: #1D1D17; --sunken: #100F0B;
     --ink: #F0EDE4; --ink-2: #A5A091; --ink-3: #726D5F; --edge: #2C2B23;
     --accent: #5FBF96; --accent-wash: rgb(95 191 150 / .14); --on-accent: #0F1A15;
@@ -50,6 +71,15 @@
     --field-a: oklch(0.34 0.035 215 / .30); --field-b: oklch(0.32 0.030 55 / .26);
     --tex-ink: 255 250 240;
   }
+}
+:root[data-scheme="dark"][data-palette="paper"],
+:root[data-scheme="dark"] [data-palette="paper"] {
+    --ground: #14140F; --surface: #1D1D17; --sunken: #100F0B;
+    --ink: #F0EDE4; --ink-2: #A5A091; --ink-3: #726D5F; --edge: #2C2B23;
+    --accent: #5FBF96; --accent-wash: rgb(95 191 150 / .14); --on-accent: #0F1A15;
+    --wash: rgb(150 190 170 / .05);
+    --field-a: oklch(0.34 0.035 215 / .30); --field-b: oklch(0.32 0.030 55 / .26);
+    --tex-ink: 255 250 240;
 }
 
 /* --- Slate: cool grey, deep blue. Quiet and technical. ------------------- */
@@ -62,7 +92,8 @@
   --tex-ink: 20 23 28;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="slate"], [data-palette="slate"] {
+  :root:not([data-scheme="light"])[data-palette="slate"],
+  :root:not([data-scheme="light"]) [data-palette="slate"] {
     --ground: #0F1216; --surface: #171B21; --sunken: #0B0E11;
     --ink: #ECEFF3; --ink-2: #9BA3B0; --ink-3: #69717D; --edge: #262C34;
     --accent: #7FAEE0; --accent-wash: rgb(127 174 224 / .14); --on-accent: #0B141D;
@@ -70,6 +101,15 @@
     --field-a: oklch(0.33 0.035 255 / .32); --field-b: oklch(0.31 0.028 205 / .26);
     --tex-ink: 235 242 250;
   }
+}
+:root[data-scheme="dark"][data-palette="slate"],
+:root[data-scheme="dark"] [data-palette="slate"] {
+    --ground: #0F1216; --surface: #171B21; --sunken: #0B0E11;
+    --ink: #ECEFF3; --ink-2: #9BA3B0; --ink-3: #69717D; --edge: #262C34;
+    --accent: #7FAEE0; --accent-wash: rgb(127 174 224 / .14); --on-accent: #0B141D;
+    --wash: rgb(150 180 220 / .05);
+    --field-a: oklch(0.33 0.035 255 / .32); --field-b: oklch(0.31 0.028 205 / .26);
+    --tex-ink: 235 242 250;
 }
 
 /* --- Clay: terracotta and sand. Warm, hand-made. ------------------------- */
@@ -82,7 +122,8 @@
   --tex-ink: 36 26 20;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="clay"], [data-palette="clay"] {
+  :root:not([data-scheme="light"])[data-palette="clay"],
+  :root:not([data-scheme="light"]) [data-palette="clay"] {
     --ground: #17110D; --surface: #201812; --sunken: #120C08;
     --ink: #F5EAE0; --ink-2: #AD9B8C; --ink-3: #7A6A5D; --edge: #302419;
     --accent: #E08A5C; --accent-wash: rgb(224 138 92 / .15); --on-accent: #1A0F08;
@@ -90,6 +131,15 @@
     --field-a: oklch(0.33 0.045 45 / .3); --field-b: oklch(0.31 0.032 90 / .26);
     --tex-ink: 252 240 228;
   }
+}
+:root[data-scheme="dark"][data-palette="clay"],
+:root[data-scheme="dark"] [data-palette="clay"] {
+    --ground: #17110D; --surface: #201812; --sunken: #120C08;
+    --ink: #F5EAE0; --ink-2: #AD9B8C; --ink-3: #7A6A5D; --edge: #302419;
+    --accent: #E08A5C; --accent-wash: rgb(224 138 92 / .15); --on-accent: #1A0F08;
+    --wash: rgb(220 170 130 / .05);
+    --field-a: oklch(0.33 0.045 45 / .3); --field-b: oklch(0.31 0.032 90 / .26);
+    --tex-ink: 252 240 228;
 }
 
 /* --- Ink: near-black on cream. High contrast, editorial. ----------------- */
@@ -102,7 +152,8 @@
   --tex-ink: 16 16 16;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="ink"], [data-palette="ink"] {
+  :root:not([data-scheme="light"])[data-palette="ink"],
+  :root:not([data-scheme="light"]) [data-palette="ink"] {
     --ground: #0C0C0C; --surface: #161616; --sunken: #070707;
     --ink: #F3F1EA; --ink-2: #A09D94; --ink-3: #6B6862; --edge: #262523;
     --accent: #A9A2F0; --accent-wash: rgb(169 162 240 / .14); --on-accent: #0D0B1C;
@@ -110,6 +161,15 @@
     --field-a: oklch(0.32 0.04 285 / .3); --field-b: oklch(0.30 0.025 70 / .24);
     --tex-ink: 250 248 242;
   }
+}
+:root[data-scheme="dark"][data-palette="ink"],
+:root[data-scheme="dark"] [data-palette="ink"] {
+    --ground: #0C0C0C; --surface: #161616; --sunken: #070707;
+    --ink: #F3F1EA; --ink-2: #A09D94; --ink-3: #6B6862; --edge: #262523;
+    --accent: #A9A2F0; --accent-wash: rgb(169 162 240 / .14); --on-accent: #0D0B1C;
+    --wash: rgb(200 195 230 / .04);
+    --field-a: oklch(0.32 0.04 285 / .3); --field-b: oklch(0.30 0.025 70 / .24);
+    --tex-ink: 250 248 242;
 }
 
 /* --- Moss: deep green and stone. ----------------------------------------- */
@@ -122,7 +182,8 @@
   --tex-ink: 20 26 19;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="moss"], [data-palette="moss"] {
+  :root:not([data-scheme="light"])[data-palette="moss"],
+  :root:not([data-scheme="light"]) [data-palette="moss"] {
     --ground: #101410; --surface: #181D17; --sunken: #0A0D0A;
     --ink: #EDF2EA; --ink-2: #9AA697; --ink-3: #687264; --edge: #242B23;
     --accent: #8CC96F; --accent-wash: rgb(140 201 111 / .14); --on-accent: #0E1509;
@@ -130,6 +191,15 @@
     --field-a: oklch(0.33 0.04 145 / .3); --field-b: oklch(0.31 0.026 195 / .26);
     --tex-ink: 240 248 236;
   }
+}
+:root[data-scheme="dark"][data-palette="moss"],
+:root[data-scheme="dark"] [data-palette="moss"] {
+    --ground: #101410; --surface: #181D17; --sunken: #0A0D0A;
+    --ink: #EDF2EA; --ink-2: #9AA697; --ink-3: #687264; --edge: #242B23;
+    --accent: #8CC96F; --accent-wash: rgb(140 201 111 / .14); --on-accent: #0E1509;
+    --wash: rgb(160 200 150 / .05);
+    --field-a: oklch(0.33 0.04 145 / .3); --field-b: oklch(0.31 0.026 195 / .26);
+    --tex-ink: 240 248 236;
 }
 
 /* ==========================================================================

@@ -267,12 +267,24 @@ for (const app of APPS) {
       void route.abort()
     })
 
-    if (ROOT === 'web/hq') {
-      await page.addInitScript(`
-        window.HQ_API = 'http://127.0.0.1:${String(PORT)}/hq-api'
-        try { localStorage.setItem('hq.token', 'audit') } catch {}
-      `)
-    }
+    /*
+      Unconditional since #74.
+
+      This used to be guarded on `ROOT === 'web/hq'`, and `web/hq` was deleted
+      in #68. So the studio was audited with no token: `canWrite()` in
+      `web/studio/office.js` reads `localStorage['hq.token']`, it was false,
+      and EVERY WRITE CONTROL IN THE PRODUCT WAS NEVER DRAWN. The audit walked
+      the page, found only read controls, and passed — while eight separate
+      dead buttons sat in the interface waiting for Grant to find them by
+      hand, which is how they were found.
+
+      A control audit that cannot see controls is worse than no audit, because
+      it is green.
+    */
+    await page.addInitScript(`
+      window.HQ_API = 'http://127.0.0.1:${String(PORT)}/hq-api'
+      try { localStorage.setItem('hq.token', 'audit') } catch {}
+    `)
 
     await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(800)
@@ -297,7 +309,7 @@ for (const app of APPS) {
       await home()
       await page.locator('.project[data-open="legacy-coaching-course"]').click()
       await page.waitForTimeout(500)
-      await page.locator(`[role="tab"][data-tab="${tab}"]`).click()
+      await page.locator(`[data-tab="${tab}"]`).click()
       await page.waitForTimeout(350)
     }
 
@@ -322,95 +334,51 @@ for (const app of APPS) {
       await page.waitForTimeout(300)
     }
 
-    /* The build page's own menu — every tab, not just whatever loads first. */
-    const HQ_TABS = [
-      'overview',
-      'projects',
-      'talk',
-      'build',
-      'output',
-      'activity',
-      'staff',
-      'connections',
-      'cost',
-      'usage',
-      'trends',
-      'setup',
-      'help',
+    /*
+      HQ_TABS and intoHq were here: the thirteen tabs of `web/hq/index.html`
+      and the helper that walked them. The page was deleted in #68 and this
+      never went with it (#74), so the audit carried a route list for a target
+      that does not exist.
+    */
+
+    /*
+      No `web/hq` branch any more — the page was deleted in #68 and its script
+      entry went with it (#74). A route list that can select a target which does
+      not exist is the same shape of bug as the token guard above: it looks like
+      coverage and audits nothing.
+    */
+    const routes: [string, () => Promise<void>][] = [
+      ['portfolio', home],
+      ...(
+        ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity'] as const
+      ).map(
+        (tab) =>
+          [
+            `project/${tab}`,
+            async () => {
+              await intoProject(tab)
+            },
+          ] as [string, () => Promise<void>],
+      ),
+      ...(['board', 'chat', 'jobs', 'outputs'] as const).map(
+        (sub) =>
+          [
+            `team/${sub}`,
+            async () => {
+              await intoTeam(sub)
+            },
+          ] as [string, () => Promise<void>],
+      ),
+      ...(['team', 'behaviour', 'connections', 'channels', 'models', 'appearance'] as const).map(
+        (tab) =>
+          [
+            `settings/${tab}`,
+            async () => {
+              await intoSettings(tab)
+            },
+          ] as [string, () => Promise<void>],
+      ),
     ]
-    const intoHq = async (tab: string) => {
-      await home()
-      /*
-        `:visible`, because there are two navs in this markup.
-
-        The sheet holds one copy of the menu and the sidebar the other — one
-        set of markup, two shapes. On a desktop the sheet is `display: none`,
-        so a bare `[data-tab]` resolves the hidden copy first and Playwright
-        waits 2.5s for something that will never be clickable. The same trap
-        the `data-go="portfolio"` note below describes, in the other app.
-      */
-      /*
-        On a phone the menu is a sheet, and it is closed.
-
-        Desktop shows the sidebar copy and hides the sheet copy; the phone does
-        the reverse, so on a phone NEITHER copy is visible until the "where you
-        are" button is pressed. The desktop run passed and the phone run
-        crashed on its first route.
-      */
-      const opener = page.locator('#menubtn:visible')
-      if ((await opener.count()) > 0) {
-        await opener.first().click()
-        await page.waitForTimeout(300)
-      }
-      await page.locator(`[data-tab="${tab}"]:visible`).first().click({ timeout: 2500 })
-      await page.waitForTimeout(400)
-    }
-
-    const routes: [string, () => Promise<void>][] =
-      ROOT === 'web/hq'
-        ? HQ_TABS.map(
-            (tab) =>
-              [
-                `hq/${tab}`,
-                async () => {
-                  await intoHq(tab)
-                },
-              ] as [string, () => Promise<void>],
-          )
-        : [
-            ['portfolio', home],
-            ...(
-              ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity'] as const
-            ).map(
-              (tab) =>
-                [
-                  `project/${tab}`,
-                  async () => {
-                    await intoProject(tab)
-                  },
-                ] as [string, () => Promise<void>],
-            ),
-            ...(['board', 'chat', 'jobs', 'outputs'] as const).map(
-              (sub) =>
-                [
-                  `team/${sub}`,
-                  async () => {
-                    await intoTeam(sub)
-                  },
-                ] as [string, () => Promise<void>],
-            ),
-            ...(
-              ['team', 'behaviour', 'connections', 'channels', 'models', 'appearance'] as const
-            ).map(
-              (tab) =>
-                [
-                  `settings/${tab}`,
-                  async () => {
-                    await intoSettings(tab)
-                  },
-                ] as [string, () => Promise<void>],
-            ),
-          ]
 
     for (const [name, go] of routes.filter(
       (r) => routeFilter.length === 0 || routeFilter.some((f) => r[0].startsWith(f)),
@@ -444,7 +412,7 @@ for (const app of APPS) {
               ? `[role="tab"][data-sub="${leaf}"].on`
               : kind === 'settings'
                 ? `[role="tab"][data-setting="${leaf}"].on`
-                : `[role="tab"][data-tab="${leaf}"].on`
+                : `[data-tab="${leaf}"].on`
 
       // Every control on this route, by a stable handle.
       const labels: string[] = await page.evaluate(`(() => {

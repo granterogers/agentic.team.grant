@@ -65,7 +65,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 /* --- shell --------------------------------------------------------------- */
-.shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+/* One number for the rail's width: the grid column and the toggle's anchor
+   have to agree, and they did not when they were written three hundred lines
+   apart. */
+:root { --rail: 220px; }
+.shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
 @media (max-width: 860px) { .shell { grid-template-columns: minmax(0, 1fr); } }
 
 .rail {
@@ -177,30 +181,52 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .project:hover { box-shadow: var(--lift-2); transform: translateY(-4px) scale(1.004); }
 .project:active { box-shadow: var(--lift-1); transform: translateY(-1px); }
+/*
+  The cover is a mark, not a slab (#82).
+
+  Grant, 11 September: *"Remove oversized project color blocks: Eliminate the
+  large colored squares and rectangles that consume space without adding
+  value."*
+
+  He is right and the capture is the proof: three projects filled a 1440x900
+  screen, and the majority of it was flat colour — a 610x240 green rectangle
+  for the lead and a 550x130 band on each of the others. At that size the
+  artwork was not helping you recognise a project, it was standing between you
+  and the next one.
+
+  The hue stays and so does the generated art, because recognising a project by
+  its picture is the actual job of a cover and `ambient()` tints the room from
+  the same hue. What changes is the size: a 64px rounded square beside the name,
+  88px on the lead. The art survives the crop by construction — cover.js draws
+  drifting bands precisely because they read at any aspect ratio.
+
+  This is also the slot #83 needs: an uploaded image or a chosen icon goes
+  exactly here, at exactly this size.
+*/
+.project { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s4);
+  align-items: center; padding: var(--s4); }
 .project .cover {
   position: relative; overflow: hidden; background: var(--hue);
-  display: flex; align-items: flex-end; padding: var(--s3); height: 118px;
+  width: 64px; height: 64px; border-radius: 16px; flex: none; display: block;
   /* Inset, so the artwork reads as printed into the card rather than laid on
      top of it — and a bright hairline where the two meet. */
   box-shadow:
     inset 0 -1px 0 rgb(255 255 255 / .22),
     inset 0 12px 28px -14px rgb(0 0 0 / .45);
 }
-.project .body { padding: var(--s4); display: grid; gap: var(--s3); color: var(--ink); }
+/* The facts chips were drawn over a 240px-tall picture. There is no room for
+   them on a 64px mark, and the same numbers are in the body two lines below. */
+.project .cover .chips { display: none; }
+.project .body { padding: 0; display: grid; gap: var(--s2); color: var(--ink); }
 
-/* The lead. Art on the left at a real size, the words beside it — so it reads
-   as a spread rather than as a taller card. */
-.project.lead { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+/* The lead is still the lead — one size up on the mark and on the type, rather
+   than a different layout. What the page says before you read a word is: this
+   one, then those. */
+.project.lead .cover { width: 88px; height: 88px; border-radius: 20px; }
+.project.lead .body { gap: var(--s3); }
 @media (max-width: 760px) {
-  .project.lead { grid-template-columns: minmax(0, 1fr); }
-  /* Still the lead: its artwork stays taller than the others' so the hierarchy
-     survives the columns collapsing. */
-  .project.lead .cover { min-height: 178px; }
-  .project.lead .body { padding: var(--s4); }
   .rest { grid-template-columns: minmax(0, 1fr); }
 }
-.project.lead .cover { height: 100%; min-height: 236px; }
-.project.lead .body { padding: var(--s5); align-content: center; gap: var(--s4); }
 
 /* The artwork itself. `currentColor` is the project hue, set on .project. */
 .art { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
@@ -281,11 +307,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .section > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
 
 /* --- project cover, in the dashboard -------------------------------------- */
-.hero { height: 208px; border-radius: var(--r-sheet); background: var(--hue);
-  position: relative; overflow: hidden; display: flex; align-items: flex-end;
-  padding: var(--s4); margin-bottom: var(--s5);
-  box-shadow: var(--lift-2), inset 0 16px 40px -18px rgb(0 0 0 / .5),
+/*
+  And the same on the project page (#82).
+
+  This was a 208px full-width band above the title — the single largest thing
+  on the dashboard and the one carrying the least. It is now the same mark as
+  the portfolio card, 72px, sitting beside the project name, so the title is at
+  the top of the page where a title belongs.
+*/
+.hero { width: 72px; height: 72px; border-radius: 18px; background: var(--hue);
+  position: relative; overflow: hidden; flex: none; display: block;
+  box-shadow: var(--lift-1), inset 0 8px 20px -10px rgb(0 0 0 / .5),
               inset 0 -1px 0 rgb(255 255 255 / .2); }
+.hero .chips { display: none; }
+/* The head becomes a row: mark, then the words. */
+.projhead { display: flex; align-items: center; gap: var(--s4); }
 .hero { color: var(--hue); }
 .hero > .chips { position: relative; }
 
@@ -819,32 +855,91 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* --- a collapsible rail ------------------------------------------------------
    Collapsed it keeps every control and drops every word: a narrower rail, not
    a hidden one, so nothing has to be reopened to be reached. */
+/*
+  Fixed, and anchored from the left (#76).
+
+  It used to be `position: absolute; right: -13px` inside `.rail`, whose
+  `position: sticky` was the containing block. Moving it OUT of the rail — so
+  the rail's opacity could not hide it — left it positioned against the page
+  instead, and it rendered as a half-circle clipped by the right edge of the
+  viewport.
+
+  Anchoring it to the left in both states means one rule and no jump: it rides
+  the rail's edge when open and sits in the top corner when shut, and `left`
+  transitions with the grid column.
+*/
 .railtoggle {
-  position: absolute; top: var(--s3); right: -13px; z-index: 5;
+  position: fixed; top: var(--s3); left: calc(var(--rail) - 13px); z-index: 40;
   width: 26px; height: 26px; border-radius: 50%;
   background: var(--surface); border: 1px solid var(--edge); color: var(--ink-2);
   display: grid; place-items: center; box-shadow: var(--lift-1);
-  transition: transform .3s cubic-bezier(.2,.8,.3,1);
+  transition: transform .3s cubic-bezier(.2,.8,.3,1),
+              left .34s cubic-bezier(.2,.8,.3,1);
 }
 .railtoggle:hover { color: var(--accent); border-color: var(--accent); }
 .rail { position: sticky; }
 .shell { transition: grid-template-columns .34s cubic-bezier(.2,.8,.3,1); }
-.shell.shut { grid-template-columns: 74px minmax(0, 1fr); }
-.shell.shut .railtoggle { transform: rotate(180deg); }
-.shell.shut .rail { padding-left: var(--s3); padding-right: var(--s3); align-items: center; }
-.shell.shut .brandline,
-.shell.shut .navitem span:not(.dot):not(.swatchdot),
-.shell.shut .callbtn .lbl,
-.shell.shut .mate .what,
-.shell.shut .crew .rest-note,
-.shell.shut .wordmark > span:last-child { display: none; }
-.shell.shut .navitem { justify-content: center; padding: 9px 0; }
-.shell.shut .navitem.proj { padding: 9px 0; }
-.shell.shut .callbtn { justify-content: center; padding: 0; }
-.shell.shut .crew { flex-direction: column; gap: 4px; }
-.shell.shut .crew .face { margin-left: 0; }
-.shell.shut .mate { justify-content: center; }
+
+/*
+  Collapsed means gone (#76).
+
+  Grant: *"Make the sidebar collapse fully and reclaim the space. Currently,
+  only a small portion disappears."* It was 220px to 74px - 146px reclaimed and
+  a 74px icon strip left behind, which is a narrower rail rather than a hidden
+  one and is not what the chevron promises.
+
+  Two states, not three. The icon strip was a reasonable design and it is
+  deleted rather than kept as a middle setting: two states a person can predict
+  beat three they have to discover, and the unlabelled icons were already
+  failing on the phone.
+
+  The toggle has to survive the thing it collapses, so when shut it leaves the
+  rail's flow and floats over the content. Note it is position:fixed and the
+  rail carries no filter, transform, backdrop-filter, perspective or
+  will-change - any of those would establish a containing block and anchor the
+  button to the collapsed rail instead of the viewport, which is how a bottom
+  navigation bar once rendered across the top of the page.
+*/
+.shell.shut { grid-template-columns: 0 minmax(0, 1fr); }
+.shell.shut .rail {
+  padding: 0; border-right: 0; overflow: hidden;
+  width: 0; opacity: 0; pointer-events: none;
+}
+/*
+  The toggle sits outside the rail in the markup for exactly this reason:
+  opacity on the rail would hide it too, and a descendant cannot opt out of an
+  ancestor's opacity. Fixed rather than absolute because the grid column it
+  would otherwise be positioned against is 0 wide.
+*/
+.shell.shut .railtoggle { left: var(--s3); transform: rotate(180deg); }
 @media (max-width: 860px) { .railtoggle { display: none; } .shell.shut { grid-template-columns: minmax(0, 1fr); } }
+
+/*
+  The rail's bottom group (#84, #86).
+
+  Call the team, then Lately, then Settings, pushed to the floor by the auto
+  margin so they sit at the bottom however short the section list is.
+*/
+.railfoot { margin-top: auto; display: flex; flex-direction: column; gap: var(--s2); }
+
+/*
+  Project sections as sidebar entries (#80).
+
+  They were a horizontal tab strip. The count badge rides to the right of the
+  name rather than after it, so a column of them lines up.
+
+  Named .navitem.sect rather than reusing .tab: .tab still styles the sub-tabs
+  inside AI Team, and a class that means two things is a bug waiting for the
+  right element - .stage was a status pill AND a pannable surface, and the day
+  something blockified it, it pushed a row 660px down the page.
+*/
+.navitem.sect { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.navitem.sect .n {
+  font: 500 11.5px/1 var(--text); color: var(--muted);
+  background: var(--sink); border-radius: 999px; padding: 3px 7px; flex: none;
+}
+.navitem.sect.on { background: var(--sink); color: var(--text); font-weight: 550; }
+.navitem.sect.on .n { background: var(--accent); color: var(--on-accent); }
 
 /* --- a real rendered page --------------------------------------------------
    Sits over the drawn one rather than replacing it in the DOM, so nothing is
@@ -2540,3 +2635,30 @@ kbd {
   .toolrow { min-height: 44px; align-items: center; }
   .source .btn.small { min-height: 44px; padding-inline: 12px; }
 }
+
+
+/* --- the light/dark shortcut (#87) ---------------------------------------
+   The button shows the theme it will GIVE you, not the one you are in: a
+   control labelled with its current state reads as a status light and gets
+   pressed by accident. Both icons are in the markup and CSS picks one, because
+   rewriting a button's innerHTML to swap an icon is how the call button once
+   deleted its own microphone. */
+.iconbtn { display: inline-grid; place-items: center; }
+.iconbtn > svg { grid-area: 1 / 1; }
+[data-scheme-toggle] .i-sun { display: none; }
+[data-scheme-toggle] .i-moon { display: block; }
+[data-scheme-toggle].is-dark .i-sun { display: block; }
+[data-scheme-toggle].is-dark .i-moon { display: none; }
+
+/* A three-way choice that is one object, not three buttons that happen to be
+   adjacent — so it reads as "pick one of these" at a glance. */
+.segmented { display: inline-flex; border: 1px solid var(--edge); border-radius: 10px;
+  overflow: hidden; background: var(--surface); }
+.segmented .seg {
+  font: 500 13px/1 var(--text); color: var(--ink-2);
+  padding: 11px var(--s4); min-height: 44px; background: none; border: 0;
+  border-right: 1px solid var(--edge); white-space: nowrap;
+}
+.segmented .seg:last-child { border-right: 0; }
+.segmented .seg:hover { color: var(--ink); background: var(--sunken); }
+.segmented .seg.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }

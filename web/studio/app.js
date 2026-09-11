@@ -9,12 +9,12 @@
 
 import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
 import { act, attempt, canWrite, read, say, sure } from './office.js'
-import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
+import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as command from './command.js'
 import * as config from './settings.js'
-import { wireCall } from './call.js'
+import { wireCall, unwireCall, syncCallButtons, callIsLive } from './call.js'
 import { hydrateUsage, usageTab } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
@@ -435,80 +435,110 @@ const openCmd = () => { state.cmd = { open: true, q: '', at: 0 }; render(); $('[
 const closeCmd = () => { state.cmd = { open: false, q: '', at: 0 } }
 
 
-function ribbon() {
-  const running = PROJECTS.flatMap((p) => workspace.rows(p))
-    .filter((r) => r.state === 'working' && r.blocked === undefined).length
-  // Carry the project with each row, so "3 blocked" can take you to one.
-  const stuck = PROJECTS.flatMap((p) => workspace.rows(p).map((r) => ({ ...r, slug: p.slug })))
-    .filter((r) => r.blocked !== undefined)
-  const waiting = PROJECTS.reduce((n, p) => n + workspace.split(p).waiting.length, 0)
-  const busy = CREW.filter((c) => c.state === 'busy')
+/*
+  The ribbon is gone (#78).
 
-  return `<div class="ribbon ${stuck.length > 0 ? 'alert' : ''}">
-    <span class="rb">
-      <span class="pulse ${running > 0 ? 'live' : ''}"></span>
-      <span class="t-label">${
-        running === 0 ? 'Nothing running' : `${running} running`
-      }</span>
-    </span>
-    ${busy.length === 0 ? '' : `<span class="rb faces">${busy.map((c) => face(c, 20)).join('')}</span>`}
-    ${waiting === 0 ? '' : `<span class="rb"><span class="t-label warn">${waiting} waiting on you</span></span>`}
-    <!--
-      Straight to the blocked job, not merely to its project.
+  Grant: *"Remove the top status bar: Remove the Waiting on me / Nothing
+  running strip."*
 
-      This was dead in the most confusing way possible: the blocked job lives on
-      the project Grant was already looking at, so pressing "1 blocked" set the
-      project he was already on and re-rendered an identical page. It looked
-      broken and was, in effect. The data-blocked attribute carries the project
-      AND lands on AI Team, Active Jobs, which is the only screen that says what
-      the blocker actually is.
+  It occupied a full-width strip at the top of every view to report, most of
+  the time, that nothing was happening. A status line whose common case is "no
+  news" trains you not to read it, and once you are not reading it the
+  uncommon case does not reach you either.
 
-      No backticks in this comment. It lives inside a template literal, and a
-      backtick here ends the string — which is exactly how this file was left
-      unparseable for one commit.
-    -->
-    ${stuck.length === 0 ? '' : `<button class="rb stuck" data-blocked="${esc(stuck[0].slug)}">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
-      <span class="t-label">${stuck.length} blocked</span>
-    </button>`}
-    <!--
-      Whether this is the office or the prototype (#68).
+  It was also where the "68 BLOCKED" bug lived: it keyed on state_reason, which
+  is set on every dequeue, so it claimed sixty-eight blocked jobs against an
+  office with none. Two fixes were needed. That the most prominent element on
+  the page could be that wrong for that long is its own argument.
 
-      It has to say. The studio spent a week rendering invented data and looking
-      entirely convincing, and the whole reason the deployed page went a week
-      without its design is that nobody could tell by looking which artefact
-      they were judging. Shown only when it is NOT live: a badge that is always
-      there is a badge nobody reads.
+  The two things worth carrying went where they are actionable: waiting on me
+  is on the project it concerns and in the morning briefing, which already
+  reaches his phone, and running is in Lately, which is the record of what the
+  office did.
+*/
 
-      No backticks in this comment. It is inside a template literal and one
-      would end the string.
-    -->
-    ${source.live ? '' : `<span class="rb"><span class="t-meta mock">Prototype data${
-      source.why ? ` — ${esc(source.why)}` : ''
-    }</span></span>`}
-    <span class="rb right">
-      <span class="t-label">${esc(config.SPEND.month)} this month</span>
-      <span class="t-meta">of ${esc(config.SPEND.target)}</span>
-    </span>
-  </div>`
+/*
+  Seven sections, and AI Team's four inside it (#30).
+
+  The counts on the section buttons are how Grant learns something is waiting
+  without opening anything — which is the whole reason the specification puts
+  an operational overview first rather than a file list.
+
+  Top-level since #80, because the sections moved into the rail and the rail is
+  rendered before the project body. It used to be computed inside `dashboard()`,
+  which is the only place that needed it then.
+*/
+/*
+  Every light/dark shortcut shows which way it will go (#87).
+
+  Same reasoning as `syncCallButtons`: the button is rebuilt on every render and
+  knows nothing, and two copies disagreeing about the theme is worse than one
+  copy being wrong. A class on the button, and CSS picks the icon — swapping
+  innerHTML on a button whose content is an SVG is how the call button once
+  deleted its own microphone.
+*/
+function paintSchemeButtons() {
+  const dark = activeScheme() === 'dark'
+  for (const b of document.querySelectorAll('[data-scheme-toggle]')) {
+    b.classList.toggle('is-dark', dark)
+    const to = dark ? 'light' : 'dark'
+    b.title = 'Switch to ' + to
+    b.setAttribute('aria-label', 'Switch to ' + to)
+  }
 }
 
+function sectionCounts(p) {
+  const waiting = workspace.split(p).waiting.length
+  const blocked = workspace.rows(p).filter((r) => r.blocked !== undefined).length
+  const openTasks = p.tasks.filter((t, i) => t.state !== 'done' && !state.done.has(i)).length
+  return {
+    /*
+      Two rawer numbers ride along, because AI Team's own sub-tabs need them
+      separately and they are the same two counts. They are not section ids, so
+      they never collide with a SECTIONS lookup.
+    */
+    waiting,
+    blocked,
+    team: waiting + blocked,
+    /*
+      The true count, not the number of rows in hand.
+
+      The API caps the document list at 24 because a hundred of them with their
+      metadata is a slow first paint on a phone. The tab said 24 on a project
+      with 41, which is the kind of wrong that costs trust in every other number
+      on the page. `p.docs` is counted in SQL over the whole project.
+    */
+    documents: Math.max(p.docs ?? 0, allDocs(p).length),
+    tasks: openTasks,
+    contacts: p.contacts.length,
+    sources: (p.sources ?? []).length,
+  }
+}
 
 function rail() {
-  return `<aside class="rail">
-    <!--
-      Grant: *"sidebars and such should be collapsible"*. Collapsed, the rail
-      keeps every control and drops every word — icons, project dots and faces
-      stay, so it is a narrower rail rather than a hidden one. The state is
-      remembered, because a person who collapses a sidebar means it.
-    -->
-    <button class="railtoggle" data-rail aria-label="Collapse the sidebar">
+  const inProject = state.view === 'project'
+  const p = inProject ? byId(state.project) : null
+  const counts = inProject ? sectionCounts(p) : {}
+
+  /*
+    The toggle is a SIBLING of the rail, not a child of it (#76).
+
+    Grant: *"Make the sidebar collapse fully and reclaim the space. Currently,
+    only a small portion disappears."* It used to collapse from 220px to 74px,
+    keeping an icon strip - a narrower rail rather than a hidden one.
+
+    Collapsing the rail now hides it with opacity, and OPACITY ON AN ANCESTOR
+    HIDES EVERY DESCENDANT no matter what the child's own opacity says. With
+    the button inside, the way to reopen the sidebar disappeared along with the
+    sidebar. Same family of trap as backdrop-filter breaking position:fixed:
+    the parent decides things the child cannot override.
+  */
+  return `<button class="railtoggle" data-rail aria-label="Collapse the sidebar">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
         <path d="M14 6l-6 6 6 6"/></svg>
     </button>
+    <aside class="rail">
     <div class="wordmark">
       <span class="glyph"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
         stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -520,133 +550,130 @@ function rail() {
     </div>
 
     <!--
-      The project selector, top left.
+      The dashboard project selector, top left, always.
 
       Grant: *"the top left should be the project selector and it should be like
       a drop down menu that shows other projects. But once the project is
       selected, everything else on the screen is relevant to that project."*
+      And again on 11 September: *"Allow switching between projects directly
+      from the sidebar."* (#79)
 
-      The rail used to list every project as a permanent nav item, with the
-      current one's People hanging off it. Two things were wrong with that. It
-      spent the most valuable space in the interface on a choice made once a
-      day; and the People sub-item duplicated the Contacts tab, so the same list
-      had two doors and neither was obviously the real one.
+      It used to appear only while inside a project, so from the portfolio the
+      only way in was the grid. Now it is the permanent anchor: which dashboard
+      project you are in, and that there are others. Everything under it belongs
+      to that project.
 
-      A switcher says the same thing in one row: which project you are in, and
-      that there are others. Everything below it belongs to that project, and
-      everything belonging to that project is in its tabs — never in both.
+      A dashboard project is a row in public.projects. Not a notebook, not a
+      Notion database, not a Drive folder — those are things it is attached to.
     -->
-    ${state.view === 'project' ? (() => {
-      const p = byId(state.project)
-      return `<div class="switcher">
-        <button class="switch ${p.hue}" data-switch-open aria-haspopup="listbox"
-                aria-expanded="false">
-          <span class="dot"></span>
-          <span class="sname">${esc(p.name)}</span>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M7 10l5 5 5-5"/></svg>
-        </button>
-        <div class="switchmenu" data-switch-menu hidden role="listbox">
-          ${PROJECTS.map((x) => `
-            <button role="option" aria-selected="${x.slug === p.slug}"
-                    class="${x.hue} ${x.slug === p.slug ? 'on' : ''}" data-open="${x.slug}">
-              <span class="dot"></span>
-              <span>
-                <b>${esc(x.name)}</b>
-                <span class="t-meta">${x.docs} docs · ${x.total} tasks</span>
-              </span>
-            </button>`).join('')}
-          <button class="allprojects" data-go="portfolio">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-              <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
-            All projects
-          </button>
-        </div>
-      </div>`
-    })() : ''}
+    <div class="switcher">
+      <button class="switch ${inProject ? p.hue : ''}" data-switch-open aria-haspopup="listbox"
+              aria-expanded="false">
+        <span class="dot"></span>
+        <span class="sname">${inProject ? esc(p.name) : 'All projects'}</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 10l5 5 5-5"/></svg>
+      </button>
+      <div class="switchmenu" data-switch-menu hidden role="listbox">
+        ${PROJECTS.map((x) => `
+          <button role="option" aria-selected="${inProject && x.slug === p.slug}"
+                  class="${x.hue} ${inProject && x.slug === p.slug ? 'on' : ''}" data-open="${x.slug}">
+            <span class="dot"></span>
+            <span>
+              <b>${esc(x.name)}</b>
+              <span class="t-meta">${x.docs} docs · ${x.total} tasks</span>
+            </span>
+          </button>`).join('')}
+        <!--
+          The ONLY element carrying data-go=portfolio.
 
-    <nav class="navgroup">
-      <button class="navitem home" data-go="portfolio" aria-current="${state.view === 'portfolio'}">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-          <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
-        All projects
+          There were two: this one and a nav item below. Grant asked for the
+          nav item to go (#77), and the duplicate was also a real bug — the
+          control audit resolved the hidden copy inside this menu and waited
+          thirty seconds for something invisible to become clickable. The
+          comment recording that is still in scripts/verify/controls.ts.
+        -->
+        <button class="allprojects" data-go="portfolio">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
+          All projects
+        </button>
+      </div>
+    </div>
+
+    <!--
+      The project sections, in the sidebar (#80).
+
+      Grant: *"Move project sections into the left sidebar: Place Overview,
+      Documents, Tasks, Contacts, and other project sections there."*
+
+      They were a horizontal tab strip above the content. As sidebar entries
+      under the picker the rail reads WHICH PROJECT, then WHERE IN IT, which is
+      the shape four of his thirty items are circling.
+
+      These stay data-tab so the wiring and the audits that drive them keep
+      working, but they are navigation now, not a tablist: aria-current, not
+      aria-selected, and no role=tab on a thing that is not in a tablist.
+    -->
+    <nav class="navgroup" aria-label="${inProject ? esc(p.name) : 'Projects'}">
+      ${inProject
+        ? SECTIONS.map((t) => `
+          <button class="navitem sect ${state.tab === t.id ? 'on' : ''}" data-tab="${t.id}"
+                  aria-current="${state.tab === t.id ? 'page' : 'false'}">
+            <span>${esc(t.name)}</span>
+            ${counts[t.id] > 0 ? `<span class="n">${counts[t.id]}</span>` : ''}
+          </button>`).join('')
+        : PROJECTS.map((x) => `
+          <button class="navitem proj ${x.hue}" data-open="${x.slug}" aria-current="false">
+            <span class="dot"></span>${esc(x.name)}
+          </button>`).join('')}
+    </nav>
+
+    <!--
+      Everything below here is pinned to the bottom by .railfoot.
+
+      Grant: *"Move Lately near the bottom"* (#84) and *"Place Settings at the
+      bottom left. Label the entry Settings rather than Appearance"* (#86).
+      Appearance is one of six tabs inside Settings and has been since the
+      settings sheet was built; the rail was still advertising the tab as if it
+      were the whole thing, so five tabs were behind a door that did not
+      mention them.
+
+      "Working now" and the Desk entry are gone (#77) — presence for its own
+      sake, and a view whose contents all found homes in the project sections.
+    -->
+    <div class="railfoot">
+      <!--
+        Grant: *"of course the talk to team button should be prominent"*. It is
+        the one control he uses when he does not want to use the interface at
+        all, so it is the only filled thing in the rail.
+      -->
+      <button class="callbtn" data-call>
+        <span class="ring"></span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
+          <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
+        <span class="lbl">Call the team</span>
       </button>
-      <button class="navitem home" data-go="desk" aria-current="${state.view === 'desk'}">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-          <rect x="3" y="4" width="8" height="6" rx="1.5"/><rect x="13" y="7" width="8" height="5" rx="1.5"/>
-          <rect x="5" y="13" width="9" height="7" rx="1.5"/></svg>
-        Desk
-      </button>
-      <button class="navitem home" data-go="lately" aria-current="${state.view === 'lately'}">
+
+      <button class="navitem" data-go="lately" aria-current="${state.view === 'lately' ? 'page' : 'false'}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
         Lately
       </button>
-      <!--
-        Only the two GLOBAL places. A project's own sections live in its tabs
-        and nowhere else — Grant: *"obviously, they don't duplicate things"*.
-        The rail's project list and its People sub-item both said something the
-        tabs already say, so both are gone.
-      -->
-      ${state.view === 'project' ? '' : PROJECTS.map((p) => `
-        <button class="navitem proj ${p.hue}" data-open="${p.slug}"
-                aria-current="false">
-          <span class="dot"></span>${esc(p.name)}
-        </button>`).join('')}
-    </nav>
-    <!--
-      The team, as people.
 
-      Now that there are real portraits (#24 idea 4) the rail can say who is
-      actually doing something rather than showing eight identical dots. Whoever
-      is working gets a row with their face, their name and their work; everyone
-      else collapses into a quiet strip underneath. That is presence being
-      ambient — you see the shape of the office without reading it.
-    -->
-    <!--
-      Grant: *"of course the talk to team button should be prominent"*. It was a
-      secondary button in a page header, competing with New project. It is the
-      one control he uses when he does not want to use the interface at all, so
-      it lives in the rail, it is the only filled thing in it, and it survives
-      the rail collapsing.
-    -->
-    <button class="callbtn" data-call>
-      <span class="ring"></span>
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
-        <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
-      <span class="lbl">Call the team</span>
-    </button>
-
-    <button class="navitem settings-open" data-settings>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3.2"/>
-        <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3"/>
-      </svg>
-      Appearance
-    </button>
-    <div class="team">
-      <div class="t-label">Working now</div>
-      ${CREW.filter((c) => c.state === 'busy').map((c) => `
-        <div class="mate">
-          ${face(c, 34)}
-          <span class="what">
-            <b>${esc(c.name)}</b>
-            <span class="t-meta">${esc(c.doing ?? c.role)}</span>
-          </span>
-        </div>`).join('')}
-      <div class="crew">${CREW.filter((c) => c.state !== 'busy').map((c) => face(c, 26)).join('')}
-        <span class="t-meta rest-note">${
-          CREW.filter((c) => c.state !== 'busy').length
-        } more, quiet</span>
-      </div>
+      <button class="navitem settings-open" data-settings>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3"/>
+        </svg>
+        Settings
+      </button>
     </div>
   </aside>`
 }
@@ -921,33 +948,17 @@ function callSheet() {
   </button>`
 }
 
-function desk() {
-  const pos = canvasView.positions(PROJECTS)
-  return `<main class="main deskmain">
-    <div class="head">
-      <div>
-        <h1 class="t-display">Desk</h1>
-        <p class="t-lead" style="margin:var(--s2) 0 0">Drag a project anywhere. It stays
-          where you put it — nothing tidies itself, because a surface that rearranges
-          is a surface you cannot remember.</p>
-      </div>
-      <button class="btn" data-go="portfolio">Back to the list</button>
-    </div>
-    <div class="deskstage">
-      <div class="surface" data-surface>
-        ${PROJECTS.map((p) => `
-          <div class="deskcard ${p.hue}" data-card="${p.slug}"
-               style="left:${pos[p.slug].x}px;top:${pos[p.slug].y}px">
-            <span class="cover">${coverSvg(p.slug, { facts: p })}</span>
-            <span class="body">
-              <b>${esc(p.name)}</b>
-              <span class="t-meta">${p.docs} docs · ${p.total} tasks</span>
-            </span>
-          </div>`).join('')}
-      </div>
-    </div>
-  </main>`
-}
+/*
+  The desk is gone (#77).
+
+  Grant: *"Remove Working now icons, All projects, and the redundant Desk
+  view."* Redundant is the right word — everything that lived on the pannable
+  surface now has a home in a project section, so it was a second door to the
+  same rooms.
+
+  `canvas.js` and the drag springs it used are kept: the customizable project
+  dashboard (#81) is the same interaction with a reason to exist.
+*/
 
 function peopleTab(p) {
   const defined = people.labels()
@@ -1666,24 +1677,7 @@ function dashboard() {
     without opening anything — which is the whole reason the specification puts
     an operational overview first rather than a file list.
   */
-  const waiting = workspace.split(p).waiting.length
-  const blocked = workspace.rows(p).filter((r) => r.blocked !== undefined).length
-  const openTasks = p.tasks.filter((t, i) => t.state !== 'done' && !state.done.has(i)).length
-  const counts = {
-    team: waiting + blocked,
-    /*
-      The true count, not the number of rows in hand.
-
-      The API caps the document list at 24 because a hundred of them with their
-      metadata is a slow first paint on a phone. The tab said 24 on a project
-      with 41, which is the kind of wrong that costs trust in every other number
-      on the page. `p.docs` is counted in SQL over the whole project.
-    */
-    documents: Math.max(p.docs ?? 0, allDocs(p).length),
-    tasks: openTasks,
-    contacts: p.contacts.length,
-    sources: (p.sources ?? []).length,
-  }
+  const counts = sectionCounts(p)
 
   const teamBody =
     state.sub === 'chat' ? chatTab(p)
@@ -1692,8 +1686,8 @@ function dashboard() {
     : teamBoard(p)
 
   const teamCounts = {
-    jobs: blocked,
-    outputs: waiting,
+    jobs: counts.blocked,
+    outputs: counts.waiting,
   }
 
   const team = `
@@ -1722,15 +1716,22 @@ function dashboard() {
     : board
 
   return `<main class="main">
-    <div class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
-      ${coverSvg(p.slug, { dense: true, facts: p })}
-    </div>
     <div class="head">
-      <div>
+      <div class="projhead">
+        <!--
+          The mark, beside the title rather than a 208px band above it (#82).
+          It keeps the view-transition-name so the portfolio card's mark still
+          grows and moves into this slot when you open the project.
+        -->
+        <span class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
+          ${coverSvg(p.slug, { dense: true, facts: p })}
+        </span>
+        <span style="min-width:0">
         <h1 class="t-display" style="font-size:38px"${
           canWrite() ? ` contenteditable="plaintext-only" spellcheck="false" data-rename="${esc(p.slug)}"` : ''
         }>${esc(p.name)}</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(p.purpose)}</p>
+        </span>
       </div>
       <div class="headctl">
         <!--
@@ -1756,24 +1757,45 @@ function dashboard() {
           Chat is one tap away in AI Team, so the header keeps only what the
           tabs cannot say: the project's own settings.
         -->
-        <!-- Project Settings, top-right, where the specification's sketch puts it. -->
-        <button class="btn" data-project-settings title="Project settings"
-                aria-label="Project settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3.2"/>
-            <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3"/>
+        <!--
+          The light/dark shortcut (#87).
+
+          A sun icon sat here and did nothing. It was the Project Settings
+          placeholder for #36, which is not built, so it shook and apologised —
+          but the icon it shook with was a SUN, in the top right, which is where
+          every application on earth puts a theme switch. Grant read it as a
+          broken dark-mode button and he read it correctly.
+
+          So the sun does what a sun does. Project settings comes back with #36,
+          with a gear on it.
+
+          It says which way it will go rather than which way it is: the icon is
+          a moon when pressing it makes things dark. A control labelled with its
+          current state reads as a status light and gets pressed by accident.
+        -->
+        <button class="btn iconbtn" data-scheme-toggle title="Switch between light and dark"
+                aria-label="Switch between light and dark">
+          <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2"/>
+            <path d="M12 2.5v2.4M12 19.1v2.4M21.5 12h-2.4M4.9 12H2.5M18.7 5.3l-1.7 1.7M7 17l-1.7 1.7M18.7 18.7L17 17M7 7L5.3 5.3"/>
+          </svg>
+          <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true">
+            <path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/>
           </svg>
         </button>
       </div>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="${esc(p.name)}">
-      ${SECTIONS.map((t) => `<button role="tab" class="tab ${state.tab === t.id ? 'on' : ''}"
-          aria-selected="${state.tab === t.id}" data-tab="${t.id}">${esc(t.name)}${
-            counts[t.id] > 0 ? `<span class="n">${counts[t.id]}</span>` : ''
-          }</button>`).join('')}
-    </div>
+    <!--
+      The section strip lived here. It is in the rail now (#80), which is where
+      Grant asked for it. The counts moved with it: sectionCounts is
+      top-level for exactly that reason.
+
+      No backticks in this comment. Template literal.
+    -->
 
     ${body}
   </main>`
@@ -2346,6 +2368,28 @@ function appearanceTab() {
       <p class="t-lead" style="margin:0 0 var(--s4)">Changes apply straight away and are
         remembered on this device.</p>
 
+      <!--
+        Light and dark (#87).
+
+        The shortcut in the project header sets the same value this does, and
+        both read it back from the same place, so the two can never disagree —
+        which was the thing most likely to go wrong here: one control that works
+        and one that lies.
+
+        Three choices, not a switch. Following the system is the default and the
+        honest answer for most people; a boolean forces a side and then the
+        studio is the one application on the machine that does not go dark at
+        sunset with everything else.
+      -->
+      <div class="setgroup">
+        <span class="t-label">Light and dark</span>
+        <div class="segmented" role="group" aria-label="Light and dark">
+          ${SCHEMES.map((x) => `
+            <button class="seg ${now.scheme === x.id ? 'on' : ''}" data-scheme-pick="${x.id}"
+                    aria-pressed="${now.scheme === x.id}">${esc(x.name)}</button>`).join('')}
+        </div>
+      </div>
+
       <div class="setgroup">
         <span class="t-label">Palette</span>
         <div class="swatches">
@@ -2729,6 +2773,18 @@ function wireAppearance(v) {
     settingsSheet()          // redraw so the tick moves
     sheet(v, true)
   }
+  /*
+    The same value the header's shortcut sets (#87). One setting, two doors —
+    which is the only way the two can be guaranteed not to contradict each
+    other, and a page insisting it is light while it is plainly dark is the
+    worst outcome available here.
+  */
+  for (const b of v.querySelectorAll('[data-scheme-pick]')) {
+    b.addEventListener('click', () => {
+      pick('scheme', b.dataset.schemePick)
+      paintSchemeButtons()
+    })
+  }
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
   }
@@ -2787,15 +2843,19 @@ const railShut = () => {
 function render() {
   const root = $('#root')
   root.classList.toggle('shut', railShut())
-  root.innerHTML = commandBar() + ribbon() + rail() + (
+  root.innerHTML = commandBar() + rail() + (
     state.view === 'project' ? dashboard()
-    : state.view === 'desk' ? desk()
     : state.view === 'lately' ? lately()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
   breathe(root)
   scatter(root)
+  // The rail is rebuilt on every render, so the call button is a new element
+  // each time and knows nothing. A live call must not be represented by a
+  // button that looks idle (#101).
+  syncCallButtons()
+  paintSchemeButtons()
 
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
@@ -3114,15 +3174,28 @@ function render() {
     while looking at something else, and navigating away from the project you
     were discussing to talk about it is exactly backwards.
   */
+  /*
+    Closing the sheet does not hang up (#101, #102).
+
+    It used to be the only way a call ended, and it ended it by throwing away
+    the reference rather than by stopping anything — the microphone stayed
+    open with no interface attached to it. Now the call is a module-level
+    singleton in `call.js`: the sheet attaches to it and detaches from it, and
+    the only thing that stops a microphone is `endCall`.
+
+    So the rail button opens the sheet whether or not a call is running, and
+    the sheet's own microphone button is what starts and ends one. The rail
+    button still shows the state, because `syncCallButtons` paints every
+    element carrying `data-call`.
+  */
   const call = $('[data-call]', root)
   call?.addEventListener('click', () => {
     const v = $('#viewer')
     v.innerHTML = callSheet()
     sheet(v, true)
-    $('.close', v)?.addEventListener('click', () => sheet(v, false))
-    v.addEventListener('click', (e) => {
-      if (e.target === v) sheet(v, false)
-    })
+    const shut = () => { unwireCall(); sheet(v, false); syncCallButtons() }
+    $('.close', v)?.addEventListener('click', shut)
+    v.addEventListener('click', (e) => { if (e.target === v) shut() })
     wireCall(v)
   })
 
@@ -3313,18 +3386,20 @@ function render() {
     })
   }
 
-  $('[data-project-settings]', root)?.addEventListener('click', () => {
-    /*
-      #36 is not built. Saying so where the press happened beats writing to a
-      status line — which is exactly how the call button came to be dead: it
-      wrote to `.talkstate`, an element that no longer exists.
-    */
-    const btn = $('[data-project-settings]', root)
-    if (btn !== null) {
-      btn.classList.add('nope')
-      setTimeout(() => { btn.classList.remove('nope') }, 1400)
-    }
-  })
+  /*
+    The light/dark shortcut, for real (#87).
+
+    Nothing re-renders: the theme is tokens on the root element, so flipping the
+    attribute repaints the whole page without touching a single node. Which is
+    also why it must not call `render()` — that would throw away an open menu
+    and any text being typed, to change a colour.
+  */
+  for (const b of root.querySelectorAll('[data-scheme-toggle]')) {
+    b.addEventListener('click', () => {
+      toggleScheme()
+      paintSchemeButtons()
+    })
+  }
 
   /*
     "Talk to the team about this" (#27).

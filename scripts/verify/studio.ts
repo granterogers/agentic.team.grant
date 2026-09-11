@@ -159,14 +159,14 @@ for (const [size, opts] of SIZES) {
       }
     }
 
-    // The desk: a whole mode, and one a portfolio capture cannot show.
-    if (size === 'desktop') {
-      await page.locator('[data-go="desk"]').click()
-      await page.waitForTimeout(700)
-      await shoot('desk')
-      await page.locator('[data-go="portfolio"]').first().click()
-      await page.waitForTimeout(500)
-    }
+    /*
+      The desk was captured here. It is gone (#77) — Grant called it redundant
+      and everything on it now has a home in a project section.
+
+      The collapsed rail takes its place, because #76 changed what collapsing
+      means: it used to leave a 74px icon strip and now it leaves nothing, and
+      that is a state worth having a picture of.
+    */
 
     // Into a project, which is the shared-element transition. Everything after
     // this — People, contacts, documents — only exists inside one.
@@ -177,7 +177,7 @@ for (const [size, opts] of SIZES) {
       the next one there. Board is what the "project" capture is of, so say so
       rather than depending on whatever the last run happened to leave behind.
     */
-    await page.locator('[role="tab"][data-tab="overview"]').click()
+    await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
     await shoot('project')
 
@@ -210,7 +210,7 @@ for (const [size, opts] of SIZES) {
         tab, so Grant asked for it gone — "obviously, they don't duplicate
         things". A capture script is where a removed selector announces itself.
       */
-      await page.locator('[role="tab"][data-tab="contacts"]').click()
+      await page.locator('[data-tab="contacts"]').click()
       await page.waitForTimeout(500)
       await shoot('contacts-section')
       /*
@@ -267,7 +267,7 @@ for (const [size, opts] of SIZES) {
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
 
-    await page.locator('[role="tab"][data-tab="team"]').click()
+    await page.locator('[data-tab="team"]').click()
     await page.waitForTimeout(600)
     await shoot('team-board')
 
@@ -296,7 +296,7 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('chat')
 
-    await page.locator('[role="tab"][data-tab="documents"]').click()
+    await page.locator('[data-tab="documents"]').click()
     await page.waitForTimeout(500)
     await shoot('documents')
     // The talk action on a document, and where it lands.
@@ -306,7 +306,7 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('talk-about-a-document')
 
-    await page.locator('[role="tab"][data-tab="overview"]').click()
+    await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
 
     /*
@@ -320,7 +320,7 @@ for (const [size, opts] of SIZES) {
       await page.locator('[data-switch-menu] [data-open="wellness"]').click()
       await page.waitForTimeout(700)
       for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
-        await page.locator(`[role="tab"][data-tab="${s}"]`).click()
+        await page.locator(`[data-tab="${s}"]`).click()
         await page.waitForTimeout(350)
         await shoot(`empty-${s}`)
       }
@@ -331,12 +331,12 @@ for (const [size, opts] of SIZES) {
     }
 
     for (const section of ['tasks', 'contacts', 'sources', 'activity']) {
-      await page.locator(`[role="tab"][data-tab="${section}"]`).click()
+      await page.locator(`[data-tab="${section}"]`).click()
       await page.waitForTimeout(500)
       await shoot(section)
     }
 
-    await page.locator('[role="tab"][data-tab="documents"]').click()
+    await page.locator('[data-tab="documents"]').click()
     await page.waitForTimeout(500)
 
     // And a document, which is the second one.
