@@ -191,5 +191,9 @@
   "0190_kind_is_an_enum_and_the_wrapper_did_not_know.sql": "3c8a807f68450f7013c0397ebd2b6b13024e4169bc9b43766fca18a95374529a",
   "0191_what_everything_is_costing.sql": "e9dfcbb707daf779f4d6b8cf9afbc31152b295e79be35ec34d401f1a1c34348c",
   "0192_billing_month_is_a_date.sql": "072a069d9db81b4cd1bf4e7cc744d0b651aa25b12075c01f85c3e58f64490371",
-  "0193_the_test_suite_was_in_his_spend_breakdown.sql": "de7422d6de9ceeb9c149a2c4cd56655fc022cb598fb5c13fcaa021da2be69501"
+  "0193_the_test_suite_was_in_his_spend_breakdown.sql": "de7422d6de9ceeb9c149a2c4cd56655fc022cb598fb5c13fcaa021da2be69501",
+  "0194_a_drive_folder_per_project.sql": "d2464f6ed14ec361121aa8e0b6377f048af11c23f57e4f104895e14c29838d89",
+  "0195_someone_has_to_look_at_the_folder.sql": "4baeb55a498555078d992de9f6a3523349442f6d380cc8548930322922de5020",
+  "0196_a_folder_is_a_kind_of_reference.sql": "31d29ce240d615984a61f24b4168a6fafaba06228c50c3b464b7249daa14aa82",
+  "0197_the_word_was_wanted_not_use.sql": "7c485588aaf947400f1d85e2c3d09a5ab28f5d47b3fffd3a84cb0a2d0d9bf0e1"
 }
