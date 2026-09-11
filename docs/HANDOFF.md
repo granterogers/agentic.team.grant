@@ -45,8 +45,11 @@
 > behaviourally and structurally.
 >
 > **The backlog is current as of 11 September.** Every issue verified complete
-> was closed with the evidence in a comment rather than a tick — #9, #48, #50,
-> #52, #53, #55, #56, #57, #58, #61, #62, #66, #68. Five findings from that
+> was closed with the evidence in a comment rather than a tick — #9, #48, #52,
+> #53, #55, #56, #57, #58, #59, #61, #62, #66, #68. **#50 stays open on
+> purpose**: six of its seven boxes are ticked and the last one — a real
+> capability acquired end to end without a coding session — needs the office to
+> ask for a tool it does not have and be granted it. Five findings from that
 > day's work that were in nobody's Issue are now filed: Claire is the only
 > agent with no bot of her own and the only one permitted to speak to Grant
 > (#70) · modules are in the canonical IA with no table behind them (#71) ·
