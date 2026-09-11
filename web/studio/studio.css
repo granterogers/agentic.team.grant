@@ -2843,3 +2843,29 @@ kbd {
 /* An audio document, played rather than described. Full width because the
    browser's own control is the whole interface here. */
 .docaudio { width: 100%; display: block; }
+
+/* --- the way out of a document conversation (#97, #98) --------------------
+   First thing in the panel, always drawn, never hover-revealed. `opacity: 0`
+   hides pixels and not layout, and on a touch screen a hover-revealed control
+   does not exist at all — that is #67, where eight agent names wrapped one
+   character per line behind an invisible button.
+
+   Two controls, because they do different things: this bar leaves the
+   conversation, and the small x on the chip in the composer detaches the
+   document and keeps you here. Merging them would be the bug. */
+.backbar {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  padding: var(--s3) 0 var(--s4); border-bottom: 1px solid var(--edge);
+  margin-bottom: var(--s4);
+}
+.backbar .t-meta { flex: 1 1 auto; min-width: 0; }
+.backbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+/* 44px, and it says so rather than relying on the icon's own size. The moment
+   verify:ui was pointed at the right payload it found a 68x24 target in this
+   part of the interface. */
+.closeconv {
+  width: 44px; height: 44px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; color: var(--ink-2);
+  border: 1px solid var(--edge); background: var(--surface);
+}
+.closeconv:hover { color: var(--ink); background: var(--sunken); border-color: var(--accent); }

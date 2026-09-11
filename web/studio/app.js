@@ -1318,7 +1318,46 @@ function chatTab(p) {
     </div>`
   }
 
+  /*
+    The way out, and it is the first thing in the panel (#97, #98).
+
+    Grant: *"ensure users can reliably return from the conversation to
+    Documents"* and *"Provide an obvious X that closes the conversation panel
+    and returns to the document."*
+
+    Obvious is the requirement and it is the one most easily failed. Not
+    hover-revealed: `opacity: 0` hides pixels and not layout, and on a touch
+    screen a hover-revealed control does not exist at all — that is #67, where
+    eight agent names wrapped one character per line behind an invisible
+    button. And 44px, because the moment `verify:ui` was pointed at the right
+    payload it found a 68x24 target in this same area.
+
+    Two controls rather than one, because they do different things and merging
+    them would be the bug: the X leaves the conversation and goes back to what
+    you were reading; the small x on the chip below detaches the document and
+    keeps you here to write about something else.
+
+    This is a JS block comment, not an HTML one — it sits outside the template
+    literal, so it closes with a star-slash and not with an arrow. Getting that
+    wrong left the comment unterminated and the file unparseable.
+  */
+  const backTo = a?.back?.tab
+  const backName = SECTIONS.find((sx) => sx.id === backTo)?.name ?? 'the project'
+
   return `<div class="tabbody chatbody">
+    ${a?.back === undefined ? '' : `<div class="backbar">
+      <button class="btn quiet backbtn" data-back-out>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 6l-6 6 6 6"/></svg>
+        Back to ${esc(backName)}
+      </button>
+      <span class="t-meta">Talking about ${esc(a.title)}</span>
+      <button class="closeconv" data-back-out aria-label="Close this conversation and go back to ${esc(backName)}">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>`}
     <div class="thread" data-thread>
       ${messages.length === 0
         ? `<div class="empty">
@@ -3661,15 +3700,46 @@ function render() {
     state, the tab switches, and the composer takes focus — the whole action is
     one press and then typing.
   */
+  /*
+    Leave the conversation and go back to what you were reading (#97, #98).
+
+    One handler for both controls in the bar. `state.attach` is cleared with
+    the navigation because the attachment IS the conversation-about-this-thing;
+    leaving it set would mean the next message you typed from Documents was
+    silently still about the document you had walked away from.
+  */
+  for (const b of root.querySelectorAll('[data-back-out]')) {
+    b.addEventListener('click', () => {
+      const back = state.attach?.back
+      state.attach = null
+      state.tab = back?.tab ?? 'documents'
+      state.sub = back?.sub ?? 'board'
+      render()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-talk-kind]')) {
     b.addEventListener('click', (e) => {
       e.stopPropagation()
+      /*
+        Where we came from travels with the attachment (#97).
+
+        Getting back from a document conversation was "unreliable" because two
+        different things were wrong. This is the second: arriving here called
+        `rememberTab(project, 'team')`, which PERSISTS the tab. So opening a
+        conversation about a document silently changed where that project opens
+        for ever after — you would come back tomorrow and land in Chat, having
+        never chosen it. A side action must not rewrite a deliberate choice, so
+        the remembered tab is left alone and the return path is carried instead.
+      */
       state.attach = {
-        kind: b.dataset.talkKind, id: b.dataset.talkId, title: b.dataset.talkTitle,
+        kind: b.dataset.talkKind,
+        id: b.dataset.talkId,
+        title: b.dataset.talkTitle,
+        back: { tab: state.tab, sub: state.sub },
       }
       state.tab = 'team'
       state.sub = 'chat'
-      rememberTab(state.project, 'team')
       render()
       $('[data-say]')?.focus()
     })
