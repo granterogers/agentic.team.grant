@@ -186,7 +186,19 @@ if (project === undefined) {
   }
 }
 
-const html = await readFile('web/hq/index.html', 'utf8')
+/*
+  The studio is the page now (ADR-0019, #68).
+
+  `web/hq/index.html` is deleted. It kept the root URL until every one of its
+  fifteen write actions existed in the studio, which is the condition ADR-0019
+  set — retiring it sooner would have removed capability in the name of a
+  redesign, the failure 0119 named in a different context: *"a permission
+  system's first job is to not change behaviour on the day it is installed."*
+
+  Grant's bookmark is the root, so the studio serves there. `/studio/` keeps
+  working, because a URL that has been handed out is a URL somebody has open.
+*/
+const html = await readFile('web/studio/index.html', 'utf8')
 
 /*
   The studio prototype, at /studio/.
@@ -218,12 +230,29 @@ const walk = async (dir: string): Promise<void> => {
       continue
     }
     const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
-    const at = `studio/${relative('web/studio', full).split('\\').join('/')}`
+    const rel = relative('web/studio', full).split('\\').join('/')
+    const at = `studio/${rel}`
     studioFiles.push(
       BINARY.has(ext)
         ? { file: at, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
         : { file: at, data: await readFile(full, 'utf8') },
     )
+    /*
+      And at the root, because the page is served there now.
+
+      Two copies of each asset rather than a rewrite rule: this is a static
+      deployment with no routing layer, `index.html` asks for `./app.js`, and a
+      relative path from `/` and from `/studio/` are different files as far as
+      the host is concerned. Thirty-one small files twice is cheaper than a
+      config that only one person understands.
+    */
+    if (rel !== 'index.html') {
+      studioFiles.push(
+        BINARY.has(ext)
+          ? { file: rel, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
+          : { file: rel, data: await readFile(full, 'utf8') },
+      )
+    }
   }
 }
 await walk('web/studio')

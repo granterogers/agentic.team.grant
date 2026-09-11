@@ -14,6 +14,7 @@ import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as command from './command.js'
 import * as config from './settings.js'
+import { wireCall } from './call.js'
 import { hydrateUsage, usageTab } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
@@ -864,6 +865,62 @@ function lately() {
   </main>`
 }
 
+/*
+  The call, as a sheet.
+
+  Deliberately spare. There is one thing to do here and a page of controls
+  around a microphone is a page that makes you look for the microphone. The
+  typing box is a disclosure rather than a second equal option: it is the
+  fallback for a quiet room, not a parallel interface.
+*/
+function callSheet() {
+  return `<div class="sheet callsheet">
+    <div class="chead">
+      <span style="flex:1;min-width:0">
+        <h2 class="t-title" style="margin:0">Talk to the team</h2>
+        <p class="t-meta" style="margin:4px 0 0">Claire picks up. She knows what the
+          office has been doing — ask her, tell her, interrupt her.</p>
+      </span>
+    </div>
+
+    <div class="callstage">
+      <!--
+        The ids are the old page's, deliberately.
+
+        verify:talk drives this by id — call, talkstate, askform, asktext,
+        asksend, turns, typeinstead — and those are stable handles an audit
+        already knows. Keeping them means the check follows the capability
+        rather than being rewritten alongside it, which is how a retarget
+        quietly loses an assertion.
+
+        No backticks in this comment. Template literal.
+      -->
+      <button type="button" class="bigmic" id="call" data-call aria-label="Call Claire">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
+          <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
+      </button>
+      <p class="t-lead" id="talkstate" data-callstate style="margin:0;text-align:center">Press to call
+        Claire. The browser will ask for the microphone once.</p>
+    </div>
+
+    <details class="typeinstead" id="typeinstead">
+      <summary>Type instead</summary>
+      <form class="askform" id="askform" data-callform>
+        <input id="asktext" data-calltext placeholder="Say it here"
+               aria-label="What you want to say" autocomplete="off" enterkeyhint="send">
+        <button class="btn primary" id="asksend" type="submit">Send</button>
+      </form>
+      <div class="turns" id="turns" data-callturns></div>
+    </details>
+  </div>
+  <button class="close" aria-label="Close">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>`
+}
+
 function desk() {
   const pos = canvasView.positions(PROJECTS)
   return `<main class="main deskmain">
@@ -1393,6 +1450,33 @@ function sources(p) {
         <span class="t-meta" data-said></span>
       </span>` : ''}
     </div>
+    <!--
+      "Not now" — the fifth option, and the only one that ends in no attachment.
+
+      Without it the office keeps asking about a connector Grant has decided
+      this project does not want, and there is no way to answer except by
+      connecting something. §3 lists it as a real answer, so it is a real
+      control: it records the decision and the asking stops.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${
+      canWrite()
+        ? `<div class="declines" data-saidwrap>
+      <span class="t-meta">Not every project needs everything.</span>
+      ${(config.CONNECTIONS ?? [])
+        .filter((k) => !(p.connectors ?? []).includes(k.name))
+        .slice(0, 4)
+        .map(
+          (k) => `<button class="btn small quiet" data-decline="${esc(p.slug)}"
+             data-connector="${esc(k.key)}" data-name="${esc(k.name)}">
+             ${esc(p.name)} does not need ${esc(k.name)}</button>`,
+        )
+        .join('')}
+      <span class="t-meta" data-said></span>
+    </div>`
+        : ''
+    }
     <div class="sourcegrid">${list.map((x) => `
       <article class="source ${x.kind === 'connector' ? 'live' : ''}" data-saidwrap>
         <span class="t-label">${x.kind === 'connector' ? 'Connector' : 'Reference'}</span>
@@ -1938,6 +2022,36 @@ function setupTab() {
             : `<a class="btn primary" href="${esc(GOOGLE_START)}" target="_blank" rel="noopener">Connect Google</a>`
         }
       </div>
+      <!--
+        The two credentials, before the consent screen can be reached.
+
+        The secret is a password field and is cleared the moment it is saved: it
+        goes straight to the Supabase Vault through the API and is never echoed,
+        never logged, and never put anywhere this page can read it back. That is
+        the established mechanism, and it is why there is a field here at all
+        rather than a request to paste it somewhere.
+
+        Shown only when Google is not connected — once it is, these are answered
+        and a form that stays around invites re-entering a working credential.
+
+        No backticks in this comment. Template literal.
+      -->
+      ${
+        google.ready
+          ? ''
+          : `<div class="gsetup" data-saidwrap>
+        <label class="flab">Client ID</label>
+        <input data-g-id placeholder="…apps.googleusercontent.com" aria-label="Google client ID"
+               value="${esc(google.client_id ?? '')}">
+        <label class="flab">Client secret</label>
+        <input data-g-secret type="password" autocomplete="off"
+               placeholder="GOCSPX-…" aria-label="Google client secret">
+        <div class="srow wrap">
+          <button class="btn" data-save-google>Save credentials</button>
+          <span class="t-meta" data-said></span>
+        </div>
+      </div>`
+      }
       <div class="glist">${(google.services ?? [])
         .map(
           (g) => `<div class="grow">
@@ -2543,6 +2657,39 @@ function settingsSheet() {
     })
   }
 
+  for (const b of v.querySelectorAll('[data-save-google]')) {
+    b.addEventListener('click', async () => {
+      const wrap = b.closest('[data-saidwrap]')
+      const id = String(wrap?.querySelector('[data-g-id]')?.value ?? '').trim()
+      const secretBox = wrap?.querySelector('[data-g-secret]')
+      const secret = String(secretBox?.value ?? '').trim()
+      if (id === '' && secret === '') {
+        say(b, 'Nothing to save.', 'warn')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Saving…',
+        async () => {
+          if (id !== '') await act('set_setting', { p_key: 'google.client_id', p_value: id })
+          if (secret !== '') await act('set_google_secret', { p_secret: secret })
+          return { ok: true }
+        },
+        'Saved. Now press Connect Google.',
+      )
+      /*
+        Cleared whatever happened.
+
+        On success it is in the vault and this copy is redundant; on failure the
+        commonest cause is pasting the client ID into the secret box, and
+        leaving a wrong credential sitting in a password field is how it gets
+        submitted again. Either way it does not stay on the page.
+      */
+      if (secretBox) secretBox.value = ''
+      if (done) await afterWrite()
+    })
+  }
+
   for (const b of v.querySelectorAll('[data-forget-google]')) {
     b.addEventListener('click', async () => {
       /*
@@ -2780,6 +2927,24 @@ function render() {
     h.addEventListener('blur', commit)
   }
 
+  for (const b of root.querySelectorAll('[data-decline]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Noting it…',
+        () =>
+          act('connection_choose', {
+            p_slug: b.dataset.decline,
+            p_connector: b.dataset.connector,
+            p_choice: 'declined',
+            p_reason: 'Decided from the dashboard.',
+          }),
+        `Noted — nothing will ask about ${b.dataset.name} on this project again.`,
+      )
+      if (done) await refresh()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-detach]')) {
     b.addEventListener('click', async () => {
       /*
@@ -2936,17 +3101,29 @@ function render() {
     somewhere else that may or may not exist. It reverts after a moment so the
     rail does not stay stuck mid-sentence.
   */
+  /*
+    Call the team, for real (#68).
+
+    This was a stub that said "Calling Claire…" for two and a half seconds and
+    did nothing — and before that it was genuinely dead, writing to an element
+    that had been removed from the rail. It is the most prominent control in the
+    interface, the one Grant asked to be prominent, and it is the last thing
+    that kept the old page alive.
+
+    Opened as a sheet rather than a route: a call is a thing you are doing
+    while looking at something else, and navigating away from the project you
+    were discussing to talk about it is exactly backwards.
+  */
   const call = $('[data-call]', root)
   call?.addEventListener('click', () => {
-    if (call.classList.contains('ringing')) return
-    const label = $('.lbl', call)
-    const was = label?.textContent ?? 'Call the team'
-    call.classList.add('ringing')
-    if (label !== null) label.textContent = 'Calling Claire…'
-    setTimeout(() => {
-      call.classList.remove('ringing')
-      if (label !== null) label.textContent = was
-    }, 2400)
+    const v = $('#viewer')
+    v.innerHTML = callSheet()
+    sheet(v, true)
+    $('.close', v)?.addEventListener('click', () => sheet(v, false))
+    v.addEventListener('click', (e) => {
+      if (e.target === v) sheet(v, false)
+    })
+    wireCall(v)
   })
 
   for (const b of root.querySelectorAll('[data-settings]')) {

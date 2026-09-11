@@ -2426,6 +2426,75 @@ kbd {
    fault — the whole reason the checklist has three states and not two. */
 .service.s-off { opacity: .72; }
 
+/* The Google credentials, in Setting up. The secret is a password field and
+   is cleared on submit — it goes to the vault and never comes back here. */
+.gsetup { display: grid; gap: 6px; margin-top: var(--s3); max-width: 520px; }
+.gsetup input {
+  width: 100%; padding: 9px 12px; font: inherit; font-size: 13px;
+  border-radius: var(--r-field, 10px); border: 1px solid var(--edge);
+  background: var(--surface); color: var(--ink);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
+}
+.gsetup input:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04), 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* "Not now" — §3's fifth option, and the only one that ends in no attachment.
+   Quiet, because deciding a project does not need something is a small act. */
+.declines { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap;
+  margin: 0 0 var(--s4); }
+
+/*
+  The call sheet (#68).
+
+  One thing to do, so one thing is big. The ring is the only continuously
+  animated element in the product and it is only animated while a call is live —
+  §18 says motion is designed, not added, and a pulsing microphone on an idle
+  page is decoration that also says something false.
+*/
+.callsheet { display: grid; gap: var(--s5); max-width: 560px; }
+.callstage { display: grid; gap: var(--s4); justify-items: center; padding: var(--s5) 0; }
+.bigmic {
+  width: 96px; height: 96px; border-radius: 50%;
+  display: grid; place-items: center; position: relative;
+  border: 0; cursor: pointer; color: #fff;
+  background: linear-gradient(150deg,
+    color-mix(in srgb, var(--accent) 92%, #fff 8%), var(--accent));
+  box-shadow: var(--lift-2), inset 0 1px 0 rgb(255 255 255 / .28);
+  transition: transform .16s cubic-bezier(.2,.8,.3,1), box-shadow .16s;
+}
+.bigmic:hover { transform: translateY(-2px); box-shadow: var(--lift-3, var(--lift-2)); }
+.bigmic:active { transform: translateY(1px) scale(.98); box-shadow: var(--engrave); }
+.bigmic.ringing::after {
+  content: ''; position: absolute; inset: -10px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: callring 1.6s cubic-bezier(.2,.7,.3,1) infinite;
+}
+@keyframes callring {
+  from { transform: scale(.94); opacity: .9 }
+  to   { transform: scale(1.22); opacity: 0 }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bigmic.ringing::after { animation: none; opacity: .6 }
+}
+.typeinstead summary { cursor: pointer; font-size: 13px; color: var(--ink-3); }
+.askform { display: flex; gap: var(--s2); margin-top: var(--s3); }
+.askform input {
+  flex: 1; min-width: 0; padding: 10px 12px; font: inherit; font-size: 13px;
+  border-radius: var(--r-field, 10px); border: 1px solid var(--edge);
+  background: var(--surface); color: var(--ink);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
+}
+.askform input:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04), 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.turns { display: grid; gap: var(--s2); margin-top: var(--s3); }
+.turn { display: grid; gap: 2px; font-size: 13px; padding: var(--s3);
+  border-radius: 10px; background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.turn b { font-weight: 600; font-size: 12.5px; color: var(--ink-3); }
+
 /*
   Phone. The floor is 44px and 16px, or iOS Safari zooms the page on focus —
   and these are new controls, so they were not covered by the sweep that fixed
@@ -2438,6 +2507,10 @@ kbd {
   .addsource .btn, .newproj .btn { min-height: 44px; }
   .newproj { width: 100%; }
   .newproj input { flex: 1; min-width: 0; font-size: 16px; min-height: 44px; }
+  .gsetup input { font-size: 16px; min-height: 44px; }
+  .askform input { font-size: 16px; min-height: 44px; }
+  .askform .btn { min-height: 44px; }
+  .declines .btn { min-height: 44px; }
   /* Every new control in the person editor. 16px or iOS Safari zooms on focus,
      44px or it cannot be hit. */
   .sopen input, .sopen textarea, .sopen select { font-size: 16px; min-height: 44px; }
