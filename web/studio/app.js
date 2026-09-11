@@ -1727,7 +1727,7 @@ function dashboard() {
           ${coverSvg(p.slug, { dense: true, facts: p })}
         </span>
         <span style="min-width:0">
-        <h1 class="t-display" style="font-size:38px"${
+        <h1 class="t-display projname"${
           canWrite() ? ` contenteditable="plaintext-only" spellcheck="false" data-rename="${esc(p.slug)}"` : ''
         }>${esc(p.name)}</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(p.purpose)}</p>

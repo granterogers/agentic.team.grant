@@ -2662,3 +2662,55 @@ kbd {
 .segmented .seg:last-child { border-right: 0; }
 .segmented .seg:hover { color: var(--ink); background: var(--sunken); }
 .segmented .seg.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+
+
+/* --- the phone, after the rail changed shape (#76, #84, #86) ---------------
+   At the END of the file, like every other phone override, for the reason
+   written above: a media query adds no specificity and this file has been
+   bitten twice by writing one too early.
+
+   `.railfoot` groups Call, Lately and Settings so they can be pinned to the
+   bottom of a vertical rail. On a phone the rail is a horizontal strip and
+   that group is exactly wrong — it stacked the three into a column floating
+   over the content, which is what the capture showed.
+
+   `display: contents` makes the wrapper vanish from layout and hands its
+   children straight to the strip, so they lay out as they did before the
+   group existed. The two rules under it exist because a selector does not
+   follow `display: contents`: `.rail > *` still matches the wrapper, never
+   its children, so the flex and width rules the strip depends on have to be
+   restated one level deeper. */
+@media (max-width: 860px) {
+  .railfoot { display: contents; }
+  .rail > .railfoot > * { flex: none; }
+  .rail > .railfoot > .navitem { width: auto; }
+}
+
+/* Still the phone, still at the end.
+
+   Two things the capture showed once the strip was one row again.
+
+   The switcher was down to "Al..." — three characters of a project name, which
+   is the one thing in the strip that has to be readable, because it is the
+   answer to "where am I". Lately's word is what was taking the room, and its
+   clock icon says the same thing in a fifth of the width. The same trick the
+   Settings entry already uses two rules above.
+
+   And the lead card set "Legacy Coaching Course" on three lines beside an 88px
+   mark, because 390px minus the mark minus the padding leaves about 260 for a
+   28px title. The lead is a size up on a desktop where there is room for it to
+   be; on a phone every card is the same size and the hierarchy comes from
+   order, which is the only thing it can come from at this width. */
+@media (max-width: 860px) {
+  .rail > .railfoot > .navitem[data-go="lately"] { padding: 0 10px; font-size: 0; }
+  .rail > .railfoot > .navitem[data-go="lately"] svg { font-size: 15px; }
+  .project.lead .cover { width: 64px; height: 64px; border-radius: 16px; }
+  .project.lead .body > span > span:first-child { font-size: 19px; line-height: 1.25; }
+}
+
+/* The project's name was a hard 38px inline. At 390px, beside a 72px mark,
+   that is about 260px of measure for a three-word title and "Legacy Coaching
+   Course" set on three lines and pushed the whole head under the top strip.
+   `clamp` lets it be the display size it should be on a desktop and something
+   a phone can hold, without a breakpoint. */
+.projname { font-size: clamp(24px, 2.6vw + 14px, 38px); }
