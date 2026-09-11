@@ -82,6 +82,21 @@ This is the long-range goal that outranks most others. A capability that exists
 only as a script an agent runs is a capability Grant does not have. Prefer
 making the office able to do a thing over doing it for him.
 
+### The words for things
+
+> *"from now on, let's call our source of truth for projects, our **dashboard
+> projects**. So then we know where we're referring to Supabase. So that's
+> where everything eventually lives, and it can interact with third party
+> sources like Google Notebook, and it can pull things in, pull things out."*
+
+**A "dashboard project" is a row in `public.projects` in Supabase.** It is the
+source of truth. A NotebookLM notebook, a Notion database, a Drive folder are
+things a dashboard project is *attached to* — never the project itself.
+
+Use his words. "Project" alone is ambiguous when NotebookLM also calls its
+notebooks projects, and that ambiguity has already produced three notebooks for
+one intention.
+
 ### Confirm before destroying
 
 > *"You should always check before making any destructive action with me."*
@@ -302,6 +317,13 @@ Each of these cost real time. They are here so they cost it once.
   to `/data_sources/:id/query`. Notion exposes **no teamspace** on any version.
 - **A document we wrote into a connector is not new material.** See
   `documents.mirrors_document_id` (0169).
+- **`opacity: 0` hides pixels, not layout.** A Configure button invisible until
+  hover still reserved its 90px in every staff card, leaving ~50px for the
+  text: eight agent names wrapped one character per line. `smoke`,
+  `verify:layouts` (38 states) and `verify:controls` all passed — bad wrapping
+  is not overflow, not low contrast, not small type and not a dead control.
+  Found by opening the PNG. Use `position: absolute` or reserve the space
+  deliberately. Issue #67; the same shape as #34.
 - **`backdrop-filter` breaks `position: fixed` inside it.** It establishes a
   containing block, so a fixed child anchors to that element instead of the
   viewport — a bottom navigation bar rendered across the top of the page.

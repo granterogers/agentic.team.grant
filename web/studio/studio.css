@@ -1638,12 +1638,56 @@ body::after {
 .setbody { display: grid; gap: var(--s4); align-content: start; }
 
 /* Team */
-.staffgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: var(--s3); }
-.staffcard { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); }
+/*
+  Wide enough for the longest role, which is "COMMUNICATIONS".
+
+  At 258px three columns fitted and that word broke mid-word into
+  "COMMUNICA / TIONS" — a label that cannot hold its own word is a label that
+  should have more room, not smaller type. Two columns of ~410px is a settings
+  panel reading well rather than a dashboard packing tight.
+*/
+.staffgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s3); }
+.staffcard {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  /* The anchor for .sctl below. */
+  position: relative;
+}
 .staffcard > .face { flex: none; }
 .sbody { display: grid; gap: 1px; min-width: 0; flex: 1; }
 .sbody b { font: 600 15px/1.25 var(--text); }
-.sctl { flex: none; opacity: 0; transition: opacity .16s; }
+/*
+  Out of the flow, because `opacity: 0` hides pixels and not layout.
+
+  The Configure button is invisible until the card is hovered — and it was
+  still reserving its full ~90px the whole time. In a 258px card, minus
+  padding, the 46px portrait and two gaps, that left roughly fifty pixels for
+  the text: every name wrapped one character per line. "Clair/e", "Oliv/er",
+  "CHIE/F OF/STAF/F".
+
+  This is #34 in a second place — the phone nav did the same thing for the same
+  family of reason — and it survived a full capture run and a 38-state layout
+  audit reporting zero findings, because text wrapping stupidly is not
+  overflow, is not low contrast, and is not small type. Nothing measures it but
+  looking.
+
+  Absolute rather than `display: none` until hover, because appearing from
+  nothing shifts the card; this way the space was never the text's to lose.
+*/
+.sctl {
+  position: absolute;
+  right: var(--s3);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.16s;
+}
+/* The text stops before the button's corner, so a long name is ellipsised
+   rather than sliding under it. */
+.staffcard .sbody { padding-right: 78px; }
+/* A role is one phrase and breaks at spaces, never inside a word. With the
+   room above there is no case left where it needs to. */
+.staffcard .sbody .t-label { overflow-wrap: normal; }
 .staffcard:hover .sctl, .staffcard:focus-within .sctl { opacity: 1; }
 @media (pointer: coarse) { .sctl { opacity: 1; } }
 
