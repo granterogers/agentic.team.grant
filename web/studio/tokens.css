@@ -15,7 +15,15 @@
   --sunken:  #F2EFE9;
   --ink:     #191813;
   --ink-2:   #6B675C;
-  --ink-3:   #9C9789;
+  /*
+    Darkened from #9C9789, which was 2.75:1 on the ground — well under WCAG AA's
+    4.5:1 for body text. `npm run verify:layouts` found it, and it was systemic
+    rather than local: `--ink-3` is the colour of every `.t-label`, every
+    `.t-meta` fallback and the brandline, so one token failing meant most of the
+    quiet text in the product failed. #767164 is 4.59:1 and still clearly a step
+    lighter than `--ink-2` at 5.32:1, so the three-level hierarchy survives.
+  */
+  --ink-3:   #767164;
   --edge:    #E6E1D7;
   --accent:  #1F5F4B;
   --accent-wash: rgb(31 95 75 / 0.08);
@@ -161,7 +169,8 @@
     --sunken:  #100F0B;
     --ink:     #F0EDE4;
     --ink-2:   #A5A091;
-    --ink-3:   #726D5F;
+    /* 3.58:1 before; #837E70 is 4.56:1 on the dark ground. */
+    --ink-3:   #837E70;
     --edge:    #2C2B23;
     --accent:  #5FBF96;
     --accent-wash: rgb(95 191 150 / 0.14);
