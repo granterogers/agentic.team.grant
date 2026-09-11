@@ -101,8 +101,21 @@ async def main() -> None:
             "poll|retry|artifacts|sources|ask|delete_source|delete_artifact> '<json>'",
         )
     action = sys.argv[1]
+
+    # Arguments come from argv when they are small and from STDIN when they are
+    # not. `add_text` carries whole documents, and argv has a hard ceiling —
+    # a 180kb source produced
+    #
+    #     OSError: [Errno 7] Argument list too long: '/var/lang/bin/python'
+    #
+    # which looks like a Google failure and is the operating system refusing to
+    # exec. stdin has no such limit. argv stays supported because every other
+    # caller uses it and the payloads there are a few hundred bytes.
+    raw_args = sys.argv[2] if len(sys.argv) > 2 else ""
+    if raw_args == "-":
+        raw_args = sys.stdin.read()
     try:
-        args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+        args = json.loads(raw_args) if raw_args.strip() else {}
     except json.JSONDecodeError as exc:
         die(action, f"arguments are not valid JSON: {exc}")
 

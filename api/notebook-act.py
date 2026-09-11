@@ -164,8 +164,20 @@ def run(action: str, args: dict, storage_state: str) -> tuple[int, object]:
             "NOTEBOOK_STORAGE_DIR": directory,
         }
         try:
+            # Arguments go down STDIN, not argv.
+            #
+            # This file already passes the cookie jar through the environment
+            # because argv is world-readable in `ps`. The same channel is wrong
+            # for a different reason too: argv has a size ceiling, and
+            # `add_text` carries whole documents. A 180kb source came back as
+            #
+            #     OSError: [Errno 7] Argument list too long
+            #
+            # which reads like a Google failure and is the kernel refusing to
+            # exec. `-` tells act.py to read the payload from stdin.
             completed = subprocess.run(  # noqa: S603 - fixed script, no shell
-                [sys.executable, str(script), action, json.dumps(args)],
+                [sys.executable, str(script), action, "-"],
+                input=json.dumps(args),
                 capture_output=True,
                 text=True,
                 env=environment,
