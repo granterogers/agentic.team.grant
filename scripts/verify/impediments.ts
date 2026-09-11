@@ -293,6 +293,52 @@ await refuses(
   )
 }
 
+// --- the fixture rule itself (#55) ---------------------------------------
+//
+// This suite depends on `jobs.is_fixture` more than any other, so it is the
+// right place to assert what the rule actually says. 0203 removed
+// `kind LIKE 'research.%'` from it: every other term identifies the REQUESTER
+// as a harness, and that one condemned a whole category of real work. The day
+// Emma ran a real research job it would have vanished from office_health and
+// from every tally here.
+
+{
+  const rule = await one(`
+    select pg_get_expr(d.adbin, d.adrelid) as expr
+      from pg_attrdef d
+      join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+     where d.adrelid = 'public.jobs'::regclass and a.attname = 'is_fixture'
+  `)
+  const expr = String(rule.expr ?? '')
+  ok(
+    'a real research job is no longer classed as harness traffic',
+    !expr.includes("'research.%'"),
+    'kind LIKE research.% is back in is_fixture',
+  )
+  ok(
+    'but a job called verification.something still is — nothing real is called that',
+    expr.includes("'verification.%'"),
+  )
+  ok('and the rule still turns on who asked', expr.includes('verify:%') && expr.includes('purge:%'))
+}
+
+{
+  // The property that made the change safe: every suite stamps `requested_by`,
+  // so nothing lost its fixture status when the kind term went.
+  const leaked = await all(`
+    select requested_by, count(*)::int c
+      from public.jobs
+     where kind like 'research%' and not is_fixture
+       and requested_by like 'verify:%'
+     group by 1
+  `)
+  ok(
+    'no verification suite lost its fixture status when the rule changed',
+    leaked.length === 0,
+    leaked.map((r) => String(r.requested_by)).join(', '),
+  )
+}
+
 // --- wrappers ---------------------------------------------------------------
 
 {
