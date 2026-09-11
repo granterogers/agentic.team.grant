@@ -2784,3 +2784,29 @@ kbd {
   background: transparent; border: 1px solid var(--edge);
 }
 .close.inhead:hover { background: var(--sunken); color: var(--ink); }
+
+/* --- bringing someone in (#105) -------------------------------------------
+   Why and when sit beside the name rather than behind an "advanced" toggle,
+   because they are the two fields that stop the office quietly growing and a
+   field you have to go looking for is a field nobody fills in. */
+.hireform {
+  border: 1px solid var(--edge); border-radius: var(--r-card); background: var(--surface);
+  padding: var(--s4); margin-bottom: var(--s4); box-shadow: var(--lift-1);
+  display: grid; gap: var(--s3);
+}
+.hirerow { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s3); }
+.hireform label {
+  display: grid; gap: 6px; min-width: 0;
+  font: 500 12.5px/1 var(--text); color: var(--ink-2);
+  letter-spacing: .04em; font-variant-caps: all-small-caps;
+}
+/* 16px, or iOS Safari zooms the whole page the moment the field takes focus.
+   The floor applies to every input and this form has four of them. */
+.hireform input {
+  font: 400 16px/1.4 var(--text); color: var(--ink); min-height: 44px;
+  padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px;
+  background: var(--ground); min-width: 0; width: 100%;
+}
+.hireform input:focus { outline: none; border-color: var(--accent); }
+.hireact { display: flex; align-items: flex-end; gap: var(--s3); flex-wrap: wrap; }
+.hireact .btn { min-height: 44px; }

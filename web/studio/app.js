@@ -2023,7 +2023,47 @@ function teamTabSettings() {
       <p class="t-lead" style="margin:0">${people.filter((c) => c.active !== false).length}
         permanent. Bring in a specialist for a piece of work and they leave when it
         is finished.</p>
-      <button class="btn primary" data-hire>+ Bring someone in</button>
+      ${canWrite() ? '<button class="btn primary" data-hire>+ Bring someone in</button>' : ''}
+    </div>
+    <!--
+      The form behind the last dead button in the product (#105, migrations
+      0233 to 0235).
+
+      It carried data-hire and nothing anywhere looked that attribute up. Found
+      by cross-referencing every data attribute in the rendered DOM against
+      every attribute any source file queries, which is now verify:wired,
+      rather than by pressing things one at a time.
+
+      Why and when are required fields rather than optional ones. A hire with
+      no reason and no end is how an office quietly grows: eight becomes
+      eleven, nobody remembers why three of them are there, and every prompt is
+      a little more expensive forever. The RPC refuses both too, because the
+      page is not the only possible caller.
+
+      No backticks in this comment. Template literal.
+    -->
+    <div class="hireform" data-hire-form hidden>
+      <div class="hirerow">
+        <label>Name
+          <input data-hire-name placeholder="Priya" autocomplete="off"></label>
+        <label>Here to do
+          <input data-hire-title placeholder="Pricing research" autocomplete="off"></label>
+      </div>
+      <label>Why they are needed
+        <input data-hire-why placeholder="The pricing work needs someone who is not already on three projects"
+               autocomplete="off">
+        <span class="t-meta" style="font-variant-caps:normal;letter-spacing:0">At least
+          30 characters — the database enforces it, and a reason nobody can read later
+          is the same as no reason.</span></label>
+      <div class="hirerow">
+        <label>Until
+          <input type="date" data-hire-until></label>
+        <span class="hireact">
+          <span class="t-meta" data-said></span>
+          <button class="btn primary" data-hire-go>Bring them in</button>
+          <button class="btn quiet" data-hire-cancel>Cancel</button>
+        </span>
+      </div>
     </div>
     <div class="staffgrid">${people.map(card).join('')}</div>
     <p class="t-meta">A temporary agent carries a justification and an expiry, so the
@@ -2716,6 +2756,76 @@ function settingsSheet() {
     is a separate kind of change — 0119's argument that a text field and a
     foreign key must not share a mechanism, applied to the interface.
   */
+  /*
+    Bringing someone in (#105, migrations 0233 to 0235).
+
+    `afterWrite()` rather than a local splice, like every other write in this
+    file: the roster the page shows comes from the office, and a page that
+    edits its own copy is a page that disagrees with the database the moment
+    anything else writes.
+  */
+  const hireForm = $('[data-hire-form]', v)
+  $('[data-hire]', v)?.addEventListener('click', () => {
+    if (hireForm) hireForm.hidden = !hireForm.hidden
+    $('[data-hire-name]', v)?.focus()
+  })
+  $('[data-hire-cancel]', v)?.addEventListener('click', () => {
+    if (hireForm) hireForm.hidden = true
+  })
+  $('[data-hire-go]', v)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const name = String($('[data-hire-name]', v)?.value ?? '').trim()
+    const title = String($('[data-hire-title]', v)?.value ?? '').trim()
+    const why = String($('[data-hire-why]', v)?.value ?? '').trim()
+    const until = String($('[data-hire-until]', v)?.value ?? '').trim()
+    /*
+      Said here rather than sent and refused.
+
+      The RPC checks all of these and returns a sentence, so this could just
+      post and show the answer. It does not, because a round trip to be told
+      the name box is empty is a round trip nobody needed, and the message
+      reads better attached to the press than arriving after it.
+    */
+    if (name === '' || title === '') {
+      say(b, 'A name, and what they are here to do.', 'warn')
+      return
+    }
+    if (why === '') {
+      say(b, 'Say why. A hire with no reason is how a team grows without anyone deciding to.', 'warn')
+      return
+    }
+    /*
+      Thirty, because `staff_temporary_is_justified` says thirty. Mirrored so
+      the form fails once instead of twice, and the count is in the message
+      because "say more" without saying how much more is a field edited blind.
+    */
+    if (why.length < 30) {
+      say(b, `${why.length} characters — a temporary hire needs at least 30.`, 'warn')
+      return
+    }
+    if (until === '') {
+      say(b, 'Say when they go.', 'warn')
+      return
+    }
+    const done = await attempt(
+      b,
+      'Bringing them in…',
+      () => act('staff_hire', {
+        p_name: name,
+        p_title: title,
+        p_justification: why,
+        // End of that day rather than its first instant: a date input gives
+        // midnight, and "until the 20th" means through the 20th.
+        p_expires_at: new Date(`${until}T23:59:59`).toISOString(),
+      }),
+      `${name} is on the team until ${until}.`,
+    )
+    if (done) {
+      if (hireForm) hireForm.hidden = true
+      await afterWrite()
+    }
+  })
+
   for (const b of v.querySelectorAll('[data-configure]')) {
     b.addEventListener('click', () => {
       state.person = b.dataset.configure

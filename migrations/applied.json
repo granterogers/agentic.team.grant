@@ -230,5 +230,8 @@
   "0229_and_the_jobs_tab_actually_reads_it.sql": "c1f0e81a3dccd480aebcbb096ae44a330c3113ffd2370e76d91865147c56b507",
   "0230_blocked_means_blocked.sql": "6f50250d0702d906550dc4dac9fbac8515a9a09bbf1b1dd8755c63a8392c86ac",
   "0231_lately_what_the_office_did_and_what_is_being_built.sql": "2af8390782dee8577031d03e067b96a0ef95e47fc450ec8b2eb6fa23e5acd52e",
-  "0232_a_null_is_not_an_absent_key.sql": "903972a9707a9ba5e39f9c42dfa636e6ba379ae9be4e7d643956f2bac6a16955"
+  "0232_a_null_is_not_an_absent_key.sql": "903972a9707a9ba5e39f9c42dfa636e6ba379ae9be4e7d643956f2bac6a16955",
+  "0233_bringing_someone_in_for_a_piece_of_work.sql": "f0ba50e9f0e2b9508df0e1151155a234d38b82df7e0c177aa33e05f9cbd994d4",
+  "0234_two_things_the_hire_test_found.sql": "b19e529b44f2b020f1965e602ab32f7851e202ac460c1f1bfea9f6b81f133a7b",
+  "0235_hiring_against_the_constraints_that_exist.sql": "5d0af557622e177c396309ceaca3e948e80706dc2d7dd52f1ad63437a2ae90e1"
 }

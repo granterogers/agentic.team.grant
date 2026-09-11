@@ -148,6 +148,19 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // BECAUSE null is the meaningful value — it is how a bot is freed.
   bot_assign: { fn: 'hq_bot_assign', required: ['p_username'] },
   staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
+  // Bringing someone in (0233). The other half of `staff_retire`, which has
+  // existed alone since 0079 — the studio had a "+ Bring someone in" button
+  // wired to nothing at all.
+  //
+  // `p_justification` and `p_expires_at` are required HERE as well as in the
+  // RPC, which is not belt and braces: this list is what the page is allowed
+  // to call, and a hire that reaches the function without a reason or an end
+  // should be refused before it costs a round trip. The function refuses it
+  // too, because the page is not the only possible caller.
+  staff_hire: {
+    fn: 'hq_staff_hire',
+    required: ['p_name', 'p_title', 'p_justification', 'p_expires_at'],
+  },
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
