@@ -2869,3 +2869,22 @@ kbd {
   border: 1px solid var(--edge); background: var(--surface);
 }
 .closeconv:hover { color: var(--ink); background: var(--sunken); border-color: var(--accent); }
+
+/* The add-task form (#11). Shares the shape of the hire form — same job, same
+   rules: 16px inputs or iOS Safari zooms the page on focus, and 44px controls. */
+.taskform {
+  border: 1px solid var(--edge); border-radius: var(--r-card); background: var(--surface);
+  padding: var(--s4); margin-bottom: var(--s4); box-shadow: var(--lift-1);
+  display: grid; gap: var(--s3);
+}
+.taskform label {
+  display: grid; gap: 6px; min-width: 0;
+  font: 500 12.5px/1 var(--text); color: var(--ink-2);
+  letter-spacing: .04em; font-variant-caps: all-small-caps;
+}
+.taskform input, .taskform select {
+  font: 400 16px/1.4 var(--text); color: var(--ink); min-height: 44px;
+  padding: 9px 12px; border: 1px solid var(--edge); border-radius: 9px;
+  background: var(--ground); min-width: 0; width: 100%;
+}
+.taskform input:focus, .taskform select:focus { outline: none; border-color: var(--accent); }

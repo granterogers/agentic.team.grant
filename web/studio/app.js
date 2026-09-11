@@ -258,7 +258,8 @@ const allDocs = (p) => [
 const taskRow = (t, i) => {
   const done = t.state === 'done' || state.done.has(i)
   const who = t.who ? crewBy(t.who) : null
-  return withTalk(`<button class="task ${done ? 'done' : ''}" data-task="${i}">
+  return withTalk(`<button class="task ${done ? 'done' : ''}" data-task="${i}"${
+    t.id ? ` data-task-id="${esc(t.id)}"` : ''}>
     <span class="box ${t.state === 'due' && !done ? 'due' : ''}">${
       done ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--on-accent)"
         stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>` : ''
@@ -333,7 +334,7 @@ const taskRow = (t, i) => {
   on a brand-new project — gets prose and no buttons. Offering an action that
   cannot help is worse than offering none.
 */
-function emptyState({ says, mine, ask }) {
+function emptyState({ says, mine, mineDo, ask }) {
   return `<div class="empty">
     <p class="t-lead" style="margin:0">${says}</p>
     <div class="emptydo">
@@ -342,7 +343,23 @@ function emptyState({ says, mine, ask }) {
           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/></svg>
         ${esc(ask.name)}</button>`}
-      ${mine === undefined ? '' : `<button class="btn">${esc(mine)}</button>`}
+      <!--
+        The empty state's own action (#105).
+
+        Every empty state in the product rendered this as a bare button with no
+        attribute at all — Add a task, Add a document, Add someone, Add a
+        source - so all of them did nothing. verify:wired could not see them
+        either, because it compared attributes against source lookups and these
+        had no attribute to compare.
+
+        mineDo names what the press should do. Where it is absent the button
+        is not drawn at all, which is the honest state for a section whose
+        write path does not exist yet — Contacts has no table (#24).
+
+        No backticks in this comment. Template literal.
+      -->
+      ${mine === undefined || mineDo === undefined ? '' :
+        `<button class="btn" data-empty-do="${esc(mineDo)}">${esc(mine)}</button>`}
     </div>
   </div>`
 }
@@ -717,7 +734,18 @@ function attention() {
       <span style="display:block;font-weight:500;font-size:14px">${esc(WAITING.what)}</span>
       <span class="t-meta">${esc(WAITING.who)}, ${esc(WAITING.when)}. ${esc(WAITING.note)}</span>
     </span>
-    <button class="btn">Show me</button>
+    <!--
+      It goes somewhere now (#105).
+
+      This was the most prominent button on the home screen and it did nothing
+      — and could not have, because the payload carried no reference to
+      anything. Migration 0240 adds the project slug and the blocker id, and it
+      lands on Active jobs, which is the only screen that says what the blocker
+      actually IS rather than that there is one.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${WAITING.slug ? `<button class="btn" data-blocked="${esc(WAITING.slug)}">Show me</button>` : ''}
   </div>`
 }
 
@@ -1605,6 +1633,44 @@ function sources(p) {
   to — *"assigned to human"* and *"assigned to agent"* are two of his branches,
   so the face on a row is doing real work rather than decorating it.
 */
+/*
+  Adding a task (#11).
+
+  `public.tasks` had a good schema and zero rows, because nothing anywhere
+  could write one. Migrations 0238 and 0239 gave it an RPC; this is the mouth.
+
+  A title and a project are all that is required — a form that demands a date,
+  an owner and a description before it will accept "chase the invoice" is a
+  form people route around. Date and owner are there because they are what
+  makes a task reach the diary (#94) and reach a person, and both are optional.
+
+  No backticks in the HTML comments below. Template literal.
+*/
+function addTaskForm(p) {
+  if (!canWrite()) return ''
+  return `<div class="taskform" data-task-form hidden>
+    <div class="hirerow">
+      <label>What needs doing
+        <input data-task-title placeholder="Draft the pricing note" autocomplete="off"></label>
+      <label>Due
+        <input type="date" data-task-due></label>
+    </div>
+    <div class="hirerow">
+      <label>Who
+        <select data-task-who>
+          <option value="">Nobody yet</option>
+          ${CREW.map((c) => `<option value="${esc(c.staffSlug ?? c.slug)}">${esc(c.name)} — ${esc(c.role)}</option>`).join('')}
+        </select>
+      </label>
+      <span class="hireact">
+        <span class="t-meta" data-said></span>
+        <button class="btn primary" data-task-go>Add it</button>
+        <button class="btn quiet" data-task-cancel>Cancel</button>
+      </span>
+    </div>
+  </div>`
+}
+
 function tasksSection(p) {
   if (p.tasks.length === 0) {
     return `<div class="tabbody">${emptyState({
@@ -1612,7 +1678,8 @@ function tasksSection(p) {
       ask: { name: 'Ask the team to work out what is needed',
              say: `Read everything on ${p.name} and propose the tasks it actually needs, with owners.` },
       mine: 'Add a task',
-    })}</div>`
+      mineDo: 'task',
+    })}${addTaskForm(p)}</div>`
   }
   const at = (t, i) => t.state === 'done' || state.done.has(i) ? 'done'
     : t.blocked !== undefined ? 'blocked'
@@ -1630,8 +1697,9 @@ function tasksSection(p) {
   return `<div class="tabbody">
     <div class="tabhead">
       <p class="t-lead" style="margin:0">Everything open on ${esc(p.name)}, and who has it.</p>
-      <button class="btn">Add a task</button>
+      ${canWrite() ? '<button class="btn primary" data-empty-do="task">Add a task</button>' : ''}
     </div>
+    ${addTaskForm(p)}
     ${group('Waiting or blocked', 'blocked', 'Cannot move until something else does.')}
     ${group('In progress', 'doing', '')}
     ${group('To do', 'todo', '')}
@@ -1647,14 +1715,25 @@ function documentsSection(p) {
       says: `Nothing in ${esc(p.name)} yet.`,
       ask: { name: 'Ask the team to gather what exists',
              say: `Find everything already written about ${p.name} — in Drive, Notion and NotebookLM — and bring it in.` },
-      mine: 'Add a document',
+      mine: 'Bring documents in',
+      mineDo: 'sources',
     })}</div>`
   }
   return `<div class="tabbody">
     <div class="tabhead">
       <p class="t-lead" style="margin:0">${docs.length} in ${esc(p.name)}.
         Anything the team made is here only because you approved it.</p>
-      <button class="btn">Add a document</button>
+      <!--
+        Documents arrive through a connector, not through an upload here (#105).
+
+        This was a bare button with no attribute, like the Tasks header. It
+        goes to Sources, which is where attaching Drive or Notion actually puts
+        documents in a project, and where a pasted Drive link is already
+        recognised on its own.
+
+        No backticks in this comment. Template literal.
+      -->
+      <button class="btn" data-empty-do="sources">Bring documents in</button>
     </div>
     <div class="gallery">${docs.map(docCard).join('')}</div>
   </div>`
@@ -3388,8 +3467,94 @@ function render() {
           stroke="var(--on-accent)" stroke-width="3.4" stroke-linecap="round"
           stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>`
       } else if (!check) { box.innerHTML = '' }
+
+      /*
+        And then persist it (#11).
+
+        The tick was a Set in browser memory and nothing else: it survived
+        until the next render and never reached the office. `state.done` still
+        exists because it is what makes the tick instant — the write is a round
+        trip and a checkbox that waits for one feels broken — but it is now the
+        optimistic half of a real write rather than the whole of it.
+
+        A failure puts the tick back where it was and says so, because a
+        checkbox that silently reverts is worse than one that never moved.
+      */
+      const id = b.dataset.taskId
+      if (id === undefined || !canWrite()) return
+      /*
+        `refresh()`, not `afterWrite()`.
+
+        `afterWrite` is defined inside the settings wiring and re-renders the
+        SETTINGS SHEET — calling it from the project page threw
+        "afterWrite is not defined" in the first end-to-end run, which is
+        exactly why that run existed. `refresh()` re-reads the studio payload
+        and repaints the page, which is what a task write needs.
+      */
+      act('task_state', { p_task_id: id, p_state: check ? 'done' : 'todo' })
+        .then(() => refresh())
+        .catch((err) => {
+          check ? state.done.delete(i) : state.done.add(i)
+          b.classList.toggle('done')
+          box.innerHTML = check ? '' : box.innerHTML
+          say(b, String(err.message ?? err), 'warn')
+        })
     })
   }
+
+  /*
+    The empty states' own actions, and the Tasks header (#105).
+
+    Every one of these was a bare button with no attribute. `task` opens the
+    add-task form; anything else is a section to go to — "Bring documents in"
+    goes to Sources, where attaching a connector is what actually puts
+    documents in a project.
+  */
+  for (const b of root.querySelectorAll('[data-empty-do]')) {
+    b.addEventListener('click', () => {
+      const what = b.dataset.emptyDo
+      if (what === 'task') {
+        const form = $('[data-task-form]', root)
+        if (form) {
+          form.hidden = false
+          $('[data-task-title]', root)?.focus()
+        }
+        return
+      }
+      state.tab = what
+      rememberTab(state.project, what)
+      render()
+    })
+  }
+
+  $('[data-task-cancel]', root)?.addEventListener('click', () => {
+    const form = $('[data-task-form]', root)
+    if (form) form.hidden = true
+  })
+
+  $('[data-task-go]', root)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const title = String($('[data-task-title]', root)?.value ?? '').trim()
+    if (title === '') { say(b, 'Say what needs doing.', 'warn'); return }
+    const due = String($('[data-task-due]', root)?.value ?? '').trim()
+    const who = String($('[data-task-who]', root)?.value ?? '').trim()
+    const done = await attempt(
+      b,
+      'Adding…',
+      () => act('task_add', {
+        p_project: state.project,
+        p_title: title,
+        p_due_on: due === '' ? null : due,
+        p_assignee: who === '' ? null : who,
+      }),
+      'Added.',
+    )
+    if (done) {
+      const form = $('[data-task-form]', root)
+      if (form) form.hidden = true
+      await refresh()
+    }
+  })
 
   // The rail reaches People per project — which is now a tab on that project
   // rather than a view of its own, because People was never a separate place.

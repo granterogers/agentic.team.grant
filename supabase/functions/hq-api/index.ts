@@ -164,6 +164,21 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // BECAUSE null is the meaningful value — it is how a bot is freed.
   bot_assign: { fn: 'hq_bot_assign', required: ['p_username'] },
   staff_retire: { fn: 'hq_staff_retire', required: ['p_slug', 'p_active'] },
+  /*
+    Tasks (#11, migrations 0238-0239).
+
+    `public.tasks` has had a good schema for weeks and ZERO ROWS, because
+    nothing anywhere could write one — no RPC, no action here, no control in
+    the interface. The checkbox in the Tasks section ticked a Set in browser
+    memory that was gone on the next render.
+
+    Found while building Calendar sync (#94), whose whole job is putting dated
+    tasks in a diary: the plan query correctly returned nothing to do.
+  */
+  task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
+  // `p_reason` is optional here and required by the RPC when the state is
+  // `blocked` — the schema's own check constraint, said in a sentence.
+  task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },
   // Bringing someone in (0233). The other half of `staff_retire`, which has
   // existed alone since 0079 — the studio had a "+ Bring someone in" button
   // wired to nothing at all.

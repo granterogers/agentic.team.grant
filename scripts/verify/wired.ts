@@ -102,6 +102,26 @@ await pg.goto('http://127.0.0.1:4418/', { waitUntil: 'domcontentloaded' })
 await pg.waitForTimeout(1000)
 
 const found = new Map<string, string>()
+/*
+  And buttons carrying NO attribute at all (#105).
+
+  The check above compares the attributes it finds against the attributes the
+  source queries — so a button with no `data-*` is invisible to it. It has
+  nothing to compare. Not a hypothetical gap: `emptyState()` renders its
+  "Add a task" / "Add a document" / "Add someone" action as a bare
+  `<button class="btn">`, the Tasks header does the same, and the first version
+  of this check reported no dead controls with every one of them on screen.
+
+  A button here is wired through a data attribute or a form submit. One with
+  neither cannot be doing anything.
+
+  The obvious filter — `b.type !== 'submit'` — is WRONG and silently empties
+  this check: `HTMLButtonElement.type` returns "submit" for any button with no
+  `type` attribute, which is nearly every button in this codebase. The first
+  version of this scan used it and reported a clean screen while "Add a task"
+  sat on it. Being inside a `<form>` is the real test.
+*/
+const bare = new Map<string, string>()
 const scan = async (where: string) => {
   const rows = (await pg.evaluate(`
     [...document.querySelectorAll('button, a, [role="button"]')]
@@ -109,6 +129,35 @@ const scan = async (where: string) => {
       .flatMap(b => [...b.attributes].filter(a => a.name.startsWith('data-')).map(a => a.name.slice(5)))
   `)) as string[]
   for (const r of rows) if (!found.has(r)) found.set(r, where)
+
+  const naked = (await pg.evaluate(`
+    [...document.querySelectorAll('button')]
+      .filter(b => b.offsetParent !== null)
+      .filter(b => !b.closest('form'))
+      .filter(b => ![...b.attributes].some(a => a.name.startsWith('data-')))
+      .map(b => ({
+        label: (b.getAttribute('aria-label') || b.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 48),
+        classes: [...b.classList],
+      }))
+      .filter(x => x.label.length > 0)
+  `)) as { label: string; classes: string[] }[]
+  /*
+    A class the source selects on counts as wired.
+
+    Not every control is addressed by a data attribute: the sheet close buttons
+    are `$('.close', v)`, which is a perfectly good handle and predates the
+    convention. Flagging them would train whoever runs this to ignore it, which
+    is how a check with one false positive becomes a check nobody reads.
+  */
+  for (const x of naked) {
+    if (
+      x.classes.some(
+        (c) => src.includes(`.${c}'`) || src.includes(`.${c}"`) || src.includes(`.${c} `),
+      )
+    )
+      continue
+    if (!bare.has(x.label)) bare.set(x.label, where)
+  }
 }
 await scan('portfolio')
 await pg.locator('.project[data-open="legacy-coaching-course"]').click()
@@ -139,10 +188,19 @@ await b.close()
 srv.close()
 
 console.log(`\nverify:wired — ${String(found.size)} control attributes across 16 screens`)
-if (orphans.length === 0) {
-  console.log('every one of them is looked up by something. No dead controls.')
-} else {
+let bad = 0
+if (orphans.length > 0) {
+  bad += orphans.length
   console.log('NOT looked up by any source file — these controls cannot be wired:')
   for (const [k, w] of orphans) console.log(`  data-${k}   (first seen on ${w})`)
+}
+if (bare.size > 0) {
+  bad += bare.size
+  console.log('buttons with no data attribute and no submit — nothing can be listening:')
+  for (const [t, w] of bare) console.log(`  "${t}"   (on ${w})`)
+}
+if (bad === 0) {
+  console.log('every one is looked up, and no button is bare. No dead controls.')
+} else {
   process.exit(1)
 }

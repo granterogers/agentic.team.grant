@@ -234,5 +234,9 @@
   "0233_bringing_someone_in_for_a_piece_of_work.sql": "f0ba50e9f0e2b9508df0e1151155a234d38b82df7e0c177aa33e05f9cbd994d4",
   "0234_two_things_the_hire_test_found.sql": "b19e529b44f2b020f1965e602ab32f7851e202ac460c1f1bfea9f6b81f133a7b",
   "0235_hiring_against_the_constraints_that_exist.sql": "5d0af557622e177c396309ceaca3e948e80706dc2d7dd52f1ad63437a2ae90e1",
-  "0236_a_document_the_reader_can_actually_read.sql": "9250b3a6f433290f794b9a189dc5b80dda2a055f262f6f8d9576113a6964404b"
+  "0236_a_document_the_reader_can_actually_read.sql": "9250b3a6f433290f794b9a189dc5b80dda2a055f262f6f8d9576113a6964404b",
+  "0237_tasks_reach_the_diary.sql": "a4b3c03e574df2e035c6128936acad2f5f9dad751b95dfd820943b54615217e0",
+  "0238_a_task_you_can_actually_create.sql": "66af16a328875680953b524e53c70b82c3ccbbe1c4c4f4d11c4985e0301b093d",
+  "0239_projects_have_a_status_not_an_is_archived.sql": "c1d60daf71aeee2171c6e58710a8d7f249dff9f8eac5c98f228cdff29cb8e06d",
+  "0240_show_me_has_somewhere_to_go.sql": "99c517e356dbc528e0ca01a67b1ea96e92f03ef3ffb5b328b815807f6412a805"
 }
