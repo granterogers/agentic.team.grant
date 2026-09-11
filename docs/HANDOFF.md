@@ -9,13 +9,17 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
-> ## State as of 2026-09-10
+> ## State as of 2026-09-11
 >
 > | | |
 > |---|---|
 > | Tests | 859 passing · `verify:hq` 40/40 · `verify:ui` 36/36 · `verify:talk` 34/34 |
+> | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
+> | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
+> | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
+> | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | 170 applied |
+> | Migrations | 180 applied |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
