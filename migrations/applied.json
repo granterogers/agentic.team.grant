@@ -195,5 +195,6 @@
   "0194_a_drive_folder_per_project.sql": "d2464f6ed14ec361121aa8e0b6377f048af11c23f57e4f104895e14c29838d89",
   "0195_someone_has_to_look_at_the_folder.sql": "4baeb55a498555078d992de9f6a3523349442f6d380cc8548930322922de5020",
   "0196_a_folder_is_a_kind_of_reference.sql": "31d29ce240d615984a61f24b4168a6fafaba06228c50c3b464b7249daa14aa82",
-  "0197_the_word_was_wanted_not_use.sql": "7c485588aaf947400f1d85e2c3d09a5ab28f5d47b3fffd3a84cb0a2d0d9bf0e1"
+  "0197_the_word_was_wanted_not_use.sql": "7c485588aaf947400f1d85e2c3d09a5ab28f5d47b3fffd3a84cb0a2d0d9bf0e1",
+  "0198_what_we_were_just_talking_about.sql": "df0c73039bcf2c9a9f22c9a8ac56761bd0ae048f54d3f506b924af58bb28c56d"
 }

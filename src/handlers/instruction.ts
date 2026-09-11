@@ -86,6 +86,7 @@ import {
   type Step,
 } from '../agents/plan.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
+import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
@@ -925,6 +926,31 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const paired = await pairWithNearby(deps.db, job, payload, instruction)
       if (paired !== null) instruction = paired
 
+      /*
+        What "it" refers to (#63).
+
+        Grant: *"seems to have problems recalling what we talked about
+        before."* Until now every message was handled with only its own text,
+        so "make the audio one long" arrived with no subject — and the plan
+        parser was handed a sentence missing its noun and blamed for missing
+        half of it (#60).
+
+        AFTER pairing, deliberately: pairing joins a link to its caption and
+        produces the fuller sentence, which is the better thing to resolve
+        against a history. Before it, the resolver would be handed a fragment.
+
+        Most messages never reach a model — `needsResolving` is a cheap test
+        and self-contained sentences are returned untouched.
+      */
+      const resolved = await resolveAgainstThread(
+        deps.db,
+        deps.router,
+        String(payload.command_id ?? ''),
+        instruction,
+        { correlationId: job.correlationId, jobId: job.jobId },
+      )
+      instruction = resolved.instruction
+
       const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)
 
       // Is this several things at once? If so, say it back and hold it.
@@ -973,7 +999,21 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             the same bubble. `heardText` is null when the instruction was
             typed, in which case quoting it back would just be repetition.
           */
-          body: heardText === null ? describePlan(plan) : `${heardText}\n\n${describePlan(plan)}`,
+          /*
+            One message: what was heard, what it was taken to mean, the plan.
+
+            The resolution line only appears when a rewrite happened. It is
+            there because a resolution is a GUESS about what he meant — caught
+            in the say-back it costs one message, acted on silently it costs
+            the work.
+          */
+          body: [
+            heardText,
+            resolved.changed ? `↳ Taking that as: “${resolved.instruction}”` : null,
+            describePlan(plan),
+          ]
+            .filter((part) => part !== null)
+            .join('\n\n'),
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
