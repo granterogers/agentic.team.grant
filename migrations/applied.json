@@ -178,5 +178,8 @@
   "0177_a_document_grant_made_himself.sql": "e4c01cb42b96fe8965d2c846a6e725f2f62bf90e4866a467387e8392ea274313",
   "0178_origin_follows_the_connector.sql": "ae6a449c390d626acb731ecadb3b49f884464c4f11d60f154569407a23261811",
   "0179_a_project_answers_to_its_own_name.sql": "dfbc5939500e6cf63eb7b5a02aafc50156f95315b8cebcf1ce4bac327b5fbfcc",
-  "0180_how_much_of_the_free_tier_is_left.sql": "8dcc71dd46af885c9143986cfac823f4855443dd7d970b00d214d114f2a796ca"
+  "0180_how_much_of_the_free_tier_is_left.sql": "8dcc71dd46af885c9143986cfac823f4855443dd7d970b00d214d114f2a796ca",
+  "0181_the_office_learns_something.sql": "4876cba1abfb974bb1baa742bb95c1cfea9ebeacf2267e5949d599fe361176a4",
+  "0182_reading_the_lessons_back.sql": "1f4e75dd14861d5398c42f3e934023221375f5ea93d129bb95ad5aa739ce1e72",
+  "0183_a_lesson_is_a_ledger_row_not_a_child.sql": "9778f425781c3a8f417d8aed532fd1e821d13f770a3906f3bf94926c906e9279"
 }
