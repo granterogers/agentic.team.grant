@@ -109,17 +109,42 @@ export const CHANNELS = [
     detail: 'Read, not sent. Sending needs your say-so.' },
 ]
 
-/** Shaped like `inference_usage` joined to `model_prices`. Mocked figures. */
+/*
+  Shaped like `inference_usage` joined to `model_prices`. Mocked — EXCEPT the
+  two numbers that would make Grant do something.
+
+  This block used to say *"Supabase storage is at 82% of the free tier — 412 MB
+  of 500 MB"* and warn that above 500 MB it starts costing. Nobody measured
+  that. It was invented to make a mock look realistic, and it is the most
+  consequential figure on the page: the hard constraint here is ~£0/month and
+  500 MB is where the database stops being free. A person reading it would have
+  started deleting things.
+
+  The real figures, from `public.free_tier_headroom()` (migration 0180) on
+  11 September 2026: **31 MB of 500 MB, 6.3%** in the database, and **41 MB of
+  1024 MB, 4%** in storage across 67 objects. There is no warning to give.
+
+  The rest stays mocked, and §14A permits that at M0 — but a mocked figure must
+  be plausible, not alarming. When these are wired up, the RPC is the source:
+  it also names the five largest tables, because "the database is at 6%" is a
+  fact and "and 3.6 MB of it is documents" is an action.
+*/
 export const SPEND = {
   target: 'about £0 / month',
   month: '£0.00',
   rows: [
     { name: 'Inference — OpenRouter free tier', cost: '£0.00', note: '1,284 calls this month' },
-    { name: 'Supabase', cost: '£0.00', note: '412 MB of 500 MB · free tier' },
+    { name: 'Supabase', cost: '£0.00', note: '31 MB of 500 MB database · 41 MB of 1 GB storage' },
     { name: 'Vercel', cost: '£0.00', note: 'Hobby' },
     { name: 'Speech', cost: '£0.00', note: '38 minutes · free allowance' },
   ],
-  warn: 'Supabase storage is at 82% of the free tier. Above 500 MB it starts costing.',
+  /*
+    Empty means there is nothing wrong, and the page must then show nothing —
+    not an empty warning box with a warning icon in it, which is what an
+    unconditional render gives you.
+  */
+  warn: '',
+  headroom: 'Well inside every free tier: 6% of the database, 4% of storage.',
 }
 
 export const services = () => CONNECTIONS.map((c) => ({ ...c, ...MARKS[c.key] }))

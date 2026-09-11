@@ -1599,12 +1599,23 @@ function modelsTab() {
         <div class="bignum">${esc(config.SPEND.month)}</div>
         <span class="t-meta">Target: ${esc(config.SPEND.target)}</span>
       </div>
-      <p class="warnbox">
+      <!--
+        A warning only when there IS one.
+
+        This box used to render unconditionally around a hardcoded string
+        claiming Supabase storage was at 82% of the free tier. It is at 4%
+        (0180 measures it), so the box now has nothing to say — and an empty
+        warning box with a warning triangle in it is worse than no box, because
+        it reads as an alert you cannot decipher.
+      -->
+      ${config.SPEND.warn === '' ? `<p class="t-meta" style="margin:10px 0 0">
+        ${esc(config.SPEND.headroom)}
+      </p>` : `<p class="warnbox">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
         ${esc(config.SPEND.warn)}
-      </p>
+      </p>`}
     </div>
     <div class="spendrows">
       ${config.SPEND.rows.map((r) => `

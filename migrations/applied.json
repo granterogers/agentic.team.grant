@@ -177,5 +177,6 @@
   "0176_reaching_the_graph.sql": "65271697f203db87d4f5218239896c2e85c638f2ca6b14449919cd33350f197c",
   "0177_a_document_grant_made_himself.sql": "e4c01cb42b96fe8965d2c846a6e725f2f62bf90e4866a467387e8392ea274313",
   "0178_origin_follows_the_connector.sql": "ae6a449c390d626acb731ecadb3b49f884464c4f11d60f154569407a23261811",
-  "0179_a_project_answers_to_its_own_name.sql": "dfbc5939500e6cf63eb7b5a02aafc50156f95315b8cebcf1ce4bac327b5fbfcc"
+  "0179_a_project_answers_to_its_own_name.sql": "dfbc5939500e6cf63eb7b5a02aafc50156f95315b8cebcf1ce4bac327b5fbfcc",
+  "0180_how_much_of_the_free_tier_is_left.sql": "8dcc71dd46af885c9143986cfac823f4855443dd7d970b00d214d114f2a796ca"
 }
