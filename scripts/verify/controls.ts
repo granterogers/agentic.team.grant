@@ -305,12 +305,165 @@ for (const app of APPS) {
       await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
       await page.waitForTimeout(600)
     }
+    /*
+      Wait for the view transition to lift, not for a number of milliseconds.
+
+      Opening a project runs `carry()`, which is a View Transition. While one is
+      running the browser paints a `::view-transition` overlay over the WHOLE
+      page, and `document.elementFromPoint` anywhere returns the root element —
+      so every click lands on the overlay and Playwright reports
+      "main intercepts pointer events" until it times out thirty seconds later.
+
+      The transition is 396ms and the hydrate re-render follows it, so the old
+      500ms wait was inside the window about half the time. Measured: at 200ms
+      and 500ms the point under a rail button is HTML; by 900ms it is the
+      button.
+
+      A bigger number would have worked today and drifted the first time a
+      spring was retuned. This waits for the actual condition — the element at
+      the target's own centre IS the target — which cannot drift because it is
+      the thing the click needs to be true.
+    */
+    /*
+      Wait for the view transition's overlay to lift.
+
+      Opening a project runs `carry()`, a View Transition. While one is running
+      the browser paints a `::view-transition` overlay over the WHOLE page, and
+      `document.elementFromPoint` anywhere returns the root element — so every
+      click lands on the overlay and Playwright reports "main intercepts
+      pointer events" until it gives up thirty seconds later.
+
+      Measured: at 200ms and 500ms after opening a project, the point under a
+      rail button is HTML; by 900ms it is the button. The old wait was 500ms,
+      so it was inside that window.
+
+      Two things this deliberately does NOT do. It does not wait a bigger
+      number — that would work today and drift the first time a spring is
+      retuned. And it does not wait on `getAnimations()`: the transition's
+      animations are not reported there in this Chromium, and the unfiltered
+      version never settles at all, because the studio breathes, the skeletons
+      pulse and a busy face has a ring going round it.
+
+      So it asks the only question that matters — is the page covered — by
+      looking at what is actually under the middle of the viewport.
+    */
+    const uncovered = async () => {
+      await page.waitForFunction(
+        `(() => {
+           const at = document.elementFromPoint(innerWidth / 2, innerHeight / 2)
+           return at !== null && at !== document.documentElement && at !== document.body
+         })()`,
+        undefined,
+        { timeout: 15_000, polling: 100 },
+      )
+    }
+
+    const clickWhenReachable = async (selector: string) => {
+      await uncovered()
+      /*
+        And then let it stop moving.
+
+        `uncovered()` answers "is the page covered", which is a different
+        question from "has the layout settled". The rail's own width is a .34s
+        transition on `grid-template-columns`, so a button can be reachable and
+        still sliding — Playwright then refuses the click as "element is not
+        stable" and burns its whole timeout waiting.
+
+        A fixed wait is acceptable HERE and was not acceptable for the overlay,
+        because this one is a stabiliser on top of a real condition rather than
+        a guess standing in for one.
+      */
+      await page.waitForTimeout(420)
+      const target = page.locator(selector).first()
+      await target.waitFor({ state: 'visible', timeout: 10_000 })
+      /*
+        Hit-test it ourselves, then click past Playwright's stability check.
+
+        The studio never stops moving: `breathe()` and `scatter()` keep ambient
+        animations running on the shell for as long as the page is open. So
+        Playwright's "element is not stable" requirement is never satisfied for
+        anything inside it, and every navigation click burned its full timeout
+        reporting a stability problem rather than a real one.
+
+        `force: true` is normally a way of pretending a control is clickable.
+        It is not that here: the line below asks the browser what is actually
+        under the middle of this element and requires the answer to be this
+        element, which is the check `force` skips. We do the check and then
+        skip the one that cannot pass.
+      */
+      await page.waitForFunction(
+        `(() => {
+           const el = document.querySelector(${JSON.stringify(selector)})
+           if (el === null) return false
+           const r = el.getBoundingClientRect()
+           if (r.width < 2 || r.height < 2) return false
+           const at = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+           return at !== null && (at === el || el.contains(at) || at.contains(el))
+         })()`,
+        undefined,
+        { timeout: 10_000, polling: 100 },
+      )
+      await target.click({ force: true })
+      // And again after, so the next click is not issued into the transition
+      // this one just started.
+      await uncovered()
+    }
+
+    /*
+      Two attempts, and say so if the second fails.
+
+      The comment above says a control audit whose own navigation is flaky
+      reports flakiness as dead buttons, and this is that hazard again: the
+      view transition's overlay covers the page for about 900ms after a project
+      opens, `uncovered()` catches the common case, and an occasional click
+      still lands inside it.
+
+      Retrying the whole route from a fresh load is honest — it is a navigation
+      problem, not a finding — and it is bounded, so a genuinely unreachable
+      route still fails rather than looping.
+    */
+    /*
+      Open the rail before navigating by it.
+
+      The audit presses every control, and one of them is the sidebar toggle —
+      which REMEMBERS, in `localStorage['studio.rail']`, because a person who
+      collapses a sidebar means it. Since #80 the project's sections live in
+      that sidebar and since #76 collapsing it hides it completely, so after
+      the toggle had been pressed once every later route tried to click a
+      179px-wide button that was 20px wide and off the left edge, and reported
+      "main intercepts pointer events" for thirty seconds each.
+
+      Not a bug in the page: that is what collapsing a sidebar does, and the
+      toggle stays visible so there is always a way back. It is a bug in an
+      audit that pressed a persistent control and then assumed the layout it
+      had before.
+
+      Two attempts, because the transition overlay above is the other way this
+      can go wrong and a retry from a fresh load is honest for a navigation
+      problem. Bounded, so a genuinely unreachable route still fails.
+    */
+    const openRail = async () => {
+      const shut = await page.locator('.shell.shut').count()
+      if (shut > 0) {
+        await page.locator('[data-rail]').first().click()
+        await page.waitForTimeout(450)
+      }
+    }
+
     const intoProject = async (tab: string) => {
-      await home()
-      await page.locator('.project[data-open="legacy-coaching-course"]').click()
-      await page.waitForTimeout(500)
-      await page.locator(`[data-tab="${tab}"]`).click()
-      await page.waitForTimeout(350)
+      for (let go = 1; go <= 2; go += 1) {
+        try {
+          await home()
+          await openRail()
+          await clickWhenReachable('.project[data-open="legacy-coaching-course"]')
+          await openRail()
+          await clickWhenReachable(`[data-tab="${tab}"]`)
+          await page.waitForTimeout(350)
+          return
+        } catch (e) {
+          if (go === 2) throw e
+        }
+      }
     }
 
     /*

@@ -153,6 +153,30 @@ export function wire(host, project, panels, redraw) {
     grip?.addEventListener('pointerup', drop)
     grip?.addEventListener('pointercancel', drop)
 
+    /*
+      The three header buttons are INSIDE the drag handle, and that stopped
+      them working (#105).
+
+      `[data-grip]` is the whole header, so a press on Narrower, Wider or
+      Remove first fired `pointerdown` on the grip: a drag began, the grip took
+      pointer capture, `pointerup` ran `drop()`, which saved and redrew — and
+      the DOM the click was travelling towards no longer existed. The click
+      never landed. Three controls per panel, six panels, eighteen buttons that
+      looked fine and did nothing.
+
+      Found by `verify:controls` the first time it could reach the project
+      routes at all. `verify:wired` could not have found it: the handlers ARE
+      registered and the attributes ARE looked up — the fault is that the event
+      never arrives, which only pressing the thing can show. That is why both
+      checks exist.
+
+      `pointerdown` rather than `click`: the drag starts on pointerdown, so
+      that is the event that has to be kept away from the grip.
+    */
+    for (const b of el.querySelectorAll('.pctl button')) {
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation() })
+    }
+
     // Width by column, because a dashboard of arbitrary widths never lines up.
     el.querySelector('[data-wider]')?.addEventListener('click', () => {
       panel.w = Math.min(3, panel.w + 1)

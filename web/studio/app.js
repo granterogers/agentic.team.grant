@@ -1271,7 +1271,7 @@ const PANEL = {
         not to Settings, which is about the office's credentials rather than
         about this project.
       -->
-      <button class="link add" data-tab="sources">+ Connect something</button>
+      <button class="link add" data-empty-do="sources">+ Connect something</button>
     </div>`,
 
   note: () => `<textarea class="notepad" placeholder="Anything you want to remember about
