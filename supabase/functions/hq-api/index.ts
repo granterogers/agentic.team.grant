@@ -61,6 +61,16 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   studio: { fn: 'hq_studio' },
   // The Settings viewer, in the shapes settings.js already exports (#68).
   studio_settings: { fn: 'hq_studio_settings' },
+  /*
+    The usage dashboard (#61), from `usage_overview` rather than `hq_usage`.
+
+    Two functions, two shapes, and the studio wants the second: `hq_usage` is
+    the old page's, grouped by subsystem; `usage_overview` is grouped by SERVICE
+    with a quota and a provenance on each, which is what Grant asked for —
+    *"a fraction of what's being spent over a monthly, weekly, daily quota"*.
+    `web/studio/usage.js` was written in its exact shape.
+  */
+  usage_overview: { fn: 'usage_overview', args: { p_days: 30 } },
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },

@@ -14,7 +14,7 @@ import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as command from './command.js'
 import * as config from './settings.js'
-import { usageTab } from './usage.js'
+import { hydrateUsage, usageTab } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
@@ -3232,6 +3232,7 @@ async function refresh() {
     // screen and most visits never open it — but a write can change either, so
     // a refresh re-reads both rather than leaving one stale behind a tab.
     config.hydrateSettings(read),
+    hydrateUsage(read),
   ])
   render()
 }
@@ -3248,7 +3249,7 @@ async function live() {
     render()
     return
   }
-  await Promise.all([hydrate(API, token), config.hydrateSettings(read)])
+  await Promise.all([hydrate(API, token), config.hydrateSettings(read), hydrateUsage(read)])
   render()
 }
 

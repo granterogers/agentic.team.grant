@@ -225,5 +225,8 @@
   "0224_settings_that_do_not_call_healthy_things_unknown.sql": "d6917f1e1c9998fbed405bcbb6d2f240138809892ee8c480c762bab04c30bb0e",
   "0225_a_setter_for_autonomy_and_the_levels_that_exist.sql": "fd8b34defe5f2b59b94029a32c7d175a460e5cddfa9b83f890d4babe5ec7347a",
   "0226_a_settings_page_is_not_engineering_notes.sql": "d957ba8a1ddefd89684e375c60aed47e5531e3022aff55f3645effecd3059b95",
-  "0227_and_the_cards_actually_say_it.sql": "76e69274055d3a5e819ee864b162da69597d912f789c225a0430038b8638e6d5"
+  "0227_and_the_cards_actually_say_it.sql": "76e69274055d3a5e819ee864b162da69597d912f789c225a0430038b8638e6d5",
+  "0228_the_work_in_hand_is_real_work.sql": "93306dffe1fd3603c36b685f73fb89e52776bbf5d7170e2c5b9de4124b28bc2d",
+  "0229_and_the_jobs_tab_actually_reads_it.sql": "c1f0e81a3dccd480aebcbb096ae44a330c3113ffd2370e76d91865147c56b507",
+  "0230_blocked_means_blocked.sql": "6f50250d0702d906550dc4dac9fbac8515a9a09bbf1b1dd8755c63a8392c86ac"
 }

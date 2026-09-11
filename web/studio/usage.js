@@ -51,7 +51,7 @@
 */
 
 /** From `public.usage_overview(30)` — 11 September 2026. */
-export const USAGE = {
+const FALLBACK_USAGE = {
   generated_at: '2026-09-11T07:20:00Z',
   window_days: 30,
   target: 'about £0 / month',
@@ -402,4 +402,41 @@ export function usageTab(data = USAGE) {
     ${area(data.by_day)}
     ${consumers(data.top_models)}
   </div>`
+}
+
+/*
+  ---------------------------------------------------------------------------
+  The real numbers (#68, #61)
+  ---------------------------------------------------------------------------
+
+  This file's header promised that wiring this to `usage_overview(30)` would be
+  "a one-line change rather than a rewrite", because the mock was written in the
+  RPC's exact shape. It was — the two payloads' keys match key for key.
+
+  That mattering is not theoretical, and the header says why: until the morning
+  it was written this page claimed Supabase storage was at 82% of the free tier.
+  Nobody had measured it; the real figure was 4%. On a page that is ENTIRELY
+  numbers, an invented one is the whole feature being a lie — so the fallback
+  below is now clearly the fallback, and the page says when it is showing it.
+*/
+
+export const USAGE = { ...FALLBACK_USAGE }
+export const usageSource = { live: false, why: 'not asked yet' }
+
+export async function hydrateUsage(read) {
+  try {
+    const d = await read('usage_overview')
+    if (!d || !Array.isArray(d.services)) throw new Error('unexpected shape')
+    for (const k of Object.keys(USAGE)) delete USAGE[k]
+    Object.assign(USAGE, d)
+    usageSource.live = true
+    usageSource.why = ''
+    return true
+  } catch (e) {
+    for (const k of Object.keys(USAGE)) delete USAGE[k]
+    Object.assign(USAGE, FALLBACK_USAGE)
+    usageSource.live = false
+    usageSource.why = e instanceof Error ? e.message : String(e)
+    return false
+  }
 }
