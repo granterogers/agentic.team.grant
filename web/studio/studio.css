@@ -2230,3 +2230,83 @@ kbd {
   border-radius: 999px;
   padding: 2px 8px;
 }
+
+/*
+  Connecting a source, in the Sources tab header (#68).
+
+  Inline rather than a dialogue. §31 treats an avoidable request for manual
+  configuration as a design failure, and a modal that asks for one link is a
+  configuration step wearing a costume — the field is the whole interaction, so
+  it lives where the eye already is.
+*/
+.addsource { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.addsource input {
+  min-width: 260px; padding: 9px 12px; font: inherit; font-size: 13px;
+  border-radius: var(--r-field, 10px); border: 1px solid var(--edge);
+  background: var(--surface); color: var(--ink);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
+  transition: border-color .18s cubic-bezier(.2,.8,.3,1), box-shadow .18s cubic-bezier(.2,.8,.3,1);
+}
+.addsource input:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04), 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* A quieter button than a primary: disconnecting is not the thing you came for. */
+/*
+  A quiet button: present, and not the thing you came for.
+
+  It is `.btn.small.quiet` and NOT `.mini`, which in this stylesheet is a 78px
+  preview thumbnail — reusing that name from the other page's stylesheet made
+  Disconnect render as a 110px empty box on every source card. CLAUDE.md has the
+  rule and this is the third time it has been earned: grep for a class before
+  you use it, especially one you remember from somewhere else.
+*/
+.btn.quiet {
+  background: transparent; box-shadow: none; color: var(--ink-3);
+  border-color: color-mix(in srgb, var(--edge) 70%, transparent);
+}
+.btn.quiet:hover {
+  color: var(--ink); border-color: var(--ink-3);
+  box-shadow: var(--lift-1); transform: none;
+}
+/* Anything the office refused, in its own words. Amber rather than red: a
+   refusal is usually the system working, not breaking. */
+.t-meta.warn { color: var(--warn, #8a6a1f); }
+
+/* Creating a project, in the portfolio header. Two fields, because a project
+   with no source has nothing to read or write and hq_create_project refuses
+   one. */
+.newproj { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.newproj input {
+  min-width: 190px; padding: 9px 12px; font: inherit; font-size: 13px;
+  border-radius: var(--r-field, 10px); border: 1px solid var(--edge);
+  background: var(--surface); color: var(--ink);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
+  transition: border-color .18s cubic-bezier(.2,.8,.3,1), box-shadow .18s cubic-bezier(.2,.8,.3,1);
+}
+.newproj input:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04), 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* An editable title should look editable when you reach for it, and like a
+   title the rest of the time. */
+[data-rename]:hover { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--ink-3) 40%, transparent); }
+[data-rename]:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/*
+  Phone. The floor is 44px and 16px, or iOS Safari zooms the page on focus —
+  and these are new controls, so they were not covered by the sweep that fixed
+  the rest. Last in the file, because a media query adds no specificity and
+  where you write it decides whether it works.
+*/
+@media (pointer: coarse) {
+  .addsource { width: 100%; }
+  .addsource input { flex: 1; min-width: 0; font-size: 16px; min-height: 44px; }
+  .addsource .btn, .newproj .btn { min-height: 44px; }
+  .newproj { width: 100%; }
+  .newproj input { flex: 1; min-width: 0; font-size: 16px; min-height: 44px; }
+  .source .btn.small { min-height: 44px; padding-inline: 12px; }
+}

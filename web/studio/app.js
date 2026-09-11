@@ -8,6 +8,7 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
+import { act, attempt, canWrite, say, sure } from './office.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
@@ -888,6 +889,24 @@ function portfolio() {
         <h1 class="t-display">${esc(greeting())}, Grant</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(standing())}</p>
       </div>
+      <!--
+        A new dashboard project (#68).
+
+        Grant: "Please don't assume I wish to create a new project — this is a
+        large task and should always be confirmed." So it takes two steps by
+        design: the button opens the field, and the field is what creates. And
+        hq_create_project without p_force returns CANDIDATES rather than
+        creating, which is the behaviour that stops a fifth notebook for one
+        intention — the studio shows them and makes him choose.
+
+        No backticks in this comment: template literal.
+      -->
+      ${canWrite() ? `<span class="newproj" data-saidwrap>
+        <input data-new-name placeholder="Name a new project" aria-label="Name a new project">
+        <input data-new-ref placeholder="…and a link to attach" aria-label="A link to attach">
+        <button class="btn" data-new-project>Create</button>
+        <span class="t-meta" data-said></span>
+      </span>` : ''}
     </div>
     ${attention()}
     <div class="portfolio">
@@ -1244,24 +1263,50 @@ function sources(p) {
       <p class="t-lead" style="margin:0">What ${esc(p.name)} reads from. The project
         is the source of truth; these are optional attachments to it.</p>
       <!--
-        Adding one is a real action on the build page and a stub here, and the
-        label says which. Grant: treat an avoidable request for manual
-        configuration as a design failure — so the button names the thing it
-        will ask for rather than opening an empty dialogue.
+        A real action now, not a stub (#68).
+
+        Grant: treat an avoidable request for manual configuration as a design
+        failure. So it takes a link and works the rest out — hq_attach reads
+        knowledge_connectors and delegates a Drive folder to the Drive path
+        without being told which kind it is.
+
+        No backticks in this comment: template literal.
       -->
-      <button class="btn" data-add-source>Connect a folder or page</button>
+      ${canWrite() ? `<span data-saidwrap class="addsource">
+        <input data-src-ref placeholder="Paste a Notion, Drive or notebook link" aria-label="A link to connect">
+        <button class="btn" data-add-source="${esc(p.slug)}">Connect</button>
+        <span class="t-meta" data-said></span>
+      </span>` : ''}
     </div>
     <div class="sourcegrid">${list.map((x) => `
-      <article class="source ${x.kind === 'connector' ? 'live' : ''}">
+      <article class="source ${x.kind === 'connector' ? 'live' : ''}" data-saidwrap>
         <span class="t-label">${x.kind === 'connector' ? 'Connector' : 'Reference'}</span>
-        <b>${esc(x.name)}</b>
-        <span class="t-meta">${esc(x.what)}</span>
+        <b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`
+                   : esc(x.name)}</b>
+        <span class="t-meta">${esc(x.via ?? '')}${x.what ? ` · ${esc(x.what)}` : ''}</span>
         <span class="srcfoot">
           ${x.kind === 'connector'
             ? `<span class="stage s-${x.health === 'ok' ? 'approved' : 'review'}">${
-                x.health === 'ok' ? `Read ${esc(x.last)}` : esc(x.problem)}</span>`
+                x.health !== 'ok' ? esc(x.problem ?? 'switched off')
+                : x.last === 'never' ? 'Not read yet'
+                : `Read ${esc(x.last)}`}</span>`
             : `<span class="t-meta">${esc(x.last)}</span>`}
-          ${x.gave > 0 ? `<span class="t-meta">${x.gave} documents</span>` : ''}
+          <!--
+            Counted per CONNECTOR, not per attachment, because documents record
+            which connector they came through and not which of its data sources.
+            Three Notion databases on one project therefore all report the same
+            number, and saying "29 documents" three times looks like a bug. The
+            wording carries the caveat instead of the number pretending to be
+            something it is not.
+
+            No backticks in this comment: template literal.
+          -->
+          ${x.gave > 0 ? `<span class="t-meta">${x.gave} via ${esc(x.via ?? 'it')}</span>` : ''}
+          <span class="t-meta" data-said></span>
+          ${canWrite() && x.id
+            ? `<button class="btn small quiet" data-detach="${esc(x.id)}"
+                 data-name="${esc(x.name)}">Disconnect</button>`
+            : ''}
         </span>
       </article>`).join('')}</div>
   </div>`
@@ -1483,7 +1528,9 @@ function dashboard() {
     </div>
     <div class="head">
       <div>
-        <h1 class="t-display" style="font-size:38px">${esc(p.name)}</h1>
+        <h1 class="t-display" style="font-size:38px"${
+          canWrite() ? ` contenteditable="plaintext-only" spellcheck="false" data-rename="${esc(p.slug)}"` : ''
+        }>${esc(p.name)}</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(p.purpose)}</p>
       </div>
       <div class="headctl">
@@ -1919,6 +1966,152 @@ function render() {
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
       carry(null, null, () => { state.view = b.dataset.go; state.label = null; render() })
+    })
+  }
+
+  /*
+    Sources: connect and disconnect, for real (#68).
+
+    The first two write actions the studio has ever had, and they are the right
+    two to start with — a project's sources are the thing Grant changes most
+    and the thing #62 already built the server half of.
+
+    `hq_attach` takes a link and works the rest out: it reads
+    `knowledge_connectors` to recognise the kind and delegates a Drive folder to
+    the Drive path. §31 — an avoidable request for manual configuration is a
+    design failure, so this asks for the link and nothing else.
+  */
+  for (const b of root.querySelectorAll('[data-add-source]')) {
+    b.addEventListener('click', async () => {
+      const field = b.closest('[data-saidwrap]')?.querySelector('[data-src-ref]')
+      const ref = String(field?.value ?? '').trim()
+      if (ref === '') {
+        field?.focus()
+        return
+      }
+      const done = await attempt(b, 'Connecting…', () =>
+        act('attach', { p_slug: b.dataset.addSource, p_ref: ref }),
+      )
+      if (done) {
+        if (field) field.value = ''
+        await refresh()
+      }
+    })
+  }
+
+  /*
+    A new dashboard project, and only when he says so twice.
+
+    `hq_create_project` without `p_force` returns CANDIDATES and creates
+    nothing — 0153 built that deliberately, because three notebooks once existed
+    for one intention. So the first press may come back with "did you mean one
+    of these", and only a second, explicit press creates.
+  */
+  for (const b of root.querySelectorAll('[data-new-project]')) {
+    b.addEventListener('click', async () => {
+      const wrap = b.closest('[data-saidwrap]')
+      const name = String(wrap?.querySelector('[data-new-name]')?.value ?? '').trim()
+      const ref = String(wrap?.querySelector('[data-new-ref]')?.value ?? '').trim()
+      if (name === '' || ref === '') {
+        say(b, 'A project needs a name and something to read from.', 'warn')
+        return
+      }
+      const force = b.dataset.force === name
+
+      if (!force && !sure(`Create a dashboard project called "${name}"?`)) return
+
+      const made = await attempt(
+        b,
+        force ? 'Creating…' : 'Checking…',
+        () => act('create_project', { p_name: name, p_connector: 'auto', p_ref: ref,
+                                      ...(force ? { p_force: true } : {}) }),
+        (r) => (r?.candidates?.length ? '' : 'Created.'),
+      )
+      /*
+        Candidates came back, so nothing was created.
+
+        Saying "already exists" would be wrong — these are near matches, not the
+        same thing — and creating anyway would be the assumption he asked twice
+        not to make. So it names them and arms the button to mean "yes, a new
+        one" on the next press.
+      */
+      if (made?.candidates?.length) {
+        b.dataset.force = name
+        b.textContent = 'Create anyway'
+        say(
+          b,
+          `We already have ${made.candidates.map((c) => c.name).join(', ')}. ` +
+            'Press again if you want a new one as well.',
+          'warn',
+        )
+        return
+      }
+      if (made) {
+        b.dataset.force = ''
+        b.textContent = 'Create'
+        await refresh()
+      }
+    })
+  }
+
+  /*
+    Rename in place, on the title itself.
+
+    An edit-in-place rather than a pencil and a dialogue: there are four
+    projects and the name is one field. Committed on blur or Enter, and Escape
+    puts it back — which matters because a contenteditable that cannot be
+    abandoned is a trap.
+  */
+  for (const h of root.querySelectorAll('[data-rename]')) {
+    const was = h.textContent
+    const commit = async () => {
+      const now = h.textContent.trim()
+      if (now === was || now === '') {
+        h.textContent = was
+        return
+      }
+      const done = await attempt(
+        h,
+        'Renaming…',
+        () => act('rename_project', { p_slug: h.dataset.rename, p_name: now }),
+        'Renamed.',
+      )
+      if (done) await refresh()
+      else h.textContent = was
+    }
+    h.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); h.blur() }
+      if (e.key === 'Escape') { h.textContent = was; h.blur() }
+    })
+    h.addEventListener('blur', commit)
+  }
+
+  for (const b of root.querySelectorAll('[data-detach]')) {
+    b.addEventListener('click', async () => {
+      /*
+        Confirmed, always. Grant: "You should always check before making any
+        destructive action with me."
+
+        Nothing is lost by disconnecting — ADR-0013 is explicit that the corpus
+        a connector fed survives the connector being removed — and the sentence
+        says so, because a confirmation that overstates the danger is one people
+        learn to click through.
+      */
+      if (
+        !sure(
+          `Disconnect ${b.dataset.name}? The documents it already gave stay; ` +
+            'nothing new comes in until it is connected again.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        'Disconnecting…',
+        () => act('detach', { p_attachment_id: b.dataset.detach }),
+        'Disconnected.',
+      )
+      if (done) await refresh()
     })
   }
 
@@ -2610,6 +2803,25 @@ render()
 */
 const API =
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+
+/*
+  Re-read the office and repaint.
+
+  After every write, rather than patching the state in place. Patching is faster
+  and is how two things drift: the server decides what an attachment is called
+  and whether it is enabled, and a page that guesses shows one thing while the
+  database holds another. A round trip costs a moment and is always right.
+*/
+async function refresh() {
+  await hydrate(API, (() => {
+    try {
+      return localStorage.getItem('hq.token') ?? ''
+    } catch {
+      return ''
+    }
+  })())
+  render()
+}
 
 async function live() {
   let token = ''
