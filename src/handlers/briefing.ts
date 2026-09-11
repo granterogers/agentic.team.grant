@@ -141,8 +141,26 @@ export function briefingLines(f: Facts): string[] {
       */
       const named = w.project !== null && !w.what.includes(w.project) ? ` (${w.project})` : ''
       const cut = /[a-z]$/.test(w.what.trimEnd()) && w.what.length > 100
+
+      /*
+        The first sentence of `why`, and no more.
+
+        This file's own header says a model handed "35 of 40 by our own count,
+        because Google publishes no usage API" will produce "35 of 40
+        remaining" — the same sentence with the only important part removed. It
+        then happened, in the first real briefing: Claire wrote "≈3 notebook
+        units, 35/40 left", and an estimate became a fact on Grant's phone.
+
+        Instructing the model not to is the weak fix and is one bad morning
+        away from failing again. The strong fix is that the number is not in
+        the briefing at all: notebook allowance accounting belongs in the
+        evening capacity report, which is built to carry its own caveats. What
+        a briefing needs is what the decision is and roughly what it costs.
+      */
+      const gist = (w.why.split(/(?<=\.)\s+/)[0] ?? w.why).trim()
+
       lines.push(
-        `${w.what.trimEnd()}${cut ? '…' : ''}${named}. ${w.why}` +
+        `${w.what.trimEnd()}${cut ? '…' : ''}${named}. ${gist}` +
           (w.work_continues ? '' : ' Nothing else on that project moves until you answer.'),
       )
     }
@@ -300,7 +318,9 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
             'vary the opening — some days there is something to remark on and ' +
             'most there is not. Lead with whatever actually needs him. Do not ' +
             'add anything that is not in the facts, and do not pad a quiet ' +
-            'morning into a busy-sounding one.',
+            'morning into a busy-sounding one. Where a fact says a number is ' +
+            'an estimate or our own count, keep that — dropping the hedge ' +
+            'turns a guess into a fact.',
           facts: lines,
           fallback: assembled,
           words: 130,
