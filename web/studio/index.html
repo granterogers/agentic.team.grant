@@ -15,6 +15,17 @@
 </head>
 <body>
 <div id="root" class="shell"></div>
+<!--
+  The team, in writing, without leaving what you are doing (#103).
+
+  OUTSIDE #root, like the settings and the viewer, because render() replaces
+  everything inside #root on every navigation — a conversation living in there
+  would lose its scroll position, its draft and its in-flight request the
+  moment you changed section. Grant asked for it to remain accessible without
+  obstructing navigation, and that is a structural requirement rather than a
+  styling one.
+-->
+<div class="dock" id="dock" hidden></div>
 <div class="viewer" id="settings" hidden></div>
 <div class="viewer" id="viewer" hidden></div>
 <script type="module" src="./app.js"></script>

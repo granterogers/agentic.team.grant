@@ -8,7 +8,7 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
-import { act, attempt, canWrite, read, say, sure } from './office.js'
+import { act, attempt, canWrite, read, say, sure, token } from './office.js'
 import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
@@ -558,6 +558,112 @@ function markMock(root) {
   root.prepend(bar)
 }
 
+/*
+  The team, in writing, docked (#103).
+
+  Grant: *"Provide an integrated text conversation area that remains accessible
+  without opening a pop-up or obstructing navigation."*
+
+  Three things follow from that sentence and each one is a decision:
+
+  NOT A POP-UP. It is a panel on the right with the page still usable beside
+  it. No backdrop, no `body.behind`, nothing to dismiss before you can press
+  something else.
+
+  DOES NOT OBSTRUCT NAVIGATION. It lives outside `#root`, so `render()` never
+  touches it — the scroll position, the draft and any in-flight request survive
+  moving between projects and sections. That is why it is a sibling of the
+  settings sheet in index.html rather than part of the shell.
+
+  REMAINS ACCESSIBLE. Open is remembered, so it is still there on the next
+  visit if that is how you work.
+
+  It is the same conversation as the project's Chat tab, because it is the same
+  thread for the same project, read from the same place.
+*/
+const dockOpen = () => {
+  try { return localStorage.getItem('studio.dock') === 'open' } catch { return false }
+}
+const rememberDock = (open) => {
+  try { localStorage.setItem('studio.dock', open ? 'open' : 'shut') } catch { /* not fatal */ }
+}
+
+function paintDock() {
+  const el = $('#dock')
+  if (!el) return
+  const open = dockOpen()
+  el.hidden = !open
+  document.body.classList.toggle('docked', open)
+  if (!open) { el.innerHTML = ''; return }
+
+  const slug = state.project ?? PROJECTS[0]?.slug
+  const p = slug ? byId(slug) : null
+  const messages = p ? chat.thread(p.slug) : []
+  const draft = $('[data-docksay]')?.value ?? ''
+  const at = $('[data-dockthread]')?.scrollTop
+
+  el.innerHTML = `<div class="dockhead">
+      <span style="flex:1;min-width:0">
+        <b>The team</b>
+        <span class="t-meta">${p ? esc(p.name) : 'No project yet'}</span>
+      </span>
+      <button class="closeconv" data-dock-close aria-label="Close the conversation">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="thread${messages.length === 0 ? ' empty' : ''}" data-dockthread>${
+      /*
+        An empty conversation should look like an invitation, not like a fault.
+
+        The first cut rendered the standing "ask them something" line at the
+        top of the full-height bordered thread box, which on a 900px screen is
+        three lines of grey text above 600px of ruled nothing. Empty gets its
+        own treatment: no box, centred, and the two examples do more work than
+        the explanation did.
+      */
+      messages.length === 0
+        ? `<div class="dockblank">
+             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/></svg>
+             <p class="t-meta">Ask them something, or tell them what to do.</p>
+             <p class="dockeg">&ldquo;Where are we on this?&rdquo; &middot;
+               &ldquo;Draft the next module outline&rdquo;</p>
+             <p class="t-meta dockwhere">The same conversation as the Chat tab on
+               ${p ? esc(p.name) : 'a project'}.</p>
+           </div>`
+        : messages.map(bubble).join('')
+    }</div>
+    <form class="composer" data-dockform>
+      <div class="crow">
+        <textarea data-docksay rows="1" placeholder="Ask the team…"
+                  aria-label="Message the team"></textarea>
+        <button class="btn primary" type="submit">Send</button>
+      </div>
+    </form>`
+
+  const box = $('[data-docksay]', el)
+  if (box) box.value = draft
+  const thread = $('[data-dockthread]', el)
+  if (thread) thread.scrollTop = at ?? thread.scrollHeight
+
+  $('[data-dock-close]', el)?.addEventListener('click', () => {
+    rememberDock(false)
+    paintDock()
+  })
+
+  $('[data-dockform]', el)?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const text = String(box?.value ?? '').trim()
+    if (text === '' || !p) return
+    if (box) box.value = ''
+    chat.send(p.slug, text, null)
+    paintDock()
+    void chat.ask(p.slug, text, null, token.get()).then(() => { paintDock() })
+  })
+}
+
 function sectionCounts(p) {
   const waiting = workspace.split(p).waiting.length
   const blocked = workspace.rows(p).filter((r) => r.blocked !== undefined).length
@@ -728,6 +834,19 @@ function rail() {
           <path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z"/>
           <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
         <span class="lbl">Call the team</span>
+      </button>
+
+      <!--
+        Writing to them, beside calling them (#103).
+
+        The same conversation either way: both reach /voice/turn, which is the
+        canonical layer. §5 — a surface may translate and may not decide.
+      -->
+      <button class="navitem" data-dock aria-label="Message the team">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/></svg>
+        Message the team
       </button>
 
       <button class="navitem" data-go="lately" aria-current="${state.view === 'lately' ? 'page' : 'false'}">
@@ -1374,11 +1493,15 @@ function teamTab(p) {
   prototype has no team behind it. Faking a plausible answer would make the
   prototype prove something that is not true.
 */
-function chatTab(p) {
-  const messages = chat.thread(p.slug)
-  const a = state.attach
+/*
+  One bubble renderer, used by the Chat tab and by the dock (#103).
 
-  const bubble = (m) => {
+  Hoisted out of `chatTab` when the dock arrived: two copies of "what a message
+  looks like" would have drifted the first time one of them changed, and the
+  one that drifted would have been the dock, because it is the one nobody has
+  open while editing the other.
+*/
+const bubble = (m) => {
     if (m.from === 'grant') {
       return `<div class="msg mine">
         ${m.context ? `<span class="ctxchip">${esc(m.context.title)}</span>` : ''}
@@ -1386,16 +1509,32 @@ function chatTab(p) {
       </div>`
     }
     const c = crewBy(m.from)
-    return `<div class="msg theirs" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
+    return `<div class="msg theirs ${m.bad ? 'bad' : ''}" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 30)}
       <div class="mbody">
         <span class="t-label">${esc(c.name)} · ${esc(c.role)}</span>
         <p>${esc(m.text)}</p>
-        ${m.pending ? `<span class="t-meta pendmark">Prototype — no team behind this yet.
-          Wired up, this becomes a job you can watch in Team.</span>` : ''}
+        <!--
+          What the office is doing with it (#103).
+
+          This used to say "Prototype - no team behind this yet" on EVERY
+          reply, for ever, because the reply was invented locally and nothing
+          was ever asked. Now it is asked, so the note means what it says: it
+          is on screen only while the answer is on its way, and it is replaced
+          by the real one.
+
+          No backticks in this comment. Template literal.
+        -->
+        ${m.pending ? '<span class="t-meta pendmark">Asking the office…</span>' : ''}
+        ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer comes
+          back in Slack and Telegram too.</span>` : ''}
       </div>
     </div>`
   }
+
+function chatTab(p) {
+  const messages = chat.thread(p.slug)
+  const a = state.attach
 
   /*
     The way out, and it is the first thing in the panel (#97, #98).
@@ -3539,6 +3678,13 @@ function render() {
   // button that looks idle (#101).
   syncCallButtons()
   paintSchemeButtons()
+  /*
+    The dock lives OUTSIDE `#root`, so `render()` never wipes it — that is the
+    whole point of it (#103): a conversation you can leave open while you move
+    around. This call only re-reads it, so the project name in its header
+    follows whatever you are looking at.
+  */
+  paintDock()
 
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
@@ -3991,6 +4137,17 @@ function render() {
     button still shows the state, because `syncCallButtons` paints every
     element carrying `data-call`.
   */
+  /*
+    Writing to the team, beside calling them (#103). Toggles rather than opens,
+    because the rail entry is the only way back to a dock you shut with its own
+    close button and the only way to shut one you opened.
+  */
+  $('[data-dock]', root)?.addEventListener('click', () => {
+    rememberDock(!dockOpen())
+    paintDock()
+    if (dockOpen()) $('[data-docksay]')?.focus()
+  })
+
   const call = $('[data-call]', root)
   call?.addEventListener('click', () => {
     const v = $('#viewer')
@@ -4290,12 +4447,26 @@ function render() {
       e.preventDefault()
       const text = say.value.trim()
       if (text === '') return
-      chat.send(state.project, text, state.attach)
+      /*
+        Shown instantly, asked behind it (#103).
+
+        `send` writes what you typed plus a placeholder and returns; `ask`
+        posts to the office and replaces the placeholder with what it actually
+        said. A composer that waits for the network before showing your own
+        words feels broken even when it is fast.
+      */
+      const about = state.attach
+      chat.send(state.project, text, about)
       state.attach = null
       render()
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
+      void chat.ask(state.project, text, about, token.get()).then(() => {
+        render()
+        const after = $('[data-thread]')
+        if (after) after.scrollTop = after.scrollHeight
+      })
     })
 
     $('[data-unattach]', composer)?.addEventListener('click', () => {

@@ -2721,6 +2721,18 @@ kbd {
 @media (max-width: 860px) {
   .rail > .railfoot > .navitem[data-go="lately"] { padding: 0 10px; font-size: 0; }
   .rail > .railfoot > .navitem[data-go="lately"] svg { font-size: 15px; }
+  /*
+    "Message the team" (#103) is the fourth thing in this strip and its label
+    is the longest of them, so on a phone it goes the way Lately and Settings
+    already went: the icon alone. `font-size: 0` collapses the text node
+    without removing it, so the accessible name is still the button's own
+    `aria-label` and a screen reader still hears it. `min-width` keeps the
+    tap target at the 44px floor once the words are gone.
+  */
+  .rail > .railfoot > .navitem[data-dock] {
+    padding: 0 10px; font-size: 0; min-width: 44px; justify-content: center;
+  }
+  .rail > .railfoot > .navitem[data-dock] svg { font-size: 15px; }
   .project.lead .cover { width: 64px; height: 64px; border-radius: 16px; }
   .project.lead .body > span > span:first-child { font-size: 19px; line-height: 1.25; }
 }
@@ -2976,3 +2988,82 @@ kbd {
   overflow-wrap: anywhere;
 }
 .reach a:hover { border-bottom-color: currentColor; }
+
+/* --- the dock: the team, in writing, beside the work (#103) ------------------
+
+   A COLUMN, NOT A POP-UP. Grant asked for a way to message the team that
+   "remains accessible and does not obstruct navigation", and a modal is the
+   one shape that fails both halves — it covers the page and it closes the
+   moment you go anywhere. So this is a fixed right-hand column and the page
+   is given room beside it: `body.docked` gets padding, so nothing the studio
+   draws ends up underneath. Everything stays clickable while it is open.
+
+   Padding on `body` rather than a margin on `.shell`, because the shell is a
+   grid whose rail is `position: sticky` — a margin there would have left the
+   rail measuring against the old width and the sticky offset wrong.
+
+   No backdrop, no `backdrop-filter`. That property establishes a containing
+   block, and this file has already lost a day to a `position: fixed` child
+   anchoring to a filtered ancestor instead of the viewport. */
+.dock {
+  position: fixed; inset: 0 0 0 auto; width: min(380px, 100vw);
+  z-index: 40; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--s3); padding: var(--s4);
+  background: var(--ground); border-left: 1px solid var(--edge);
+  box-shadow: -18px 0 42px -30px rgb(0 0 0 / .5);
+}
+body.docked { padding-right: min(380px, 100vw); }
+.dockhead {
+  display: flex; align-items: baseline; gap: var(--s3);
+  padding-bottom: var(--s3); border-bottom: 1px solid var(--edge);
+}
+.dockhead b { font: 600 15px/1.3 var(--text); }
+.dockhead .t-meta { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+/* The thread fills whatever is left between the header and the composer. The
+   tab version is bounded by `max-height` because it sits in a scrolling page;
+   here the column is the scroll container, so that bound would strand the
+   composer halfway up a tall screen. */
+.dock .thread { max-height: none; min-height: 0; height: 100%; }
+.dock .msg { max-width: 94%; }
+/* Nothing said yet: an invitation rather than a ruled void. */
+/* `align-content` moves on the THREAD, not on the child: the thread is the
+   grid, and `height: 100%` on a grid item inside an `align-content: start`
+   track resolves against a track sized by that same item, so it computed to
+   auto and the invitation sat at the top of a tall empty column. */
+.dock .thread.empty {
+  border-color: transparent; background: transparent; align-content: center;
+}
+.dockblank {
+  display: grid; gap: var(--s3); justify-items: center;
+  text-align: center; padding: var(--s5) var(--s4); color: var(--ink-3);
+}
+.dockblank .t-meta { margin: 0; max-width: 26ch; }
+.dockeg {
+  margin: 0; max-width: 28ch; color: var(--ink-2);
+  font: 400 13.5px/1.7 var(--text); font-style: italic;
+}
+.dockwhere { color: var(--ink-3); }
+
+/* A reply that failed reads as failed rather than as an answer (#103). */
+.msg.theirs.bad .mbody { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.msg.theirs.bad .mbody p { color: var(--ink-2); }
+
+/* --- the dock on a phone, last ----------------------------------------------
+   Same reason as every other rule down here: a media query adds no
+   specificity, so the `.dock` base rules three hundred lines above would win
+   on source order alone if this lived up there.
+
+   380px of fixed column on a 390px screen is the whole screen, and the
+   padding that keeps the page clear of it would leave a 10px page. So on a
+   phone it stops being a column and becomes a sheet across the bottom, above
+   the bottom navigation bar, with the page untouched behind it. */
+@media (max-width: 860px) {
+  .dock {
+    inset: auto 0 0 0; width: auto; height: min(76vh, 560px);
+    border-left: 0; border-top: 1px solid var(--edge);
+    border-radius: 16px 16px 0 0;
+    padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -18px 42px -28px rgb(0 0 0 / .55);
+  }
+  body.docked { padding-right: 0; }
+}

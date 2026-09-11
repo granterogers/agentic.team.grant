@@ -78,18 +78,81 @@ function replyText(text, context) {
   return `Taking that on for ${about}. It will show up in Team as soon as there is something to look at.`
 }
 
+/*
+  Where a typed message goes (#103).
+
+  The same endpoint the voice call's typing box uses, and the same one Claire's
+  own tool uses — because they are the same thing: something was said, and the
+  office answers or takes it on. Two implementations would drift, and the one
+  that drifted would be this one, which is the one nobody reads the logs of.
+
+  §5 of the master spec: a channel adapter may only TRANSLATE. It writes to the
+  canonical layer and asks; it never decides. `/voice/turn` is that layer, so
+  this posts to it rather than working anything out for itself.
+*/
+const API = () =>
+  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+const TURN = () => API().replace(/\/hq-api$/, '/voice')
+
+/** One session per visit, so the office can group the turns of a conversation. */
+const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
+
 export function send(slug, text, context) {
   const now = new Date().toISOString()
   const mine = {
     id: `m${Date.now()}`, from: 'grant', text, at: now,
     context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
   }
+  /*
+    The local guess stays, as the thing on screen WHILE the office is asked.
+
+    It is marked pending, which is what draws the "no team behind this yet"
+    note. That note is now a lie only until the answer lands, and it is
+    replaced by the real one — rather than being the whole of the feature,
+    which is what it was.
+  */
   const who = routeTo(text, context)
   const back = {
     id: `m${Date.now() + 1}`, from: who, text: replyText(text, context),
     at: now, pending: true,
   }
   const next = [...thread(slug), mine, back]
+  write(slug, next)
+  return next
+}
+
+/**
+ * Ask the office, and replace the placeholder with what it actually said.
+ *
+ * Separate from `send` so the message appears instantly and the round trip
+ * happens behind it: a composer that waits for the network before showing what
+ * you typed feels broken even when it is fast.
+ *
+ * A failure leaves the placeholder and says why on it. The alternative — an
+ * empty thread and a thrown error — loses what you wrote.
+ */
+export async function ask(slug, text, context, token) {
+  const pendingId = thread(slug).at(-1)?.id
+  let reply = null
+  try {
+    const r = await fetch(`${TURN()}/turn`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ said: text, session: SESSION }),
+    })
+    const body = await r.json()
+    if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
+    reply = { text: body.speak, did: body.did }
+  } catch (e) {
+    reply = { text: `I could not reach the office: ${e.message}`, failed: true }
+  }
+
+  const next = thread(slug).map((m) =>
+    m.id === pendingId
+      ? { ...m, text: reply.text, pending: false, bad: reply.failed === true,
+          delegated: reply.did === 'delegated' }
+      : m,
+  )
   write(slug, next)
   return next
 }
