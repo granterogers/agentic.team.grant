@@ -2888,3 +2888,15 @@ kbd {
   background: var(--ground); min-width: 0; width: 100%;
 }
 .taskform input:focus, .taskform select:focus { outline: none; border-color: var(--accent); }
+
+/* --- hidden means hidden ---------------------------------------------------
+   The browser's own `[hidden] { display: none }` is an author-overridable UA
+   rule, so ANY class setting `display` beats it. `.taskform`, `.hireform` and
+   `.connectpick` are all `display: grid`, so all three rendered open the moment
+   they existed — the Add Contact form was on screen in a capture that never
+   pressed anything to open it.
+
+   One rule at the end of the file rather than a `[hidden]` variant per
+   component, because the next component to set `display` would have the same
+   bug and nobody would connect the two. */
+[hidden] { display: none !important; }

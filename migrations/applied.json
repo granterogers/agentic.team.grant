@@ -242,5 +242,7 @@
   "0241_a_switch_for_putting_tasks_in_the_diary.sql": "b6c74b585c5485212dd83d3d3e987f43bfbfb87b65d5486e30b28443b5bee00b",
   "0242_a_duty_that_keeps_the_diary_matching.sql": "ed5916f0d028b314b34982a907d53e564835efc47675d9323cc514057ad18903",
   "0243_somewhere_to_turn_the_diary_sync_on.sql": "7a0a2ef23f206da13a65b4bd820c6304fa91434e2922bd9a5c8e61cdc6a84afa",
-  "0244_the_key_is_allowed_in_both_lists.sql": "c1e13a6be61057c6411c8fcf14a48e2ae1b67ce22516c2d0b3cf2091a893dd7b"
+  "0244_the_key_is_allowed_in_both_lists.sql": "c1e13a6be61057c6411c8fcf14a48e2ae1b67ce22516c2d0b3cf2091a893dd7b",
+  "0245_contacts_have_a_table.sql": "bfdb1475dd39661a491cd41ead20dfa4ad16e4160505c2a4a2df2534ad8426ea",
+  "0246_contacts_reach_the_page.sql": "d6b59b702e0d514e2c422f8cc3b1603310424b766c506dd46f0ee912c23f7279"
 }

@@ -176,6 +176,11 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     tasks in a diary: the plan query correctly returned nothing to do.
   */
   task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
+  // Contacts (#24, #99). A name and a project; everything else — role, org,
+  // email, phone, Instagram, website, kind, note — is optional, because a form
+  // that demands nine fields before it will take "Ben, referrer" is a form
+  // people route around.
+  contact_add: { fn: 'hq_contact_add', required: ['p_project', 'p_name'] },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
   task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },

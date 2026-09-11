@@ -1042,6 +1042,8 @@ function peopleTab(p) {
       }).join('')}
     </div>
 
+    ${canWrite() ? '<div class="tabhead"><span></span><button class="btn primary" data-empty-do="contact">Add someone</button></div>' : ''}
+    ${addContactForm(p)}
     ${
       shown.length === 0
         ? (p.contacts.length === 0
@@ -1050,6 +1052,7 @@ function peopleTab(p) {
                 ask: { name: 'Ask the team to find who it is about',
                        say: `Go through ${p.name}'s documents and messages and list the people it is actually about.` },
                 mine: 'Add someone',
+                mineDo: 'contact',
               })
             : `<div class="empty"><p class="t-lead" style="margin:0">Nobody here carries that
                 label yet. Open someone and tick it.</p></div>`)
@@ -1646,6 +1649,60 @@ function sources(p) {
 
   No backticks in the HTML comments below. Template literal.
 */
+/*
+  Adding a contact (#24, #99).
+
+  Grant: *"Open a standard Add Contact form with name, phone number, email,
+  Instagram, and other relevant contact details."* Those four are here by name,
+  with role, org, website and a kind beside them.
+
+  Only the name is required. A form that demands nine fields before it will
+  take "Ben, referrer" is a form people route around, and a half-filled contact
+  is worth more than the one nobody entered.
+
+  `kind` is a select because the canonical IA lists companies, collaborators
+  and suppliers beside people, and a supplier with no surname is not a
+  malformed person.
+*/
+function addContactForm(p) {
+  if (!canWrite()) return ''
+  return `<div class="taskform" data-contact-form hidden>
+    <div class="hirerow">
+      <label>Name
+        <input data-c-name placeholder="Ben Hartley" autocomplete="off"></label>
+      <label>What they are to this project
+        <input data-c-role placeholder="Referrer" autocomplete="off"></label>
+    </div>
+    <div class="hirerow">
+      <label>Email
+        <input data-c-email type="email" placeholder="ben@hartleyco.com" autocomplete="off"></label>
+      <label>Phone
+        <input data-c-phone placeholder="+44 7700 900118" autocomplete="off"></label>
+    </div>
+    <div class="hirerow">
+      <label>Instagram
+        <input data-c-insta placeholder="@benhartley" autocomplete="off"></label>
+      <label>Organisation
+        <input data-c-org placeholder="Hartley and Co" autocomplete="off"></label>
+    </div>
+    <div class="hirerow">
+      <label>Kind
+        <select data-c-kind>
+          <option value="person">A person</option>
+          <option value="company">A company</option>
+          <option value="collaborator">A collaborator</option>
+          <option value="supplier">A supplier</option>
+        </select>
+      </label>
+      <span class="hireact">
+        <span class="t-meta" data-said></span>
+        <button class="btn primary" data-c-go>Add them</button>
+        <button class="btn quiet" data-c-cancel>Cancel</button>
+      </span>
+    </div>
+  </div>`
+}
+
 function addTaskForm(p) {
   if (!canWrite()) return ''
   return `<div class="taskform" data-task-form hidden>
@@ -3513,11 +3570,13 @@ function render() {
   for (const b of root.querySelectorAll('[data-empty-do]')) {
     b.addEventListener('click', () => {
       const what = b.dataset.emptyDo
-      if (what === 'task') {
-        const form = $('[data-task-form]', root)
+      if (what === 'task' || what === 'contact') {
+        const sel = what === 'task' ? '[data-task-form]' : '[data-contact-form]'
+        const first = what === 'task' ? '[data-task-title]' : '[data-c-name]'
+        const form = $(sel, root)
         if (form) {
           form.hidden = false
-          $('[data-task-title]', root)?.focus()
+          $(first, root)?.focus()
         }
         return
       }
@@ -3526,6 +3585,38 @@ function render() {
       render()
     })
   }
+
+  $('[data-c-cancel]', root)?.addEventListener('click', () => {
+    const form = $('[data-contact-form]', root)
+    if (form) form.hidden = true
+  })
+
+  $('[data-c-go]', root)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const val = (sel) => String($(sel, root)?.value ?? '').trim()
+    const name = val('[data-c-name]')
+    if (name === '') { say(b, 'A name, at least.', 'warn'); return }
+    const done = await attempt(
+      b,
+      'Adding…',
+      () => act('contact_add', {
+        p_project: state.project,
+        p_name: name,
+        p_role: val('[data-c-role]') || null,
+        p_org: val('[data-c-org]') || null,
+        p_email: val('[data-c-email]') || null,
+        p_phone: val('[data-c-phone]') || null,
+        p_instagram: val('[data-c-insta]') || null,
+        p_kind: val('[data-c-kind]') || 'person',
+      }),
+      `${name} is on ${byId(state.project).name}.`,
+    )
+    if (done) {
+      const form = $('[data-contact-form]', root)
+      if (form) form.hidden = true
+      await refresh()
+    }
+  })
 
   $('[data-task-cancel]', root)?.addEventListener('click', () => {
     const form = $('[data-task-form]', root)
