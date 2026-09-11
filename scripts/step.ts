@@ -99,7 +99,16 @@ if (finishing !== null) {
     select public.build_step_finish(${lit(finishing)}::uuid, ${lit(state)},
                                     ${lit(flag('produced'))}, ${lit(url)})
   `)
-  console.log(`step ${finishing} → ${state}`)
+  /*
+    Print the URL. Grant: *"I can't see anything.. you will always have to give
+    me the image links each time to judge."*
+
+    Opening a step printed the link and finishing one did not, which is exactly
+    backwards — the screenshot worth looking at is the one attached to finished
+    work. Every `--shot` now prints where the image is, so it can be pasted into
+    the reply rather than left on a page he has to go and find.
+  */
+  console.log(`step ${finishing} → ${state}${url === null ? '' : `\n  shot ${url}`}`)
   process.exit(0)
 }
 
