@@ -13,18 +13,30 @@
 >
 > | | |
 > |---|---|
-> | Tests | 859 passing · `verify:hq` 40/40 · `verify:ui` 36/36 · `verify:talk` 34/34 |
+> | Tests | 927 passing · `verify:hq` 40/40 · `verify:ui` 36/36 · `verify:talk` 34/34 |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | 180 applied |
+> | Migrations | 214 applied |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
+>
+> **The office now learns, notices and can be taught.** `app.notice()` finds
+> what nobody asked about — an unowned deadline, a quiet project, a source that
+> gave nothing, a limitation that recurred — and a dismissal buys a fortnight of
+> silence per dismissal rather than lowering a score. It feeds the morning
+> briefing's recommendations, which arrive daily at 07:00 Athens. And skills are
+> data: Grant can tell the office a procedure in a Telegram message and it goes
+> in front of the relevant work from the next job on, visible and retirable on
+> each person's card. **A skill may name a tool and may never name an address**
+> (ADR-0017) — that one rule is what makes a procedure safe to let an agent
+> write, and `app.staff_may_use()` reads neither skills nor lessons, asserted
+> behaviourally and structurally.
 >
 > **Recently landed:** the frontend build prompt persisted to
 > `docs/spec/` · integration assessment · GitHub as the operational record
@@ -83,7 +95,7 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-146 migrations · 770 unit tests · ~30 live suites, all green.
+214 migrations · 927 unit tests · ~36 live suites, all green.
 
 **There is no cron and no GitHub Actions.** Grant switched Actions off on
 2026-09-08 — *"for any process"* — and everything scheduled moved to
