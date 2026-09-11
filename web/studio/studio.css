@@ -2933,3 +2933,18 @@ kbd {
 }
 .mcpsteps { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .mcpsteps li { font: 400 14px/1.55 var(--text); color: var(--ink-2); }
+
+/* --- Help, as a guide (#104) -----------------------------------------------
+   A single column with a real measure rather than a grid of equal cards: this
+   is prose to be read in order, and a three-across grid of numbered steps
+   reads as seven unrelated things. */
+.helplist { display: grid; gap: var(--s5); max-width: 68ch; }
+.helpsec { display: grid; gap: var(--s3); }
+.helpsteps { margin: 0; padding-left: 1.25em; display: grid; gap: 8px; }
+.helpsteps li { font: 400 14.5px/1.6 var(--text); color: var(--ink-2); }
+.helpnote {
+  margin: 0; padding: 10px 12px; border-radius: 9px;
+  background: var(--accent-wash); color: var(--ink-2);
+  border-left: 2px solid var(--accent);
+  font: 400 13.5px/1.55 var(--text);
+}

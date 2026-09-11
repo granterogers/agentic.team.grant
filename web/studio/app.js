@@ -2372,56 +2372,120 @@ function setupTab() {
   answers is not "what can it do" but "what am I looking at". Short on purpose:
   a help page nobody finishes is a help page nobody read.
 */
+/*
+  Help, as a guide rather than seven aphorisms (#104).
+
+  Grant named the sections: setup, navigation, connections, documents, tasks,
+  and using team voice and messaging. They are used in that order, because a
+  list of the things he asked for in the order he asked for them is a better
+  structure than one invented here.
+
+  ## Written in his register, which is a standing instruction
+
+  *"Always be explicit with instructions!!! Never assume I just know what you
+  are referring to. Also include full instructions each and every time with
+  URLs, steps to follow, etc."*
+
+  So: numbered steps, the real button labels, and what success looks like. Not
+  "connect your Drive account" but the press, the screen it lands on, and how
+  you know it worked.
+
+  ## Written LAST, on purpose
+
+  Nine of the thirty items in his review changed navigation. A guide describing
+  tabs that became sidebar entries is worse than no guide, because it is
+  confidently wrong. This describes the interface as it stands after all of
+  them.
+
+  ## No secrets, ever
+
+  Not the bearer token, not a connector credential, not in an example. Where a
+  step needs one, the step is the procedure for getting it — `npm run hq:token`
+  sends it to Telegram. `npm run check:secrets` would catch a pasted value in
+  this file; it would not catch one baked into a screenshot of this page.
+*/
+const HELP = [
+  {
+    title: 'Setting up',
+    steps: [
+      'Open Settings at the bottom left, then "Setting up". It lists what is done and what is not, in order.',
+      'Anything still outstanding says what to press. Work down the list — each step unlocks the next.',
+      'To connect Google, use "Connect Google" on the Connections tab. It opens Google\'s own consent screen and comes back here.',
+      'The bearer token is never shown on any page. Run npm run hq:token and it arrives on Telegram.',
+    ],
+    note: 'If a step looks done but the light is orange, the connection answered and something about it is off — the card says which.',
+  },
+  {
+    title: 'Finding your way around',
+    steps: [
+      'The sidebar is the whole of the navigation. Top left is the dashboard project you are in; press it to switch to another or to see them all.',
+      'Under it are that project\'s sections: Overview, AI Team, Documents, Tasks, Contacts, Sources, Activity. The number beside one is how many things are waiting in it.',
+      'The chevron at the very top left collapses the sidebar completely and gives the space to the content. It stays collapsed until you press it again.',
+      'At the bottom: Call the team, Lately, and Settings.',
+    ],
+    note: 'A dashboard project is the source of truth and it lives here. A Notion database, a notebook or a Drive folder is something a project is ATTACHED TO — never the project itself.',
+  },
+  {
+    title: 'Connections',
+    steps: [
+      'Settings, then Connections. Every service the office can reach, with a light saying whether it answered.',
+      'Not connected shows a Connect button that starts the real authorisation. Connected shows Manage, which takes you to where its credential lives.',
+      '"+ Connect something" lists everything available with its state, and every row leads somewhere real or says plainly that there is no flow yet.',
+      'The MCP card\'s "How to connect a client" shows the server URL and the tools another client would see — this is how something other than this page reaches the office.',
+    ],
+    note: 'Disconnecting Google is real and reversible: it revokes here and you can connect again. Other services say Manage instead, because a button that appeared to revoke a credential while revoking nothing would be worse than no button.',
+  },
+  {
+    title: 'Documents',
+    steps: [
+      'Documents shows everything the office holds for a project. Opening one shows its whole text, however long.',
+      'Documents arrive through a connector rather than an upload: press "Bring documents in" and attach Drive, Notion or NotebookLM on the Sources tab.',
+      'The Sources tab takes a pasted Google Drive link and works out the rest by itself.',
+      'The speech icon on a document starts a conversation about that document with the team. The bar at the top of it brings you back to where you were.',
+    ],
+    note: 'A PDF that came in as extracted text shows its text. Where the office holds the actual file, it opens in a viewer with a link to the real thing.',
+  },
+  {
+    title: 'Tasks',
+    steps: [
+      'Tasks, then "Add a task". A title is all that is required; a due date and an owner are optional.',
+      'The circle beside a task marks it done, and that is saved — it is not just a tick on this screen.',
+      'A task can be waiting on something, in progress, to do, or completed, and the section groups them that way.',
+      'To have dated tasks appear in your Google Calendar, turn on "Put dated tasks in my Google Calendar" on the Behaviour tab.',
+    ],
+    note: 'Calendar sync is one way. A task with a due date becomes an all-day event and comes away when it is done; the diary never changes a task, and nothing the office did not create is ever touched.',
+  },
+  {
+    title: 'Talking to the team',
+    steps: [
+      'Press "Call the team" in the sidebar. The browser asks for the microphone once. Talk over her whenever you like — she stops.',
+      'The call keeps running while you move around the interface. The button stays lit while it is live.',
+      'Press it again to hang up. That stops the microphone as well as the call — the recording indicator in your browser goes out.',
+      'To type instead, open AI Team then Chat on any project, or use the "Type instead" box on the call itself.',
+    ],
+    note: 'Telegram is the other way in, and the one that reaches you when you are not here. Message the bot and it answers as Claire.',
+  },
+  {
+    title: 'When something looks wrong',
+    steps: [
+      'Lately shows everything the office did and whether it can be undone.',
+      'Settings then Connections shows what is reachable right now, rather than what was reachable when it was set up.',
+      'The Usage tab says, on every card, whether a figure was measured, reported by the service, or estimated by us.',
+      'If a number looks wrong, say so. A dashboard that lies once is one you stop believing.',
+    ],
+    note: '',
+  },
+]
+
 function helpTab() {
-  const bits = [
-    [
-      'What this is',
-      'Eight colleagues who take work from one queue. You ask, they do it, and ' +
-        'everything they produce lands somewhere you can see it. Claire routes ' +
-        'the work and is the only one who messages you.',
-    ],
-    [
-      'A dashboard project',
-      'The source of truth, and it lives here. A Notion database, a notebook or ' +
-        'a Drive folder is something a project is attached to — never the ' +
-        'project itself. Everything eventually lives here and can be pulled ' +
-        'in or pushed out.',
-    ],
-    [
-      'How to ask for something',
-      'Talk to the team, send Claire a voice note on Telegram, or type in the ' +
-        'chat on any project. Same queue either way — the surface you use ' +
-        'never changes what the office does.',
-    ],
-    [
-      'Teaching them',
-      'Tell them in a message. "From now on, always give me the URL" becomes a ' +
-        'standing preference; "when you write a status update, lead with what ' +
-        'changed" becomes a procedure, and shows up on that person\'s card here.',
-    ],
-    [
-      'What it costs',
-      'About nothing. Free tiers throughout, measured on the Usage tab rather ' +
-        'than assumed, and every figure there says whether it was counted or ' +
-        'estimated.',
-    ],
-    [
-      'When something looks wrong',
-      'Lately shows everything that happened and whether it can be undone. ' +
-        'Setting up shows what is connected. If a number looks wrong, it ' +
-        'probably is — say so, because a dashboard that lies once is one you ' +
-        'stop believing.',
-    ],
-  ]
   return `<div class="setbody">
-    <div class="helpgrid">${bits
-      .map(
-        ([h, b]) => `<article class="helpcard" data-lift data-tilt="1.6">
-        <b>${esc(h)}</b>
-        <p class="t-meta">${esc(b)}</p>
-      </article>`,
-      )
-      .join('')}</div>
+    <p class="t-lead" style="margin:0 0 var(--s4)">Seven things, in the order you
+      are likely to need them.</p>
+    <div class="helplist">${HELP.map((h) => `<article class="helpsec">
+      <h3 class="t-title" style="margin:0;font-size:17px">${esc(h.title)}</h3>
+      <ol class="helpsteps">${h.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+      ${h.note === '' ? '' : `<p class="helpnote">${esc(h.note)}</p>`}
+    </article>`).join('')}</div>
   </div>`
 }
 
