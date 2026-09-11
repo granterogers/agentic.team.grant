@@ -89,10 +89,42 @@ let checked = 0
   purpose — the section tabs and the phone's bottom bar both scroll.
 */
 const GEOMETRY = `(() => {
-  const out = { wide: [], small: [], tiny: [], input: [] }
+  const out = { wide: [], small: [], tiny: [], input: [], clipped: [] }
   const w = document.documentElement.clientWidth
   const sw = document.documentElement.scrollWidth
   if (sw > w + 1) out.wide.push('document is ' + sw + 'px in a ' + w + 'px viewport')
+
+  /*
+    A box that hides content must SAY it hides content (#108).
+
+    The dashboard panels scroll, and Chromium draws an overlay scrollbar that
+    is invisible until you are already scrolling. So a panel ended mid-row,
+    sliced horizontally through a title, and it did not read as "there is more
+    below" -- it read as a rendering fault, on the tab you land on. Every
+    check was green: it is not overflow, not small type, not low contrast and
+    not a dead control. It was found by opening the PNG, which is the third
+    time that has been the only thing that found a defect.
+
+    So: any box with more content than it shows must give the eye one of two
+    things. Either a classic scrollbar taking real width in the gutter -- the
+    difference between offsetWidth and clientWidth -- or a marker class this
+    page sets when there is content beyond the edge, which is what draws the
+    fade. An overlay scrollbar counts as neither, because it is not painted.
+  */
+  for (const el of document.querySelectorAll('*')) {
+    const cs = getComputedStyle(el)
+    if (!/(auto|scroll)/.test(cs.overflowY)) continue
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue
+    const hidden = el.scrollHeight - el.clientHeight
+    if (hidden <= 4) continue
+    const gutter = el.offsetWidth - el.clientWidth > 2
+    const marked = el.closest('.more, .above, [data-more]') != null ||
+                   el.parentElement?.classList.contains('more') === true
+    if (!gutter && !marked) {
+      const what = (el.getAttribute('aria-label') || el.className || el.tagName).toString()
+      out.clipped.push(hidden + 'px hidden in "' + what.trim().slice(0, 40) + '" with nothing to say so')
+    }
+  }
 
   const named = (el) => {
     const t = (el.getAttribute('aria-label') || el.textContent || el.tagName).trim()
@@ -292,6 +324,7 @@ for (const width of WIDTHS) {
         small: 'text under 12px',
         tiny: 'target under 44px',
         input: 'input under 16px',
+        clipped: 'content cut with no affordance',
       }[kind]
       for (const item of [...new Set(list)].slice(0, 4)) {
         findings.push({ where: `${String(width)}px ${route}`, what: `${String(label)} — ${item}` })

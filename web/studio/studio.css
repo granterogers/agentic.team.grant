@@ -951,11 +951,26 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   something blockified it, it pushed a row 660px down the page.
 */
 .navitem.sect { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+/*
+  Three tokens that do not exist.
+
+  This block was written against a different vocabulary: `--muted`, `--sink`
+  and `--text`-as-a-colour. Only `--text` is defined at all, and it is the FONT
+  STACK -- so `color: var(--text)` resolved to a font-family string, which is
+  not a colour, so the declaration was dropped and the count inherited. The
+  pill had no background and the selected section had no colour of its own,
+  silently, in the sidebar, on every screen. The real names are `--ink-2`,
+  `--sunken` and `--ink`. Grep the token file before reaching for a name that
+  sounds right.
+
+  And 12px, not 11.5px: the floor in CLAUDE.md is 12 and `verify:layouts`
+  reported this on all four widths.
+*/
 .navitem.sect .n {
-  font: 500 11.5px/1 var(--text); color: var(--muted);
-  background: var(--sink); border-radius: 999px; padding: 3px 7px; flex: none;
+  font: 500 12px/1 var(--text); color: var(--ink-2);
+  background: var(--sunken); border-radius: 999px; padding: 3px 7px; flex: none;
 }
-.navitem.sect.on { background: var(--sink); color: var(--text); font-weight: 550; }
+.navitem.sect.on { background: var(--sunken); color: var(--ink); font-weight: 550; }
 .navitem.sect.on .n { background: var(--accent); color: var(--on-accent); }
 
 /* --- a real rendered page --------------------------------------------------
@@ -1156,6 +1171,46 @@ body::after {
 @media (pointer: coarse) { .pctl { opacity: 1; } }
 
 .pbodywrap { padding: var(--s4); overflow: auto; flex: 1; }
+/*
+  Say there is more (#108).
+
+  A thin scrollbar that is always drawn rather than Chromium's overlay one,
+  which only appears once you are already scrolling — by which point you have
+  read the clipped row as a rendering fault. Belt and braces with the fades
+  below, because `scrollbar-width` is honoured differently on every platform
+  and a phone honours it not at all.
+*/
+.pbodywrap { scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+.pbodywrap::-webkit-scrollbar { width: 8px; }
+.pbodywrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-3) 55%, transparent);
+  border-radius: 99px; border: 2px solid transparent; background-clip: content-box;
+}
+/*
+  The fades. On the PANEL rather than inside the scroller, because a pseudo
+  element on a scroll container scrolls away with the content — it would be
+  pinned to the bottom of the list, not to the bottom of the box.
+
+  `left/right/bottom: 1px` keeps them inside the border, and the corner radius
+  is the card's minus that border, so the fade does not square off a rounded
+  corner. `pointer-events: none` so a fade never eats a click on the row it
+  sits over.
+*/
+.panel::after, .panel::before {
+  content: ''; position: absolute; left: 1px; right: 1px; height: 34px;
+  pointer-events: none; opacity: 0; transition: opacity .18s; z-index: 1;
+}
+.panel::after {
+  bottom: 1px; border-radius: 0 0 calc(var(--r-card) - 1px) calc(var(--r-card) - 1px);
+  background: linear-gradient(to bottom, transparent, var(--surface) 82%);
+}
+.panel::before {
+  /* Below the header, not at the very top: the header is opaque and sits above
+     the scroller, so a fade at `top: 1px` would be painted behind it. */
+  top: 49px; height: 22px;
+  background: linear-gradient(to top, transparent, var(--surface) 88%);
+}
+.panel.more::after, .panel.above::before { opacity: 1; }
 .pbodywrap .shelf { padding-bottom: 10px; }
 .modgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s3); }
 .notepad {
@@ -2988,6 +3043,18 @@ kbd {
   overflow-wrap: anywhere;
 }
 .reach a:hover { border-bottom-color: currentColor; }
+/*
+  A `mailto:` is a link you TAP on a phone, and these were 20px tall --
+  `verify:layouts` reported four of them at 390px. Padding rather than a
+  min-height, because a min-height on an inline element does nothing (the same
+  property that made the `.stage` collision invisible for weeks), and only
+  where the pointer is coarse, so a desktop card does not grow 24px of air
+  around every address for a mouse that does not need it.
+*/
+@media (pointer: coarse) {
+  .reach { gap: 0 var(--s3); }
+  .reach a { display: inline-flex; align-items: center; min-height: 44px; }
+}
 
 /* --- the dock: the team, in writing, beside the work (#103) ------------------
 

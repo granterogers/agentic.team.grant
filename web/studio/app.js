@@ -664,6 +664,41 @@ function paintDock() {
   })
 }
 
+/*
+  A panel that has more in it must SAY so (#108).
+
+  The capture showed Modules and Tasks ending mid-row, sliced horizontally
+  through a title. `.pbodywrap` already scrolls — `overflow: auto` — but
+  Chromium draws an overlay scrollbar that is invisible until you scroll, so a
+  row cut through the middle of a word does not read as "there is more below".
+  It reads as a rendering fault, on the tab you land on.
+
+  So the panel gets a fade at whichever edge has content beyond it: one below
+  when there is more to come, one above once you have scrolled. `scrollTop` is
+  in the sum deliberately — the fade must go away at the end of the list,
+  otherwise it is claiming there is more when there is not, which is the same
+  lie in the other direction.
+
+  Recomputed on scroll and on resize: the panels are user-resizable, so the
+  answer changes when Grant drags one narrower.
+*/
+function markPanelScroll(root) {
+  for (const wrap of root.querySelectorAll('.pbodywrap')) {
+    const panel = wrap.parentElement
+    if (!panel) continue
+    const paint = () => {
+      const below = wrap.scrollHeight - wrap.clientHeight - wrap.scrollTop
+      panel.classList.toggle('more', below > 4)
+      panel.classList.toggle('above', wrap.scrollTop > 4)
+    }
+    paint()
+    wrap.addEventListener('scroll', paint, { passive: true })
+    // The panel is resizable, and a ResizeObserver is the only thing that
+    // hears a drag on the grip.
+    new ResizeObserver(paint).observe(wrap)
+  }
+}
+
 function sectionCounts(p) {
   const waiting = workspace.split(p).waiting.length
   const blocked = workspace.rows(p).filter((r) => r.blocked !== undefined).length
@@ -4491,6 +4526,7 @@ function render() {
     const p = byId(state.project)
     const mine = panels.layout(p)
     panels.wire(board, p, mine, render)
+    markPanelScroll(board)
     $('[data-add-open]', root)?.addEventListener('click', (e) => {
       e.stopPropagation()
       const menu = $('[data-add-menu]', root)
