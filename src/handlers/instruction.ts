@@ -963,6 +963,28 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const unresolved = readPlan(instruction)
       const plan = unresolved === null ? null : await resolveProjects(deps.db, unresolved)
       if (plan !== null) {
+        /*
+          A clause we could not plan is a typed impediment, not just an apology.
+
+          #47 and #60 together. Saying "I could not work out how to research
+          that" once is honest; saying it eleven times and nobody counting is
+          how a missing capability stays missing. `needed` is the countable
+          handle, so four agents hitting the same wall GROUP BY together and
+          `impediments_tally` can turn a repeated one into a proposal (#49).
+
+          Deliberately not fatal and deliberately not announced — the say-back
+          already tells Grant. This is for the office's own record.
+        */
+        for (const missing of plan.unread ?? []) {
+          const handle = missing.split(' ').slice(0, 3).join('-').toLowerCase()
+          await deps.db
+            .execute(`
+              select app.cannot(${lit(job.jobId)}::uuid, 'missing_skill',
+                ${lit(handle)}, 'chief-of-staff', ${lit(missing)},
+                ${lit(instruction.slice(0, 280))})
+            `)
+            .catch(() => undefined)
+        }
         await deps.db.execute(`
           update public.jobs
              set pinned_config = pinned_config
