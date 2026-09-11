@@ -276,6 +276,19 @@ Each of these cost real time. They are here so they cost it once.
   `responsibilities.period_minutes`, `documents.content`, `deliveries.error_code`,
   `outputs.body` with no `project_id` (join through `jobs`).
 - **`min(uuid)` does not exist.** Use `(array_agg(x order by y))[1]`.
+- **A project's slug is derived from its NAME, not from `p_ref`.** In
+  `app.hq_create_project(p_name, p_connector, p_ref, p_display, p_force)`,
+  `p_ref` is the CONNECTOR REFERENCE. A verify teardown keyed on `p_ref`
+  matched nothing and left six real, active projects in Grant's project list.
+  Delete order is forced by ADR-0014: **archive, then attachments, then the
+  project** — the trigger fires on the attachment delete.
+- **A teardown that matches nothing looks exactly like a teardown that
+  worked.** Assert it left nothing behind, in the suite, as a check.
+- **A suite that names its subjects `fixture-…` cannot test anything that
+  excludes fixtures.** `app.resolve_project_by_name` filters
+  `not p.is_fixture`, and `is_fixture` is GENERATED from the slug — so
+  `verify:identity` spent eleven failing checks on a feature that works. Use
+  real subjects and tear them down (Issue #45).
 - **Extensions live in the `extensions` schema.** A function with
   `search_path = ''` must qualify `extensions.similarity`.
 - **A server-side `fetch` sends no `Origin`,** so it cannot detect a CORS
