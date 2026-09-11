@@ -341,7 +341,15 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
     transcriber.mode === 'api'
       ? await (async () => {
           const { bytes, filename } = await fetchTelegramAudio(token, String(payload.voice_file_id))
-          return transcribeOverApi(bytes, filename, transcriber, vocabulary)
+          return transcribeOverApi(
+            bytes,
+            filename,
+            transcriber,
+            vocabulary,
+            // Telegram's own figure. The local path already used it; the API
+            // path dropped it, and every voice note echoed as "(0s)".
+            payload.voice_seconds ?? 0,
+          )
         })()
       : await transcribeTelegramVoice(token, String(payload.voice_file_id), {
           ...(payload.voice_seconds === null || payload.voice_seconds === undefined
@@ -366,7 +374,28 @@ async function listen(db: SqlExecutor, job: Job, payload: Payload): Promise<stri
   // are useful: the chat to send to, and the message to reply UNDER, so the
   // echo threads beneath the voice note it belongs to instead of arriving as a
   // loose line in the conversation.
-  await echoTranscript(token, String(payload.origin_ref ?? ''), heard)
+  //
+  // ## Why this is now conditional
+  //
+  // Grant, 11 September, on receiving a transcript and a say-back as two
+  // messages from one voice note: *"I sent a single voice, and I kinda split
+  // the message up over two. That's probably not a good idea. Try to have
+  // everything self contained and want a message to avoid any confusion."*
+  //
+  // His earlier instruction still stands and is not being discarded — he asked
+  // to see the transcript *"immediately... and then it can give me the
+  // interpretation"*, so he can tell a mishearing from a misunderstanding. The
+  // two are only in tension about the MESSAGE COUNT, not the content. So when
+  // a say-back is coming, the transcript rides on it (`describePlan`) and this
+  // stays quiet; when nothing else is coming, this is the only thing he would
+  // get and it still fires.
+  //
+  // Same shape as the fix already in this file for the other duplicate pair:
+  // "this job goes quiet and the request speaks for both".
+  const sayBackFollows = readPlan(heard.text) !== null
+  if (!sayBackFollows) {
+    await echoTranscript(token, String(payload.origin_ref ?? ''), heard)
+  }
 
   await db.execute(`
     update public.inbound_commands
@@ -875,8 +904,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const payload = ((rows[0] as { pinned_config?: Payload } | undefined)?.pinned_config ??
         {}) as Payload
       let instruction = String(payload.instruction ?? '').trim()
+      /*
+        The transcript, quoted, when this arrived as a voice note.
+
+        It rides on the say-back rather than arriving as its own message —
+        Grant, 11 September: *"I sent a single voice, and I kinda split the
+        message up over two... Try to have everything self contained."* Null for
+        a typed instruction, where quoting his own text back is just noise.
+      */
+      let heardText: string | null = null
       if (instruction === '' && (payload.voice_file_id ?? null) !== null) {
         instruction = await listen(deps.db, job, payload)
+        heardText = `🎧 Heard: “${instruction}”`
       }
       if (instruction === '') throw new Error('the command carried no instruction')
 
@@ -925,7 +964,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           )
         `)
         return {
-          body: describePlan(plan),
+          /*
+            One message, not two.
+
+            The transcript leads so he can still tell a mishearing from a
+            misunderstanding at a glance — which is what he asked for when the
+            echo was added — and then the say-back and the buttons follow in
+            the same bubble. `heardText` is null when the instruction was
+            typed, in which case quoting it back would just be repetition.
+          */
+          body: heardText === null ? describePlan(plan) : `${heardText}\n\n${describePlan(plan)}`,
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
