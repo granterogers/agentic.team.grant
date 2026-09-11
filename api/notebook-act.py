@@ -71,6 +71,8 @@ ACTIONS = {
     "poll",
     "retry",
     "artifacts",
+    # Getting an artifact back OUT, which nothing could do before #66.
+    "download",
     "sources",
     "ask",
     "notebooks",

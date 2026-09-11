@@ -202,5 +202,9 @@
   "0201_the_roster_did_not_know_enough_words.sql": "c1fd2b08ab29fadbc8a9728be8bf4373f69143ecf5f5bfd25df3d5c6fb32402a",
   "0202_skills_route_work_now.sql": "31853dd8f30fd4aa1846fbdf4addbcd325d2e162026eba0fd2e62568c2a4432b",
   "0203_a_research_job_is_not_a_test.sql": "edcb49f17caa219bb5ad7bcfbfce4961c386689818c9fbc354ac9b753b1fca3b",
-  "0204_answer_the_button.sql": "a8b6f8d0a5f4907608145c4fa2b114081ee42d62e94532d6ae761fa8dfc42f9e"
+  "0204_answer_the_button.sql": "a8b6f8d0a5f4907608145c4fa2b114081ee42d62e94532d6ae761fa8dfc42f9e",
+  "0205_a_document_can_be_a_file.sql": "bae38ba20f05600c844b8d96e7657638ccf2a4c2a790de955f76d0aa97d47ada",
+  "0206_a_generated_file_was_made_not_sourced.sql": "86d908777d4fe4e549fe53c0ff67e48701800a2aceb659255de1c0c74f23c51d",
+  "0207_a_file_has_no_text_yet.sql": "fa22fd868468ccde66d0056d4e8e361812e8e7690766cd60d3822e2963fb7be0",
+  "0208_read_every_constraint_first.sql": "f02140af36f415e4547bf025f228bb1acb5f23d1490409f235cdffae65311506"
 }

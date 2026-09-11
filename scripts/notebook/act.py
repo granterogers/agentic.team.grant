@@ -369,6 +369,82 @@ async def main() -> None:
                 })
                 return
 
+            if action == "download":
+                """
+                The bytes of a finished artifact.
+
+                Issue #66. Grant: *"maybe bring that audio file into the
+                dashboard project, and just directly have the audio file sent
+                to me on Telegram that I can play it directly rather than
+                having to open notebook."* Everything up to "the notebook has
+                an artifact" existed; nothing could get the artifact OUT.
+
+                The library exposes this differently across versions and this
+                is the one place that has to know. Each candidate is tried and
+                the FIRST that yields bytes wins; if none does, the action says
+                so by name rather than returning an empty file — a zero-byte
+                audio overview sent to Telegram would look like a delivery
+                that worked.
+                """
+                artifact_id = args.get("artifact_id") or ""
+                if not artifact_id:
+                    die(action, "artifact_id is required")
+
+                items = await client.artifacts.list(notebook)
+                target = next((a for a in items if str(getattr(a, "id", "")) == artifact_id), None)
+                if target is None:
+                    die(action, f"no artifact {artifact_id} in this notebook")
+                if not bool(getattr(target, "is_completed", False)):
+                    die(action, f"artifact is {getattr(target, 'status_str', 'not ready')}")
+
+                blob = None
+                tried = []
+                for name in ("download", "fetch", "content", "bytes"):
+                    fn = getattr(client.artifacts, name, None)
+                    if fn is None:
+                        continue
+                    tried.append(name)
+                    try:
+                        got = fn(notebook, artifact_id)
+                        blob = await got if hasattr(got, "__await__") else got
+                        if blob:
+                            break
+                    except Exception as exc:  # noqa: BLE001 - the reason is the point
+                        tried[-1] = f"{name}({type(exc).__name__})"
+                        blob = None
+
+                # A share URL is the other shape the library offers, and it is
+                # enough: the caller can fetch it itself.
+                url = None
+                for attr in ("share_url", "url", "audio_url", "media_url"):
+                    value = getattr(target, attr, None)
+                    if isinstance(value, str) and value.startswith("http"):
+                        url = value
+                        break
+
+                if blob is None and url is None:
+                    die(action,
+                        "this notebooklm-py exposes no way to fetch an artifact; "
+                        f"tried {', '.join(tried) or 'nothing'} and found no share url")
+
+                emit({
+                    "ok": True,
+                    "action": action,
+                    "artifact_id": artifact_id,
+                    "title": getattr(target, "title", None),
+                    "kind": str(getattr(getattr(target, "kind", None), "value", "") or "unknown"),
+                    "url": url,
+                    # Base64 so it survives the JSON envelope every other action
+                    # already uses. Only when there are bytes and no URL — a URL
+                    # is smaller to pass and the caller can stream it.
+                    "base64": (
+                        __import__("base64").b64encode(blob).decode()
+                        if blob is not None and url is None else None
+                    ),
+                    "byte_size": len(blob) if blob is not None else None,
+                })
+                return
+
             if action == "ask":
                 question = args.get("question") or ""
                 if not question.strip():

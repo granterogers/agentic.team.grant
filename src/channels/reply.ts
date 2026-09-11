@@ -160,6 +160,16 @@ export function replyChannel(db: SqlExecutor): {
             a second list here would drift from it within a month.
           */
           keyboard: inlineKeyboard(context.actions, job.correlationId, context.projectUrl),
+          /*
+            The file rides on this message, not after it (#66).
+
+            Grant, on a voice note that arrived as two messages: *"try to have
+            everything self contained."* A twenty-minute audio overview and the
+            sentence explaining it, sent separately, is that failure in the
+            other direction — so the transport sends one `sendAudio` with the
+            words as its caption.
+          */
+          ...(output.attachAudio === undefined ? {} : { audio: output.attachAudio }),
           silent: false,
         },
       })

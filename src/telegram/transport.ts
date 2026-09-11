@@ -40,6 +40,21 @@ export interface TelegramMessageBody {
   /** A pager should not also ring. Set for anything below `important`. */
   readonly silent?: boolean
   /**
+   * Send this as a playable audio file rather than as text (#66).
+   *
+   * `url` when Telegram can fetch it itself, `bytes` when it cannot — which is
+   * the case for anything in our private bucket. Telegram caps a bot upload at
+   * 50MB and will not say so kindly, so the caller checks first.
+   */
+  readonly audio?: {
+    readonly url?: string
+    readonly bytes?: Uint8Array
+    readonly filename: string
+    readonly title: string
+    readonly performer?: string
+    readonly durationSeconds?: number
+  }
+  /**
    * Suppress the default feedback buttons. Rare, and each use says why.
    *
    * Not a general escape hatch: the default exists because Grant asked for
@@ -73,6 +88,22 @@ export class TelegramTransport implements Transport {
 
   async send(request: SendRequest): Promise<SendResult> {
     const message = request.body as TelegramMessageBody
+
+    /*
+      A file, sent as a file.
+
+      Issue #66. Grant: *"just directly have the audio file sent to me on
+      Telegram that I can play it directly in Telegram rather than necessarily
+      having to open notebook."* `sendMessage` was the only method this
+      transport used, so the best it could do was a link — which is the trip to
+      NotebookLM he was trying to avoid, one click further away.
+
+      `sendAudio` rather than `sendVoice`: a voice note is a waveform bubble
+      with no title, which is right for a fifteen-second reply and wrong for a
+      twenty-minute overview. `sendAudio` shows the title, the duration and a
+      scrubber, and it survives being forwarded.
+    */
+    if (message.audio !== undefined) return await this.sendAudio(request, message)
     const body: Record<string, unknown> = {
       chat_id: request.targetRef,
       text: message.text,
@@ -131,6 +162,81 @@ export class TelegramTransport implements Transport {
         // `ok: true` with no message id should not happen, and if it does we
         // cannot address the message afterwards — which is the same position an
         // indeterminate send leaves us in, so it is reported the same way.
+        throw new TransportError('indeterminate:no_message_id', 'indeterminate')
+      }
+      return { messageRef: String(result.message_id) }
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      if (error instanceof TelegramApiError) throw new TransportError(error.code, error.kind)
+      throw error
+    }
+  }
+
+  /**
+   * Send a playable audio file.
+   *
+   * Two paths because Telegram offers two, and which one applies is decided by
+   * whether the bytes are reachable from the public internet. A URL is one JSON
+   * request; bytes are a multipart upload, and the upload is what a private
+   * bucket forces.
+   */
+  private async sendAudio(request: SendRequest, message: TelegramMessageBody): Promise<SendResult> {
+    const audio = message.audio
+    if (audio === undefined) throw new TransportError('no_audio', 'terminal')
+
+    const fields: Record<string, string> = {
+      chat_id: request.targetRef,
+      title: audio.title,
+      // The caption carries the words that would otherwise have been the whole
+      // message, so nothing is lost by sending a file instead of a sentence.
+      caption: message.text.slice(0, 1024),
+      parse_mode: 'HTML',
+      disable_notification: String(message.silent === true),
+      ...(audio.performer === undefined ? {} : { performer: audio.performer }),
+      ...(audio.durationSeconds === undefined
+        ? {}
+        : { duration: String(Math.round(audio.durationSeconds)) }),
+    }
+    if (request.threadRef !== null) {
+      fields.reply_to_message_id = String(Number(request.threadRef))
+      fields.allow_sending_without_reply = 'true'
+    }
+
+    try {
+      let response: { result?: unknown }
+      if (audio.url !== undefined && audio.url !== '') {
+        // Telegram fetches it. One request, and it fails if the URL is not
+        // publicly reachable — which is why a private bucket takes the other
+        // path rather than trying this first and falling back.
+        response = await this.telegram.call('sendAudio', { ...fields, audio: audio.url })
+      } else if (audio.bytes !== undefined) {
+        const form = new FormData()
+        for (const [k, v] of Object.entries(fields)) form.append(k, v)
+        form.append(
+          'audio',
+          // `Uint8Array` into a Blob, not a Buffer: this runs in Deno as well
+          // as Node, and Buffer is not a global there. Bitten three times.
+          /*
+            The array is widened rather than typed.
+
+            `BlobPart` is a DOM lib name and this project runs `tsc` without
+            the DOM lib — deliberately, so a real DOM mistake in Node code
+            cannot pass. `Blob` and `FormData` are Node 18+ globals and work
+            at runtime; only the part type is missing, so it is the one thing
+            widened rather than switching the lib on for the whole project.
+          */
+          new Blob([audio.bytes] as unknown as ConstructorParameters<typeof Blob>[0], {
+            type: 'audio/mpeg',
+          }),
+          audio.filename,
+        )
+        response = await this.telegram.callForm('sendAudio', form)
+      } else {
+        throw new TransportError('audio_has_neither_url_nor_bytes', 'terminal')
+      }
+
+      const result = response.result as { message_id?: number } | undefined
+      if (result?.message_id === undefined) {
         throw new TransportError('indeterminate:no_message_id', 'indeterminate')
       }
       return { messageRef: String(result.message_id) }

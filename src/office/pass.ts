@@ -46,6 +46,7 @@ import { backupHandler } from '../handlers/backup.ts'
 import { briefingHandler } from '../handlers/briefing.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
+import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { mailHandler } from '../handlers/mail.ts'
@@ -288,6 +289,7 @@ export const buildPass = async (
     capacityHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     briefingHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     driveWatchHandler(db),
+    collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports

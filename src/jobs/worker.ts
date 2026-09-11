@@ -69,6 +69,26 @@ export interface HandlerOutput {
    */
   readonly announce?: boolean
   /**
+   * Send this output as a playable audio file rather than as text (#66).
+   *
+   * On the OUTPUT, like `announce`, because the handler is the only thing that
+   * knows there is a file — and because it must ride on the same delivery as
+   * the sentence. Grant, on a voice note that arrived as two messages: *"try to
+   * have everything self contained."* A file and its explanation sent
+   * separately is that failure in the other direction.
+   *
+   * Not stored on the output row: bytes belong in Storage and the row already
+   * records where. This is a delivery instruction with the lifetime of one
+   * send.
+   */
+  readonly attachAudio?: {
+    readonly bytes: Uint8Array
+    readonly filename: string
+    readonly title: string
+    readonly performer?: string
+    readonly durationSeconds?: number
+  }
+  /**
    * How loudly. `routine` is Slack only; `important` and above buzz a phone.
    *
    * Undefined means routine, which is the important half of this: §12 gives
