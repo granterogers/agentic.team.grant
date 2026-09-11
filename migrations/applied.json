@@ -175,5 +175,6 @@
   "0174_a_projects_tasks_are_its_own.sql": "712f1c4beebdcbca3065bfa5ae3bf63e4277e583a1a61cc77babf1038dd85361",
   "0175_a_document_is_an_asset.sql": "3153ab70fe640850ca9f4ffa541c324be406de514e35b197e1eec829f0093c03",
   "0176_reaching_the_graph.sql": "65271697f203db87d4f5218239896c2e85c638f2ca6b14449919cd33350f197c",
-  "0177_a_document_grant_made_himself.sql": "e4c01cb42b96fe8965d2c846a6e725f2f62bf90e4866a467387e8392ea274313"
+  "0177_a_document_grant_made_himself.sql": "e4c01cb42b96fe8965d2c846a6e725f2f62bf90e4866a467387e8392ea274313",
+  "0178_origin_follows_the_connector.sql": "ae6a449c390d626acb731ecadb3b49f884464c4f11d60f154569407a23261811"
 }
