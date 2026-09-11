@@ -13,7 +13,8 @@
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
 import { randomBytes } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
+import { join, relative } from 'node:path'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
@@ -186,6 +187,47 @@ if (project === undefined) {
 }
 
 const html = await readFile('web/hq/index.html', 'utf8')
+
+/*
+  The studio prototype, at /studio/.
+
+  Grant, looking at the deployed dashboard: *"excuse me but where all the nice
+  graphics that we spent so long trying to perfect?"* — and the honest answer
+  was that they had never been deployed. `web/studio` is the designed frontend,
+  it has had days of visual iteration, and it existed only on disk and as PNGs
+  in `.out/`. Every critique of it was made from a screenshot, which is exactly
+  the thing §14A says not to do.
+
+  It ships alongside rather than instead of. They are different things: the HQ
+  page is live and wired to the office, the studio is the M0 prototype and its
+  data is invented. Two URLs says that more clearly than one page trying to be
+  both.
+
+  Fonts and PDFs go up base64: Vercel's file API takes a string, and a woff2
+  read as utf8 is a corrupted woff2 that fails silently as a fallback face —
+  which is the exact failure the sandbox already has, and shipping it to
+  production would make the one thing we cannot check locally also wrong live.
+*/
+const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico'])
+const studioFiles: { file: string; data: string; encoding?: 'base64' }[] = []
+const walk = async (dir: string): Promise<void> => {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      await walk(full)
+      continue
+    }
+    const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
+    const at = `studio/${relative('web/studio', full).split('\\').join('/')}`
+    studioFiles.push(
+      BINARY.has(ext)
+        ? { file: at, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
+        : { file: at, data: await readFile(full, 'utf8') },
+    )
+  }
+}
+await walk('web/studio')
+console.log(`  studio: ${String(studioFiles.length)} files`)
 const reader = await readFile('api/notebook.py', 'utf8')
 // The write side, and the script it spawns. `act.py` ships as a plain file
 // rather than being reimplemented in the function: fourteen actions with a
@@ -208,6 +250,7 @@ const deployment = await fetch('https://api.vercel.com/v13/deployments', {
       { file: 'scripts/notebook/act.py', data: actScript },
       { file: 'requirements.txt', data: requirements },
       { file: 'vercel.json', data: vercelConfig },
+      ...studioFiles,
     ],
     projectSettings: { framework: null },
   }),

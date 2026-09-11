@@ -212,5 +212,8 @@
   "0211_a_dismissal_that_actually_silences.sql": "6267e46d7901976b53d2ee477d98809a96bc822b64f77ac9adc2648fd955be63",
   "0212_a_skill_is_a_procedure_with_no_address_in_it.sql": "b0f666e0696f77463a3e24b42f8f05a90c290076dc99e466577317145e16028e",
   "0213_writing_a_skill_down_and_reading_it_back.sql": "6c45c9397dd8e576c1a78567a29dcf55ddf68986a23e3ac31a5c595decd821d8",
-  "0214_the_team_page_shows_how_each_person_works.sql": "69f66e49ebdae762287dcfd3f94620ef126c6ae7690f74920deaeb18084e465d"
+  "0214_the_team_page_shows_how_each_person_works.sql": "69f66e49ebdae762287dcfd3f94620ef126c6ae7690f74920deaeb18084e465d",
+  "0215_asking_for_reach_and_the_record_of_the_answer.sql": "14cf347b4976035d038e9310e0c8f6beb9e80a729891d5077a281757a48d515a",
+  "0216_a_ceiling_on_the_office_improving_itself.sql": "06b857950922f12216eab492f031d03a42c0bcf798ea9e9a47e8fd375630789e",
+  "0217_every_self_change_leaves_a_trace_with_a_way_back.sql": "1f773d2e6809c53068004a4465d26e593d01ef443aeafb34bb299e99e8873700"
 }
