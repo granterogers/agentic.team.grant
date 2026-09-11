@@ -2731,3 +2731,56 @@ kbd {
    `clamp` lets it be the display size it should be on a desktop and something
    a phone can hold, without a breakpoint. */
 .projname { font-size: clamp(24px, 2.6vw + 14px, 38px); }
+
+/* --- the connect picker (#92) --------------------------------------------
+   A panel rather than a dropdown: it lists everything the office can reach,
+   with its state, and that is more than a menu's worth of reading. Named
+   `.connectpick` and `.pick` rather than `.menu` or `.card` — grep before you
+   invent a class name, because `.stage` was a status pill AND a pannable
+   surface and the collision pushed a row 660px down the page. */
+.connectpick {
+  border: 1px solid var(--edge); border-radius: var(--r-card); background: var(--surface);
+  padding: var(--s4); margin-bottom: var(--s4); box-shadow: var(--lift-1);
+}
+.pickgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--s3); }
+.pick {
+  display: grid; gap: 4px; align-content: start; text-align: left;
+  padding: var(--s3); min-height: 64px; border-radius: 10px;
+  border: 1px solid var(--edge); background: var(--ground); color: var(--ink);
+}
+.pick:hover { border-color: var(--accent); background: var(--accent-wash); }
+/* Already connected, and not offering to do it again. Not a button at all —
+   `display: grid` on a div, so there is nothing to press and nothing to
+   explain. */
+.pick.done, .pick.off { opacity: .62; }
+.pick.done:hover, .pick.off:hover { border-color: var(--edge); background: var(--ground); }
+.pickname { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.pickname b { font: 600 14px/1.25 var(--text); }
+.pickname .mark { width: 18px; height: 18px; display: grid; place-items: center; flex: none; }
+.pickname .mark svg { width: 100%; height: 100%; }
+@media (max-width: 560px) { .pickgrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* --- the dialog's own header (#88) ---------------------------------------
+   The close button used to be a sibling of the sheet, positioned against the
+   backdrop, so it floated in the corner of the SCREEN rather than the corner
+   of the thing it closes.
+
+   Sticky, not fixed: the sheet is the scroll container, so sticky keeps the
+   header and its X in place while the longest tab scrolls underneath. Fixed
+   would anchor to the nearest ancestor carrying backdrop-filter, filter,
+   transform, perspective or will-change — and the sheet has glass on it. */
+.sheethead {
+  position: sticky; top: calc(var(--s5) * -1); z-index: 6;
+  margin: calc(var(--s5) * -1) calc(var(--s5) * -1) 0;
+  padding: var(--s5) var(--s5) var(--s4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--edge);
+  display: flex; align-items: flex-start; gap: var(--s4);
+}
+/* In the header it is a normal flex item, so every positioning rule from the
+   floating version has to be undone rather than inherited. */
+.close.inhead {
+  position: static; flex: none; box-shadow: none;
+  background: transparent; border: 1px solid var(--edge);
+}
+.close.inhead:hover { background: var(--sunken); color: var(--ink); }

@@ -115,6 +115,36 @@ const sheet = (el, open) => {
   document.body.classList.toggle('behind', anyOpen)
 }
 
+/*
+  Escape closes whatever is open (#88, #98).
+
+  One listener on the document rather than one per sheet, for the same reason
+  `sheet()` exists: five copies of the same behaviour drift the first time one
+  of them changes.
+
+  It is what makes the close button a convenience rather than the only way out
+  — which is the actual complaint behind both of those issues. A panel you can
+  only leave by finding one small target is a panel people get stuck in, and
+  the studio has been shipping two of them.
+
+  The call is deliberately NOT hung up here: closing the sheet leaves the call
+  running (#101), and Escape is closing the sheet.
+*/
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    for (const id of ['#viewer', '#settings']) {
+      const el = $(id)
+      if (el && !el.hidden) {
+        if (id === '#viewer') unwireCall()
+        sheet(el, false)
+        syncCallButtons()
+        return
+      }
+    }
+  })
+}
+
 // --- pieces -----------------------------------------------------------------
 
 /*
@@ -1155,7 +1185,14 @@ const PANEL = {
       ${p.connectors.length === 0
         ? '<span class="t-meta">Nothing yet — this project stands on its own.</span>'
         : p.connectors.map((c) => `<span class="link">${esc(c)}</span>`).join('')}
-      <button class="link add">+ Connect something</button>
+      <!--
+        The project's own version of the same dead button (#92). It goes to the
+        project's Sources tab, which is where attaching to THIS project happens
+        and where a pasted Drive link is already recognised on its own (#62) —
+        not to Settings, which is about the office's credentials rather than
+        about this project.
+      -->
+      <button class="link add" data-tab="sources">+ Connect something</button>
     </div>`,
 
   note: () => `<textarea class="notepad" placeholder="Anything you want to remember about
@@ -2285,7 +2322,44 @@ function connectionsTab() {
         <span class="dotstate"></span>
         <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
         <span class="t-meta">${esc(c.last)}</span>
-        ${c.fix === undefined ? '' : `<button class="btn small">${esc(c.fix)}</button>`}
+        <!--
+          The action, and it goes somewhere (#89, #90).
+
+          There was a button here carrying the text of c.fix and NOTHING ELSE —
+          no attribute, no handler. "Connect it" on the Zoom card and "Rotate
+          it" on the GitHub card, both completely inert. A card that names the
+          problem and offers a button that does not fix it is worse than a card
+          that only names the problem.
+
+          Not connected gets Connect, routed to the flow that already exists.
+          Connected gets Disconnect where a disconnect actually exists — which
+          today is the Google family, through forget_google. Everything else
+          says where its credential lives instead of offering a button that
+          would lie.
+
+          No backticks in this comment. Template literal.
+        -->
+        <span class="t-meta" data-said></span>
+        ${(() => {
+          const route = config.routeFor(c.key)
+          if (!config.isConnected(c.state)) {
+            if (route.how === 'oauth') {
+              return `<a class="btn small primary" href="${esc(GOOGLE_START)}"
+                        target="_blank" rel="noopener">${esc(route.label)}</a>`
+            }
+            if (route.how === 'tab') {
+              return `<button class="btn small primary" data-goto-setting="${esc(route.to)}"
+                        >${esc(route.label)}</button>`
+            }
+            return `<span class="t-meta">${esc(route.why ?? route.label)}</span>`
+          }
+          return route.family === 'google' && canWrite()
+            ? '<button class="btn small quiet" data-forget-google>Disconnect</button>'
+            : route.how === 'tab'
+              ? `<button class="btn small quiet" data-goto-setting="${esc(route.to)}"
+                   >Manage</button>`
+              : ''
+        })()}
       </div>
     </article>`
   const list = config.services()
@@ -2302,7 +2376,41 @@ function connectionsTab() {
     <div class="tabhead">
       <p class="t-lead" style="margin:0">${list.length} services. ${
         bad === 0 ? 'All of them well.' : `${bad} want looking at.`}</p>
-      <button class="btn">+ Connect something</button>
+      <button class="btn" data-connect-open>+ Connect something</button>
+    </div>
+    <!--
+      The picker (#92).
+
+      This button had no attribute and no handler at all — the front door to
+      every integration in the product, completely inert, in two places.
+
+      It lists only what the office can actually reach, and every row leads to
+      a real flow or says plainly that there is not one. A picker offering a
+      service that cannot be connected is the same defect one level up.
+
+      No backticks in this comment. Template literal.
+    -->
+    <div class="connectpick" data-connect-menu hidden>
+      <p class="t-lead" style="margin:0 0 var(--s3)">What would you like the office to
+        reach? Each of these goes to the real thing.</p>
+      <div class="pickgrid">
+        ${list.map((c) => {
+          const route = config.routeFor(c.key)
+          const on = config.isConnected(c.state)
+          const body = `<span class="pickname">${c.svg ? `<span class="mark">${c.svg}</span>` : ''}
+              <b>${esc(c.name)}</b></span>
+            <span class="t-meta">${esc(on ? config.STATE_LABEL[c.state] : (route.why ?? route.label))}</span>`
+          if (on) return `<div class="pick done">${body}</div>`
+          if (route.how === 'oauth') {
+            return `<a class="pick" href="${esc(GOOGLE_START)}" target="_blank"
+                      rel="noopener">${body}</a>`
+          }
+          if (route.how === 'tab') {
+            return `<button class="pick" data-goto-setting="${esc(route.to)}">${body}</button>`
+          }
+          return `<div class="pick off">${body}</div>`
+        }).join('')}
+      </div>
     </div>
     <div class="servicegrid">${list.map(card).join('')}</div>
   </div>`
@@ -2453,8 +2561,7 @@ function appearanceTab() {
         <p class="t-meta" id="texerr" hidden></p>
       </div>
 
-      <p class="t-meta" style="margin-top:var(--s4)">Light and dark follow your system
-        setting. Every palette has both.</p>    </div>`
+    </div>`
 }
 
 
@@ -2482,13 +2589,32 @@ function settingsSheet() {
     : state.setting === 'help' ? helpTab()
     : teamTabSettings()
 
+  /*
+    The close button lives in the dialog's own header (#88).
+
+    Grant: *"Put the X in the top-right corner of the dialog's outer header,
+    outside the content area."* It was a sibling of the sheet, positioned
+    against the backdrop — so it floated in the corner of the SCREEN, detached
+    from the thing it closes, and on a narrow window it was nowhere near it.
+
+    The header is `position: sticky` inside the scrolling sheet rather than
+    `position: fixed`. Fixed would have been wrong twice over: the sheet is the
+    scroll container, and a fixed child of anything carrying backdrop-filter,
+    filter, transform, perspective or will-change anchors to that element
+    instead of the viewport — which is how a bottom navigation bar once
+    rendered across the top of the page.
+  */
   v.innerHTML = `<div class="sheet wide settings">
-    <div class="chead">
+    <div class="chead sheethead">
       <span style="flex:1;min-width:0">
         <h2 class="t-title" style="margin:0">The office</h2>
         <p class="t-meta" style="margin:4px 0 0">Everything about how this place
           runs, and what it is plugged into.</p>
       </span>
+      <button class="close inhead" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
     </div>
     <div class="settabs" role="tablist" aria-label="Settings">
       ${config.TABS.map((t) => `<button role="tab" class="settab ${
@@ -2496,14 +2622,30 @@ function settingsSheet() {
       }" aria-selected="${state.setting === t.id}" data-setting="${t.id}">${esc(t.name)}</button>`).join('')}
     </div>
     ${body}
-  </div>
-  <button class="close" aria-label="Close">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-  </button>`
+  </div>`
 
   for (const b of v.querySelectorAll('[data-setting]')) {
     b.addEventListener('click', () => { state.setting = b.dataset.setting; settingsSheet(); sheet(v, true) })
+  }
+  /*
+    Take me to where that is set up (#89, #92).
+
+    The same navigation as the tab strip, but from a card. The point of it is
+    that a person pressing Connect on the Notion card should not then have to
+    know that Notion's token lives in "Setting up" — §31 again.
+  */
+  /* Open and close the picker. */
+  const pickMenu = $('[data-connect-menu]', v)
+  $('[data-connect-open]', v)?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    if (pickMenu) pickMenu.hidden = !pickMenu.hidden
+  })
+  for (const b of v.querySelectorAll('[data-goto-setting]')) {
+    b.addEventListener('click', () => {
+      state.setting = b.dataset.gotoSetting
+      settingsSheet()
+      sheet(v, true)
+    })
   }
   for (const el of v.querySelectorAll('[data-lift]')) {
     tiltable(el, { max: Number(el.dataset.tilt ?? 3), scale: 1.006 })

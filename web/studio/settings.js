@@ -344,3 +344,60 @@ export const services = () => CONNECTIONS.map((c) => ({ ...c, ...(MARKS[c.key] ?
   payload arrives and on the morning it does not.
 */
 export const staff = () => (TEAM.length > 0 ? TEAM : CREW)
+
+
+/*
+  Where pressing a service's button actually goes (#89, #92).
+
+  Every one of these already existed somewhere. Google's OAuth start has worked
+  for weeks — it was an anchor buried in the "Setting up" tab, three tabs away
+  from the card Grant pressed. Notion's token, GitHub's token and NotebookLM's
+  credential are all in the same place. The channels have their own tab.
+
+  So this is not new capability. It is a map from the card a person presses to
+  the flow that already exists, which is the whole of what was missing: §31
+  treats an avoidable request for manual configuration as a design failure, and
+  "find the right tab yourself" is exactly that.
+
+  `how` says what kind of destination it is, because the three behave
+  differently: 'oauth' leaves the page for a provider and comes back, 'tab'
+  moves within Settings, and 'none' is an honest dead end that says so rather
+  than pretending.
+*/
+export const ROUTES = {
+  drive: { how: 'oauth', family: 'google', label: 'Connect Google' },
+  calendar: { how: 'oauth', family: 'google', label: 'Connect Google' },
+  gmail: { how: 'oauth', family: 'google', label: 'Connect Google' },
+  notebooklm: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  notion: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  github: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  openrouter: { how: 'tab', to: 'models', label: 'Set up in Models' },
+  supabase: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  telegram: { how: 'tab', to: 'channels', label: 'Set up in Channels' },
+  slack: { how: 'tab', to: 'channels', label: 'Set up in Channels' },
+  mcp: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  zoom: {
+    how: 'none',
+    label: 'Not supported yet',
+    why: 'Nothing in the office reads Zoom yet. Recordings reach it through Drive.',
+  },
+}
+
+/** The route for a service, or an honest unknown. */
+export const routeFor = (key) =>
+  ROUTES[key] ?? {
+    how: 'none',
+    label: 'No route yet',
+    why: 'This service has no connect flow in the studio. It is set up outside it.',
+  }
+
+/*
+  Whether a service counts as connected.
+
+  Deliberately NOT `state === 'ok'`. `attested` means we cannot poll it and
+  someone has vouched for it, which is still connected; `degraded` is connected
+  and unwell, and offering Connect on it would be wrong — the thing to offer is
+  the fix.
+*/
+export const isConnected = (state) =>
+  state === 'ok' || state === 'attested' || state === 'degraded'
