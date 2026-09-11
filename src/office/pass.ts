@@ -45,6 +45,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { backupHandler } from '../handlers/backup.ts'
 import { briefingHandler } from '../handlers/briefing.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
+import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
@@ -291,6 +292,9 @@ export const buildPass = async (
     driveWatchHandler(db),
     collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
+    // The other direction: dated tasks into the diary (#94, ADR-0020). Off
+    // until `calendar.sync_tasks` is turned on.
+    calendarTasksHandler(db),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
     // "no storage key" as an outcome rather than failing, because a backup

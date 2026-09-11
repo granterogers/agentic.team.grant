@@ -238,5 +238,9 @@
   "0237_tasks_reach_the_diary.sql": "a4b3c03e574df2e035c6128936acad2f5f9dad751b95dfd820943b54615217e0",
   "0238_a_task_you_can_actually_create.sql": "66af16a328875680953b524e53c70b82c3ccbbe1c4c4f4d11c4985e0301b093d",
   "0239_projects_have_a_status_not_an_is_archived.sql": "c1d60daf71aeee2171c6e58710a8d7f249dff9f8eac5c98f228cdff29cb8e06d",
-  "0240_show_me_has_somewhere_to_go.sql": "99c517e356dbc528e0ca01a67b1ea96e92f03ef3ffb5b328b815807f6412a805"
+  "0240_show_me_has_somewhere_to_go.sql": "99c517e356dbc528e0ca01a67b1ea96e92f03ef3ffb5b328b815807f6412a805",
+  "0241_a_switch_for_putting_tasks_in_the_diary.sql": "b6c74b585c5485212dd83d3d3e987f43bfbfb87b65d5486e30b28443b5bee00b",
+  "0242_a_duty_that_keeps_the_diary_matching.sql": "ed5916f0d028b314b34982a907d53e564835efc47675d9323cc514057ad18903",
+  "0243_somewhere_to_turn_the_diary_sync_on.sql": "7a0a2ef23f206da13a65b4bd820c6304fa91434e2922bd9a5c8e61cdc6a84afa",
+  "0244_the_key_is_allowed_in_both_lists.sql": "c1e13a6be61057c6411c8fcf14a48e2ae1b67ce22516c2d0b3cf2091a893dd7b"
 }
