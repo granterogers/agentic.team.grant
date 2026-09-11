@@ -2810,3 +2810,36 @@ kbd {
 .hireform input:focus { outline: none; border-color: var(--accent); }
 .hireact { display: flex; align-items: flex-end; gap: var(--s3); flex-wrap: wrap; }
 .hireact .btn { min-height: 44px; }
+
+/* --- the document reader (#95, #96) ---------------------------------------
+   The sheet is the scroll container and the head is sticky inside it, so the
+   close button stays put through a 180,000-character document — which is the
+   longest one the office actually holds, so this is not a hypothetical. Same
+   mechanism as the settings dialog (#88), same reason not to use fixed. */
+.docsheet { display: flex; flex-direction: column; }
+/* Room under the sticky head and above the sheet's floor. Without it the first
+   line sits hard against the header rule and the last against the edge, which
+   reads as clipped even though nothing is. */
+.docbody { min-width: 0; padding: var(--s5) 0 var(--s2); }
+
+/* A measure, because a 180,000-character document set the full width of a
+   1440px sheet is unreadable however correct it is. 68ch is the usual advice
+   and it is right. */
+.doctext { max-width: 68ch; }
+.doctext p { margin: 0 0 var(--s4); font: 400 15.5px/1.68 var(--text); color: var(--ink); }
+.doctext p:last-child { margin-bottom: 0; }
+.docfoot { margin: var(--s4) 0 0; }
+
+/* The browser's own PDF reader. `aspect-ratio` with max-width so it cannot be
+   the thing that pushes a phone sideways — `npm run wide` filters SVG children
+   and scroll containers, and an iframe is neither. */
+.pdfwrap { width: 100%; max-width: 100%; aspect-ratio: 3 / 4; }
+.pdfframe {
+  width: 100%; height: 100%; border: 1px solid var(--edge);
+  border-radius: var(--r-card); background: var(--surface); display: block;
+}
+@media (max-width: 560px) { .pdfwrap { aspect-ratio: 2 / 3; } }
+
+/* An audio document, played rather than described. Full width because the
+   browser's own control is the whole interface here. */
+.docaudio { width: 100%; display: block; }

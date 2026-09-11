@@ -43,7 +43,9 @@ const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 /** The complete list. A section not named here does not exist. */
-const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unknown> }>> = {
+const SECTIONS: Readonly<
+  Record<string, { fn: string; args?: Record<string, unknown>; arg?: string }>
+> = {
   overview: { fn: 'hq_overview' },
   staff: { fn: 'hq_staff' },
   usage: { fn: 'hq_usage' },
@@ -71,6 +73,20 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
     `web/studio/usage.js` was written in its exact shape.
   */
   usage_overview: { fn: 'usage_overview', args: { p_days: 30 } },
+  /*
+    One document, in full (#95).
+
+    The FIRST section that takes a caller-supplied argument — every other one
+    has fixed args baked in above. `arg` names the single RPC parameter the
+    `id` query string is allowed to fill, so a section cannot be talked into
+    passing something it did not ask for.
+
+    It exists because `hq_studio` returns up to 24 documents per project and
+    cannot carry their text: the longest document in the office is 180,000
+    characters, and forty of those is not a first paint. So the grid gets
+    metadata and opening one fetches it — the same reasoning as `lately`.
+  */
+  document: { fn: 'studio_document', arg: 'p_document_id' },
   // What the office did and what is being built, as one page (#68).
   lately: { fn: 'hq_studio_lately', args: { p_limit: 40 } },
   // The first-run checklist, for the Setting up pane (#68). `setup` already
@@ -272,6 +288,28 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: 'unknown section', sections: Object.keys(SECTIONS) }, 400)
   }
 
+  /*
+    The one argument a caller may supply, and only where the section declares it.
+
+    Validated as a UUID here rather than left to Postgres. An id that is not a
+    uuid comes back from PostgREST as a type error, and §25 forbids putting a
+    database error in front of a person — but more to the point, this is the
+    only place in the API where a query string reaches an RPC, so the shape is
+    checked at the door.
+
+    `id` is ignored entirely for a section that declares no `arg`, so adding
+    `?id=` to any other section changes nothing.
+  */
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  let args: Record<string, unknown> = section.args ?? {}
+  if (section.arg !== undefined) {
+    const id = url.searchParams.get('id') ?? ''
+    if (!UUID.test(id)) {
+      return json({ error: 'that section needs a valid id', section: name }, 400)
+    }
+    args = { ...args, [section.arg]: id }
+  }
+
   const response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
     method: 'POST',
     headers: {
@@ -279,7 +317,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       Authorization: `Bearer ${SERVICE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(section.args ?? {}),
+    body: JSON.stringify(args),
   })
 
   if (!response.ok) {
@@ -289,5 +327,44 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: 'upstream failed', section: name }, 502)
   }
 
-  return json({ section: name, data: await response.json() })
+  const data = await response.json()
+
+  /*
+    A document with a file gets a signed URL, minted here (#96).
+
+    The `files` bucket is PRIVATE, so `storage_path` is useless to a browser —
+    an href on it would 404, and making the bucket public to avoid this would
+    put every document Grant has ever imported on the open internet.
+
+    Signing needs the service key, which exists here and must never exist in
+    the page. So the RPC returns the path, this swaps it for a URL, and the
+    path itself is dropped from the response: the browser gets a link it can
+    follow and learns nothing about how storage is laid out.
+
+    Ten minutes. Long enough to open a PDF and read it, short enough that a URL
+    caught in a screenshot — and these get attached to build steps — has
+    expired before anyone else could use it. The page fetches a fresh one every
+    time a document is opened, so a longer life buys nothing.
+  */
+  if (name === 'document' && typeof data?.path === 'string' && data.path !== '') {
+    const signed = await fetch(`${DB_URL}/storage/v1/object/sign/files/${data.path}`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 600 }),
+    })
+    if (signed.ok) {
+      const { signedURL } = (await signed.json()) as { signedURL?: string }
+      if (signedURL) data.url = `${DB_URL}/storage/v1${signedURL}`
+    } else {
+      // Not fatal: the reader falls back to the text, which is usually there.
+      console.error(`hq-api document: could not sign (${String(signed.status)})`)
+    }
+    data.path = undefined
+  }
+
+  return json({ section: name, data })
 })

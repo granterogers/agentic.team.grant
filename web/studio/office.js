@@ -90,8 +90,16 @@ export async function act(action, args = {}) {
 }
 
 /** Read one section, for the panes that want their own rather than the whole payload. */
-export async function read(section) {
-  const r = await fetch(`${API}?section=${encodeURIComponent(section)}`, {
+export async function read(section, id) {
+  /*
+    `id` is for the one section that takes an argument — `document` (#95).
+
+    Appended rather than made a separate function, because the auth, the 401
+    handling and the unwrapping are identical and a second copy of those is a
+    second place for them to drift.
+  */
+  const q = id === undefined ? '' : `&id=${encodeURIComponent(id)}`
+  const r = await fetch(`${API}?section=${encodeURIComponent(section)}${q}`, {
     headers: { Authorization: `Bearer ${token.get()}` },
   })
   if (r.status === 401) {

@@ -3949,25 +3949,143 @@ function labelEditor(after) {
   sheet(v, true)
 }
 
+/*
+  Opening a document shows the document (#95, #96).
+
+  It used to draw `pageSvg(doc.title, doc.kind)` — a GENERATED ILLUSTRATION of
+  a page, the same drawing the grid thumbnail uses, at a larger size. The text
+  was never rendered anywhere, at any length. Grant's issue said "show complete
+  documents" and the honest reading of that was that it truncated; it did not
+  truncate, it never showed any.
+
+  The illustration is still what you see while the text is on its way, and it
+  is still what you get for a document the office cannot read back — an audio
+  file, or a Notion database container that is a folder rather than a page.
+  It is a good drawing. It was only ever the wrong thing to stop at.
+
+  The fetch is per document and deliberate: `hq_studio` carries up to 24
+  documents per project and cannot carry their text — the longest document in
+  the office is 180,000 characters. Metadata in the grid, content on open, the
+  same shape `needLately()` uses.
+*/
 function openDoc(doc, from) {
   const v = $('#viewer')
-  v.innerHTML = `<div class="sheet">
-      <div class="t-label">${esc(doc.origin)}</div>
+  const head = `<div class="t-label">${esc(doc.origin)}</div>
       <h2 class="t-title" style="margin:var(--s2) 0 var(--s3)">${esc(doc.title)}</h2>
-      <p class="t-meta">${esc(doc.size)}</p>
-      <div class="bigpage" data-bigpage>${pageSvg(doc.title, doc.kind)}</div>
-    </div>
-    <button class="close" aria-label="Close">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>`
+      <p class="t-meta">${esc(doc.size)}</p>`
+  v.innerHTML = `<div class="sheet docsheet">
+      <div class="sheethead">
+        <span style="flex:1;min-width:0">${head}</span>
+        <button class="close inhead" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="docbody" data-docbody>
+        <div class="bigpage" data-bigpage>${pageSvg(doc.title, doc.kind)}</div>
+      </div>
+    </div>`
   if (doc.file) paint($('[data-bigpage]', v), doc.file, 760)
   const page = $('.page', from)
+  const shut = () => carry('doc-open', page, () => { sheet(v, false) })
   carry('doc-open', page, () => { sheet(v, true) })
-  $('.close', v).addEventListener('click', () => carry('doc-open', page, () => { sheet(v, false) }))
-  v.addEventListener('click', (e) => {
-    if (e.target === v) carry('doc-open', page, () => { sheet(v, false) })
-  })
+  $('.close', v).addEventListener('click', shut)
+  v.addEventListener('click', (e) => { if (e.target === v) shut() })
+  if (doc.id) void fillDoc(doc, $('[data-docbody]', v))
+}
+
+/*
+  The text, once it arrives.
+
+  Failure leaves the illustration in place and says so underneath, rather than
+  emptying the sheet. A reader that goes blank on a network hiccup is worse
+  than one that shows the drawing it already had.
+*/
+async function fillDoc(doc, host) {
+  if (!host) return
+  let full
+  try {
+    full = await read('document', doc.id)
+  } catch (e) {
+    host.insertAdjacentHTML('beforeend',
+      `<p class="t-meta">Could not fetch this document — ${esc(String(e.message ?? e))}</p>`)
+    return
+  }
+  if (!full || full.error) {
+    host.insertAdjacentHTML('beforeend',
+      `<p class="t-meta">${esc(full?.error ?? 'The office had nothing for this one.')}</p>`)
+    return
+  }
+
+  /*
+    A PDF goes to the browser's own reader, not to a reimplementation (#96).
+
+    No bundler and no build step (ADR-0002, ADR-0011), so PDF.js is out; and a
+    CDN copy is worse than out, because the build sandbox cannot reach external
+    hosts and every capture would show an empty frame. An iframe on the file is
+    free, needs nothing, and is genuinely good on a desktop.
+
+    It is unreliable on iOS Safari, which is exactly why "Open in new tab" is
+    not a nicety — on a phone it is frequently the only thing that works. So it
+    is a real link to the real file, prominent, not tucked away.
+  */
+  const mime = String(full.mime_type ?? '')
+  const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(full.title ?? '')
+
+  /*
+    `full.url`, not `full.path`.
+
+    The `files` bucket is private, so the storage path is useless to a browser.
+    The edge function swaps it for a signed URL that lives ten minutes and
+    drops the path from the response — the page gets something it can follow
+    and learns nothing about how storage is laid out.
+  */
+  if (isPdf && full.url) {
+    host.innerHTML = `<div class="pdfwrap"><iframe class="pdfframe" src="${esc(full.url)}"
+        title="${esc(full.title)}"></iframe></div>
+      <p class="docfoot"><a class="btn" href="${esc(full.url)}" target="_blank"
+        rel="noopener">Open the PDF in a new tab</a></p>`
+    return
+  }
+
+  /*
+    Audio plays here rather than being described (#66 put one in the office).
+
+    The one document in the office with a real file is a 940 KB audio overview,
+    and until now opening it showed a drawing of a page.
+  */
+  if (mime.startsWith('audio/') && full.url) {
+    host.innerHTML = `<audio class="docaudio" controls preload="none"
+        src="${esc(full.url)}"></audio>
+      <p class="docfoot t-meta">Audio. The office holds no transcript for this one.</p>`
+    return
+  }
+
+  const text = String(full.content ?? '').trim()
+  if (text === '') {
+    host.insertAdjacentHTML('beforeend', `<p class="t-meta">${
+      String(full.mime_type ?? '').startsWith('audio/')
+        ? 'This one is audio, and the office could not produce a link for it.'
+        : 'The office holds this document but has no text for it.'
+    }</p>`)
+    return
+  }
+
+  /*
+    Paragraphs, escaped, not innerHTML of the content.
+
+    Document text comes from Notion, Drive and the office's own agents. It is
+    data, and putting it through innerHTML would let a document written by
+    anything upstream execute in the studio. Split on blank lines, escape each
+    piece — the whole document, no clamp, no max-height.
+  */
+  host.innerHTML = `<article class="doctext">${
+    text.split(/\n{2,}/).map((para) => `<p>${esc(para).replace(/\n/g, '<br>')}</p>`).join('')
+  }</article>${
+    full.mirrored
+      ? '<p class="docfoot t-meta">The office wrote this into a connector and read it back. It is not new material.</p>'
+      : ''
+  }`
 }
 
 /*
