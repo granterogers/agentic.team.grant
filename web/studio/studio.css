@@ -2900,3 +2900,25 @@ kbd {
    component, because the next component to set `display` would have the same
    bug and nobody would connect the two. */
 [hidden] { display: none !important; }
+
+/* --- what a channel actually is (#93) --------------------------------------
+   Opens inside the card rather than in another sheet: a sheet on top of a
+   sheet is a place people get lost, and the card is where the question was
+   asked. */
+.chdetail {
+  margin-top: var(--s4); padding: var(--s4);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface); box-shadow: var(--lift-1);
+  display: grid; gap: var(--s3);
+}
+.chset { max-width: 62ch; }
+.chset { display: grid; gap: var(--s3); }
+.chrow { display: grid; gap: 2px; }
+.chname { font: 550 13px/1.3 var(--text); color: var(--ink); }
+.chval { font: 600 13px/1.3 var(--text); color: var(--accent); }
+.chwho { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: var(--s2); }
+.chbot { display: grid; gap: 1px; padding: 6px 10px; border-radius: 8px;
+  background: var(--sunken); border: 1px solid var(--edge); }
+.chbot b { font: 600 12.5px/1.2 var(--text); }
+/* Disabled reads as disabled rather than merely being it. */
+.chbot.off { opacity: .5; }

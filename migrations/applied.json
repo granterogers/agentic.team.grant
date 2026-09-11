@@ -244,5 +244,7 @@
   "0243_somewhere_to_turn_the_diary_sync_on.sql": "7a0a2ef23f206da13a65b4bd820c6304fa91434e2922bd9a5c8e61cdc6a84afa",
   "0244_the_key_is_allowed_in_both_lists.sql": "c1e13a6be61057c6411c8fcf14a48e2ae1b67ce22516c2d0b3cf2091a893dd7b",
   "0245_contacts_have_a_table.sql": "bfdb1475dd39661a491cd41ead20dfa4ad16e4160505c2a4a2df2534ad8426ea",
-  "0246_contacts_reach_the_page.sql": "d6b59b702e0d514e2c422f8cc3b1603310424b766c506dd46f0ee912c23f7279"
+  "0246_contacts_reach_the_page.sql": "d6b59b702e0d514e2c422f8cc3b1603310424b766c506dd46f0ee912c23f7279",
+  "0247_channel_entries_that_say_something.sql": "a8cc4b6106ca77831a3eda9cdb34be68cfeb042fed4af718c69bd95c8f3c34a1",
+  "0248_that_setting_is_a_slug_not_a_switch.sql": "0eb9f7e77ca96304324f33270fb1eef36958d1bad339aa41ac99d6bd26c5fbf1"
 }

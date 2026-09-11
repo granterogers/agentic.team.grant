@@ -43,6 +43,9 @@ const state = {
   sub: 'board',
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
+  // Which channel's "how it works" is open, in Settings (#93). One at a time:
+  // four expanded cards is a page nobody reads.
+  channel: null,
   // The command bar (#40 idea 1): open, what is typed, which row is picked.
   cmd: { open: false, q: '', at: 0 },
 }
@@ -2662,10 +2665,57 @@ function channelsTab() {
           <div class="svfoot">
             <span class="dotstate"></span>
             <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
+            <button class="btn small quiet" data-channel="${esc(c.key)}">${
+              state.channel === c.key ? 'Close' : 'How it works'}</button>
           </div>
         </article>`
       }).join('')}
     </div>
+    <!--
+      What the open channel actually is (#93).
+
+      BELOW the grid, not inside the card. Expanding it in place stretched the
+      whole grid row, so the other three cards became tall empty boxes with a
+      logo floating at the top - visible immediately in a capture and invisible
+      in the source.
+
+      Everything here comes from the office rather than from this file: the
+      bots and whose they are, the settings that govern the channel, and what
+      to actually do, spelled out.
+
+      The two Telegram settings sit side by side deliberately. They are
+      confused constantly - one decides WHO SENDS AT ALL, the other decides
+      WHICH CHAT - and putting them next to each other with both said plainly
+      is the cheapest fix available for that.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${(() => {
+      const c = config.CHANNELS.find((x) => x.key === state.channel)
+      if (c === undefined) return ''
+      return `<div class="chdetail">
+        <h3 class="t-title" style="margin:0;font-size:19px">${esc(c.name)}</h3>
+        ${c.steps ? `<p class="t-lead" style="margin:0">${esc(c.steps)}</p>` : ''}
+        ${(c.settings ?? []).length === 0 ? '' : `<div class="chset">
+          ${c.settings.map((x) => `<div class="chrow">
+            <span class="chname">${esc(x.name)}</span>
+            <span class="chval">${x.kind === 'switch'
+              ? (x.value ? 'On' : 'Off')
+              : esc(String(x.value === '' ? 'anyone' : x.value))}</span>
+            <span class="t-meta">${esc(x.note ?? '')}</span>
+          </div>`).join('')}
+        </div>`}
+        ${(c.who ?? []).length === 0 ? '' : `<div>
+          <span class="t-label">Bots</span>
+          <div class="chwho">
+            ${c.who.map((w) => `<span class="chbot ${w.on ? '' : 'off'}">
+              <b>@${esc(w.username)}</b>
+              <span class="t-meta">${esc(w.whose)}${w.pager ? ' · pager' : ''}</span>
+            </span>`).join('')}
+          </div>
+        </div>`}
+      </div>`
+    })()}
   </div>`
 }
 
@@ -2855,6 +2905,21 @@ function settingsSheet() {
     e.stopPropagation()
     if (pickMenu) pickMenu.hidden = !pickMenu.hidden
   })
+  /*
+    Open one channel's detail, and close it again (#93).
+
+    `settingsSheet()` rather than `render()`: the sheet is outside `#root` and
+    the page behind it does not change. One at a time — four expanded cards is
+    a page nobody reads.
+  */
+  for (const b of v.querySelectorAll('[data-channel]')) {
+    b.addEventListener('click', () => {
+      state.channel = state.channel === b.dataset.channel ? null : b.dataset.channel
+      settingsSheet()
+      sheet(v, true)
+    })
+  }
+
   for (const b of v.querySelectorAll('[data-goto-setting]')) {
     b.addEventListener('click', () => {
       state.setting = b.dataset.gotoSetting
