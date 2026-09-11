@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **235 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **249 applied.**
 
 ---
 
@@ -366,6 +366,19 @@ Each of these cost real time. They are here so they cost it once.
   containing block, so a fixed child anchors to that element instead of the
   viewport — a bottom navigation bar rendered across the top of the page.
   `filter`, `transform`, `perspective` and `will-change` all do the same.
+- **A wired control can still never receive the event.** The panel headers'
+  Narrower, Wider and Remove buttons sit inside `[data-grip]`, the drag handle.
+  Pressing one fired `pointerdown` on the grip, a drag began, `pointerup` saved
+  and redrew, and the DOM the click was travelling towards no longer existed —
+  eighteen buttons that looked fine and did nothing. `verify:wired` cannot see
+  this (the handlers exist and the attributes are looked up); only
+  `verify:controls`, which presses and watches, can. That is why both exist.
+- **The studio never stops moving**, so Playwright's "element is not stable"
+  check can never pass inside it — `breathe()` and `scatter()` run for as long
+  as the page is open. Hit-test the element yourself
+  (`document.elementFromPoint` at its centre IS the element) and then
+  `click({ force: true })`. And a view transition paints an overlay over the
+  WHOLE page for ~900ms, during which every `elementFromPoint` returns the root.
 - **A control that nothing looks up is a control nothing can have wired.**
   `verify:controls` presses things, costs minutes per route, and only covers
   what it can reach. `npm run verify:wired` walks sixteen screens, collects

@@ -13,13 +13,13 @@
 >
 > | | |
 > |---|---|
-> | Tests | 927 passing · `verify:ui` **57/57** · `verify:hq` 39/39 · `verify:talk` **36/36** · `verify:design` 13/13 · `verify:boundary` 57/57 |
+> | Tests | 935 passing · `verify:ui` **57/57** · `verify:hq` 39/39 · `verify:talk` **36/36** · `verify:design` 13/13 · `verify:boundary` 57/57 |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | 235 applied |
+> | Migrations | 249 applied |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -43,6 +43,22 @@
 > (ADR-0017) — that one rule is what makes a procedure safe to let an agent
 > write, and `app.staff_may_use()` reads neither skills nor lessons, asserted
 > behaviourally and structurally.
+>
+> **Overnight, 11–12 September.** Twenty-two of the thirty UX-review items are
+> closed, plus #11 and #24 which turned out to be blockers. Google Calendar
+> sync is built and **switched off** — turn it on at Settings → Behaviour →
+> *"Put dated tasks in my Google Calendar"*. Everything else is live.
+>
+> Two things to know before reading further:
+>
+> - **`calendar.sync_tasks` is false on purpose.** It works end to end,
+>   verified with one controlled round trip against the real diary. A task that
+>   becomes done has its event **deleted** without asking — only ever events
+>   carrying our own task id (ADR-0020). That is the one decision worth your
+>   eye before you flip it.
+> - **`public.tasks` had zero rows and no way to make one**, which is why #11
+>   got built ahead of the calendar. A calendar sync over an empty task table
+>   would have been #72 exactly.
 >
 > **Grant's UX review of the studio is filed as #75 and half-built.** Thirty
 > items, persisted verbatim at `docs/spec/ux-review-2026-09-11.md` and filed as
