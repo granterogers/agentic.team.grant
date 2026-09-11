@@ -98,6 +98,48 @@ for (const [size, opts] of SIZES) {
     }
 
     /*
+      The settings tabs, including the long one.
+
+      `.setbody` scrolls INSIDE the sheet — the sheet is capped at 86vh — so a
+      page screenshot at 900px tall can never show the bottom of a long tab
+      however `fullPage` is set. Usage is the first tab long enough for that to
+      matter: its chart and its "what is being used the most" ranking are both
+      below the fold, so the only capture of them was no capture at all, and a
+      visual standard that says "run it and look at it" cannot be met by
+      looking at the top third.
+
+      So the scroll container is scrolled and shot again. Two honest images
+      rather than one CSS-mutated one: overriding max-height to fit everything
+      would photograph a layout that does not exist.
+    */
+    if (size === 'desktop') {
+      await page.locator('[data-settings]').click()
+      await page.waitForTimeout(400)
+      for (const tab of ['models', 'behaviour'] as const) {
+        await page.locator(`[data-setting="${tab}"]`).click()
+        await page.waitForTimeout(450)
+        await shoot(`settings-${tab}`)
+        // A string, not a closure: this file has no DOM lib and `document` is
+        // not in scope at compile time. Playwright evaluates either.
+        const scrolled = await page.evaluate(`(() => {
+          const el = document.querySelector('#settings .setbody')
+          if (el === null) return false
+          const box = el.closest('.sheet, .settings') || el
+          const target = box.scrollHeight > box.clientHeight ? box : el
+          if (target.scrollHeight <= target.clientHeight + 40) return false
+          target.scrollTop = target.scrollHeight
+          return true
+        })()`)
+        if (scrolled) {
+          await page.waitForTimeout(400)
+          await shoot(`settings-${tab}-lower`)
+        }
+      }
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(300)
+    }
+
+    /*
       Hover states, captured deliberately.
 
       Iteration 4 added pointer-tracked tilt and a specular highlight, and a

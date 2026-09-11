@@ -188,5 +188,8 @@
   "0187_a_duty_that_happens_at_a_time.sql": "2f5abb29b1792a698484382b444fb8b722e65d590d894c300ed5c8d295ee2c0b",
   "0188_what_the_morning_briefing_is_made_of.sql": "c38adb5152f0da70500eec8f5208f07f45a79228922dd69dd0b2f253b953a5e7",
   "0189_claire_briefs_him_at_seven.sql": "3a8c1b867bc78273c28e7a26b759be8d753fcac0d5047bbc2ed28c5786dfb6f7",
-  "0190_kind_is_an_enum_and_the_wrapper_did_not_know.sql": "3c8a807f68450f7013c0397ebd2b6b13024e4169bc9b43766fca18a95374529a"
+  "0190_kind_is_an_enum_and_the_wrapper_did_not_know.sql": "3c8a807f68450f7013c0397ebd2b6b13024e4169bc9b43766fca18a95374529a",
+  "0191_what_everything_is_costing.sql": "e9dfcbb707daf779f4d6b8cf9afbc31152b295e79be35ec34d401f1a1c34348c",
+  "0192_billing_month_is_a_date.sql": "072a069d9db81b4cd1bf4e7cc744d0b651aa25b12075c01f85c3e58f64490371",
+  "0193_the_test_suite_was_in_his_spend_breakdown.sql": "de7422d6de9ceeb9c149a2c4cd56655fc022cb598fb5c13fcaa021da2be69501"
 }

@@ -40,7 +40,15 @@ export const TABS = [
   { id: 'behaviour', name: 'Behaviour' },
   { id: 'connections', name: 'Connections' },
   { id: 'channels', name: 'Channels' },
-  { id: 'models', name: 'Models & cost' },
+  /*
+    "Usage", not "Models & cost".
+
+    Grant asked for *"a dashboard dedicated to usage across the various API
+    keys, third party services, you know, everything"* — and "Models & cost"
+    names two things when the tab should name one. Models are now one card on
+    it among six.
+  */
+  { id: 'models', name: 'Usage' },
   { id: 'appearance', name: 'Appearance' },
 ]
 

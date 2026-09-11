@@ -13,6 +13,7 @@ import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as command from './command.js'
 import * as config from './settings.js'
+import { usageTab } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
@@ -1591,41 +1592,6 @@ function channelsTab() {
   note in a document. The warning is the useful part: the free tier has an edge
   and the only bad way to find it is an invoice.
 */
-function modelsTab() {
-  return `<div class="setbody">
-    <div class="spendhead" data-lift data-tilt="1.2">
-      <div>
-        <span class="t-label">This month</span>
-        <div class="bignum">${esc(config.SPEND.month)}</div>
-        <span class="t-meta">Target: ${esc(config.SPEND.target)}</span>
-      </div>
-      <!--
-        A warning only when there IS one.
-
-        This box used to render unconditionally around a hardcoded string
-        claiming Supabase storage was at 82% of the free tier. It is at 4%
-        (0180 measures it), so the box now has nothing to say — and an empty
-        warning box with a warning triangle in it is worse than no box, because
-        it reads as an alert you cannot decipher.
-      -->
-      ${config.SPEND.warn === '' ? `<p class="t-meta" style="margin:10px 0 0">
-        ${esc(config.SPEND.headroom)}
-      </p>` : `<p class="warnbox">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
-        ${esc(config.SPEND.warn)}
-      </p>`}
-    </div>
-    <div class="spendrows">
-      ${config.SPEND.rows.map((r) => `
-        <div class="spendrow" data-lift data-tilt="1">
-          <span><b>${esc(r.name)}</b><span class="t-meta">${esc(r.note)}</span></span>
-          <span class="cost">${esc(r.cost)}</span>
-        </div>`).join('')}
-    </div>
-  </div>`
-}
 
 
 /*
@@ -1727,7 +1693,7 @@ function settingsSheet() {
     state.setting === 'behaviour' ? behaviourTab()
     : state.setting === 'connections' ? connectionsTab()
     : state.setting === 'channels' ? channelsTab()
-    : state.setting === 'models' ? modelsTab()
+    : state.setting === 'models' ? usageTab()
     : state.setting === 'appearance' ? appearanceTab()
     : teamTabSettings()
 

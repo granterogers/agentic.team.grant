@@ -2014,3 +2014,160 @@ kbd {
   .withtalk .task { padding-right: 56px; }
   .withtalk .contact { padding-right: 58px; }
 }
+
+
+/* ===========================================================================
+   Usage — every service, every quota (#61)
+   ===========================================================================
+
+   Grant: *"make it a nice, beautiful, graphical presentation, not just like
+   raw numbers."*
+
+   Prefixed `u-` throughout. CLAUDE.md: a class name defined twice is a bug
+   waiting for the right element — `.stage` was a status pill AND a pannable
+   surface with min-height 420px, which pushed a row 660px down the page the
+   day something blockified it. `.card`, `.head`, `.bar`, `.note` and `.grid`
+   are all far too good a short word to take.
+   =========================================================================== */
+
+.u-body { display: flex; flex-direction: column; gap: var(--s4); }
+
+.u-head {
+  padding: var(--s4);
+  border-radius: var(--r3);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: blur(var(--blur-1));
+  box-shadow: var(--emboss);
+}
+.u-excluded { margin: 10px 0 0; max-width: 54ch; }
+
+.u-grid {
+  display: grid;
+  /* auto-fit rather than a column count: the sheet is one width on a laptop
+     and another in a narrow window, and a fixed count is how a card ends up
+     130px wide with a ring in it. */
+  /* 268, not 228. At 228 the sheet fitted three columns and every card
+     truncated its own name — "Notebook g…", "OpenRouter, fr…", "Supabase,
+     free t…". A card whose title does not fit is not a card. */
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+  gap: var(--s3);
+}
+
+.u-card {
+  padding: var(--s3);
+  border-radius: var(--r2);
+  background: var(--glass-1);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--emboss);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.u-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.u-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.u-name b { font-size: 14px; letter-spacing: -0.01em; }
+/* Long service names must ellipsis rather than push the provenance chip off
+   the card — the chip is the part that must never be lost. */
+/* The NAME wraps; only the subtitle ellipsises. Losing "Notebook generations"
+   to "Notebook g…" costs more than losing "Audio, slides, …". */
+.u-name b { overflow-wrap: anywhere; }
+.u-name .t-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.u-ring { width: 42px; height: 42px; flex: 0 0 42px; transform: rotate(-90deg); }
+/* The track carries the meaning at low usage.
+
+   At 4% the filled arc is a few pixels, so the first version rendered as three
+   unexplained dots — technically honest and visually broken. A strong track
+   makes it read as "a gauge, nearly empty", which is the true statement. */
+.u-ringtrack { fill: none; stroke: var(--ink-3); stroke-width: 5; opacity: 0.28; }
+.u-ringfill {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  /* The arc draws in on open. Grant asked for things to feel alive; a ring
+     that is simply there says nothing, and one that fills says "this is a
+     proportion" before any label is read. */
+  animation: u-draw var(--carry, 396ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes u-draw { from { stroke-dasharray: 0 999; } }
+.u-noring { width: 42px; height: 42px; flex: 0 0 42px; }
+
+.u-prov {
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid var(--glass-edge);
+  color: var(--ink-3);
+  background: var(--glass-1);
+}
+/* The one that matters. An estimate shown as a fact is the failure this whole
+   page exists to avoid, so it is the only chip with a colour. */
+.u-prov-estimated { color: var(--warn, #9a6b12); border-color: currentColor; opacity: 0.95; }
+
+.u-figure { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.u-used { font-size: 26px; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.u-pct { margin-left: auto; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.u-trio { display: flex; gap: var(--s3); }
+.u-trio div { display: flex; flex-direction: column; gap: 2px; }
+.u-trio b { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.u-note { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+.u-chart {
+  padding: var(--s3);
+  border-radius: var(--r2);
+  background: var(--glass-1);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--emboss);
+}
+.u-charthead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
+/* A fixed height with preserveAspectRatio none: the shape is the information,
+   and letting it letterbox on a phone would flatten the only series here that
+   has anything to say. */
+.u-svg { width: 100%; height: 108px; display: block; margin-top: 8px; }
+.u-axis { display: flex; justify-content: space-between; }
+
+.u-rank { display: flex; flex-direction: column; gap: 8px; }
+.u-rankrow { display: grid; grid-template-columns: minmax(0, 1fr) 40% auto; align-items: center; gap: 10px; }
+.u-rankname {
+  font-size: 13px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.u-free {
+  font-size: 12px; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--glass-edge); color: var(--ink-3);
+}
+.u-bar { display: block; height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.u-bar i {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, oklch(62% 0.15 152), oklch(68% 0.13 168));
+  animation: u-grow var(--carry, 396ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes u-grow { from { width: 0 !important; } }
+.u-rankn { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .u-ringfill, .u-bar i { animation: none; }
+}
+
+
+/* Usage on a phone. At the END of the stylesheet, deliberately — a media query
+   adds no specificity, so a phone rule written above the base rule it
+   overrides is silently lost to source order. This repository has been bitten
+   by that twice (.navgroup, then .callbtn and three others), and a full
+   capture run reported no errors while the phone stayed broken. */
+@media (max-width: 860px) {
+  .u-grid { grid-template-columns: 1fr; }
+  /* The three-column ranking becomes two rows: a 40% bar next to an ellipsised
+     model name leaves neither readable at 390px. */
+  .u-rankrow { grid-template-columns: minmax(0, 1fr) auto; }
+  .u-rankrow .u-bar { grid-column: 1 / -1; }
+  .u-trio { flex-wrap: wrap; gap: var(--s2) var(--s3); }
+  .u-used { font-size: 22px; }
+}
