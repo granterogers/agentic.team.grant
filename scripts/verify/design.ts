@@ -31,7 +31,7 @@
  * A floor is a floor. Passing it is not a compliment.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 let pass = 0
 let fail = 0
@@ -182,23 +182,22 @@ for (const p of PRIMITIVES) {
 }
 
 /*
-  The old page is not growing.
+  The old page is gone, and cannot come back by accident.
 
-  ADR-0019 puts `web/hq/index.html` in run-out: it keeps its URL until its write
-  actions exist in the studio, and nothing new goes into it. A file in run-out
-  that gains a hundred lines is a file that is not in run-out, and the decision
-  has quietly been reversed by nobody in particular.
+  ADR-0019 put `web/hq/index.html` in run-out and it kept the root URL until
+  every one of its fifteen write actions, its six sections and the voice call
+  existed in the studio. All of them do, so it is deleted — and this asserts
+  that, because a second frontend reappearing is exactly how the design and the
+  product drifted apart the first time.
 
-  A line count rather than a diff, because this has to work in a fresh clone
-  with no git history to compare against.
+  An existence check rather than a line-count ceiling, which is what this was
+  while the file was still alive.
 */
 {
-  const RUNOUT_CEILING = 3900
-  const lines = read('web/hq/index.html').split('\n').length
   ok(
-    `the retiring page is not growing: ${String(lines)} lines (ceiling ${String(RUNOUT_CEILING)})`,
-    lines <= RUNOUT_CEILING,
-    'ADR-0019 — features go in the studio. Move the work rather than raising this.',
+    'there is one frontend, not two',
+    !existsSync('web/hq/index.html'),
+    'web/hq/index.html is back — ADR-0019 says features go in the studio',
   )
 }
 

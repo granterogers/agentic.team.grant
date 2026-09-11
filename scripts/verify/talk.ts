@@ -42,8 +42,9 @@
  * one surface Grant named.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
@@ -56,13 +57,42 @@ const record = (what: string, outcome: string, passed: boolean): void => {
   console.log(`${passed ? '✅' : '❌'} ${what} — ${outcome}`)
 }
 
-const html = readFileSync('web/hq/index.html')
-const server = createServer((_request, response) => {
+/*
+  The studio, whole (#68, ADR-0019).
+
+  The call moved out of `web/hq/index.html` into `web/studio/call.js` and the
+  studio is what is served at the root now. A check still pointed at the old
+  file would be testing a page nobody can open — the pattern CLAUDE.md names
+  after three instances of it in one day.
+
+  A directory rather than a string, because the studio is a page plus thirty
+  files. The ids it drives by — call, talkstate, askform, asktext, asksend,
+  turns, typeinstead — were kept on the new markup deliberately, so what this
+  suite asserts did not have to be rewritten alongside what it tests. A retarget
+  that rewrites its own assertions is a retarget that quietly loses one.
+*/
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.pdf': 'application/pdf',
+}
+const server = createServer((request, response) => {
+  let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
+  if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+  if (!existsSync(file)) {
+    response.writeHead(404)
+    response.end('not here')
+    return
+  }
+  const body = readFileSync(file)
   response.writeHead(200, {
-    'content-type': 'text/html; charset=utf-8',
-    'content-length': html.length,
+    'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
+    'content-length': body.length,
   })
-  response.end(html)
+  response.end(body)
 })
 await new Promise<void>((resolve) => server.listen(PORT, resolve))
 
@@ -126,10 +156,16 @@ const openTalk = async (device: Record<string, unknown>) => {
   // Reached the way a person reaches it — via the menu — and matched the same
   // three ways `verify:ui` matches, because the label a person reads ("Talk to
   // the team") is not the section name the code uses ("talk").
+  /*
+    The call is a sheet now, not a tab.
+
+    Reached the way a person reaches it — the microphone in the rail, which is
+    the most prominent control in the interface and the one Grant asked to be
+    prominent. Pressing it opens the sheet; the sheet's own microphone is what
+    places the call, and that is the one every check below drives.
+  */
   const reached = (await page.evaluate(`(() => {
-    const el = [...document.querySelectorAll('a,button,[data-tab],[data-section]')]
-      .find((e) => e.getAttribute('data-tab') === 'talk' || e.getAttribute('data-section') === 'talk'
-        || (e.textContent ?? '').trim().toLowerCase() === 'talk');
+    const el = document.querySelector('[data-call]');
     if (!el) return false;
     el.click();
     return true;
@@ -388,11 +424,30 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
   await page.evaluate(`window.__MINT = 'down'`)
   await page.locator('#call').tap()
   await page.waitForTimeout(1_200)
+  /*
+    Asserted on the STATE, not on an emoji.
+
+    The old page's button was the character 📞 and hanging up rewrote its text,
+    so "did it reset" could be read off `textContent`. The studio's is an SVG
+    microphone — setting text on it would delete the icon — and the reset is a
+    class coming off plus the label going back.
+
+    That is the better assertion anyway: it was always the state that mattered,
+    and the emoji was how the state happened to be drawn. A check written
+    against a rendering detail fails when the rendering improves.
+  */
+  const callReset = async () =>
+    (await page.evaluate(
+      `(() => {
+        const b = document.getElementById('call');
+        return (b.classList.contains('ringing') ? 'ringing' : 'idle')
+          + '/' + (b.getAttribute('aria-label') || '');
+      })()`,
+    )) as string
   record(
     'call · when the office will not start a call, the button resets',
-    `${String(await stateOn(page))} / button="${String(await page.evaluate(`document.getElementById('call').textContent`))}"`,
-    !(await stateOn(page)).includes('Connecting') &&
-      String(await page.evaluate(`document.getElementById('call').textContent`)).includes('📞'),
+    `${String(await stateOn(page))} / button=${await callReset()}`,
+    !(await stateOn(page)).includes('Connecting') && (await callReset()).startsWith('idle/'),
   )
 
   await page.evaluate(`window.__MINT = 'ok'; window.__MIC = 'refused'`)

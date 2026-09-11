@@ -44,7 +44,14 @@ import { chromium, devices } from 'playwright'
   of them is reachable by a project tab click. A control audit that silently
   skips half the controls is worse than none, because it is believed.
 */
-const APPS = ['web/studio', 'web/hq'] as const
+/*
+  One app now (#68, ADR-0019).
+
+  `web/hq` is deleted: every one of its fifteen write actions, its six sections
+  and the voice call moved into the studio, which is what the root serves. The
+  sweep is smaller and points at the only thing a person can open.
+*/
+const APPS = ['web/studio'] as const
 let ROOT: string = APPS[0]
 const PORT = 4614
 const TYPES: Record<string, string> = {

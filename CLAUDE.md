@@ -190,7 +190,7 @@ screenshots for visual work** — a sentence about spacing is worth nothing.
 | **No new auth system** | One bearer token (`hq.api_token`), constant-time compared. Reuse it. |
 | **Channel adapters may only translate** | §5 of the master spec. Every surface writes to `inbound_commands` and asks the canonical layer. An adapter that decides is a bug. |
 | **Frontend stack** | No React, no Next.js, no bundler, no build step. Hand-written HTML on Vercel. Deliberate — ADR 0002, ADR 0011. Changing this needs an ADR and evidence, not preference. |
-| **Which frontend** | `web/studio` is becoming the product; `web/hq/index.html` is in run-out and keeps its URL only until its write actions exist in the studio (**ADR-0019**, Issue #68). Do not add a feature to the old page. |
+| **Which frontend** | **`web/studio` is the product**, served at the root. `web/hq/index.html` is deleted — every write action, section and the voice call moved across (**ADR-0019**, Issue #68). `verify:design` fails if a second frontend reappears. |
 
 ---
 
@@ -218,7 +218,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **214 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **232 applied.**
 
 ---
 

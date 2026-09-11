@@ -1107,7 +1107,11 @@ body::after {
   background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 62%, var(--ink)));
 }
 .tab .n {
-  font: 600 11px/1 var(--display); padding: 3px 6px; border-radius: 999px;
+  /* 12px, not 11. The floor is 12 and a count badge is real text a person
+     reads — unlike the title drawn inside a page illustration, which is a
+     picture of text. Caught by verify:ui the first run after it was pointed at
+     the studio. */
+  font: 600 12px/1 var(--display); padding: 3px 6px; border-radius: 999px;
   background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn);
 }
 .tab.on .n { background: var(--accent-wash); color: var(--accent-ink, var(--accent)); }
@@ -1149,7 +1153,7 @@ body::after {
 .wgroup { display: grid; gap: var(--s3); }
 .wgroup h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
 .wgroup h3 .n {
-  font: 600 11px/1 var(--display); padding: 3px 7px; border-radius: 999px;
+  font: 600 12px/1 var(--display); padding: 3px 7px; border-radius: 999px;
   background: var(--sunken); color: var(--ink-3);
 }
 .wrow {
@@ -1380,7 +1384,11 @@ body::after {
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 7%), var(--surface));
 }
 .subtab .n {
-  font: 600 11px/1 var(--display); padding: 3px 6px; border-radius: 999px;
+  /* 12px, not 11. The floor is 12 and a count badge is real text a person
+     reads — unlike the title drawn inside a page illustration, which is a
+     picture of text. Caught by verify:ui the first run after it was pointed at
+     the studio. */
+  font: 600 12px/1 var(--display); padding: 3px 6px; border-radius: 999px;
   background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn);
 }
 
@@ -2508,7 +2516,20 @@ kbd {
   .newproj { width: 100%; }
   .newproj input { flex: 1; min-width: 0; font-size: 16px; min-height: 44px; }
   .gsetup input { font-size: 16px; min-height: 44px; }
+  /* Disconnect Google came in at 142x32 on iPad. Found by verify:ui the first
+     time it was pointed at the studio, which is the whole argument for
+     retargeting it rather than leaving it aimed at a page nobody opens. */
+  .gsetup .btn, .behave .btn.small, .service .btn.small { min-height: 44px; }
+  [data-forget-google] { min-height: 44px; }
   .askform input { font-size: 16px; min-height: 44px; }
+  /*
+    The switch is 50x29 by design and 29 is under the touch floor.
+
+    Grown by padding rather than by making the track taller: a 44px pill reads
+    as a button, and the thing that has to be 44px is the TARGET, not the
+    graphic. The track keeps its proportions and the hit area is the whole row.
+  */
+  .toggle { box-sizing: content-box; padding-block: 10.5px; }
   .askform .btn { min-height: 44px; }
   .declines .btn { min-height: 44px; }
   /* Every new control in the person editor. 16px or iOS Safari zooms on focus,

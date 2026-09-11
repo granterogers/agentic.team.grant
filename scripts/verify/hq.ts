@@ -200,9 +200,32 @@ record(
   measured.every((p) => p === 'measured'),
 )
 
-// The page has to render the label, not merely receive it.
+/*
+  The served page, and the modules it is made of (#68, ADR-0019).
+
+  Until today the root served one self-contained HTML file, so every assertion
+  below could be made against `html`. The studio is a shell plus thirty modules:
+  its markup is generated at runtime, so grepping the served HTML for a rendered
+  badge now finds nothing and would report nine failures about a page that is
+  working perfectly.
+
+  So the source assertions read what the page is MADE of, fetched from the same
+  deployment rather than off disk — a file that is in the repository and not in
+  the build is exactly the gap that produced #68. What the page renders is
+  `verify:ui`'s job, in a real browser, at three sizes.
+*/
 const page = await fetch(PAGE)
 const html = await page.text()
+const sourceOf = async (file: string): Promise<string> => {
+  const r = await fetch(`${PAGE}/${file}`)
+  return r.ok ? await r.text() : ''
+}
+const [appJs, usageJs, studioCss] = await Promise.all([
+  sourceOf('app.js'),
+  sourceOf('usage.js'),
+  sourceOf('studio.css'),
+])
+const source = `${appJs}\n${usageJs}\n${studioCss}`
 record(
   'the page serves as HTML rather than as an auth wall or a text file',
   `http ${String(page.status)} ${String(page.headers.get('content-type'))} ${String(html.length)} bytes`,
@@ -211,14 +234,19 @@ record(
     html.includes('Team HQ'),
 )
 record(
-  'and it renders the ESTIMATED badge rather than dropping the label on the floor',
-  html.includes('ESTIMATED') ? 'badge present' : 'BADGE MISSING',
-  html.includes('ESTIMATED'),
+  'and the estimated label is carried, not dropped on the floor',
+  /estimate/i.test(usageJs) ? 'the usage cards carry provenance' : 'PROVENANCE MISSING',
+  /estimate/i.test(usageJs),
 )
 record(
   'the page ships no token of its own — it asks for one and keeps it on the device',
-  SHAPES.some((p) => p.test(html)) ? 'SOMETHING TOKEN-SHAPED IS IN THE PAGE' : 'clean',
-  !SHAPES.some((p) => p.test(html)) && html.includes('localStorage'),
+  SHAPES.some((p) => p.test(html) || p.test(source))
+    ? 'SOMETHING TOKEN-SHAPED IS IN THE PAGE'
+    : 'clean',
+  // The modules too, not just the shell: a credential baked into app.js is
+  // served just as publicly as one in the HTML, and this check exists because
+  // a token in a page is a token in everybody's browser.
+  !SHAPES.some((p) => p.test(html) || p.test(source)) && source.includes('localStorage'),
 )
 
 // ===========================================================================
@@ -240,39 +268,59 @@ record(
   series.data?.timezone === 'Europe/Athens',
 )
 
+/*
+  What was here, and why most of it is not any more.
+
+  Eight assertions used to grep the served HTML for the old page's markup: its
+  sparkline's non-scaling stroke, its crosshair, its `hq.layout` key, and a rule
+  that the stylesheet must contain NO max-width query because that page was
+  written mobile-first with min-width additions.
+
+  They were good checks about a page that no longer exists, and three things are
+  true of them now:
+
+  1. **The studio's markup is generated at runtime.** Grepping the served shell
+     for a rendered element finds nothing whether the page works or not — a
+     check that cannot fail for the right reason.
+  2. **Two of them encoded the OLD page's decisions, not the product's.** The
+     studio deliberately uses `@media (pointer: coarse)` and max-width blocks
+     placed at the END of the stylesheet; CLAUDE.md records that as its rule,
+     learned after phone overrides were silently lost to source order twice.
+     Asserting the opposite would fail a correct page.
+  3. **The rest is covered better elsewhere.** `verify:ui` drives a real browser
+     at three sizes and enforces the 12px type floor, the 44px touch floor and
+     horizontal overflow on nineteen screens — sixty assertions against what is
+     actually painted. `verify:design` counts the motion, depth and transparency
+     primitives in what the deployment serves.
+
+  What survives is the part neither of those can see: that the deployment serves
+  the modules at all, and that the shell declares a mobile viewport.
+*/
 record(
-  'a series that is entirely zero renders a sentence, not a flat line pretending to be data',
-  html.includes('Nothing in the last') ? 'handled' : 'NOT HANDLED',
-  html.includes('Nothing in the last'),
+  'the modules the page is built from are actually served',
+  `app.js ${String(appJs.length)}b · usage.js ${String(usageJs.length)}b · studio.css ${String(studioCss.length)}b`,
+  appJs.length > 10_000 && usageJs.length > 1_000 && studioCss.length > 10_000,
 )
 record(
-  'the sparkline stroke does not stretch with the viewBox',
-  // preserveAspectRatio="none" scales the stroke horizontally too. Invisible in
-  // the source, obvious the moment it is rendered.
-  html.includes('vector-effect="non-scaling-stroke"') ? 'non-scaling-stroke set' : 'MISSING',
-  html.includes('vector-effect="non-scaling-stroke"'),
+  'the usage figures carry a hedge where the number is our own count',
+  /google publishes no|our own count|estimate/i.test(usageJs)
+    ? 'the caveat travels with the number'
+    : 'HEDGE MISSING',
+  /google publishes no|our own count|estimate/i.test(usageJs),
 )
 record(
-  'every chart has a hover layer and a table view — a shape you cannot interrogate is decoration',
-  html.includes('pointermove') && html.includes('details class="values"')
-    ? 'crosshair + numbers'
-    : 'MISSING',
-  html.includes('pointermove') && html.includes('details class="values"'),
-)
-const described = html.includes('aria-label=') && html.includes('role="img"')
-record(
-  'one series, so no legend — and an aria-label carries the shape for a screen reader',
-  described ? 'role=img with a described shape' : 'NOT DESCRIBED',
-  described,
+  'a screen a person can be on is described for a screen reader',
+  /aria-label=/.test(appJs) ? 'aria-labels present' : 'NOT DESCRIBED',
+  /aria-label=/.test(appJs),
 )
 record(
-  'collapse and reorder are remembered per DEVICE, which is what a phone and a desktop each want',
-  html.includes('hq.layout') && html.includes('localStorage') ? 'localStorage' : 'MISSING',
-  html.includes('hq.layout'),
+  'what a person rearranges is remembered on their own device',
+  /localStorage/.test(appJs) && /studio\./.test(appJs) ? 'localStorage' : 'MISSING',
+  /localStorage/.test(appJs) && /studio\./.test(appJs),
 )
 
 // ===========================================================================
-// Mobile-first, as far as a script can tell
+// Mobile, as far as a script can tell
 // ===========================================================================
 
 record(
@@ -283,18 +331,19 @@ record(
   html.includes('width=device-width') && html.includes('viewport-fit=cover'),
 )
 record(
-  'touch targets are specified at 38px or more, which a phone needs and a mouse does not',
-  /min-height:\s*(3[89]|[4-9]\d)px/.test(html) ? 'declared' : 'NOT DECLARED',
-  /min-height:\s*(3[89]|[4-9]\d)px/.test(html),
+  'the touch floor is declared, not left to the default',
+  /min-height:\s*44px/.test(studioCss) ? 'declared at 44px' : 'NOT DECLARED',
+  /min-height:\s*44px/.test(studioCss),
 )
-const mobileFirst =
-  html.includes('@media (min-width: 760px)') && !html.includes('@media (max-width')
 record(
-  'it is mobile-FIRST: the desktop rules are the additions, inside a min-width query',
-  mobileFirst
-    ? 'no max-width queries; desktop is the min-width block'
-    : 'MAX-WIDTH QUERIES PRESENT',
-  mobileFirst,
+  'and the phone rules are the LAST thing in the stylesheet',
+  // CLAUDE.md, twice earned: a media query adds no specificity, so a phone
+  // override written above the base rule it overrides is silently lost to
+  // source order. Where it sits is the whole of whether it works.
+  studioCss.lastIndexOf('pointer: coarse') > studioCss.length * 0.8
+    ? 'the coarse-pointer block is at the end'
+    : 'PHONE RULES ARE NOT LAST',
+  studioCss.lastIndexOf('pointer: coarse') > studioCss.length * 0.8,
 )
 
 // ===========================================================================
