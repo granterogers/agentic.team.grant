@@ -928,8 +928,23 @@ function gate(message) {
       ${message ? `<div class="err">${esc(message)}</div>` : ''}
     </div>`
   const input = document.getElementById('tok')
+  const err = document.querySelector('.gate .err')
+  /*
+    An empty press must say something.
+
+    It used to `return` in silence: you pressed Unlock, nothing happened, and
+    there was no way to tell a page that had not registered the press from one
+    that had rejected you. Found by the control audit, which is the only check
+    that presses things — every screenshot of this gate looked correct.
+  */
   const submit = () => {
-    if (!input.value.trim()) return
+    if (!input.value.trim()) {
+      const say = err || Object.assign(document.createElement('div'), { className: 'err' })
+      say.textContent = 'Type the password first.'
+      if (!say.parentNode) document.querySelector('.gate').appendChild(say)
+      input.focus()
+      return
+    }
     localStorage.setItem(KEY, input.value.trim())
     start()
   }
