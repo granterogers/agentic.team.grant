@@ -238,6 +238,14 @@ element.
 
 Each of these cost real time. They are here so they cost it once.
 
+- **A backtick inside an HTML comment inside a template literal ends the
+  string.** `web/studio/app.js` is one long set of template literals, and the
+  explanatory `<!-- … -->` comments live inside them. Writing `` `data-blocked` ``
+  in one of those comments terminated the template, and the file became
+  unparseable — which renders NOTHING, and announces itself as a capture run
+  timing out on a selector that cannot exist. Use plain words inside HTML
+  comments in this file. `npm run smoke` catches it in three seconds; run it
+  after every edit to `app.js`.
 - **A media query adds no specificity, so where you write it decides whether
   it works.** `web/studio/studio.css` has a `@media (max-width: 860px)` block
   near the top and base rules for `.callbtn`, `.brandline`, `.team` and

@@ -19,6 +19,7 @@
     "notify": "tsx scripts/notify.ts",
     "step": "tsx scripts/step.ts",
     "smoke": "tsx scripts/verify/smoke.ts",
+    "verify:controls": "SIZE=desktop tsx scripts/verify/controls.ts && SIZE=phone tsx scripts/verify/controls.ts",
     "shots": "npm run smoke && tsx scripts/verify/studio.ts",
     "probe": "tsx scripts/verify/probe.ts",
     "wide": "tsx scripts/verify/wide.ts",

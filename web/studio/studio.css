@@ -1955,3 +1955,21 @@ kbd {
 .emptydo { display: flex; gap: var(--s2); flex-wrap: wrap; }
 .empty { gap: var(--s4); }
 @media (max-width: 560px) { .emptydo .btn { width: 100%; justify-content: center; } }
+
+/* Call the team, mid-call. The button says what it is doing, in place. */
+.callbtn.ringing {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--good) 80%, #fff), var(--good));
+}
+.callbtn.ringing .ring { animation-duration: .9s; }
+
+/* A control that admits it is not built yet, where the press happened. */
+.btn.nope {
+  animation: nope .38s cubic-bezier(.36,.07,.19,.97);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+}
+@keyframes nope {
+  10%, 90% { transform: translateX(-1.5px) }
+  30%, 70% { transform: translateX(3px) }
+  50%      { transform: translateX(-3px) }
+}
+@media (prefers-reduced-motion: reduce) { .btn.nope { animation: none; } }

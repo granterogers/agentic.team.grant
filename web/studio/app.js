@@ -435,7 +435,21 @@ function ribbon() {
     </span>
     ${busy.length === 0 ? '' : `<span class="rb faces">${busy.map((c) => face(c, 20)).join('')}</span>`}
     ${waiting === 0 ? '' : `<span class="rb"><span class="t-label warn">${waiting} waiting on you</span></span>`}
-    ${stuck.length === 0 ? '' : `<button class="rb stuck" data-open="${esc(stuck[0].slug)}">
+    <!--
+      Straight to the blocked job, not merely to its project.
+
+      This was dead in the most confusing way possible: the blocked job lives on
+      the project Grant was already looking at, so pressing "1 blocked" set the
+      project he was already on and re-rendered an identical page. It looked
+      broken and was, in effect. The data-blocked attribute carries the project
+      AND lands on AI Team, Active Jobs, which is the only screen that says what
+      the blocker actually is.
+
+      No backticks in this comment. It lives inside a template literal, and a
+      backtick here ends the string — which is exactly how this file was left
+      unparseable for one commit.
+    -->
+    ${stuck.length === 0 ? '' : `<button class="rb stuck" data-blocked="${esc(stuck[0].slug)}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
         <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
@@ -1935,10 +1949,31 @@ function render() {
     try { localStorage.setItem('studio.rail', railShut() ? 'open' : 'shut') } catch { /* fine */ }
     render()
   })
-  $('[data-call]', root)?.addEventListener('click', () => {
-    // The prototype has no call; saying so is better than a dead button.
-    const s = $('.talkstate', root)
-    if (s) s.textContent = 'Calling Claire…'
+  /*
+    Call the team.
+
+    This was DEAD. It wrote to `.talkstate`, an element removed from the rail at
+    some point since, so the most prominent control in the interface — the one
+    Grant asked to be prominent — did nothing at all when pressed. Nothing
+    caught it: it renders, it passes every layout check, and it photographs
+    perfectly. `npm run verify:controls` found it by pressing it.
+
+    The prototype still has no call to place, so the honest behaviour is to say
+    so ON the button, where the press happened, rather than in a status line
+    somewhere else that may or may not exist. It reverts after a moment so the
+    rail does not stay stuck mid-sentence.
+  */
+  const call = $('[data-call]', root)
+  call?.addEventListener('click', () => {
+    if (call.classList.contains('ringing')) return
+    const label = $('.lbl', call)
+    const was = label?.textContent ?? 'Call the team'
+    call.classList.add('ringing')
+    if (label !== null) label.textContent = 'Calling Claire…'
+    setTimeout(() => {
+      call.classList.remove('ringing')
+      if (label !== null) label.textContent = was
+    }, 2400)
   })
 
   for (const b of root.querySelectorAll('[data-settings]')) {
@@ -2050,6 +2085,20 @@ function render() {
     })
   }
 
+  // The ribbon's blocked count goes to the job itself (see ribbon()).
+  for (const b of root.querySelectorAll('[data-blocked]')) {
+    b.addEventListener('click', () => {
+      carry(null, null, () => {
+        state.project = b.dataset.blocked
+        state.view = 'project'
+        state.tab = 'team'
+        state.sub = 'jobs'
+        rememberTab(state.project, 'team')
+        render()
+      })
+    })
+  }
+
   /*
     Tabs, the talk action, the composer and the in-tray decisions.
 
@@ -2115,9 +2164,16 @@ function render() {
   }
 
   $('[data-project-settings]', root)?.addEventListener('click', () => {
-    // #36. Not built yet, and saying so beats a sheet with nothing in it.
-    const s2 = $('.talkstate', root)
-    if (s2 !== null) s2.textContent = 'Project settings — not built yet (#36)'
+    /*
+      #36 is not built. Saying so where the press happened beats writing to a
+      status line — which is exactly how the call button came to be dead: it
+      wrote to `.talkstate`, an element that no longer exists.
+    */
+    const btn = $('[data-project-settings]', root)
+    if (btn !== null) {
+      btn.classList.add('nope')
+      setTimeout(() => { btn.classList.remove('nope') }, 1400)
+    }
   })
 
   /*
