@@ -375,7 +375,14 @@ export const ROUTES = {
   supabase: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
   telegram: { how: 'tab', to: 'channels', label: 'Set up in Channels' },
   slack: { how: 'tab', to: 'channels', label: 'Set up in Channels' },
-  mcp: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  /*
+    MCP opens its own view rather than sending you to another tab (#91).
+
+    It is the one connection whose "how do I use this" answer is a URL, a list
+    of tools and a procedure — none of which lives in Setting up, which is
+    where this used to point.
+  */
+  mcp: { how: 'mcp', label: 'How to connect a client' },
   zoom: {
     how: 'none',
     label: 'Not supported yet',
@@ -401,3 +408,26 @@ export const routeFor = (key) =>
 */
 export const isConnected = (state) =>
   state === 'ok' || state === 'attested' || state === 'degraded'
+
+
+/*
+  The MCP server's own page (#91), fetched on demand.
+
+  Not part of `hq_studio_settings`: it reads three tables nobody else touches,
+  and putting it in the shared payload would make every settings open pay for
+  it. Same reasoning as `lately`.
+*/
+export const MCP = { loaded: false, url: '', tools: [], clients: [], recent: [], steps: [] }
+
+export async function hydrateMcp(read) {
+  try {
+    const d = await read('mcp')
+    if (!d || typeof d.url !== 'string') throw new Error('unexpected shape')
+    Object.assign(MCP, d, { loaded: true })
+  } catch {
+    // A settings tab that shows a stack trace is worse than one that says it
+    // could not ask. `loaded` stays false and the panel says so.
+    MCP.loaded = false
+  }
+  return MCP
+}

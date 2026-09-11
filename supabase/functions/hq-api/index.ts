@@ -87,6 +87,17 @@ const SECTIONS: Readonly<
     metadata and opening one fetches it — the same reasoning as `lately`.
   */
   document: { fn: 'studio_document', arg: 'p_document_id' },
+  /*
+    The MCP server, as a page (#91).
+
+    Its own section rather than part of `studio_settings`, because it is the
+    only tab that reads three tables nobody else touches and putting it in the
+    shared payload would make every settings open pay for it.
+
+    Nothing in the RPC selects `token_sha256`. This tab gets captured by
+    `npm run shots` and attached to a build step on a public page.
+  */
+  mcp: { fn: 'hq_mcp' },
   // What the office did and what is being built, as one page (#68).
   lately: { fn: 'hq_studio_lately', args: { p_limit: 40 } },
   // The first-run checklist, for the Setting up pane (#68). `setup` already

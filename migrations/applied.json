@@ -246,5 +246,6 @@
   "0245_contacts_have_a_table.sql": "bfdb1475dd39661a491cd41ead20dfa4ad16e4160505c2a4a2df2534ad8426ea",
   "0246_contacts_reach_the_page.sql": "d6b59b702e0d514e2c422f8cc3b1603310424b766c506dd46f0ee912c23f7279",
   "0247_channel_entries_that_say_something.sql": "a8cc4b6106ca77831a3eda9cdb34be68cfeb042fed4af718c69bd95c8f3c34a1",
-  "0248_that_setting_is_a_slug_not_a_switch.sql": "0eb9f7e77ca96304324f33270fb1eef36958d1bad339aa41ac99d6bd26c5fbf1"
+  "0248_that_setting_is_a_slug_not_a_switch.sql": "0eb9f7e77ca96304324f33270fb1eef36958d1bad339aa41ac99d6bd26c5fbf1",
+  "0249_the_mcp_client_entry_says_what_it_is.sql": "1e296ba0ccd5cf8a8437e5454428c4e4947d4a7c2b53ca7d96b5a529a21eb2cc"
 }

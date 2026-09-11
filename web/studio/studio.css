@@ -2922,3 +2922,14 @@ kbd {
 .chbot b { font: 600 12.5px/1.2 var(--text); }
 /* Disabled reads as disabled rather than merely being it. */
 .chbot.off { opacity: .5; }
+
+/* The MCP server's URL, meant to be copied. `user-select: all` so one click
+   takes the whole thing rather than a word of it. */
+.mcpurl {
+  display: block; font: 500 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 10px 12px; border-radius: 9px; background: var(--sunken);
+  border: 1px solid var(--edge); color: var(--ink); word-break: break-all;
+  user-select: all;
+}
+.mcpsteps { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.mcpsteps li { font: 400 14px/1.55 var(--text); color: var(--ink-2); }

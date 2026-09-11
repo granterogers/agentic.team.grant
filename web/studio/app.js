@@ -43,6 +43,8 @@ const state = {
   sub: 'board',
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
+  // Whether the MCP client view is open, on the Connections tab (#91).
+  mcp: false,
   // Which channel's "how it works" is open, in Settings (#93). One at a time:
   // four expanded cards is a page nobody reads.
   channel: null,
@@ -2569,7 +2571,13 @@ function connectionsTab() {
               return `<button class="btn small primary" data-goto-setting="${esc(route.to)}"
                         >${esc(route.label)}</button>`
             }
+            if (route.how === 'mcp') {
+              return `<button class="btn small primary" data-mcp-open>${esc(route.label)}</button>`
+            }
             return `<span class="t-meta">${esc(route.why ?? route.label)}</span>`
+          }
+          if (route.how === 'mcp') {
+            return `<button class="btn small quiet" data-mcp-open>${esc(route.label)}</button>`
           }
           return route.family === 'google' && canWrite()
             ? '<button class="btn small quiet" data-forget-google>Disconnect</button>'
@@ -2631,6 +2639,44 @@ function connectionsTab() {
       </div>
     </div>
     <div class="servicegrid">${list.map(card).join('')}</div>
+    <!--
+      How to connect a client to this office (#91).
+
+      Below the grid rather than inside a card, for the reason the channel
+      detail learned: expanding in place stretches the grid row and turns the
+      neighbours into tall empty boxes.
+
+      The token is not here. Not truncated, not fingerprinted, not present at
+      all - the RPC never selects token_sha256. This tab gets captured by
+      npm run shots and attached to a build step on a public page, and the
+      procedure for getting the token is the thing that belongs on screen.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${!state.mcp ? '' : `<div class="chdetail">
+      <h3 class="t-title" style="margin:0;font-size:19px">Connecting a client</h3>
+      ${!config.MCP.loaded
+        ? '<p class="t-meta">Asking the office…</p>'
+        : `<p class="t-label">Server URL</p>
+           <code class="mcpurl">${esc(config.MCP.url)}</code>
+           <ol class="mcpsteps">${config.MCP.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+           <div>
+             <span class="t-label">Tools a client would see (${
+               config.MCP.tools.filter((t) => t.on).length} of ${config.MCP.tools.length})</span>
+             <div class="chwho">${config.MCP.tools.map((t) => `<span class="chbot ${t.on ? '' : 'off'}"
+               title="${esc(t.why_off ?? t.what ?? '')}">
+               <b>${esc(t.tool)}</b>
+               <span class="t-meta">${esc(t.on ? (t.what ?? '') : (t.why_off ?? 'switched off'))}</span>
+             </span>`).join('')}</div>
+           </div>
+           ${config.MCP.clients.length === 0 ? '' : `<div>
+             <span class="t-label">Clients that have connected</span>
+             <div class="chwho">${config.MCP.clients.slice(0, 8).map((c) => `<span class="chbot ${c.on ? '' : 'off'}">
+               <b>${esc(c.name ?? 'unnamed')}</b>
+               <span class="t-meta">${esc(String(c.calls ?? 0))} calls${c.last ? ` · ${esc(c.last)}` : ''}</span>
+             </span>`).join('')}</div>
+           </div>`}`}
+    </div>`}
   </div>`
 }
 
@@ -2912,6 +2958,26 @@ function settingsSheet() {
     the page behind it does not change. One at a time — four expanded cards is
     a page nobody reads.
   */
+  /*
+    Open the MCP view, fetching it the first time (#91).
+
+    Lazy, like `lately`: it reads three tables nobody else touches and most
+    settings visits never open it. The panel says "asking the office" until it
+    arrives rather than appearing empty.
+  */
+  for (const b of v.querySelectorAll('[data-mcp-open]')) {
+    b.addEventListener('click', async () => {
+      state.mcp = !state.mcp
+      settingsSheet()
+      sheet(v, true)
+      if (state.mcp && !config.MCP.loaded) {
+        await config.hydrateMcp(read)
+        settingsSheet()
+        sheet(v, true)
+      }
+    })
+  }
+
   for (const b of v.querySelectorAll('[data-channel]')) {
     b.addEventListener('click', () => {
       state.channel = state.channel === b.dataset.channel ? null : b.dataset.channel
