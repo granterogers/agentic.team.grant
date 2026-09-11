@@ -73,7 +73,7 @@ const PORT = Number(process.env.UI_VERIFY_PORT ?? 8971)
 */
 const ROUTES = [
   { kind: 'view', at: 'portfolio', name: 'all projects' },
-  { kind: 'view', at: 'desk', name: 'desk' },
+  // The desk was here. Removed with the view itself (#77).
   { kind: 'view', at: 'lately', name: 'lately' },
   { kind: 'tab', at: 'overview', name: 'project · overview' },
   { kind: 'tab', at: 'team', name: 'project · AI team' },

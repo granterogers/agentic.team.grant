@@ -103,7 +103,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   padding: 9px 10px; border-radius: 8px; text-align: left;
   min-height: 44px; color: var(--ink-2);
 }
-.navitem[aria-current="true"] { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
+/* Both spellings. Navigation entries use `aria-current="page"`, which is the
+   correct value for "this is the page you are on"; the older ones say "true".
+   A selector that knows only one of them styles half the rail. */
+.navitem[aria-current="true"],
+.navitem[aria-current="page"] { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
 .navitem:hover { background: var(--accent-wash); }
 
 /* Presence: ambient, at the edge. Never a feed. */
@@ -548,7 +552,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    The top tier. A project is reachable from anywhere; documents and tasks are
    not, because they only exist inside one. */
 .navitem.home { color: var(--ink-2); font-weight: 500; }
-.navitem.proj { padding-left: 10px; gap: 10px; font-size: 14px; min-height: 40px; }
+/*
+  44px, not 40 (#105, found by verify:ui once it could reach this screen).
+
+  This rule is BELOW the `@media (max-width: 860px)` block that sets
+  `.navitem { min-height: 48px }`, and a media query adds no specificity — so
+  on a phone the project entries were 40px tall and the phone rule written for
+  them lost on source order alone. Third time this file has been bitten by it;
+  the note at the end of the stylesheet says overrides go last, and this is the
+  base rule the overrides were losing to.
+
+  The floor is 44px everywhere, so the base rule now meets it and there is
+  nothing for the phone rule to rescue.
+*/
+.navitem.proj { padding-left: 10px; gap: 10px; font-size: 14px; min-height: 44px; }
 .navitem.proj .dot {
   width: 9px; height: 9px; border-radius: 3px; flex: none;
   background: linear-gradient(160deg, color-mix(in srgb, var(--hue) 70%, #fff), var(--hue));

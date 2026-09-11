@@ -145,6 +145,20 @@ const openTalk = async (device: Record<string, unknown>) => {
       const ctx = new AudioContext();
       const dest = ctx.createMediaStreamDestination();
       const osc = ctx.createOscillator(); osc.connect(dest); osc.start();
+      /*
+        Every stream this stub ever handed out, kept (#102).
+
+        The check that matters is not "did the page call stop on the stream it
+        is holding" — it is "is ANY microphone this page opened still live".
+        Those are different questions, and the bug was precisely the gap
+        between them: closing the call sheet dropped the reference, so the page
+        held nothing, stopped nothing, and the device kept recording.
+
+        A page that has lost track of a stream cannot be asked about it. The
+        stub can.
+      */
+      window.__MICS = window.__MICS || [];
+      window.__MICS.push(dest.stream);
       return dest.stream;
     };
   `)
@@ -643,6 +657,58 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
     'call · and the button offers to call again',
     after.slice(0, 60),
     after.toLowerCase().includes('call again') || after.toLowerCase().includes('press the phone'),
+  )
+
+  /*
+    The one that would have caught #102.
+
+    Grant: *"Turning voice off must stop microphone capture and ongoing voice
+    playback."* Every check above this line passed while the microphone stayed
+    open, because they all ask what the page SENT or what the page SHOWS, and a
+    leaked audio track is neither. It is a device that is still recording after
+    the interface says it is not, and the only external sign is the browser's
+    own indicator.
+
+    `live` counts tracks that are not 'ended' across every stream the stub ever
+    handed out — including any the page has forgotten about, which is the whole
+    point.
+  */
+  const liveTracks = (await page.evaluate(
+    `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
+  )) as number
+  record(
+    'call · and the microphone is actually released, not merely forgotten',
+    liveTracks === 0
+      ? 'no live track remains'
+      : `${String(liveTracks)} track(s) STILL RECORDING after stop`,
+    liveTracks === 0,
+  )
+
+  /*
+    And again from the state that leaked.
+
+    Closing the sheet is not hanging up (#101) — the call is meant to survive
+    it. So: place a call, close the sheet, reopen it, and press stop. That is
+    the exact sequence that used to strand a microphone, and it is the sequence
+    a person performs without thinking about it.
+  */
+  await page.locator('#call').tap()
+  await page.waitForTimeout(400)
+  await page.locator('#viewer .close').tap()
+  await page.waitForTimeout(300)
+  await page.locator('[data-call]').first().tap()
+  await page.waitForTimeout(400)
+  await page.locator('#call').tap()
+  await page.waitForTimeout(500)
+  const afterRoundTrip = (await page.evaluate(
+    `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
+  )) as number
+  record(
+    'call · and after closing the sheet mid-call and coming back, still released',
+    afterRoundTrip === 0
+      ? 'no live track remains'
+      : `${String(afterRoundTrip)} track(s) STILL RECORDING`,
+    afterRoundTrip === 0,
   )
 
   await context.close()
