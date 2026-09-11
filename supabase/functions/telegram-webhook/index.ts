@@ -233,6 +233,52 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // into work and a `return=minimal` insert hands back nothing.
   })
 
+  /*
+    Answer the button, now.
+
+    Issue #59. `answerCallbackQuery` was listed as idempotent in the Telegram
+    client and called from nowhere, so pressing a button left the spinner
+    turning until Telegram gave up. The press WAS recorded — the insert above
+    is what records it, and the worker acts within the minute — but nothing
+    said so, and the only honest reading of a spinner that never resolves is
+    "it did not work". Grant pressed them and reasonably concluded they were
+    dead.
+
+    It has to happen here rather than in the worker: Telegram wants the answer
+    within a few seconds and the duty pass runs every minute.
+
+    After the insert, deliberately. The toast says the press was taken, so
+    saying it before the row exists would be a lie in the one case that
+    matters. Best effort thereafter — a toast that fails must not make Telegram
+    retry an update that was stored.
+  */
+  if (command.callback_action !== null && command.callback_action !== undefined) {
+    const queryId = update.callback_query?.id
+    if (typeof queryId === 'string' && queryId !== '') {
+      const ack = (await rpcOne('callback_ack', {
+        p_bot_id: claimed,
+        p_action: command.callback_action,
+      })) as { token?: string; text?: string } | null
+      if (typeof ack?.token === 'string' && ack.token !== '') {
+        try {
+          await fetch(`https://api.telegram.org/bot${ack.token}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              callback_query_id: queryId,
+              text: ack.text ?? 'Got it',
+              // A toast, not an alert. An alert is a modal he has to dismiss,
+              // which is a heavier interruption than the press deserved.
+              show_alert: false,
+            }),
+          })
+        } catch {
+          // See above: never fail the request over an acknowledgement.
+        }
+      }
+    }
+  }
+
   if (!response.ok && response.status !== 409) {
     // A 5xx here means Telegram should retry, so say so. A 409 is the
     // idempotency index doing its job and is success.

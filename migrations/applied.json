@@ -201,5 +201,6 @@
   "0200_who_knows_about_this.sql": "49f397f60617c3c32374d3d92180c877519fb393365af784802767998f22d040",
   "0201_the_roster_did_not_know_enough_words.sql": "c1fd2b08ab29fadbc8a9728be8bf4373f69143ecf5f5bfd25df3d5c6fb32402a",
   "0202_skills_route_work_now.sql": "31853dd8f30fd4aa1846fbdf4addbcd325d2e162026eba0fd2e62568c2a4432b",
-  "0203_a_research_job_is_not_a_test.sql": "edcb49f17caa219bb5ad7bcfbfce4961c386689818c9fbc354ac9b753b1fca3b"
+  "0203_a_research_job_is_not_a_test.sql": "edcb49f17caa219bb5ad7bcfbfce4961c386689818c9fbc354ac9b753b1fca3b",
+  "0204_answer_the_button.sql": "a8b6f8d0a5f4907608145c4fa2b114081ee42d62e94532d6ae761fa8dfc42f9e"
 }
