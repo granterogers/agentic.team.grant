@@ -33,6 +33,8 @@ const state = {
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
+  // Which person's card is open in Settings. Null is the grid (#68).
+  person: null,
   // The project's sections (#30). Overview is the default: the specification
   // opens on Current Focus and Project Status, not on a file list.
   tab: 'overview',
@@ -1601,30 +1603,177 @@ function dashboard() {
   piece of work and expire when it is done. What was missing was any way to see
   or do it.
 */
+/*
+  One person, opened.
+
+  Configure was a dead button — the one whose reserved 90px made eight names
+  wrap a character per line (#67). This is what it should always have opened.
+
+  Expanded in place rather than in a second sheet. Settings is already a sheet,
+  and a sheet inside a sheet is two Escape presses and a lost sense of where you
+  are. The card becomes the editor and the rest of the grid stays put, so the
+  answer to "who else is there" never leaves the screen.
+
+  Grant: *"I want the staff members details to be editable on the front page —
+  names, roles, but you know what kind of skills they have? I'd like to give
+  them the ability to interact with other tools."* Both halves are here, and 0119
+  is why they look different: expertise is a text field because it grants
+  nothing, and a tool is a checkbox against a foreign key because it does.
+*/
+const LEVEL_NAMES = ['Reads only', 'Writes internally', 'Acts outside', 'Needs approval']
+
+function personEditor(c) {
+  const tools = c.tools ?? []
+  const held = tools.filter((t) => t.granted).length
+  const procs = c.procedures ?? []
+  const spares = config.SPARE_BOTS ?? []
+
+  const groups = [0, 1, 2, 3]
+    .map((lvl) => {
+      const rows = tools.filter((t) => t.level === lvl)
+      if (rows.length === 0) return ''
+      return `<div class="toolgroup">
+        <span class="t-label">${esc(LEVEL_NAMES[lvl])}</span>
+        ${rows
+          .map(
+            (t) => `<label class="toolrow${t.available ? '' : ' off'}"${
+              t.available ? '' : ` title="${esc(t.unavailable_because ?? 'switched off for everyone')}"`
+            }>
+            <input type="checkbox" data-grant="${esc(t.tool)}" data-who="${esc(c.slug)}"
+              ${t.granted ? 'checked' : ''}${t.available ? '' : ' disabled'}>
+            <span>${esc(t.description ?? t.tool)}</span>
+          </label>`,
+          )
+          .join('')}
+      </div>`
+    })
+    .join('')
+
+  const botOptions = [
+    '<option value="">— none —</option>',
+    ...(c.bot ? [`<option value="${esc(c.bot)}" selected>@${esc(c.bot)}</option>`] : []),
+    ...spares.map((b) => `<option value="${esc(b.username)}">@${esc(b.username)} (spare)</option>`),
+  ].join('')
+
+  return `<article class="staffcard open" data-saidwrap
+           style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
+    <div class="sopen">
+      <div class="srow">
+        ${face(c, 46)}
+        <div class="sfields">
+          <input class="nm" data-f="p_name" value="${esc(c.name)}" aria-label="First name">
+          <input data-f="p_title" value="${esc(c.role ?? '')}" aria-label="Role">
+        </div>
+        <button class="btn small quiet" data-close-person>Done</button>
+      </div>
+
+      <label class="flab">What they do</label>
+      <textarea data-f="p_remit" rows="2" aria-label="What they do">${esc(c.remit ?? '')}</textarea>
+
+      <label class="flab">How they talk <span class="t-meta">— one line, in your words.</span></label>
+      <input data-f="p_style" value="${esc(c.style ?? '')}" aria-label="How they talk">
+
+      <!--
+        Skills route work, and they grant nothing.
+
+        0119 drew the line and it is worth repeating on the page: this is
+        vocabulary the router matches against, so a word here decides who gets
+        asked. The tools below are the other thing entirely.
+
+        No backticks in this comment. Template literal.
+      -->
+      <label class="flab">Skills <span class="t-meta">— comma separated. This decides
+        who gets the work: "how much should we charge" finds whoever owns
+        <i>charge</i>. It grants no tools.</span></label>
+      <input data-f="p_skills" value="${esc((c.expertise ?? []).join(', '))}"
+             aria-label="Skills" placeholder="pricing, charge, budget, forecast">
+
+      <div class="srow wrap">
+        <label class="flab" style="margin:0">Bot</label>
+        <select data-bot="${esc(c.slug)}" aria-label="Which bot speaks as ${esc(c.name)}">
+          ${botOptions}
+        </select>
+        ${c.bot ? `<a class="t-meta" href="https://t.me/${esc(c.bot)}" target="_blank" rel="noopener">open chat</a>` : ''}
+      </div>
+
+      <details class="tools">
+        <summary>Tools — ${held} of ${tools.length} allowed</summary>
+        <div class="toolbody">
+          ${groups}
+          <p class="t-meta">Ticking saves at once. A greyed row is switched off for
+            everyone by policy, and granting it here cannot turn it on.</p>
+        </div>
+      </details>
+
+      ${procs.length === 0 ? '' : `<details class="tools">
+        <summary>How they work — ${procs.length} procedure${procs.length === 1 ? '' : 's'}</summary>
+        <div class="toolbody">
+          ${procs
+            .map(
+              (pr) => `<div class="proc" data-saidwrap>
+              <div class="procname">${esc(pr.name)}${
+                pr.scope === 'global' ? ' <span class="t-meta">— whole team</span>' : ''
+              }</div>
+              <div class="proctext">${esc(pr.procedure)}</div>
+              <div class="srow">
+                <span class="t-meta">from ${esc(pr.authored_by)} · shown to ${pr.uses ?? 0} job${
+                  (pr.uses ?? 0) === 1 ? '' : 's'
+                }</span>
+                <span class="t-meta" data-said></span>
+                <button class="btn small quiet" data-retire-proc="${esc(pr.skill_id)}">Retire</button>
+              </div>
+            </div>`,
+            )
+            .join('')}
+          <p class="t-meta">Written down by telling the team, in a message. Retiring is
+            reversible — say it again and it comes back.</p>
+        </div>
+      </details>`}
+
+      <div class="srow wrap">
+        <button class="btn primary" data-save-person="${esc(c.slug)}">Save</button>
+        ${c.slug === 'chief-of-staff' ? '' : `<button class="btn small quiet"
+          data-retire-person="${esc(c.slug)}" data-to="${c.active === false ? 'true' : 'false'}"
+          data-name="${esc(c.name)}">${c.active === false ? 'Bring back' : 'Retire'}</button>`}
+        <span class="t-meta" data-said></span>
+      </div>
+    </div>
+  </article>`
+}
+
 function teamTabSettings() {
-  const card = (c) => `
-    <article class="staffcard" data-lift data-edge data-tilt="3.2"
+  const card = (c) =>
+    state.person === c.slug
+      ? personEditor(c)
+      : `
+    <article class="staffcard${c.active === false ? ' retired' : ''}" data-lift data-edge data-tilt="3.2"
              style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 46)}
       <div class="sbody">
         <b>${esc(c.name)}</b>
         <span class="t-label">${esc(c.role)}</span>
-        <span class="t-meta">${esc(c.doing ?? 'Available')}</span>
+        <span class="t-meta">${esc(
+          c.active === false ? 'Retired' : (c.doing ?? 'Available'),
+        )}</span>
       </div>
       <div class="sctl">
         <button class="btn" data-configure="${esc(c.slug)}">Configure</button>
       </div>
     </article>`
 
+  const people = config.staff()
   return `<div class="setbody">
     <div class="tabhead">
-      <p class="t-lead" style="margin:0">Eight permanent. Bring in a specialist for a
-        piece of work and they leave when it is finished.</p>
+      <p class="t-lead" style="margin:0">${people.filter((c) => c.active !== false).length}
+        permanent. Bring in a specialist for a piece of work and they leave when it
+        is finished.</p>
       <button class="btn primary" data-hire>+ Bring someone in</button>
     </div>
-    <div class="staffgrid">${CREW.map(card).join('')}</div>
+    <div class="staffgrid">${people.map(card).join('')}</div>
     <p class="t-meta">A temporary agent carries a justification and an expiry, so the
-      office never quietly grows. Removing one is reversible.</p>
+      office never quietly grows. Removing one is reversible — there is no delete,
+      because outputs, routing decisions and deliveries all name a person and a
+      roster that can lose a row is a history that stops explaining itself.</p>
   </div>`
 }
 
@@ -1999,6 +2148,141 @@ function settingsSheet() {
         return
       }
       applyBehaviour(b, b.dataset.via, chosen)
+    })
+  }
+
+  /*
+    The team, editable (#68).
+
+    Five actions behind one card: edit the person, grant a tool, assign a bot,
+    retire a procedure, retire the person. Each is a separate RPC because each
+    is a separate kind of change — 0119's argument that a text field and a
+    foreign key must not share a mechanism, applied to the interface.
+  */
+  for (const b of v.querySelectorAll('[data-configure]')) {
+    b.addEventListener('click', () => {
+      state.person = b.dataset.configure
+      settingsSheet()
+      sheet(v, true)
+    })
+  }
+  for (const b of v.querySelectorAll('[data-close-person]')) {
+    b.addEventListener('click', () => {
+      state.person = null
+      settingsSheet()
+      sheet(v, true)
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-save-person]')) {
+    b.addEventListener('click', async () => {
+      const card = b.closest('.staffcard')
+      const field = (name) => card?.querySelector(`[data-f="${name}"]`)?.value ?? ''
+      const done = await attempt(
+        b,
+        'Saving…',
+        () =>
+          act('staff_update', {
+            p_slug: b.dataset.savePerson,
+            p_name: field('p_name'),
+            p_title: field('p_title'),
+            p_remit: field('p_remit'),
+            p_style: field('p_style'),
+            /*
+              An empty box means no skills, and that is a real instruction.
+
+              Splitting on comma and dropping the blanks rather than sending the
+              raw string: the RPC takes an array, and "pricing, , charge" with an
+              empty element is a routing word that matches everything.
+            */
+            p_skills: field('p_skills')
+              .split(',')
+              .map((x) => x.trim())
+              .filter((x) => x !== ''),
+          }),
+        (r) => {
+          const lost = Number(r?.skills_removed ?? 0)
+          return lost > 0
+            ? `Saved — ${lost} skill${lost === 1 ? '' : 's'} removed.`
+            : 'Saved.'
+        },
+      )
+      if (done) await afterWrite()
+    })
+  }
+
+  for (const box of v.querySelectorAll('[data-grant]')) {
+    box.addEventListener('change', async () => {
+      /*
+        Optimistic and then corrected, rather than optimistic and hoped for.
+
+        The RPC refuses a grant for a globally disabled tool, and a checkbox left
+        ticked after a refusal is a lie about what somebody can do.
+      */
+      const done = await attempt(box, 'Saving…', () =>
+        act('staff_tool_set', {
+          p_slug: box.dataset.who,
+          p_tool: box.dataset.grant,
+          p_granted: box.checked,
+        }),
+      )
+      if (done === null) box.checked = !box.checked
+      else await afterWrite()
+    })
+  }
+
+  for (const sel of v.querySelectorAll('[data-bot]')) {
+    // What it held, so a change knows which bot to hand back.
+    sel.dataset.was = sel.value
+    sel.addEventListener('change', async () => {
+      const done = await attempt(sel, 'Saving…', async () => {
+        /*
+          Free the previous bot first.
+
+          The RPC refuses to give a person a second bot — one each, so "who is
+          this from" always has an answer — and a bot cannot be deleted and a
+          username is claimed for ever, so firing must hand it back rather than
+          consume it.
+        */
+        if (sel.dataset.was) await act('bot_assign', { p_username: sel.dataset.was, p_staff_slug: null })
+        if (sel.value) await act('bot_assign', { p_username: sel.value, p_staff_slug: sel.dataset.bot })
+        return { ok: true }
+      })
+      if (done) await afterWrite()
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-retire-proc]')) {
+    b.addEventListener('click', async () => {
+      if (!sure('Retire this procedure? The team stops being shown it. Saying it again brings it back.')) {
+        return
+      }
+      const done = await attempt(b, 'Retiring…', () =>
+        act('retire_skill', { p_skill_id: b.dataset.retireProc }),
+      )
+      if (done) await afterWrite()
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-retire-person]')) {
+    b.addEventListener('click', async () => {
+      const bringingBack = b.dataset.to === 'true'
+      if (
+        !bringingBack &&
+        !sure(
+          `Retire ${b.dataset.name}? They stop taking work. Everything they have ` +
+            'already done stays, and you can bring them back at any time.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        bringingBack ? 'Bringing back…' : 'Retiring…',
+        () => act('staff_retire', { p_slug: b.dataset.retirePerson, p_active: bringingBack }),
+        bringingBack ? 'Back on the team.' : 'Retired.',
+      )
+      if (done) await afterWrite()
     })
   }
 

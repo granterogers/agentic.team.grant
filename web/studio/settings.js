@@ -32,7 +32,7 @@
   the same rule as the chat's "prototype" mark.
 */
 
-import { CREW } from './data.js'
+import { CREW, DESIGN } from './data.js'
 import { MARKS } from './logos/marks.js'
 
 export const TABS = [
@@ -221,7 +221,27 @@ export async function hydrateSettings(read) {
     const d = await read('studio_settings')
     if (!d || !Array.isArray(d.behaviours)) throw new Error('unexpected shape')
 
-    replace(TEAM, d.team ?? [])
+    /*
+      The design layer, merged back on.
+
+      `hue` and `tone` are decisions from direction.md about perception and are
+      not facts about a person, so they live in `data.js` and not in a column.
+      Without this the Team pane rendered eight identical green discs, which is
+      the exact failure that file's own comment describes: two people sharing a
+      colour is worse than nobody having one, because it teaches you the colour
+      means nothing.
+    */
+    replace(
+      TEAM,
+      (d.team ?? []).map((m) => ({
+        ...(DESIGN[m.slug] ?? { hue: 'p-slate', tone: 210 }),
+        ...m,
+        // `slug` from DESIGN is the studio's short name and would overwrite the
+        // real one, which everything that writes back needs.
+        slug: m.slug,
+        staffSlug: m.slug,
+      })),
+    )
     replace(SPARE_BOTS, d.spare_bots ?? [])
     replace(BEHAVIOURS, d.behaviours ?? [])
     replace(CONNECTIONS, d.connections ?? [])

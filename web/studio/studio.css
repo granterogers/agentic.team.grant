@@ -2297,6 +2297,59 @@ kbd {
 }
 
 /*
+  A staff card, opened (#68).
+
+  It spans the grid rather than growing in place: an editor squeezed into a
+  third of the width wraps every label, and the whole reason Configure existed
+  was to give these fields room. `grid-column: 1 / -1` works whatever the grid's
+  column count resolves to, so it survives the breakpoint.
+*/
+.staffcard.open {
+  grid-column: 1 / -1;
+  display: block; padding: var(--s4);
+  box-shadow: var(--lift-2);
+  /* No tilt on an open card: a form that moves under the cursor while you aim
+     at a checkbox is the tactile idea applied where it hurts. */
+  transform: none !important;
+}
+.sopen { display: grid; gap: var(--s3); }
+.srow { display: flex; gap: var(--s3); align-items: center; }
+.srow.wrap { flex-wrap: wrap; }
+.sfields { display: grid; gap: 6px; flex: 1; min-width: 0; }
+.flab { font-size: 12.5px; color: var(--ink-3); }
+.sopen input, .sopen textarea, .sopen select {
+  width: 100%; padding: 9px 12px; font: inherit; font-size: 13px;
+  border-radius: var(--r-field, 10px); border: 1px solid var(--edge);
+  background: var(--surface); color: var(--ink);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
+  transition: border-color .18s cubic-bezier(.2,.8,.3,1), box-shadow .18s cubic-bezier(.2,.8,.3,1);
+}
+.sopen select { width: auto; min-width: 200px; }
+.sopen input:focus-visible, .sopen textarea:focus-visible, .sopen select:focus-visible {
+  outline: none; border-color: var(--accent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / .04), 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.sopen .nm { font-weight: 600; }
+.sopen textarea { resize: vertical; min-height: 54px; }
+
+.toolgroup { display: grid; gap: 2px; padding: var(--s3) 0; }
+.toolgroup + .toolgroup { border-top: 1px solid var(--edge); }
+.toolrow {
+  display: flex; gap: 10px; align-items: flex-start; padding: 7px 2px;
+  font-size: 13px; cursor: pointer; border-radius: 8px;
+  transition: background .14s cubic-bezier(.2,.8,.3,1);
+}
+.toolrow:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+/* Disabled by policy. Shown, not hidden: a permission screen that lists only
+   what is granted cannot be used to grant anything (0119). */
+.toolrow.off { color: var(--ink-3); cursor: not-allowed; }
+.toolrow input { width: auto; margin-top: 2px; flex: none; box-shadow: none; padding: 0; }
+/* A retired person is present and obviously not working. Hiding them offers no
+   way to undo a mistap. */
+.staffcard.retired { opacity: .62; }
+.staffcard.retired .sbody b { text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/*
   Phone. The floor is 44px and 16px, or iOS Safari zooms the page on focus —
   and these are new controls, so they were not covered by the sweep that fixed
   the rest. Last in the file, because a media query adds no specificity and
@@ -2308,5 +2361,11 @@ kbd {
   .addsource .btn, .newproj .btn { min-height: 44px; }
   .newproj { width: 100%; }
   .newproj input { flex: 1; min-width: 0; font-size: 16px; min-height: 44px; }
+  /* Every new control in the person editor. 16px or iOS Safari zooms on focus,
+     44px or it cannot be hit. */
+  .sopen input, .sopen textarea, .sopen select { font-size: 16px; min-height: 44px; }
+  .sopen select { width: 100%; }
+  .sopen .btn { min-height: 44px; }
+  .toolrow { min-height: 44px; align-items: center; }
   .source .btn.small { min-height: 44px; padding-inline: 12px; }
 }

@@ -314,7 +314,7 @@ const FALLBACK_WAITING = {
   here — one place, and the direction of travel is obvious if the slugs are ever
   reconciled.
 */
-const DESIGN = {
+export const DESIGN = {
   'chief-of-staff':          { slug: 'claire', hue: 'p-moss',  tone: 152 },
   'research-director':       { slug: 'emma',   hue: 'p-rust',  tone: 28 },
   'communications-director': { slug: 'oliver', hue: 'p-iris',  tone: 292 },
