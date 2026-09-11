@@ -198,7 +198,8 @@ screenshots for visual work** — a sentence about spacing is worth nothing.
 
 ```bash
 npm run lint && npm run typecheck && npm run test
-npm run check:migrations && npm run check:secrets
+npm run check:migrations && npm run check:secrets && npm run check:templates
+npm run verify:wired                                            # if UI changed
 npm run verify:hq && npm run verify:ui && npm run verify:talk   # if UI changed
 npm run shots                                                   # capture web/studio
 ```
@@ -218,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **232 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **235 applied.**
 
 ---
 
@@ -254,8 +255,17 @@ element.
 
 Each of these cost real time. They are here so they cost it once.
 
+- **`git checkout <file>` throws away uncommitted work in that file.** Used to
+  undo a two-line scratch edit in `web/studio/app.js`, it also discarded an
+  hour of unrelated changes sitting in the same file. Copy the file first
+  (`cp x /tmp/x.bak`) or stash; never reach for `checkout` on a file you are
+  in the middle of editing.
 - **A backtick inside an HTML comment inside a template literal ends the
-  string.** `web/studio/app.js` is one long set of template literals, and the
+  string.** *This now has a check: `npm run check:templates`, which parses
+  every `web/**/*.js` **as an ES module** and refuses a backtick inside an
+  HTML comment. `node --check` alone is not enough — without a `.mjs`
+  extension it parses in script mode, which is how a broken `app.js` once
+  passed a green check.* `web/studio/app.js` is one long set of template literals, and the
   explanatory `<!-- … -->` comments live inside them. Writing `` `data-blocked` ``
   in one of those comments terminated the template, and the file became
   unparseable — which renders NOTHING, and announces itself as a capture run
@@ -356,6 +366,18 @@ Each of these cost real time. They are here so they cost it once.
   containing block, so a fixed child anchors to that element instead of the
   viewport — a bottom navigation bar rendered across the top of the page.
   `filter`, `transform`, `perspective` and `will-change` all do the same.
+- **A control that nothing looks up is a control nothing can have wired.**
+  `verify:controls` presses things, costs minutes per route, and only covers
+  what it can reach. `npm run verify:wired` walks sixteen screens, collects
+  every `data-*` attribute on every visible button and link, and fails if any
+  source file never queries it. It found `data-hire` — the other half of a
+  roster feature whose `staff_retire` had existed alone since 0079 — which a
+  full press-everything audit had never seen, because that audit runs without
+  a token and the button is only drawn for a writer (#74).
+- **The key you DERIVE is not the key you must CHECK.** Hiring someone called
+  "Claire" derived the slug `claire`, found no collision, and would have put a
+  second Claire on the roster — because Claire's slug is `chief-of-staff`.
+  Same shape as the project trap below it. Check the human-readable field too.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

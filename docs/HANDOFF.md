@@ -13,13 +13,13 @@
 >
 > | | |
 > |---|---|
-> | Tests | 927 passing · `verify:ui` **60/60** · `verify:hq` 39/39 · `verify:talk` 34/34 · `verify:design` 13/13 · `verify:boundary` 57/57 |
+> | Tests | 927 passing · `verify:ui` **57/57** · `verify:hq` 39/39 · `verify:talk` **36/36** · `verify:design` 13/13 · `verify:boundary` 57/57 |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | 232 applied |
+> | Migrations | 235 applied |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -43,6 +43,26 @@
 > (ADR-0017) — that one rule is what makes a procedure safe to let an agent
 > write, and `app.staff_may_use()` reads neither skills nor lessons, asserted
 > behaviourally and structurally.
+>
+> **Grant's UX review of the studio is filed as #75 and half-built.** Thirty
+> items, persisted verbatim at `docs/spec/ux-review-2026-09-11.md` and filed as
+> #76–#105. Fourteen are closed: the navigation is his shape now (picker top
+> left, sections in the sidebar, Lately and Settings at the bottom, no status
+> strip, no Desk, the rail collapses to nothing), the covers are 64px marks
+> rather than slabs, light and dark is a real three-state setting, and the
+> connect buttons connect.
+>
+> Two of them were worse than described. **#102 was not "off does not work"**:
+> closing the call sheet threw away the only reference to a live microphone,
+> so nothing could ever stop it and reopening started a second. **#87 could
+> not have been fixed as written**: there was no dark-mode setting to fix —
+> every palette's dark tokens lived only inside `prefers-color-scheme`.
+>
+> **Three new checks, each written because something passed while broken.**
+> `check:templates` parses every `web/**/*.js` as a module and refuses a
+> backtick in an HTML comment. `verify:wired` fails on a control no source
+> file looks up. And `verify:talk` now counts live audio tracks across every
+> stream the stub handed out, including ones the page has forgotten.
 >
 > **The backlog is current as of 11 September.** Every issue verified complete
 > was closed with the evidence in a comment rather than a tick — #9, #48, #52,
