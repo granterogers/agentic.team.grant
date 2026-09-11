@@ -181,5 +181,8 @@
   "0180_how_much_of_the_free_tier_is_left.sql": "8dcc71dd46af885c9143986cfac823f4855443dd7d970b00d214d114f2a796ca",
   "0181_the_office_learns_something.sql": "4876cba1abfb974bb1baa742bb95c1cfea9ebeacf2267e5949d599fe361176a4",
   "0182_reading_the_lessons_back.sql": "1f4e75dd14861d5398c42f3e934023221375f5ea93d129bb95ad5aa739ce1e72",
-  "0183_a_lesson_is_a_ledger_row_not_a_child.sql": "9778f425781c3a8f417d8aed532fd1e821d13f770a3906f3bf94926c906e9279"
+  "0183_a_lesson_is_a_ledger_row_not_a_child.sql": "9778f425781c3a8f417d8aed532fd1e821d13f770a3906f3bf94926c906e9279",
+  "0184_saying_what_it_could_not_do.sql": "ff1cd4d577887dac3657ac2ebcef2d10199f325cd6f57f126e3f844dc1a7eb79",
+  "0185_deriving_it_rather_than_asserting_it.sql": "b7165e43b12cb2dc9684f9937865ddfa4a7c0d0bf905f3b66a186b72a62fb586",
+  "0186_a_seam_for_testing_that_does_not_open_a_hole.sql": "787bacf2d6d374535caf9b6da35c399b6d989b32ad57638280413474a4028d52"
 }
