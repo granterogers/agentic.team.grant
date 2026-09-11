@@ -184,5 +184,9 @@
   "0183_a_lesson_is_a_ledger_row_not_a_child.sql": "9778f425781c3a8f417d8aed532fd1e821d13f770a3906f3bf94926c906e9279",
   "0184_saying_what_it_could_not_do.sql": "ff1cd4d577887dac3657ac2ebcef2d10199f325cd6f57f126e3f844dc1a7eb79",
   "0185_deriving_it_rather_than_asserting_it.sql": "b7165e43b12cb2dc9684f9937865ddfa4a7c0d0bf905f3b66a186b72a62fb586",
-  "0186_a_seam_for_testing_that_does_not_open_a_hole.sql": "787bacf2d6d374535caf9b6da35c399b6d989b32ad57638280413474a4028d52"
+  "0186_a_seam_for_testing_that_does_not_open_a_hole.sql": "787bacf2d6d374535caf9b6da35c399b6d989b32ad57638280413474a4028d52",
+  "0187_a_duty_that_happens_at_a_time.sql": "2f5abb29b1792a698484382b444fb8b722e65d590d894c300ed5c8d295ee2c0b",
+  "0188_what_the_morning_briefing_is_made_of.sql": "c38adb5152f0da70500eec8f5208f07f45a79228922dd69dd0b2f253b953a5e7",
+  "0189_claire_briefs_him_at_seven.sql": "3a8c1b867bc78273c28e7a26b759be8d753fcac0d5047bbc2ed28c5786dfb6f7",
+  "0190_kind_is_an_enum_and_the_wrapper_did_not_know.sql": "3c8a807f68450f7013c0397ebd2b6b13024e4169bc9b43766fca18a95374529a"
 }

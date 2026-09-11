@@ -43,6 +43,7 @@ import { announceStart } from '../channels/progress.ts'
 import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { backupHandler } from '../handlers/backup.ts'
+import { briefingHandler } from '../handlers/briefing.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
@@ -284,6 +285,7 @@ export const buildPass = async (
     ...notebookHandlers(db),
     planHandler(db),
     capacityHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
+    briefingHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     calendarHandler(db),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
