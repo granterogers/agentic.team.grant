@@ -1446,12 +1446,12 @@ function staff(d) {
         </div>
         <input data-f="p_title" value="${esc(s.title)}" aria-label="Role">
         <textarea data-f="p_remit" rows="2" aria-label="What they do">${esc(s.responsibilities || '')}</textarea>
-        <label class="flab">Skills <span class="m">— comma separated, up to twelve. This shapes how they write and what they think they are for. It grants nothing.</span></label>
-        <input data-f="p_skills" value="${esc((s.skills || []).join(', '))}" aria-label="Skills" placeholder="e.g. positioning, image editing, campaign copy">
+        <label class="flab">Skills <span class="m">— comma separated, up to thirty. <b>This decides who gets the work.</b> Use the words you would actually type: "how much should we charge" finds whoever owns <i>charge</i>. It shapes how they write too, and it still grants no tools — those are below.</span></label>
+        <input data-f="p_skills" value="${esc((s.expertise || []).join(', '))}" aria-label="Skills" placeholder="e.g. pricing, charge, budget, forecast, margin">
         <label class="flab">How they talk <span class="m">— one line, in your words.</span></label>
         <input data-f="p_style" value="${esc(s.communication_style || '')}" aria-label="How they talk">
         ${toolBox(s)}
-        <div class="m" style="margin-top:6px">${bot} · convened for ${s.convened_for} job${s.convened_for === 1 ? '' : 's'}${s.permanent ? '' : ' · temporary'}</div>
+        <div class="m" style="margin-top:6px">${bot} · convened for ${s.jobs_convened_for || 0} job${(s.jobs_convened_for || 0) === 1 ? '' : 's'}${s.permanent ? '' : ' · temporary'}</div>
         <div class="row" style="margin-top:6px">
           <button class="mini" data-save="${esc(s.slug)}">Save</button>
           ${s.slug === 'chief-of-staff' ? '' :
@@ -1466,6 +1466,11 @@ function staff(d) {
       press Save; it is what they sign messages with everywhere. Tools are different —
       those save the moment you tick them, because a permission you have to remember to
       submit is a permission you cannot trust the state of.</p>
+    <p class="meta"><b>Skills route work.</b> When you send something to the Chief of
+      Staff, she matches what you said against these words and hands it to whoever owns
+      them. Add the words you actually use, not job descriptions — nobody types "unit
+      economics", they type "how much should we charge". Emptying someone's skills means
+      they will never be picked for anything.</p>
     <div class="body"><div class="staff">${people}</div></div>
   </section>`
 }
@@ -1484,8 +1489,21 @@ function wireTeam() {
       b.disabled = true
       said(slug, 'Saving…')
       try {
-        await act('staff_update', args)
-        said(slug, 'Saved.')
+        const r = await act('staff_update', args)
+        /*
+          A cleared skills list is reported, not swallowed.
+
+          Since 0200 these words decide who work is routed to, so emptying them
+          makes someone unroutable — and nothing on the page would look wrong.
+          The RPC returns how many went; saying so is the difference between an
+          accident you notice now and one you discover by wondering why Ruby
+          never gets anything.
+        */
+        const lost = (r && r.skills_removed) || 0
+        said(slug, lost > 0
+          ? `Saved — ${lost} skill${lost === 1 ? '' : 's'} removed. ${(r.skills || []).length === 0
+              ? 'They will not be routed work by subject any more.' : ''}`
+          : 'Saved.')
       } catch (e) {
         // The server refuses a two-word name (0079) and says so in words. Shown
         // verbatim because "first names only" is the rule Grant asked for and a
