@@ -307,8 +307,7 @@ console.log('briefing —')
     overnight: { finished: 0, failed: 0, still_going: 0 },
     stuck: [],
     diary: [],
-    adrift: [],
-    office_cannot: [],
+    noticed: [],
   })
   ok(
     'a morning with nothing at all in it still says something',

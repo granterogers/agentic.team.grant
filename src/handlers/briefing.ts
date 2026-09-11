@@ -68,17 +68,18 @@ interface Diary {
   what: string
   at: string
 }
-interface Adrift {
-  project: string
-  open_tasks: number
-  last_touched_days: number
-}
-interface Cannot {
-  who: string | null
-  needs: string
+/**
+ * Something the office noticed without being asked (#52).
+ *
+ * The body is already a finished sentence, counted in SQL by `app.notice()`,
+ * for the reason this file's header gives: a model handed the numbers writes a
+ * better sentence with the hedge removed.
+ */
+interface Noticed {
   kind: string
-  times: number
-  for_instance: string | null
+  body: string
+  because: Record<string, unknown>
+  weight: number
 }
 interface Facts {
   for_date: string
@@ -87,8 +88,7 @@ interface Facts {
   overnight: { finished: number; failed: number; still_going: number }
   stuck: Stuck[]
   diary: Diary[]
-  adrift: Adrift[]
-  office_cannot: Cannot[]
+  noticed: Noticed[]
 }
 
 /** Local wall-clock time, in his zone, for a timestamp that is stored in UTC. */
@@ -220,24 +220,21 @@ export function briefingLines(f: Facts): string[] {
   /*
     Recommendations — his word, and the part that has to earn its place.
 
-    Only two honest sources today: a project with open work that nothing has
-    touched in a week, and a limitation the office has hit more than once
-    (#47). Both are counted, neither is inferred. #52's noticing pass is what
-    makes this section genuinely good, and until then it is thin rather than
-    padded.
+    One source now, not two: `app.notice()` (#52), which arrives already
+    ranked and already stripped of anything he has dismissed. This section
+    used to render `adrift` and `office_cannot` directly, and both were
+    subsets of the noticing pass — so the briefing said the same thing twice
+    in two different phrasings, which reads worse than either alone.
+
+    Three, and no more. The failure mode of a recommendations section is not
+    that it is thin, it is that it is long enough to skim.
   */
-  for (const a of f.adrift.slice(0, 2)) {
+  for (const n of f.noticed.slice(0, 3)) {
     lines.push(
-      `${a.project} has not moved in ${count(a.last_touched_days, 'day', 'days')}` +
-        (a.open_tasks > 0 ? ` with ${count(a.open_tasks, 'task', 'tasks')} still open.` : '.') +
-        ' Worth deciding whether it is still live.',
-    )
-  }
-  for (const c of f.office_cannot.slice(0, 2)) {
-    lines.push(
-      `We have been unable to ${c.needs.replace(/-/g, ' ')} ${count(c.times, 'time', 'times')} ` +
-        `in the last fortnight${c.who === null ? '' : ` — ${c.who}`}.` +
-        (c.for_instance === null ? '' : ` For instance: ${c.for_instance}`),
+      // A quiet project is the one kind that is an observation without an
+      // implied action, so it gets the nudge that turns it into one. The
+      // others already name what to do by naming what is wrong.
+      n.kind === 'project_quiet' ? `${n.body} Worth deciding whether it is still live.` : n.body,
     )
   }
 

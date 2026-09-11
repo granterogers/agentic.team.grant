@@ -207,5 +207,7 @@
   "0206_a_generated_file_was_made_not_sourced.sql": "86d908777d4fe4e549fe53c0ff67e48701800a2aceb659255de1c0c74f23c51d",
   "0207_a_file_has_no_text_yet.sql": "fa22fd868468ccde66d0056d4e8e361812e8e7690766cd60d3822e2963fb7be0",
   "0208_read_every_constraint_first.sql": "f02140af36f415e4547bf025f228bb1acb5f23d1490409f235cdffae65311506",
-  "0209_attach_reads_the_registry.sql": "85be8b5479fea2242e37b08ae0e6321105ed3543f10a1c116fbdbd52d30fdeb4"
+  "0209_attach_reads_the_registry.sql": "85be8b5479fea2242e37b08ae0e6321105ed3543f10a1c116fbdbd52d30fdeb4",
+  "0210_noticing_what_nobody_asked_about.sql": "885507a570af669d8ea3d5a6816aa13a2874434dbcd11b6d781d88114d6fc765",
+  "0211_a_dismissal_that_actually_silences.sql": "6267e46d7901976b53d2ee477d98809a96bc822b64f77ac9adc2648fd955be63"
 }
