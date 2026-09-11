@@ -8,7 +8,7 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
-import { act, attempt, canWrite, say, sure } from './office.js'
+import { act, attempt, canWrite, read, say, sure } from './office.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
@@ -1638,11 +1638,13 @@ function teamTabSettings() {
 function behaviourTab() {
   const row = (b) => {
     if (b.kind === 'choice') {
-      return `<article class="behave" data-lift data-tilt="1.6">
-        <div class="bhead"><b>${esc(b.name)}</b></div>
+      return `<article class="behave" data-lift data-tilt="1.6" data-saidwrap>
+        <div class="bhead"><b>${esc(b.name)}</b><span class="t-meta" data-said></span></div>
         <div class="choices">
           ${b.options.map((o) => `
-            <button class="choice ${b.value === o.id ? 'on' : ''}" data-choose="${esc(b.id)}:${esc(o.id)}">
+            <button class="choice ${b.value === o.id ? 'on' : ''}"
+                    data-choose="${esc(b.id)}:${esc(o.id)}" data-via="${esc(b.via ?? '')}"
+                    ${b.settable === false || !canWrite() ? 'disabled' : ''}>
               <b>${esc(o.name)}</b>
               <span class="t-meta">${esc(o.note)}</span>
             </button>`).join('')}
@@ -1650,14 +1652,30 @@ function behaviourTab() {
       </article>`
     }
     if (b.kind === 'switch') {
-      return `<article class="behave row" data-lift data-tilt="1.6">
+      /*
+        Drawn as a control only when it IS one.
+
+        `settable` comes from the same allow-list `hq_set_setting` enforces, so
+        the page can never offer a switch the API will refuse. Two of these are
+        deliberately fixed rather than unbuilt — "keep everything undoable" is
+        what the ledger does, not a preference — and both say why instead of
+        being silently omitted, because a missing row raises the question and
+        a stated one answers it.
+
+        No backticks in this comment: template literal.
+      */
+      return `<article class="behave row" data-lift data-tilt="1.6" data-saidwrap>
         <div class="bhead">
           <b>${esc(b.name)}</b>
           <span class="t-meta">${esc(b.note)}</span>
+          <span class="t-meta" data-said></span>
         </div>
-        <button class="toggle ${b.value ? 'on' : ''}" role="switch"
+        ${b.settable === false || !canWrite()
+          ? `<span class="pillvalue">${b.value ? 'On' : 'Off'}</span>`
+          : `<button class="toggle ${b.value ? 'on' : ''}" role="switch"
                 aria-checked="${b.value}" data-toggle="${esc(b.id)}"
-                aria-label="${esc(b.name)}"><span class="knob"></span></button>
+                data-via="${esc(b.via ?? '')}" data-now="${b.value ? '1' : ''}"
+                aria-label="${esc(b.name)}"><span class="knob"></span></button>`}
       </article>`
     }
     return `<article class="behave row" data-lift data-tilt="1.6">
@@ -1689,12 +1707,39 @@ function behaviourTab() {
 function connectionsTab() {
   const card = (c) => `
     <article class="service s-${c.state}" data-lift data-tilt="3.4"
-             style="--tint:${esc(c.tint)}">
-      <span class="mark">${c.svg}</span>
+             style="--tint:${esc(c.tint ?? 'var(--edge)')}">
+      <!--
+        Nothing rather than the word "undefined".
+
+        The marks table has a logo for the services with one, and Uploads and
+        MCP are not companies — there is no mark to draw. Printing an absent one
+        gave every card without a logo the literal text "undefined", wrapped
+        across two lines where the icon should be.
+
+        This comment originally spelled that table name in backticks, inside an
+        HTML comment, inside a template literal — while itself saying not to.
+        The file became unparseable and every capture failed with a syntax
+        error. Fourth time; the rule is in CLAUDE.md and it is easy to type.
+
+        No backticks in this comment: template literal.
+      -->
+      ${c.svg ? `<span class="mark">${c.svg}</span>` : ''}
       <div class="svbody">
         <b>${esc(c.name)}</b>
         <span class="t-meta">${esc(c.used)}</span>
-        <span class="t-meta from">${esc(c.detail)}</span>
+        <!--
+          Capped. connection_health.detail is a short state note for most
+          services and four hundred characters of token scoping for GitHub, and
+          one card four times the height of its neighbours is the grid falling
+          over. The whole note is still in the database for whoever needs it.
+
+          No backticks in this comment. Template literal.
+        -->
+        <span class="t-meta from">${esc(
+          String(c.detail ?? '').length > 110
+            ? `${String(c.detail).slice(0, 108).replace(/[\s,;.]+\S*$/, '')}…`
+            : (c.detail ?? ''),
+        )}</span>
       </div>
       <div class="svfoot">
         <span class="dotstate"></span>
@@ -1704,7 +1749,15 @@ function connectionsTab() {
       </div>
     </article>`
   const list = config.services()
-  const bad = list.filter((c) => c.state !== 'ok').length
+  /*
+    Only what is actually wrong.
+
+    `state !== 'ok'` counted `unchecked` and `attested` as problems and told
+    Grant four of six services wanted looking at when none of them did. A
+    dashboard that cries wolf on the summary line is one he stops reading before
+    reaching the card that matters.
+  */
+  const bad = list.filter((c) => config.isWrong(c.state)).length
   return `<div class="setbody">
     <div class="tabhead">
       <p class="t-lead" style="margin:0">${list.length} services. ${
@@ -1729,7 +1782,19 @@ function channelsTab() {
           <div class="svbody">
             <b>${esc(c.name)}</b>
             <span class="t-meta">${esc(c.role)}</span>
-            <span class="t-meta from">${esc(c.detail)}</span>
+            <!--
+          Capped. connection_health.detail is a short state note for most
+          services and four hundred characters of token scoping for GitHub, and
+          one card four times the height of its neighbours is the grid falling
+          over. The whole note is still in the database for whoever needs it.
+
+          No backticks in this comment. Template literal.
+        -->
+        <span class="t-meta from">${esc(
+          String(c.detail ?? '').length > 110
+            ? `${String(c.detail).slice(0, 108).replace(/[\s,;.]+\S*$/, '')}…`
+            : (c.detail ?? ''),
+        )}</span>
           </div>
           <div class="svfoot">
             <span class="dotstate"></span>
@@ -1879,6 +1944,64 @@ function settingsSheet() {
   for (const el of v.querySelectorAll('[data-lift]')) {
     tiltable(el, { max: Number(el.dataset.tilt ?? 3), scale: 1.006 })
   }
+
+  /*
+    Behaviour, for real (#68).
+
+    Three different RPCs behind three switches that look identical, which is
+    why each row carries `via` rather than the page holding a lookup: autonomy
+    is `hq_autonomy_set`, the chief switch is `hq_routing_set` (its own RPC,
+    because turning it off means eight bots may message Grant), and the rest are
+    `hq_set_setting` against its allow-list. A page that decides which one to
+    call is a second place the routing lives.
+  */
+  const afterWrite = async () => {
+    await config.hydrateSettings(read)
+    settingsSheet()
+    sheet(v, true)
+  }
+
+  const applyBehaviour = async (el, via, value) => {
+    const [kind, name] = String(via ?? '').split(':')
+    const done = await attempt(el, 'Saving…', () => {
+      if (kind === 'autonomy') return act('autonomy_set', { p_level: value })
+      if (kind === 'routing') return act('routing_set', { p_what: name, p_value: value })
+      if (kind === 'setting') return act('set_setting', { p_key: name, p_value: value })
+      throw new Error('nothing behind that control yet')
+    })
+    if (done !== null) await afterWrite()
+  }
+
+  for (const b of v.querySelectorAll('[data-toggle]')) {
+    b.addEventListener('click', () => {
+      // The value it will become, not the one it shows.
+      applyBehaviour(b, b.dataset.via, b.dataset.now === '1' ? 'false' : 'true')
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-choose]')) {
+    b.addEventListener('click', () => {
+      const chosen = String(b.dataset.choose).split(':')[1]
+      /*
+        Confirmed when it widens what the office may do on its own.
+
+        Narrowing needs no confirmation — nobody regrets being asked more often
+        — and treating both the same is how a confirmation becomes noise.
+      */
+      const widening = chosen !== 'suggest'
+      if (
+        widening &&
+        !sure(
+          'Let the team act without asking first? Consequential actions still ' +
+            'wait for you, and you can put this back at any time.',
+        )
+      ) {
+        return
+      }
+      applyBehaviour(b, b.dataset.via, chosen)
+    })
+  }
+
   wireAppearance(v)
 }
 
@@ -2813,13 +2936,19 @@ const API =
   database holds another. A round trip costs a moment and is always right.
 */
 async function refresh() {
-  await hydrate(API, (() => {
-    try {
-      return localStorage.getItem('hq.token') ?? ''
-    } catch {
-      return ''
-    }
-  })())
+  await Promise.all([
+    hydrate(API, (() => {
+      try {
+        return localStorage.getItem('hq.token') ?? ''
+      } catch {
+        return ''
+      }
+    })()),
+    // Both, together. Settings is a separate payload because it is a separate
+    // screen and most visits never open it — but a write can change either, so
+    // a refresh re-reads both rather than leaving one stale behind a tab.
+    config.hydrateSettings(read),
+  ])
   render()
 }
 
@@ -2835,7 +2964,7 @@ async function live() {
     render()
     return
   }
-  await hydrate(API, token)
+  await Promise.all([hydrate(API, token), config.hydrateSettings(read)])
   render()
 }
 

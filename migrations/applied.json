@@ -220,5 +220,10 @@
   "0219_the_studio_reads_the_real_office.sql": "fb936d4fa890a399a5278688a4c2b419e1acc95ef89782742fd7aa55ee335012",
   "0220_the_words_a_card_uses_for_a_connector.sql": "15e6ac99b177cc47f669b1dca417541caaca8de56b40297d7731acee61396259",
   "0221_what_happened_in_words_a_person_uses.sql": "a72c6714ff963d3e5dc83ac213e4a6a6263513fa75ca219a6d034f3f32d6b746",
-  "0222_one_function_per_section_so_the_next_edit_is_small.sql": "aa3f5d3729a459d56b83041a3b17a7ec17c6ad97be83359758e66c7316cfd965"
+  "0222_one_function_per_section_so_the_next_edit_is_small.sql": "aa3f5d3729a459d56b83041a3b17a7ec17c6ad97be83359758e66c7316cfd965",
+  "0223_the_studio_settings_read_the_real_office.sql": "9bc659f54f1c86320805d6cbfc52073993441b56ba7ff0745f0d32843d77ff62",
+  "0224_settings_that_do_not_call_healthy_things_unknown.sql": "d6917f1e1c9998fbed405bcbb6d2f240138809892ee8c480c762bab04c30bb0e",
+  "0225_a_setter_for_autonomy_and_the_levels_that_exist.sql": "fd8b34defe5f2b59b94029a32c7d175a460e5cddfa9b83f890d4babe5ec7347a",
+  "0226_a_settings_page_is_not_engineering_notes.sql": "d957ba8a1ddefd89684e375c60aed47e5531e3022aff55f3645effecd3059b95",
+  "0227_and_the_cards_actually_say_it.sql": "76e69274055d3a5e819ee864b162da69597d912f789c225a0430038b8638e6d5"
 }

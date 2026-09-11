@@ -59,6 +59,8 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   // whole shell at once and a page that fetches per section feels broken while
   // being correct — the argument 0120 made for the tool catalogue.
   studio: { fn: 'hq_studio' },
+  // The Settings viewer, in the shapes settings.js already exports (#68).
+  studio_settings: { fn: 'hq_studio_settings' },
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },
@@ -118,6 +120,11 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // removing anything, and writing the procedure again undoes it. `p_reason` is
   // optional — the RPC supplies an honest default rather than an empty string.
   retire_skill: { fn: 'hq_retire_skill', required: ['p_skill_id'] },
+  // How much the office does without asking (#15). Its own action rather than a
+  // `set_setting` key: it lives in `autonomy_settings`, it is scoped — a project
+  // can override the global — and every change is a new row so "when did it
+  // start acting on its own" stays answerable.
+  autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'] },
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
   staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
