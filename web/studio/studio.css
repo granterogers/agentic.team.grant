@@ -2948,3 +2948,18 @@ kbd {
   border-left: 2px solid var(--accent);
   font: 400 13.5px/1.55 var(--text);
 }
+
+/* --- the mock announces itself (#78 regression, caught by verify:design) ----
+   Spans the whole shell above both columns, because it is a statement about
+   the entire page rather than about the content area. Present ONLY when the
+   data is invented — on a working office this element does not exist. */
+.mockbar {
+  grid-column: 1 / -1;
+  display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
+  padding: 8px var(--s5);
+  background: color-mix(in srgb, var(--warn) 14%, var(--ground));
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  font: 400 12.5px/1.4 var(--text); color: var(--ink-2);
+}
+.mockbar b { font: 600 12px/1.4 var(--text); letter-spacing: .05em;
+  font-variant-caps: all-small-caps; color: var(--warn); }

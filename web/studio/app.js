@@ -539,6 +539,25 @@ function paintSchemeButtons() {
   }
 }
 
+/*
+  The one thing the page must never stop admitting.
+
+  Removed from the DOM entirely when the office answered, rather than hidden:
+  an element that is present and invisible is one a later stylesheet can
+  reveal, and this must be exactly as true as the data behind it.
+*/
+function markMock(root) {
+  const existing = $('.mockbar')
+  if (existing) existing.remove()
+  if (source.live) return
+  const bar = document.createElement('div')
+  bar.className = 'mockbar'
+  bar.innerHTML = `<b>Prototype data</b><span>${
+    esc(source.why || 'the office has not answered, so this is a drawing')
+  }</span>`
+  root.prepend(bar)
+}
+
 function sectionCounts(p) {
   const waiting = workspace.split(p).waiting.length
   const blocked = workspace.rows(p).filter((r) => r.blocked !== undefined).length
@@ -3473,6 +3492,24 @@ function render() {
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
   breathe(root)
   scatter(root)
+  /*
+    Say so when what you are looking at is invented (#78 took this out).
+
+    The "Prototype data" badge lived in the ribbon, and removing the ribbon
+    removed the only place the studio admitted it was showing a mock. That is
+    the one thing on the page that must never quietly disappear: without a
+    token the studio renders FALLBACK_PROJECTS, and a design judged as a
+    product is exactly how a page came to claim Supabase storage was at 82% of
+    the free tier when the real figure was 4%.
+
+    `verify:design` caught it, which is the check doing its job — it exists
+    because this repository has shipped invented numbers before.
+
+    A strip at the very top rather than back in a status bar he asked to
+    remove: it appears only when the data is not real, so on a working office
+    it is never there at all.
+  */
+  markMock(root)
   // The rail is rebuilt on every render, so the call button is a new element
   // each time and knows nothing. A live call must not be represented by a
   // button that looks idle (#101).
