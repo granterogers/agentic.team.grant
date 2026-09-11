@@ -31,6 +31,7 @@ import {
   TransportError,
 } from '../channels/delivery.ts'
 import { TelegramApiError, type TelegramClient } from './api.ts'
+import { inlineKeyboard } from './message.ts'
 
 /** What `TelegramTransport` expects in `SendRequest.body`. */
 export interface TelegramMessageBody {
@@ -38,7 +39,32 @@ export interface TelegramMessageBody {
   readonly keyboard?: readonly (readonly { text: string; callback_data?: string; url?: string }[])[]
   /** A pager should not also ring. Set for anything below `important`. */
   readonly silent?: boolean
+  /**
+   * Suppress the default feedback buttons. Rare, and each use says why.
+   *
+   * Not a general escape hatch: the default exists because Grant asked for
+   * these on everything, and a flag that gets set out of habit puts us back
+   * where we were.
+   */
+  readonly noFeedback?: boolean
 }
+
+/*
+  Purposes that must NOT get thumbs up and down.
+
+  Two kinds, and both would be worse with them:
+
+  - `ack` is "got it, working on it". Asking whether an acknowledgement was
+    useful is noise, and it is the most frequent message the office sends.
+  - a credential delivery is a one-off operational message; a 👍 on it records
+    nothing anyone will read and puts a button under a secret.
+
+  An APPROVAL request is excluded by a different mechanism — `resultContext`
+  already swaps the six buttons for approve/decline, so it arrives with a
+  keyboard and the default never applies. That is deliberate: 👍 on "may I
+  generate this?" answers nothing.
+*/
+const NO_FEEDBACK_PURPOSES: ReadonlySet<string> = new Set(['ack'])
 
 export class TelegramTransport implements Transport {
   readonly channel = 'telegram' as const
@@ -64,8 +90,38 @@ export class TelegramTransport implements Transport {
         allow_sending_without_reply: true,
       }
     }
-    if (message.keyboard !== undefined && message.keyboard.length > 0) {
-      body.reply_markup = { inline_keyboard: message.keyboard }
+    /*
+      Every message to Grant carries the feedback pair, unless it already has
+      buttons of its own.
+
+      Issue #59, and specifically his second time asking:
+
+          "ensure that ALL messages sent to me on Telegram come with that
+           little thumbs up, thumbs down button at the end to make it easier to
+           provide feedback if the message has been understood or if it
+           requires correction."
+
+      The first fix added them to `replyChannel`. That was one of six senders:
+      the pager had them, and `progress.ts`, `scripts/notify.ts`,
+      `hq-token.ts` and `mcp.ts` did not. Patching each is how the seventh
+      sender ships without them, so the default lives here — the one place
+      every Telegram message passes through, including ones nobody has written
+      yet.
+
+      A caller that supplies its own keyboard wins, so approve/decline and the
+      full six are untouched. A caller with nothing to say gets the pair.
+    */
+    const keyboard =
+      message.keyboard !== undefined && message.keyboard.length > 0
+        ? message.keyboard
+        : message.noFeedback === true ||
+            NO_FEEDBACK_PURPOSES.has(request.purpose) ||
+            request.correlationId === null
+          ? undefined
+          : inlineKeyboard(['feedback.useful', 'feedback.not_useful'], request.correlationId, null)
+
+    if (keyboard !== undefined && keyboard.length > 0) {
+      body.reply_markup = { inline_keyboard: keyboard }
     }
 
     try {

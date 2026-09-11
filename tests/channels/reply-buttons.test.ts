@@ -21,8 +21,10 @@
  * returns.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { TelegramClient } from '../../src/telegram/api.ts'
 import { inlineKeyboard } from '../../src/telegram/message.ts'
+import { TelegramTransport } from '../../src/telegram/transport.ts'
 
 const CORRELATION = '3f2a1b4c-5d6e-4f70-8a91-b2c3d4e5f607'
 
@@ -83,5 +85,79 @@ describe('the buttons on a reply', () => {
     // transport only sets reply_markup when there is at least one row, and an
     // empty inline_keyboard is a Telegram error rather than a no-op.
     expect(inlineKeyboard([], CORRELATION, null)).toHaveLength(0)
+  })
+})
+
+/*
+  The transport-level guarantee.
+
+  The first fix put buttons on `replyChannel`, and four other senders still had
+  none — so Grant asked a second time, for ALL messages. Patching each sender is
+  how the seventh ships without them, so the default lives in the transport and
+  the test lives here rather than on any one caller.
+*/
+describe('every Telegram message carries the feedback pair by default', () => {
+  const sent: Record<string, unknown>[] = []
+  const client = {
+    call: vi.fn(async (_method: string, body: Record<string, unknown>) => {
+      sent.push(body)
+      return { result: { message_id: 1 } }
+    }),
+  } as unknown as TelegramClient
+
+  const send = async (over: Record<string, unknown> = {}) => {
+    sent.length = 0
+    const transport = new TelegramTransport(client)
+    await transport.send({
+      targetRef: '1386648496',
+      threadRef: null,
+      dedupeKey: 'test',
+      correlationId: CORRELATION,
+      purpose: 'result',
+      body: { text: 'hello' },
+      ...over,
+    } as never)
+    return sent[0] ?? {}
+  }
+
+  const buttons = (body: Record<string, unknown>) =>
+    (
+      (body.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)
+        ?.inline_keyboard ?? []
+    ).flat()
+
+  it('adds thumbs up and down when the caller supplies no keyboard', async () => {
+    const body = await send()
+    expect(buttons(body).map((b) => b.text)).toEqual(['👍 Useful', '👎 Not useful'])
+  })
+
+  it('leaves a caller’s own keyboard alone, so approve/decline survives', async () => {
+    // resultContext swaps the six for approve/decline on an approval request.
+    // A default that overrode it would answer "may I generate this?" with 👍,
+    // which answers nothing.
+    const own = inlineKeyboard(['approve', 'decline'], CORRELATION, null)
+    const body = await send({ body: { text: 'may I?', keyboard: own } })
+    // The labels are the product's, not this test's guess at them.
+    expect(buttons(body).map((b) => b.text)).toEqual(
+      inlineKeyboard(['approve', 'decline'], CORRELATION, null)
+        .flat()
+        .map((b) => b.text),
+    )
+    expect(buttons(body).map((b) => b.text)).not.toContain('👍 Useful')
+  })
+
+  it('stays off an acknowledgement, which is the most frequent message there is', async () => {
+    expect(buttons(await send({ purpose: 'ack' }))).toHaveLength(0)
+  })
+
+  it('stays off a message with nothing to attach feedback to', async () => {
+    // A credential delivery has no correlation, so a press could not be
+    // resolved to anything — and a button under a secret is worse than no
+    // button.
+    expect(buttons(await send({ correlationId: null }))).toHaveLength(0)
+  })
+
+  it('can be turned off deliberately', async () => {
+    expect(buttons(await send({ body: { text: 'x', noFeedback: true } }))).toHaveLength(0)
   })
 })
