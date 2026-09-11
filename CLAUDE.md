@@ -217,7 +217,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **169+ applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **214 applied.**
 
 ---
 
@@ -324,6 +324,25 @@ Each of these cost real time. They are here so they cost it once.
   is not overflow, not low contrast, not small type and not a dead control.
   Found by opening the PNG. Use `position: absolute` or reserve the space
   deliberately. Issue #67; the same shape as #34.
+- **A class is only styled where its rule says it is.** `.m` is muted and
+  12.5px because of `li .m, .meta { … }` — the first half of that selector needs
+  an `li` ancestor. Used outside a list it renders at full body size and full
+  ink, so a meta line under a heading read as a second heading. Grep for the
+  rule, not just the class name, and check the ancestor it assumes.
+- **A verification that feeds the page the wrong payload passes.**
+  `verify:ui` mapped the staff tab to `hq_staff()` while the page asks for
+  section `team`, which the API serves from `hq_team()` — a different shape
+  entirely. The tool grid, the bot picker and the procedures all rendered as
+  nothing, and a card with nothing in it has no overflow, no small type and no
+  bad contrast. It passed for months. The moment it was corrected it found a
+  68×24 touch target. Check what the PAGE requests, not what the section is
+  called.
+- **A trigger you do not know about silently undoes your write.**
+  `projects_touch_updated_at` sets `updated_at` to now on every update, so
+  backdating it to manufacture a stale project is reverted by the statement
+  doing the backdating. Three checks failed against a branch that was correct.
+  `select tgname from pg_trigger where tgrelid = 'public.x'::regclass` before
+  concluding the code is wrong.
 - **`backdrop-filter` breaks `position: fixed` inside it.** It establishes a
   containing block, so a fixed child anchors to that element instead of the
   viewport — a bottom navigation bar rendered across the top of the page.

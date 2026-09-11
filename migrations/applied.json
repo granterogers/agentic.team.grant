@@ -211,5 +211,6 @@
   "0210_noticing_what_nobody_asked_about.sql": "885507a570af669d8ea3d5a6816aa13a2874434dbcd11b6d781d88114d6fc765",
   "0211_a_dismissal_that_actually_silences.sql": "6267e46d7901976b53d2ee477d98809a96bc822b64f77ac9adc2648fd955be63",
   "0212_a_skill_is_a_procedure_with_no_address_in_it.sql": "b0f666e0696f77463a3e24b42f8f05a90c290076dc99e466577317145e16028e",
-  "0213_writing_a_skill_down_and_reading_it_back.sql": "6c45c9397dd8e576c1a78567a29dcf55ddf68986a23e3ac31a5c595decd821d8"
+  "0213_writing_a_skill_down_and_reading_it_back.sql": "6c45c9397dd8e576c1a78567a29dcf55ddf68986a23e3ac31a5c595decd821d8",
+  "0214_the_team_page_shows_how_each_person_works.sql": "69f66e49ebdae762287dcfd3f94620ef126c6ae7690f74920deaeb18084e465d"
 }

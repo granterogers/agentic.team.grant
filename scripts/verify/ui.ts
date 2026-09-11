@@ -89,7 +89,18 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 const SECTIONS = [
   ['overview', 'hq_overview'],
   ['series', 'hq_series'],
-  ['team', 'hq_staff'],
+  /*
+    `hq_team`, not `hq_staff`.
+
+    The page's staff tab asks for section `team`, which the API serves from
+    `app.hq_team()` — the payload with the roster, the bot assignments, the tool
+    grants and the written-down procedures on it. This list fed it `hq_staff()`
+    instead, whose shape is entirely different, so the team tab has been laid
+    out here against a payload the page never receives: no tool boxes, no bot
+    pickers, no procedures, and every one of those rendered as nothing at all.
+    A layout check that renders an empty card passes.
+  */
+  ['team', 'hq_team'],
   ['activity', 'hq_activity'],
   ['usage', 'hq_usage'],
   ['connections', 'hq_connections'],

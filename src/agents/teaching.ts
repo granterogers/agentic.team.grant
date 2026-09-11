@@ -96,22 +96,40 @@ const firstSentence = (text: string): string => {
  * cost a call on every message that might be a teaching, most of which are not.
  * Grant renames it on the dashboard if it reads badly.
  */
-const nameFrom = (whenToUse: string): string => {
-  const stripped = whenToUse
+const nameFrom = (condition: string | null, procedure: string): string => {
+  /*
+    No stated condition means there is nothing to make a verb phrase out of.
+
+    Decided by the CALLER passing null, not by inspecting the text. The first
+    attempt ran the gerund rule over the fallback wording and shipped a skill
+    called "Ting applies to the work in hand" into the live office; the second
+    attempt guessed at whether the text looked like a verb phrase and produced
+    "Whenevering it applies to the work in hand". The condition either exists or
+    it does not, and only the caller knows.
+  */
+  if (condition === null) {
+    const clause = (/^[^.!?,;:]{6,60}/.exec(procedure.trim())?.[0] ?? 'How we do this').trim()
+    return `${clause.charAt(0).toUpperCase()}${clause.slice(1)}`.slice(0, 80)
+  }
+
+  const stripped = condition
     .replace(
-      /^\s*(?:when|whenever|any time|each time|before|after)\s+(?:you|we|i)?\s*(?:are\s+)?/i,
+      /^\s*(?:when|whenever|any time|each time|before|after)\s+(?:you|we|i|it)\s+(?:are\s+|comes?\s+to\s+)?/i,
       '',
     )
+    .replace(/^\s*(?:when|whenever|any time|each time|before|after)\s+/i, '')
     .replace(/[,.!?]+$/, '')
     .trim()
-  if (stripped === '') return 'How we do this'
-  // "write a brief" → "Writing a brief". Only the common regular verbs; an
-  // irregular one just keeps its infinitive, which reads fine.
-  const gerund = stripped.replace(
-    /^([a-z]+?)(e)?\b/i,
-    (_m, stem: string, e: string | undefined) =>
-      `${stem.charAt(0).toUpperCase()}${stem.slice(1)}${e === undefined ? '' : ''}ing`,
-  )
+  if (stripped === '') return nameFrom(null, procedure)
+
+  // "write a brief" → "Writing a brief". The first word only, greedily: a
+  // non-greedy match took a letter off the front and made a word up.
+  const stem = /^([a-z]+)/i.exec(stripped)?.[1]
+  if (stem === undefined || /^(?:it|this|that|there|they|a|an|the)$/i.test(stem)) {
+    return nameFrom(null, procedure)
+  }
+  const base = /e$/i.test(stem) && !/ee$/i.test(stem) ? stem.slice(0, -1) : stem
+  const gerund = `${base.charAt(0).toUpperCase()}${base.slice(1)}ing${stripped.slice(stem.length)}`
   return gerund.slice(0, 80)
 }
 
@@ -155,7 +173,7 @@ export function readTeaching(instruction: string): Teaching | null {
 
     return {
       kind: 'skill',
-      name: nameFrom(whenToUse),
+      name: nameFrom(conditional === null ? null : whenToUse, procedure),
       whenToUse: whenToUse.slice(0, 400),
       procedure,
     }

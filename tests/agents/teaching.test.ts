@@ -96,6 +96,33 @@ describe('readTeaching — a procedure is a skill', () => {
     expect(t?.kind).toBe('skill')
   })
 
+  it('names a procedure with no stated condition from the procedure itself', () => {
+    /*
+      The bug this exists for reached the live office.
+
+      The gerund rule was applied to the fallback phrase "Whenever it applies to
+      the work in hand" and produced a skill called "Ting applies to the work in
+      hand". Sixteen tests passed, because every one of them supplied a
+      condition. The rule only makes sense on a verb phrase.
+    */
+    const t = readTeaching(
+      "Here's how to handle a request you cannot finish: do every part that is " +
+        'not blocked, then say plainly which part you could not do and why.',
+    )
+    expect(t?.kind).toBe('skill')
+    expect(t?.kind === 'skill' && t.name).not.toMatch(/^Ting/)
+    expect(t?.kind === 'skill' && t.name).toMatch(/^[A-Z]/)
+    expect(t?.kind === 'skill' && t.name).toContain('how to handle a request')
+  })
+
+  it('does not gerund a pronoun', () => {
+    const t = readTeaching(
+      'When it comes to a research request, check what we already hold first, ' +
+        'then search, then write it up with the sources cited inline in the text.',
+    )
+    expect(t?.kind === 'skill' && t.name).not.toMatch(/^Iting|^Ting/)
+  })
+
   it('does not promote a short conditional into a procedure', () => {
     // "When you finish, tell me" is a preference, not a method, and filing it
     // as a skill buries one sentence in a library.

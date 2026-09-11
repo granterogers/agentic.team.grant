@@ -108,6 +108,11 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // be: outputs, routing decisions and deliveries all name a staff member, and
   // a roster that can lose a row is a history that stops explaining itself.
   staff_update: { fn: 'hq_staff_update', required: ['p_slug'] },
+  // Withdrawing a written-down procedure (#50). On the configuring side of the
+  // line: `skills` is append-only, so this writes a retirement row rather than
+  // removing anything, and writing the procedure again undoes it. `p_reason` is
+  // optional — the RPC supplies an honest default rather than an empty string.
+  retire_skill: { fn: 'hq_retire_skill', required: ['p_skill_id'] },
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
   staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },
