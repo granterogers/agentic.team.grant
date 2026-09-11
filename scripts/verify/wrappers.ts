@@ -98,7 +98,7 @@ for (const name of CLIENT_FACING) {
   ok(
     `${name} has a public wrapper`,
     inPublic.length > 0,
-    inApp.length > 0 ? 'only app.' + name : 'not found',
+    inApp.length > 0 ? `only app.${name}` : 'not found',
   )
 
   /*

@@ -254,11 +254,7 @@ const left = await one(`
        + (select count(*) from public.relations where project_id = '${pid}'::uuid)
        + (select count(*) from public.collections where project_id = '${pid}'::uuid) as n
 `)
-ok(
-  'nothing is left behind afterwards',
-  Number(left.n) === 0,
-  `${String(left.n)} left`,
-)
+ok('nothing is left behind afterwards', Number(left.n) === 0, `${String(left.n)} left`)
 
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 if (fail > 0) process.exit(1)

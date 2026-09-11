@@ -29,9 +29,11 @@
  *
  * ## Fixtures
  *
- * Every project this creates is named `fixture-identity-<run>` and archived at
- * the end. Nothing is deleted — the ledger refuses deletes anyway (§16) — and
- * `purge:fixtures` sweeps the archived rows.
+ * ## Subjects
+ *
+ * The projects this creates are REAL, not fixtures, because the function under
+ * test excludes fixtures by design. They are named `Identity proof <run>` and
+ * removed at the end. See the note on SUBJECT below.
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -46,6 +48,37 @@ const db = new ManagementApiExecutor(ref, supabase)
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const run = Date.now().toString(36)
+
+/*
+  The subjects of this suite are NOT fixture projects, and that is the point.
+
+  `app.resolve_project_by_name` deliberately excludes fixtures:
+
+      live as (select p.* from public.projects p
+                where p.status = 'active' and not p.is_fixture)
+
+  and `projects.is_fixture` is GENERATED from the slug — 'fixture-%', 'verify-%',
+  'ledger-proof-%'. So every subject named `fixture-identity-…` was invisible to
+  the very function under test, and eleven checks failed against a feature that
+  works. Verified directly against a real project:
+
+      hq_create_project('Legacy Coaching Course', …)
+        -> needs_confirmation: true, 1 candidate, nothing created
+      hq_create_project('legacy coaching', …)
+        -> needs_confirmation: true, 0.743 near match, nothing created
+
+  Making resolution see fixtures would be changing the product to suit the test.
+  So the subjects are real projects with a distinctive name, removed at the end.
+
+  **The slug is derived from the NAME, not from `p_ref`.** `p_ref` is the
+  connector reference. Getting that backwards is how a teardown keyed on the
+  reference matched nothing and left six real, active projects in Grant's
+  project list. Everything that has to find these rows again keys on SLUG.
+*/
+const SUBJECT = `identityproof-${run}`
+/** What `app.hq_create_project` will actually derive from those names. */
+const SLUG = `identity-proof-${run}`
+const SLUG_OTHER = `identity-proof-other-${run}`
 
 const one = async (sql: string): Promise<Record<string, unknown> | undefined> =>
   (await db.execute(sql)).rows[0] as Record<string, unknown> | undefined
@@ -132,7 +165,7 @@ for (const [a, b, why] of [
 
 const created = await one(`
   select app.hq_create_project(
-    ${lit(`Fixture identity ${run}`)}, 'upload', ${lit(`fixture-identity-${run}`)}, null, true
+    ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}`)}, null, true
   ) as r
 `)
 const madeRaw = (created?.r ?? {}) as { project_id?: string; error?: string }
@@ -152,7 +185,7 @@ if (projectId === '') {
 // would not resolve.
 {
   const rows = await all(
-    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(`Fixture identity ${run}`)}) r
+    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(`Identity proof ${run}`)}) r
       where r.project_id = ${lit(projectId)}::uuid`,
   )
   record(
@@ -204,8 +237,8 @@ const alias = `the ${run} thing`
 // "the finance thing" is the ambiguity that made the duplicate.
 {
   const second = await one(`
-    select app.hq_create_project(${lit(`Fixture identity other ${run}`)}, 'upload',
-      ${lit(`fixture-identity-other-${run}`)}, null, true) as r
+    select app.hq_create_project(${lit(`Identity proof other ${run}`)}, 'upload',
+      ${lit(`${SUBJECT}-other`)}, null, true) as r
   `)
   const otherId = String(((second?.r ?? {}) as { project_id?: string }).project_id ?? '')
   const clash = (
@@ -232,8 +265,8 @@ const alias = `the ${run} thing`
 {
   const attempt = (
     await one(`
-    select app.hq_create_project(${lit(`Fixture identity ${run}`)}, 'upload',
-      ${lit(`fixture-identity-dup-${run}`)}) as r
+    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+      ${lit(`${SUBJECT}-dup`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: unknown[]; project_id?: string }
 
@@ -248,7 +281,7 @@ const alias = `the ${run} thing`
   // The assertion that actually matters. `ai-learning-2` exists because the old
   // path answered this question by making a second project.
   const dupes = await all(
-    `select project_id from public.projects where slug like ${lit(`fixture-identity-${run}%`)}`,
+    `select project_id from public.projects where slug like ${lit(`${SLUG}%`)}`,
   )
   record(
     'and no second project was made behind the question',
@@ -262,8 +295,8 @@ const alias = `the ${run} thing`
 {
   const near = (
     await one(`
-    select app.hq_create_project(${lit(`fixture identity ${run} tracker`)}, 'upload',
-      ${lit(`fixture-identity-near-${run}`)}) as r
+    select app.hq_create_project(${lit(`identity proof ${run} tracker`)}, 'upload',
+      ${lit(`${SUBJECT}-near`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: { name?: string }[] }
   record(
@@ -280,8 +313,8 @@ const alias = `the ${run} thing`
 {
   const forced = (
     await one(`
-    select app.hq_create_project(${lit(`Fixture identity ${run}`)}, 'upload',
-      ${lit(`fixture-identity-forced-${run}`)}, null, true) as r
+    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+      ${lit(`${SUBJECT}-forced`)}, null, true) as r
   `)
   )?.r as { project_id?: string }
   record(
@@ -358,7 +391,7 @@ const alias = `the ${run} thing`
   // confident match and several plausible ones. The temptation there is to take
   // the best fuzzy candidate. That is precisely how work lands in the wrong
   // project while looking entirely reasonable, so it must return null.
-  const vague = `fixture identity`
+  const vague = `identity proof`
   const close = await all(
     `select r.confidence::float8 c from app.resolve_project_by_name(${lit(vague)}) r
       order by r.confidence desc`,
@@ -480,10 +513,35 @@ const alias = `the ${run} thing`
 // Tidy up
 // ===========================================================================
 
-await db.execute(`
-  update public.projects set status = 'archived', updated_at = app.now_utc()
-   where slug like ${lit(`fixture-identity-%${run}%`)} or slug like ${lit(`fixture-identity-${run}%`)}
-`)
+/*
+  These are REAL projects, not fixtures, so `purge:fixtures` will never collect
+  them and leaving them behind means leaving them in Grant's project list.
+  Archiving alone is not enough either: an abandoned archived project still
+  holds its rows on the globally unique alias table, and the next run would
+  find its own name already taken.
+
+  The order is forced by ADR-0014 — an ACTIVE project must have an enabled
+  attachment, and the trigger fires on the attachment delete. Archive first,
+  then the attachments, then the project. Aliases cascade with the project;
+  documents do not (#43), but this suite creates none.
+
+  Matched on the derived slug, scoped to this run, so a concurrent run is
+  untouched.
+*/
+const mine = `(slug like ${lit(`${SLUG}%`)} or slug like ${lit(`${SLUG_OTHER}%`)})`
+await db.execute(`update public.projects set status = 'archived', updated_at = app.now_utc()
+                   where ${mine}`)
+await db.execute(`delete from public.project_attachments
+                   where project_id in (select project_id from public.projects where ${mine})`)
+await db.execute(`delete from public.projects where ${mine}`)
+
+// Prove it. A teardown that silently matches nothing is how this went wrong.
+const left = await all(`select slug from public.projects where ${mine}`)
+record(
+  'the suite leaves nothing of its own behind',
+  left.length === 0 ? 'clean' : left.map((r) => String(r.slug)).join(', '),
+  left.length === 0,
+)
 
 const passed = checks.filter((c) => c.passed).length
 console.log(`\n| check | outcome | |`)
