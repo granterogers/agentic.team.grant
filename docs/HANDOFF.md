@@ -44,6 +44,18 @@
 > write, and `app.staff_may_use()` reads neither skills nor lessons, asserted
 > behaviourally and structurally.
 >
+> **The backlog is current as of 11 September.** Every issue verified complete
+> was closed with the evidence in a comment rather than a tick — #9, #48, #50,
+> #52, #53, #55, #56, #57, #58, #61, #62, #66, #68. Five findings from that
+> day's work that were in nobody's Issue are now filed: Claire is the only
+> agent with no bot of her own and the only one permitted to speak to Grant
+> (#70) · modules are in the canonical IA with no table behind them (#71) ·
+> *build the mechanism, forget the mouth*, five instances in one session, which
+> wants a check rather than another note (#72) · the backtick-in-a-template
+> -literal trap fired five times in a day despite being documented (#73) ·
+> `verify:controls` audits the studio without a token, so it cannot see a
+> single write control (#74).
+>
 > **Recently landed:** the frontend build prompt persisted to
 > `docs/spec/` · integration assessment · GitHub as the operational record
 > (19 labels, 5 milestones, templates, 14 Issues) · the Notion document
