@@ -125,9 +125,36 @@ export function capabilityBrief(reach: readonly Reach[], verbs: readonly Verb[] 
     'and it is not yours to make. ' +
     // The specific sentence Grant objected to, forbidden by name.
     'And do not offer to produce something "ready for you to add" when you can ' +
-    'add it yourself — if a verb above covers it, use it.'
+    'add it yourself — if a verb above covers it, use it. ' +
+    CHANNEL_TRUTHS
   )
 }
+
+/**
+ * What the office does for you, whether or not you hold a tool.
+ *
+ * Issue #64. Claire told Grant *"I cannot add interactive Telegram buttons; I
+ * only generate plain text"*, which was false when she said it: §12's six
+ * buttons had been built for months and the pager was rendering them. He then
+ * asked me to add a feature that already existed.
+ *
+ * `reachNow` covers connectors and `verbsNow` covers tools, and a button is
+ * neither — it is a property of the delivery layer. So an agent asked about it
+ * had nothing to consult and answered from what a LANGUAGE MODEL is: a text
+ * generator. Right about the model, wrong about the system it is part of.
+ *
+ * These are stated as facts rather than grants precisely because the agent does
+ * not do them. `TelegramTransport` attaches the buttons; she does not have to
+ * act, which is exactly why she did not know she could.
+ */
+const CHANNEL_TRUTHS =
+  'Facts about how your messages are sent, which are true whether or not you ' +
+  'do anything: every Telegram message you send automatically carries thumbs ' +
+  'up and thumbs down buttons, and a request for permission carries Go ahead ' +
+  'and Not now. Voice notes Grant sends are transcribed before you see them. ' +
+  'You reach him on Telegram and the team on Slack. Never tell him you can ' +
+  'only produce plain text, or that you cannot add buttons — you can, because ' +
+  'the office adds them for you.'
 
 /** What a service can actually be made to DO, as opposed to merely reached. */
 export interface Verb {
@@ -192,7 +219,21 @@ export async function verbsNow(db: SqlExecutor): Promise<Verb[]> {
  *
  * Returns the offending service, or null.
  */
+/*
+  Claims about the channel, which name no service and so slip past the loop
+  below.
+
+  "I only generate plain text" mentions nothing in `reach`, so the service scan
+  cannot see it. It is the exact sentence Grant was given, and it cost him a
+  request for a feature he already had.
+*/
+const DENIES_CHANNEL =
+  /\b(?:can(?:'|’)?t|cannot|can not|unable to|do(?:n(?:'|’)?t| not))\b[^.!?]{0,60}\b(?:add |send |use |attach |create )?(?:interactive |inline )?buttons?\b|\bonly (?:generate|produce|send|reply with|output)\b[^.!?]{0,30}\b(?:plain )?text\b|\breplies (?:are|stay) limited to text\b/i
+
 export function contradictsReality(reply: string, reach: readonly Reach[]): string | null {
+  // Checked first: it names no service, so the loop below would never reach it.
+  if (DENIES_CHANNEL.test(reply)) return 'Telegram buttons'
+
   const text = reply.toLowerCase()
   for (const r of reach) {
     if (!r.reachable) continue

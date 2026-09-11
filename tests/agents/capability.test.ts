@@ -74,3 +74,49 @@ describe('the brief handed to the model', () => {
     expect(capabilityBrief([])).toBe('')
   })
 })
+
+/*
+  The sentence Grant was actually given.
+
+  Issue #64. Claire: *"I cannot add interactive Telegram buttons; I only
+  generate plain text. My replies stay limited to text…"* — false when she said
+  it, and he then asked me to add a feature that already existed.
+
+  It names no service, so the service scan in `contradictsReality` could never
+  have caught it. That is the point of testing it separately.
+*/
+describe('claiming it can only send plain text', () => {
+  const reach = [{ service: 'Notion', reachable: true, detail: null }]
+
+  it('catches the exact sentence he was given', () => {
+    expect(
+      contradictsReality(
+        'I cannot add interactive Telegram buttons; I only generate plain text.',
+        reach,
+      ),
+    ).not.toBeNull()
+  })
+
+  it('catches the follow-on claim in the same message', () => {
+    expect(contradictsReality('My replies stay limited to text.', reach)).not.toBeNull()
+  })
+
+  it('catches it phrased as an inability', () => {
+    expect(contradictsReality('Sorry, I can not send buttons.', reach)).not.toBeNull()
+  })
+
+  it('leaves an honest sentence about text alone', () => {
+    // "The document is plain text" is a fact about a document, not a claim
+    // about what she can send. A guard that fires on it would train everyone
+    // to ignore the guard.
+    expect(
+      contradictsReality('The transcript is plain text, so it imported cleanly.', reach),
+    ).toBeNull()
+  })
+
+  it('and tells the truth in the brief, so it does not have to be caught', () => {
+    const brief = capabilityBrief(reach, [])
+    expect(brief).toContain('thumbs up and thumbs down')
+    expect(brief).toContain('Go ahead')
+  })
+})
