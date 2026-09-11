@@ -2215,3 +2215,18 @@ kbd {
   .u-trio { flex-wrap: wrap; gap: var(--s2) var(--s3); }
   .u-used { font-size: 22px; }
 }
+
+/*
+  The prototype badge (#68).
+
+  Deliberately quiet and deliberately present. The studio rendered invented data
+  for a week and looked entirely convincing, which is how a design gets judged
+  as a product and a product ships without its design. Amber rather than red:
+  it is not an error, it is a statement about what you are looking at.
+*/
+.rb .t-meta.mock {
+  color: var(--warn, #8a6a1f);
+  border: 1px solid color-mix(in srgb, var(--warn, #8a6a1f) 30%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
+}

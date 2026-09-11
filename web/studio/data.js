@@ -40,7 +40,7 @@ const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public
   one the office reads as "in hand"; Grace, who is quality and risk, sits next
   to the warning amber without being it.
 */
-export const CREW = [
+const FALLBACK_CREW = [
   { slug: 'claire', face: `${FACES}/chief-of-staff.jpg`, name: 'Claire', role: 'Chief of Staff',
     hue: 'p-moss', tone: 152, state: 'busy', doing: 'On a call with you' },
   { slug: 'emma', face: `${FACES}/research-director.jpg`, name: 'Emma', role: 'Research',
@@ -59,7 +59,7 @@ export const CREW = [
     hue: 'p-slate', tone: 196, state: 'idle' },
 ]
 
-export const PROJECTS = [
+const FALLBACK_PROJECTS = [
   {
     slug: 'legacy-coaching-course',
     name: 'Legacy Coaching Course',
@@ -278,11 +278,179 @@ export const PROJECTS = [
   },
 ]
 
-export const WAITING = {
+const FALLBACK_WAITING = {
   what: 'Wellness needs its Notion databases shared before anything can be written there',
   who: 'Marcus', when: '2 days ago',
   note: 'Everything else on that project is carrying on.',
 }
 
+/*
+  ---------------------------------------------------------------------------
+  Real data (#68, ADR-0019)
+  ---------------------------------------------------------------------------
+
+  Grant chose to make the studio the product rather than port its design into
+  the plain page, so this file stops being the source of truth and becomes the
+  fallback plus the design layer.
+
+  Two things stay here on purpose:
+
+  **The mock, as a fallback.** With no token, or with the API unreachable, the
+  studio still renders. That matters more than it sounds: §14A's loop is render
+  → capture → critique, and a design that cannot be looked at without a live
+  backend is a design nobody critiques on the morning the backend is down.
+
+  **The colour.** `hue` and `tone` are decisions from `docs/design/direction.md`
+  about perception — the greens spaced further apart than the blues because they
+  are closer to the eye — and they are not facts about a project. Putting them
+  in a database column is how somebody eventually sets one to a hex code.
+*/
+
+/*
+  The database calls her `chief-of-staff` and the design calls her Claire.
+
+  Issue #42, which has been open since the prototype was written. Rather than
+  renaming eight rows in a live office to match a prototype, the mapping lives
+  here — one place, and the direction of travel is obvious if the slugs are ever
+  reconciled.
+*/
+const DESIGN = {
+  'chief-of-staff':          { slug: 'claire', hue: 'p-moss',  tone: 152 },
+  'research-director':       { slug: 'emma',   hue: 'p-rust',  tone: 28 },
+  'communications-director': { slug: 'oliver', hue: 'p-iris',  tone: 292 },
+  'strategy-director':       { slug: 'tom',    hue: 'p-slate', tone: 248 },
+  'finance-director':        { slug: 'daniel', hue: 'p-plum',  tone: 338 },
+  'operations-director':     { slug: 'marcus', hue: 'p-amber', tone: 78 },
+  'growth-director':         { slug: 'ruby',   hue: 'p-rust',  tone: 4 },
+  'quality-director':        { slug: 'grace',  hue: 'p-slate', tone: 196 },
+}
+
+/*
+  A project's hue, stable for the life of its slug.
+
+  Not stored, and not assigned by position: position changes when a project is
+  created and every card in the portfolio would change colour at once, which
+  looks like a fault. A hash of the slug means Legacy Coaching Course is the
+  same green next week and a new project takes whatever is left.
+*/
+const HUES = ['p-moss', 'p-slate', 'p-amber', 'p-iris', 'p-rust', 'p-plum']
+
+/*
+  Assigned in one pass over the whole list rather than one project at a time.
+
+  A pure hash per slug is stable, which is the property that matters, but two of
+  four projects came out the same purple on the first real render — and two
+  adjacent cards sharing a colour is worse than nobody having one, because it
+  teaches you the colour means nothing. Exactly the argument `data.js` already
+  makes about Emma and Ruby both being rust.
+
+  So the hash picks a STARTING point and collisions walk to the next free hue.
+  Stable while the set of projects is stable, which is the honest guarantee: a
+  new project can shift one other card, and that is a better trade than two
+  cards that look related and are not.
+*/
+const hueFor = (slug) => {
+  let n = 0
+  for (const ch of String(slug)) n = (n * 31 + ch.charCodeAt(0)) % 9973
+  return HUES[n % HUES.length]
+}
+
+const huesFor = (slugs) => {
+  const taken = new Set()
+  const out = {}
+  for (const slug of [...slugs].sort()) {
+    const wanted = HUES.indexOf(hueFor(slug))
+    let at = wanted
+    while (taken.has(HUES[at]) && taken.size < HUES.length) at = (at + 1) % HUES.length
+    out[slug] = HUES[at]
+    taken.add(HUES[at])
+  }
+  return out
+}
+
+/** Live, and mutable in place so importers holding the array see the update. */
+export const CREW = [...FALLBACK_CREW]
+export const PROJECTS = [...FALLBACK_PROJECTS]
+export const WAITING = { ...FALLBACK_WAITING }
+
+/** Whether what is on screen is the office or the mock. The shell says so. */
+export const source = { live: false, at: null, why: 'not asked yet' }
+
+const replace = (target, rows) => {
+  target.length = 0
+  for (const r of rows) target.push(r)
+}
+
+/**
+ * Fetch the real office and put it behind the same shapes.
+ *
+ * Deliberately forgiving: any failure leaves the mock in place and records why.
+ * A studio that shows a stack trace instead of a design is a studio nobody can
+ * judge, and the fallback is already realistic data at realistic lengths.
+ */
+export async function hydrate(endpoint, token) {
+  try {
+    const r = await fetch(`${endpoint}?section=studio`, {
+      headers: { authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) throw new Error(`http ${r.status}`)
+    const { data } = await r.json()
+    if (!data || !Array.isArray(data.projects)) throw new Error('unexpected shape')
+
+    const base = data.avatar_base ?? FACES
+    replace(
+      CREW,
+      (data.crew ?? []).map((c) => {
+        const d = DESIGN[c.slug] ?? { slug: c.slug, hue: 'p-slate', tone: 210 }
+        return {
+          ...d,
+          // The real slug travels too: everything that writes back — a chat
+          // addressed to somebody, a tool grant — needs the name the office
+          // answers to, not the one the design calls them.
+          staffSlug: c.slug,
+          face: c.avatar_ref ? `${base}/${c.avatar_ref}` : '',
+          name: c.name,
+          role: c.role,
+          state: c.state,
+          doing: c.doing,
+          expertise: c.expertise ?? [],
+        }
+      }),
+    )
+
+    const hues = huesFor(data.projects.map((p) => p.slug))
+    replace(
+      PROJECTS,
+      data.projects.map((p) => ({
+        ...p,
+        hue: hues[p.slug] ?? hueFor(p.slug),
+        // Every section the studio renders, guaranteed to be an array so a
+        // renderer never has to ask. An absent section and an empty one are the
+        // same thing to a reader, and only one of them can throw.
+        modules: p.modules ?? [],
+        documents: p.documents ?? [],
+        tasks: p.tasks ?? [],
+        contacts: p.contacts ?? [],
+        sources: p.sources ?? [],
+        activity: p.activity ?? [],
+        requests: p.requests ?? [],
+      })),
+    )
+
+    for (const k of Object.keys(WAITING)) delete WAITING[k]
+    if (data.waiting) Object.assign(WAITING, data.waiting)
+
+    source.live = true
+    source.at = data.generated_at ?? new Date().toISOString()
+    source.why = ''
+    return true
+  } catch (e) {
+    source.live = false
+    source.why = e instanceof Error ? e.message : String(e)
+    return false
+  }
+}
+
 export const byId = (slug) => PROJECTS.find((p) => p.slug === slug) ?? PROJECTS[0]
-export const crewBy = (slug) => CREW.find((c) => c.slug === slug) ?? CREW[0]
+export const crewBy = (slug) =>
+  CREW.find((c) => c.slug === slug || c.staffSlug === slug) ?? CREW[0]

@@ -7,7 +7,7 @@
   is not, that is evidence for React and this file becomes the specification.
 */
 
-import { CREW, PROJECTS, WAITING, byId, crewBy } from './data.js'
+import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
 import { PALETTES, TEXTURES, appearance, apply, readTexture } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
@@ -190,7 +190,20 @@ const docCard = (d, i) => withTalk(`
   <button class="doc" data-doc="${i}">
     ${cover(d)}
     <span style="font-weight:500;font-size:13px;line-height:1.35">${esc(d.title)}</span>
-    <span class="t-meta" style="font-size:12px">${esc(d.origin)} · ${esc(d.size)}</span>
+    <!--
+      The separator only when there is something on both sides of it.
+
+      Several real documents have no size worth printing — a Notion database
+      container is twenty-four characters, so the API deliberately says nothing
+      rather than "4 words" — and the caption rendered as "Notion ·" with a
+      dangling middot. A trailing separator reads as data that failed to load.
+
+      No backticks in this comment: template literal.
+    -->
+    <span class="t-meta" style="font-size:12px">${[d.origin, d.size]
+      .filter((x) => String(x ?? '').trim() !== '')
+      .map((x) => esc(x))
+      .join(' · ')}</span>
   </button>`, 'document', String(i), d.title)
 
 /*
@@ -456,6 +469,21 @@ function ribbon() {
         <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
       <span class="t-label">${stuck.length} blocked</span>
     </button>`}
+    <!--
+      Whether this is the office or the prototype (#68).
+
+      It has to say. The studio spent a week rendering invented data and looking
+      entirely convincing, and the whole reason the deployed page went a week
+      without its design is that nobody could tell by looking which artefact
+      they were judging. Shown only when it is NOT live: a badge that is always
+      there is a badge nobody reads.
+
+      No backticks in this comment. It is inside a template literal and one
+      would end the string.
+    -->
+    ${source.live ? '' : `<span class="rb"><span class="t-meta mock">Prototype data${
+      source.why ? ` — ${esc(source.why)}` : ''
+    }</span></span>`}
     <span class="rb right">
       <span class="t-label">${esc(config.SPEND.month)} this month</span>
       <span class="t-meta">of ${esc(config.SPEND.target)}</span>
@@ -798,13 +826,67 @@ function peopleTab(p) {
   </div>`
 }
 
+/*
+  The time of day, in his zone.
+
+  "Good morning, Grant" at nine in the evening is the first thing that tells a
+  reader nothing on this page is really about them. Cheap to get right and one
+  of the few places a product can feel like it is paying attention.
+*/
+function greeting() {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Europe/Athens' })
+      .format(new Date()),
+  )
+  if (hour < 12) return 'Good morning'
+  if (hour < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+/*
+  Where things stand, counted rather than written.
+
+  This line said "Three projects. One thing waiting on you, and the team
+  finished nine things overnight" for a fortnight, and it was true of the mock
+  and false of everything else — the first render against the real office showed
+  it claiming three projects above four cards. A sentence that contradicts the
+  page under it is worse than no sentence, because it teaches a reader to stop
+  believing the ones that are true.
+
+  Each clause is dropped when its count is zero rather than printed as "no
+  projects" — the rule the morning briefing arrived at after telling him
+  "nothing failed" every day for a month.
+*/
+function standing() {
+  const parts = []
+  const n = PROJECTS.length
+  if (n > 0) parts.push(`${n} ${n === 1 ? 'project' : 'projects'}`)
+
+  const waiting = PROJECTS.reduce((t, p) => t + workspace.split(p).waiting.length, 0)
+  if (waiting > 0) parts.push(`${waiting} thing${waiting === 1 ? '' : 's'} waiting on you`)
+
+  const open = PROJECTS.reduce(
+    (t, p) => t + (p.tasks ?? []).filter((k) => k.state !== 'done').length,
+    0,
+  )
+  if (open > 0) parts.push(`${open} task${open === 1 ? '' : 's'} still open`)
+
+  const busy = CREW.filter((c) => c.state === 'busy').length
+  if (busy > 0) parts.push(`${busy} of the team working now`)
+
+  if (parts.length === 0) return 'Nothing is waiting on you, and nothing is running.'
+  // Sentence case, and a full stop. "4 projects, 1 thing waiting on you." reads
+  // as a status bar; the same words with a capital read as a person telling you.
+  const said = parts.join(', ')
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
+}
+
 function portfolio() {
   return `<main class="main">
     <div class="head">
       <div>
-        <h1 class="t-display">Good morning, Grant</h1>
-        <p class="t-lead" style="margin:var(--s2) 0 0">Three projects. One thing waiting on you,
-          and the team finished nine things overnight.</p>
+        <h1 class="t-display">${esc(greeting())}, Grant</h1>
+        <p class="t-lead" style="margin:var(--s2) 0 0">${esc(standing())}</p>
       </div>
     </div>
     ${attention()}
@@ -1345,7 +1427,15 @@ function dashboard() {
   const openTasks = p.tasks.filter((t, i) => t.state !== 'done' && !state.done.has(i)).length
   const counts = {
     team: waiting + blocked,
-    documents: allDocs(p).length,
+    /*
+      The true count, not the number of rows in hand.
+
+      The API caps the document list at 24 because a hundred of them with their
+      metadata is a slow first paint on a phone. The tab said 24 on a project
+      with 41, which is the kind of wrong that costs trust in every other number
+      on the page. `p.docs` is counted in SQL over the whole project.
+    */
+    documents: Math.max(p.docs ?? 0, allDocs(p).length),
     tasks: openTasks,
     contacts: p.contacts.length,
     sources: (p.sources ?? []).length,
@@ -1397,7 +1487,20 @@ function dashboard() {
         <p class="t-lead" style="margin:var(--s2) 0 0">${esc(p.purpose)}</p>
       </div>
       <div class="headctl">
-        <div class="crew" style="margin:0">${p.activity.map((a) => face(crewBy(a.who))).join('')}</div>
+        <!--
+          Who has touched this project, each of them once.
+
+          It was one disc per activity ROW, which was fine against a mock whose
+          history was five different people and became thirteen identical
+          Claires the moment it saw a real project. A row of the same face is
+          not information, it is a rendering artefact that looks like one.
+
+          No backticks in this comment: template literal.
+        -->
+        <div class="crew" style="margin:0">${[...new Set(p.activity.map((a) => a.who))]
+          .slice(0, 6)
+          .map((who) => face(crewBy(who)))
+          .join('')}</div>
         <!--
           There is no "Talk to the team" button here.
 
@@ -2493,3 +2596,35 @@ document.addEventListener('keydown', (e) => {
 apply()
 clock()
 render()
+
+/*
+  And then the real office, if it will have us (#68, ADR-0019).
+
+  Rendered FIRST with whatever is in hand, then hydrated and rendered again.
+  The other order — wait for the fetch, then paint — gives a blank screen for
+  however long the network takes, and the whole argument for keeping the mock is
+  that there is always something to look at.
+
+  The token is the same one Team HQ uses. No new auth system: one bearer token,
+  and the studio reads it from the same place rather than asking again.
+*/
+const API =
+  window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+
+async function live() {
+  let token = ''
+  try {
+    token = localStorage.getItem('hq.token') ?? ''
+  } catch {
+    // Private browsing, or storage blocked. The mock stands.
+  }
+  if (token === '') {
+    source.why = 'no token — showing the prototype'
+    render()
+    return
+  }
+  await hydrate(API, token)
+  render()
+}
+
+live()

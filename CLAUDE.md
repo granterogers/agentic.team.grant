@@ -189,7 +189,8 @@ screenshots for visual work** — a sentence about spacing is worth nothing.
 | **GitHub Actions** | **Off.** Every schedule and push trigger was removed 2026-09-08 on Grant's instruction after 1,800 of 2,000 free minutes went to a five-minute cron: *"stop using github actions completely please, find another way to do thing... for any process."* `workflow_dispatch` remains. Checks run before every push in the authoring session instead. See Issue #17. |
 | **No new auth system** | One bearer token (`hq.api_token`), constant-time compared. Reuse it. |
 | **Channel adapters may only translate** | §5 of the master spec. Every surface writes to `inbound_commands` and asks the canonical layer. An adapter that decides is a bug. |
-| **Frontend stack** | No React, no Next.js, no bundler, no build step. Two hand-written HTML files on Vercel. Deliberate — ADR 0002, ADR 0011. Changing this needs an ADR and evidence, not preference. |
+| **Frontend stack** | No React, no Next.js, no bundler, no build step. Hand-written HTML on Vercel. Deliberate — ADR 0002, ADR 0011. Changing this needs an ADR and evidence, not preference. |
+| **Which frontend** | `web/studio` is becoming the product; `web/hq/index.html` is in run-out and keeps its URL only until its write actions exist in the studio (**ADR-0019**, Issue #68). Do not add a feature to the old page. |
 
 ---
 
@@ -329,6 +330,14 @@ Each of these cost real time. They are here so they cost it once.
   an `li` ancestor. Used outside a list it renders at full body size and full
   ink, so a meta line under a heading read as a second heading. Grep for the
   rule, not just the class name, and check the ancestor it assumes.
+- **A verification that looks somewhere other than where the user looks passes
+  for the wrong reason.** Three instances in one day, which is what makes it a
+  pattern rather than three bugs. `verify:ui` fed the staff tab `hq_staff()`
+  while the page requests `hq_team()`. `verify:skills` tested the table and the
+  function separately and the bug lived only in the gap. And `npm run shots`
+  renders `web/studio` while `verify:ui` drives `web/hq/index.html`, so a week
+  of visual work went into a file that is not the one deployed (#68). Before
+  trusting a green suite, ask what it is pointed at.
 - **A verification that feeds the page the wrong payload passes.**
   `verify:ui` mapped the staff tab to `hq_staff()` while the page asks for
   section `team`, which the API serves from `hq_team()` — a different shape

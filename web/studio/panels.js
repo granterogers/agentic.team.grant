@@ -32,7 +32,17 @@ const GRID = 24
 /** What a project CAN show. Each maps to a renderer in app.js. */
 export const KINDS = [
   { id: 'modules', name: 'Modules', note: 'The parts of the work', w: 2, h: 300 },
-  { id: 'documents', name: 'Documents', note: 'A shelf of covers', w: 2, h: 340 },
+  /*
+    380, not 340.
+
+    A document card is 284px of cover plus a two-line caption, and the panel is
+    340 with a 46px header — so the caption was cut off mid-word at the bottom
+    edge, on every project, in a panel with overflow: hidden. Measured with
+    `npm run probe` rather than read out of the stylesheet, which is the only
+    reason it was found: the layout looks deliberate right up until you notice
+    the word "Notion" has no second half.
+  */
+  { id: 'documents', name: 'Documents', note: 'A shelf of covers', w: 2, h: 380 },
   { id: 'tasks', name: 'Tasks', note: 'What is open', w: 1, h: 340 },
   { id: 'contacts', name: 'People', note: 'Who it is about', w: 1, h: 320 },
   { id: 'activity', name: 'Lately', note: 'What the team did', w: 1, h: 260 },
@@ -54,7 +64,7 @@ const defaultFor = (project) => {
   // Only what the project actually has. A panel showing nothing is the thing
   // this whole change exists to remove.
   if (has.modules) { out.push({ id: 'modules', x: 0, y, w: 2, h: 300 }); y += 324 }
-  if (has.documents) { out.push({ id: 'documents', x: 0, y, w: 2, h: 340 }); y += 364 }
+  if (has.documents) { out.push({ id: 'documents', x: 0, y, w: 2, h: 380 }); y += 404 }
   let ry = 0
   if (has.tasks) { out.push({ id: 'tasks', x: 2, y: ry, w: 1, h: 340 }); ry += 364 }
   if (has.contacts) { out.push({ id: 'contacts', x: 2, y: ry, w: 1, h: 320 }); ry += 344 }

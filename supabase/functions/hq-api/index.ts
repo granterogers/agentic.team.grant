@@ -54,6 +54,11 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
   artifacts: { fn: 'hq_artifacts' },
   settings: { fn: 'hq_settings' },
   team: { fn: 'hq_team' },
+  // Everything the studio renders, in the shape web/studio/data.js already
+  // exports (#68, ADR-0019). One call rather than nine: the studio paints the
+  // whole shell at once and a page that fetches per section feels broken while
+  // being correct — the argument 0120 made for the tool catalogue.
+  studio: { fn: 'hq_studio' },
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },
