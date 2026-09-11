@@ -228,5 +228,7 @@
   "0227_and_the_cards_actually_say_it.sql": "76e69274055d3a5e819ee864b162da69597d912f789c225a0430038b8638e6d5",
   "0228_the_work_in_hand_is_real_work.sql": "93306dffe1fd3603c36b685f73fb89e52776bbf5d7170e2c5b9de4124b28bc2d",
   "0229_and_the_jobs_tab_actually_reads_it.sql": "c1f0e81a3dccd480aebcbb096ae44a330c3113ffd2370e76d91865147c56b507",
-  "0230_blocked_means_blocked.sql": "6f50250d0702d906550dc4dac9fbac8515a9a09bbf1b1dd8755c63a8392c86ac"
+  "0230_blocked_means_blocked.sql": "6f50250d0702d906550dc4dac9fbac8515a9a09bbf1b1dd8755c63a8392c86ac",
+  "0231_lately_what_the_office_did_and_what_is_being_built.sql": "2af8390782dee8577031d03e067b96a0ef95e47fc450ec8b2eb6fa23e5acd52e",
+  "0232_a_null_is_not_an_absent_key.sql": "903972a9707a9ba5e39f9c42dfa636e6ba379ae9be4e7d643956f2bac6a16955"
 }

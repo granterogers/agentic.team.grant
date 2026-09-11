@@ -2350,6 +2350,83 @@ kbd {
 .staffcard.retired .sbody b { text-decoration: line-through; text-decoration-thickness: 1px; }
 
 /*
+  Lately — two columns, because they are read side by side (#68).
+
+  The office's history on the left is a long thin list; the build diary on the
+  right is images. Equal columns would make the list too wide to scan and the
+  screenshots too small to judge, so the split is 1fr and 1.15fr, and below
+  920px they stack with the office first — what the team did outranks what is
+  being built to it.
+*/
+.lately { display: grid; grid-template-columns: 1fr 1.15fr; gap: var(--s6); align-items: start; }
+.latecol { display: grid; gap: var(--s3); align-content: start; min-width: 0; }
+.latecol h2 { margin: 0; }
+/* The rationale under a ledger line — why it happened, not just that it did. */
+.latewhy { display: block; color: var(--ink-3); margin-top: 2px; }
+
+.nowcard {
+  display: grid; gap: 6px; padding: var(--s4); border-radius: var(--r-card);
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 5%), var(--surface));
+  box-shadow: var(--lift-1);
+  /* The one live thing on the page, so it carries the accent edge the rest do
+     not — depth by one hairline and one soft shadow, per direction.md. */
+  border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.nowcard p { margin: 0; }
+
+.steps { display: grid; gap: var(--s4); }
+.stepcard {
+  display: grid; gap: var(--s3); padding: var(--s3); border-radius: var(--r-card);
+  border: 1px solid var(--edge); background: var(--surface);
+  box-shadow: var(--lift-1);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
+}
+.stepcard:hover { box-shadow: var(--lift-2); }
+.stepcard img {
+  width: 100%; display: block; border-radius: 8px; border: 1px solid var(--edge);
+  /* A screenshot of a page is wider than it is tall, and a card that reflows to
+     each image's ratio makes the column jump as they load. */
+  aspect-ratio: 16 / 10; object-fit: cover; object-position: top left;
+  background: var(--ground);
+}
+.stepbody { display: grid; gap: 3px; }
+
+@media (max-width: 920px) {
+  .lately { grid-template-columns: 1fr; }
+}
+
+/* Setting up, and Help (#68). */
+.glist { display: grid; gap: 6px; margin-top: var(--s3); }
+.grow { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+/*
+  The name does not wrap, and does not shrink.
+
+  As a plain flex item it shrank to the width of the longest word's break point
+  and rendered "Gm / ail" on two lines — the same failure shape as the eight
+  agent names in #67, at a smaller scale. A fixed floor and nowrap; the
+  description takes the remaining width, which is the one that should reflow.
+*/
+.grow b { font-weight: 600; flex: 0 0 auto; min-width: 108px; white-space: nowrap; }
+.grow .t-meta { flex: 1; min-width: 0; }
+.dotstate.s-ok { background: var(--ok, #3f7d52); }
+.dotstate.s-off { background: var(--ink-3); }
+
+.helpgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4); }
+.helpcard {
+  display: grid; gap: 6px; padding: var(--s4); border-radius: var(--r-card);
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
+  transition: box-shadow .24s cubic-bezier(.2,.7,.3,1), transform .5s cubic-bezier(.2,.9,.3,1);
+}
+.helpcard:hover { box-shadow: var(--lift-2); }
+.helpcard p { margin: 0; }
+/* A read-only state a service can be in on purpose, and it must not look like a
+   fault — the whole reason the checklist has three states and not two. */
+.service.s-off { opacity: .72; }
+
+/*
   Phone. The floor is 44px and 16px, or iOS Safari zooms the page on focus —
   and these are new controls, so they were not covered by the sweep that fixed
   the rest. Last in the file, because a media query adds no specificity and

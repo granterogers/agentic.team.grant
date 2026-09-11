@@ -71,6 +71,12 @@ const SECTIONS: Readonly<Record<string, { fn: string; args?: Record<string, unkn
     `web/studio/usage.js` was written in its exact shape.
   */
   usage_overview: { fn: 'usage_overview', args: { p_days: 30 } },
+  // What the office did and what is being built, as one page (#68).
+  lately: { fn: 'hq_studio_lately', args: { p_limit: 40 } },
+  // The first-run checklist, for the Setting up pane (#68). `setup` already
+  // exists above and serves the same function; named apart so the studio's
+  // fetch is legible next to `studio` and `studio_settings`.
+  studio_setup: { fn: 'hq_setup' },
   google: { fn: 'hq_google' },
   // What to do next, for a person who has just opened this for the first time.
   setup: { fn: 'hq_setup' },

@@ -580,6 +580,12 @@ function rail() {
           <rect x="5" y="13" width="9" height="7" rx="1.5"/></svg>
         Desk
       </button>
+      <button class="navitem home" data-go="lately" aria-current="${state.view === 'lately'}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        Lately
+      </button>
       <!--
         Only the two GLOBAL places. A project's own sections live in its tabs
         and nowhere else — Grant: *"obviously, they don't duplicate things"*.
@@ -751,6 +757,113 @@ function card(p, lead) {
   memory beats a list might be false for three projects and obviously true for
   thirty — and the only way to find out is to have both.
 */
+/*
+  Lately — what the office did, and what is being built.
+
+  Two of the six sections that only existed on the plain page, and they are the
+  same shape: a reverse-chronological list answering "what has been going on".
+  One page with two columns rather than two rail items, because the IA is two
+  levels and never three, and because they are read together.
+
+  Grant on the second column: *"I want to see what it is that you're doing... so
+  that I can pop into the application and see what it is you're doing."* It is
+  neither office work nor his work — it is a window on the person changing the
+  thing — which is why it sits beside the office's history rather than in
+  Settings.
+*/
+function lately() {
+  const d = latest.lately
+  const office = d?.office ?? []
+  const build = d?.building ?? {}
+  const steps = build.steps ?? []
+  const t = d?.today ?? {}
+
+  /*
+    A summary line only where there is something to summarise.
+
+    The morning briefing arrived at this after telling Grant "nothing failed"
+    every day for a month: a section that announces its own emptiness teaches
+    the reader to skip the region.
+  */
+  const bits = []
+  if (Number(t.jobs_done) > 0) bits.push(`${t.jobs_done} finished`)
+  if (Number(t.jobs_failed) > 0) bits.push(`${t.jobs_failed} failed`)
+  if (Number(t.events) > 0) bits.push(`${t.events} things recorded`)
+
+  return `<main class="main">
+    <div class="head">
+      <div>
+        <h1 class="t-display">Lately</h1>
+        <p class="t-lead" style="margin:var(--s2) 0 0">${
+          bits.length === 0
+            ? 'Nothing in the last day. The office is idle, which is not the same as broken.'
+            : `In the last day: ${esc(bits.join(', '))}.`
+        }</p>
+      </div>
+    </div>
+
+    <div class="lately">
+      <section class="latecol">
+        <h2 class="t-title">The office</h2>
+        <p class="t-meta">What the team did, and whether it can be undone.</p>
+        ${
+          office.length === 0
+            ? '<p class="t-meta">Nothing recorded yet.</p>'
+            : `<div class="tasks">${office
+                .map(
+                  (e) => `<div class="task" style="cursor:default">
+              ${face(crewBy(e.who), 22)}
+              <span class="label t-meta" style="color:var(--ink)">
+                <b style="font-weight:600">${esc(crewBy(e.who).name ?? e.who)}</b>
+                ${esc(e.verb)} ${esc(e.what)}${e.project ? ` on ${esc(e.project)}` : ''}
+                <span style="color:var(--ink-3)"> · ${esc(e.when)}</span>
+                ${e.why ? `<span class="latewhy">${esc(e.why)}</span>` : ''}
+              </span>
+            </div>`,
+                )
+                .join('')}</div>`
+        }
+      </section>
+
+      <section class="latecol">
+        <h2 class="t-title">What Claude is building</h2>
+        ${
+          build.now
+            ? `<article class="nowcard">
+                <span class="t-label">${esc(build.now.towards ?? 'in progress')}</span>
+                <b>${esc(build.now.headline ?? '')}</b>
+                <p class="t-meta">${esc(build.now.detail ?? '')}</p>
+              </article>`
+            : ''
+        }
+        ${
+          steps.length === 0
+            ? '<p class="t-meta">Nothing in the diary yet.</p>'
+            : `<div class="steps">${steps
+                .slice(0, 12)
+                .map(
+                  (st) => `<article class="stepcard">
+              ${
+                st.shot
+                  ? `<a href="${esc(st.shot)}" target="_blank" rel="noopener">
+                       <img src="${esc(st.shot)}" alt="${esc(st.what ?? 'a screenshot of the work')}" loading="lazy">
+                     </a>`
+                  : ''
+              }
+              <div class="stepbody">
+                <b>${esc(st.what ?? '')}</b>
+                ${st.produced ? `<span class="t-meta">${esc(st.produced)}</span>` : ''}
+                <span class="t-meta from">${esc(st.when ?? st.finished ?? '')}</span>
+              </div>
+            </article>`,
+                )
+                .join('')}</div>`
+        }
+      </section>
+    </div>
+  </main>`
+}
+
 function desk() {
   const pos = canvasView.positions(PROJECTS)
   return `<main class="main deskmain">
@@ -1778,6 +1891,148 @@ function teamTabSettings() {
 }
 
 /*
+  Setting up — the checklist, and the one thing only Grant can do.
+
+  §31: an avoidable request for manual configuration is a design failure, and
+  the preference order is API, then CLI, then automated configuration, then a
+  manual UI. So this page is deliberately SHORT: everything that could be
+  automated already was, and what is left is the irreducible part — a Google
+  consent screen that has to be clicked by the person whose account it is.
+
+  Three states and not two. `off` is something switched off on purpose and must
+  not be shown as a fault; that distinction is the difference between a
+  checklist you trust and one you learn to ignore.
+*/
+function setupTab() {
+  const d = config.SETUP ?? {}
+  const services = d.services ?? []
+  const google = d.google ?? {}
+  const needs = Number(d.needs_you ?? 0)
+  const lamp = { ready: 'ok', action: 'degraded', off: 'off' }
+
+  return `<div class="setbody">
+    <div class="tabhead">
+      <p class="t-lead" style="margin:0">${
+        needs === 0
+          ? `${d.ready ?? services.length} of ${services.length} services are set up. Nothing needs you.`
+          : `${needs} thing${needs === 1 ? '' : 's'} need${needs === 1 ? 's' : ''} you. Everything else is done.`
+      }</p>
+    </div>
+
+    ${
+      google.services
+        ? `<article class="behave" data-lift data-tilt="1.4" data-saidwrap>
+      <div class="bhead">
+        <b>Google</b>
+        <span class="t-meta">${
+          google.ready
+            ? 'Connected. Calendar and mail are readable; sending stays off by policy.'
+            : 'Not connected. One consent screen, and only you can click it.'
+        }</span>
+        <span class="t-meta" data-said></span>
+      </div>
+      <div class="srow wrap">
+        ${
+          google.ready
+            ? `<button class="btn small quiet" data-forget-google>Disconnect Google</button>`
+            : `<a class="btn primary" href="${esc(GOOGLE_START)}" target="_blank" rel="noopener">Connect Google</a>`
+        }
+      </div>
+      <div class="glist">${(google.services ?? [])
+        .map(
+          (g) => `<div class="grow">
+          <span class="dotstate ${g.connected ? 's-ok' : 's-off'}"></span>
+          <b>${esc(g.name)}</b>
+          <span class="t-meta">${esc(g.does)}</span>
+        </div>`,
+        )
+        .join('')}</div>
+    </article>`
+        : ''
+    }
+
+    <div class="servicegrid">${services
+      .map(
+        (x) => `<article class="service s-${lamp[x.state] ?? 'unchecked'}" data-lift data-tilt="2.6">
+        <div class="svbody">
+          <b>${esc(x.name)}</b>
+          <span class="t-meta">${esc(x.what ?? x.does ?? '')}</span>
+          ${x.detail ? `<span class="t-meta from">${esc(x.detail)}</span>` : ''}
+        </div>
+        <div class="svfoot">
+          <span class="dotstate"></span>
+          <span class="t-label">${esc(
+            x.state === 'ready' ? 'Ready' : x.state === 'off' ? 'Switched off' : 'Needs you',
+          )}</span>
+          ${x.action ? `<span class="t-meta">${esc(x.action)}</span>` : ''}
+        </div>
+      </article>`,
+      )
+      .join('')}</div>
+  </div>`
+}
+
+/*
+  Help — what all this is.
+
+  Written as prose rather than a list of features, because the question it
+  answers is not "what can it do" but "what am I looking at". Short on purpose:
+  a help page nobody finishes is a help page nobody read.
+*/
+function helpTab() {
+  const bits = [
+    [
+      'What this is',
+      'Eight colleagues who take work from one queue. You ask, they do it, and ' +
+        'everything they produce lands somewhere you can see it. Claire routes ' +
+        'the work and is the only one who messages you.',
+    ],
+    [
+      'A dashboard project',
+      'The source of truth, and it lives here. A Notion database, a notebook or ' +
+        'a Drive folder is something a project is attached to — never the ' +
+        'project itself. Everything eventually lives here and can be pulled ' +
+        'in or pushed out.',
+    ],
+    [
+      'How to ask for something',
+      'Talk to the team, send Claire a voice note on Telegram, or type in the ' +
+        'chat on any project. Same queue either way — the surface you use ' +
+        'never changes what the office does.',
+    ],
+    [
+      'Teaching them',
+      'Tell them in a message. "From now on, always give me the URL" becomes a ' +
+        'standing preference; "when you write a status update, lead with what ' +
+        'changed" becomes a procedure, and shows up on that person\'s card here.',
+    ],
+    [
+      'What it costs',
+      'About nothing. Free tiers throughout, measured on the Usage tab rather ' +
+        'than assumed, and every figure there says whether it was counted or ' +
+        'estimated.',
+    ],
+    [
+      'When something looks wrong',
+      'Lately shows everything that happened and whether it can be undone. ' +
+        'Setting up shows what is connected. If a number looks wrong, it ' +
+        'probably is — say so, because a dashboard that lies once is one you ' +
+        'stop believing.',
+    ],
+  ]
+  return `<div class="setbody">
+    <div class="helpgrid">${bits
+      .map(
+        ([h, b]) => `<article class="helpcard" data-lift data-tilt="1.6">
+        <b>${esc(h)}</b>
+        <p class="t-meta">${esc(b)}</p>
+      </article>`,
+      )
+      .join('')}</div>
+  </div>`
+}
+
+/*
   Behaviour — how much the office does without asking.
 
   This is the frontend half of #15. The one that matters is the top one: a
@@ -2065,6 +2320,8 @@ function settingsSheet() {
     : state.setting === 'channels' ? channelsTab()
     : state.setting === 'models' ? usageTab()
     : state.setting === 'appearance' ? appearanceTab()
+    : state.setting === 'setup' ? setupTab()
+    : state.setting === 'help' ? helpTab()
     : teamTabSettings()
 
   v.innerHTML = `<div class="sheet wide settings">
@@ -2286,6 +2543,28 @@ function settingsSheet() {
     })
   }
 
+  for (const b of v.querySelectorAll('[data-forget-google]')) {
+    b.addEventListener('click', async () => {
+      /*
+        Confirmed, and the sentence says what it costs.
+
+        Nothing is deleted — the mail and calendar the office already read stay
+        in `documents` — but the team stops being able to see the diary, which
+        is a real loss of capability and not a tidy-up.
+      */
+      if (
+        !sure(
+          'Disconnect Google? The team stops being able to read your calendar ' +
+            'and mail. Everything already read stays. Reconnecting is one consent screen.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', () => act('forget_google', {}), 'Disconnected.')
+      if (done) await afterWrite()
+    })
+  }
+
   wireAppearance(v)
 }
 
@@ -2364,6 +2643,7 @@ function render() {
   root.innerHTML = commandBar() + ribbon() + rail() + (
     state.view === 'project' ? dashboard()
     : state.view === 'desk' ? desk()
+    : state.view === 'lately' ? lately()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
@@ -2372,7 +2652,14 @@ function render() {
 
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
-      carry(null, null, () => { state.view = b.dataset.go; state.label = null; render() })
+      carry(null, null, () => {
+        state.view = b.dataset.go
+        state.label = null
+        render()
+      })
+      // After the transition, not inside it: a fetch in the middle of a view
+      // transition holds the old frame on screen until it resolves.
+      if (b.dataset.go === 'lately') void needLately()
     })
   }
 
@@ -3210,6 +3497,10 @@ render()
 */
 const API =
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
+// Same derivation the old page used: one base, and the OAuth start is a sibling
+// function. Hardcoding a second URL is how the two drift on the day the project
+// reference changes.
+const GOOGLE_START = API.replace(/\/hq-api$/, '/google-oauth/start')
 
 /*
   Re-read the office and repaint.
@@ -3219,7 +3510,32 @@ const API =
   and whether it is enabled, and a page that guesses shows one thing while the
   database holds another. A round trip costs a moment and is always right.
 */
+/*
+  Payloads that belong to one screen rather than to the whole shell.
+
+  The portfolio and every project come from one call, because the shell paints
+  them all at once and a page that fetches per section feels broken while being
+  correct. Lately is different: most visits never open it, and forty ledger rows
+  and a dozen screenshots on every load is a cost paid by everyone for a page
+  few of them want. So it is fetched when it is first asked for and kept.
+*/
+const latest = { lately: null }
+
+async function needLately() {
+  if (latest.lately !== null) return
+  try {
+    latest.lately = await read('lately')
+  } catch {
+    // Left null. The view says there is nothing rather than showing an error,
+    // which on a history page is nearly the same sentence.
+    latest.lately = { office: [], building: {}, today: {} }
+  }
+  render()
+}
+
 async function refresh() {
+  // A write can add a ledger row, so the kept copy is now behind.
+  latest.lately = null
   await Promise.all([
     hydrate(API, (() => {
       try {

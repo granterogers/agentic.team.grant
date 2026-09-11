@@ -50,6 +50,15 @@ export const TABS = [
   */
   { id: 'models', name: 'Usage' },
   { id: 'appearance', name: 'Appearance' },
+  /*
+    The last two of the six sections that lived only on the plain page (#68).
+
+    Setting up is a checklist and belongs beside Connections, which is what it
+    is a checklist ABOUT. Help is last because it is the one you reach for when
+    the others have not answered you.
+  */
+  { id: 'setup', name: 'Setting up' },
+  { id: 'help', name: 'Help' },
 ]
 
 /** Shaped like `connection_health` joined to `knowledge_connectors`. */
@@ -193,6 +202,8 @@ export const CHANNELS = [...FALLBACK_CHANNELS]
 export const SPEND = { ...FALLBACK_SPEND }
 export const TEAM = []
 export const SPARE_BOTS = []
+/** The first-run checklist, from `hq_setup`. Fetched with the rest. */
+export const SETUP = {}
 
 export const settingsSource = { live: false, why: 'not asked yet' }
 
@@ -246,6 +257,17 @@ export async function hydrateSettings(read) {
     replace(BEHAVIOURS, d.behaviours ?? [])
     replace(CONNECTIONS, d.connections ?? [])
     replace(CHANNELS, d.channels ?? [])
+
+    // Its own call: `hq_setup` is a different function with a different job,
+    // and folding it into the settings payload would couple a checklist about
+    // credentials to a page about preferences.
+    try {
+      const setup = await read('studio_setup')
+      for (const k of Object.keys(SETUP)) delete SETUP[k]
+      Object.assign(SETUP, setup ?? {})
+    } catch {
+      // A settings page that cannot show a checklist is still a settings page.
+    }
 
     /*
       Spend, from `usage_overview` — which distinguishes what a provider
