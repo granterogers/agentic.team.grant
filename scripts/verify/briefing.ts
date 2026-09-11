@@ -308,6 +308,7 @@ console.log('briefing —')
     stuck: [],
     diary: [],
     noticed: [],
+    wanted: [],
   })
   ok(
     'a morning with nothing at all in it still says something',
@@ -315,6 +316,83 @@ console.log('briefing —')
     `${String(quiet.join('').length)} characters — the table requires 40`,
   )
   ok('and says the true thing, not a padded one', quiet.length === 1)
+}
+
+// --- a request for reach reaches him ----------------------------------------
+//
+// #53. The mechanism to ask was built and nothing carried the ask to Grant, so
+// the office could want something and he would never hear it. This asserts on
+// the SENTENCE, because a request that is in the facts and not in the words is
+// a request he still never hears.
+
+{
+  const asked = briefingLines({
+    for_date: '2026-01-01',
+    timezone: 'Europe/Athens',
+    waiting_on_you: [],
+    overnight: { finished: 0, failed: 0, still_going: 0 },
+    stuck: [],
+    diary: [],
+    noticed: [],
+    wanted: [
+      {
+        tool: 'github.write',
+        asked_by: 'operations-director',
+        what_for: 'Three jobs stalled at the diff because nothing can push it.',
+        exists_yet: true,
+        days: 3,
+      },
+    ],
+  })
+  const said = asked.join(' ')
+  ok('a request for reach reaches the briefing', said.includes('github.write'), said.slice(0, 160))
+  ok(
+    'and says who asked and what for',
+    said.includes('operations-director') && said.includes('stalled'),
+  )
+  ok('and how long it has been waiting', said.includes('3 days'))
+  // ADR-0018's second decision, in the one sentence he reads: yes to one of
+  // these is a switch, yes to the other is a decision to build.
+  ok('and that saying yes switches it on', said.includes('switches it on'))
+
+  const unbuilt = briefingLines({
+    for_date: '2026-01-01',
+    timezone: 'Europe/Athens',
+    waiting_on_you: [],
+    overnight: { finished: 0, failed: 0, still_going: 0 },
+    stuck: [],
+    diary: [],
+    noticed: [],
+    wanted: [
+      {
+        tool: 'instagram.post',
+        asked_by: 'growth-director',
+        what_for: 'Posting the campaign images without waiting on a person.',
+        exists_yet: false,
+        days: 0,
+      },
+    ],
+  }).join(' ')
+  ok(
+    'and a tool that does not exist says yes means building it',
+    unbuilt.includes('means building it'),
+    unbuilt.slice(0, 160),
+  )
+  // Nothing pending must not become a line saying nothing is pending.
+  const quiet = briefingLines({
+    for_date: '2026-01-01',
+    timezone: 'Europe/Athens',
+    waiting_on_you: [],
+    overnight: { finished: 0, failed: 0, still_going: 0 },
+    stuck: [],
+    diary: [],
+    noticed: [],
+    wanted: [],
+  }).join(' ')
+  ok(
+    'and no request means no sentence about requests',
+    !quiet.toLowerCase().includes('asked to be able'),
+  )
 }
 
 // --- an unrecognised kind explains itself -----------------------------------

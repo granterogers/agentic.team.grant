@@ -81,6 +81,17 @@ interface Noticed {
   because: Record<string, unknown>
   weight: number
 }
+/**
+ * Something the office has asked to be able to reach, and cannot until Grant
+ * answers (#53).
+ */
+interface Wanted {
+  tool: string
+  asked_by: string
+  what_for: string
+  exists_yet: boolean
+  days: number
+}
 interface Facts {
   for_date: string
   timezone: string
@@ -89,6 +100,7 @@ interface Facts {
   stuck: Stuck[]
   diary: Diary[]
   noticed: Noticed[]
+  wanted: Wanted[]
 }
 
 /** Local wall-clock time, in his zone, for a timestamp that is stored in UTC. */
@@ -178,6 +190,31 @@ export function briefingLines(f: Facts): string[] {
       Caught by running it; the constraint is right and the sentence was wrong.
     */
     lines.push('Nothing is waiting on you, and nothing is stuck.')
+  }
+
+  /*
+    What the office has asked for and cannot do until he answers (#53).
+
+    Immediately after what is waiting on him, because it IS waiting on him —
+    it is a question only he can answer, and the whole route that produces it
+    (a skill names a tool nobody holds, three impediments, a briefing line)
+    exists to get it in front of him once. Two at most: a list of asks reads
+    as a wish list, and a wish list is a thing people stop reading.
+  */
+  for (const w of f.wanted.slice(0, 2)) {
+    lines.push(
+      `${w.asked_by} has asked to be able to use ${w.tool}` +
+        (w.days >= 2 ? `, ${count(w.days, 'day', 'days')} ago` : '') +
+        `. ${w.what_for}` +
+        // The distinction ADR-0018 turns on, in the one sentence he reads. Yes
+        // to one of these is a switch; yes to the other is a decision to build.
+        (w.exists_yet
+          ? ' Saying yes switches it on.'
+          : ' We do not have that tool at all yet, so yes means building it.'),
+    )
+  }
+  if (f.wanted.length > 2) {
+    lines.push(`${String(f.wanted.length - 2)} more requests are on the dashboard.`)
   }
 
   // His day. Omitted entirely when the calendar is empty — "no meetings today"
