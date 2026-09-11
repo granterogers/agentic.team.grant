@@ -75,6 +75,7 @@
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import { capabilityBrief, contradictsReality, reachNow, verbsNow } from '../agents/capability.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
+import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -85,7 +86,9 @@ import {
   readPlan,
   type Step,
 } from '../agents/plan.ts'
+import { remember } from '../agents/remember.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
+import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -1186,6 +1189,46 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         } satisfies HandlerOutput
       }
 
+      /*
+        Is he teaching us something? (#48, #50)
+
+        Grant: *"all behaviours, skills, what I want them to do, it can all just
+        be told to them directly via Telegram or Slack."* Before this, both
+        tables could only be written by Claude in a coding session — which makes
+        the office's memory Claude's memory, not the office's.
+
+        Checked BEFORE the link and artifact readers, because "from now on,
+        always attach the notebook link" is a rule about attaching links and
+        would otherwise be executed as a request to attach one.
+
+        Only from Grant. An agent authoring its own procedures is the design
+        (ADR-0017) but it is not this path: this path is a person in a chat
+        window, and it stores what he says at high confidence because he said
+        it.
+      */
+      const teaching = readTeaching(instruction)
+      if (teaching !== null) {
+        const kept = await remember(
+          deps.db,
+          teaching,
+          'grant',
+          // Addressed to one person, or to the office. Getting this backwards
+          // means a rule for Ruby quietly governing Daniel.
+          (payload.addressed_to ?? '') === '' ? null : who.slug,
+          job.jobId,
+        )
+        return {
+          body: kept.said,
+          confidence: 'high',
+          // The write either happened or the sentence says it did not.
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'deterministic_retrieval',
+          model: null,
+        } satisfies HandlerOutput
+      }
+
       const sent = linkRequest(instruction)
       const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
 
@@ -1220,6 +1263,26 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // trip — and because "Notion is reachable" was never the sentence that
       // stopped Claire offering Grant an outline to paste in himself.
       const verbs = confirmation !== null ? [] : await verbsNow(deps.db)
+
+      /*
+        What this person has learned and knows how to do (#48, #50).
+
+        Retrieved here because here is where the prompt is built, and until now
+        it was retrieved nowhere at all — `lessons_for` existed for a fortnight
+        and every caller was its own test suite. A memory nothing consults is a
+        table with good comments.
+
+        Scoped to this person, this kind of job and this project, so a
+        procedure written for research does not turn up in a finance answer.
+      */
+      const guidance =
+        confirmation !== null
+          ? { lessons: [], skills: [] }
+          : await guidanceFor(deps.db, who.slug, job.kind, job.projectId)
+      // At retrieval, not at completion: a skill shown to a job and then
+      // ignored still shaped the prompt, so it still answers for the outcome.
+      await recordSkillUse(deps.db, guidance.skills, job.jobId)
+      const learned = guidanceBrief(guidance)
 
       const completion =
         confirmation !== null
@@ -1276,6 +1339,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     // told to say she could not see a notebook, Claire
                     // generalised to "I don't have integration access".
                     `\n\n${capabilityBrief(reach, verbs)}` +
+                    // After what the office can reach, before what it holds on
+                    // this question: how we work sits between authority and
+                    // evidence, which is exactly what it is.
+                    (learned === '' ? '' : `\n\n${learned}`) +
                     (context === ''
                       ? // Nothing matched. The old wording here said "answer
                         // from general knowledge", and that is how Grant asked
