@@ -26,8 +26,73 @@
   Documents panel. A single shared layout would put the guess back.
 */
 
+import { act, canWrite } from './office.js'
+
 const KEY = 'studio.panels'
 const GRID = 24
+
+/*
+  Where an arrangement lives (#81, migration 0250).
+
+  Grant was explicit that `localStorage` is the wrong answer: *"he uses more
+  than one device and the whole point of arranging it is that it stays
+  arranged."* So the office holds it, in `public.dashboard_layouts`, and
+  `hq_studio()` hands it back on the project as `project.layout`.
+
+  `localStorage` still gets written, and is not a leftover. It is the cache
+  that makes a drag feel instant: the RPC is a round trip, the redraw is not,
+  and a panel that snaps back for 200ms before settling reads as a bug. It is
+  also the whole answer with no token, where the studio is a prototype against
+  invented projects and there is nothing to save to.
+
+  So the order is: what the office knows, then what this browser remembers,
+  then the default. The office wins, because it is the one that is his rather
+  than this machine's.
+*/
+const remember = (slug, panels) => {
+  try {
+    const all = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    if (panels === null) delete all[slug]
+    else all[slug] = panels
+    localStorage.setItem(KEY, JSON.stringify(all))
+  } catch { /* not fatal — the office has it */ }
+}
+const remembered = (slug) => {
+  try {
+    const mine = JSON.parse(localStorage.getItem(KEY) ?? '{}')[slug]
+    return Array.isArray(mine) && mine.length > 0 ? mine : null
+  } catch { return null }
+}
+/*
+  Fire and forget, deliberately.
+
+  Awaiting the save would make every drop wait on the network before the board
+  redrew. If it fails the arrangement is still on screen and still in this
+  browser, and the next change tries again — so the failure mode is "the other
+  device is out of date", not "your work vanished". It is logged rather than
+  swallowed so a persistent failure is findable.
+*/
+/*
+  What THIS session just did, which outranks all three.
+
+  Without it a drag snapped back. `layout()` prefers `project.layout` — the
+  office's copy, carried in the payload fetched at load — so the redraw
+  immediately after a drop read the arrangement as it was BEFORE the drop and
+  put the panel back. The save had worked; the screen disagreed with it.
+
+  Re-fetching the whole studio payload after every drop is the other fix and is
+  much worse: a network round trip between letting go of a panel and seeing it
+  land. So the change is held here until the next load, when the office's copy
+  is authoritative again.
+*/
+const live = new Map()
+
+const persist = (action, args) => {
+  if (!canWrite()) return
+  void act(action, args).catch((e) => {
+    console.warn('the arrangement did not reach the office:', e.message)
+  })
+}
 
 /** What a project CAN show. Each maps to a renderer in app.js. */
 export const KINDS = [
@@ -74,28 +139,33 @@ const defaultFor = (project) => {
 }
 
 export function layout(project) {
-  try {
-    const all = JSON.parse(localStorage.getItem(KEY) ?? '{}')
-    const mine = all[project.slug]
-    if (Array.isArray(mine) && mine.length > 0) return mine
-  } catch { /* fall through */ }
-  return defaultFor(project)
+  const mine = live.get(project.slug)
+  if (mine !== undefined) return mine === null ? defaultFor(project) : mine
+  // Then what the office has, which is what he arranged wherever he arranged it.
+  if (Array.isArray(project.layout) && project.layout.length > 0) return project.layout
+  return remembered(project.slug) ?? defaultFor(project)
 }
 
 export function save(slug, panels) {
-  try {
-    const all = JSON.parse(localStorage.getItem(KEY) ?? '{}')
-    all[slug] = panels
-    localStorage.setItem(KEY, JSON.stringify(all))
-  } catch { /* not fatal */ }
+  live.set(slug, panels.length === 0 ? null : panels)
+  remember(slug, panels)
+  /*
+    An empty board is a reset, not a layout — and the RPC says the same thing,
+    because a stored `[]` is indistinguishable from a layout that failed to
+    load. Removing the last panel puts the default back.
+  */
+  if (panels.length === 0) {
+    remember(slug, null)
+    persist('dashboard_layout_reset', { p_slug: slug })
+    return
+  }
+  persist('dashboard_layout_set', { p_slug: slug, p_panels: panels })
 }
 
 export const reset = (slug) => {
-  try {
-    const all = JSON.parse(localStorage.getItem(KEY) ?? '{}')
-    delete all[slug]
-    localStorage.setItem(KEY, JSON.stringify(all))
-  } catch { /* not fatal */ }
+  live.set(slug, null)
+  remember(slug, null)
+  persist('dashboard_layout_reset', { p_slug: slug })
 }
 
 /**

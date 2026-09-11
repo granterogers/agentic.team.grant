@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "check:migrations": "tsx scripts/check-migrations.ts",
     "check:templates": "tsx scripts/check-templates.ts",
+    "verify:arrangement": "tsx scripts/verify/arrangement.ts",
     "verify:wired": "tsx scripts/verify/wired.ts",
     "check:secrets": "python3 scripts/secret-scan.py",
     "verify": "npm run lint && npm run typecheck && npm run check:migrations && npm run test && npm run check:secrets",

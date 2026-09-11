@@ -195,6 +195,21 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
   task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },
+  /*
+    The arrangement of a project's dashboard (#81, migration 0250).
+
+    Configuration, squarely -- it changes what a page looks like and nothing
+    the office does. It is here rather than in `localStorage` because Grant
+    was explicit: he uses more than one device, and the whole point of
+    arranging a dashboard is that it stays arranged.
+
+    `p_panels` is the only jsonb argument any action takes. The RPC validates
+    its shape and writes nothing if a single entry is malformed -- a
+    half-saved layout is worse than an unsaved one -- so this list does not
+    try to check it here. §5: the page translates, the RPC decides.
+  */
+  dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
+  dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
   // Bringing someone in (0233). The other half of `staff_retire`, which has
   // existed alone since 0079 — the studio had a "+ Bring someone in" button
   // wired to nothing at all.

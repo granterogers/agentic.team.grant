@@ -1,0 +1,228 @@
+/**
+ * The arrangement is his, not the browser's.
+ *
+ *   npm run verify:arrangement
+ *
+ * Issue #81. Grant asked for a customisable project dashboard and was explicit
+ * about where the arrangement lives: *"Layout is per person, per dashboard
+ * project, and persists. Not `localStorage`: he uses more than one device and
+ * the whole point of arranging it is that it stays arranged."*
+ *
+ * ## Why this needs its own check
+ *
+ * The failure this guards against is invisible to every other suite. A page
+ * that saves an arrangement only to `localStorage` looks perfect: it drags, it
+ * snaps, it survives a reload, it captures beautifully. It is wrong only on the
+ * SECOND device, which no capture run has. So the assertion has to be about
+ * what leaves the page — the request — and about whether a layout arriving
+ * from the office is the one drawn.
+ *
+ * The page is served from the working tree and every `hq-api` call is answered
+ * here. Nothing reaches the network: the studio's own payload is fed in, with a
+ * stored layout planted in it, and the POSTs the page makes are captured rather
+ * than sent. `verify:hq` and `scripts/verify/hq.ts` cover the live round trip;
+ * this covers the half a browser has to do.
+ */
+
+import { existsSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import { extname, join } from 'node:path'
+import { chromium } from 'playwright'
+import { ManagementApiExecutor } from '../../src/db/executor.ts'
+
+const PORT = 4621
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.pdf': 'application/pdf',
+  '.json': 'application/json',
+}
+
+const token = process.env.SUPABASE_ACCESS_TOKEN
+if (token === undefined || token === '') {
+  console.error('SUPABASE_ACCESS_TOKEN is required')
+  process.exit(2)
+}
+const db = new ManagementApiExecutor(
+  process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
+  token,
+)
+
+/*
+  Real rows, for the same reason `verify:ui` uses them: a synthetic project
+  with two documents proves nothing about a panel that has to hold twelve.
+*/
+const studio = (
+  (await db.execute('select app.hq_studio() as d')).rows[0] as {
+    d: { projects: { slug: string; name: string; layout: unknown }[] }
+  }
+).d
+const subject = studio.projects[0]
+if (subject === undefined) {
+  console.error('the office has no active dashboard project to arrange')
+  process.exit(2)
+}
+
+/*
+  The planted arrangement.
+
+  Deliberately NOT the default: one panel, full width, in a slot the default
+  never puts anything in. If the page drew the default instead, the assertion
+  below could not tell the difference — which is how a check passes for the
+  wrong reason.
+*/
+const PLANTED = [{ id: 'tasks', x: 0, y: 0, w: 3, h: 300 }]
+subject.layout = PLANTED
+
+const server = createServer(async (request, response) => {
+  let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
+  if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+  if (!existsSync(file)) {
+    response.writeHead(404)
+    response.end('not here')
+    return
+  }
+  response.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
+  response.end(await readFile(file))
+})
+await new Promise<void>((r) => {
+  server.listen(PORT, '127.0.0.1', () => {
+    r()
+  })
+})
+
+const browser = await chromium.launch()
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const page = await context.newPage()
+
+/*
+  Every POST the page makes, kept rather than sent.
+
+  `window.__SENT` is the whole point of the suite: the question is not whether
+  the arrangement is on screen, it is whether it left the browser.
+*/
+await page.addInitScript(`
+  window.__SECTIONS = ${JSON.stringify({ studio })};
+  window.__SENT = [];
+  try { localStorage.setItem('hq.token', 'verify-arrangement'); } catch (e) {}
+  try { localStorage.removeItem('studio.panels'); } catch (e) {}
+  window.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('hq-api')) {
+      const section = /section=([a-z_]+)/.exec(url);
+      if (section) {
+        return new Response(JSON.stringify({ data: window.__SECTIONS[section[1]] ?? {} }),
+          { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      try { window.__SENT.push(JSON.parse(String(init && init.body))); } catch (e) {}
+      return new Response(JSON.stringify({ result: { ok: true } }),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+`)
+
+const crashes: string[] = []
+page.on('pageerror', (e) => crashes.push(e.message.slice(0, 140)))
+
+const checks: { what: string; detail: string; ok: boolean }[] = []
+const check = (what: string, detail: string, ok: boolean) => {
+  checks.push({ what, detail, ok })
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what} — ${detail}`)
+}
+
+await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(2_000)
+await page.evaluate(`document.querySelector('[data-open]')?.click()`)
+await page.waitForTimeout(1_200)
+
+const sent = async () =>
+  (await page.evaluate('window.__SENT')) as { action: string; args: Record<string, unknown> }[]
+
+// --- 1. what the office stored is what is drawn -----------------------------
+/*
+  `page.evaluate` with a string, not `evaluateAll` with a callback: this file is
+  type-checked as Node, where `HTMLElement` does not exist, and adding the DOM
+  lib for one cast would change what every other Node script is allowed to say.
+*/
+const drawn = (await page.evaluate(
+  `[...document.querySelectorAll('[data-panel]')].map((e) => e.dataset.panel)`,
+)) as string[]
+check(
+  'the arrangement the office holds is the one drawn',
+  drawn.length === 0 ? 'no panels at all' : drawn.join(', '),
+  drawn.length === 1 && drawn[0] === 'tasks',
+)
+
+// --- 2. changing it sends it to the office ----------------------------------
+const panel = page.locator('[data-panel]').first()
+if ((await panel.count()) === 0) {
+  check('a panel to change', 'the board is empty — nothing else can be asserted', false)
+  console.log('\n1/1 checks passed')
+  process.exit(1)
+}
+await panel.hover()
+await panel.locator('[data-narrower]').click()
+await page.waitForTimeout(700)
+let posts = await sent()
+const saved = posts.filter((p) => p.action === 'dashboard_layout_set').at(-1)
+check(
+  'narrowing a panel reaches the office',
+  saved === undefined ? 'nothing was sent' : `${saved.action} ${JSON.stringify(saved.args.p_slug)}`,
+  saved !== undefined && saved.args.p_slug === subject.slug,
+)
+const body = saved?.args.p_panels as { id: string; w: number }[] | undefined
+check(
+  'and carries the new width, not the old one',
+  body === undefined ? 'no panels in the body' : `w=${String(body[0]?.w)}`,
+  Array.isArray(body) && body[0]?.w === 2,
+)
+
+/*
+  ## The one that would have caught the original bug
+
+  `layout()` prefers the office's copy, so the redraw immediately after a change
+  read the arrangement as it was BEFORE the change and put the panel back. The
+  save had worked and the screen disagreed with it — and a check that only
+  asserted the request would have passed.
+*/
+/*
+  Read through `$$eval` rather than a locator, because a locator WAITS. When
+  this regressed the panel was not on the page at all and the suite died on a
+  30-second timeout instead of reporting a failure — a check that crashes tells
+  you less than one that says which assertion broke.
+*/
+const width = await page.evaluate(
+  `document.querySelector('[data-panel="tasks"]')?.style.width ?? '(no tasks panel on the page)'`,
+)
+check(
+  'and the screen agrees with what was saved',
+  String(width),
+  String(width).includes('66.6') || String(width).includes('66.7'),
+)
+
+// --- 3. removing the last panel resets rather than storing nothing ----------
+await panel.hover()
+await page.locator('[data-drop-panel]').first().click()
+await page.waitForTimeout(700)
+posts = await sent()
+const last = posts.at(-1)
+check(
+  'emptying the board asks for a reset, never an empty layout',
+  last === undefined ? 'nothing was sent' : last.action,
+  last?.action === 'dashboard_layout_reset',
+)
+
+// --- 4. and nothing threw ---------------------------------------------------
+check('no uncaught JavaScript', crashes.join(' | ') || 'none', crashes.length === 0)
+
+await browser.close()
+server.close()
+
+const passed = checks.filter((c) => c.ok).length
+console.log(`\n${String(passed)}/${String(checks.length)} checks passed`)
+if (passed !== checks.length) process.exit(1)
