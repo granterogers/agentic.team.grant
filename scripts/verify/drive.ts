@@ -330,6 +330,54 @@ for (const [mime, expected] of [
   ok(`a ${expected} is called a ${expected}`, describeKind(mime) === expected, describeKind(mime))
 }
 
+// --- attaching by clicking, not only by RPC (#62) ----------------------------
+//
+// `hq_attach` is what the build page calls. It refused anything outside a
+// hardcoded list of four connectors, so a Drive folder could be attached by RPC
+// and not by clicking — for no reason but a second copy of an answer that
+// `knowledge_connectors` already holds.
+
+{
+  await db.execute(
+    `update public.projects set status = 'active' where project_id = ${lit(pid)}::uuid`,
+  )
+  const viaPage = await one(`
+    select app.hq_attach(${lit(`driveproof-${run}`)}, 'drive',
+      ${lit(`https://drive.google.com/drive/folders/${FOLDER}?usp=sharing`)},
+      'source', null, 'Course material') as r
+  `)
+  const got = viaPage.r as { attachment_id?: string; folder_id?: string; error?: string }
+  ok(
+    'the page can attach a Drive folder',
+    String(got.attachment_id ?? '') !== '',
+    String(got.error ?? ''),
+  )
+  ok('and it reads the folder id out of the pasted link', got.folder_id === FOLDER)
+
+  // The reason it delegates rather than inserting: an attachment with no watch
+  // row is a folder nobody looks at, and that is indistinguishable from one
+  // being watched until nothing is ever reported from it.
+  const watched = await all(`
+    select 1 from public.drive_watch
+     where attachment_id = ${lit(String(got.attachment_id))}::uuid
+  `)
+  ok('and starts the watch, so it is actually looked at', watched.length === 1)
+}
+
+{
+  const unknown = await one(
+    `select app.hq_attach(${lit(`driveproof-${run}`)}, 'dropbox', 'x') as r`,
+  )
+  const r = unknown.r as { error?: string; connectors?: string[] }
+  ok('a connector this office does not have is refused', String(r.error ?? '').includes('dropbox'))
+  // Naming them, because "not a connector" leaves him guessing what is.
+  ok(
+    'and it says which ones there are',
+    (r.connectors ?? []).includes('drive') && (r.connectors ?? []).includes('notion'),
+    (r.connectors ?? []).join(', '),
+  )
+}
+
 // --- the duty exists --------------------------------------------------------
 
 {

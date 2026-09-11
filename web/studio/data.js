@@ -157,6 +157,17 @@ export const PROJECTS = [
       connectors.
     */
     sources: [
+      /*
+        A watched Drive folder (#62).
+
+        Grant: *"anytime I drop a document in there, chief of staff is like, oh,
+        we see that a file has been dropped. What would you like me to do with
+        that?"* So a Drive source says when it was last looked at, not merely
+        that it is connected — the useful fact about a watcher is whether it is
+        awake.
+      */
+      { kind: 'connector', name: 'Google Drive', what: 'Course material — watched for new files',
+        health: 'ok', last: '6 minutes ago', gave: 3 },
       { kind: 'connector', name: 'Notion', what: 'Six module pages, written by the office',
         health: 'ok', last: '2 days ago', gave: 6 },
       { kind: 'connector', name: 'NotebookLM', what: 'The interview corpus',

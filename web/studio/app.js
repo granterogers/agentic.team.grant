@@ -1161,7 +1161,13 @@ function sources(p) {
     <div class="tabhead">
       <p class="t-lead" style="margin:0">What ${esc(p.name)} reads from. The project
         is the source of truth; these are optional attachments to it.</p>
-      <button class="btn">Add a source</button>
+      <!--
+        Adding one is a real action on the build page and a stub here, and the
+        label says which. Grant: treat an avoidable request for manual
+        configuration as a design failure — so the button names the thing it
+        will ask for rather than opening an empty dialogue.
+      -->
+      <button class="btn" data-add-source>Connect a folder or page</button>
     </div>
     <div class="sourcegrid">${list.map((x) => `
       <article class="source ${x.kind === 'connector' ? 'live' : ''}">
