@@ -162,7 +162,26 @@ async function speaker(
   const { classifyIntent } = await import('../agents/intent.ts')
   const { pickRoster } = await import('../agents/router.ts')
   const classified = classifyIntent(instruction)
-  const { roster, reason } = pickRoster(classified, instruction)
+
+  /*
+    Who the ROSTER says knows about this (#65).
+
+    `pickRoster` fell back to five regexes in `router.ts` — which worked, and
+    which Grant cannot edit. He is building a dashboard to *"look at each
+    agent, what their skill sets are, and adjust and add and refine"*, so the
+    subject vocabulary lives in `staff.expertise` now and this reads it.
+
+    Failure falls through to the hardcoded list rather than to nobody: a
+    routing decision degrading to yesterday's behaviour is recoverable, and one
+    degrading to "chief-of-staff answers everything" is the very complaint
+    this is fixing.
+  */
+  const topical = await db
+    .execute(`select slug from app.who_knows_about(${lit(instruction)}, 3)`)
+    .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
+    .catch(() => undefined)
+
+  const { roster, reason } = pickRoster(classified, instruction, topical as never)
   const chosen = roster[0] ?? 'chief-of-staff'
   const { rows } = await db.execute(`
     select slug, name, title, communication_style, responsibilities
@@ -952,6 +971,48 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       instruction = resolved.instruction
 
       const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)
+
+      /*
+        Write down who it went to (#65).
+
+        `jobs.recipient_agent` has existed since the job engine and was NULL on
+        all 499 real jobs — the routing decision was made, recorded in
+        `routing_decisions`, and then thrown away. So "did Emma do this?" had
+        no answer, and Grant reasonably concluded nothing was being delegated.
+
+        This is the whole of the cheap half of the fix: the decision already
+        existed, it just never reached the row anyone would look at.
+      */
+      await deps.db
+        .execute(`
+          update public.jobs set recipient_agent = ${lit(who.slug)}
+           where job_id = ${lit(job.jobId)}::uuid
+        `)
+        .catch(() => undefined)
+
+      /*
+        And record it as a consultation when it is genuinely a hand-off.
+
+        §9's consultation economics table has never held a row, so there has
+        been no way to ask whether specialists are worth convening.
+        `changed_outcome` is left null here and filled by whatever judges the
+        output — recording the consult is not the same as claiming it helped,
+        and a table that assumed it did would answer its own question.
+
+        Not recorded when Claire keeps the work: the chief of staff handling
+        something herself is not a consultation, and counting it would make the
+        rate look healthy while nothing was delegated at all.
+      */
+      if (who.slug !== 'chief-of-staff' && (payload.addressed_to ?? '') === '') {
+        await deps.db
+          .execute(`
+            insert into public.consultations
+              (job_id, consulted_staff, requested_by, reason, provider_requests)
+            values (${lit(job.jobId)}::uuid, array[${lit(who.slug)}]::text[],
+                    'chief-of-staff', ${lit(who.reason)}, 0)
+          `)
+          .catch(() => undefined)
+      }
 
       // Is this several things at once? If so, say it back and hold it.
       //

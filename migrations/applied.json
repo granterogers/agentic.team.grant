@@ -197,5 +197,7 @@
   "0196_a_folder_is_a_kind_of_reference.sql": "31d29ce240d615984a61f24b4168a6fafaba06228c50c3b464b7249daa14aa82",
   "0197_the_word_was_wanted_not_use.sql": "7c485588aaf947400f1d85e2c3d09a5ab28f5d47b3fffd3a84cb0a2d0d9bf0e1",
   "0198_what_we_were_just_talking_about.sql": "df0c73039bcf2c9a9f22c9a8ac56761bd0ae048f54d3f506b924af58bb28c56d",
-  "0199_an_agent_that_knows_what_it_can_do.sql": "f6a55bac3ede1b34de6d5c2fbd2e3c625a045418529008bf8f96e4fda585dabd"
+  "0199_an_agent_that_knows_what_it_can_do.sql": "f6a55bac3ede1b34de6d5c2fbd2e3c625a045418529008bf8f96e4fda585dabd",
+  "0200_who_knows_about_this.sql": "49f397f60617c3c32374d3d92180c877519fb393365af784802767998f22d040",
+  "0201_the_roster_did_not_know_enough_words.sql": "c1fd2b08ab29fadbc8a9728be8bf4373f69143ecf5f5bfd25df3d5c6fb32402a"
 }

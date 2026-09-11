@@ -394,6 +394,25 @@ const TOPIC_ROLES: readonly { readonly role: RoleSlug; readonly pattern: RegExp 
 export const pickRoster = (
   classification: Classification,
   instruction: string,
+  /*
+    Who the roster says knows about this, in rank order.
+
+    Passed in rather than looked up here, because the lookup is a database call
+    and this function is pure — which is what makes every routing rule in it
+    testable without a database. Omitted, it falls back to `TOPIC_ROLES`.
+
+    Issue #65. `TOPIC_ROLES` is five regexes in this file and it has routed
+    correctly for months; it is also the one thing Grant cannot change. He is
+    building a dashboard to *"look at each agent, what their skill sets are,
+    and adjust and add and refine"*, and a regex in TypeScript is not
+    adjustable. `app.who_knows_about` reads `staff.expertise`, which is a
+    column he edits, and 0201 moved this file's vocabulary into it.
+
+    The hardcoded list stays as the fallback rather than being deleted: if the
+    database is unreachable or an expertise column is emptied by mistake,
+    routing degrades to what it did yesterday instead of to nothing.
+  */
+  topical?: readonly RoleSlug[],
 ): { readonly roster: readonly RoleSlug[]; readonly reason: string } => {
   const ceiling = ROSTER_CEILINGS[classification.intent]
   if (ceiling.length === 0) {
@@ -416,8 +435,9 @@ export const pickRoster = (
     }
   }
 
-  const topical = TOPIC_ROLES.filter((t) => t.pattern.test(instruction)).map((t) => t.role)
-  const chosen = ceiling.filter((r) => topical.includes(r))
+  const fromRoster =
+    topical ?? TOPIC_ROLES.filter((t) => t.pattern.test(instruction)).map((t) => t.role)
+  const chosen = ceiling.filter((r) => fromRoster.includes(r))
 
   // Nothing topical matched: take the single cheapest-to-justify role from the
   // ceiling rather than all of it. An unclassifiable assignment is still work,
@@ -428,7 +448,7 @@ export const pickRoster = (
     roster: roster.slice(0, ROSTER_CEILING),
     reason:
       chosen.length > 0
-        ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${topical.join(', ')}, so the intersection was taken`
+        ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${fromRoster.join(', ')}, so the intersection was taken`
         : `${classification.intent} permits ${ceiling.join(', ')}, but nothing in the request names a subject area, so only the first was taken`,
   }
 }
@@ -442,7 +462,12 @@ export const pickRoster = (
 export const route = (
   instruction: string,
   scan: DuplicateScan,
-  options: { readonly linkTo?: string; readonly justification?: string } = {},
+  options: {
+    readonly linkTo?: string
+    readonly justification?: string
+    /** From `app.who_knows_about`. See `pickRoster`. */
+    readonly topical?: readonly RoleSlug[]
+  } = {},
 ): RoutingDecision => {
   const classification = classifyIntent(instruction)
   const clarify = needsClarification(classification)
@@ -457,7 +482,7 @@ export const route = (
           'the reading was too uncertain to act on, so the decision is to ask ' +
           'rather than to convene anyone',
       }
-    : pickRoster(classification, instruction)
+    : pickRoster(classification, instruction, options.topical)
 
   let resolution: DuplicateResolution = 'none_found'
   let linkedJobId: string | null = null
