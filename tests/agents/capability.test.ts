@@ -2,7 +2,13 @@
  * The sentence that caused this file, and the ones that must still be allowed.
  */
 import { describe, expect, it } from 'vitest'
-import { capabilityBrief, contradictsReality, type Reach } from '../../src/agents/capability.ts'
+import {
+  type Capability,
+  capabilityBrief,
+  contradictsReality,
+  EMPTY_CAPABILITY,
+  type Reach,
+} from '../../src/agents/capability.ts'
 
 const REACH: Reach[] = [
   { service: 'Notion', reachable: true, detail: null },
@@ -10,6 +16,18 @@ const REACH: Reach[] = [
   { service: 'Google NotebookLM', reachable: true, detail: null },
   { service: 'GitHub', reachable: false, detail: 'no read token for other repos' },
 ]
+
+/*
+  A capability is five lists now, not one (#148). `contradictsReality` still
+  takes the reach on its own — it is a scan over service names and nothing else
+  — so `REACH` stays exactly as it was, which is the point: the guard that
+  caught #64's sentence is unchanged and still has to pass.
+*/
+const able = (over: Partial<Capability> = {}): Capability => ({
+  ...EMPTY_CAPABILITY,
+  reach: REACH,
+  ...over,
+})
 
 describe('claiming it cannot reach something it can', () => {
   it('catches the reply that started this', () => {
@@ -58,20 +76,20 @@ describe('claiming it cannot reach something it can', () => {
 
 describe('the brief handed to the model', () => {
   it('names what is reachable and what is not, with the reason', () => {
-    const brief = capabilityBrief(REACH)
+    const brief = capabilityBrief(able())
     expect(brief).toContain('Notion')
     expect(brief).toContain('Slack')
     expect(brief).toContain('no read token for other repos')
   })
 
   it('draws the distinction that was collapsed', () => {
-    const brief = capabilityBrief(REACH).toLowerCase()
+    const brief = capabilityBrief(able()).toLowerCase()
     expect(brief).toContain('records hold nothing')
     expect(brief).toContain('not yours to make')
   })
 
   it('says nothing at all when it knows nothing', () => {
-    expect(capabilityBrief([])).toBe('')
+    expect(capabilityBrief(EMPTY_CAPABILITY)).toBe('')
   })
 })
 
@@ -115,8 +133,77 @@ describe('claiming it can only send plain text', () => {
   })
 
   it('and tells the truth in the brief, so it does not have to be caught', () => {
-    const brief = capabilityBrief(reach, [])
+    const brief = capabilityBrief({ ...EMPTY_CAPABILITY, reach })
     expect(brief).toContain('thumbs up and thumbs down')
     expect(brief).toContain('Go ahead')
+  })
+})
+
+/*
+  What the brief says about a boundary (#148).
+
+  Before this it said only what was reachable. An agent that does not know a
+  tool exists cannot ask for it — ADR-0018 makes asking the correct move — and
+  an agent that does not know a request was already refused asks again, which is
+  how a boundary turns into a nag.
+*/
+describe('the brief and the boundary', () => {
+  it('names the verbs a tool actually has, rather than only the tool', () => {
+    const brief = capabilityBrief(
+      able({
+        can: [
+          {
+            tool: 'notion.write',
+            what: 'Create and update Notion pages',
+            verbs: ['create pages in any shared data source', 'set properties and relations'],
+          },
+        ],
+      }),
+    )
+    expect(brief).toContain('create pages in any shared data source')
+  })
+
+  it('still names a tool that has no verbs recorded, rather than hiding it', () => {
+    // Eighteen of twenty-one tools had no verb while the list lived in
+    // TypeScript. Silence about them is what this replaced.
+    const brief = capabilityBrief(
+      able({ can: [{ tool: 'web.search', what: 'Search the web', verbs: [] }] }),
+    )
+    expect(brief).toContain('web.search')
+  })
+
+  it('tells an agent to ASK for a tool the office holds and it does not', () => {
+    const brief = capabilityBrief(
+      able({ mustAsk: [{ tool: 'slack.post', what: 'Post to Slack', verbs: [] }] }),
+    )
+    expect(brief).toContain('ask for one rather than saying it is impossible')
+    expect(brief).toContain('slack.post')
+  })
+
+  it('says what is off for everyone, with the reason, so a proposal can be specific', () => {
+    const brief = capabilityBrief(
+      able({
+        cannot: [
+          { tool: 'gmail.send', what: 'Send email', verbs: [], why: 'Destructive. Level 3.' },
+        ],
+      }),
+    )
+    expect(brief).toContain('gmail.send')
+    expect(brief).toContain('Destructive. Level 3.')
+  })
+
+  it('says what was already refused, so it is not asked for twice', () => {
+    const brief = capabilityBrief(able({ declined: [{ tool: 'github.write', why: 'not in V1' }] }))
+    expect(brief).toContain('do not ask again')
+    expect(brief).toContain('github.write')
+    expect(brief).toContain('not in V1')
+  })
+
+  it('says none of it when there is nothing to say', () => {
+    // A brief padded with empty headings is one a model learns to skim.
+    const brief = capabilityBrief(able())
+    expect(brief).not.toContain('ask for one rather than')
+    expect(brief).not.toContain('Switched off for everyone')
+    expect(brief).not.toContain('do not ask again')
   })
 })

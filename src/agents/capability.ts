@@ -52,47 +52,108 @@ export interface Reach {
   readonly detail: string | null
 }
 
+/** One tool, and what it can be made to do. */
+export interface Able {
+  readonly tool: string
+  readonly what: string
+  readonly verbs: readonly string[]
+}
+
+/** What has been asked for and refused, so it is not asked for again. */
+export interface Refused {
+  readonly tool: string
+  readonly why: string | null
+}
+
 /**
- * What is reachable right now.
+ * Everything this office can do right now, for this person.
  *
- * Connectors joined to health, because a connector switched on with a dead
- * credential is not reachable and saying so is the honest answer. Chat surfaces
- * are included because two of the three false claims were about Slack.
+ * One query, answered by `app.capability_index` (0277-0279), which reads
+ * `tool_permissions`, `staff_tools`, `knowledge_connectors`, `connection_health`
+ * and `tool_requests` on every call and stores nothing.
+ *
+ * **In SQL rather than here, and that is the change #148 asked for.** This file
+ * used to hold `verbsNow()` — a hand-written list covering three of the
+ * twenty-one tools, which meant eighteen of them had no verb at all and an
+ * agent asked about one answered from what a language model is rather than from
+ * what this office is. That is exactly how #64 happened. The verbs are now a
+ * column, so the office can correct one without a deploy.
+ *
+ * Four answers rather than one, because they need different replies:
+ *
+ *   `can`      — enabled, and this person holds the grant
+ *   `mustAsk`  — enabled, and they do not. ADR-0018: ask, never assume
+ *   `cannot`   — off for everyone, with the reason, so #49 can be specific
+ *   `declined` — already refused. Asking again is how a boundary becomes a nag
  */
-export async function reachNow(db: SqlExecutor): Promise<Reach[]> {
-  const { rows } = await db.execute(`
-    select
-      k.name as service,
-      (k.enabled and coalesce(h.state, 'ok') not in ('dead', 'missing')) as reachable,
-      case
-        when not k.enabled then coalesce(k.disabled_reason, 'switched off')
-        when h.state in ('dead', 'missing') then coalesce(h.detail, h.state)
-        else null
-      end as detail
-    from public.knowledge_connectors k
-    left join lateral (
-      select ch.state, ch.detail
-        from public.connection_health ch
-       where ch.service = k.health_service
-       order by case ch.state
-                  when 'dead' then 0 when 'missing' then 1 when 'unknown' then 2
-                  when 'ok' then 3 else 4 end
-       limit 1
-    ) h on true
-    where k.connector not in ('upload', 'mcp')
-    union all
-    -- The surfaces. Not connectors, and the thing she was wrong about twice.
-    select c.service,
-           c.state not in ('dead', 'missing'),
-           case when c.state in ('dead', 'missing') then coalesce(c.detail, c.state) else null end
-      from public.connection_health c
-     where c.service in ('Slack', 'Telegram')
-  `)
-  return (rows as { service: string; reachable: boolean; detail: string | null }[]).map((r) => ({
-    service: String(r.service),
-    reachable: r.reachable === true,
-    detail: r.detail === null ? null : String(r.detail),
-  }))
+export interface Capability {
+  readonly reach: readonly Reach[]
+  readonly can: readonly Able[]
+  readonly mustAsk: readonly Able[]
+  readonly cannot: readonly (Able & { readonly why: string })[]
+  readonly declined: readonly Refused[]
+}
+
+/**
+ * A capability of nothing.
+ *
+ * Exported because a caller that is confirming a say-back rather than answering
+ * a question does not need the index and should not pay for the query — and
+ * `[]` no longer type-checks now that a capability is five lists rather than
+ * one.
+ */
+export const EMPTY_CAPABILITY: Capability = {
+  reach: [],
+  can: [],
+  mustAsk: [],
+  cannot: [],
+  declined: [],
+}
+
+export async function capabilityNow(db: SqlExecutor, staffSlug?: string): Promise<Capability> {
+  const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+  const { rows } = await db.execute(
+    `select app.capability_index(${staffSlug === undefined ? 'null' : lit(staffSlug)}) as i`,
+  )
+  const i = (rows[0] as { i?: Record<string, unknown> } | undefined)?.i
+  if (i === undefined) return EMPTY_CAPABILITY
+
+  const able = (v: unknown): Able[] =>
+    (Array.isArray(v) ? v : []).map((r) => {
+      const row = r as Record<string, unknown>
+      return {
+        tool: String(row.tool ?? ''),
+        what: String(row.what ?? ''),
+        verbs: Array.isArray(row.verbs) ? row.verbs.map((x) => String(x)) : [],
+      }
+    })
+
+  return {
+    reach: (Array.isArray(i.reach) ? i.reach : []).map((r) => {
+      const row = r as Record<string, unknown>
+      return {
+        service: String(row.service ?? ''),
+        reachable: row.reachable === true,
+        detail: row.detail === null || row.detail === undefined ? null : String(row.detail),
+      }
+    }),
+    can: able(i.can),
+    mustAsk: able(i.must_ask),
+    cannot: able(i.cannot).map((a, n) => ({
+      ...a,
+      why: String(
+        ((Array.isArray(i.cannot) ? i.cannot : [])[n] as Record<string, unknown> | undefined)
+          ?.why ?? 'switched off',
+      ),
+    })),
+    declined: (Array.isArray(i.declined) ? i.declined : []).map((r) => {
+      const row = r as Record<string, unknown>
+      return {
+        tool: String(row.tool ?? ''),
+        why: row.why === null || row.why === undefined ? null : String(row.why),
+      }
+    }),
+  }
 }
 
 /**
@@ -103,21 +164,52 @@ export async function reachNow(db: SqlExecutor): Promise<Reach[]> {
  * reaching a service is a fact about our wiring, and only one of them is hers
  * to report.
  */
-export function capabilityBrief(reach: readonly Reach[], verbs: readonly Verb[] = []): string {
-  if (reach.length === 0) return ''
-  const can = reach.filter((r) => r.reachable).map((r) => r.service)
-  const cannot = reach.filter((r) => !r.reachable)
+export function capabilityBrief(cap: Capability): string {
+  if (cap.reach.length === 0 && cap.can.length === 0) return ''
+  const can = cap.reach.filter((r) => r.reachable).map((r) => r.service)
+  const cannotReach = cap.reach.filter((r) => !r.reachable)
+
+  /*
+    The verbs, from the registry. Capped at four per tool and only for tools
+    that have them, because this paragraph goes into every prompt and a
+    twenty-one-item catalogue would push the actual question out of the model's
+    attention. The tools with no verbs recorded still appear by name and
+    description below, which is more than the eighteen of them had before.
+  */
+  const verbs = cap.can
+    .filter((a) => a.verbs.length > 0)
+    .map((a) => `${a.tool} — you can ${a.verbs.slice(0, 4).join(', ')}.`)
+  const plain = cap.can.filter((a) => a.verbs.length === 0).map((a) => a.tool)
 
   return (
     'What this team can reach right now, as a matter of fact: ' +
     (can.length === 0 ? 'nothing' : can.join(', ')) +
     '. ' +
-    (cannot.length === 0
+    (cannotReach.length === 0
       ? ''
-      : `Not reachable: ${cannot.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
-    (verbs.length === 0
+      : `Not reachable: ${cannotReach.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
+    (verbs.length === 0 ? '' : `${verbs.join(' ')} `) +
+    (plain.length === 0 ? '' : `You also hold: ${plain.join(', ')}. `) +
+    /*
+      What this person may NOT do, which is as load-bearing as what they may.
+
+      An agent that does not know a tool exists cannot ask for it, and ADR-0018
+      makes asking the correct move — so "must ask" and "nobody may" are stated
+      apart. Before this the brief said neither, and an agent hitting a boundary
+      had nothing to propose (#49).
+    */
+    (cap.mustAsk.length === 0
       ? ''
-      : `${verbs.map((v) => `${v.service} — you can ${v.can.join(', ')}.`).join(' ')} `) +
+      : `The office can ${cap.mustAsk.map((a) => a.tool).join(', ')} but you do not hold ` +
+        'those — ask for one rather than saying it is impossible. ') +
+    (cap.cannot.length === 0
+      ? ''
+      : `Switched off for everyone: ${cap.cannot.map((a) => `${a.tool} (${a.why})`).join('; ')}. `) +
+    (cap.declined.length === 0
+      ? ''
+      : `Already asked for and refused, so do not ask again: ${cap.declined
+          .map((d) => `${d.tool}${d.why === null ? '' : ` (${d.why})`}`)
+          .join(', ')}. `) +
     'Never claim you cannot reach one of the reachable services, and never say ' +
     'you lack access or an integration for one. If our records hold nothing ' +
     'about the thing being asked about, say THAT — "I have nothing on it here" ' +
@@ -155,60 +247,6 @@ const CHANNEL_TRUTHS =
   'You reach him on Telegram and the team on Slack. Never tell him you can ' +
   'only produce plain text, or that you cannot add buttons — you can, because ' +
   'the office adds them for you.'
-
-/** What a service can actually be made to DO, as opposed to merely reached. */
-export interface Verb {
-  readonly service: string
-  readonly can: readonly string[]
-}
-
-/**
- * The verbs, from the tool registry rather than from a live call.
- *
- * Reachability is a fact about right now and worth asking the network for.
- * Which operations exist is a fact about this repository and about what Grant
- * has permitted, both of which are in the database — so this costs one query
- * rather than a round trip to Notion on every answer.
- *
- * The distinction matters for the sentence it produces. "Notion is reachable"
- * did not stop Claire offering to write an outline for Grant to paste in; "you
- * can create pages, upload files and set relations in Notion" is the sentence
- * that does.
- */
-export async function verbsNow(db: SqlExecutor): Promise<Verb[]> {
-  const { rows } = await db.execute(`
-    select tool from public.tool_permissions where enabled and level <= 2 order by tool
-  `)
-  const enabled = new Set((rows as { tool: string }[]).map((r) => String(r.tool)))
-  const verbs: Verb[] = []
-
-  if (enabled.has('notion.write')) {
-    verbs.push({
-      service: 'Notion',
-      can: [
-        'create pages in any shared data source',
-        'append and update blocks',
-        'set properties and relations',
-        'upload and attach files including audio and video',
-        'archive a page (reversibly)',
-        'read a database schema before writing to it',
-      ],
-    })
-  }
-  if (enabled.has('notebook.write')) {
-    verbs.push({
-      service: 'Google NotebookLM',
-      can: ['add sources and notes', 'generate artifacts'],
-    })
-  }
-  if (enabled.has('github.read')) {
-    verbs.push({
-      service: 'GitHub',
-      can: ['read repositories, branches, README, the source tree, issues and releases'],
-    })
-  }
-  return verbs
-}
 
 /**
  * Did the reply claim it cannot reach something it can?

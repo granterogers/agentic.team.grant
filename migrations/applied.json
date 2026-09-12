@@ -274,5 +274,8 @@
   "0273_a_shape_with_no_facts_says_so.sql": "2b80b8c3c976505e04c6ff62a9950283115343bf3a3c09e656304015f217e905",
   "0274_a_failure_the_office_recognises.sql": "b44e9078e543dfe5f63384aaaa6cec991242b76b7c7df9a4973405b1b663cc3a",
   "0275_the_noticing_pass_can_see_a_repeat.sql": "3ae1bf8c75c372a7bc6f54a419c2feb3a3c597eb15d5875fbccdcb874c0fd19d",
-  "0276_a_subject_is_an_id_not_a_token.sql": "80fde21bee20d91e63944148fe32053deef3dfa43375a0660d7b27dbbfd42ad8"
+  "0276_a_subject_is_an_id_not_a_token.sql": "80fde21bee20d91e63944148fe32053deef3dfa43375a0660d7b27dbbfd42ad8",
+  "0277_a_capability_index_the_office_generates.sql": "4db9a90c870903854bcb22cf9e991986c5a5ba4b999b29422cb2a48a3efdaf01",
+  "0278_a_surface_is_not_listed_twice.sql": "43aeda044184cf43a874dad8af1b242485c5a63403d3137212efac8a696cd066",
+  "0279_one_row_per_surface_worst_state_first.sql": "d5598c409c407c38ed170909b20729e4e1c67f1a9f8fb5974c9fc2cc741f5f08"
 }

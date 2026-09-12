@@ -108,6 +108,7 @@
     "slack:rename-channels": "tsx scripts/slack/rename-channels.ts",
     "notion:sync": "tsx scripts/notion/sync.ts",
     "verify:calendar": "tsx scripts/verify/calendar.ts",
+    "verify:capability": "tsx scripts/verify/capability.ts",
     "verify:notion": "tsx scripts/verify/notion.ts",
     "telegram:roster": "tsx scripts/telegram/roster.ts",
     "telegram:configure-staff": "tsx scripts/telegram/configure-staff.ts",

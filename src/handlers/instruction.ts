@@ -73,7 +73,12 @@
  */
 
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
-import { capabilityBrief, contradictsReality, reachNow, verbsNow } from '../agents/capability.ts'
+import {
+  capabilityBrief,
+  capabilityNow,
+  contradictsReality,
+  EMPTY_CAPABILITY,
+} from '../agents/capability.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
@@ -1257,12 +1262,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // Asked once per answer rather than described in the prompt as a
       // constant: a connector switched off an hour ago must change what she
       // says she can do.
-      const reach = confirmation !== null ? [] : await reachNow(deps.db)
-      // What each reachable service can be made to DO. Read from the tool
-      // registry rather than the network, so it costs a query and not a round
-      // trip — and because "Notion is reachable" was never the sentence that
-      // stopped Claire offering Grant an outline to paste in himself.
-      const verbs = confirmation !== null ? [] : await verbsNow(deps.db)
+      /*
+        One query now, not two, and scoped to the person answering (#148).
+
+        `reachNow` and `verbsNow` were two calls and the second was a
+        hand-written list in TypeScript covering three of twenty-one tools. It
+        is `app.capability_index` now, which also knows what this agent may NOT
+        do and what has already been asked for and refused — so an agent that
+        hits a boundary has something to propose (#49) instead of asserting a
+        limitation it does not have (#64).
+      */
+      const cap = confirmation !== null ? EMPTY_CAPABILITY : await capabilityNow(deps.db, who.slug)
+      const reach = cap.reach
 
       /*
         What this person has learned and knows how to do (#48, #50).
@@ -1338,7 +1349,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     // because that branch is where the false claim came from:
                     // told to say she could not see a notebook, Claire
                     // generalised to "I don't have integration access".
-                    `\n\n${capabilityBrief(reach, verbs)}` +
+                    `\n\n${capabilityBrief(cap)}` +
                     // After what the office can reach, before what it holds on
                     // this question: how we work sits between authority and
                     // evidence, which is exactly what it is.
