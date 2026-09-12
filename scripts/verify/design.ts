@@ -222,5 +222,42 @@ for (const p of PRIMITIVES) {
   )
 }
 
+/*
+  And it says WHICH kind of not-live it is (#119).
+
+  The strip used to have one wording, so "you are not signed in" and "the office
+  is down" looked identical — the first is normal, the second is an outage, and
+  the alarming state was wearing the calmer label. That is the same failure as
+  the one this suite was built for, in the other direction: there, invented data
+  was mistaken for real; here, real breakage is mistaken for a normal prototype.
+
+  A source check rather than a browser one, like everything else in this file.
+  The BEHAVIOUR — that a failed fetch actually reaches `unreachable` and that
+  the retry works — is asserted in `scripts/verify/offline.ts`, which drives it
+  in Chromium. Both, because a state that exists in the source and is never
+  reached is #72's shape.
+*/
+{
+  const app = read('web/studio/app.js')
+  const data = read('web/studio/data.js')
+  for (const state of ['prototype', 'unreachable', 'stale', 'refused'] as const) {
+    ok(
+      `the page has words for "${state}"`,
+      app.includes(`${state}:`) || app.includes(`'${state}'`),
+      'a state with no wording falls back to the calm one, which is how an outage reads as normal',
+    )
+  }
+  ok(
+    'a refused token is cleared rather than retried forever',
+    data.includes("removeItem('hq.token')"),
+    'a page retrying a dead token is a page that never recovers',
+  )
+  ok(
+    'a fetch that never answers gives up rather than hanging',
+    data.includes('AbortSignal.timeout'),
+    'without a timeout the page sits blank claiming nothing is wrong',
+  )
+}
+
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 process.exit(fail === 0 ? 0 : 1)

@@ -564,16 +564,80 @@ function paintSchemeButtons() {
   an element that is present and invisible is one a later stylesheet can
   reveal, and this must be exactly as true as the data behind it.
 */
+/*
+  Three states, three sentences, and only one of them is calm (#119).
+
+  There was one strip and one wording, so "you are not signed in" and "the
+  office is down" looked identical. The first is normal; the second is an
+  outage, and the more alarming state was wearing the quieter label.
+
+  The mock strip exists because a design was once judged as a product and
+  reported Supabase storage at 82% of the free tier when the real figure was
+  4%. That was invented data mistaken for real. This is the same class in the
+  other direction -- real breakage mistaken for a normal prototype -- and it is
+  how an outage goes unnoticed.
+*/
+const MOCK_STATE = {
+  prototype: {
+    label: 'Prototype data',
+    say: 'Showing the design on invented projects. Sign in to see your office.',
+    tone: '',
+  },
+  unreachable: {
+    label: 'The office did not answer',
+    say: 'Nothing on this page is your office. This is the prototype standing in.',
+    tone: 'bad',
+  },
+  stale: {
+    label: 'Out of date',
+    say: 'The office answered once and has stopped. What you can see was real then.',
+    tone: 'bad',
+  },
+  refused: {
+    label: 'Signed out',
+    say: 'That token was not accepted, so it has been cleared. Sign in again.',
+    tone: 'bad',
+  },
+}
+
 function markMock(root) {
   const existing = $('.mockbar')
   if (existing) existing.remove()
   if (source.live) return
+
+  const state = MOCK_STATE[source.state] ?? MOCK_STATE.prototype
   const bar = document.createElement('div')
-  bar.className = 'mockbar'
-  bar.innerHTML = `<b>Prototype data</b><span>${
-    esc(source.why || 'the office has not answered, so this is a drawing')
-  }</span>`
+  bar.className = `mockbar${state.tone === '' ? '' : ' bad'}`
+
+  /*
+    The retry is drawn only where retrying can help. Offering one on the
+    prototype state would be a button that cannot work -- there is no token to
+    try with -- and a control that cannot do its job is the defect #105 spent a
+    day on.
+  */
+  const when =
+    source.at === null
+      ? ''
+      : ` Last answered ${esc(new Date(source.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}.`
+  bar.innerHTML = `<b>${esc(state.label)}</b><span>${esc(state.say)}${when}</span>${
+    source.state === 'unreachable' || source.state === 'stale'
+      ? '<button class="btn small quiet" data-retry-office>Try again</button>'
+      : ''
+  }`
   root.prepend(bar)
+
+  $('[data-retry-office]', bar)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    b.disabled = true
+    b.textContent = 'Trying…'
+    await refresh()
+    /*
+      No `say()` on success: the strip disappears, which is the clearest
+      possible confirmation. On failure `refresh` has already updated
+      `source.why` and the redraw prints it, so a repeated failure reads as a
+      repeated failure rather than as a button that did nothing.
+    */
+  })
 }
 
 /*
@@ -5458,12 +5522,38 @@ async function live() {
     // Private browsing, or storage blocked. The mock stands.
   }
   if (token === '') {
+    /*
+      Not a failure, and it must not read as one (#119). `state` stays
+      `prototype`, which is the calm wording; `unreachable` is the alarming one
+      and belongs only to a fetch that actually failed.
+    */
+    source.state = 'prototype'
     source.why = 'no token — showing the prototype'
     render()
     return
   }
-  await Promise.all([hydrate(API, token), config.hydrateSettings(read), hydrateUsage(read)])
+  /*
+    The studio payload first, then draw, then the rest (#119).
+
+    This was one `Promise.all` over three fetches, so the page waited for the
+    SLOWEST of them before drawing anything — and if one never answered, it
+    never drew at all. `hydrate` has a ten-second deadline; the settings and
+    usage payloads are separate modules and do not, so a hung office left the
+    page on the default state indefinitely, saying "Prototype data", which is
+    the calm wording. An outage was reading as normal for as long as it lasted.
+
+    Found by `verify:offline`, which hangs every call and asserts the page says
+    the office did not answer. It said the opposite.
+
+    So: the payload that decides what is on screen is awaited and drawn, and the
+    two that decorate Settings and Usage follow. They redraw when they arrive,
+    and if they never do the page is still there and still honest.
+  */
+  await hydrate(API, token)
   render()
+  void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
+    render()
+  })
 }
 
 live()

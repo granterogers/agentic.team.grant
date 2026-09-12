@@ -149,6 +149,7 @@
     "verify:skills": "tsx scripts/verify/skills.ts",
     "verify:boundary": "tsx scripts/verify/boundary.ts",
     "verify:disconnect": "tsx scripts/verify/disconnect.ts",
+    "verify:offline": "tsx scripts/verify/offline.ts",
     "verify:design": "tsx scripts/verify/design.ts"
   },
   "devDependencies": {

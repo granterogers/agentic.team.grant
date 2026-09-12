@@ -914,6 +914,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
               left .34s cubic-bezier(.2,.8,.3,1);
 }
 .railtoggle:hover { color: var(--accent); border-color: var(--accent); }
+/*
+  Out of the strip's way when there is one.
+
+  `.railtoggle` is `position: fixed` at the top of the viewport and the mock
+  strip spans the full width above the shell, so the chevron sat ON the strip's
+  sentence — visible in every capture since the strip existed and easy to read
+  past when the sentence was four words. #119 gave the strip a real sentence and
+  a button, and the collision stopped being ignorable.
+
+  `:has` rather than a class from JavaScript: the strip is created and removed
+  by `markMock`, and a class that has to be kept in step with it is a second
+  fact that can drift from the first.
+*/
+body:has(.mockbar) .railtoggle { top: calc(var(--s3) + 40px); }
 .rail { position: sticky; }
 .shell { transition: grid-template-columns .34s cubic-bezier(.2,.8,.3,1); }
 
@@ -3050,6 +3064,23 @@ kbd {
 }
 .mockbar b { font: 600 12px/1.4 var(--text); letter-spacing: .05em;
   font-variant-caps: all-small-caps; color: var(--warn); }
+/*
+  The alarming states look alarming (#119).
+
+  The amber strip is right for "you are not signed in", which is normal. It is
+  wrong for "the office did not answer", which is an outage — and wearing the
+  same colour is precisely how the second went unnoticed. `--bad` for the three
+  states that mean something is actually wrong.
+*/
+.mockbar.bad {
+  background: color-mix(in srgb, var(--bad) 13%, var(--ground));
+  border-bottom-color: color-mix(in srgb, var(--bad) 42%, transparent);
+}
+.mockbar.bad b { color: var(--bad); }
+/* The retry sits at the end of the strip rather than under it, so the bar stays
+   one line on a desktop and wraps as a unit on a phone. */
+.mockbar .btn { margin-left: auto; }
+@media (max-width: 860px) { .mockbar .btn { margin-left: 0; } }
 
 /* --- a contact is a name and a way to reach them (#100) --------------------
    The disc is gone: it was the first letter of the name in a 54px circle,

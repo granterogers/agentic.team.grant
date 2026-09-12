@@ -373,8 +373,40 @@ export const CREW = [...FALLBACK_CREW]
 export const PROJECTS = [...FALLBACK_PROJECTS]
 export const WAITING = { ...FALLBACK_WAITING }
 
-/** Whether what is on screen is the office or the mock. The shell says so. */
-export const source = { live: false, at: null, why: 'not asked yet' }
+/*
+  Whether what is on screen is the office or the mock, and WHICH KIND of not-live
+  it is (#119).
+
+  There used to be one boolean and a sentence, so "you are not signed in" and
+  "the office is down" wore the same calm label: `Prototype data`. The first is
+  normal and expected; the second means an outage, and it should not take a
+  second look to tell them apart. The more alarming state was wearing the
+  quieter word.
+
+  `state` is one of:
+
+    prototype    no token. Nothing is wrong. This is the design, on invented
+                 projects, which is exactly what it says.
+    unreachable  the fetch failed or timed out. The office may be down and
+                 nothing on screen is current. Offers a retry.
+    refused      a 401 with a token present. The token is stale, and it is
+                 cleared, because a page retrying a dead token forever is a
+                 page that never recovers.
+    stale        it answered once and has stopped. Distinguished because the
+                 numbers on screen were real at `at` and are not now, which is
+                 a different warning from never having had any.
+
+  `live` stays a boolean and stays true only for the good case, so every
+  existing reader keeps working.
+*/
+export const source = {
+  live: false,
+  at: null,
+  state: 'prototype',
+  why: 'not asked yet',
+  /** How many times in a row a fetch has failed. Drives the retry's wording. */
+  misses: 0,
+}
 
 const replace = (target, rows) => {
   target.length = 0
@@ -390,9 +422,22 @@ const replace = (target, rows) => {
  */
 export async function hydrate(endpoint, token) {
   try {
+    /*
+      A timeout, because a fetch with none can hang for the browser's default
+      and the page sits on a spinner-less blank claiming nothing is wrong. Ten
+      seconds is far longer than the office ever takes and far shorter than a
+      person will wait before deciding the product is broken.
+    */
+    const stop = AbortSignal.timeout(10_000)
     const r = await fetch(`${endpoint}?section=studio`, {
       headers: { authorization: `Bearer ${token}` },
+      signal: stop,
     })
+    if (r.status === 401 || r.status === 403) {
+      const refused = new Error('that token was not accepted')
+      refused.name = 'Refused'
+      throw refused
+    }
     if (!r.ok) throw new Error(`http ${r.status}`)
     const { data } = await r.json()
     if (!data || !Array.isArray(data.projects)) throw new Error('unexpected shape')
@@ -442,11 +487,38 @@ export async function hydrate(endpoint, token) {
 
     source.live = true
     source.at = data.generated_at ?? new Date().toISOString()
+    source.state = 'live'
     source.why = ''
+    source.misses = 0
     return true
   } catch (e) {
     source.live = false
-    source.why = e instanceof Error ? e.message : String(e)
+    source.misses += 1
+    /*
+      Name the kind of failure, because the answer differs.
+
+      A refused token is the page's to fix — clear it, and the next load is an
+      honest prototype rather than a loop retrying a credential that will never
+      work again. Everything else is the office's, and all the page can do is
+      say so and offer to try again.
+
+      `stale` rather than `unreachable` once it has answered at least once: the
+      numbers on screen WERE real, and "these are from 11 minutes ago" is a
+      different warning from "there has never been anything here".
+    */
+    if (e instanceof Error && (e.name === 'Refused' || /http 40[13]/.test(e.message))) {
+      source.state = 'refused'
+      source.why = 'that token was not accepted — sign in again'
+      try { localStorage.removeItem('hq.token') } catch { /* nothing to clear */ }
+    } else {
+      source.state = source.at === null ? 'unreachable' : 'stale'
+      source.why =
+        e instanceof Error && e.name === 'TimeoutError'
+          ? 'the office did not answer in ten seconds'
+          : e instanceof Error
+            ? e.message
+            : String(e)
+    }
     return false
   }
 }
