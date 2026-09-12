@@ -2860,12 +2860,27 @@ function connectionsTab() {
           if (route.how === 'mcp') {
             return `<button class="btn small quiet" data-mcp-open>${esc(route.label)}</button>`
           }
-          return route.family === 'google' && canWrite()
-            ? '<button class="btn small quiet" data-forget-google>Disconnect</button>'
-            : route.how === 'tab'
-              ? `<button class="btn small quiet" data-goto-setting="${esc(route.to)}"
-                   >Manage</button>`
-              : ''
+          /*
+            Disconnect where a disconnect is real, Manage where it is not (#90).
+
+            Driven by `route.off` rather than by the family, which is what made
+            this Google-only: Notion and NotebookLM both have a credential in
+            the vault and neither had a way out. A service with no `off` still
+            says Manage, because a button that appeared to revoke a credential
+            while revoking nothing is the failure this issue is about.
+
+            `btn small quiet`, deliberately not a new class. During the port
+            Disconnect rendered as a 110px empty box because `.mini` is a 78px
+            preview thumbnail -- grep for a class name before inventing one.
+          */
+          if (route.off !== undefined && canWrite()) {
+            return `<button class="btn small quiet" data-disconnect="${esc(route.off)}"
+                      data-service="${esc(c.name)}">Disconnect</button>`
+          }
+          return route.how === 'tab'
+            ? `<button class="btn small quiet" data-goto-setting="${esc(route.to)}"
+                 >Manage</button>`
+            : ''
         })()}
       </div>
     </article>`
@@ -3592,6 +3607,53 @@ function settingsSheet() {
       }
       const done = await attempt(b, 'Disconnecting…', () => act('forget_google', {}), 'Disconnected.')
       if (done) await afterWrite()
+    })
+  }
+
+  /*
+    Disconnecting anything (#90).
+
+    Three things this does that the Google-only version did not:
+
+    1. It names the service and what stops, from `route.costs`, so the
+       confirmation is about THIS service rather than a generic "are you
+       sure?". Grant confirms every destructive action, and a confirmation that
+       does not say what it costs reads as "will this delete my work".
+    2. It repeats the RPC's own sentence afterwards rather than saying
+       "Disconnected." A disconnect of something that was never connected
+       reports exactly that, because a teardown that matched nothing looks
+       identical to one that worked.
+    3. It says where consent is withdrawn at the provider. Deleting our copy of
+       a credential is not revoking it; Postgres makes no HTTP calls, so
+       claiming a revocation here would be false. The link is the honest half.
+  */
+  for (const b of v.querySelectorAll('[data-disconnect]')) {
+    b.addEventListener('click', async () => {
+      const key = b.dataset.disconnect
+      const name = b.dataset.service ?? key
+      const route = Object.values(config.ROUTES).find((r) => r.off === key)
+      if (!sure(`Disconnect ${name}? ${route?.costs ?? ''}`)) return
+      let outcome = null
+      const done = await attempt(b, 'Disconnecting…', async () => {
+        outcome = await act('disconnect', { p_service: key })
+        return outcome
+      })
+      if (!done) return
+      await afterWrite()
+      /*
+        Said after the redraw, and found again by attribute, because
+        `afterWrite` rebuilds the sheet and the button pressed is gone. Without
+        this the sentence lands on a detached node and nothing appears — the
+        same shape as the eighteen dead panel buttons in #105.
+      */
+      const again = $(`[data-disconnect="${key}"]`) ?? $('[data-settings-body]')
+      const where = outcome?.revoke_at
+      say(
+        again,
+        `${outcome?.note ?? 'Disconnected.'}${
+          where === undefined ? '' : ` Withdraw the consent at ${where}`
+        }`,
+      )
     })
   }
 

@@ -249,5 +249,6 @@
   "0248_that_setting_is_a_slug_not_a_switch.sql": "0eb9f7e77ca96304324f33270fb1eef36958d1bad339aa41ac99d6bd26c5fbf1",
   "0249_the_mcp_client_entry_says_what_it_is.sql": "1e296ba0ccd5cf8a8437e5454428c4e4947d4a7c2b53ca7d96b5a529a21eb2cc",
   "0250_the_arrangement_is_his.sql": "2afbf8e1895722d6d08bd59ef207f6bfd61d00341a25a3dea58ed94435e0072d",
-  "0251_a_missing_key_is_not_a_wrong_key.sql": "ced0a8e5b613ebe23bd86f4d3c27cc7a3925a25d7243af01f91d3df2b0b1387f"
+  "0251_a_missing_key_is_not_a_wrong_key.sql": "ced0a8e5b613ebe23bd86f4d3c27cc7a3925a25d7243af01f91d3df2b0b1387f",
+  "0252_disconnect_means_disconnect.sql": "be30bfbf5d0d0976aa6a9b82d1a11a0a62c563d680c47ee9ebc42122b02ff1c2"
 }

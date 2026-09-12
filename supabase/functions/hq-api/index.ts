@@ -229,6 +229,19 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // The way back out. There was a way in and none out, which made a consent
   // granted through a browser effectively permanent from this page's side.
   forget_google: { fn: 'hq_forget_google', required: [] },
+  /*
+    Disconnecting anything (#90, migration 0252).
+
+    `forget_google` stays, because the Setting up page calls it by name and a
+    working caller is not worth breaking; this is the general one, and Google
+    is one of its branches.
+
+    The RPC decides what disconnecting each service means AND which ones have
+    no honest disconnect at all — OpenRouter is how the team thinks, Telegram
+    is how it reaches him. It returns a refusal with the reason rather than a
+    cheerful ok, and this list does not second-guess it. §5.
+  */
+  disconnect: { fn: 'hq_disconnect', required: ['p_service'] },
   // One setter over three kinds of routing change, allow-listed inside the
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.

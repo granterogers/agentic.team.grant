@@ -364,12 +364,61 @@ export const staff = () => (TEAM.length > 0 ? TEAM : CREW)
   moves within Settings, and 'none' is an honest dead end that says so rather
   than pretending.
 */
+/*
+  `off` names what disconnecting a service means, and only appears where a
+  disconnect is real (#90).
+
+  Three fields, and each earns its place:
+
+  - `off` is the service key `app.hq_disconnect` takes. Its absence is the
+    signal that there is no disconnect, so a card cannot draw the button by
+    accident. Grant: the page asserting a connection that is not there is
+    worse than no button.
+  - `costs` goes in the confirmation. Destructive actions are confirmed
+    (CLAUDE.md), and a confirmation that says "are you sure?" and nothing else
+    reads as "will this delete my work" — so it names what stops AND what
+    stays.
+  - `revokeAt` is where consent is withdrawn at the PROVIDER. Deleting our copy
+    of a credential is not revoking it, and the honest thing is to say so with
+    the URL rather than claim a revocation that did not happen.
+*/
 export const ROUTES = {
-  drive: { how: 'oauth', family: 'google', label: 'Connect Google' },
-  calendar: { how: 'oauth', family: 'google', label: 'Connect Google' },
-  gmail: { how: 'oauth', family: 'google', label: 'Connect Google' },
-  notebooklm: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
-  notion: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
+  drive: {
+    how: 'oauth', family: 'google', label: 'Connect Google', off: 'google',
+    costs:
+      'The team stops being able to read your Drive, calendar and mail. Everything ' +
+      'it already read stays. Reconnecting is one consent screen.',
+    revokeAt: 'https://myaccount.google.com/permissions',
+  },
+  calendar: {
+    how: 'oauth', family: 'google', label: 'Connect Google', off: 'google',
+    costs:
+      'The team stops being able to read your calendar and mail, and calendar ' +
+      'reading switches off. Everything already read stays.',
+    revokeAt: 'https://myaccount.google.com/permissions',
+  },
+  gmail: {
+    how: 'oauth', family: 'google', label: 'Connect Google', off: 'google',
+    costs:
+      'The team stops being able to read your mail, calendar and Drive. ' +
+      'Everything already read stays.',
+    revokeAt: 'https://myaccount.google.com/permissions',
+  },
+  notebooklm: {
+    how: 'tab', to: 'setup', label: 'Set up in Setting up', off: 'notebooklm',
+    costs:
+      'Audio overviews, mind maps and briefings stop being made, and generation ' +
+      'switches off. Notebooks already attached to a dashboard project stay ' +
+      'attached, and what they produced stays.',
+    revokeAt: 'https://notebooklm.google.com',
+  },
+  notion: {
+    how: 'tab', to: 'setup', label: 'Set up in Setting up', off: 'notion',
+    costs:
+      'The office stops being able to read Notion. Pages it already imported ' +
+      'stay — ADR-0013: a route may be closed and the corpus is kept.',
+    revokeAt: 'https://www.notion.so/profile/integrations',
+  },
   github: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
   openrouter: { how: 'tab', to: 'models', label: 'Set up in Models' },
   supabase: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
