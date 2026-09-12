@@ -178,7 +178,7 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-266 migrations · 958 unit tests · ~48 live suites, all green.
+273 migrations · 958 unit tests · ~51 live suites, all green.
 
 **Since 2026-09-11 the studio can take things back (#118, migrations
 0263-0266).** Every write with an EXACT inverse records it at the moment it
@@ -190,6 +190,36 @@ disconnected service (the credential is deleted from the Vault), a new project
 exactness per action against the live database, and carries a control that
 records a deliberately WRONG inverse and requires the same comparison to catch
 it.
+
+**A write-capable job now says what it would do before it does it (#131,
+migrations 0267-0269).** `Handler.plan()` is computed by the same code path that
+performs the work — `syncTasksToCalendar` was split at exactly that seam — and
+the worker records it against the job before the handler runs, at one
+chokepoint. `app.request_approval` appends it to the blocker, so an approval
+shows the list rather than the category. `npm run verify:dryrun` runs the
+planner with a `fetch` that throws on any outward write, then runs the handler
+with one that counts, and fails a handler that does more than it planned. Not
+yet covered: `office.notion_import`, whose plan depends on a model call and so
+needs the STORED plan to be the thing executed.
+
+**A queued job is no longer invisible (#112, migrations 0270-0271).** Nine
+hourly jobs sat queued for eight hours with a green dashboard, because
+`office_health()` counted complete, failed and in-flight and a job nobody has
+taken is none of those. `verify:worker` now holds the kinds enabled duties
+enqueue against the kinds the real registry declares — `buildPass` exposes them
+— and fails before a deploy rather than eight hours after.
+`app.jobs_stuck_queued()` measures a stall against the period of the duty that
+made the job, `office_health()` reports it, and the studio shows an orange strip
+naming the kind and the age.
+
+**An output can declare its shape (#130, migrations 0272-0273).**
+`public.output_shapes` holds the contract as rows — one authority, because the
+validator has to run where the row is written and every consumer is SQL — and a
+trigger refuses a declared shape whose facts do not match, naming the key and
+what it should have been. `body` stays: prose is what Grant reads. The duties
+that report "nothing changed" now say so in a field. Still prose-only:
+`research_summary`, `tasks_extracted` and `draft_document`, which need their
+handlers taught to ask the model for structure.
 
 **There is no cron and no GitHub Actions.** Grant switched Actions off on
 2026-09-08 — *"for any process"* — and everything scheduled moved to

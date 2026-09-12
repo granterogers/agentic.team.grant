@@ -173,6 +173,28 @@ export interface HandlerOutput {
    * things. Making a handler ASK to interrupt is what makes that true.
    */
   readonly severity?: PagerSeverity
+  /**
+   * The structure beside the prose (#130).
+   *
+   * `outputs.body` is text for every job kind, so a research summary, a list of
+   * extracted tasks and a draft document all arrive as English and every
+   * consumer re-parses it to find out what it got. That is why IMPORT TO
+   * PROJECT (#28) reads sentences, and why a list of extracted tasks cannot
+   * simply become tasks.
+   *
+   * `body` STAYS. Prose is what Grant reads and it is the right thing to send
+   * to Telegram; this sits beside it, never instead of it — an output that is
+   * only structured is an output nobody wants to receive.
+   *
+   * Optional, and absent on most handlers, which is honest: a duty reporting
+   * that the diary already matches has no structure worth declaring. Naming a
+   * shape that `public.output_shapes` does not declare, or facts that do not
+   * match it, FAILS THE JOB at the moment it happens rather than surprising a
+   * reader later — the trigger in 0272 does that, so it holds for every writer
+   * rather than for this one.
+   */
+  readonly shape?: string
+  readonly facts?: Record<string, unknown>
   readonly confidence: Confidence
   readonly evidence: Evidence
   readonly sources: readonly string[]
@@ -619,10 +641,36 @@ export const runJob = async (
     kind: job.kind.startsWith('status.') ? 'status' : 'research_conclusion',
   })
 
-  const { rows } = await db.execute(`
+  /*
+    An output the database refuses is a job failure, here.
+
+    Two rules meet at this insert and both are enforced in the schema: 0023
+    refuses a determinism claim from a job with recorded inference usage, and
+    0272 refuses a declared shape whose facts do not match it (#130). Either
+    raises.
+
+    Left alone that exception came out of `runJob` and took the whole drain with
+    it -- every other job in the pass punished for one handler's mistake. Caught,
+    and turned into a failed job carrying the database's own sentence: "a
+    research_summary output is missing sources" is something the person who wrote
+    the handler can act on, and it lands in `job_state_transitions` where every
+    other failure lands, rather than in a stack trace nobody keeps.
+
+    **This changed the behaviour for the determinism rule too, deliberately.**
+    `verify:worker` used to assert that such a handler made `runJob` THROW; it
+    now asserts the job is failed with the constraint's words, which is the
+    stronger property -- the refusal is what matters and a dead drain never was.
+
+    NOT retried. Both refusals are deterministic: the same handler produces the
+    same rejected row four more times, so a retry is four more model calls for
+    the same answer.
+  */
+  let inserted: { rows: readonly Record<string, unknown>[] }
+  try {
+    inserted = await db.execute(`
     insert into public.outputs
       (job_id, staff_id, body, confidence, evidence, sources, contradictions,
-       deterministic, model)
+       deterministic, model, shape, facts)
     values
       (${lit(job.jobId)}::uuid,
        -- WHO did this. 736 outputs were written before this line existed, every
@@ -642,10 +690,25 @@ export const runJob = async (
        ${lit(JSON.stringify(output.sources))}::jsonb,
        ${output.contradictions === null ? 'null' : lit(output.contradictions)},
        ${String(gate.exempt)},
-       ${output.model === null ? 'null' : lit(output.model)})
+       ${output.model === null ? 'null' : lit(output.model)},
+       -- Together or not at all (#130). A shape with no facts is a claim with
+       -- nothing behind it; facts with no shape are data nobody can interpret.
+       -- The column constraint says the same thing, so a caller that sends one
+       -- is refused rather than half-recorded.
+       ${output.shape === undefined || output.facts === undefined ? 'null' : lit(output.shape)},
+       ${output.shape === undefined || output.facts === undefined ? 'null' : `${lit(JSON.stringify(output.facts))}::jsonb`})
     returning output_id::text as id
   `)
-  const outputId = String(rows[0]?.id)
+  } catch (error) {
+    const said = (error as Error).message.replace(/\s+/g, ' ')
+    await moveTo(db, job.jobId, 'failed', `output refused: ${said.slice(0, 180)}`)
+    await trace(db, job.jobId, 'degradation', {
+      shape: output.shape ?? null,
+      said: said.slice(0, 300),
+    })
+    return { jobId: job.jobId, finalState: 'failed', note: said.slice(0, 200) }
+  }
+  const outputId = String((inserted.rows[0] as { id?: string } | undefined)?.id)
 
   // Before the notifier is anywhere near it. `combinedNotifier` reads
   // `jobs.announce` as its first act, so a handler's verdict has to be on the

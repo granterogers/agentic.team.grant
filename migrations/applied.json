@@ -269,5 +269,7 @@
   "0268_a_plan_is_a_kind_of_trace.sql": "693cdecdc9d62f9344ad1108eb34a6a214b9bde7b115e1a80b94d5129b271ca0",
   "0269_an_approval_carries_the_plan.sql": "e91ca45f07ca91da5a6c6de92a1dacfaa68e2c2e1334eeebc31b4f40ea2f65a5",
   "0270_a_queued_job_is_not_a_failed_job.sql": "f9217e78f164c2e887fa8ec21aa85ae99847c9abdf17f8b8c785c954a618b55a",
-  "0271_the_studio_can_go_orange.sql": "5fa680d359965b9ea41d50087f82750d213ddcae7bc13f85bef31f0ff5845ab5"
+  "0271_the_studio_can_go_orange.sql": "5fa680d359965b9ea41d50087f82750d213ddcae7bc13f85bef31f0ff5845ab5",
+  "0272_an_output_can_declare_its_shape.sql": "7099c7458df2e62e3737d6539c4982aa409f90d4b662387998f66938ec240957",
+  "0273_a_shape_with_no_facts_says_so.sql": "2b80b8c3c976505e04c6ff62a9950283115343bf3a3c09e656304015f217e905"
 }

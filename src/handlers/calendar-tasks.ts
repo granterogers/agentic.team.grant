@@ -69,6 +69,16 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
 
       return {
         body: `Diary and task list: ${outcome.note}.`,
+        /*
+          The structure beside the prose (#130).
+
+          "Nothing changed" is this duty's answer sixteen times a day, and every
+          consumer of it -- the studio, #52's noticing pass, a follow-up asking
+          whether anything came of something -- has had to read the sentence to
+          establish that. The sentence stays; a boolean sits next to it.
+        */
+        shape: 'nothing_happened',
+        facts: { changed: moved > 0, looked_at: moved },
         confidence: 'high',
         evidence: 'verified',
         sources: ['google:calendar'],

@@ -51,8 +51,19 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
   return {
     kind: 'drive.watch',
     handle: async (job: Job): Promise<HandlerOutput> => {
-      const quiet = (body: string): HandlerOutput => ({
+      /*
+        `looked` is not in scope yet where `quiet` is defined, so the count is
+        passed in. Declaring the shape without it would mean a `looked_at` that
+        is always zero -- a structured field that is worse than no field, since
+        a consumer would believe it.
+      */
+      const quiet = (body: string, lookedAt = 0): HandlerOutput => ({
         body,
+        // The structure beside the prose (#130). A ten-minute duty whose usual
+        // answer is "nothing new" is exactly the case where a consumer should
+        // not have to read a sentence to establish it.
+        shape: 'nothing_happened',
+        facts: { changed: false, looked_at: lookedAt },
         // Nothing found is not news. A duty that says "looked, saw nothing"
         // every ten minutes is the hourly repetition `announce` was added to
         // stop — Marcus told Grant "Looked through 2 notebooks. Nothing new."
@@ -184,12 +195,17 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
       }
 
       if (asked === 0) {
-        return quiet(`Looked at ${count(looked, 'Drive folder', 'Drive folders')}. Nothing new.`)
+        return quiet(
+          `Looked at ${count(looked, 'Drive folder', 'Drive folders')}. Nothing new.`,
+          looked,
+        )
       }
       return {
         body: `${count(asked, 'folder has', 'folders have')} something new in ${
           asked === 1 ? 'it' : 'them'
         }. I have asked what to do.`,
+        shape: 'nothing_happened',
+        facts: { changed: true, looked_at: looked },
         // The blocker itself is what reaches him, with its own options on it.
         // This job saying the same thing seconds later is the duplication the
         // instruction handler already had to fix once: "this job goes quiet and

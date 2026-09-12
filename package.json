@@ -118,6 +118,7 @@
     "verify:cross-interface": "tsx scripts/verify/cross-interface.ts",
     "verify:chaos": "tsx scripts/verify/chaos.ts",
     "verify:security": "tsx scripts/verify/security.ts",
+    "verify:shapes": "tsx scripts/verify/shapes.ts",
     "setup:python": "tsx scripts/setup/python.ts",
     "deploy:mcp": "tsx scripts/deploy/mcp.ts",
     "mcp:revoke": "tsx scripts/mcp/revoke.ts",

@@ -293,10 +293,26 @@ record(
 
 await enqueue('research.liar', `fixture-worker-liar-${run}`)
 const liarJob = await dequeue(db, WORKER)
+/*
+  The refusal is what matters, and where it now lands.
+
+  This used to assert that `runJob` THREW. It no longer does: since #130 the
+  worker catches a refused output insert and fails the job with the database's
+  own sentence, rather than letting the exception out and taking the rest of
+  the drain with it -- every other job in the pass punished for one handler's
+  mistake.
+
+  The property asserted is therefore the stronger one. Not "an exception
+  escaped", which is an implementation detail and was never the point, but: the
+  row was refused, the job is FAILED, and the reason recorded against it is the
+  constraint's own words. A caller reading `job_state_transitions` a week later
+  can see why.
+*/
 let liarError = 'no error'
 if (liarJob !== null) {
   try {
-    await runJob(db, liarJob, HANDLERS, approve)
+    const outcome = await runJob(db, liarJob, HANDLERS, approve)
+    liarError = `${outcome.finalState}: ${outcome.note}`
   } catch (error) {
     liarError =
       error instanceof SqlExecutionError || error instanceof Error
@@ -304,6 +320,14 @@ if (liarJob !== null) {
         : String(error)
   }
 }
+const liarState =
+  liarJob === null
+    ? undefined
+    : ((
+        await db.execute(`
+          select state, state_reason from public.jobs where job_id = ${lit(liarJob.jobId)}::uuid
+        `)
+      ).rows[0] as { state: string; state_reason: string } | undefined)
 record(
   'a handler claiming a deterministic path while naming a model is refused at the insert',
   // The job id is in the outcome because "no error" was ambiguous between "the
@@ -311,6 +335,29 @@ record(
   // check whose failure you cannot attribute is barely better than no check.
   `${liarJob === null ? 'NOTHING DEQUEUED' : liarJob.jobId.slice(0, 8)}: ${liarError.slice(0, 120)}`,
   liarError.includes('cannot be marked deterministic'),
+)
+record(
+  'and the job is left FAILED with that reason, rather than the drain dying',
+  liarState === undefined
+    ? 'NOTHING DEQUEUED'
+    : `${liarState.state}: ${String(liarState.state_reason).slice(0, 90)}`,
+  liarState?.state === 'failed' &&
+    String(liarState.state_reason).includes('cannot be marked deterministic'),
+)
+/*
+  And nothing was written. A refusal that leaves a half-row behind would be
+  worse than one that throws, because the row is what every consumer reads.
+*/
+const liarLeft = (
+  await db.execute(`
+    select count(*)::int as n from public.outputs
+     where job_id = ${lit(liarJob?.jobId ?? '00000000-0000-4000-8000-000000000000')}::uuid
+  `)
+).rows[0] as { n: number }
+record(
+  'and no output row survives the refusal',
+  `${String(liarLeft.n)} output(s)`,
+  Number(liarLeft.n) === 0,
 )
 
 // ===========================================================================

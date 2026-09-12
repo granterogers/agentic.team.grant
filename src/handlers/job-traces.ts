@@ -47,6 +47,14 @@ export function jobTracesHandler(db: SqlExecutor): Handler {
       const out = row.r
 
       const base = {
+        /*
+          The structure beside the prose (#130). "Nothing to do" is the normal
+          answer for a cleanup duty, and until now establishing that meant
+          reading the sentence -- which is what #28's import step has been doing
+          to work out what it received.
+        */
+        shape: 'nothing_happened' as const,
+        facts: { changed: out.removed > 0, looked_at: out.removed },
         confidence: 'high' as const,
         evidence: 'verified' as const,
         sources: [`job:${job.jobId}`],
