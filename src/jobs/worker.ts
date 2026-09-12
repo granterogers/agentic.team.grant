@@ -568,11 +568,49 @@ export const runJob = async (
     output = await handler.handle(job, db)
   } catch (error) {
     const retryable = job.attempt < 4
+    /*
+      Recognise it (#132).
+
+      A failure the office has already seen is a different thing from a new one,
+      and until now there was no way to tell: the same `notebook.collect_artifact`
+      failure would be retried, fail identically, and leave nothing behind but
+      another row in a flat log.
+
+      The MESSAGE goes in and never comes out -- `failure_seen` classifies it
+      into one of nine words and discards it, and `failure_signatures` has no
+      text column to keep it in. Same discipline as the trace above, enforced by
+      the schema rather than by remembering.
+
+      Never throws, for the reason every observability call here does not: a job
+      that failed and then failed again writing down that it failed is the worst
+      bug available in this file.
+    */
+    let recognised: { note?: string; seen?: number } = {}
+    try {
+      const said = (
+        await db.execute(
+          `select app.failure_seen(${lit(job.kind)}, ${lit((error as Error).message.slice(0, 500))},
+             ${job.projectId === null ? 'null' : lit(job.projectId)},
+             ${lit(job.jobId)}::uuid) as r`,
+        )
+      ).rows[0] as { r: { note?: string; seen?: number } }
+      recognised = said.r
+    } catch {
+      /* Recognising a failure must never be a second failure. */
+    }
     await trace(
       db,
       job.jobId,
       'degradation',
-      { threw: (error as Error).message.slice(0, 300), retryable },
+      {
+        threw: (error as Error).message.slice(0, 300),
+        retryable,
+        // "this has failed the same way eleven times" is the thing worth
+        // reading, and it is why the count is recorded rather than just the
+        // failure.
+        seen: recognised.seen ?? null,
+        recognised: recognised.note ?? null,
+      },
       { ms: Date.now() - startedAt },
     )
     await moveTo(
