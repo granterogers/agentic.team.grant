@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **297 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **299 applied.**
 
 ---
 
@@ -461,6 +461,21 @@ Each of these cost real time. They are here so they cost it once.
   `p_include_fixtures` parameter the tally already had (0297) so the real path
   can still be driven. This is the OPPOSITE of #45's advice, and the deciding
   question is which one the thing under test filters.
+- **A registry row can claim anything, so the claim needs a column that names
+  what performs it.** `tool_permissions` listed `web.search`, level 0, ENABLED,
+  with nothing in the repository implementing it — and `capabilityBrief` builds
+  every agent's prompt from that table, so all eight were told they could search
+  the web. #64 with the sign reversed, which is worse: being told NO about
+  something possible costs a feature request; being told YES about something
+  impossible costs the work, silently, and Grant finds out when nothing arrives.
+  `delivered_by` plus a check constraint (0298) makes the claim checkable.
+  Disable such a row, never delete it: a listed gap can become a proposal
+  (#49), a deleted one cannot.
+- **`public.skills` and `public.job_impediments` are append-only, so a suite
+  RETIRES its subject.** `app.retire_skill` is the withdrawal path, and using it
+  in teardown is better than a DELETE would have been — it exercises the
+  mechanism a person actually has. Assert that the subject is no longer LIVE
+  (`skills_live`, or excluded from the tally), never that the row is gone.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

@@ -178,7 +178,25 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-297 migrations · 976 unit tests · ~64 live suites, all green.
+299 migrations · 976 unit tests · ~65 live suites, all green.
+
+**The office gained a capability without a coding session (#50, migrations
+0298-0299).** The epic's own acceptance box, done rather than simulated: Emma
+authored *"Research a topic with the reach we already have"* through
+`app.teach_skill` — no migration, no deploy, no handler — and it comes back from
+`app.skills_for` on her next job with `missing: []`, because it was written
+against reach she actually holds. Found on the way: **`tool_permissions` listed
+`web.search`, level 0, ENABLED, and nothing implements it** — so every agent's
+sheet told it that it could search the web. That is #64 with the sign reversed,
+and reversed is worse: being told no about something possible costs a feature
+request, being told yes about something impossible costs the work, silently.
+0298 adds `delivered_by`, fills it for all fifteen real tools, disables
+`web.search` with the reason (disabled and NOT deleted — a listed gap can become
+a proposal, a deleted one cannot), and adds a constraint so an enabled tool must
+name what performs it. `npm run verify:acquire` (11 checks) proves the whole
+chain including the half that makes it safe: authoring a skill that names
+`web.search` and `spend.money` changes nothing about what the agent holds, and
+`staff_may_use` still refuses.
 
 **The office says what it understood, and asks for what it needs (#47, #49,
 migrations 0295-0297).** `jobs.understood_as` is the agent's own one-sentence

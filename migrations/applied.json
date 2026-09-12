@@ -295,5 +295,7 @@
   "0294_delegation_that_leaves_a_trace.sql": "92dfcb150e834bc981ee7ff8d3097038e4295503dec2d97672475b5314147dab",
   "0295_a_proposal_is_a_row_not_a_message.sql": "fa33b294e459626faab908341b723c5cb65a156fc88010c5b4360f8674af7f65",
   "0296_the_job_says_what_it_understood.sql": "eae8946cfc244592aa88b503971a5503131017348004cdc6cadd68aaf97a64d4",
-  "0297_a_proposal_pass_that_can_be_tested.sql": "bca482aa853d2a66eb1deac20d89f1f00aee21e22e499fd64bfea2e8d650d3ed"
+  "0297_a_proposal_pass_that_can_be_tested.sql": "bca482aa853d2a66eb1deac20d89f1f00aee21e22e499fd64bfea2e8d650d3ed",
+  "0298_a_tool_names_what_delivers_it.sql": "f00cd47379139c32532f024d242013cbcc54bc691637eeb28312fb76c0727de9",
+  "0299_the_gmail_module_is_called_mail.sql": "5126e0b7fa6054811e3ad711a3ba4b91bf59c6fd10886341e9e10b79ef5bb518"
 }

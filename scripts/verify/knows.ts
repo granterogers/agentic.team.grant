@@ -211,6 +211,82 @@ if (writes.length === 0) {
   )
 }
 
+// ===========================================================================
+console.log('\nand a tool the office cannot perform is not offered')
+
+/*
+  #50 and #51, found while closing #64 and the same bug one layer down.
+
+  `tool_permissions` listed `web.search`, level 0, ENABLED — and nothing in the
+  repository implements it. `capabilityBrief` builds every agent's sheet from
+  this table, so all eight were being told in their prompts that they could
+  search the web. Asked to research something, the honest answer is "I can look
+  through what we hold" and the answer they would give is "I'll search".
+
+  That is #64 with the sign reversed, and reversed is worse: being told NO
+  about something possible costs a feature request, being told YES about
+  something impossible costs the work, silently.
+
+  0298 added `delivered_by` so the claim is checkable rather than assertable,
+  with a constraint behind it. This asserts the property the constraint
+  protects, because a constraint can be dropped by the next migration that
+  finds it inconvenient.
+*/
+const claimed = (
+  await db.execute(`
+    select tool, enabled, delivered_by, coalesce(disabled_reason, '') as why
+      from public.tool_permissions order by tool
+  `)
+).rows as { tool: string; enabled: boolean; delivered_by: string; why: string }[]
+
+const hollow = claimed.filter((t) => t.enabled && t.delivered_by.trim() === '')
+check(
+  'every enabled tool names what actually performs it',
+  hollow.length === 0
+    ? `${String(claimed.filter((t) => t.enabled).length)} enabled, all delivered`
+    : `CLAIMED WITHOUT AN IMPLEMENTATION: ${hollow.map((t) => t.tool).join(', ')}`,
+  hollow.length === 0,
+)
+
+/*
+  And the specific one, by name. A general invariant passes the day somebody
+  writes `delivered_by = 'the office'` on a row that does nothing, so the case
+  that was actually wrong is pinned separately.
+*/
+const web = claimed.find((t) => t.tool === 'web.search')
+check(
+  'web.search is off, and says why rather than vanishing',
+  web === undefined
+    ? 'the row is gone'
+    : `enabled=${String(web.enabled)} — ${web.why.slice(0, 70)}`,
+  web !== undefined && !web.enabled && web.why.length > 20,
+)
+
+/*
+  It moves from CAN to CANNOT — it does not disappear.
+
+  The first version of this check asserted the string `web.search` never
+  appears in the sheet at all, and failed against correct code. Being told
+  "you cannot search the web, and here is why" is exactly what #64 asks for:
+  the rule is that an agent must not claim it CAN do something it cannot, and
+  a stated limitation with a reason is the honest opposite of that. A sheet
+  that simply omitted the tool would leave the agent guessing again.
+
+  Disabled and not deleted for the same reason one level up: a listed gap can
+  become a proposal (#49), a deleted one cannot.
+*/
+const emma = await capabilityNow(db, 'research-director')
+check(
+  'no agent is told it CAN search the web',
+  emma.can.some((c) => c.tool === 'web.search') ? 'IT IS IN THE CAN LIST' : 'not in can',
+  !emma.can.some((c) => c.tool === 'web.search'),
+)
+check(
+  'and it is told it cannot, with the reason, rather than left to guess',
+  emma.cannot.find((c) => c.tool === 'web.search')?.why.slice(0, 60) ?? 'NOT MENTIONED AT ALL',
+  emma.cannot.some((c) => c.tool === 'web.search' && c.why.length > 20),
+)
+
 const failed = checks.filter((c) => !c).length
 console.log(`\n${String(checks.length - failed)}/${String(checks.length)} checks passed`)
 process.exit(failed === 0 ? 0 : 1)
