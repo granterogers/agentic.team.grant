@@ -13,13 +13,13 @@
 >
 > | | |
 > |---|---|
-> | Tests | 935 passing · `verify:ui` **57/57** · `verify:hq` 39/39 · `verify:talk` **36/36** · `verify:design` 13/13 · `verify:boundary` 57/57 |
+> | Tests | 935 passing · `verify:ui` **57/57** · `verify:hq` 39/39 · `verify:talk` **36/36** · `verify:design` 13/13 · `verify:boundary` 57/57 · `verify:layouts` **38 states, 0 findings** · `verify:wired` **47 controls, none dead** · `verify:arrangement` **6/6** · `verify:disconnect` **23/23** |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | 249 applied |
+> | Migrations | **252 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -44,10 +44,21 @@
 > write, and `app.staff_may_use()` reads neither skills nor lessons, asserted
 > behaviourally and structurally.
 >
-> **Overnight, 11–12 September.** Twenty-two of the thirty UX-review items are
-> closed, plus #11 and #24 which turned out to be blockers. Google Calendar
+> **Overnight, 11–12 September.** Twenty-seven of the thirty UX-review items
+> are closed, plus #11 and #24 which turned out to be blockers. Google Calendar
 > sync is built and **switched off** — turn it on at Settings → Behaviour →
 > *"Put dated tasks in my Google Calendar"*. Everything else is live.
+>
+> The last five of that night: **#103** the dock — a fixed column that keeps a
+> conversation with the team open while you move around, reaching `/voice/turn`
+> like the call does · **#81** dashboard arrangements now live in Supabase
+> rather than `localStorage`, which is **ADR-0021** and the rule for everything
+> customisable after it · **#90** Disconnect works for Notion and NotebookLM as
+> well as Google, refuses honestly where there is no safe disconnect, and says
+> where to revoke at the provider because Postgres cannot · **#108** dashboard
+> panels stopped clipping their own content mid-word · **#107** a contact shows
+> the labels its role already names, so no chip reads zero beside somebody who
+> plainly belongs in it.
 >
 > Two things to know before reading further:
 >
@@ -74,11 +85,26 @@
 > not have been fixed as written**: there was no dark-mode setting to fix —
 > every palette's dark tokens lived only inside `prefers-color-scheme`.
 >
-> **Three new checks, each written because something passed while broken.**
+> **Six new checks, each written because something passed while broken.**
 > `check:templates` parses every `web/**/*.js` as a module and refuses a
 > backtick in an HTML comment. `verify:wired` fails on a control no source
-> file looks up. And `verify:talk` now counts live audio tracks across every
+> file looks up. `verify:talk` now counts live audio tracks across every
 > stream the stub handed out, including ones the page has forgotten.
+> `verify:layouts` fails when a box hides content and gives the eye neither a
+> real scrollbar gutter nor a marker — the third clipping-class defect a green
+> suite had missed. `verify:arrangement` asserts what LEAVES the page, because
+> a layout saved only to `localStorage` drags, snaps, survives a reload and
+> captures perfectly, and is wrong only on the second device. And
+> `verify:disconnect` checks a destructive action **without being
+> destructive**: every SQL assertion runs inside `begin … rollback`, the page's
+> own payload is read back inside the transaction, and it then re-asserts that
+> the real credentials are still there.
+>
+> **Each of the three new suites was proved by putting its bug back.**
+> `verify:layouts` reported 2192px of Documents hidden with nothing to say so;
+> `verify:arrangement` went to 1/6; and `verify:disconnect` needs no such
+> demonstration because it deletes a real credential and rolls it back on
+> every run.
 >
 > **The backlog is current as of 11 September.** Every issue verified complete
 > was closed with the evidence in a comment rather than a tick — #9, #48, #52,
