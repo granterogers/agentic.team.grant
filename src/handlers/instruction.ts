@@ -1012,14 +1012,43 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         rate look healthy while nothing was delegated at all.
       */
       if (who.slug !== 'chief-of-staff' && (payload.addressed_to ?? '') === '') {
-        await deps.db
+        /*
+          Through `app.record_consultation`, which takes SLUGS.
+
+          The previous version wrote the INSERT by hand and had never once
+          succeeded: `consulted_staff` and `requested_by` are uuids, and it
+          passed a `text[]` and the string 'chief-of-staff'. Every hand-off
+          since the code landed raised, and the `.catch(() => undefined)`
+          below swallowed it — so §9's consultation table stayed empty while
+          the code read as finished, and #65's box stayed red for a reason
+          nobody could see.
+
+          A swallowed error on a write nobody reads back is indistinguishable
+          from a feature that was never built. So the RPC does the resolution
+          (one place, impossible to get wrong from here), and a refusal is
+          recorded as an impediment rather than discarded — it is still not
+          allowed to fail the job, because Grant's actual work must not stop
+          because bookkeeping did.
+        */
+        const said = await deps.db
           .execute(`
-            insert into public.consultations
-              (job_id, consulted_staff, requested_by, reason, provider_requests)
-            values (${lit(job.jobId)}::uuid, array[${lit(who.slug)}]::text[],
-                    'chief-of-staff', ${lit(who.reason)}, 0)
+            select public.record_consultation(${lit(job.jobId)}::uuid, ${lit(who.slug)},
+              'chief-of-staff', ${lit(who.reason)}, 0) as r
           `)
-          .catch(() => undefined)
+          .catch((error: unknown) => ({
+            rows: [{ r: { error: (error as Error).message.slice(0, 200) } }],
+          }))
+        const answer = (said.rows[0] as { r?: { error?: string } } | undefined)?.r
+        if (answer?.error !== undefined) {
+          await deps.db
+            .execute(`
+              select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                'record-consultation', 'chief-of-staff',
+                ${lit(`could not record the hand-off to ${who.slug}: ${answer.error}`)},
+                ${lit(instruction.slice(0, 280))})
+            `)
+            .catch(() => undefined)
+        }
       }
 
       // Is this several things at once? If so, say it back and hold it.

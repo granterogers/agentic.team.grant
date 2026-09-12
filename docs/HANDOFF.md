@@ -178,7 +178,27 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-293 migrations · 976 unit tests · ~60 live suites, all green.
+294 migrations · 976 unit tests · ~61 live suites, all green.
+
+**Delegation leaves a trace (#65, migration 0294).** Re-measured against the
+Issue's own numbers: jobs addressed had moved from 0/499 to 9/856 and four of
+those went to a specialist, so the CHOOSING was real — but `consultations` was
+still 0 and outputs with no author had gone from 140 to 1,060. The reason for
+the first: the hand-written INSERT passed a `text[]` and a slug where two UUIDs
+belong, so it raised on **every** hand-off, and the call site ended
+`.catch(() => undefined)`. A swallowed error on a write nobody reads back is
+indistinguishable from a feature that was never built. It goes through
+`app.record_consultation` now, which takes slugs and does the resolution once,
+refuses consulting yourself (which would make the rate look healthy) and a name
+nobody answers to; a refusal is recorded as an impediment rather than
+discarded. `app.judge_consultation` fills `changed_outcome` from the review the
+output already gets, and records in `outcome_note` what it inferred it from, so
+weak evidence is not later mistaken for strong. An output with no author now
+takes the job's `recipient_agent` by trigger rather than by editing 28 handlers
+— history is deliberately NOT backfilled, because nothing recorded who wrote
+those and a name Grant would read as fact is worse than the gap.
+`app.delegation_health` answers the Issue in the numbers it was filed with, and
+`npm run verify:handoff` reports the rate rather than asserting a threshold.
 
 **Claire has a conversation, and says back everything she was asked (#63, #60,
 `verify:conversation`).** Both mechanisms were built in an earlier session and

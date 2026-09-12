@@ -291,5 +291,6 @@
   "0290_an_answered_job_takes_the_legal_road_back.sql": "ef2e9aac4f9844e612f495e24bed2d75bdd6ca4b219dc4c42d951e7834ef3ab6",
   "0291_the_latest_switch_is_the_one_that_counts.sql": "7661875db0b39ab73f403201e095a0144175d67d15ef864018e1370407bde64e",
   "0292_a_debris_projects_switches_are_debris_too.sql": "bec31c0ef195712a546a74135fb0fc1cee9243fc13060a7c76daaedf1dba736a",
-  "0293_the_front_door_agrees_with_the_lock.sql": "0f6a0599fdb64cb59b7a747cf26a1b900381faae4236c0cf15f5e9593a1410ae"
+  "0293_the_front_door_agrees_with_the_lock.sql": "0f6a0599fdb64cb59b7a747cf26a1b900381faae4236c0cf15f5e9593a1410ae",
+  "0294_delegation_that_leaves_a_trace.sql": "92dfcb150e834bc981ee7ff8d3097038e4295503dec2d97672475b5314147dab"
 }

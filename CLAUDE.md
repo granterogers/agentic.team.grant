@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **293 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **294 applied.**
 
 ---
 
@@ -443,6 +443,15 @@ Each of these cost real time. They are here so they cost it once.
   reached Grant's project switcher. Name the extra subject so the run stays
   where the prefix expects it (`Identity proof <run> rival`), rather than
   widening the teardown.
+- **A swallowed error on a write nobody reads back is indistinguishable from a
+  feature that was never built.** `consultations` had never held a row and the
+  code that writes it looked finished: it passed a `text[]` and a slug where
+  two UUIDs belong, raised on every single hand-off, and ended
+  `.catch(() => undefined)`. §9's whole question — is convening specialists
+  worth it — was unanswerable for weeks because of one silent catch. If a write
+  is allowed to fail without failing the job, record the failure somewhere
+  (`app.cannot`), and prefer an RPC that takes the vocabulary the CALLER has
+  over an INSERT that makes the caller know the column types.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 
