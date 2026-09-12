@@ -300,5 +300,7 @@
   "0299_the_gmail_module_is_called_mail.sql": "5126e0b7fa6054811e3ad711a3ba4b91bf59c6fd10886341e9e10b79ef5bb518",
   "0300_what_a_connector_can_do_and_what_we_use.sql": "2179d01cbf6b8009eff017071e4976ad75a92eda975fb0538e0184257a9623dc",
   "0301_an_agent_can_say_what_its_connectors_do.sql": "18d098ed1aff2482b37983ae121f1f16394087d303bef4fc893fc176b29794d1",
-  "0302_what_the_office_learned_and_why.sql": "997685183838ff30710124c66111bbec00dfeb8b333cff199548af58ba8ba8dd"
+  "0302_what_the_office_learned_and_why.sql": "997685183838ff30710124c66111bbec00dfeb8b333cff199548af58ba8ba8dd",
+  "0303_a_probe_is_not_a_wall_the_office_hit.sql": "0dc6de5cff9e134f5af3bd2a578fa29a0bcabb3893b0328e4ac5f4fb493ae6d7",
+  "0304_either_half_may_say_it_is_a_fixture.sql": "bd3419f99308202420824dda740d82dd027059951257876bf6cfa1508dc8a60f"
 }

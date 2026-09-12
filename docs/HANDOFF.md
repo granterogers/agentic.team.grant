@@ -178,7 +178,26 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-302 migrations · 976 unit tests · ~67 live suites, all green.
+304 migrations · 976 unit tests · ~67 live suites, all green.
+
+**The Governance page shipped with harness debris on it, and it is fixed
+(0303-0304).** An hour after #54 went live, a status sweep found Ruby's card
+reading *"probe-need-j4je9xrc — the office has no such tool — 8x"*: five rows of
+`verify:proposes` debris on the surface built to make the office legible, which
+is the exact trap `jobs.is_fixture` exists to prevent. `app.office_health()` was
+separately reporting fourteen stalled research jobs from the same crashed run.
+
+The cause is worth keeping: `job_impediments.is_fixture` is a copy taken from
+the job by trigger at insert, and §6 then refuses UPDATE — so once the job's
+attribution was corrected, the copy stayed wrong for ever. The tally now asks
+the job as well, whose `is_fixture` is generated and always current. The first
+attempt used `coalesce` (job first, copy as fallback) and put two rows BACK on
+the page, because their copy said fixture and their job said real; the rule is
+that **either witness may exclude and neither may include**, so it is `or`
+(0304). Nothing was deleted — all 105 impediment rows are still on the ledger,
+41 of them visible through `p_include_fixtures`, and none counted as work.
+`verify:governs` is 24 checks now: one asserts no name on the page matches a
+probe pattern, and one asserts the two-witness rule directly.
 
 **Grant can see what the office learned, and change it (#54, migration 0302).**
 The last child of #46, and the one that makes the rest of that epic safe rather

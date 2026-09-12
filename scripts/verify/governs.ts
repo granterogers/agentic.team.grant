@@ -414,6 +414,56 @@ try {
     `${String(agents.filter((a) => (a.tried_and_could_not ?? []).length > 0).length)} of ${String(agents.length)} have hit one`,
     agents.every((a) => Array.isArray(a.tried_and_could_not)),
   )
+
+  /*
+    And not one of them is a probe.
+
+    This is the check that was missing when #54 shipped. Ruby's card read
+    "probe-need-j4je9xrc — the office has no such tool — 8x" on the live page
+    for an hour: five rows of `verify:proposes` debris presented as things a
+    member of staff had genuinely been stopped by. Everything above passed
+    while it did, because everything above asked whether the list was an array.
+
+    Asserted on the SHAPE OF THE NAME rather than on a count, because a count
+    is a moving target — the office should hit real walls, and a check that
+    says "zero walls" would fail the day #49 starts working properly.
+  */
+  const debris = agents.flatMap((a) =>
+    ((a.tried_and_could_not as { needed?: string }[] | undefined) ?? [])
+      .map((w) => String(w.needed ?? ''))
+      .filter((n) => /^(?:probe|fixture|verify)[-:]/i.test(n)),
+  )
+  check(
+    'and not one of those walls is harness debris',
+    debris.length === 0 ? 'none' : `ON THE PAGE: ${debris.slice(0, 4).join(', ')}`,
+    debris.length === 0,
+  )
+
+  /*
+    The rule underneath it, asserted directly (0303-0304).
+
+    Two witnesses to whether a row is harness traffic: the job's `is_fixture`,
+    which is GENERATED and always current, and the ledger's copy, frozen at
+    insert by §6 and correctable never. Each may only EXCLUDE. 0303 used
+    `coalesce` — job first, ledger as fallback — and two rows whose ledger copy
+    said fixture and whose job said real came back onto the page it was written
+    to clear.
+
+    So: every row the real tally returns must be denied by BOTH.
+  */
+  const witnesses = await one(`
+    select count(*)::int as n
+      from app.impediments_tally(3650, 1, false) t
+      join public.job_impediments i
+        on i.kind = t.kind and i.needed = t.needed and i.staff_slug = t.staff_slug
+      left join public.jobs j on j.job_id = i.job_id
+     where i.is_fixture or coalesce(j.is_fixture, false)
+  `)
+  check(
+    'a row either witness calls a fixture never reaches the real tally',
+    `${String(witnesses.n)} row(s) got through`,
+    Number(witnesses.n) === 0,
+  )
 } finally {
   // =======================================================================
   console.log('\nteardown')

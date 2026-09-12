@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **302 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **304 applied.**
 
 ---
 
@@ -511,6 +511,28 @@ Each of these cost real time. They are here so they cost it once.
   governance page put `esc(s.because)` on Grant's screen. Query
   `information_schema` for the TYPE before writing the renderer, the same rule
   as for the column name.
+- **A denormalised flag on an append-only table is a fact frozen at insert.**
+  `job_impediments.is_fixture` is COPIED from the job by trigger, and §6's
+  triggers then refuse UPDATE — so when the job's attribution is corrected
+  afterwards, the copy stays wrong for ever. Five rows of `verify:proposes`
+  debris sat on Grant's Governance page for an hour saying Ruby had tried and
+  could not do `probe-need-j4je9xrc` eight times, which is the harness-traffic
+  trap on the surface built to make the office legible. Join to the thing that
+  can still tell the truth (0303).
+- **When two sources disagree and one is append-only, ask which direction each
+  can lie in — `coalesce` assumes they are symmetric and they rarely are.**
+  0303's fix read the job first and the frozen copy as a fallback, and put two
+  rows BACK on the page it was written to clear: their ledger copy said fixture
+  and their job, named `impediment-proof-…`, said real. Both flags can
+  truthfully say "harness traffic" and neither can be trusted to say "real", so
+  the rule is `or`, not `coalesce` (0304). The asymmetry is what makes it safe:
+  a witness that can only ever exclude cannot hide a genuine finding.
+- **A check that asks whether a list is an ARRAY passes while the list is
+  wrong.** `verify:governs` asserted `Array.isArray(tried_and_could_not)` for
+  all eight agents and was green throughout the hour the probe rows were live.
+  Assert the shape of what is IN it — and against a moving target, assert the
+  property rather than a count: "no name matching probe/fixture/verify" holds
+  for ever, "zero walls" fails the day #49 starts working.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 
