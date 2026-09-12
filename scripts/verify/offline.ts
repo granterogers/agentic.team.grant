@@ -149,7 +149,10 @@ const open = async (
     })()`)) as { label: string; say: string; tone: string; retry: boolean }
 
   if (process.env.SHOT === '1') {
-    await page.screenshot({ path: `.out/offline-${mode}.png`, clip: { x: 0, y: 0, width: 1440, height: 420 } })
+    await page.screenshot({
+      path: `.out/offline-${mode}.png`,
+      clip: { x: 0, y: 0, width: 1440, height: 420 },
+    })
   }
   const now = await read()
   return {

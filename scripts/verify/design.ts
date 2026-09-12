@@ -158,7 +158,7 @@ try {
 ok(
   'the deployed page serves the designed frontend',
   served,
-  'nothing at ' + LIVE + '/studio/ — the design is on disk and not shipped, which is #68 exactly',
+  `nothing at ${LIVE}/studio/ — the design is on disk and not shipped, which is #68 exactly`,
 )
 
 for (const p of PRIMITIVES) {
@@ -193,13 +193,11 @@ for (const p of PRIMITIVES) {
   An existence check rather than a line-count ceiling, which is what this was
   while the file was still alive.
 */
-{
-  ok(
-    'there is one frontend, not two',
-    !existsSync('web/hq/index.html'),
-    'web/hq/index.html is back — ADR-0019 says features go in the studio',
-  )
-}
+ok(
+  'there is one frontend, not two',
+  !existsSync('web/hq/index.html'),
+  'web/hq/index.html is back — ADR-0019 says features go in the studio',
+)
 
 /*
   And the studio can still be looked at without a backend.

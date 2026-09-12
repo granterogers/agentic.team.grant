@@ -138,12 +138,10 @@ ok(
   )
 }
 
-{
-  await db.execute(`
-    select public.job_cannot(${lit(jid)}::uuid, 'missing_data', ${lit(SOLO)},
-      ${lit(who)}, 'Seen exactly once.')
-  `)
-}
+await db.execute(`
+  select public.job_cannot(${lit(jid)}::uuid, 'missing_data', ${lit(SOLO)},
+    ${lit(who)}, 'Seen exactly once.')
+`)
 
 // --- the countable handle ---------------------------------------------------
 

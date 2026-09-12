@@ -26,6 +26,12 @@
   styling one.
 -->
 <div class="dock" id="dock" hidden></div>
+<!--
+  The way back (#118). Outside #root for the same reason the dock is: render()
+  replaces everything inside it after every write, which is precisely when this
+  exists, and moving between tabs while deciding whether to undo is normal.
+-->
+<div class="undobar" id="undobar" role="status" hidden></div>
 <div class="viewer" id="settings" hidden></div>
 <div class="viewer" id="viewer" hidden></div>
 <script type="module" src="./app.js"></script>

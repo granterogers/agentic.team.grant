@@ -64,15 +64,15 @@ const db = new ManagementApiExecutor(
 const studio = (
   (await db.execute('select app.hq_studio() as d')).rows[0] as {
     d: {
-    projects: {
-      slug: string
-      name: string
-      layout: unknown
-      icon: string | null
-      iconHue: string | null
-      image: string | null
-    }[]
-  }
+      projects: {
+        slug: string
+        name: string
+        layout: unknown
+        icon: string | null
+        iconHue: string | null
+        image: string | null
+      }[]
+    }
   }
 ).d
 const subject = studio.projects[0]
@@ -295,11 +295,7 @@ check(
   `${String(grid.icons)} marks, ${String(grid.hues)} colours`,
   grid.icons >= 28 && grid.hues === 6,
 )
-check(
-  'and shows which one is already chosen',
-  grid.on,
-  grid.on === 'rocket',
-)
+check('and shows which one is already chosen', grid.on, grid.on === 'rocket')
 
 const before = sent.length
 await page.evaluate(`document.querySelector('[data-look-icon="leaf"]')?.click()`)

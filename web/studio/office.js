@@ -70,6 +70,26 @@ export const canWrite = () => token.get() !== ''
  * different thing from a transport failure and reads identically to a caller,
  * so both become an exception here and neither is swallowed.
  */
+/*
+  What happens after any successful write (#118).
+
+  A callback rather than an import, because the thing that wants to know is
+  `undo.js` and `undo.js` calls `act` — importing it here would be a cycle. It
+  is also the honest shape: this module talks to the office and does not know
+  what the page does about it.
+
+  One chokepoint matters more than it looks. Every write in the studio goes
+  through `act`, so hooking it here means no button anywhere has to remember
+  that undo exists, and the fifteenth action added next month gets it for free.
+  A per-button opt-in would have been forgotten by the third one.
+*/
+let afterWrite = () => {}
+
+/** Register what to do after any successful write. Replaces any previous. */
+export function onWrite(fn) {
+  afterWrite = typeof fn === 'function' ? fn : () => {}
+}
+
 export async function act(action, args = {}) {
   const r = await fetch(API, {
     method: 'POST',
@@ -86,6 +106,14 @@ export async function act(action, args = {}) {
   }
   if (!r.ok) throw new Error(body.error ?? `The server returned ${r.status}`)
   if (body.result?.error) throw new Error(body.result.error)
+  // Only on the way out, and only after both refusal checks: an action that was
+  // refused changed nothing, and offering to take back nothing is a lie.
+  try {
+    afterWrite(action, body.result)
+  } catch {
+    // A page that cannot show its undo strip must not turn a successful write
+    // into a failed one.
+  }
   return body.result
 }
 

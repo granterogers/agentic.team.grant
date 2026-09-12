@@ -260,5 +260,9 @@
   "0259_something_that_measures_an_answer.sql": "7a673f6d3047129a9d305a93ecf7fbc61a69cffba78f251213179e874f46d6d1",
   "0260_a_fair_grader_needs_the_facts.sql": "650ac00983d6722cdb57b8d53340cbc96ce40764cb0ee980d78a2f734c520a4b",
   "0261_the_grader_cannot_know_what_the_office_holds.sql": "80f2ff56672434eff8b809839e616bebd310ff43e3942384433f03aa4212abb7",
-  "0262_a_cheap_way_to_ask_whether_anything_changed.sql": "e483a022c0f1fb66f564813322332ba90ebc8d6afcf4c8063aad57e4b460e386"
+  "0262_a_cheap_way_to_ask_whether_anything_changed.sql": "e483a022c0f1fb66f564813322332ba90ebc8d6afcf4c8063aad57e4b460e386",
+  "0263_an_undo_that_records_its_own_inverse.sql": "7e038c557ccac2e4f9e207e33bd1aa6bddaa02b971c26597e92d8ce721347d21",
+  "0264_appending_to_an_array_is_not_a_concatenation.sql": "e74f324db3892b013cd8915b09debbad12bab88a2d7e4647b1a388567120a459",
+  "0265_the_loser_of_the_claim_must_not_also_act.sql": "ac0cc906824796ce80d27c39f88ec7fe0f3e0ac7059285b833064a7cd1b10220",
+  "0266_a_fixture_project_has_no_channels_to_rename.sql": "36f696d478cd9ec2e671fcc116837b76ad185d54f2c712774a272ff15ba93f68"
 }

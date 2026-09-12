@@ -280,6 +280,24 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.
   routing_set: { fn: 'hq_routing_set', required: ['p_what', 'p_value'] },
+  /*
+    Taking something back (#118, migrations 0263-0265).
+
+    Every write above that has an EXACT inverse now records it at the moment it
+    still knows the previous value, and answers with an `undo` id. This is the
+    action that spends one.
+
+    It is on the configuring side of the line by construction: it can only
+    perform a reversal that some other action here already recorded, so it can
+    never do anything those actions could not.
+
+    `reattach` is its one companion — the exact inverse of `detach`, which
+    re-enables the same row rather than attaching the same reference again. It
+    is listed so that undoing a detach goes through the same door as everything
+    else rather than through a private one.
+  */
+  undo: { fn: 'hq_undo', required: ['p_action_id'] },
+  reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
 }
 
 /**

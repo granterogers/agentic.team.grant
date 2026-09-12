@@ -64,7 +64,9 @@ for (const [name, fn, args] of [
   ['usage_overview', 'usage_overview', '30'],
   ['studio_setup', 'hq_setup', ''],
 ] as const) {
-  sections[name] = ((await db.execute(`select app.${fn}(${args}) as d`)).rows[0] as { d: unknown }).d
+  sections[name] = (
+    (await db.execute(`select app.${fn}(${args}) as d`)).rows[0] as { d: unknown }
+  ).d
 }
 
 const server = createServer(async (rq, rs) => {

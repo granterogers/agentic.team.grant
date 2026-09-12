@@ -159,7 +159,7 @@ export function guidanceBrief(g: Guidance): string {
         g.lessons
           .map(
             (l) =>
-              `- ${l.body}` + (l.observations > 1 ? ` (seen ${String(l.observations)} times)` : ''),
+              `- ${l.body}${l.observations > 1 ? ` (seen ${String(l.observations)} times)` : ''}`,
           )
           .join('\n'),
     )

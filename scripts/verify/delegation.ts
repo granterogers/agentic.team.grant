@@ -79,12 +79,10 @@ for (const [text, expected] of [
   )
 }
 
-{
-  // Nobody is the right answer sometimes, and it matters: a router that always
-  // names someone is a router that has stopped discriminating.
-  ok('and "good morning" goes to nobody', (await asks('good morning')).length === 0)
-  ok('as does "thanks"', (await asks('thanks')).length === 0)
-}
+// Nobody is the right answer sometimes, and it matters: a router that always
+// names someone is a router that has stopped discriminating.
+ok('and "good morning" goes to nobody', (await asks('good morning')).length === 0)
+ok('as does "thanks"', (await asks('thanks')).length === 0)
 
 // --- the property Grant is actually buying ----------------------------------
 //

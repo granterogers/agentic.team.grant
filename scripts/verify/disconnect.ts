@@ -115,10 +115,26 @@ const after = await one(`
 `)
 const said = String(after.said ?? '')
 const row = String(after.row ?? '')
-check('disconnecting Notion removes the credential', said.slice(0, 60), said.includes('"removed": 1'))
-check('and the credential is really gone', `${String(after.left_behind)} left`, after.left_behind === 0)
-check('and says where consent is withdrawn', 'notion.so/profile/integrations', said.includes('notion.so/profile/integrations'))
-check('and promises the corpus is kept', 'already imported stay', said.includes('already imported stay'))
+check(
+  'disconnecting Notion removes the credential',
+  said.slice(0, 60),
+  said.includes('"removed": 1'),
+)
+check(
+  'and the credential is really gone',
+  `${String(after.left_behind)} left`,
+  after.left_behind === 0,
+)
+check(
+  'and says where consent is withdrawn',
+  'notion.so/profile/integrations',
+  said.includes('notion.so/profile/integrations'),
+)
+check(
+  'and promises the corpus is kept',
+  'already imported stay',
+  said.includes('already imported stay'),
+)
 check(
   'and the page stops calling it connected',
   row.slice(0, 96) || '(no notion row)',

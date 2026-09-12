@@ -165,7 +165,7 @@ await pg.waitForTimeout(700)
 for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']) {
   await pg.locator(`[data-tab="${tab}"]`).first().click()
   await pg.waitForTimeout(450)
-  await scan('project/' + tab)
+  await scan(`project/${tab}`)
 }
 await pg.locator('[data-settings]').first().click()
 await pg.waitForTimeout(500)
@@ -181,7 +181,7 @@ for (const t of [
 ]) {
   await pg.locator(`[data-setting="${t}"]`).click()
   await pg.waitForTimeout(450)
-  await scan('settings/' + t)
+  await scan(`settings/${t}`)
 }
 const orphans = [...found].filter(([k]) => !queried.has(k))
 await b.close()

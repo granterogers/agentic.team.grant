@@ -162,8 +162,7 @@ const failedTrace = await one(`
 check(
   'a job that threw carries a trace up to the point it died',
   `${String(failedTrace.state)} · ${String(failedTrace.kinds)}`,
-  String(failedTrace.kinds).includes('prompt') &&
-    String(failedTrace.kinds).includes('degradation'),
+  String(failedTrace.kinds).includes('prompt') && String(failedTrace.kinds).includes('degradation'),
 )
 check(
   'and the trace says what threw',

@@ -8,7 +8,8 @@
 */
 
 import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
-import { act, attempt, canWrite, read, say, sure, token } from './office.js'
+import { act, attempt, canWrite, onWrite, read, say, sure, token } from './office.js'
+import * as undo from './undo.js'
 import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
@@ -5566,5 +5567,19 @@ async function live() {
   */
   pulse.watch(API, token, refresh)
 }
+
+/*
+  The way back, wired once (#118).
+
+  Registered here rather than at each of the fifteen write sites, because a
+  per-button opt-in would have been forgotten by the third one. `act` calls this
+  after every successful write; a result with no `undo` id offers nothing, which
+  is most of them.
+
+  `refresh` is passed so an undo redraws through the same path a write does.
+*/
+onWrite((_action, result) => {
+  undo.offer(result, refresh)
+})
 
 live()

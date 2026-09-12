@@ -72,10 +72,8 @@ console.log('boundary —')
 
 // --- the door is shut before anything is tried -------------------------------
 
-{
-  ok(`${WHO} holds ${HELD} to begin with`, await mayUse(HELD))
-  ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
-}
+ok(`${WHO} holds ${HELD} to begin with`, await mayUse(HELD))
+ok(`and does not hold ${NOT_HELD}`, !(await mayUse(NOT_HELD)))
 
 // --- door one: a lesson --------------------------------------------------------
 //
@@ -620,7 +618,7 @@ console.log('boundary —')
     changes.every((c) => c.reversible === true && String(c.undo_with ?? '') !== ''),
     // §6: claiming reversible without saying how is the failure that produces
     // an Undo button which cannot undo.
-    changes.filter((c) => String(c.undo_with ?? '') === '').length + ' without a method',
+    `${changes.filter((c) => String(c.undo_with ?? '') === '').length} without a method`,
   )
 }
 
