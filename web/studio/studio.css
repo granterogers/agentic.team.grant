@@ -2912,6 +2912,29 @@ kbd {
 .hireact { display: flex; align-items: flex-end; gap: var(--s3); flex-wrap: wrap; }
 .hireact .btn { min-height: 44px; }
 
+/*
+  The box that says a task is a module (#71).
+
+  Named `tickbox` rather than `check`, `tick` or `box`: every one of those is
+  either already in this file or one letter from something that is, and a class
+  name defined twice is a bug waiting for the right element — `.stage` was a
+  status pill AND a pannable surface for weeks.
+
+  44px on the label, not on the input, because the input is 16px and the target
+  is the whole row including the words.
+*/
+.tickbox {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+  margin-right: auto;
+}
+.tickbox input { width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+
 /* --- the document reader (#95, #96) ---------------------------------------
    The sheet is the scroll container and the head is sticky inside it, so the
    close button stays put through a 180,000-character document — which is the

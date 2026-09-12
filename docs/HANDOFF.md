@@ -178,7 +178,22 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-285 migrations · 964 unit tests · ~55 live suites, all green.
+287 migrations · 964 unit tests · ~57 live suites, all green.
+
+**Modules are real, and are not a new table (#71, migrations 0286-0287).** The
+Issue asked for `public.modules`. The canonical IA it cites does not contain the
+word; the frontend prompt uses it for the dashboard's PANELS, which #81 built.
+The section the studio actually renders is a third thing — numbered, named parts
+of the work with a state and counts — and **every piece of that already existed**:
+`tasks.is_milestone`, `tasks.priority`, `tasks.parent_task_id`, `collections`.
+So a module is a milestone task that gathers documents, the one missing join is
+`collections.for_task_id`, and `app.studio_modules` derives the rest at read time
+so a count cannot drift from what it counts. `hq_task_add` learned `p_milestone`
+(0287, dropping both halves by exact signature first — the public wrapper is the
+one that silently drops a new parameter), so making a module is one call rather
+than add-then-promote. `npm run verify:modules` is 16 checks against a subject
+built with decoys: a fixture child, a grandchild, and a collection that is
+nobody's shelf, each of which a plausible join would count.
 
 **Contact labels and custom fields are the office's, not the browser's (#110,
 migration 0285).** The last thing in the studio on the wrong side of ADR-0021 —

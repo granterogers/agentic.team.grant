@@ -1568,7 +1568,9 @@ function portfolio() {
 */
 const PANEL = {
   modules: (p) => p.modules.length === 0
-    ? `<p class="t-meta">No modules on this project.</p>`
+    ? `<p class="t-meta">No modules on this project yet — a module is a part of
+         the work, with its own tasks and documents underneath it.</p>
+       ${canWrite() ? '<button class="btn" data-empty-do="module">Add a module</button>' : ''}`
     : `<div class="modgrid">${p.modules.map((m) => `
         <div class="module" style="--dot:${
           m.state === 'done' ? 'var(--good)' : m.state === 'doing' ? 'var(--warn)' : 'var(--ink-3)'
@@ -2138,6 +2140,18 @@ function addTaskForm(p) {
         </select>
       </label>
       <span class="hireact">
+        <!--
+          A module is a milestone (#71, migration 0286).
+
+          Not a second form: the office has one noun for a piece of work and
+          this is the box that says this one is a heading with others under it.
+          A separate Add Module form would be a second place a title and a date
+          are typed, and the two would drift.
+        -->
+        <label class="tickbox">
+          <input type="checkbox" data-task-milestone>
+          <span>It is a module — a part of the work, with tasks under it</span>
+        </label>
         <span class="t-meta" data-said></span>
         <button class="btn primary" data-task-go>Add it</button>
         <button class="btn quiet" data-task-cancel>Cancel</button>
@@ -4424,12 +4438,20 @@ function render() {
   for (const b of root.querySelectorAll('[data-empty-do]')) {
     b.addEventListener('click', () => {
       const what = b.dataset.emptyDo
-      if (what === 'task' || what === 'contact') {
-        const sel = what === 'task' ? '[data-task-form]' : '[data-contact-form]'
-        const first = what === 'task' ? '[data-task-title]' : '[data-c-name]'
+      if (what === 'task' || what === 'contact' || what === 'module') {
+        const sel = what === 'contact' ? '[data-contact-form]' : '[data-task-form]'
+        const first = what === 'contact' ? '[data-c-name]' : '[data-task-title]'
         const form = $(sel, root)
         if (form) {
           form.hidden = false
+          /*
+            #71. A module is a milestone, so it opens the same form with the box
+            already ticked — and `task` UNTICKS it, because a form left ticked
+            from the last press turns the next ordinary task into a heading
+            silently. Set both ways, never only one.
+          */
+          const tick = $('[data-task-milestone]', root)
+          if (tick) tick.checked = what === 'module'
           $(first, root)?.focus()
         }
         return
@@ -4491,8 +4513,12 @@ function render() {
         p_title: title,
         p_due_on: due === '' ? null : due,
         p_assignee: who === '' ? null : who,
+        // #71. `hq_task_add` takes it since 0287; before that a module was
+        // add-then-promote, and a refusal on the promote left a plain task on
+        // the board that nobody had asked for.
+        p_milestone: $('[data-task-milestone]', root)?.checked === true,
       }),
-      'Added.',
+      $('[data-task-milestone]', root)?.checked === true ? 'Module added.' : 'Added.',
     )
     if (done) {
       const form = $('[data-task-form]', root)
