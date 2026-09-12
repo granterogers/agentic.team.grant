@@ -230,6 +230,70 @@ try {
   )
 
   // =========================================================================
+  console.log('\nand the right person is chosen, from something Grant can edit')
+
+  /*
+    #65's last box: *"a verify suite drives a research request and asserts
+    Emma, not Claire, produced the output."*
+
+    Asked of `app.who_knows_about`, which is where the decision is actually
+    made, and which reads `staff.expertise` — the column Grant edits in the
+    dashboard. The five regexes in `router.ts` remain only as the fallback for
+    an unreachable database, so testing THOSE would test the thing he cannot
+    change.
+  */
+  const research = (
+    await db.execute(`
+    select slug, score from app.who_knows_about(
+      'do some research on how coaching programmes are structured', 3)
+     order by score desc
+  `)
+  ).rows as { slug: string; score: number }[]
+  check(
+    'a research request finds Emma, not Claire',
+    research.map((r) => `${r.slug}=${String(r.score)}`).join(', ') || 'nobody',
+    research.some((r) => r.slug === 'research-director') &&
+      !research.some((r) => r.slug === 'chief-of-staff'),
+  )
+
+  /*
+    And a CONTROL, because "it named a specialist" is satisfied by a router
+    that names the same specialist for everything. A different subject has to
+    reach a different person or the first check proves nothing.
+  */
+  const money = (
+    await db.execute(`
+    select slug, score from app.who_knows_about(
+      'what did we spend on subscriptions last quarter', 3) order by score desc
+  `)
+  ).rows as { slug: string }[]
+  check(
+    'CONTROL: a different subject reaches a different person',
+    money.map((r) => r.slug).join(', ') || 'nobody',
+    money.length > 0 && money[0]?.slug !== research[0]?.slug,
+  )
+
+  /*
+    And that it is driven by data rather than by code, which is the half that
+    makes it Grant's. `staff.expertise` is a column he edits; if routing were
+    the regexes in `router.ts` he could not change who does what without a
+    coding session — the thing he said outranks most others.
+  */
+  const fromData = Number(
+    (
+      await one(`
+      select count(*)::int as n from public.staff
+       where active and coalesce(array_length(expertise, 1), 0) > 0
+    `)
+    ).n,
+  )
+  check(
+    'and the routing reads expertise Grant can edit, not a regex in a file',
+    `${String(fromData)} active staff with expertise recorded`,
+    fromData >= 4,
+  )
+
+  // =========================================================================
   console.log('\nand the question can be asked')
 
   const health = (await one('select app.delegation_health(30) as h')).h as Record<string, unknown>

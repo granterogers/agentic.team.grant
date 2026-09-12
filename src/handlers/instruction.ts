@@ -1130,6 +1130,26 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           body: [
             heardText,
             resolved.changed ? `↳ Taking that as: “${resolved.instruction}”` : null,
+            /*
+              Who it went to, and why (#65).
+
+              Grant: *"I still don't really fully understand the role of the
+              individual agents when I send Claire to do something."* The
+              routing decision was being made and never said, so from the
+              outside there was one bot with eight names.
+
+              ONLY when the work actually left Claire. #65 is explicit that
+              more delegation is not automatically better — *"a team that
+              visibly passes his request around three times before answering is
+              worse than one bot"* — and the chief of staff handling something
+              herself is the ordinary case. Narrating that would be noise on
+              every single message, and noise is how a line stops being read.
+
+              The test the Issue sets is not how many agents touched it. It is
+              whether Grant can tell the right person did it, which is one
+              sentence when it is true and silence when it is not.
+            */
+            who.slug === 'chief-of-staff' ? null : `↳ Giving this to ${who.name} — ${who.reason}.`,
             describePlan(plan),
           ]
             .filter((part) => part !== null)
