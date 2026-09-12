@@ -256,5 +256,8 @@
   "0255_a_task_can_be_edited.sql": "fabe310a5b0ad1ac8ae34240d01b7966d0a3e53f2c87a8a2eda87340ba7c2b1e",
   "0256_the_task_row_carries_what_the_editor_needs.sql": "f5ff13131be12e67613a2971b4fcc7d215fd123f923271d7861a1cf16848e215",
   "0257_a_trace_per_job.sql": "9c048400ff36f2e65fd69b7ac30e203792847addb451f7eeedf1886fb8c0474c",
-  "0258_the_trace_prunes_itself.sql": "ea34f10552db88b56ea6d97200f26c59bd5b99ff986e69b34dd4a6320efa3379"
+  "0258_the_trace_prunes_itself.sql": "ea34f10552db88b56ea6d97200f26c59bd5b99ff986e69b34dd4a6320efa3379",
+  "0259_something_that_measures_an_answer.sql": "7a673f6d3047129a9d305a93ecf7fbc61a69cffba78f251213179e874f46d6d1",
+  "0260_a_fair_grader_needs_the_facts.sql": "650ac00983d6722cdb57b8d53340cbc96ce40764cb0ee980d78a2f734c520a4b",
+  "0261_the_grader_cannot_know_what_the_office_holds.sql": "80f2ff56672434eff8b809839e616bebd310ff43e3942384433f03aa4212abb7"
 }
