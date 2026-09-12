@@ -178,7 +178,24 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-288 migrations · 976 unit tests · ~58 live suites, all green.
+290 migrations · 976 unit tests · ~59 live suites, all green.
+
+**What is waiting on Grant is where the work is (#151, migrations
+0289-0290).** The landing page has shown "2 things waiting on you" since 0240;
+inside a project — where he could actually deal with it — it showed nothing,
+because `hq_studio` reduced `needs_me` to one item for the banner and threw the
+rest away. Now `app.studio_waiting` per project, in the header, above the
+sections, collapsed to a line until pressed and absent entirely when nothing is
+waiting. The third bullet had no mechanism at all: `answer_generation_approval`
+did one kind and every other blocker could only be discussed, so
+`app.hq_answer_blocker` is the general answer — refusing anything the blocker
+did not offer, delegating to the generation path where that is what it is, and
+releasing the job it was holding. 0290 is the bug `verify:waiting` found on its
+first run: `waiting_user -> queued` is not a legal transition, and the legal
+road is `paused` then `queued`, which is also the honest one — both hops land in
+`job_state_transitions`. `npm run verify:waiting` is 21 checks and writes three
+captures; opening one of them found the second bug, that an overdue item was
+indistinguishable from a calm one on a bar with two rows.
 
 **A time on the page stays true while the page is open (#153, migration
 0288).** Every "3 days ago" was computed in SQL when the payload was built —

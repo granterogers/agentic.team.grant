@@ -286,5 +286,7 @@
   "0285_a_label_he_defined_is_his.sql": "4337ec3d0a491f7ecc4da6f61cdcab0738ce1cabb6e99f91abd5006a0c99fbac",
   "0286_a_module_is_a_milestone_that_gathers.sql": "56358a44d8f0fe1a5f0cfe1cc6eb8e621f67519632dd1e24057a963cb8ca2f26",
   "0287_a_task_can_be_born_a_milestone.sql": "3c273b08ee6a531e9bf3e61544374f8e3a5a0d55d6424e593de05efcd87687fe",
-  "0288_a_time_travels_with_its_instant.sql": "9a77a673459beeba3150a68f1ca52fb7b2741bf970392c74243d2da38e47e6b9"
+  "0288_a_time_travels_with_its_instant.sql": "9a77a673459beeba3150a68f1ca52fb7b2741bf970392c74243d2da38e47e6b9",
+  "0289_the_waiting_list_is_where_the_work_is.sql": "7497b5d3921e3c67daca296b2b893858370007a9b4acf1f2a2b303b0eb4cc3af",
+  "0290_an_answered_job_takes_the_legal_road_back.sql": "ef2e9aac4f9844e612f495e24bed2d75bdd6ca4b219dc4c42d951e7834ef3ab6"
 }

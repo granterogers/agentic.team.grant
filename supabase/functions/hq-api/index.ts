@@ -239,6 +239,21 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
   contact_labels_set: { fn: 'hq_contact_labels_set', required: ['p_contact_id', 'p_labels'] },
   contact_fields_set: { fn: 'hq_contact_fields_set', required: ['p_contact_id', 'p_fields'] },
+  /*
+    Answering a blocker, wherever you are standing (#151, migration 0289).
+
+    The landing page has shown "2 things waiting on you" since 0240 and a
+    project never did, so the one urgent category was visible exactly where
+    Grant could not act on it. There was also no way to ANSWER one from
+    anywhere: `answer_generation_approval` did one kind and every other blocker
+    could only be discussed.
+
+    The RPC refuses an answer the blocker did not offer — §5, the page
+    translates and the RPC decides — because an answer the handler cannot act on
+    would resolve the row and strand the job, which is the worst outcome
+    available: the interface would report success.
+  */
+  answer_blocker: { fn: 'hq_answer_blocker', required: ['p_blocker_id', 'p_answer'] },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
   task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },

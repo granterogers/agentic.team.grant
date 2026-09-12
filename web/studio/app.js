@@ -67,6 +67,15 @@ const state = {
   channel: null,
   // The command bar (#40 idea 1): open, what is typed, which row is picked.
   cmd: { open: false, q: '', at: 0 },
+  /*
+    Whether the project's waiting list is expanded (#151).
+
+    Collapsed by default and deliberately NOT remembered per project: the bar
+    only exists when something is waiting, and a person who has just answered
+    the last one should get the space back rather than an empty open panel on
+    the next project they open.
+  */
+  waitingOpen: false,
 }
 
 /*
@@ -2461,8 +2470,82 @@ function dashboard() {
       No backticks in this comment. Template literal.
     -->
 
+    ${waitingHere(p)}
+
     ${body}
   </main>`
+}
+
+/*
+  What is waiting on Grant, in the project (#151).
+
+  His words: *"the one genuinely urgent category in the whole product is visible
+  exactly where you are least able to act on it"* — the landing page has shown
+  this since 0240 and a project never did.
+
+  ## In the header, not in a tab
+
+  A tab would be an eighth section competing with seven others for a glance, and
+  the whole complaint is that this is the urgent one. It sits under the project
+  name, above everything, where nothing has to be scrolled to or chosen.
+
+  ## Collapsed to a line until pressed
+
+  A project usually has none, and a permanent empty panel above every project is
+  worse than nothing — it teaches the eye to skip the place the urgent thing
+  will appear. Nothing waiting renders NOTHING at all.
+
+  ## And answered here
+
+  The third bullet, and the one that had no mechanism until 0289: every other
+  blocker could only be discussed. Each item draws the answers it actually
+  offers, from `approval_options` — never an invented Yes/No, because an answer
+  the handler cannot act on resolves the row and strands the job.
+
+  No backticks in these comments. Template literal.
+*/
+function waitingHere(p) {
+  const list = p.waiting ?? []
+  if (list.length === 0) return ''
+  const open = state.waitingOpen
+
+  return `<section class="waitbar ${open ? 'open' : ''}">
+    <button class="waithead" data-waiting-toggle aria-expanded="${open ? 'true' : 'false'}">
+      <span class="waitdot ${list.some((w) => w.overdue) ? 'late' : ''}"></span>
+      <b>${list.length === 1 ? 'One thing is' : `${list.length} things are`} waiting on you</b>
+      <span class="t-meta">${
+        list.some((w) => w.blocks)
+          ? 'Something here is holding the work up.'
+          : 'The rest of the project is carrying on.'
+      }</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    ${!open ? '' : `<div class="waitlist">${list.map((w) => `
+      <article class="waititem ${w.overdue ? 'late' : ''}">
+        <div class="wbody">
+          <b>${esc(w.what)}</b>
+          <span class="t-meta">${esc(w.who)} · ${when.stamp(w.at, w.when)}${
+            w.overdue ? ' · <b class="wlate">past its deadline</b>' : ''}${
+            w.blocks ? ' · nothing else on this moves until you answer' : ''}</span>
+          ${w.why ? `<p class="t-meta wwhy">${esc(w.why)}</p>` : ''}
+        </div>
+        ${!canWrite() ? '' : `<div class="wact" data-saidwrap>
+          <span class="t-meta" data-said></span>
+          ${
+            (w.options ?? []).length > 0
+              ? w.options.map((o, i) => `<button class="btn ${i === 0 ? 'primary' : ''}"
+                   data-answer="${esc(w.id)}" data-answer-with="${esc(o)}">${esc(o)}</button>`).join('')
+              : `<form class="addfield" data-answer-form="${esc(w.id)}">
+                   <input name="answer" placeholder="Your answer" aria-label="Your answer"
+                     maxlength="240" autocomplete="off">
+                   <button class="btn primary" type="submit">Send it</button>
+                 </form>`
+          }
+        </div>`}
+      </article>`).join('')}</div>`}
+  </section>`
 }
 
 // --- render and wire ---------------------------------------------------------
@@ -4823,6 +4906,60 @@ function render() {
         rememberTab(state.project, 'team')
         render()
       })
+    })
+  }
+
+  /*
+    The project's waiting list (#151).
+
+    `render()` rather than a class toggle, because the list is not in the DOM
+    when collapsed — an eight-item panel above every project is a panel the eye
+    learns to skip, and skipping is the one thing this must never teach.
+  */
+  for (const b of root.querySelectorAll('[data-waiting-toggle]')) {
+    b.addEventListener('click', () => {
+      state.waitingOpen = !state.waitingOpen
+      render()
+    })
+  }
+
+  /*
+    Answering one, in place.
+
+    `attempt` disables the button, says the office's own sentence on a refusal,
+    and re-enables — the pattern every action in the old page arrived at
+    independently. On success the payload is re-read, which is what removes the
+    item: the answer resolved the blocker, so `needs_me` no longer returns it
+    and the bar shrinks or disappears by itself.
+  */
+  for (const b of root.querySelectorAll('[data-answer]')) {
+    b.addEventListener('click', async (e) => {
+      const btn = e.currentTarget
+      const said = await attempt(
+        btn,
+        'Sending…',
+        () => act('answer_blocker', {
+          p_blocker_id: btn.dataset.answer,
+          p_answer: btn.dataset.answerWith,
+        }),
+        'Answered.',
+      )
+      if (said) await refresh()
+    })
+  }
+  for (const f of root.querySelectorAll('[data-answer-form]')) {
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const answer = String(f.answer.value ?? '').trim()
+      const go = $('button', f)
+      if (answer === '') { say(go, 'Say what the answer is.', 'warn'); return }
+      const said = await attempt(
+        go,
+        'Sending…',
+        () => act('answer_blocker', { p_blocker_id: f.dataset.answerForm, p_answer: answer }),
+        'Answered.',
+      )
+      if (said) await refresh()
     })
   }
 

@@ -71,6 +71,26 @@ const FALLBACK_PROJECTS = [
     connectors: ['Notion', 'NotebookLM'],
     done: 9, total: 24, docs: 12,
     next: 'Interviews by 16 Sep',
+    /*
+      Something waiting, in the prototype too (#151).
+
+      §14A requires realistic data, and "realistic" for this bar means it is
+      sometimes there — a state that only ever appears against the live office
+      is a state no capture run has ever looked at.
+    */
+    waiting: [
+      {
+        id: 'w1',
+        what: 'Generate the audio overview for the Legacy course notebook',
+        why: 'It costs about 10 of the notebook\u2019s allowance, and about 40 of 40 are left in this five-hour window.',
+        who: 'Claire',
+        when: '2 days ago',
+        at: null,
+        overdue: false,
+        blocks: false,
+        options: ['Go ahead', 'Not now'],
+      },
+    ],
     modules: [
       { n: 1, name: 'Legacy Opening Assessment', state: 'done', docs: 2, tasks: 4 },
       { n: 2, name: 'Ideal Client Avatar', state: 'doing', docs: 3, tasks: 4 },
@@ -491,6 +511,10 @@ export async function hydrate(endpoint, token) {
         // Every section the studio renders, guaranteed to be an array so a
         // renderer never has to ask. An absent section and an empty one are the
         // same thing to a reader, and only one of them can throw.
+        // #151. Guaranteed an array like every other section: an absent one
+        // and an empty one are the same thing to a reader, and only one of
+        // them can throw.
+        waiting: p.waiting ?? [],
         modules: p.modules ?? [],
         documents: p.documents ?? [],
         tasks: p.tasks ?? [],

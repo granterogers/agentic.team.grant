@@ -3586,3 +3586,112 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 }
+
+/* ---------------------------------------------------------------------------
+   What is waiting on you, in the project (#151)
+   ---------------------------------------------------------------------------
+
+   Grant: *"the one genuinely urgent category in the whole product is visible
+   exactly where you are least able to act on it."* So it sits under the project
+   name, above the sections, and nothing has to be scrolled to or chosen.
+
+   Warm rather than red. This is not an error — it is the office having done its
+   part and stopped where a person has to decide, which is the system working.
+   Red would put it in the same visual class as a failed job, and the two want
+   opposite reactions. Only `overdue` earns the alarm.
+
+   Class names prefixed `wait`/`w` and grepped first: `.stage` was a status pill
+   and a pannable surface for weeks, and `.kind.doc` collided with `.doc`.
+   ------------------------------------------------------------------------- */
+
+.waitbar {
+  margin: var(--s4) 0 0;
+  border: 1px solid color-mix(in oklch, var(--warn) 34%, var(--edge));
+  border-radius: var(--r-card);
+  background: color-mix(in oklch, var(--warn) 7%, var(--surface));
+  overflow: hidden;
+}
+
+.waithead {
+  display: flex; align-items: center; gap: var(--s3);
+  width: 100%; min-height: 52px;
+  padding: var(--s3) var(--s4);
+  border: 0; background: none; text-align: left; cursor: pointer;
+  color: var(--ink); font: inherit;
+}
+.waithead b { font-size: 14px; font-weight: 600; flex: none; }
+/* The sentence gives way before the count does: at a narrow width the number
+   is the part that has to survive. */
+.waithead .t-meta { flex: 1 1 auto; min-width: 0; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+.waithead:hover { background: color-mix(in oklch, var(--warn) 12%, transparent); }
+
+.waitdot {
+  flex: none; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--warn);
+}
+/* Overdue, and only overdue, gets the alarm — and a ring rather than a bigger
+   dot, so the two states differ in kind and not only in shade. */
+.waitdot.late {
+  background: var(--bad);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--bad) 22%, transparent);
+}
+
+.waitbar .chev { flex: none; color: var(--ink-3); transition: transform 160ms ease; }
+.waitbar.open .chev { transform: rotate(180deg); }
+
+.waitlist { padding: 0 var(--s4) var(--s4); display: grid; gap: var(--s3); }
+
+.waititem {
+  display: flex; align-items: flex-start; gap: var(--s4);
+  padding: var(--s3) 0 0;
+  border-top: 1px solid var(--edge);
+}
+/*
+  An overdue item has to be identifiable AS the overdue one.
+
+  Found by opening the capture: two items, one nine days past its deadline, and
+  the only difference on screen was the dot at the head of the bar — which says
+  "one of these is late" and not "this one". A person with two things waiting
+  cannot act on that.
+
+  A left edge and a word, so it reads at a glance and also without colour.
+*/
+.waititem.late {
+  border-top-color: color-mix(in oklch, var(--bad) 40%, var(--edge));
+  border-left: 3px solid var(--bad);
+  padding-left: var(--s3);
+  margin-left: calc(var(--s3) * -1);
+}
+.wlate { color: var(--bad); font-weight: 600; }
+
+.wbody { flex: 1 1 auto; min-width: 0; display: grid; gap: 3px; }
+.wbody b { font-size: 14px; font-weight: 600; line-height: 1.35; }
+/* `.m` is muted only under an `li` — the rule is `li .m, .meta`. Said here so
+   nobody reaches for it and gets full-size ink under a heading. */
+.wwhy { margin: 4px 0 0; line-height: 1.45; }
+
+.wact { flex: none; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.wact .btn { min-height: 44px; }
+.wact .addfield { display: flex; gap: var(--s2); }
+/* 16px or iOS Safari zooms the page on focus (§17). */
+.wact input { min-height: 44px; font-size: 16px; }
+
+@media (max-width: 860px) {
+  /*
+    The answer buttons go under the words rather than beside them (#151).
+
+    Side by side at 390px leaves the ask about eleven characters wide, and the
+    ask is the part being answered. Written at the END of the file on purpose:
+    a media query adds no specificity, so the base rules three hundred lines up
+    would win from source order — which is how the phone layout stayed broken
+    through a full capture run that reported no errors. Twice.
+  */
+  .waititem { flex-direction: column; gap: var(--s3); }
+  .wact { width: 100%; }
+  .wact .btn { flex: 1 1 auto; }
+  .wact .addfield { width: 100%; }
+  .wact .addfield input { flex: 1 1 auto; min-width: 0; }
+  .waithead { flex-wrap: wrap; }
+  .waithead .t-meta { flex-basis: 100%; white-space: normal; }
+}
