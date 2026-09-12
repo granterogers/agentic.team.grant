@@ -32,6 +32,7 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0019](0019-the-studio-becomes-the-product.md) | The studio becomes the product; `web/hq/index.html` is retired | Accepted |
 | [0020](0020-tasks-reach-the-diary-one-way.md) | Tasks reach the diary one way, and only ever touch events we made | Accepted |
 | [0021](0021-an-arrangement-belongs-to-the-person.md) | An arrangement belongs to the person, not to the browser | Accepted |
+| [0022](0022-a-project-is-archived-not-deleted.md) | A project is archived, not deleted; deletion is for debris | Accepted |
 
 **Note the collision:** two ADRs were written as 0012 on the same day, by two
 sessions that each read the highest number and then wrote. They are left as

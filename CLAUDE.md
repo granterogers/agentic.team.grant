@@ -310,6 +310,17 @@ Each of these cost real time. They are here so they cost it once.
   project** — the trigger fires on the attachment delete.
 - **A teardown that matches nothing looks exactly like a teardown that
   worked.** Assert it left nothing behind, in the suite, as a check.
+- **A suite that creates a REAL project must remove it, and `npm run
+  check:leaks` is what makes that true.** Thirty archived debris projects
+  accumulated because `purge:fixtures` can never collect them — `is_fixture` is
+  GENERATED and matches only `fixture-%`, `verify-%`, `ledger-proof-%`, and a
+  suite testing anything that EXCLUDES fixtures cannot use those names. So the
+  convention is: **a feature that filters fixtures gets a real subject you tear
+  down; everything else gets a fixture name.** Tear down through
+  `app.project_delete(slug)`, which refuses a project holding documents or jobs
+  and does ADR-0014's order for you. Nineteen of the thirty carry a job and can
+  therefore never be deleted at all — a job cannot be removed, so the project
+  cannot — which is why the check fails only on debris that CAN be swept.
 - **A suite that names its subjects `fixture-…` cannot test anything that
   excludes fixtures.** `app.resolve_project_by_name` filters
   `not p.is_fixture`, and `is_fixture` is GENERATED from the slug — so
