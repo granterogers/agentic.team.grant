@@ -210,6 +210,16 @@ let inert = 0
   58. The gap belongs in the report.
 */
 let skipped = 0
+/*
+  And WHICH ones, by name.
+
+  "100 unpressable" is a number with nothing attached, and a number with
+  nothing attached is where a defect lives — the count sat in this report for
+  weeks reading like coverage while it was the opposite. Naming them is what
+  turns it into something anybody can act on, and it is how the desktop and
+  phone legs became comparable at all.
+*/
+const unreached: string[] = []
 
 const browser = await chromium.launch()
 
@@ -300,9 +310,28 @@ for (const app of APPS) {
         snapshot and a Playwright listener is not.
       */
       window.__WROTE = 0;
+      /*
+        And every READ, by section.
+
+        A control whose job is to ask the office again cannot be judged by
+        whether the page changed, because this audit serves a STUB: it answers
+        every request the same way for ever, so a correct retry against it is
+        idempotent by construction and the DOM is identical afterwards. That is
+        a fact about the harness, not about the button. What can be judged is
+        whether the press issued the request at all -- which is stricter than
+        excluding it, because a retry that stops asking becomes a finding
+        again. Sections are recorded rather than a bare count so a background
+        pulse poll landing mid-press cannot stand in for the read.
+      */
+      window.__READS = [];
       const through = window.fetch;
       window.fetch = (input, init) => {
         if ((init && init.method) === 'POST') window.__WROTE++;
+        else {
+          const url = String(typeof input === 'string' ? input : (input && input.url) || '');
+          const m = url.match(/[?&]section=([a-z_]+)/);
+          window.__READS.push(m ? m[1] : 'other');
+        }
         return through(input, init);
       };
     `)
@@ -669,12 +698,33 @@ for (const app of APPS) {
           })
           continue
         }
-        const target = page
+        /*
+          The INNERMOST control carrying this label, not the outermost.
+
+          `hasText` matches any element whose SUBTREE contains the text, and
+          `.first()` then takes the one earliest in the document — which for a
+          nested control is the wrapper. A contact card is
+          `button.pcard > … > a[href^=mailto]`, so pressing "the control
+          labelled ben@hartleyco.example" pressed the CARD; Playwright clicked
+          its centre, which is the anchor; the anchor carries `data-stop` so
+          the card never opened; and six working links were reported as dead
+          for months (#180).
+
+          Same shape as the `[data-grip]` trap in CLAUDE.md — the press landed
+          somewhere other than the thing being judged — and it is worth fixing
+          rather than excluding, because the wrapper is not what the label
+          names. Deepest match wins: the candidate that contains no other
+          candidate.
+        */
+        const candidates = page
           .locator('button:visible, a[href]:visible, [role="tab"]:visible, [role="option"]:visible')
           .filter({ hasText: label })
-          .first()
+        const deep = (await candidates.evaluateAll((els) =>
+          els.findIndex((el) => !els.some((other) => other !== el && el.contains(other))),
+        )) as number
+        const target = deep >= 0 ? candidates.nth(deep) : candidates.first()
         const alt = page.getByLabel(label, { exact: true }).first()
-        const use = (await target.count()) > 0 ? target : alt
+        const use = (await candidates.count()) > 0 ? target : alt
         if ((await use.count()) === 0) continue
 
         /*
@@ -695,6 +745,36 @@ for (const app of APPS) {
           )
           .catch(() => false)
 
+        /*
+          Two kinds of control this audit cannot judge by "did the page
+          change", and both were reported as dead for months (#180).
+
+          `handsOff` — an anchor whose scheme is not http. A `mailto:` or
+          `tel:` link hands off to the mail client or the dialler, and a page
+          that changed when you pressed one would be the bug. What is worth
+          asserting is that the href is WELL FORMED, which is done below
+          instead of the DOM test.
+
+          `refetch` — a control whose whole job is to ask the office again.
+          The audit serves a stub that answers identically for ever, so a
+          correct retry is idempotent here by construction. Judged on whether
+          it issued the read instead.
+
+          Both are read off the element rather than matched on its label. A
+          label is a string anybody can reuse, and an exclusion keyed on
+          wording is an exclusion that silently grows.
+        */
+        const nature = (await use
+          .evaluate((el) => ({
+            // No `dom` lib in this tsconfig, so no HTMLAnchorElement to cast to —
+            // `getAttribute` is on Element and that is all this needs.
+            href: el.tagName === 'A' ? (el.getAttribute('href') ?? '') : '',
+            refetch: el.hasAttribute('data-retry-office'),
+          }))
+          .catch(() => ({ href: '', refetch: false }))) as { href: string; refetch: boolean }
+        const handsOff = /^(?:mailto|tel|sms|geo|facetime):/i.test(nature.href)
+
+        const readsBefore = ((await page.evaluate('(window.__READS ?? []).length')) as number) ?? 0
         const before = await page.evaluate('document.body.innerHTML')
         // A write and a focus move are both "it acted", and neither shows up
         // in the HTML. Read alongside it so the three are one observation.
@@ -702,10 +782,27 @@ for (const app of APPS) {
         const focusBefore = (await page.evaluate(
           'document.activeElement ? (document.activeElement.tagName + (document.activeElement.getAttribute("data-src-ref") ?? "")) : ""',
         )) as string
+        /*
+          Press it — and when it cannot be pressed, say WHICH one.
+
+          `skipped` was a bare count, and it read like coverage while being the
+          opposite: 100 unpressable against 97 pressed on the desktop leg, and
+          2 against 200 on the phone leg of the same routes. A number with no
+          names attached is where a defect lives.
+
+          An attempt to replace Playwright's actionability wait with a hit test
+          plus `force: true` was tried and reverted — it is recorded in #183
+          with what was measured, because the cause is not the one CLAUDE.md's
+          "the studio never stops moving" note predicts: hit-tested in a
+          settled page, all thirteen of the repeatedly-skipped rail controls
+          pass. Something in the sweep's own sequence is covering them, and
+          that is worth a session of its own rather than a fourth guess.
+        */
         try {
           await use.click({ timeout: 2500 })
         } catch {
           skipped++
+          unreached.push(`${size}/${name}  ${label}`)
           continue // covered by something else, or moved — not a dead control
         }
         await page.waitForTimeout(260)
@@ -757,7 +854,39 @@ for (const app of APPS) {
           ((await page.evaluate(
             'document.activeElement ? (document.activeElement.tagName + (document.activeElement.getAttribute("data-src-ref") ?? "")) : ""',
           )) as string) !== focusBefore
-        if (before === after && !wrote && !moved) {
+        /*
+          A hand-off link is judged on its destination, not on the page.
+
+          Asserted rather than skipped: an empty or malformed `mailto:` is a
+          real defect and this is the only sweep that would ever see it.
+        */
+        if (handsOff) {
+          const target = nature.href.split(':').slice(1).join(':').split('?')[0] ?? ''
+          if (target.trim() === '') {
+            findings.push({
+              route: `${size}/${name}`,
+              label,
+              why: `hands off to the operating system with no destination (${nature.href})`,
+            })
+          }
+        } else if (nature.refetch) {
+          /*
+            A retry is judged on whether it ASKED, which is stricter than
+            excluding it: a retry that stops issuing the read is a finding.
+            The pulse poll is discounted by name — it is the one request that
+            fires on a timer rather than because anything was pressed.
+          */
+          const asked = (await page.evaluate(
+            `(window.__READS ?? []).slice(${String(readsBefore)}).filter((s) => s !== 'pulse').length`,
+          )) as number
+          if (asked === 0) {
+            findings.push({
+              route: `${size}/${name}`,
+              label,
+              why: 'it is a retry and pressing it issued no request at all',
+            })
+          }
+        } else if (before === after && !wrote && !moved) {
           inert++
           if (!KNOWN_INERT.has(label) && !INERT_HERE.has(`${name}::${label}`) && !alreadyHere) {
             findings.push({ route: `${size}/${name}`, label, why: 'pressing it changed nothing' })
@@ -820,4 +949,9 @@ console.log(
   `pressed ${String(pressed)} controls · ${String(skipped)} unpressable · ${String(inert)} inert · ${String(findings.length)} findings`,
 )
 for (const f of findings.slice(0, 30)) console.log(`  ${f.route}  ${f.label} — ${f.why}`)
+if (unreached.length > 0) {
+  console.log(`\ncould not be pressed (${String(unreached.length)}):`)
+  for (const u of unreached.slice(0, 40)) console.log(`  ${u}`)
+  if (unreached.length > 40) console.log(`  … and ${String(unreached.length - 40)} more`)
+}
 if (findings.length > 0) process.exit(1)

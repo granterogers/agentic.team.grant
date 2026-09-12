@@ -134,11 +134,21 @@ check(
 
 console.log('\nand it is worked out fresh, not remembered')
 
+/*
+  `delivered_by` is not decoration: 0298 added
+  `tool_enabled_means_delivered`, which refuses an ENABLED row that names
+  nothing to perform it. It exists because `web.search` sat in this table
+  enabled with no implementation anywhere, and `capabilityBrief` builds every
+  agent's prompt from these rows — so all eight were told they could search the
+  web (#50). A fixture tool that claims to be enabled has to answer the same
+  question every real one does, and the honest answer is the suite itself.
+*/
 await db.execute(`
-  insert into public.tool_permissions (tool, level, description, enabled, verbs)
+  insert into public.tool_permissions (tool, level, description, enabled, verbs, delivered_by)
   values (${lit(TOOL)}, 1,
           'A fixture tool created by verify:capability, and removed by it.',
-          true, array['do the fixture thing', 'and the other fixture thing'])
+          true, array['do the fixture thing', 'and the other fixture thing'],
+          'scripts/verify/capability.ts')
 `)
 
 const appeared = await capabilityNow(db)
