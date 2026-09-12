@@ -178,7 +178,28 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-294 migrations · 976 unit tests · ~63 live suites, all green.
+297 migrations · 976 unit tests · ~64 live suites, all green.
+
+**The office says what it understood, and asks for what it needs (#47, #49,
+migrations 0295-0297).** `jobs.understood_as` is the agent's own one-sentence
+reading, written BEFORE acting and write-once — a wrong reading is invisible
+until it is written down, because an output built on a misreading looks like a
+perfectly good output. `public.proposals` is #49's core object: a ROW, not a
+message, because a message cannot be declined, only ignored and sent again on
+Thursday. One row per (agent, kind, need) FOR EVER — the unique index IS the
+durable decline — with a remedy, an argument carrying the count, and a state.
+`app.raise_proposals` reads `impediments_tally`, so noticing costs a SQL query
+rather than a model call per job, which #49 requires; a declined proposal is not
+reopened, not re-counted and not re-delivered. Claire batches through
+`app.proposals_to_send` and stamps `delivered_at`, so nobody else speaks and
+nothing sends twice. `npm run verify:proposes` (19 checks) drives four identical
+failures, asserts ONE proposal with a count of four, declines it, drives four
+more and asserts silence. 0297 exists because the suite could not tear itself
+down: `job_impediments` is append-only by §6, so the subjects had to become
+fixtures — permanent but excluded from every real tally — and `raise_proposals`
+gained the `p_include_fixtures` parameter its own tally already had. Five
+proposals raised from older harness debris were **declined**, not deleted: the
+ledger is append-only and declining is the mechanism for permanent silence.
 
 **An agent knows what it can do (#64, `verify:knows`).** Claire told Grant *"I
 cannot add interactive Telegram buttons; I only generate plain text"* — false

@@ -1058,6 +1058,30 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // better served by doing it — a permission slip for one thing is
       // friction — so `readPlan` returns null below two substantive steps and
       // the single-step paths below take over.
+      /*
+        What the office believes it was asked (#47, migration 0296).
+
+        Written BEFORE anything acts, which is the whole value: an output built
+        on a misreading looks like a perfectly good output, and the restatement
+        is the one place the misunderstanding shows while it is still cheap.
+
+        The resolved instruction, not the raw one — after #63's thread has put
+        the pronouns back — because that is the sentence everything downstream
+        actually works from, and a restatement of a sentence nobody acts on
+        would check the wrong thing.
+
+        Deterministic, and therefore free: no model call. A model asked to
+        paraphrase would introduce a second reading, and then a wrong
+        restatement could come from the paraphrase rather than from the
+        misunderstanding it is supposed to expose.
+      */
+      await deps.db
+        .execute(`
+          select app.understood(${lit(job.jobId)}::uuid,
+            ${lit(instruction.slice(0, 400))})
+        `)
+        .catch(() => undefined)
+
       const unresolved = readPlan(instruction)
       const plan = unresolved === null ? null : await resolveProjects(deps.db, unresolved)
       if (plan !== null) {

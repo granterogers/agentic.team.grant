@@ -292,5 +292,8 @@
   "0291_the_latest_switch_is_the_one_that_counts.sql": "7661875db0b39ab73f403201e095a0144175d67d15ef864018e1370407bde64e",
   "0292_a_debris_projects_switches_are_debris_too.sql": "bec31c0ef195712a546a74135fb0fc1cee9243fc13060a7c76daaedf1dba736a",
   "0293_the_front_door_agrees_with_the_lock.sql": "0f6a0599fdb64cb59b7a747cf26a1b900381faae4236c0cf15f5e9593a1410ae",
-  "0294_delegation_that_leaves_a_trace.sql": "92dfcb150e834bc981ee7ff8d3097038e4295503dec2d97672475b5314147dab"
+  "0294_delegation_that_leaves_a_trace.sql": "92dfcb150e834bc981ee7ff8d3097038e4295503dec2d97672475b5314147dab",
+  "0295_a_proposal_is_a_row_not_a_message.sql": "fa33b294e459626faab908341b723c5cb65a156fc88010c5b4360f8674af7f65",
+  "0296_the_job_says_what_it_understood.sql": "eae8946cfc244592aa88b503971a5503131017348004cdc6cadd68aaf97a64d4",
+  "0297_a_proposal_pass_that_can_be_tested.sql": "bca482aa853d2a66eb1deac20d89f1f00aee21e22e499fd64bfea2e8d650d3ed"
 }

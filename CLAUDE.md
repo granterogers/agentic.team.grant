@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **294 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **297 applied.**
 
 ---
 
@@ -452,6 +452,15 @@ Each of these cost real time. They are here so they cost it once.
   is allowed to fail without failing the job, record the failure somewhere
   (`app.cannot`), and prefer an RPC that takes the vocabulary the CALLER has
   over an INSERT that makes the caller know the column types.
+- **An append-only ledger cannot be torn down, so a suite against it must
+  write FIXTURES.** `job_impediments` refuses DELETE (§6), so `verify:proposes`
+  writing real subjects left permanent rows proposing a tool called
+  `verify-tool-mtwjh76u`. `is_fixture` is inherited from the job by trigger and
+  `impediments_tally` excludes fixtures — so a fixture impediment is permanent
+  AND uncountable, which is what a suite wants. The reader then needs the
+  `p_include_fixtures` parameter the tally already had (0297) so the real path
+  can still be driven. This is the OPPOSITE of #45's advice, and the deciding
+  question is which one the thing under test filters.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 
