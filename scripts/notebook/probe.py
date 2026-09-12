@@ -154,12 +154,48 @@ async def probe() -> dict[str, object]:
             except Exception:
                 pass
 
+        # Capability 4 onwards: what the adapter OFFERS, checked without
+        # calling it.
+        #
+        # Issue #64. This table reported `list_notebooks, account_limits,
+        # list_sources` while `act.py` demonstrably creates notebooks, uploads
+        # sources and generates audio — so an agent consulting it told Grant it
+        # could not create a notebook, in the same conversation in which it
+        # told him it could not send a button.
+        #
+        # The three above are PROBED: they were called and they worked. A write
+        # cannot be probed that way without creating a notebook on every run,
+        # which is wasteful and litters his account. So these are checked by
+        # asking the client whether the method is there — a weaker claim, and
+        # an honest one, and enough to stop an agent denying a capability the
+        # office uses daily.
+        #
+        # Named `offers_*` for exactly that reason: a reader can tell which
+        # half was exercised and which half was only found.
+        for name, path in (
+            ("create_notebook", ("notebooks", "create")),
+            ("add_source_url", ("sources", "add_url")),
+            ("add_source_text", ("sources", "add_text")),
+            ("delete_source", ("sources", "delete")),
+            ("generate_artifact", ("artifacts", "retry_failed")),
+            ("list_artifacts", ("artifacts", "list")),
+            ("download_artifact", ("artifacts", "get")),
+            ("create_note", ("notes", "create")),
+            ("ask", ("chat", "ask")),
+        ):
+            group = getattr(client, path[0], None)
+            if group is not None and callable(getattr(group, path[1], None)):
+                capabilities.append(f"offers_{name}")
+
         latency_ms = int((time.monotonic() - started) * 1000)
 
         # DEGRADED when the basics work but something expected did not.
         # Reporting `available_unofficial` while a capability is missing would
         # be the same error as calling a stored credential a working one.
         state = "available_unofficial"
+        # Only the probed three decide the state. An `offers_` entry says the
+        # method exists, which is not evidence that it works, and letting it
+        # promote the state would be the stored-credential error again.
         if first is not None and "list_sources" not in capabilities:
             state = "degraded"
         if "account_limits" not in capabilities:

@@ -48,6 +48,7 @@
     "verify:waiting": "tsx scripts/verify/waiting.ts",
     "verify:conversation": "tsx scripts/verify/conversation.ts",
     "verify:handoff": "tsx scripts/verify/handoff.ts",
+    "verify:knows": "tsx scripts/verify/knows.ts",
     "verify:dryrun": "tsx scripts/verify/dryrun.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",

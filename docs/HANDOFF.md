@@ -178,7 +178,22 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-294 migrations · 976 unit tests · ~61 live suites, all green.
+294 migrations · 976 unit tests · ~63 live suites, all green.
+
+**An agent knows what it can do (#64, `verify:knows`).** Claire told Grant *"I
+cannot add interactive Telegram buttons; I only generate plain text"* — false
+when she said it, and he went and asked for a feature he already had. The two
+mechanisms (`capabilityBrief` in the prompt, `contradictsReality` as the net
+under it) were already built; the proof was not, and the third box was open.
+The suite asserts his exact sentence is caught, six other wordings of the same
+claim, and — the half that decides whether the guard survives — six TRUE
+sentences it must not fire on, because a net that catches honest answers gets
+loosened and the bug comes back. `notebook_capability` reported three read
+capabilities while `act.py` creates notebooks and generates audio, so the probe
+now also reports what the adapter OFFERS, checked by asking the client whether
+the method exists rather than by creating a notebook on every run — named
+`offers_*` so a reader can tell which half was exercised and which was only
+found, and deliberately unable to promote the probe's state.
 
 **Delegation leaves a trace (#65, migration 0294).** Re-measured against the
 Issue's own numbers: jobs addressed had moved from 0/499 to 9/856 and four of
