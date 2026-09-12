@@ -5370,7 +5370,7 @@ function openContact(c) {
         ${row('Next', c.next ? `${c.next}${c.nextDue ? ` — ${c.nextDue}` : ''}` : '')}
       </div>
       ${(() => {
-        const extra = people.fieldsOn(c.name)
+        const extra = people.fieldsOn(c)
         return extra.length === 0 ? '' : `<div class="fields">${extra.map((f, i) =>
           `<div class="field">
              <span class="t-label">${esc(f.label)}</span>
@@ -5423,20 +5423,27 @@ function openContact(c) {
   $('.close', v).addEventListener('click', () => { sheet(v, false) })
   v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
 
+  /*
+    Labels and fields go to the office now (#110, migration 0285), so every one
+    of these is a round trip that can be refused. `after` redraws on success and
+    says what the office said on a refusal — §5: the page repeats the RPC's
+    words rather than inventing softer ones.
+  */
+  const again = (err) => {
+    openContact(c)              // redraw the sheet
+    render()                    // and the rows behind it
+    sheet($('#viewer'), true)
+    if (err) say($('.sheet', $('#viewer')), err.message, 'warn')
+  }
+  const send = (work) => {
+    work().then(() => { again() }).catch((err) => { again(err) })
+  }
+
   for (const b of v.querySelectorAll('[data-toggle-label]')) {
-    b.addEventListener('click', () => {
-      people.toggleLabel(c, b.dataset.toggleLabel)
-      openContact(c)            // redraw the sheet
-      render()                  // and the rows behind it
-      sheet($('#viewer'), true)
-    })
+    b.addEventListener('click', () => { send(() => people.toggleLabel(c, b.dataset.toggleLabel)) })
   }
   for (const b of v.querySelectorAll('[data-drop-field]')) {
-    b.addEventListener('click', () => {
-      people.removeField(c.name, Number(b.dataset.dropField))
-      openContact(c)
-      sheet($('#viewer'), true)
-    })
+    b.addEventListener('click', () => { send(() => people.removeField(c, Number(b.dataset.dropField))) })
   }
   const form = $('[data-add-field]', v)
   form?.addEventListener('submit', (e) => {
@@ -5444,9 +5451,7 @@ function openContact(c) {
     const label = form.label.value.trim()
     const value = form.value.value.trim()
     if (label === '') return
-    people.addField(c.name, label, value)
-    openContact(c)
-    sheet($('#viewer'), true)
+    send(() => people.addField(c, label, value))
   })
   for (const b of v.querySelectorAll('[data-label-edit]')) {
     b.addEventListener('click', () => { labelEditor(() => { openContact(c); sheet($('#viewer'), true) }) })
@@ -5486,19 +5491,33 @@ function labelEditor(after) {
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>`
 
+    /*
+      Every one of these is a round trip since #110. A refusal — a duplicate
+      name is the one that actually happens — is shown beside the list rather
+      than swallowed, and the list is redrawn from what the office returned
+      rather than from what was typed.
+    */
+    const send = (work) => {
+      work()
+        .then(() => { draw() })
+        .catch((err) => { draw(); say($('.sheet', v), err.message, 'warn') })
+    }
+
     for (const i of v.querySelectorAll('[data-rename]')) {
-      i.addEventListener('change', () => { people.renameLabel(i.dataset.rename, i.value.trim() || 'Label') })
+      i.addEventListener('change', () => {
+        send(() => people.renameLabel(i.dataset.rename, i.value.trim() || 'Label'))
+      })
     }
     for (const b of v.querySelectorAll('[data-remove]')) {
-      b.addEventListener('click', () => { people.removeLabel(b.dataset.remove); draw() })
+      b.addEventListener('click', () => { send(() => people.removeLabel(b.dataset.remove)) })
     }
     const f = $('[data-add-label]', v)
     f?.addEventListener('submit', (e) => {
       e.preventDefault()
       const name = f.name.value.trim()
       if (name === '') return
-      people.addLabel(name)
-      draw()
+      f.name.value = ''
+      send(() => people.addLabel(name))
     })
     $('.close', v).addEventListener('click', () => { sheet(v, false); render(); after?.() })
   }

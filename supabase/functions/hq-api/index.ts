@@ -219,6 +219,26 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // that demands nine fields before it will take "Ben, referrer" is a form
   // people route around.
   contact_add: { fn: 'hq_contact_add', required: ['p_project', 'p_name'] },
+  /*
+    Labels Grant defines, and fields he adds (#110, migration 0285).
+
+    The last two things the studio kept in `localStorage`, and ADR-0021 is why
+    they moved: he uses more than one device, and a label he invented on the
+    laptop was not there on the phone.
+
+    `p_hue` is optional — omitting it takes the next colour in the ring, which
+    is what the page did and what makes two labels made in a row look
+    different. `contact_labels_set` and `contact_fields_set` each replace the
+    WHOLE value rather than applying a delta: 0250's shape for `p_panels`, and
+    right for the same reasons — idempotent, exactly invertible for #118's
+    undo, and impossible to half-apply. §5 still holds; the RPC validates every
+    entry and writes nothing if one is malformed.
+  */
+  contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
+  contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
+  contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
+  contact_labels_set: { fn: 'hq_contact_labels_set', required: ['p_contact_id', 'p_labels'] },
+  contact_fields_set: { fn: 'hq_contact_fields_set', required: ['p_contact_id', 'p_fields'] },
   // `p_reason` is optional here and required by the RPC when the state is
   // `blocked` — the schema's own check constraint, said in a sentence.
   task_state: { fn: 'hq_task_state', required: ['p_task_id', 'p_state'] },

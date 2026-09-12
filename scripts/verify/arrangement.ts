@@ -64,6 +64,10 @@ const db = new ManagementApiExecutor(
 const studio = (
   (await db.execute('select app.hq_studio() as d')).rows[0] as {
     d: {
+      // #110. Only what this suite plants into or reads back — the payload has
+      // a great deal more and typing all of it here would be a second copy of
+      // `hq_studio` that drifts.
+      contactLabels?: unknown
       projects: {
         slug: string
         name: string
@@ -71,6 +75,7 @@ const studio = (
         icon: string | null
         iconHue: string | null
         image: string | null
+        contacts?: unknown
       }[]
     }
   }
@@ -104,6 +109,38 @@ subject.icon = 'rocket'
 subject.iconHue = 'p-iris'
 subject.image = null
 
+/*
+  And the contact labels (#110, migration 0285), the last thing the studio kept
+  in `localStorage`.
+
+  Planted for the same reason as the layout and the look: the question is
+  whether what the OFFICE holds is what is DRAWN. `Bespoke` is a name no seed
+  contains and no `role` string can derive, so a chip reading it can only have
+  come from the payload — the derived fallback (#107) could not produce it.
+
+  `labelsSet: true` with a label the role does not name is the other half: it
+  proves the office's answer WINS over the derivation, which is the rule that
+  makes a label Grant removed stay removed.
+*/
+const PLANTED_LABELS = [
+  { id: '11111111-1111-4111-8111-111111111111', name: 'Bespoke', hue: 'p-plum' },
+  { id: '22222222-2222-4222-8222-222222222222', name: 'Client', hue: 'p-moss' },
+]
+studio.contactLabels = PLANTED_LABELS
+subject.contacts = [
+  {
+    id: '33333333-3333-4333-8333-333333333333',
+    name: 'Planted Person',
+    kind: 'person',
+    role: 'Client',
+    stage: 'active',
+    labels: [PLANTED_LABELS[0]?.id],
+    labelsSet: true,
+    fields: [{ label: 'Cohort', value: 'Spring 2026' }],
+    docs: [],
+  },
+]
+
 const server = createServer(async (request, response) => {
   let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
   if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
@@ -136,6 +173,7 @@ await page.addInitScript(`
   window.__SENT = [];
   try { localStorage.setItem('hq.token', 'verify-arrangement'); } catch (e) {}
   try { localStorage.removeItem('studio.panels'); } catch (e) {}
+  try { localStorage.removeItem('studio.people'); } catch (e) {}
   window.fetch = async (input, init) => {
     const url = String(input);
     if (url.includes('hq-api')) {
@@ -318,6 +356,124 @@ check(
   'and pressing the chosen mark again takes it off',
   cleared === undefined ? 'nothing was sent' : JSON.stringify(cleared.args),
   JSON.stringify(cleared?.args ?? {}).includes('"p_clear":["icon"]'),
+)
+
+// --- 4. contact labels and fields are the office's, not the browser's (#110) --
+//
+// ADR-0021's last holdout. The failure is invisible to every other suite for
+// exactly the reason the layout's was: a page that keeps labels in
+// `localStorage` drags, filters, renders and captures perfectly, and is wrong
+// only on the second device.
+
+/*
+  Close the look picker first. Section 3 left it open in `#viewer`, and a sheet
+  covering the page swallows every click underneath it — which reads as "the
+  button did nothing" and cost three red checks that were about the sheet and
+  not about labels at all.
+*/
+await page.evaluate(
+  `document.querySelectorAll('#viewer .close, #settings .close').forEach((b) => { b.click() })`,
+)
+await page.waitForTimeout(600)
+const sheetShut = await page.evaluate(
+  `document.querySelector('#viewer').hidden && document.querySelector('#settings').hidden`,
+)
+check(
+  'the look picker closes',
+  sheetShut === true ? 'both sheets hidden' : 'still open',
+  sheetShut === true,
+)
+
+await page.evaluate(`document.querySelector('[data-tab="contacts"]')?.click()`)
+await page.waitForTimeout(900)
+
+const chips = (await page.evaluate(
+  `[...document.querySelectorAll('[data-filter]')].map((e) => e.textContent.trim())`,
+)) as string[]
+check(
+  'a label defined in the office is drawn',
+  chips.length === 0 ? 'no filter chips at all' : chips.join(' | '),
+  chips.some((c) => c.includes('Bespoke')),
+)
+
+/*
+  The count beside the chip, not just the chip.
+
+  `Planted Person` has `role: 'Client'`, so #107's derivation would put them
+  under Client — and `labelsSet` says Grant already decided, and decided
+  Bespoke. Bespoke reading 1 and Client reading 0 is the whole rule in two
+  numbers, and getting it backwards is what "the derived set never merges into
+  his choice" means when it fails.
+*/
+const counts = Object.fromEntries(
+  (
+    (await page.evaluate(
+      `[...document.querySelectorAll('[data-filter]')].map((e) =>
+         [e.textContent.replace(/[0-9]+$/, '').trim(), e.querySelector('.n')?.textContent ?? ''])`,
+    )) as [string, string][]
+  ).map(([k, v]) => [k, v]),
+)
+check(
+  'his decision wins over the derived label (#107)',
+  JSON.stringify(counts),
+  counts.Bespoke === '1' && counts.Client === '0',
+)
+
+// `data-person`, not `data-contact`: the contacts TAB draws `.pcard` with the
+// name, while `data-contact` is the dashboard panel's index-keyed card.
+await page.evaluate(`document.querySelector('[data-person]')?.click()`)
+await page.waitForTimeout(900)
+
+const field = (await page.evaluate(
+  `[...document.querySelectorAll('#viewer .field .t-label')].map((e) => e.textContent.trim())`,
+)) as string[]
+check(
+  'a field he added is drawn from the office',
+  field.join(', ') || 'no fields',
+  field.includes('Cohort'),
+)
+
+const before4 = (await sent()).length
+await page.evaluate(
+  `document.querySelector('[data-toggle-label="22222222-2222-4222-8222-222222222222"]')?.click()`,
+)
+await page.waitForTimeout(1_200)
+const toggled = (await sent()).slice(before4).find((x) => x.action === 'contact_labels_set')
+check(
+  'applying a label reaches the office',
+  toggled === undefined ? 'nothing was sent' : JSON.stringify(toggled.args),
+  Array.isArray(toggled?.args.p_labels) &&
+    (toggled.args.p_labels as string[]).includes('22222222-2222-4222-8222-222222222222'),
+)
+
+const before5 = (await sent()).length
+await page.evaluate(`
+  const f = document.querySelector('[data-add-field]');
+  if (f) { f.label.value = 'Zoom'; f.value.value = 'grant.rogers'; f.requestSubmit(); }
+`)
+await page.waitForTimeout(1_200)
+const fielded = (await sent()).slice(before5).find((x) => x.action === 'contact_fields_set')
+check(
+  'adding a field reaches the office',
+  fielded === undefined ? 'nothing was sent' : JSON.stringify(fielded.args),
+  JSON.stringify(fielded?.args.p_fields ?? []).includes('Zoom'),
+)
+
+/*
+  And the assertion that is the whole point of ADR-0021: after all of that,
+  nothing was written to `localStorage`.
+
+  Without this the suite passes for a page that sends to the office AND keeps a
+  local copy — which is worse than either, because the two disagree the moment
+  a second device touches it.
+*/
+const stored = await page.evaluate(`
+  (() => { try { return localStorage.getItem('studio.people'); } catch (e) { return 'unreadable'; } })()
+`)
+check(
+  'and nothing went to localStorage',
+  stored === null ? 'the key is not there' : String(stored),
+  stored === null,
 )
 
 // --- and nothing threw ------------------------------------------------------

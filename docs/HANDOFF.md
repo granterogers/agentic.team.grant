@@ -178,7 +178,22 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-284 migrations · 964 unit tests · ~55 live suites, all green.
+285 migrations · 964 unit tests · ~55 live suites, all green.
+
+**Contact labels and custom fields are the office's, not the browser's (#110,
+migration 0285).** The last thing in the studio on the wrong side of ADR-0021 —
+a label Grant invented on the laptop was not there on the phone, and one cleared
+browser lost the lot. `contact_labels`, `contact_label_links` and
+`contacts.fields`, keyed on `contact_id` and never on the name (which was wrong
+the first time two people share one). #107's derived labels survive with both
+their rules intact: `contacts.labels_set` is what tells "no labels" from "never
+touched", because an absent link row says both and without it a label he removes
+comes straight back. Both writes replace the whole value rather than applying a
+delta, which is 0250's shape for `p_panels` and gives #118's undo an exact
+inverse — `hq_undo` learned all three reversals in the same migration, since
+recording an inverse it cannot perform turns Undo into a button that consumes
+the offer and does nothing. `verify:arrangement` grew seven checks, the last of
+which is the one that matters: after every write, `localStorage` is still empty.
 
 **The corpus holds material and nothing else (#19, #20, migrations
 0283-0284).** `duty:notion-sync` stored two things that were never source

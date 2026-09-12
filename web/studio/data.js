@@ -7,6 +7,9 @@
   at their real lengths, including the awkward ones.
 */
 
+import * as people from './people.js'
+
+
 /*
   The real portraits.
 
@@ -497,6 +500,12 @@ export async function hydrate(endpoint, token) {
         requests: p.requests ?? [],
       })),
     )
+
+    // The labels Grant defined for contacts (#110, migration 0285). In this
+    // payload rather than a second fetch: a second fetch fails by quietly
+    // returning nothing, which renders as a contacts tab with no categories and
+    // is indistinguishable from a person who never defined any.
+    people.hydrate(data.contactLabels)
 
     for (const k of Object.keys(WAITING)) delete WAITING[k]
     if (data.waiting) Object.assign(WAITING, data.waiting)
