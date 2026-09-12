@@ -252,6 +252,19 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     resize did not run and is worth refusing loudly rather than storing.
   */
   project_look: { fn: 'hq_project_look', required: ['p_slug'] },
+  /*
+    Editing a task (#106, migration 0255).
+
+    Only the id is required: everything else is an edit, and `p_clear` says
+    which fields are being taken away — null cannot mean both "leave this" and
+    "remove it", and removing a due date is a normal thing to want.
+
+    `state` is deliberately NOT here. `task_state` owns it, because it also
+    maintains `done_at` and enforces the reason a blocked task needs; two
+    functions writing one column is how a constraint gets violated by the one
+    that forgot.
+  */
+  task_update: { fn: 'hq_task_update', required: ['p_task_id'] },
   // One setter over three kinds of routing change, allow-listed inside the
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.

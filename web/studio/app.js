@@ -276,7 +276,24 @@ const taskRow = (t, i) => {
               : t.note ? `<span class="t-meta">${esc(t.note)}</span>` : ''}
     </span>
     ${who ? face(who, 22) : ''}
-  </button>`, 'task', String(i), t.title)
+  </button>
+  <!--
+    Editing it (#106). A SIBLING of the row, not a child: the row is a button
+    and a button inside a button is invalid markup that browsers silently
+    rearrange. The withtalk wrapper already puts one control beside the row, so
+    this is the second in the same slot.
+
+    Only for a writer, and only for a task the office actually holds -- a
+    prototype task has no id and nothing to update.
+
+    No backticks in this comment. Template literal.
+  -->
+  ${t.id && canWrite() ? `<button class="rowedit" data-task-edit="${esc(t.id)}"
+    aria-label="Edit ${esc(t.title)}" title="Edit this task">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M14.5 4.5l5 5-9 9H5.5v-5z"/></svg>
+  </button>` : ''}`, 'task', String(i), t.title)
 }
 
 // --- views -------------------------------------------------------------------
@@ -4290,6 +4307,22 @@ function render() {
     button still shows the state, because `syncCallButtons` paints every
     element carrying `data-call`.
   */
+  /*
+    Editing a task (#106), from the row it is on.
+
+    The id off the button rather than the index: `state.done` is keyed by
+    position and the list reorders as tasks change state, so an index is the
+    wrong task the moment anything moves.
+  */
+  for (const b of root.querySelectorAll('[data-task-edit]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const p = byId(state.project)
+      const t = p?.tasks.find((x) => x.id === b.dataset.taskEdit)
+      if (p && t) taskSheet(t, p)
+    })
+  }
+
   // Changing how a project looks (#83), from the mark itself.
   for (const b of root.querySelectorAll('[data-look]')) {
     b.addEventListener('click', () => {
@@ -4731,6 +4764,142 @@ function render() {
   and CLAUDE.md forbids adding an auth system. Migration 0253 records the whole
   reasoning and the size it stops being right at.
 */
+/*
+  Editing a task (#106).
+
+  `hq_task_add` could make one and `hq_task_state` could move it between the
+  five states, and that was everything reachable. Renaming a task, moving its
+  date, handing it to somebody, making it a subtask or a milestone: every column
+  was in the table and nothing could touch any of them.
+
+  ## One form, and the state is not in it
+
+  `hq_task_state` owns `state`, because it also maintains `done_at` and enforces
+  the reason a blocked task needs. The tick on the row is that control and it
+  already works; putting a second one here would be two ways to write one column
+  and they would disagree the first time one of them forgot the constraint.
+
+  ## Removing is not the same as leaving alone
+
+  Every field sends only what changed, and `p_clear` says what is being taken
+  away — null cannot mean both. "This is not happening this week after all" is
+  a due date REMOVED, which without `p_clear` there is no way to say.
+
+  ## The date is `due_on`, not `due`
+
+  `due` is already rendered as "Due 1 October" for the list. A date input cannot
+  take that, and an editor that parsed a rendered string back into a date would
+  be a bug waiting for a locale — so migration 0256 puts the raw values on the
+  row beside the rendered ones.
+*/
+function taskSheet(t, p) {
+  const v = $('#viewer')
+  const others = p.tasks.filter((x) => x.id !== undefined && x.id !== t.id)
+  v.innerHTML = `<div class="sheet ${esc(p.hue)}">
+      <div class="chead">
+        <span>
+          <h2 class="t-title" style="margin:0">Edit this task</h2>
+          <p class="t-meta" style="margin:4px 0 0">On ${esc(p.name)}. The tick on the
+            row is what marks it done — this is everything else.</p>
+        </span>
+      </div>
+      <form class="taskedit" data-task-edit-form data-saidwrap>
+        <label class="field"><span class="t-label">Title</span>
+          <input name="title" value="${esc(t.title ?? '')}" maxlength="200" required></label>
+        <label class="field"><span class="t-label">Note</span>
+          <textarea name="detail" rows="2" maxlength="2000"
+            placeholder="The thing you did not have time to write down">${esc(t.note ?? '')}</textarea></label>
+        <label class="field"><span class="t-label">Due</span>
+          <input type="date" name="due_on" value="${esc(t.due_on ?? '')}"></label>
+        <label class="field"><span class="t-label">Starts</span>
+          <input type="date" name="starts_on" value="${esc(t.starts_on ?? '')}"></label>
+        <label class="field"><span class="t-label">Who</span>
+          <select name="assignee">
+            <option value="">Nobody yet</option>
+            ${CREW.map((c) => `<option value="${esc(c.slug)}"${
+              c.slug === t.who ? ' selected' : ''
+            }>${esc(c.name)}</option>`).join('')}
+          </select></label>
+        <label class="field"><span class="t-label">Under</span>
+          <select name="parent">
+            <option value="">Nothing — it stands on its own</option>
+            ${others.map((x) => `<option value="${esc(x.id)}"${
+              x.id === t.parent ? ' selected' : ''
+            }>${esc(x.title)}</option>`).join('')}
+          </select></label>
+        <label class="field"><span class="t-label">Priority</span>
+          <input type="number" name="priority" min="1" max="999"
+            value="${esc(String(t.priority ?? 100))}"></label>
+        <label class="field"><span class="t-label">Milestone</span>
+          <span class="checkrow"><input type="checkbox" name="milestone"${
+            t.milestone === true ? ' checked' : ''
+          }> <span class="t-meta">A point the work is measured against, not a job to do</span></span></label>
+        <div class="lookrow">
+          <button class="btn primary" type="submit">Save</button>
+          <button class="btn quiet" type="button" data-task-edit-close>Cancel</button>
+          <span class="t-meta" data-said></span>
+        </div>
+      </form>
+    </div>
+    <button class="close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>`
+
+  sheet(v, true)
+  const shut = () => { sheet(v, false) }
+  $('.close', v).addEventListener('click', shut)
+  $('[data-task-edit-close]', v)?.addEventListener('click', shut)
+  v.addEventListener('click', (e) => { if (e.target === v) shut() })
+
+  const form = $('[data-task-edit-form]', v)
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const f = new FormData(form)
+    const said = (k) => String(f.get(k) ?? '').trim()
+    const args = { p_task_id: t.id }
+    const clear = []
+
+    /*
+      Only what CHANGED, and a field emptied is a clear.
+
+      Sending every field on every save would work and would be wrong in one
+      specific way: it would overwrite a value somebody else — an agent, the
+      Telegram bot — changed between this sheet opening and Save being pressed.
+      Sending only the edits makes the collision as narrow as the edit.
+    */
+    const was = (k, now) => (String(t[k] ?? '') === now ? null : now)
+    const title = was('title', said('title'))
+    if (title !== null && title !== '') args.p_title = title
+    const detail = was('note', said('detail'))
+    if (detail !== null) { detail === '' ? clear.push('detail') : (args.p_detail = detail) }
+    for (const [field, key] of [['due_on', 'due_on'], ['starts_on', 'starts_on']]) {
+      const now = was(field, said(field))
+      if (now === null) continue
+      now === '' ? clear.push(key) : (args[`p_${key}`] = now)
+    }
+    const who = was('who', said('assignee'))
+    if (who !== null) { who === '' ? clear.push('assignee') : (args.p_assignee = who) }
+    const parent = String(t.parent ?? '') === said('parent') ? null : said('parent')
+    if (parent !== null) { parent === '' ? clear.push('parent') : (args.p_parent = parent) }
+    const priority = Number(said('priority'))
+    if (Number.isFinite(priority) && priority !== (t.priority ?? 100)) args.p_priority = priority
+    const milestone = f.get('milestone') !== null
+    if (milestone !== (t.milestone === true)) args.p_milestone = milestone
+    if (clear.length > 0) args.p_clear = clear
+
+    const button = $('button[type=submit]', form)
+    if (Object.keys(args).length === 1) {
+      say(button, 'Nothing changed.')
+      return
+    }
+    const done = await attempt(button, 'Saving…', () => act('task_update', args), 'Saved.')
+    if (done === null) return
+    shut()
+    await refresh()
+  })
+}
+
 function lookSheet(p) {
   const v = $('#viewer')
   const chosenHue = p.iconHue ?? p.hue

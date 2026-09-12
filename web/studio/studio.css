@@ -338,7 +338,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 5%), var(--surface) 40%);
   border: 1px solid var(--edge); border-radius: var(--r-sheet);
   box-shadow: var(--lift-3); width: min(720px, 100%); max-height: 86vh;
-  overflow: auto; padding: var(--s5); }
+  overflow: auto; padding: var(--s5);
+  /* A sheet taller than the screen scrolls, and it has to LOOK like it does.
+     Chromium's overlay scrollbar is invisible until you are already scrolling,
+     which is the #108 defect wearing a different hat: the task editor on a
+     phone simply ended below Priority, with Save nowhere. */
+  scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+.sheet::-webkit-scrollbar { width: 8px; }
+.sheet::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-3) 55%, transparent);
+  border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
 .close { position: absolute; top: var(--s4); right: var(--s4); width: 44px; height: 44px;
   border-radius: 50%; background: var(--surface); display: grid; place-items: center;
   box-shadow: var(--lift-1); }
@@ -3197,6 +3206,66 @@ body.docked { padding-right: min(380px, 100vw); }
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--hue) 70%, transparent);
 }
 .lookrow { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+
+/* --- editing a task (#106) --------------------------------------------------
+   The pencil sits beside the row's talk button, in the same slot, and appears
+   on hover like every other row control. `position: absolute` is not needed
+   here: `.withtalk` is already a flex row and the button is a real item, so
+   reserving its width is correct rather than the #67 mistake -- there is no
+   text beside it to squeeze. */
+.rowedit {
+  width: 30px; height: 30px; border-radius: 8px; flex: none;
+  display: grid; place-items: center; color: var(--ink-3);
+  opacity: 0; transition: opacity .16s, color .16s, background .16s;
+}
+.withtalk:hover .rowedit, .rowedit:focus-visible { opacity: 1; }
+.rowedit:hover { background: var(--sunken); color: var(--ink); }
+@media (pointer: coarse) { .rowedit { opacity: 1; width: 44px; height: 44px; } }
+
+.taskedit { display: grid; gap: var(--s3); margin-top: var(--s4); }
+.taskedit .field { align-items: center; }
+.taskedit input, .taskedit textarea, .taskedit select {
+  min-height: 44px; width: 100%; min-width: 0;
+  padding: 0 var(--s3); border-radius: var(--r-control);
+  border: 1px solid var(--edge); background: var(--surface); color: var(--ink);
+  /* 16px or iOS Safari zooms the page the moment one of these takes focus. */
+  font: 400 16px/1.4 var(--text);
+}
+.taskedit textarea { padding: 10px var(--s3); resize: vertical; line-height: 1.5; }
+.taskedit input:focus, .taskedit textarea:focus, .taskedit select:focus {
+  outline: none; border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.checkrow { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.checkrow input { width: 20px; height: 20px; min-height: 20px; flex: none; }
+/*
+  The actions stay on screen.
+
+  Eight fields is taller than a phone, so the sheet scrolls — and a Save button
+  that is only reachable by scrolling to the bottom of a form is a Save button
+  people lose. Sticky to the foot of the scroller, on the sheet's own
+  background so the fields pass behind it rather than through it.
+
+  A negative margin and matching padding, so the bar spans the sheet's full
+  width rather than leaving a gutter of scrolling content down each side.
+*/
+.taskedit .lookrow {
+  position: sticky; bottom: calc(var(--s5) * -1); z-index: 2;
+  margin: var(--s3) calc(var(--s5) * -1) calc(var(--s5) * -1);
+  padding: var(--s4) var(--s5) var(--s5);
+  /* The sheet is glass, so the bar cannot be a flat `--surface` and match it.
+     A gradient that reaches full opacity well above the buttons reads as
+     content passing behind rather than as a panel sitting on top, and hides
+     the half-cropped label that the first version left showing through. */
+  background: linear-gradient(to bottom,
+    transparent, color-mix(in srgb, var(--surface) 92%, transparent) 55%,
+    color-mix(in srgb, var(--surface) 92%, transparent));
+}
+/* Eight fields is taller than a phone. The sheet scrolls rather than clipping
+   the Save button off the bottom, which is the one control that must be
+   reachable. */
+@media (max-width: 860px) {
+  .taskedit .field { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 4px; }
+}
 /* The switcher's dot, when the project has a mark of its own. Same footprint
    as the plain dot so the rows do not shift, just legible instead of coloured. */
 .dot.mark {

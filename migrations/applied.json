@@ -252,5 +252,7 @@
   "0251_a_missing_key_is_not_a_wrong_key.sql": "ced0a8e5b613ebe23bd86f4d3c27cc7a3925a25d7243af01f91d3df2b0b1387f",
   "0252_disconnect_means_disconnect.sql": "be30bfbf5d0d0976aa6a9b82d1a11a0a62c563d680c47ee9ebc42122b02ff1c2",
   "0253_a_project_looks_like_what_he_says.sql": "e5cef55a71386b7baf3354b917469b4292e49beaf50723f20d8f6f0243b60c0f",
-  "0254_an_image_that_is_not_an_image.sql": "5a2d52ae3758ce8abe5a1d09db7cb084775fe04ae63ab863ad568231986bc8a4"
+  "0254_an_image_that_is_not_an_image.sql": "5a2d52ae3758ce8abe5a1d09db7cb084775fe04ae63ab863ad568231986bc8a4",
+  "0255_a_task_can_be_edited.sql": "fabe310a5b0ad1ac8ae34240d01b7966d0a3e53f2c87a8a2eda87340ba7c2b1e",
+  "0256_the_task_row_carries_what_the_editor_needs.sql": "f5ff13131be12e67613a2971b4fcc7d215fd123f923271d7861a1cf16848e215"
 }
