@@ -22,6 +22,7 @@ import * as workspace from './workspace.js'
 import * as panels from './panels.js'
 import * as pulse from './pulse.js'
 import * as people from './people.js'
+import * as when from './when.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
 import * as icons from './icons.js'
@@ -1136,7 +1137,7 @@ function contactCard(c, i) {
           stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         ${esc(c.next)}${c.nextDue ? ` — ${esc(c.nextDue)}` : ''}</span>` : ''}
     </span>
-    <span class="t-meta when">${esc(c.last)}</span>
+    <span class="t-meta when">${when.stamp(c.lastAt, c.last)}</span>
   </button>`, 'contact', String(i), c.name)
 }
 
@@ -1276,7 +1277,7 @@ function lately() {
               <span class="label t-meta" style="color:var(--ink)">
                 <b style="font-weight:600">${esc(crewBy(e.who).name ?? e.who)}</b>
                 ${esc(e.verb)} ${esc(e.what)}${e.project ? ` on ${esc(e.project)}` : ''}
-                <span style="color:var(--ink-3)"> · ${esc(e.when)}</span>
+                <span style="color:var(--ink-3)"> · ${when.stamp(e.at, e.when)}</span>
                 ${e.why ? `<span class="latewhy">${esc(e.why)}</span>` : ''}
               </span>
             </div>`,
@@ -1609,7 +1610,7 @@ const PANEL = {
     return `<div class="task" style="cursor:default">${face(c, 22)}
       <span class="label t-meta" style="color:var(--ink)">
         <b style="font-weight:600">${esc(c.name)}</b> ${esc(a.verb)} ${esc(a.what)}
-        <span style="color:var(--ink-3)"> · ${esc(a.when)}</span></span></div>`
+        <span style="color:var(--ink-3)"> · ${when.stamp(a.at, a.when)}</span></span></div>`
   }).join('')}</div>`,
 
   links: (p) => `<div class="links" style="margin:0">
@@ -1661,7 +1662,7 @@ function teamTab(p) {
     const st = workspace.STATE[r.state] ?? workspace.STATE.working
     return `<article class="wrow ${st.hue}" data-row="${esc(r.id)}">
       <div class="wask">
-        <span class="t-label">Asked · ${esc(r.asked)}</span>
+        <span class="t-label">Asked · ${when.stamp(r.askedAt, r.asked)}</span>
         <p>${esc(r.ask)}</p>
         <span class="t-meta">${esc(r.from)}${
           r.context ? ` · about ${esc(r.context.title)}` : ''}</span>
@@ -1679,7 +1680,7 @@ function teamTab(p) {
               <span class="wpage">${pageSvg(r.output.title, r.output.kind)}</span>
               <span>
                 <b>${esc(r.output.title)}</b>
-                <span class="t-meta">${esc(c.name)} · ${esc(r.delivered)} · ${esc(r.output.size)}</span>
+                <span class="t-meta">${esc(c.name)} · ${when.stamp(r.deliveredAt, r.delivered)} · ${esc(r.output.size)}</span>
                 ${r.derived.length === 0 ? '' :
                   `<span class="t-meta from">From ${esc(r.derived.join(', '))}</span>`}
               </span>
@@ -1921,7 +1922,7 @@ function activeJobs(p) {
       ${face(c, 30)}
       <div class="jbody">
         <b>${esc(r.ask)}</b>
-        <span class="t-meta">${esc(c.name)} · asked ${esc(r.asked)}${
+        <span class="t-meta">${esc(c.name)} · asked ${when.stamp(r.askedAt, r.asked)}${
           r.context ? ` · about ${esc(r.context.title)}` : ''}</span>
         ${r.blocked === undefined ? '' :
           `<span class="blocker">
@@ -3051,7 +3052,7 @@ function connectionsTab() {
       <div class="svfoot">
         <span class="dotstate"></span>
         <span class="t-label">${esc(config.STATE_LABEL[c.state])}</span>
-        <span class="t-meta">${esc(c.last)}</span>
+        <span class="t-meta">${when.stamp(c.lastAt, c.last)}</span>
         <!--
           The action, and it goes somewhere (#89, #90).
 
@@ -5853,7 +5854,13 @@ async function live() {
     to "the page shows it". A second one would drift, and the version that
     drifted would be this one — the rarely-exercised background path.
   */
-  pulse.watch(API, token, refresh)
+  /*
+    The fourth argument is #153: relative times re-made from the instants in
+    the DOM, on this tick and on no timer of its own. A second `setInterval`
+    would be a second thing to leak and a second thing to forget to stop when
+    the tab is hidden — both of which `pulse` already handles.
+  */
+  pulse.watch(API, token, refresh, () => { when.retime(document) })
 }
 
 /*

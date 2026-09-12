@@ -178,7 +178,22 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-287 migrations · 964 unit tests · ~57 live suites, all green.
+288 migrations · 976 unit tests · ~58 live suites, all green.
+
+**A time on the page stays true while the page is open (#153, migration
+0288).** Every "3 days ago" was computed in SQL when the payload was built —
+harmless when a page lived for a minute, and quietly wrong now that #117's
+watcher keeps the studio open all afternoon. The projections carry the instant
+beside the rendered string (`at`, `lastAt`, `askedAt`, `deliveredAt`), the words
+are made in `web/studio/when.js`, and `pulse.js` re-makes them on the tick it
+already runs — no second timer, and `retime()` sits ahead of the `running` guard
+because a slow fetch holds it across exactly the minutes when the times go
+stale. The rendered string stays as the fallback, which is what made this safe
+to roll through the projections one at a time. `tests/studio/when.test.ts` pins
+every boundary; `npm run verify:times` proves the wiring by leaving a real
+browser open, moving its clock two hours, and reading the same element again —
+with a control that the clock alone changes nothing, and a check that stopping
+the watcher stops the times, so a second timer could not hide.
 
 **Modules are real, and are not a new table (#71, migrations 0286-0287).** The
 Issue asked for `public.modules`. The canonical IA it cites does not contain the

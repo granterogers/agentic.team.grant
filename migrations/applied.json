@@ -285,5 +285,6 @@
   "0284_nobody_is_called_empty_string.sql": "fbba7e836b23369eef62161d77fb2c077c0c24b1b175f25940ee98ccf6d03700",
   "0285_a_label_he_defined_is_his.sql": "4337ec3d0a491f7ecc4da6f61cdcab0738ce1cabb6e99f91abd5006a0c99fbac",
   "0286_a_module_is_a_milestone_that_gathers.sql": "56358a44d8f0fe1a5f0cfe1cc6eb8e621f67519632dd1e24057a963cb8ca2f26",
-  "0287_a_task_can_be_born_a_milestone.sql": "3c273b08ee6a531e9bf3e61544374f8e3a5a0d55d6424e593de05efcd87687fe"
+  "0287_a_task_can_be_born_a_milestone.sql": "3c273b08ee6a531e9bf3e61544374f8e3a5a0d55d6424e593de05efcd87687fe",
+  "0288_a_time_travels_with_its_instant.sql": "9a77a673459beeba3150a68f1ca52fb7b2741bf970392c74243d2da38e47e6b9"
 }

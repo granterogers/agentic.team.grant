@@ -104,12 +104,30 @@ async function changed(endpoint, token) {
  * calls — so there is one path from "the data changed" to "the page shows it",
  * and a realtime update cannot drift from a post-write update.
  */
-export function watch(endpoint, token, refresh) {
+export function watch(endpoint, token, refresh, everyTick = () => {}) {
   stop()
   if (token === '') return
 
   const tick = async () => {
     if (running || document.hidden) return
+    /*
+      #153, and BEFORE the `running` guard rather than after it.
+
+      `everyTick` is the relative times being re-made from the instants already
+      in the DOM. It touches nothing but `textContent`, needs no fetch, and must
+      happen on every tick whether or not the office moved — the whole point is
+      that "2 minutes ago" stops being true while nothing changes.
+
+      Ahead of the guard because a slow fetch holds `running` across several
+      ticks, and those are exactly the minutes during which the times go stale.
+    */
+    try {
+      everyTick()
+    } catch {
+      // A clock that cannot re-render must not stop the page noticing the
+      // office moved. The stale words are the smaller failure of the two.
+    }
+    if (running) return
     running = true
     try {
       if (await changed(endpoint, token)) {
