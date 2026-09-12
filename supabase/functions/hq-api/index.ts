@@ -242,6 +242,16 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     cheerful ok, and this list does not second-guess it. §5.
   */
   disconnect: { fn: 'hq_disconnect', required: ['p_service'] },
+  /*
+    How a dashboard project looks (#83, migration 0253).
+
+    Only the slug is required: every other argument is an edit, and `p_clear`
+    is how a caller says "remove this" — null cannot mean both "leave it" and
+    "take it away". The image arrives as a data URL already resized to 256px by
+    the page; the RPC caps it at 96 KB, which can only be exceeded if that
+    resize did not run and is worth refusing loudly rather than storing.
+  */
+  project_look: { fn: 'hq_project_look', required: ['p_slug'] },
   // One setter over three kinds of routing change, allow-listed inside the
   // function for the same reason `set_setting` is: the page is not the only
   // possible caller.

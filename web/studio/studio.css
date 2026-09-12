@@ -3122,6 +3122,88 @@ body.docked { padding-right: min(380px, 100vw); }
 }
 .dockwhere { color: var(--ink-3); }
 
+/* --- how a project looks (#83) ----------------------------------------------
+
+   An image, an icon, or the generated art. `.covimg` rather than reusing
+   `.art`: the generated SVG's class carries a `color` meaning "the hue", and
+   an image needs `object-fit` and no colour at all. Two things sharing a class
+   name is how a status pill picked up a 420px min-height and pushed a row 660px
+   down the page. */
+.covimg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+/* The icon fills its mark and takes the colour he chose. `--hue` is set by the
+   palette class on this element, so the mark and the icon cannot disagree. */
+/*
+  The mark takes the icon's colour, not just the glyph.
+
+  First cut painted only the glyph, as a pale tint of the chosen hue, over a
+  background still set to the PROJECT's hue by the parent. A lilac rocket on a
+  blue square is near-white on blue: the capture showed a colour picker whose
+  choices barely registered, which is not a colour picker. So the icon's hue
+  paints the whole mark and the glyph is a light tint of it — press purple and
+  the mark is purple, which is the only thing "selectable icon colors" can mean.
+*/
+.iconmark {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: var(--hue); color: color-mix(in srgb, var(--hue) 26%, white);
+}
+:root[data-theme="dark"] .iconmark,
+:root:not([data-theme="light"]) .iconmark { color: color-mix(in srgb, var(--hue) 18%, white); }
+
+/* The pencil, on the mark. `position: absolute` rather than `opacity: 0`,
+   because an invisible control that still reserves its width is what left
+   eight staff names wrapping one character per line (#67). */
+.heroslot { position: relative; display: inline-block; flex: none; line-height: 0; }
+.lookbtn {
+  position: absolute; right: -6px; bottom: -6px;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface); color: var(--ink-2);
+  border: 1px solid var(--edge); box-shadow: var(--lift-1);
+  opacity: 0; transition: opacity .16s, transform .16s;
+}
+.heroslot:hover .lookbtn, .lookbtn:focus-visible { opacity: 1; }
+.lookbtn:hover { color: var(--ink); transform: scale(1.06); }
+/* No hover on a touch screen, so there it is simply always there. */
+@media (pointer: coarse) { .lookbtn { opacity: 1; width: 44px; height: 44px; } }
+
+/* The picker. A grid of marks that reads as ONE set, which is the whole reason
+   they share a geometry — a colour swatch row above it so the choice is made
+   in the colour it will be. */
+.huepick { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.hueswatch {
+  width: 30px; height: 30px; border-radius: 9px; background: var(--hue);
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / .3), var(--lift-1);
+  outline: 2px solid transparent; outline-offset: 2px;
+}
+.hueswatch.on { outline-color: var(--ink); }
+.iconpick {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px; min-width: 0; width: 100%;
+}
+.iconopt {
+  aspect-ratio: 1; min-height: 44px; border-radius: 10px;
+  display: grid; place-items: center;
+  color: color-mix(in srgb, var(--hue) 74%, var(--ink));
+  background: color-mix(in srgb, var(--hue) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  transition: background .14s, box-shadow .14s, transform .14s;
+}
+.iconopt:hover { background: color-mix(in srgb, var(--hue) 18%, transparent); transform: translateY(-1px); }
+.iconopt.on {
+  background: color-mix(in srgb, var(--hue) 26%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--hue) 70%, transparent);
+}
+.lookrow { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+/* The switcher's dot, when the project has a mark of its own. Same footprint
+   as the plain dot so the rows do not shift, just legible instead of coloured. */
+.dot.mark {
+  display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px;
+  background: var(--hue); color: color-mix(in srgb, var(--hue) 24%, white);
+}
+
 /* A reply that failed reads as failed rather than as an answer (#103). */
 .msg.theirs.bad .mbody { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .msg.theirs.bad .mbody p { color: var(--ink-2); }

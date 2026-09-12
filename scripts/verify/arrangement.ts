@@ -1,7 +1,12 @@
 /**
- * The arrangement is his, not the browser's.
+ * What he customised is his, not the browser's.
  *
  *   npm run verify:arrangement
+ *
+ * Issues #81 (the panel arrangement) and #83 (a project's icon, its colour and
+ * an uploaded image). One suite rather than two, because they are one subject:
+ * ADR-0021 — anything a person composed and would be annoyed to lose belongs
+ * in the office, and the failure mode is identical.
  *
  * Issue #81. Grant asked for a customisable project dashboard and was explicit
  * about where the arrangement lives: *"Layout is per person, per dashboard
@@ -58,7 +63,16 @@ const db = new ManagementApiExecutor(
 */
 const studio = (
   (await db.execute('select app.hq_studio() as d')).rows[0] as {
-    d: { projects: { slug: string; name: string; layout: unknown }[] }
+    d: {
+    projects: {
+      slug: string
+      name: string
+      layout: unknown
+      icon: string | null
+      iconHue: string | null
+      image: string | null
+    }[]
+  }
   }
 ).d
 const subject = studio.projects[0]
@@ -77,6 +91,18 @@ if (subject === undefined) {
 */
 const PLANTED = [{ id: 'tasks', x: 0, y: 0, w: 3, h: 300 }]
 subject.layout = PLANTED
+/*
+  And a look (#83), planted the same way and for the same reason.
+
+  Planted HERE rather than set through the picker and read back: the question
+  is whether what the OFFICE holds is what is DRAWN, and a check that chooses
+  through the interface first would pass even if the page never asked the
+  office at all. It has to be set before the page loads, because the payload is
+  hydrated once — mutating it afterwards proves nothing and reaches nothing.
+*/
+subject.icon = 'rocket'
+subject.iconHue = 'p-iris'
+subject.image = null
 
 const server = createServer(async (request, response) => {
   let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
@@ -217,7 +243,88 @@ check(
   last?.action === 'dashboard_layout_reset',
 )
 
-// --- 4. and nothing threw ---------------------------------------------------
+// ===========================================================================
+// How a project looks (#83) — the same rule, the other feature
+// ===========================================================================
+
+await page.evaluate(`document.querySelector('[data-go="portfolio"]')?.click()`)
+await page.waitForTimeout(1_200)
+
+const marks = (await page.evaluate(
+  `[...document.querySelectorAll('.cover')].map((c) =>
+     c.querySelector('.covimg') ? 'image' : c.querySelector('.iconmark') ? 'icon' : 'art')`,
+)) as string[]
+check(
+  'a project wearing an icon draws the icon, not the generated art',
+  marks.join(', ') || 'no covers',
+  marks[0] === 'icon',
+)
+const painted = await page.evaluate(
+  `(() => {
+     const m = document.querySelector('.iconmark');
+     if (m === null) return '(no mark)';
+     const c = getComputedStyle(m);
+     return c.backgroundColor + ' / ' + (m.querySelector('svg') === null ? 'no glyph' : 'glyph');
+   })()`,
+)
+/*
+  The BACKGROUND, not only the glyph.
+
+  The first cut painted a pale tint of the chosen hue over a background still
+  set to the project's own colour, so a lilac rocket on a blue square was
+  near-white on blue and the colour picker's choices barely registered. A
+  transparent mark means that regression is back.
+*/
+check(
+  'and the mark is painted in the colour he chose',
+  String(painted),
+  !String(painted).includes('rgba(0, 0, 0, 0)') && String(painted).includes('glyph'),
+)
+
+await page.evaluate(`document.querySelector('[data-open]')?.click()`)
+await page.waitForTimeout(1_200)
+await page.evaluate(`document.querySelector('[data-look]')?.click()`)
+await page.waitForTimeout(900)
+const grid = (await page.evaluate(
+  `({ icons: document.querySelectorAll('[data-look-icon]').length,
+      hues: document.querySelectorAll('[data-look-hue]').length,
+      on: document.querySelector('[data-look-icon].on')?.dataset.lookIcon ?? '(none)' })`,
+)) as { icons: number; hues: number; on: string }
+check(
+  'the picker offers about thirty marks and the palette',
+  `${String(grid.icons)} marks, ${String(grid.hues)} colours`,
+  grid.icons >= 28 && grid.hues === 6,
+)
+check(
+  'and shows which one is already chosen',
+  grid.on,
+  grid.on === 'rocket',
+)
+
+const before = sent.length
+await page.evaluate(`document.querySelector('[data-look-icon="leaf"]')?.click()`)
+await page.waitForTimeout(1_800)
+const look = (await sent()).slice(before).find((x) => x.action === 'project_look')
+check(
+  'choosing a mark reaches the office',
+  look === undefined ? 'nothing was sent' : JSON.stringify(look.args),
+  look?.args.p_icon === 'leaf' && typeof look.args.p_slug === 'string',
+)
+/*
+  Pressing the mark that is already on must take it OFF, and as a clear rather
+  than a null — null cannot mean both "leave this alone" and "remove it", which
+  is why the RPC takes `p_clear` at all.
+*/
+await page.evaluate(`document.querySelector('[data-look-icon="rocket"].on')?.click()`)
+await page.waitForTimeout(1_500)
+const cleared = (await sent()).at(-1)
+check(
+  'and pressing the chosen mark again takes it off',
+  cleared === undefined ? 'nothing was sent' : JSON.stringify(cleared.args),
+  JSON.stringify(cleared?.args ?? {}).includes('"p_clear":["icon"]'),
+)
+
+// --- and nothing threw ------------------------------------------------------
 check('no uncaught JavaScript', crashes.join(' | ') || 'none', crashes.length === 0)
 
 await browser.close()

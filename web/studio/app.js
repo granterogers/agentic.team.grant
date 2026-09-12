@@ -22,6 +22,7 @@ import * as panels from './panels.js'
 import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
+import * as icons from './icons.js'
 import { pageSvg } from './page.js'
 import { paint } from './pdf.js'
 import { SPRING, carry, pressable, spring } from './motion.js'
@@ -791,7 +792,15 @@ function rail() {
         ${PROJECTS.map((x) => `
           <button role="option" aria-selected="${inProject && x.slug === p.slug}"
                   class="${x.hue} ${inProject && x.slug === p.slug ? 'on' : ''}" data-open="${x.slug}">
-            <span class="dot"></span>
+            <!--
+              The chosen mark, where a project is chosen (#83). A coloured dot
+              is a colour; an icon is recognisable, which is the point of
+              letting him pick one. Falls back to the dot, so a project he has
+              not touched looks exactly as it did.
+            -->
+            ${icons.known(x.icon)
+              ? `<span class="dot mark ${esc(x.iconHue ?? x.hue)}">${icons.svg(x.icon, 13)}</span>`
+              : '<span class="dot"></span>'}
             <span>
               <b>${esc(x.name)}</b>
               <span class="t-meta">${x.docs} docs · ${x.total} tasks</span>
@@ -972,11 +981,39 @@ function contactCard(c, i) {
   </button>`, 'contact', String(i), c.name)
 }
 
+/*
+  What a project looks like (#83).
+
+  Three answers in order, and the order is the whole design: an image he
+  uploaded, then an icon he chose, then the generated art. A project nobody has
+  touched keeps exactly the cover it has today, so nothing had to be migrated
+  and nothing looks different until he says so.
+
+  The icon takes `iconHue` and falls back to the project's own hue, because
+  picking an icon and not picking a colour is a normal thing to do and the
+  project already has a colour that means something.
+
+  `covimg`, not `.art`. `.art` is the generated SVG's class and carries a
+  `color` that means "the hue"; an image needs `object-fit` and no colour at
+  all, and this file has twice been bitten by two things sharing a class name.
+*/
+function look(p, opts = {}) {
+  if (typeof p.image === 'string' && p.image.startsWith('data:image/')) {
+    return `<img class="covimg" src="${esc(p.image)}" alt="">`
+  }
+  if (icons.known(p.icon)) {
+    return `<span class="iconmark ${esc(p.iconHue ?? p.hue)}">${
+      icons.svg(p.icon, opts.dense === true ? 40 : 30)
+    }</span>`
+  }
+  return coverSvg(p.slug, opts)
+}
+
 function card(p, lead) {
   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0
   return `<button class="project ${p.hue} ${lead ? 'lead' : ''}" data-open="${p.slug}">
     <span class="cover" style="view-transition-name:cover-${p.slug}">
-      ${coverSvg(p.slug, { dense: lead, facts: p })}
+      ${look(p, { dense: lead, facts: p })}
     </span>
     <span class="body">
       <span>
@@ -2157,8 +2194,27 @@ function dashboard() {
           It keeps the view-transition-name so the portfolio card's mark still
           grows and moves into this slot when you open the project.
         -->
-        <span class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
-          ${coverSvg(p.slug, { dense: true, facts: p })}
+        <span class="heroslot">
+          <span class="hero ${p.hue}" style="view-transition-name:cover-${p.slug}">
+            ${look(p, { dense: true, facts: p })}
+          </span>
+          <!--
+            Changing the look, where the look is (#83).
+
+            On the mark rather than in a Settings tab, because section 31 calls
+            an avoidable request for manual configuration a design failure and
+            "go to another screen to change the picture you are looking at" is
+            that. Only for a writer: a reader pressing it would reach a picker
+            whose every choice is refused.
+
+            No backticks in this comment. Template literal.
+          -->
+          ${canWrite() ? `<button class="lookbtn" data-look="${esc(p.slug)}"
+            aria-label="Change how ${esc(p.name)} looks" title="Change the icon or image">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14.5 4.5l5 5-9 9H5.5v-5z"/></svg>
+          </button>` : ''}
         </span>
         <span style="min-width:0">
         <h1 class="t-display projname"${
@@ -4234,6 +4290,14 @@ function render() {
     button still shows the state, because `syncCallButtons` paints every
     element carrying `data-call`.
   */
+  // Changing how a project looks (#83), from the mark itself.
+  for (const b of root.querySelectorAll('[data-look]')) {
+    b.addEventListener('click', () => {
+      const p = byId(b.dataset.look)
+      if (p) lookSheet(p)
+    })
+  }
+
   /*
     Writing to the team, beside calling them (#103). Toggles rather than opens,
     because the rail entry is the only way back to a dock you shut with its own
@@ -4647,6 +4711,187 @@ function render() {
   contact look unfinished when it is simply a person whose number you do not
   have.
 */
+/*
+  Choosing how a project looks (#83).
+
+  One sheet, three ways to answer, in the order a person would try them: pick a
+  mark, colour it, or use a picture of your own. The fourth is Reset, because a
+  choice you cannot undo is a choice people do not make.
+
+  ## Resized in the browser, before it is sent
+
+  A photo off a phone is twelve megapixels and four megabytes, and it is going
+  to be drawn at 88px. Sending it would spend most of a free tier on pixels
+  nobody sees. So it is drawn into a 256px canvas and encoded as WebP, which is
+  typically ten to twenty KB, and the RPC refuses anything over 96 KB -- which
+  can only happen if this resize did not run, and is worth failing loudly on.
+
+  It is a data URL rather than Supabase Storage. Uploading from the browser
+  would need a storage credential IN the browser, and there is one bearer token
+  and CLAUDE.md forbids adding an auth system. Migration 0253 records the whole
+  reasoning and the size it stops being right at.
+*/
+function lookSheet(p) {
+  const v = $('#viewer')
+  const chosenHue = p.iconHue ?? p.hue
+  v.innerHTML = `<div class="sheet ${esc(p.hue)}">
+      <div class="chead">
+        <span class="hero ${esc(p.hue)}" style="width:56px;height:56px;border-radius:14px">
+          ${look(p, { dense: true, facts: p })}
+        </span>
+        <span>
+          <h2 class="t-title" style="margin:0">How ${esc(p.name)} looks</h2>
+          <p class="t-meta" style="margin:4px 0 0">A mark you pick, or a picture of
+            your own. Leave it alone and it keeps the art the office generated.</p>
+        </span>
+      </div>
+
+      <div class="field" style="margin-top:var(--s5);align-items:flex-start">
+        <span class="t-label">Colour</span>
+        <span class="huepick">
+          ${icons.HUES.map((h) => `<button class="hueswatch ${esc(h)} ${
+            h === chosenHue ? 'on' : ''
+          }" data-look-hue="${esc(h)}" aria-label="${esc(h.slice(2))}"
+             aria-pressed="${h === chosenHue ? 'true' : 'false'}"></button>`).join('')}
+        </span>
+      </div>
+
+      <div class="field" style="margin-top:var(--s4);align-items:flex-start">
+        <span class="t-label">Mark</span>
+        <span class="iconpick ${esc(chosenHue)}">
+          ${icons.KEYS.map((k) => `<button class="iconopt ${
+            k === p.icon ? 'on' : ''
+          }" data-look-icon="${esc(k)}" aria-label="${esc(k)}" title="${esc(k)}"
+             aria-pressed="${k === p.icon ? 'true' : 'false'}">${icons.svg(k, 22)}</button>`).join('')}
+        </span>
+      </div>
+
+      <div class="field" style="margin-top:var(--s4);align-items:flex-start">
+        <span class="t-label">Picture</span>
+        <span style="display:grid;gap:var(--s2);min-width:0">
+          <span class="lookrow" data-saidwrap>
+            <label class="btn" style="cursor:pointer">
+              Choose an image
+              <input type="file" accept="image/*" data-look-file hidden>
+            </label>
+            ${p.image ? '<button class="btn quiet" data-look-clear="image">Remove it</button>' : ''}
+            <button class="btn quiet" data-look-clear="all">Back to the generated art</button>
+          </span>
+          <span class="t-meta" data-said>Resized to 256px here before it is sent, so a
+            photo off a phone costs about fifteen kilobytes rather than four megabytes.</span>
+        </span>
+      </div>
+    </div>
+    <button class="close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>`
+
+  sheet(v, true)
+  $('.close', v).addEventListener('click', () => { sheet(v, false) })
+  v.addEventListener('click', (e) => { if (e.target === v) sheet(v, false) })
+
+  /*
+    Every change writes and redraws immediately.
+
+    No Save button: the sheet IS the preview, and a picker where you choose a
+    mark and then have to confirm it makes you press twice to see one thing.
+    `afterWrite` refetches, so what comes back is what the office stored rather
+    than what the page hoped.
+  */
+  /*
+    `refresh()`, not `afterWrite()`.
+
+    `afterWrite` is the SETTINGS sheet's, and it re-reads the settings payload
+    and redraws the settings sheet — from here it threw `afterWrite is not
+    defined` and, had it been in scope, would have replaced this sheet with
+    Settings. `refresh()` re-reads the studio payload, which is where a
+    project's look lives. Found by pressing an icon rather than by reading it
+    back: the mark under the pointer changed, because the page redraws
+    optimistically, and the console said the write never completed.
+  */
+  const set = async (control, args) => {
+    const ok = await attempt(control, 'Saving…', () =>
+      act('project_look', { p_slug: p.slug, ...args }),
+    )
+    if (ok === null) return
+    await refresh()
+    const fresh = byId(p.slug)
+    if (fresh) lookSheet(fresh)
+  }
+
+  for (const b of v.querySelectorAll('[data-look-hue]')) {
+    b.addEventListener('click', () => { void set(b, { p_hue: b.dataset.lookHue }) })
+  }
+  for (const b of v.querySelectorAll('[data-look-icon]')) {
+    b.addEventListener('click', () => {
+      // Pressing the mark that is already on takes it off. A picker with no way
+      // back to nothing is a picker you can only ever be wrong in.
+      const same = b.dataset.lookIcon === p.icon
+      void set(b, same ? { p_clear: ['icon'] } : { p_icon: b.dataset.lookIcon })
+    })
+  }
+  for (const b of v.querySelectorAll('[data-look-clear]')) {
+    b.addEventListener('click', () => {
+      void set(b, {
+        p_clear: b.dataset.lookClear === 'all' ? ['icon', 'hue', 'image'] : ['image'],
+      })
+    })
+  }
+
+  const file = $('[data-look-file]', v)
+  file?.addEventListener('change', async () => {
+    const chosen = file.files?.[0]
+    if (chosen === undefined) return
+    const label = file.closest('label') ?? file
+    try {
+      const data = await shrink(chosen)
+      await set(label, { p_image: data })
+    } catch (e) {
+      say(label, e instanceof Error ? e.message : 'That image could not be read.', 'bad')
+    }
+  })
+}
+
+/*
+  A picture, made small enough to keep.
+
+  256px on the long edge, centre-cropped to a square because every place a
+  project is drawn is a square and letting the browser letterbox it puts grey
+  bars inside a rounded mark.
+
+  WebP with a JPEG fallback: `toDataURL` returns a PNG when it does not know the
+  type asked for, and a 256px PNG photograph is four times the size of the WebP.
+  Checking what came back is the only reliable way to know which you got.
+*/
+function shrink(fileBlob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(fileBlob)
+    const img = new Image()
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image the browser can read.')) }
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const side = 256
+      const canvas = document.createElement('canvas')
+      canvas.width = side
+      canvas.height = side
+      const ctx = canvas.getContext('2d')
+      if (ctx === null) { reject(new Error('This browser cannot resize the image.')); return }
+      const crop = Math.min(img.naturalWidth, img.naturalHeight)
+      ctx.drawImage(
+        img,
+        (img.naturalWidth - crop) / 2, (img.naturalHeight - crop) / 2, crop, crop,
+        0, 0, side, side,
+      )
+      let out = canvas.toDataURL('image/webp', 0.82)
+      if (!out.startsWith('data:image/webp')) out = canvas.toDataURL('image/jpeg', 0.82)
+      if (out.length > 98304) { reject(new Error('That image is still too large after resizing.')); return }
+      resolve(out)
+    }
+    img.src = url
+  })
+}
+
 function openContact(c) {
   const v = $('#viewer')
   const row = (label, value, href) =>
