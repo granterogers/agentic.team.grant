@@ -284,6 +284,27 @@ for (const app of APPS) {
     await page.addInitScript(`
       window.HQ_API = 'http://127.0.0.1:${String(PORT)}/hq-api'
       try { localStorage.setItem('hq.token', 'audit') } catch {}
+      /*
+        Count the writes.
+
+        A control whose whole job is to change something on the SERVER leaves
+        the page identical: the stub answers every POST the same way, so the
+        re-render that follows redraws exactly what was there and the "did the
+        HTML change" test says the button is dead. Two real, working controls
+        were reported that way -- "does not need Notion", which records a
+        decision, and Connect, which asks for a link it was not given.
+
+        So a press that issued a write COUNTS AS ACTING, whatever the DOM does
+        afterwards. This wraps fetch rather than listening for requests from
+        the test, because it has to be readable synchronously beside the HTML
+        snapshot and a Playwright listener is not.
+      */
+      window.__WROTE = 0;
+      const through = window.fetch;
+      window.fetch = (input, init) => {
+        if ((init && init.method) === 'POST') window.__WROTE++;
+        return through(input, init);
+      };
     `)
 
     await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
@@ -377,6 +398,25 @@ for (const app of APPS) {
       const target = page.locator(selector).first()
       await target.waitFor({ state: 'visible', timeout: 10_000 })
       /*
+        Bring it into view before asking what is under it.
+
+        On a phone the project's sections live in a horizontally SCROLLING bar
+        — `.navgroup` is `overflow-x: auto` precisely because six full project
+        names never fit across 390px. Documents sat at x=744 in a 390px
+        viewport, so `elementFromPoint` at its centre returned null, the hit
+        test could never pass, and five routes reported "could not be reached"
+        for ten seconds each.
+
+        Nothing was wrong with the page: a person swipes the bar. The audit has
+        to do the same thing rather than measure a point outside the window.
+        `block: center` also lifts a card out from under the fixed bottom
+        navigation, which was the other half of the same report.
+      */
+      await target.evaluate((el) => {
+        el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
+      })
+      await page.waitForTimeout(220)
+      /*
         Hit-test it ourselves, then click past Playwright's stability check.
 
         The studio never stops moving: `breathe()` and `scatter()` keep ambient
@@ -450,10 +490,33 @@ for (const app of APPS) {
       }
     }
 
+    /*
+      Shut the dock before navigating, for the same reason the rail is opened.
+
+      The audit presses every control, and one of them opens the dock (#103) —
+      which REMEMBERS, in `localStorage['studio.dock']`, because a person who
+      opens a conversation panel means it. On a phone that panel is a sheet, so
+      every route pressed after it reported "could not be reached" for ten
+      seconds each and the whole phone sweep returned nothing.
+
+      Not a bug in the page once the sheet stopped covering the navigation bar
+      — that part WAS a bug and is fixed. This is the audit's half: a check
+      that presses a persistent control and then assumes the layout it had
+      before is a check that reports its own state as the product's.
+    */
+    const shutDock = async () => {
+      await page.evaluate(`(() => {
+        try { localStorage.setItem('studio.dock', 'shut') } catch (e) {}
+        const d = document.querySelector('#dock');
+        if (d !== null) { d.hidden = true; document.body.classList.remove('docked'); }
+      })()`)
+    }
+
     const intoProject = async (tab: string) => {
       for (let go = 1; go <= 2; go += 1) {
         try {
           await home()
+          await shutDock()
           await openRail()
           await clickWhenReachable('.project[data-open="legacy-coaching-course"]')
           await openRail()
@@ -481,6 +544,7 @@ for (const app of APPS) {
     }
     const intoSettings = async (tab: string) => {
       await home()
+      await shutDock()
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(400)
       await page.locator(`[role="tab"][data-setting="${tab}"]`).first().click()
@@ -632,6 +696,12 @@ for (const app of APPS) {
           .catch(() => false)
 
         const before = await page.evaluate('document.body.innerHTML')
+        // A write and a focus move are both "it acted", and neither shows up
+        // in the HTML. Read alongside it so the three are one observation.
+        const wroteBefore = (await page.evaluate('window.__WROTE ?? 0')) as number
+        const focusBefore = (await page.evaluate(
+          'document.activeElement ? (document.activeElement.tagName + (document.activeElement.getAttribute("data-src-ref") ?? "")) : ""',
+        )) as string
         try {
           await use.click({ timeout: 2500 })
         } catch {
@@ -664,7 +734,30 @@ for (const app of APPS) {
         await page.waitForTimeout(120)
         pressed++
 
-        if (before === after) {
+        /*
+          Three ways a control can act, not one.
+
+          The HTML is the obvious one and it is the only one the first version
+          looked at, which reported two working controls as dead:
+
+            "Legacy Coaching Course does not need Notion" records a decision on
+            the SERVER. The stub answers every POST identically, so the
+            re-render redraws exactly what was there.
+
+            "Connect" with an empty field focuses the field, because a link is
+            what it needs and asking for it is the right answer. Focus is not
+            in the HTML either.
+
+          Same shape as every other trap in this repository: a verification
+          that looks somewhere other than where the behaviour is passes, or in
+          this case fails, for the wrong reason.
+        */
+        const wrote = ((await page.evaluate('window.__WROTE ?? 0')) as number) > wroteBefore
+        const moved =
+          ((await page.evaluate(
+            'document.activeElement ? (document.activeElement.tagName + (document.activeElement.getAttribute("data-src-ref") ?? "")) : ""',
+          )) as string) !== focusBefore
+        if (before === after && !wrote && !moved) {
           inert++
           if (!KNOWN_INERT.has(label) && !INERT_HERE.has(`${name}::${label}`) && !alreadyHere) {
             findings.push({ route: `${size}/${name}`, label, why: 'pressing it changed nothing' })
