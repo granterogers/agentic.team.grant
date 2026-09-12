@@ -3346,3 +3346,50 @@ body.docked { padding-right: min(380px, 100vw); }
      permanently — it is in the way of what is under it and nothing else. */
   body.docked .shell { padding-bottom: calc(76px + min(58vh, 440px)); }
 }
+
+/* --- reduced motion, last of all (#120) --------------------------------------
+
+   AT THE END, for the reason every phone override is: a media query adds no
+   specificity, so a rule written earlier loses to any base rule below it. This
+   one has to beat all ninety-four transitions in this file, including the ones
+   somebody adds next year, so it goes after every one of them.
+
+   ## What was already right, and what was not
+
+   `motion.js` checks `reduced()` in `spring()` and `carry()`, `alive.js` checks
+   it before every ambient cue, and there were nine hand-written
+   `prefers-reduced-motion` blocks turning off named animations. All correct.
+
+   What none of it covered was TRANSITIONS. `npm run verify:motion` measured the
+   page with the setting on and found twenty-four still live, including the
+   340ms `grid-template-columns` slide on `.shell` -- the single largest
+   movement in the product -- and the same 340ms on the rail toggle chasing it
+   across the screen. Nine hand-written blocks against ninety-four declarations
+   was never going to hold, and nothing measured the gap.
+
+   So: one rule, everything, rather than a tenth block. The named blocks above
+   stay -- several say something this cannot, like showing a paused state at a
+   sensible opacity instead of mid-keyframe.
+
+   ## 0.01ms, not 0
+
+   A duration of zero means `transitionend` and `animationend` never fire, and
+   any code waiting for one waits forever. An imperceptible duration ends
+   immediately AND still fires. This is the standard recipe and this is why.
+
+   ## What is deliberately NOT here
+
+   `view-transition-name` is untouched: `carry()` already returns early under
+   reduced motion and performs the update without starting a transition, which
+   is checked. Removing the names in CSS would do nothing useful and would break
+   the pairing for everyone else. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
