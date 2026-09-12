@@ -84,6 +84,7 @@ const ROUTES = [
   { kind: 'tab', at: 'activity', name: 'project · activity' },
   { kind: 'pane', at: 'team', name: 'settings · team' },
   { kind: 'pane', at: 'behaviour', name: 'settings · behaviour' },
+  { kind: 'pane', at: 'governance', name: 'settings · governance' },
   { kind: 'pane', at: 'connections', name: 'settings · connections' },
   { kind: 'pane', at: 'channels', name: 'settings · channels' },
   { kind: 'pane', at: 'models', name: 'settings · usage' },
@@ -125,6 +126,14 @@ const SECTIONS = [
   ['usage_overview', 'usage_overview'],
   ['studio_setup', 'hq_setup'],
   ['lately', 'hq_studio_lately'],
+  /*
+    #54. Its own payload, and it must be fed as `governance` — the name the
+    PAGE asks for — not as `hq_governance`. That correction is the whole reason
+    this list is keyed on the section rather than the function: the staff tab
+    was once fed `hq_staff()` while the page requested `team`, a completely
+    different shape, and every card rendered empty and passed for months.
+  */
+  ['governance', 'hq_governance'],
 ] as const
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -143,7 +152,14 @@ for (const [name, fn] of SECTIONS) {
   // function that does not exist. Written out rather than defaulted, for the
   // reason every public wrapper in this codebase is: the caller is the half
   // that silently drops a parameter.
-  const args = fn === 'usage_overview' ? '30' : fn === 'hq_studio_lately' ? '40' : ''
+  const args =
+    fn === 'usage_overview'
+      ? '30'
+      : fn === 'hq_studio_lately'
+        ? '40'
+        : fn === 'hq_governance'
+          ? '40'
+          : ''
   const { rows } = await db.execute(`select app.${fn}(${args}) as d`)
   sections[name] = (rows[0] as { d: unknown }).d
 }

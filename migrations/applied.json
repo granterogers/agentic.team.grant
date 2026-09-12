@@ -299,5 +299,6 @@
   "0298_a_tool_names_what_delivers_it.sql": "f00cd47379139c32532f024d242013cbcc54bc691637eeb28312fb76c0727de9",
   "0299_the_gmail_module_is_called_mail.sql": "5126e0b7fa6054811e3ad711a3ba4b91bf59c6fd10886341e9e10b79ef5bb518",
   "0300_what_a_connector_can_do_and_what_we_use.sql": "2179d01cbf6b8009eff017071e4976ad75a92eda975fb0538e0184257a9623dc",
-  "0301_an_agent_can_say_what_its_connectors_do.sql": "18d098ed1aff2482b37983ae121f1f16394087d303bef4fc893fc176b29794d1"
+  "0301_an_agent_can_say_what_its_connectors_do.sql": "18d098ed1aff2482b37983ae121f1f16394087d303bef4fc893fc176b29794d1",
+  "0302_what_the_office_learned_and_why.sql": "997685183838ff30710124c66111bbec00dfeb8b333cff199548af58ba8ba8dd"
 }

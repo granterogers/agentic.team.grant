@@ -38,6 +38,18 @@ import { MARKS } from './logos/marks.js'
 export const TABS = [
   { id: 'team', name: 'Team' },
   { id: 'behaviour', name: 'Behaviour' },
+  /*
+    What the office learned, and why it changed (#54).
+
+    A sibling of Behaviour rather than part of it, which is a deliberate
+    departure from the Issue's suggestion that Behaviour "is the obvious home".
+    Behaviour is a control panel — eight switches, each a single decision — and
+    this is a reading surface with four lists on it. Folding them together
+    makes the switches hard to find and the lists hard to read. It sits
+    immediately after Behaviour, which is what the Issue was actually asking
+    for: governance lives with how-the-office-runs, not with diagnostics.
+  */
+  { id: 'governance', name: 'Governance' },
   { id: 'connections', name: 'Connections' },
   { id: 'channels', name: 'Channels' },
   /*
@@ -479,4 +491,129 @@ export async function hydrateMcp(read) {
     MCP.loaded = false
   }
   return MCP
+}
+
+
+/*
+  What the office learned, wants, noticed, and could not do (#54, migration
+  0302), fetched on demand.
+
+  Not part of `hq_studio_settings`, for the reason MCP is not: four tables
+  nobody else on a settings open touches, and most opens are not about
+  governance.
+
+  `loaded` starts false and the panel says "asking the office" rather than
+  drawing four empty lists — an empty governance page and an unreachable one
+  look identical, and only one of them is good news.
+*/
+/*
+  Shaped like `hq_governance` (0302), and standing in for it in the prototype.
+
+  Rows rather than empty lists, for the reason `FALLBACK_CONNECTIONS` has rows:
+  a design cannot be judged against nothing, and `npm run shots` runs with no
+  token. The page already declares itself — with no token the studio banners
+  "Nothing on this page is your office" — so this is never mistaken for his
+  office, and `governanceTab` only draws it when that banner is up.
+*/
+const FALLBACK_GOVERNANCE = {
+  lessons: [
+    {
+      id: 'f-l1', scope: 'global', where: 'everywhere', who: 'grant', seen: 3,
+      job: '8f21ac04-0000-0000-0000-000000000000',
+      body: 'Always paste the image URLs into the reply as well — a screenshot that only exists on the build page is one I have to go and find, and I will not.',
+      at: '2026-09-10T18:04:00Z',
+    },
+    {
+      id: 'f-l2', scope: 'project', where: 'INNERGY positioning', who: 'tom', seen: 2,
+      job: '3c90bb71-0000-0000-0000-000000000000',
+      body: 'This project wants the argument before the evidence. Leading with the research reads as hedging.',
+      at: '2026-09-09T09:40:00Z',
+    },
+    {
+      id: 'f-l3', scope: 'job_kind', where: 'research', who: 'emma', seen: 7,
+      job: 'b0417e2a-0000-0000-0000-000000000000',
+      body: 'A source without a date is not a source. Say when it was published or say that it does not say.',
+      at: '2026-09-07T14:12:00Z',
+    },
+  ],
+  proposals: [
+    {
+      id: 'f-p1', who: 'emma', title: 'Reading a page on the open web',
+      remedy: 'web.search', state: 'open', times: 9, cost: 'Free tier, 100 lookups a day',
+      argument: 'Nine research jobs in thirty days ended with a citation I could name but not read. I can reach Notion and Drive; I cannot open a URL.',
+      decided: null, note: null,
+    },
+    {
+      id: 'f-p2', who: 'marcus', title: 'Writing to the calendar',
+      remedy: 'calendar.write', state: 'declined', times: 4, cost: 'None — the token exists',
+      argument: 'Four dated tasks were agreed and then missed because nothing put them anywhere you look.',
+      decided: '2026-09-08T11:00:00Z',
+      note: 'Not yet — I want to see a month of dated tasks land correctly first.',
+    },
+  ],
+  noticed: [
+    {
+      id: 'f-s1', kind: 'attach', state: 'open', weight: 0.82, dismissed: 0,
+      project: 'INNERGY positioning',
+      body: 'This project has eleven documents and no notebook.',
+      because: { documents: 11, notebooks: 0, projects_like_it_with_one: 4 },
+      at: '2026-09-11T07:20:00Z',
+    },
+    {
+      id: 'f-s2', kind: 'routine', state: 'dismissed', weight: 0.44, dismissed: 4,
+      project: null,
+      body: 'A Friday summary of the week, unprompted.',
+      because: { fridays_you_asked: 4, weeks_running: 6 },
+      at: '2026-09-05T16:00:00Z',
+    },
+  ],
+  agents: [
+    {
+      slug: 'chief-of-staff', name: 'Claire', remit: 'Chief of Staff', tools: 14,
+      expertise: ['routing', 'summarising', 'chasing'],
+      tried_and_could_not: [],
+    },
+    {
+      slug: 'research-lead', name: 'Emma', remit: 'Research', tools: 9,
+      expertise: ['desk research', 'synthesis'],
+      tried_and_could_not: [
+        { kind: 'missing_tool', needed: 'web.search', times: 9 },
+        { kind: 'needs_permission', needed: 'drive.write', times: 2 },
+      ],
+    },
+    {
+      slug: 'operations-lead', name: 'Marcus', remit: 'Operations', tools: 11,
+      expertise: ['scheduling', 'follow-through'],
+      tried_and_could_not: [{ kind: 'missing_tool', needed: 'calendar.write', times: 4 }],
+    },
+  ],
+}
+
+export const GOVERNANCE = {
+  loaded: false,
+  at: null,
+  lessons: [...FALLBACK_GOVERNANCE.lessons],
+  proposals: [...FALLBACK_GOVERNANCE.proposals],
+  noticed: [...FALLBACK_GOVERNANCE.noticed],
+  agents: [...FALLBACK_GOVERNANCE.agents],
+}
+
+export async function hydrateGovernance(read) {
+  try {
+    const d = await read('governance')
+    if (!d || !Array.isArray(d.lessons)) throw new Error('unexpected shape')
+    Object.assign(GOVERNANCE, {
+      at: d.at ?? null,
+      lessons: d.lessons ?? [],
+      proposals: d.proposals ?? [],
+      noticed: d.noticed ?? [],
+      agents: d.agents ?? [],
+      loaded: true,
+    })
+  } catch {
+    // Same rule as `hydrateMcp`: a settings tab showing a stack trace is worse
+    // than one saying it could not ask.
+    GOVERNANCE.loaded = false
+  }
+  return GOVERNANCE
 }

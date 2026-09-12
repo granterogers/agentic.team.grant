@@ -178,7 +178,59 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-301 migrations · 976 unit tests · ~66 live suites, all green.
+302 migrations · 976 unit tests · ~67 live suites, all green.
+
+**Grant can see what the office learned, and change it (#54, migration 0302).**
+The last child of #46, and the one that makes the rest of that epic safe rather
+than unnerving: with #48 landing, behaviour changes for reasons that live in a
+table, and a table nobody surfaced removes his ability to tell a system that is
+getting better from one that is drifting. A **Governance** tab now sits beside
+Behaviour in the settings sheet — a sibling rather than part of it, because
+Behaviour is eight switches and this is four lists, and folding them together
+makes both harder to use. It answers four questions from one call,
+`app.hq_governance`:
+
+- **what it learned** — every live lesson as a quotation, with its scope, the
+  project or person it applies to, who learned it, and the job it came from.
+  `app.retract_lesson` writes a RETRACTION row that supersedes it: `lessons` is
+  append-only, so nothing is deleted, the reason is recorded next to it, and
+  "why did it change" stays answerable. Retracting twice is a no-op; retracting
+  a retraction is refused by name.
+- **what it wants** — open proposals first, then anything settled in the last
+  thirty days, each approvable or declinable in place with the argument and the
+  cost on it. **The decline is the durable half**: `proposals_one_per_need`
+  means the same need cannot be raised again while the row stands, which is
+  what stops a boundary becoming a nag. Reopening is allowed and is always a
+  person's decision.
+- **what it noticed** — suggestions with their outcome and their dismissal
+  count, because a thing offered four times and dismissed four times is the
+  office failing to take a hint. `suggestions.because` is JSONB — the numbers
+  the noticing pass counted, not a sentence — so it renders as counted facts.
+- **what each of them can do** — remit, tool count, and the list of walls hit
+  in ninety days from `app.impediments_tally`. #54 calls that last list the
+  most useful thing on the page and it is right.
+
+`verify:governs` is 22 checks, and it tears itself down through the feature
+under test: the lesson it writes is retracted, which is the only removal an
+append-only ledger allows, and the assertion that the payload no longer carries
+it is the same assertion that proves the teardown worked.
+
+**Three audits were pointed somewhere new and found five things.** #54's
+acceptance says it must pass `verify:ui`, `verify:layouts` and
+`verify:controls` — and `verify:layouts` had never opened the settings sheet at
+all, which is the "a verification that looks somewhere other than where the
+user looks" trap in its purest form. Extending it to `settings/governance`
+(52 states now, from 38) immediately found: `--ink-3` failing WCAG AA at 12px
+on five palettes; the settings sheet hiding 2,857px on a phone behind an
+overlay scrollbar with no affordance at all — #108's defect, still live, on
+every settings tab; and a false red of its own, because the studio scales the
+shell to 0.994 behind an open sheet and a 44px button therefore measures 43.74.
+The first two are fixed, the third is fixed in the audit. `verify:ui` now feeds
+the governance pane real rows at all three sizes, and `verify:wired` walks
+seventeen screens rather than sixteen. `verify:hq`'s tool control was also
+repaired: it asserted that `web.search` could be revoked and re-granted, and
+0298 had switched `web.search` off — a control that must fail on a change that
+was correct.
 
 **Every connector says what it can do, and what we never ask it for (#51,
 migrations 0300-0301).** `knowledge_connectors.notes` was prose written for a

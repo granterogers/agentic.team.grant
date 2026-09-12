@@ -467,17 +467,36 @@ record(
   stillBlocked === 'false',
 )
 
-// CONTROL: an enabled tool CAN be revoked and re-granted, so the refusal above
-// is the policy working rather than the whole endpoint being broken.
-await post('staff_tool_set', { p_slug: 'growth-director', p_tool: 'web.search', p_granted: false })
+/*
+  CONTROL: an enabled tool CAN be revoked and re-granted, so the refusal above
+  is the policy working rather than the whole endpoint being broken.
+
+  `notebook.read`, not `web.search`. This control was written against
+  `web.search` while it was enabled, and 0298 switched it off — it was claimed
+  on every agent's sheet with nothing behind it (#50). A control asserting that
+  a DISABLED tool can be re-granted is a control that must fail, and it did:
+  the check went red on a change that was correct, which is the shape
+  `verify:identity` hit when it asserted an index by name. Chosen because it is
+  enabled, delivered, and one growth-director already holds — so the revoke and
+  the restore both put the roster back exactly where they found it.
+*/
+await post('staff_tool_set', {
+  p_slug: 'growth-director',
+  p_tool: 'notebook.read',
+  p_granted: false,
+})
 const revoked = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'web.search')::text as v`)).rows[0]
-    ?.v ?? 'x',
+  (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
+    .rows[0]?.v ?? 'x',
 )
-await post('staff_tool_set', { p_slug: 'growth-director', p_tool: 'web.search', p_granted: true })
+await post('staff_tool_set', {
+  p_slug: 'growth-director',
+  p_tool: 'notebook.read',
+  p_granted: true,
+})
 const restored = String(
-  (await db.execute(`select app.staff_may_use('growth-director', 'web.search')::text as v`)).rows[0]
-    ?.v ?? 'x',
+  (await db.execute(`select app.staff_may_use('growth-director', 'notebook.read')::text as v`))
+    .rows[0]?.v ?? 'x',
 )
 record(
   'CONTROL: an allowed tool revokes and re-grants, so the refusal above discriminates',

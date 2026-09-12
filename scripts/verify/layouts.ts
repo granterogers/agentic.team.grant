@@ -71,7 +71,25 @@ await new Promise<void>((r) => {
 
 const WIDTHS = (process.env.WIDTHS ?? '390,768,1024,1440').split(',').map(Number)
 const PALETTES = ['paper', 'slate', 'clay', 'ink', 'moss']
-const ROUTES = ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']
+/*
+  A route is a project tab, or — prefixed — a tab of the settings sheet.
+
+  `settings/governance` is here because #54 put a whole reading surface behind
+  a sheet this audit had never opened. Thirty-eight green states said nothing
+  about it: an audit that looks somewhere other than where the user looks
+  passes for the wrong reason, which this repository has now done three times
+  in one day.
+*/
+const ROUTES = [
+  'overview',
+  'team',
+  'documents',
+  'tasks',
+  'contacts',
+  'sources',
+  'activity',
+  'settings/governance',
+]
 
 type Finding = { where: string; what: string }
 const findings: Finding[] = []
@@ -130,8 +148,29 @@ const GEOMETRY = `(() => {
     const t = (el.getAttribute('aria-label') || el.textContent || el.tagName).trim()
     return t.replace(/\\s+/g, ' ').slice(0, 44)
   }
+  /*
+    What is BEHIND an open sheet is not the surface being audited.
+
+    With a sheet open the studio blurs the shell, drops its saturation and
+    scales it to 0.994 -- deliberately, so the sheet reads as nearer. That
+    scale multiplies every rect behind it, and a 44px button measures 43.74:
+    the audit reported the theme toggle as an undersized touch target on two
+    widths, on a page nobody can touch, because pointer-events are off there
+    too. Measuring a decorative transform is exactly the false red that gets a
+    check switched off.
+
+    Scoped rather than excluded by class name: when a sheet is open the sheet
+    IS the page, so everything else is skipped.
+
+    No backticks in this comment: it lives inside a template literal.
+  */
+  const front = document.body.classList.contains('behind')
+    ? [...document.querySelectorAll('#settings, #viewer')].filter((v) => !v.hidden)
+    : []
+  const inFront = (el) => front.length === 0 || front.some((v) => v.contains(el))
   for (const el of document.querySelectorAll('*')) {
     if (el.ownerSVGElement != null) continue
+    if (!inFront(el)) continue
     const r = el.getBoundingClientRect()
     if (r.width === 0 && r.height === 0) continue
     const cs = getComputedStyle(el)
@@ -283,6 +322,13 @@ const open = async (page: import('playwright').Page, route: string) => {
   await page.waitForTimeout(450)
   await page.locator('.project[data-open="legacy-coaching-course"]').click()
   await page.waitForTimeout(400)
+  if (route.startsWith('settings/')) {
+    await page.locator('[data-settings]').first().click()
+    await page.waitForTimeout(450)
+    await page.locator(`[data-setting="${route.slice('settings/'.length)}"]`).click()
+    await page.waitForTimeout(450)
+    return
+  }
   await page.locator(`[data-tab="${route}"]`).click()
   await page.waitForTimeout(300)
 }
@@ -354,11 +400,19 @@ for (const scheme of ['light', 'dark'] as const) {
       `try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'plaster' })) } catch {}`,
     )
     const page = await ctx.newPage()
-    await open(page, 'overview')
-    const bad = (await page.evaluate(CONTRAST)) as string[]
-    checked++
-    for (const item of bad.slice(0, 5)) {
-      findings.push({ where: `${scheme}/${palette}`, what: `contrast — ${item}` })
+    /*
+      Two surfaces, not one. The overview is the page you land on; governance
+      is the one with four new tinted states on it — an accent scope pill, a
+      muted state pill, a warning tally and a red count — and none of them
+      exists anywhere the overview can see.
+    */
+    for (const where of ['overview', 'settings/governance'] as const) {
+      await open(page, where)
+      const bad = (await page.evaluate(CONTRAST)) as string[]
+      checked++
+      for (const item of bad.slice(0, 5)) {
+        findings.push({ where: `${scheme}/${palette} ${where}`, what: `contrast — ${item}` })
+      }
     }
     await ctx.close()
   }

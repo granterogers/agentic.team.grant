@@ -49,6 +49,7 @@
     "verify:conversation": "tsx scripts/verify/conversation.ts",
     "verify:handoff": "tsx scripts/verify/handoff.ts",
     "verify:knows": "tsx scripts/verify/knows.ts",
+    "verify:governs": "tsx scripts/verify/governs.ts",
     "verify:proposes": "tsx scripts/verify/proposes.ts",
     "verify:acquire": "tsx scripts/verify/acquire.ts",
     "verify:sheets": "tsx scripts/verify/sheets.ts",

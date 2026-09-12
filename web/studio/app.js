@@ -3084,6 +3084,261 @@ function behaviourTab() {
   </div>`
 }
 
+
+/*
+  Governance — what the office learned, what it wants, what it noticed, and
+  what each agent has tried and could not do (#54, migration 0302).
+
+  Four questions on one page, in the order Grant would ask them. The last list
+  is the one the Issue calls the most useful thing here, and it is: an agent
+  that has hit the same wall nine times is an agent telling you what to build
+  next, in its own words, without anybody writing a report.
+
+  ## The shape, and why it is not four card grids
+
+  Four uniform card grids is exactly the generic-AI UI the visual standard
+  forbids. So each answer gets the form its content wants: a lesson is a
+  QUOTATION and is set as one; a proposal is an ARGUMENT and is set as a case
+  with its cost and its verdict; a suggestion is a NOTE with a tally; an agent
+  is a PROFILE whose failures are the body, not a footnote.
+
+  Everything on this page is read-only for a reader with no token. Retracting a
+  lesson and deciding a proposal are writes and say so.
+*/
+function governanceTab() {
+  const g = config.GOVERNANCE
+
+  /*
+    Waiting, but only when there is a real office to wait for.
+
+    With no token the studio banners "Nothing on this page is your office" and
+    the fallback rows in settings.js stand in — which is what makes this page
+    judgeable from a capture. With a token and nothing back yet, four empty
+    lists would say the office has learned nothing, and that is a different and
+    much worse sentence than "asking".
+  */
+  if (!g.loaded && source.live) {
+    return `<div class="setbody">
+      <p class="t-lead" style="margin:0">Asking the office what it has learned…</p>
+      <div class="govskel">${[0, 1, 2].map(() => '<span></span>').join('')}</div>
+    </div>`
+  }
+
+  /*
+    A lesson, as a quotation.
+
+    The attribution line carries all three things the Issue asks for — the
+    scope, who learned it, and the job it came from — because a lesson you
+    cannot place is one you cannot judge. The job id is shown as its first
+    eight characters: it is there to be recognised and searched for, not read
+    aloud.
+  */
+  const lesson = (l) => `<article class="govlesson" data-lift data-tilt="1.4" data-saidwrap>
+    <blockquote class="govquote">${esc(l.body)}</blockquote>
+    <div class="govfoot">
+      <div class="govfrom">
+        <span class="govscope s-${esc(l.scope)}">${esc(SCOPE_WORD[l.scope] ?? l.scope)}</span>
+        <!--
+          The place, unless the scope already said it.
+
+          A global lesson comes back with "everywhere" in both fields, and a
+          pill reading Everywhere followed by the word everywhere is the page
+          saying the same thing twice in a row.
+
+          No backticks in this comment: template literal.
+        -->
+        ${String(l.where ?? '').toLowerCase() === 'everywhere' ? ''
+          : `<span class="t-meta">${esc(l.where)}</span>`}
+        <span class="t-meta">learned by ${esc(l.who ?? 'the office')}</span>
+        ${l.seen > 1 ? `<span class="t-meta">seen ${esc(String(l.seen))} times</span>` : ''}
+        ${l.job ? `<span class="t-meta govjob" title="The job this came from">job ${esc(String(l.job).slice(0, 8))}</span>` : ''}
+        <span class="t-meta">${when.stamp(l.at)}</span>
+      </div>
+      <span class="t-meta" data-said></span>
+      <button class="gobtn danger" data-retract="${esc(l.id)}"
+              ${canWrite() ? '' : 'disabled'}>Retract</button>
+    </div>
+  </article>`
+
+  /*
+    A proposal, as a case to be answered.
+
+    Approve and Decline sit side by side and a settled one keeps its verdict on
+    the page — #49's whole argument is that a decline has to be durable, and a
+    decline that disappears is one Grant cannot remember making. Reopen is
+    offered on a settled row because the world changes; it is a person's call
+    and never the office's.
+  */
+  const proposal = (p) => `<article class="govcase g-${esc(p.state)}" data-lift data-tilt="1.4" data-saidwrap>
+    <div class="govhead">
+      <b>${esc(p.title)}</b>
+      <span class="govstate">${esc(STATE_WORD[p.state] ?? p.state)}</span>
+    </div>
+    <p class="govarg">${esc(p.argument)}</p>
+    ${p.note ? `<p class="govnote">Your note: ${esc(p.note)}</p>` : ''}
+    <div class="govfoot">
+      <div class="govfrom">
+        <span class="t-meta">${esc(p.who)} asks for <b>${esc(p.remedy)}</b></span>
+        ${p.cost ? `<span class="t-meta govcost">${esc(p.cost)}</span>` : ''}
+        ${p.times > 1 ? `<span class="t-meta">hit ${esc(String(p.times))} times</span>` : ''}
+      </div>
+      <span class="t-meta" data-said></span>
+      ${p.state === 'open'
+        ? `<button class="gobtn" data-decide="${esc(p.id)}:declined"
+                   ${canWrite() ? '' : 'disabled'}>Decline</button>
+           <button class="gobtn go" data-decide="${esc(p.id)}:approved"
+                   ${canWrite() ? '' : 'disabled'}>Approve</button>`
+        : `<button class="gobtn" data-decide="${esc(p.id)}:open"
+                   ${canWrite() ? '' : 'disabled'}>Reopen</button>`}
+    </div>
+  </article>`
+
+  /*
+    A suggestion, and what became of it.
+
+    The dismissal count is deliberately loud when it is above zero. A thing
+    offered four times and dismissed four times is the office failing to take a
+    hint, and that is a fact about the office rather than about the suggestion.
+  */
+  const noted = (s) => `<li class="govnoted">
+    <div class="govhead">
+      <b>${esc(s.body)}</b>
+      <span class="govstate">${esc(STATE_WORD[s.state] ?? s.state)}</span>
+    </div>
+    <!--
+      The evidence, as chips.
+
+      suggestions.because is JSONB and holds the numbers the noticing pass
+      counted, not a sentence: something like eleven documents and no notebook.
+      Rendered with esc() it becomes the words object Object, which is what the
+      first pass at this page shipped.
+
+      No backticks in this comment: template literal.
+    -->
+    ${evidence(s.because)}
+    <div class="govfrom">
+      ${s.project ? `<span class="t-meta">${esc(s.project)}</span>` : ''}
+      <span class="t-meta">${esc(s.kind)}</span>
+      ${s.dismissed > 0
+        ? `<span class="govdismiss">dismissed ${esc(String(s.dismissed))}×</span>`
+        : ''}
+      <span class="t-meta">${when.stamp(s.at)}</span>
+    </div>
+  </li>`
+
+  /*
+    An agent, and the walls it has hit.
+
+    `tried_and_could_not` comes from `app.impediments_tally(90, 1, false)` —
+    ninety days, at least once, fixtures excluded. An agent with an empty list
+    says so in a sentence rather than rendering as a card with a hole in it.
+  */
+  const agent = (a) => `<article class="govagent" data-lift data-tilt="1.4">
+    <div class="govhead">
+      <b>${esc(a.name)}</b>
+      <span class="t-meta">${esc(a.remit ?? '')}</span>
+    </div>
+    <div class="govtools">
+      <span class="govcount">${esc(String(a.tools ?? 0))} tools</span>
+      ${(a.expertise ?? []).slice(0, 4).map((x) => `<span class="govskill">${esc(x)}</span>`).join('')}
+    </div>
+    ${(a.tried_and_could_not ?? []).length === 0
+      ? '<p class="t-meta govclear">Has not been stopped by anything in ninety days.</p>'
+      : `<ul class="govwalls">${a.tried_and_could_not.map((w) => `<li>
+          <span class="govwall">${esc(w.needed)}</span>
+          <span class="t-meta">${esc(WALL_WORD[w.kind] ?? w.kind)}</span>
+          <span class="govtimes">${esc(String(w.times))}×</span>
+        </li>`).join('')}</ul>`}
+  </article>`
+
+  /*
+    What it counted, in a form a person can read.
+
+    Keys come from the noticing pass and are snake_case column-ish names, so
+    the underscores go and the number sits beside the word. A value that is
+    itself a structure is skipped rather than stringified — one chip reading
+    object Object teaches a reader to distrust the other four.
+  */
+  const evidence = (because) => {
+    const rows = Object.entries(because ?? {}).filter(
+      ([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v),
+    )
+    if (rows.length === 0) return ''
+    return `<div class="govwhy">${rows
+      .slice(0, 6)
+      .map(([k, v]) => `<span class="govbit"><b>${esc(String(v))}</b>
+        ${esc(k.replace(/_/g, ' '))}</span>`)
+      .join('')}</div>`
+  }
+
+  const empty = (what) => `<p class="t-meta govempty">${esc(what)}</p>`
+
+  return `<div class="setbody">
+    <p class="t-lead" style="margin:0">What the team has learned, what it wants,
+      what it noticed, and where it keeps getting stuck. Everything here is a row
+      you can act on — nothing changes behaviour without leaving a trace.</p>
+
+    <section class="govsec">
+      <h3 class="govtitle">What it learned<span class="t-meta">${esc(String(g.lessons.length))}</span></h3>
+      ${g.lessons.length === 0
+        ? empty('Nothing yet. A lesson is written when a correction sticks.')
+        : `<div class="govlessons">${g.lessons.map(lesson).join('')}</div>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">What it wants<span class="t-meta">${esc(String(g.proposals.filter((p) => p.state === 'open').length))} open</span></h3>
+      ${g.proposals.length === 0
+        ? empty('Nothing outstanding. A proposal appears when an agent hits the same wall three times.')
+        : `<div class="govcases">${g.proposals.map(proposal).join('')}</div>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">What it noticed<span class="t-meta">${esc(String(g.noticed.length))}</span></h3>
+      ${g.noticed.length === 0
+        ? empty('Nothing noticed yet. The noticing pass runs over finished work.')
+        : `<ul class="govnotes">${g.noticed.map(noted).join('')}</ul>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">What each of them can do<span class="t-meta">${esc(String(g.agents.length))}</span></h3>
+      <div class="govagents">${g.agents.map(agent).join('')}</div>
+    </section>
+  </div>`
+}
+
+/** A scope, in words. The enum is for the database; this page is for a person. */
+const SCOPE_WORD = {
+  global: 'Everywhere',
+  project: 'One project',
+  staff: 'One person',
+  job_kind: 'One kind of work',
+}
+
+/*
+  A refusal, in words.
+
+  `job_impediments.kind` is an enum written for the office to reason with, and
+  `not_capable` in front of a person is the database talking. §25.
+*/
+const WALL_WORD = {
+  missing_tool: 'the office has no such tool',
+  missing_skill: 'nobody has been shown how',
+  missing_data: 'nothing to work from',
+  needs_permission: 'they are not granted it',
+  ambiguous: 'could not tell what was meant',
+  not_capable: 'beyond what they can do',
+}
+
+/** A state, in words, for both proposals and suggestions. */
+const STATE_WORD = {
+  open: 'Open',
+  approved: 'Approved',
+  declined: 'Declined',
+  done: 'Done',
+  dismissed: 'Dismissed',
+  superseded: 'Superseded',
+}
+
 /*
   Connections — every service, with its real mark.
 
@@ -3501,6 +3756,7 @@ function settingsSheet() {
   const v = $('#settings')
   const body =
     state.setting === 'behaviour' ? behaviourTab()
+    : state.setting === 'governance' ? governanceTab()
     : state.setting === 'connections' ? connectionsTab()
     : state.setting === 'channels' ? channelsTab()
     : state.setting === 'models' ? usageTab()
@@ -3524,7 +3780,7 @@ function settingsSheet() {
     instead of the viewport — which is how a bottom navigation bar once
     rendered across the top of the page.
   */
-  v.innerHTML = `<div class="sheet wide settings">
+  v.innerHTML = `<div class="sheet wide settings" data-more>
     <div class="chead sheethead">
       <span style="flex:1;min-width:0">
         <h2 class="t-title" style="margin:0">The office</h2>
@@ -3542,10 +3798,58 @@ function settingsSheet() {
       }" aria-selected="${state.setting === t.id}" data-setting="${t.id}">${esc(t.name)}</button>`).join('')}
     </div>
     ${body}
+    <!--
+      A sheet taller than the screen has to LOOK like it is.
+
+      Chromium paints an OVERLAY scrollbar on a touch device — zero reserved
+      width, invisible until you are already scrolling — so a settings tab with
+      two thousand pixels below the fold simply ended, mid-section, and read as
+      a rendering fault rather than as more to come. That is #108 wearing a
+      different hat, and it is the same defect that once left Save nowhere on
+      the phone task editor.
+
+      Sticky rather than absolute, and a real element rather than a pseudo: the
+      sheet is the scroll container, so an absolutely positioned fade scrolls
+      away with the content, and a fixed one would anchor to the sheet only
+      because it carries backdrop-filter, which is a coincidence to rely on.
+      Sticky needs no JavaScript and no class to toggle — with nothing below it
+      the fade sits on the sheet's own surface and cannot be seen, which is
+      exactly when there is nothing to announce.
+
+      No backticks in this comment: template literal.
+    -->
+    <div class="sheetfade" aria-hidden="true"></div>
   </div>`
 
   for (const b of v.querySelectorAll('[data-setting]')) {
-    b.addEventListener('click', () => { state.setting = b.dataset.setting; settingsSheet(); sheet(v, true) })
+    b.addEventListener('click', async () => {
+      state.setting = b.dataset.setting
+      settingsSheet()
+      sheet(v, true)
+      /*
+        Governance is fetched the first time it is opened (#54).
+
+        Lazy, like the MCP view: four tables nobody else on a settings open
+        touches. Drawn once with its waiting line, then again with the answer,
+        so the tab responds immediately rather than appearing to hang.
+      */
+      if (state.setting === 'governance' && !config.GOVERNANCE.loaded) {
+        await config.hydrateGovernance(read)
+        /*
+          Only if the sheet is still open on the same tab.
+
+          Without this guard the redraw runs whenever the fetch lands, which
+          may be after the person has moved to another tab or closed the sheet
+          — and `sheet(v, true)` REOPENS it. A capture run walked six tabs,
+          closed the settings viewer, and had it reappear over the page three
+          seconds later; every click after that hit the backdrop.
+        */
+        if (state.setting === 'governance' && !v.hidden) {
+          settingsSheet()
+          sheet(v, true)
+        }
+      }
+    })
   }
   /*
     Take me to where that is set up (#89, #92).
@@ -3618,6 +3922,19 @@ function settingsSheet() {
   */
   const afterWrite = async () => {
     await config.hydrateSettings(read)
+    settingsSheet()
+    sheet(v, true)
+  }
+
+  /*
+    Redraw the governance tab from the office, not from the page's guess.
+
+    Its own refresher rather than `afterWrite`: `hydrateSettings` does not
+    fetch this section, and a retraction that only disappeared from the DOM
+    would look identical to one the database refused.
+  */
+  const afterGovernance = async () => {
+    await config.hydrateGovernance(read)
     settingsSheet()
     sheet(v, true)
   }
@@ -3831,6 +4148,60 @@ function settingsSheet() {
         return { ok: true }
       })
       if (done) await afterWrite()
+    })
+  }
+
+  /*
+    Retracting a lesson (#54).
+
+    `lessons` is append-only (§6), so this writes a retraction row that
+    supersedes it — nothing is deleted and the trail stays readable. The
+    confirmation says that, because "retract" sounds like "delete" and a person
+    who thinks they are destroying history will not press it when they should.
+  */
+  for (const b of v.querySelectorAll('[data-retract]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !sure(
+          'Retract this lesson? The team stops being shown it. Nothing is ' +
+            'deleted — a retraction is recorded next to it, so why it changed ' +
+            'stays answerable.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Retracting…', () =>
+        act('lesson_retract', { p_lesson_id: b.dataset.retract }), 'Retracted.')
+      if (done) await afterGovernance()
+    })
+  }
+
+  /*
+    Deciding a proposal (#49, #54).
+
+    Approve, decline and reopen through one control, because they are one
+    column. Declining asks first and approving does not: a decline is the
+    durable half — `proposals_one_per_need` means the same need cannot be
+    raised again while the row stands — and an approval only says the office
+    may ask for the thing, which is undone by declining it.
+  */
+  for (const b of v.querySelectorAll('[data-decide]')) {
+    b.addEventListener('click', async () => {
+      const [id, verdict] = String(b.dataset.decide).split(':')
+      if (
+        verdict === 'declined' &&
+        !sure(
+          'Decline this? The agent stops asking for it — the decline is a row, ' +
+            'not a mood, so it will not come back next week. You can reopen it ' +
+            'here whenever you like.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Saving…', () =>
+        act('proposal_decide', { p_proposal_id: id, p_state: verdict }),
+        verdict === 'open' ? 'Reopened.' : `${verdict[0].toUpperCase()}${verdict.slice(1)}.`)
+      if (done) await afterGovernance()
     })
   }
 

@@ -343,6 +343,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
      Chromium's overlay scrollbar is invisible until you are already scrolling,
      which is the #108 defect wearing a different hat: the task editor on a
      phone simply ended below Priority, with Save nowhere. */
+  /* `scrollbar-width: thin` still yields an OVERLAY scrollbar where the
+     platform prefers one — zero reserved width, invisible until you scroll, so
+     a sheet with two thousand pixels below the fold looks finished. The gutter
+     is what makes the track occupy real space and the affordance permanent.
+     Found by pointing `verify:layouts` at the settings sheet for the first
+     time (#54). */
+  scrollbar-gutter: stable;
   scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
 .sheet::-webkit-scrollbar { width: 8px; }
 .sheet::-webkit-scrollbar-thumb {
@@ -3694,4 +3701,376 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .wact .addfield input { flex: 1 1 auto; min-width: 0; }
   .waithead { flex-wrap: wrap; }
   .waithead .t-meta { flex-basis: 100%; white-space: normal; }
+}
+
+
+/*
+  The bottom fade on a scrolling sheet.
+
+  Negative margins on three sides so it spans the sheet's padding rather than
+  sitting inside it, and a negative top margin equal to its height so it costs
+  no layout — it lies over the last forty pixels of content, which is what a
+  fade is for. `bottom` is pulled out by the sheet's own padding for the same
+  reason.
+
+  `data-more` on the sheet is what `verify:layouts` looks for, and it is true
+  unconditionally BECAUSE the affordance is unconditional: sticky means the
+  fade only has anything to hide when there is something below it.
+*/
+.sheetfade {
+  position: sticky; bottom: calc(var(--s5) * -1);
+  height: 40px; margin: -40px calc(var(--s5) * -1) 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface) 85%);
+}
+
+/* === Governance (#54) ====================================================
+   What the office learned, what it wants, what it noticed, and where each
+   agent keeps getting stuck.
+
+   Four answers, four forms. A uniform card grid would be the generic-AI UI
+   the standard forbids, and it would also be wrong on the content: a lesson
+   is a quotation, a proposal is an argument, a suggestion is a margin note
+   and an agent is a profile. They are set as those things.
+
+   Prefix `gov` throughout. `.stage` and `.kind.doc` both got claimed twice in
+   this file and both cost an afternoon; a prefix costs three characters.
+   ------------------------------------------------------------------------ */
+
+.govsec { margin-top: var(--s5); }
+.govsec:first-of-type { margin-top: var(--s4); }
+
+/*
+  A section heading that carries its own count.
+
+  The rule (a hairline that runs to the right edge) is what makes four stacked
+  lists read as four sections rather than one long scroll. It is drawn with a
+  flexed pseudo-element rather than a border-bottom so the count sits IN the
+  line rather than above it.
+*/
+.govtitle {
+  display: flex; align-items: baseline; gap: var(--s3);
+  margin: 0 0 var(--s3);
+  font-family: var(--font-display, inherit);
+  font-size: 15px; font-weight: 600; letter-spacing: .01em; color: var(--ink);
+}
+.govtitle::after {
+  content: ''; flex: 1 1 auto; height: 1px; background: var(--edge);
+}
+.govtitle .t-meta { order: 3; flex: none; white-space: nowrap; }
+
+.govempty {
+  margin: 0; padding: var(--s4);
+  border: 1px dashed var(--edge); border-radius: var(--r-card);
+  line-height: 1.5;
+}
+
+/* --- What it learned. A quotation, and its provenance. ------------------- */
+
+.govlessons { display: grid; gap: var(--s3); }
+
+.govlesson {
+  padding: var(--s4);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface);
+  display: grid; gap: var(--s3);
+}
+.govlesson:hover { box-shadow: var(--lift-2); }
+.govlesson { gap: var(--s3); }
+
+/*
+  Set as a quotation because that is what it is: a sentence the office is now
+  behaving according to. The accent rule on the left is the only ornament, and
+  it earns its place — it is what stops three lessons reading as three
+  paragraphs of one document.
+*/
+.govquote {
+  margin: 0; padding-left: var(--s4);
+  border-left: 2px solid var(--accent);
+  font-size: 16px; line-height: 1.5; color: var(--ink);
+}
+
+/*
+  The attribution line, with its separators drawn rather than typed.
+
+  Written as literal middots first, and the flex gap put a space on ONE side of
+  each: "seen 3 times ·1 day ago". A separator that belongs to the gap has to
+  be made by the gap.
+
+  The rule for `.m` is `li .m, .meta` — a bare `.t-meta` here is styled by its
+  own class, so no `li` ancestor is assumed.
+*/
+.govfrom {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  min-width: 0;
+}
+.govfrom .t-meta { white-space: nowrap; }
+.govfrom > .t-meta + .t-meta::before {
+  content: '·'; margin-right: var(--s2); color: var(--ink-3);
+}
+
+/*
+  A lesson's footer: where it came from, and the one thing you can do about it.
+
+  One row rather than two. As two, the button sat alone on a right-aligned line
+  under the attribution and every lesson card carried sixty pixels of nothing —
+  three of them made the section look like it was still loading.
+*/
+.govfoot {
+  display: flex; align-items: center; gap: var(--s3);
+  flex-wrap: wrap; min-width: 0;
+}
+.govfoot > .govfrom { flex: 1 1 auto; }
+.govfoot > [data-said] { flex: 0 1 auto; text-align: right; }
+
+/*
+  The scope, as a word rather than an enum, tinted by how wide it reaches.
+
+  Everywhere is the accent because a global lesson changes every reply; the
+  narrower scopes are quiet. A person scanning for "what did it change about
+  everything" should find it without reading.
+*/
+.govscope {
+  flex: none; padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; letter-spacing: .02em;
+  background: var(--sunken); color: var(--ink-2);
+}
+.govscope.s-global {
+  background: var(--accent-wash); color: var(--accent);
+}
+/*
+  `--ink-3` is the page's quietest ink and it does not clear WCAG AA at 12px —
+  2.96:1 on clay, 3.28 on ink, 3.07 on moss. It is fine for a drawn separator,
+  which carries no information, and wrong for a job id, which is the only
+  thread from a lesson back to the work that produced it. `verify:layouts`
+  found this the first time it was pointed at the settings sheet.
+*/
+.govjob {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px; color: var(--ink-2);
+}
+
+.govact { display: flex; align-items: center; gap: var(--s3); justify-content: flex-end; }
+.govact [data-said] { flex: 1 1 auto; text-align: left; min-width: 0; }
+
+/*
+  The one button shape on this page.
+
+  44px, because §17 is enforced and because these are consequential presses.
+  Retract and Decline are not painted red — a page where the destructive
+  action shouts is a page that talks you out of governing. They confirm
+  instead, and the wording of the confirmation does the work.
+*/
+.gobtn {
+  flex: none; min-height: 44px; padding: 0 var(--s4);
+  border: 1px solid var(--edge); border-radius: var(--r-control);
+  background: var(--surface); color: var(--ink);
+  font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+}
+.gobtn:hover:not(:disabled) {
+  box-shadow: var(--lift-2); transform: translateY(-1px); border-color: var(--ink-3);
+}
+.gobtn:disabled { opacity: .5; cursor: not-allowed; }
+.gobtn.go { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.gobtn.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+
+/* --- What it wants. An argument, with a verdict. ------------------------- */
+
+.govcases { display: grid; gap: var(--s3); }
+
+.govcase {
+  padding: var(--s4);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface);
+  display: grid; gap: var(--s2);
+}
+.govcase:hover { box-shadow: var(--lift-2); }
+/*
+  An open proposal is asking for something and says so with a left edge; a
+  settled one is history and recedes. Colour is not the only signal — the
+  state word is next to the title.
+*/
+.govcase.g-open { border-left: 3px solid var(--accent); }
+.govcase.g-declined, .govcase.g-approved { background: var(--sunken); }
+
+.govhead {
+  display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
+  min-width: 0;
+}
+.govhead b { font-size: 15px; font-weight: 600; line-height: 1.35; min-width: 0; }
+.govstate {
+  margin-left: auto; flex: none;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  background: var(--sunken); color: var(--ink-2);
+}
+.govcase.g-open .govstate { background: var(--accent-wash); color: var(--accent); }
+
+.govarg { margin: 0; line-height: 1.5; color: var(--ink-2); }
+.govcost { color: var(--good); font-weight: 600; }
+.govnote {
+  margin: var(--s1) 0; padding: var(--s3) var(--s4);
+  border-left: 2px solid var(--edge); border-radius: 0 6px 6px 0;
+  background: var(--ground); font-size: 13px; line-height: 1.5; color: var(--ink-2);
+}
+
+/* --- What it noticed. Margin notes with a tally. ------------------------- */
+
+.govnotes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.govnoted {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface);
+  display: grid; gap: 4px;
+}
+/*
+  The evidence behind a suggestion, as counted facts.
+
+  `suggestions.because` is JSONB — the numbers the noticing pass found, not a
+  sentence — so it is set as numbers: the figure in ink, the label muted beside
+  it. A row of these says "eleven documents, no notebook" faster than a clause
+  can.
+*/
+.govwhy { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: 2px; }
+.govbit {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 3px 9px; border-radius: 8px;
+  background: var(--ground); font-size: 12px; color: var(--ink-2);
+}
+.govbit b { font-size: 13px; font-weight: 700; color: var(--ink); }
+
+/*
+  A thing offered four times and dismissed four times is the office failing to
+  take a hint, so the tally is loud. This is the one place on the page where a
+  number is allowed to shout.
+*/
+.govdismiss {
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn);
+}
+
+/* --- What each of them can do. A profile whose body is its failures. ----- */
+
+/*
+  `align-items: start` matters here: without it a grid row stretches every card
+  to the tallest, and Claire — who has been stopped by nothing — rendered as a
+  card two thirds empty next to Emma's two walls.
+*/
+.govagents {
+  display: grid; gap: var(--s3); align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+}
+.govagent {
+  padding: var(--s4);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface);
+  display: grid; gap: var(--s3); align-content: start;
+}
+.govagent:hover { box-shadow: var(--lift-2); }
+
+.govtools { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.govcount {
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  background: var(--accent-wash); color: var(--accent);
+}
+.govskill {
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; background: var(--sunken); color: var(--ink-2);
+}
+.govclear { margin: 0; line-height: 1.5; }
+
+/*
+  The walls. The most useful list on the page, per the Issue, and set to look
+  like it: what was needed in the office's own vocabulary, the kind of refusal
+  beside it, and the count on the right where a scanning eye lands.
+*/
+.govwalls { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.govwalls li {
+  display: flex; align-items: baseline; gap: var(--s2);
+  padding: 6px var(--s3);
+  border-radius: 8px; background: var(--ground);
+  min-width: 0;
+}
+.govwall {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.govwalls li .t-meta { flex: 1 1 auto; min-width: 0; }
+.govtimes { flex: none; font-size: 13px; font-weight: 700; color: var(--bad); }
+
+/* Waiting for the office. Three bars, breathing. */
+.govskel { display: grid; gap: var(--s3); margin-top: var(--s4); }
+.govskel span {
+  height: 68px; border-radius: var(--r-card);
+  background: linear-gradient(90deg, var(--sunken), var(--ground), var(--sunken));
+  background-size: 200% 100%;
+  animation: govwait 1.6s ease-in-out infinite;
+}
+.govskel span:nth-child(2) { animation-delay: .15s; }
+.govskel span:nth-child(3) { animation-delay: .3s; }
+@keyframes govwait {
+  0%, 100% { background-position: 0% 0; }
+  50% { background-position: 100% 0; }
+}
+@media (prefers-reduced-motion: reduce) { .govskel span { animation: none; } }
+
+@media (max-width: 860px) {
+  /*
+    Governance on a phone (#54).
+
+    At the END of the file, deliberately. A media query adds no specificity, so
+    a phone rule written next to its base rule three hundred lines up loses to
+    source order — which is how the phone layout stayed broken through a full
+    capture run that reported no errors. Twice already in this file.
+
+    Three changes, each for a measured reason at 390px:
+
+      * the buttons go full width under the row. Beside a sentence they leave
+        the sentence about eleven characters wide, and the sentence is the
+        thing being judged;
+      * the state pill loses its `margin-left: auto`, which on a wrapped
+        heading pushed it to the right of a line it did not belong to;
+      * the agent grid drops to one column — 270px minima plus two 20px
+        gutters do not fit, and a grid that cannot fit its minimum is what
+        pushes a page sideways.
+  */
+  .govact { flex-wrap: wrap; }
+  .govact [data-said] { flex: 1 1 100%; order: -1; }
+  .govact .gobtn { flex: 1 1 auto; }
+  /*
+    The footer wraps rather than stacking. Two full-width buttons one above the
+    other is a column of slabs — Decline and Approve are a pair and should
+    read as one decision, so they share a row and split it.
+  */
+  .govfoot { flex-wrap: wrap; }
+  .govfoot > .govfrom { flex: 1 1 100%; }
+  .govfoot > [data-said] { flex: 1 1 100%; text-align: left; }
+  .govfoot > .gobtn { flex: 1 1 0; min-width: 0; }
+  /*
+    No drawn separators once the line wraps.
+
+    A dot generated before an item is a dot at the START of whatever line that
+    item lands on, and at 390px this attribution line always wraps: "· hit 9
+    times" opened a row with a bullet that belonged to the row above. The gap
+    is enough on its own when each fragment gets its own line.
+  */
+  .govfrom { gap: var(--s1) var(--s3); }
+  .govfrom > .t-meta + .t-meta::before { content: none; }
+
+  /*
+    The theme toggle in the settings header measured 58×43.5 under a coarse
+    pointer — half a pixel under the 44px floor, which is a fail and also the
+    kind of thing nobody sees by looking. Pre-existing on every settings tab
+    and only ever reported once `verify:layouts` was pointed at the sheet.
+  */
+  [data-scheme-toggle] { min-height: 44px; }
+  .govstate { margin-left: 0; }
+  .govagents { grid-template-columns: 1fr; }
+  .govquote { padding-left: var(--s3); font-size: 15px; }
+  .govfrom .t-meta { white-space: normal; }
+  .govwalls li { flex-wrap: wrap; }
 }

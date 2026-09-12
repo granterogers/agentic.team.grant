@@ -115,7 +115,7 @@ for (const [size, opts] of SIZES) {
     if (size === 'desktop') {
       await page.locator('[data-settings]').click()
       await page.waitForTimeout(400)
-      for (const tab of ['models', 'behaviour'] as const) {
+      for (const tab of ['models', 'behaviour', 'governance'] as const) {
         await page.locator(`[data-setting="${tab}"]`).click()
         await page.waitForTimeout(450)
         await shoot(`settings-${tab}`)
@@ -133,6 +133,25 @@ for (const [size, opts] of SIZES) {
         if (scrolled) {
           await page.waitForTimeout(400)
           await shoot(`settings-${tab}-lower`)
+        }
+        /*
+          The middle, for a tab that is four sections long (#54).
+
+          Top and bottom photograph the lessons and the agents and skip the two
+          in between entirely — and "what it wants" is the section with the
+          only irreversible controls on the page. A capture set that cannot see
+          the buttons cannot judge them.
+        */
+        if (tab === 'governance' && scrolled) {
+          await page.evaluate(`(() => {
+            const el = document.querySelector('#settings .setbody')
+            if (el === null) return
+            const box = el.closest('.sheet, .settings') || el
+            const target = box.scrollHeight > box.clientHeight ? box : el
+            target.scrollTop = Math.round(target.scrollHeight * 0.38)
+          })()`)
+          await page.waitForTimeout(400)
+          await shoot(`settings-${tab}-middle`)
         }
       }
       await page.locator('#settings .close').click()
@@ -231,7 +250,15 @@ for (const [size, opts] of SIZES) {
       */
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(500)
-      for (const tab of ['team', 'behaviour', 'connections', 'channels', 'models', 'appearance']) {
+      for (const tab of [
+        'team',
+        'behaviour',
+        'governance',
+        'connections',
+        'channels',
+        'models',
+        'appearance',
+      ]) {
         await page.locator(`[data-setting="${tab}"]`).click()
         await page.waitForTimeout(400)
         await shoot(`settings-${tab}`)
@@ -308,6 +335,43 @@ for (const [size, opts] of SIZES) {
 
     await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
+
+    /*
+      Governance on a phone (#54).
+
+      The only settings capture taken at 390px, and it is here because it is
+      the settings tab with the most stacking to get wrong: four sections, a
+      three-column agent grid, and every row ending in buttons. The rest of the
+      settings sheet is captured at desktop only, which is a gap this Issue
+      does not widen but does prove worth closing.
+    */
+    if (size === 'phone') {
+      await page.locator('[data-settings]').first().click()
+      await page.waitForTimeout(500)
+      await page.locator('[data-setting="governance"]').click()
+      await page.waitForTimeout(500)
+      await shoot('settings-governance')
+      await page.evaluate(`(() => {
+        const el = document.querySelector('#settings .setbody')
+        if (el === null) return
+        const box = el.closest('.sheet, .settings') || el
+        const target = box.scrollHeight > box.clientHeight ? box : el
+        target.scrollTop = Math.round(target.scrollHeight * 0.45)
+      })()`)
+      await page.waitForTimeout(400)
+      await shoot('settings-governance-middle')
+      await page.evaluate(`(() => {
+        const el = document.querySelector('#settings .setbody')
+        if (el === null) return
+        const box = el.closest('.sheet, .settings') || el
+        const target = box.scrollHeight > box.clientHeight ? box : el
+        target.scrollTop = target.scrollHeight
+      })()`)
+      await page.waitForTimeout(400)
+      await shoot('settings-governance-lower')
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(400)
+    }
 
     /*
       Wellness is the project with nothing in it, so it is the only place the

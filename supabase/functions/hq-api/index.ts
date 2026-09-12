@@ -137,6 +137,15 @@ const SECTIONS: Readonly<
     every page load pay for a list most loads never render.
   */
   portfolio_tasks: { fn: 'hq_portfolio_tasks', args: { p_limit: 200 } },
+  /*
+    What the office learned, what it wants, what it noticed and what each agent
+    could not do (#54, migration 0302).
+
+    Its own section rather than a field on `studio`, for the reason `lately`
+    and `portfolio_tasks` are: it reads four tables nobody else on the first
+    paint touches, and governance is a screen you navigate TO.
+  */
+  governance: { fn: 'hq_governance', args: { p_limit: 40 } },
 }
 
 /**
@@ -349,6 +358,22 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   */
   undo: { fn: 'hq_undo', required: ['p_action_id'] },
   reattach: { fn: 'hq_reattach', required: ['p_attachment_id'] },
+  /*
+    Governance (#54, migration 0302).
+
+    `lesson_retract` is on the configuring side of the line by construction:
+    `lessons` is append-only (§6), so it writes a RETRACTION row that
+    supersedes the lesson rather than removing anything. Nothing is lost and
+    the reason is recorded next to it. `p_why` is optional — "no longer true"
+    is a complete answer and the RPC supplies an honest default.
+
+    `proposal_decide` approves or declines a proposal in place. The decline is
+    the durable half: `proposals_one_per_need` means the same need cannot be
+    raised again while the row stands, which is what makes a decline stick
+    rather than becoming a nag. Reopening is allowed and is a person's call.
+  */
+  lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
+  proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
 }
 
 /**

@@ -172,6 +172,7 @@ await pg.waitForTimeout(500)
 for (const t of [
   'team',
   'behaviour',
+  'governance',
   'connections',
   'channels',
   'models',
@@ -187,7 +188,7 @@ const orphans = [...found].filter(([k]) => !queried.has(k))
 await b.close()
 srv.close()
 
-console.log(`\nverify:wired — ${String(found.size)} control attributes across 16 screens`)
+console.log(`\nverify:wired — ${String(found.size)} control attributes across 17 screens`)
 let bad = 0
 if (orphans.length > 0) {
   bad += orphans.length

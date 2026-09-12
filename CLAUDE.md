@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **301 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **302 applied.**
 
 ---
 
@@ -392,7 +392,7 @@ Each of these cost real time. They are here so they cost it once.
   WHOLE page for ~900ms, during which every `elementFromPoint` returns the root.
 - **A control that nothing looks up is a control nothing can have wired.**
   `verify:controls` presses things, costs minutes per route, and only covers
-  what it can reach. `npm run verify:wired` walks sixteen screens, collects
+  what it can reach. `npm run verify:wired` walks seventeen screens, collects
   every `data-*` attribute on every visible button and link, and fails if any
   source file never queries it. It found `data-hire` — the other half of a
   roster feature whose `staff_retire` had existed alone since 0079 — which a
@@ -476,6 +476,41 @@ Each of these cost real time. They are here so they cost it once.
   in teardown is better than a DELETE would have been — it exercises the
   mechanism a person actually has. Assert that the subject is no longer LIVE
   (`skills_live`, or excluded from the tally), never that the row is gone.
+- **An audit that has never opened a surface says nothing about it.**
+  `verify:layouts` walked seven project tabs and reported 38 green states for
+  weeks; it had never opened the settings sheet, which is eight more screens
+  and the only place in the product with irreversible controls on it. Pointed
+  at one settings tab it found three defects in the first run — an ink token
+  failing WCAG AA at 12px, and 2,857px of a phone sheet hidden behind an
+  overlay scrollbar with no affordance, which is #108 still live. Before
+  trusting a count of green states, ask what the audit can actually reach.
+- **A decorative transform makes a correct control measure wrong.** With a
+  sheet open the studio blurs the shell and scales it to 0.994 so the sheet
+  reads as nearer. Every rect behind it is multiplied, so a 44px button
+  measures 43.74 and a touch-target audit reports it — on a surface with
+  `pointer-events: none`, which nobody can touch. An audit run over a page with
+  something in front of it must scope itself to the thing in front.
+- **`scrollbar-width: thin` does not create a gutter on a touch device.**
+  Chromium keeps an OVERLAY scrollbar there — zero reserved width, invisible
+  until you are already scrolling — and `scrollbar-gutter: stable` is ignored
+  for overlay scrollbars, so it fixes the desktop and leaves the phone exactly
+  as broken. The affordance that works on both is a sticky fade element at the
+  end of the scroll container: no JavaScript, no class to toggle, and with
+  nothing below it there is nothing to see, which is precisely when there is
+  nothing to announce.
+- **A CONTROL goes stale when the thing it controls for changes.**
+  `verify:hq` proved its tool refusal discriminated by revoking and re-granting
+  `web.search`. 0298 disabled `web.search`, because it was claimed on every
+  agent's sheet with nothing behind it — so the control asserted that a
+  DISABLED tool could be re-granted and went red on a correct change. Same
+  shape as asserting an index by name. Pick a control subject the change under
+  test cannot move, and say in the comment why that one.
+- **A JSONB column rendered with an escaper says "object Object".**
+  `suggestions.because` holds the numbers the noticing pass counted, not a
+  sentence — the name reads like prose and it is not. The first draft of the
+  governance page put `esc(s.because)` on Grant's screen. Query
+  `information_schema` for the TYPE before writing the renderer, the same rule
+  as for the column name.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 
