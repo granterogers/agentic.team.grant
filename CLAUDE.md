@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **249 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **284 applied.**
 
 ---
 
@@ -402,6 +402,16 @@ Each of these cost real time. They are here so they cost it once.
   "Claire" derived the slug `claire`, found no collision, and would have put a
   second Claire on the roster — because Claire's slug is `chief-of-staff`.
   Same shape as the project trap below it. Check the human-readable field too.
+- **A NOT NULL column that defaults to `''` makes every `coalesce` on it dead
+  code.** `documents.produced_by` was `not null default ''`, so
+  `coalesce(d.produced_by, 'The team')` — written in four readers, including two
+  the studio calls — could never fire, and a document the office made rendered
+  with a BLANK origin line where a name should be. Latent since 0175 and only
+  reached when #20 became the first thing to set `origin = 'made'` on a row the
+  gallery shows. It is 0177's own argument about `connector = 'none'` in a
+  second column: a sentinel satisfies the constraint and lies. Fixed in the
+  column (0284), not in the four readers. Grep for `default ''` before writing a
+  coalesce against a text column.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

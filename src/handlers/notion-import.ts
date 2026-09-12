@@ -41,6 +41,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
 import { type Schema, schemaOf } from '../notion/structure.ts'
+import { registerAuthored } from '../notion/sync.ts'
 import { appendBlocks, createPageIfAbsent, relate, toBlocks } from '../notion/write.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
@@ -167,13 +168,35 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
       if (projectsDb !== undefined) {
         const schema = await schemaOf(client, projectsDb)
         for (const module of modules) {
+          const body = `${module.summary}\n\n## Built from\n\n${module.sources.map((s) => `- ${s}`).join('\n')}`
           const page = await createPageIfAbsent(client, {
             parent: { dataSource: projectsDb },
             title: module.name,
             titleProperty: schema.titleProperty,
-            body: `${module.summary}\n\n## Built from\n\n${module.sources.map((s) => `- ${s}`).join('\n')}`,
+            body,
           })
           projectPageFor.set(module.name, page.id)
+          /*
+            #20. A module page is the office's OUTPUT, and `duty:notion-sync`
+            reads it straight back — so without this it lands in the corpus
+            looking exactly like something Grant supplied. Six of them did.
+
+            Recorded here, in the pass that writes the page, rather than
+            recognised afterwards: 0169 makes the same point about
+            `mirrors_document_id`, and for the same reason — a title Grant
+            edits in Notion stops matching, and the row quietly becomes source
+            material again.
+
+            Also on the `existed` branch, because a rerun against a page an
+            earlier run created is exactly how the six unmarked rows happened.
+          */
+          await registerAuthored(
+            db,
+            job.projectId,
+            { id: page.id, title: module.name },
+            body,
+            'office.notion_import',
+          )
           if (page.existed) existed.projects += 1
           else {
             made.projects += 1

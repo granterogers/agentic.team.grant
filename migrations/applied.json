@@ -280,5 +280,7 @@
   "0279_one_row_per_surface_worst_state_first.sql": "d5598c409c407c38ed170909b20729e4e1c67f1a9f8fb5974c9fc2cc741f5f08",
   "0280_tasks_across_the_whole_portfolio.sql": "e05e35744482f31719aa00df59d680ae50cd66f5638a3643269f87c851b64438",
   "0281_a_task_with_no_project_can_be_created.sql": "b7b2092a9dbd7dc196a453259dccc4701864b036a7a0e0e3e9035314268dc3fb",
-  "0282_one_policy_for_deleting_a_project.sql": "36704de6e289c104a34eb306fa4f02fd79f3bce4c68aa4a45c52047c59c3a8a9"
+  "0282_one_policy_for_deleting_a_project.sql": "36704de6e289c104a34eb306fa4f02fd79f3bce4c68aa4a45c52047c59c3a8a9",
+  "0283_a_container_is_not_a_document.sql": "0c16601731d8957acc805d7fe919c5a18dd02cc283cb24f2ab3f076fad00fa79",
+  "0284_nobody_is_called_empty_string.sql": "fbba7e836b23369eef62161d77fb2c077c0c24b1b175f25940ee98ccf6d03700"
 }

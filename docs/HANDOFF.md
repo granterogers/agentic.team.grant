@@ -178,7 +178,26 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-281 migrations · 964 unit tests · ~54 live suites, all green.
+284 migrations · 964 unit tests · ~55 live suites, all green.
+
+**The corpus holds material and nothing else (#19, #20, migrations
+0283-0284).** `duty:notion-sync` stored two things that were never source
+material. The three databases the office WRITES into — Projects, Tasks and Docs
+— were ingested as documents, each one a bulleted index of its own rows that
+matched a search for any row title and re-synced whenever anything was renamed;
+a Notion object whose id is in `project_attachments.external_ref` is now the
+attachment, not a document in it. And the six module pages
+`office.notion_import` authored were read straight back and counted as material
+Grant supplied. #20 asked whether `documents` needed an origin column — it
+already has one, `yours | source | made`, and the bug was that 0178 DERIVED it
+from the connector, which stopped being the definition the moment the office
+began writing into a connector and reading its own work back. `origin` is
+provenance, `connector` is location, and `notion-import` now states the
+provenance in the same pass that creates the page. `npm run verify:corpus`
+drives the sync against a stub Notion that presents both shapes, and proves
+each invariant by first planting the broken row. 0284 is the bug that found:
+`documents.produced_by` was NOT NULL defaulting to `''`, so the `coalesce` in
+every reader was dead and a made document rendered with a blank origin line.
 
 **Since 2026-09-11 the studio can take things back (#118, migrations
 0263-0266).** Every write with an EXACT inverse records it at the moment it

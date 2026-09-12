@@ -31,6 +31,21 @@
  *
  * That definition is also self-clearing. Sweep the removable ones and the check
  * is green; the next suite that leaves one turns it red the same day.
+ *
+ * ## The same leak one level down: harness DOCUMENTS in a real corpus
+ *
+ * Found while working #19. Three rows titled `Verification page <run>`, 45
+ * characters each, created inside 300ms on 2026-09-11, are sitting in Grant's
+ * Legacy Coaching Course corpus. `verify:notion` creates a page in Notion and
+ * syncs it into a FIXTURE project, which is correct — but the page stays shared
+ * in his workspace, so `duty:notion-sync` picks it up on its next real pass and
+ * `upsertDocument`'s `project_id = excluded.project_id` moves the row onto the
+ * real project. The suite's teardown archives the page it made this run; the
+ * three that predate that teardown were never archived and keep coming back.
+ *
+ * Which is why this half reports and never sweeps, even behind the flag:
+ * deleting the rows fixes nothing, because the next sync restores them. The fix
+ * is in Grant's Notion workspace and it is his to authorise.
  */
 
 import { ManagementApiExecutor } from '../src/db/executor.ts'
@@ -80,6 +95,27 @@ const live = (
 ).rows as { slug: string }[]
 
 /*
+  Harness documents in a real project's corpus.
+
+  Matched on the exact title `verify:notion` writes plus the size it writes, and
+  only in a NON-fixture project — a fixture corpus is meant to hold these. Two
+  facts rather than one because a title alone would one day match something
+  Grant wrote about verification.
+*/
+const corpus = (
+  await db.execute(`
+    select p.slug, d.title, d.content_chars,
+           to_char(d.created_at, 'YYYY-MM-DD') as made
+      from public.documents d
+      join public.projects p on p.project_id = d.project_id
+     where not p.is_fixture
+       and d.title like 'Verification page %'
+       and coalesce(d.content_chars, 0) < 200
+     order by d.created_at
+  `)
+).rows as { slug: string; title: string; content_chars: number; made: string }[]
+
+/*
   The sweep, behind an explicit flag.
 
   Grant: *"You should always check before making any destructive action with
@@ -116,8 +152,11 @@ for (const r of sweepable) {
   console.log(`  LEAK  ${r.slug} — ${String(r.age_days)} day(s) old, removable`)
 }
 for (const r of live) console.log(`  LIVE  ${r.slug} — ACTIVE, and named like a probe`)
+for (const d of corpus) {
+  console.log(`  CORPUS  ${d.slug} — "${d.title}", ${String(d.content_chars)} chars, ${d.made}`)
+}
 
-if (sweepable.length === 0 && live.length === 0) {
+if (sweepable.length === 0 && live.length === 0 && corpus.length === 0) {
   console.log('  nothing a suite should have removed.')
 }
 
@@ -127,6 +166,21 @@ if (sweepable.length === 0 && live.length === 0) {
   makes the check self-clearing — sweep it and this is green, and the next suite
   that leaves one turns it red the same day.
 */
+if (corpus.length > 0) {
+  /*
+    Reported and not swept, by design. The row is a symptom: the page is still
+    shared in Grant's Notion, so the next `duty:notion-sync` writes it back. It
+    also does not fail the check on its own — a failure nothing here can clear
+    is a check somebody switches off, which is the same reasoning as the pinned
+    projects above.
+  */
+  console.log(
+    `\n  ${String(corpus.length)} harness document(s) in a real corpus. Deleting the rows\n` +
+      '  will not help: the pages are still shared in Notion and the next sync\n' +
+      "  restores them. Archiving them is a change to Grant's workspace.",
+  )
+}
+
 if (sweepable.length > 0 || live.length > 0) {
   console.error(
     `\ncheck:leaks FAILED — ${String(sweepable.length + live.length)} project(s) a suite should have removed.\n` +

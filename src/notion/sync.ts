@@ -207,6 +207,66 @@ export async function upsertDocument(
 }
 
 /**
+ * The Notion objects that ARE this project's attachments (#19).
+ *
+ * `/search` returns the Projects, Tasks and Docs databases alongside the pages
+ * in them, and `pageText` renders a database as a bulleted list of its rows'
+ * titles. Storing that put an index of the container into the corpus: it
+ * matched a search for any row title and landed the reader on a list, and its
+ * fingerprint tracked every rename in the database so it re-synced for ever.
+ *
+ * The container is the attachment. What is inside it is the documents.
+ */
+export async function containerRefs(
+  db: SqlExecutor,
+  projectId: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await db.execute(`
+    select external_ref from app.container_refs(${lit(projectId)}::uuid, ${lit(CONNECTOR)})
+  `)
+  return new Set(rows.rows.map((r) => String(r.external_ref)))
+}
+
+/**
+ * Record a page the office wrote, as the office's own work (#20).
+ *
+ * `office.notion_import` authors module pages into the Projects database. The
+ * sync then reads them back, and without this they arrive looking exactly like
+ * something Grant supplied — six pages of the office's own output counted as
+ * source material.
+ *
+ * Written HERE, in the pass that creates the page, for the reason 0169 gives
+ * about `mirrors_document_id`: anything inferred afterwards from the title
+ * stops matching the moment Grant renames it in Notion, and the row silently
+ * becomes source material again.
+ *
+ * `origin` survives the sync because `upsertDocument`'s `do update` never
+ * touches it — the sync owns the content, the writer owns the provenance.
+ */
+export async function registerAuthored(
+  db: SqlExecutor,
+  projectId: string,
+  page: { readonly id: string; readonly title: string },
+  body: string,
+  producedBy: string,
+): Promise<void> {
+  const fingerprint = await fingerprintContent(body)
+  await db.execute(`
+    insert into public.documents
+      (project_id, connector, external_parent_ref, external_ref, title, doc_type,
+       content, content_fingerprint, content_chars, fetched_at, origin, produced_by)
+    values (${lit(projectId)}::uuid, ${lit(CONNECTOR)}, 'page', ${lit(page.id)},
+            ${nul(page.title === '' ? null : page.title)}, 'page',
+            ${lit(body)}, ${lit(fingerprint)}, ${String(body.length)},
+            app.now_utc(), 'made', ${lit(producedBy)})
+    on conflict (connector, external_parent_ref, external_ref)
+      where external_ref is not null
+      do update set origin = 'made',
+                    produced_by = coalesce(public.documents.produced_by, excluded.produced_by)
+  `)
+}
+
+/**
  * One full pass.
  *
  * A page that cannot be read is recorded in `skipped` and the pass continues.
@@ -220,12 +280,18 @@ export async function syncNotion(
   projectId: string,
 ): Promise<SyncOutcome> {
   const shared = await listShared(notion)
+  const containers = await containerRefs(db, projectId)
   let added = 0
   let changed = 0
   let unchanged = 0
   const skipped: string[] = []
 
   for (const object of shared) {
+    // #19. The attachment itself, not a document in it.
+    if (containers.has(object.id)) {
+      skipped.push(`${object.title === '' ? object.id : object.title}: container`)
+      continue
+    }
     try {
       const content = await pageText(notion, object)
       if (content.trim() === '') {
