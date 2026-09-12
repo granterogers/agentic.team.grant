@@ -33,6 +33,19 @@ const $ = (sel, root = document) => root.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
+/*
+  Payloads that belong to one screen rather than to the whole shell.
+
+  Declared HERE, beside `state`, rather than beside the functions that fetch it
+  — because `rail()` reads `latest.tasks` to put a count on the Tasks entry, and
+  `render()` runs during module evaluation. A `const` further down the file is
+  in the temporal dead zone at that moment, and the page rendered NOTHING with
+  "Cannot access 'latest' before initialization" in the console. Nothing else
+  reports that: `check:templates` passes, and `npm run smoke` announces it as a
+  timeout waiting for a selector that cannot exist.
+*/
+const latest = { lately: null, tasks: null }
+
 const state = {
   // Which Settings tab is open (#39).
   setting: 'team',
@@ -1016,6 +1029,27 @@ function rail() {
           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/></svg>
         Message the team
+      </button>
+
+      <!--
+        Everything on his plate, across every project and none (#173).
+
+        Above Lately because it is what he has to DO and Lately is what already
+        happened. The count is the point of the entry: a nav item that only says
+        Tasks tells him nothing about whether to press it.
+      -->
+      <button class="navitem" data-go="tasks" aria-current="${state.view === 'tasks' ? 'page' : 'false'}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 5.5h11M9 12h11M9 18.5h11"/><path d="M3.6 5.4l1.1 1.1 2-2.2"/>
+          <path d="M3.6 11.9l1.1 1.1 2-2.2"/><circle cx="4.7" cy="18.5" r="1.3"/></svg>
+        Tasks${
+          latest.tasks === null || Number(latest.tasks.counts?.open ?? 0) === 0
+            ? ''
+            : `<span class="n${Number(latest.tasks.counts?.overdue ?? 0) > 0 ? ' bad' : ''}">${
+                Number(latest.tasks.counts.open)
+              }</span>`
+        }
       </button>
 
       <button class="navitem" data-go="lately" aria-current="${state.view === 'lately' ? 'page' : 'false'}">
@@ -3922,12 +3956,133 @@ const railShut = () => {
   try { return localStorage.getItem('studio.rail') === 'shut' } catch { return false }
 }
 
+/*
+  Everything on his plate, across every project and none (#173).
+
+  Grant asked for one question to be answerable: "What should I be doing next?"
+  So the FIRST thing on the page is the first row, named — not a count, not a
+  chart. A list sorted by date is something he can already assemble in his head;
+  an answer is not.
+
+  Grouped by what is wrong with a task rather than by project, because the
+  grouping is the argument: overdue is a different kind of thing from waiting,
+  and both are different from merely open. Project is a label on each row.
+
+  The ordering comes from the SQL (0280) and is not recomputed here — the page
+  and the Chief of Staff must agree about what is next, and two orderings is how
+  they stop agreeing.
+*/
+function tasksView() {
+  const payload = latest.tasks
+  const rows = Array.isArray(payload?.tasks) ? payload.tasks : []
+  const counts = payload?.counts ?? {}
+  const n = (k) => Number(counts[k] ?? 0)
+
+  if (payload === null) {
+    return `<main class="main"><div class="head"><div>
+      <h1 class="t-display">Tasks</h1>
+      <p class="t-lead" style="margin:var(--s2) 0 0">Looking…</p>
+    </div></div></main>`
+  }
+
+  /*
+    Nothing to do reads as nothing to do, not as a broken page (#123).
+
+    And it says how to start, because `tasks` has been an empty table since #11
+    — a complete write path with nothing calling it — so the likeliest reason
+    this screen is empty is that nobody has ever added one.
+  */
+  if (rows.length === 0) {
+    return `<main class="main"><div class="head"><div>
+        <h1 class="t-display">Tasks</h1>
+        <p class="t-lead" style="margin:var(--s2) 0 0">
+          Nothing open, here or on any project. Add one from a project, or ask
+          the team for something and it will land here.</p>
+      </div></div></main>`
+  }
+
+  const next = rows[0]
+  const say = (t) => {
+    if (t.overdue === true) return { word: 'Overdue', tone: 'bad' }
+    if (t.waiting === true) return { word: 'Waiting', tone: 'warn' }
+    if (t.stale === true) return { word: 'Not moved', tone: 'warn' }
+    return { word: t.state === 'doing' ? 'In hand' : 'To do', tone: '' }
+  }
+  const when = (t) =>
+    t.due_on === null || t.due_on === undefined
+      ? ''
+      : new Date(`${t.due_on}T00:00:00Z`).toLocaleDateString([], {
+          day: 'numeric',
+          month: 'short',
+        })
+
+  const row = (t) => {
+    const s = say(t)
+    return `<li class="ptask${t.overdue === true ? ' od' : ''}">
+      <button class="ptick" data-tick="${esc(t.id)}" title="Mark done"
+        aria-label="Mark &ldquo;${esc(t.title)}&rdquo; done"></button>
+      <div class="ptbody">
+        <b>${esc(t.title)}</b>
+        <span class="t-meta">
+          ${s.tone === '' ? '' : `<em class="pt-${s.tone}">${esc(s.word)}</em> · `}
+          ${t.project === null || t.project === undefined
+            ? 'No project'
+            : esc(String(t.project_name ?? t.project))}
+          ${t.owner_name === null || t.owner_name === undefined ? '' : ` · ${esc(String(t.owner_name))}`}
+          ${when(t) === '' ? '' : ` · due ${esc(when(t))}`}
+          ${t.suggested === true ? ' · <em>suggested</em>' : ''}
+        </span>
+        ${t.blocked_on === null || t.blocked_on === undefined
+          ? ''
+          : `<span class="t-meta">Blocked on ${esc(String(t.blocked_on))}</span>`}
+      </div>
+    </li>`
+  }
+
+  const tally = [
+    n('overdue') === 0 ? '' : `${String(n('overdue'))} overdue`,
+    n('waiting') === 0 ? '' : `${String(n('waiting'))} waiting`,
+    n('stale') === 0 ? '' : `${String(n('stale'))} not moved in a fortnight`,
+    n('unowned') === 0 ? '' : `${String(n('unowned'))} with nobody on them`,
+  ].filter((x) => x !== '')
+
+  return `<main class="main">
+    <div class="head">
+      <div>
+        <h1 class="t-display">Tasks</h1>
+        <p class="t-lead" style="margin:var(--s2) 0 0">${
+          String(n('open'))
+        } open across everything.${tally.length === 0 ? '' : ` ${esc(tally.join(', '))}.`}</p>
+      </div>
+    </div>
+
+    <!--
+      The answer, before the list. One row, named, because that is the question
+      the issue is about and a list is not an answer to it.
+    -->
+    <section class="pnext">
+      <span class="t-label">Next</span>
+      <b>${esc(next.title)}</b>
+      <span class="t-meta">${
+        next.project === null || next.project === undefined
+          ? 'No project'
+          : esc(String(next.project_name ?? next.project))
+      }${when(next) === '' ? '' : ` · due ${esc(when(next))}`}${
+        next.overdue === true ? ' · overdue' : ''
+      }</span>
+    </section>
+
+    <ul class="ptasks">${rows.map(row).join('')}</ul>
+  </main>`
+}
+
 function render() {
   const root = $('#root')
   root.classList.toggle('shut', railShut())
   root.innerHTML = commandBar() + rail() + (
     state.view === 'project' ? dashboard()
     : state.view === 'lately' ? lately()
+    : state.view === 'tasks' ? tasksView()
     : portfolio())
   // The room takes its colour from whatever is in front of you.
   ambient(state.view === 'project' ? byId(state.project).hue : PROJECTS[0].hue)
@@ -3975,6 +4130,24 @@ function render() {
       // After the transition, not inside it: a fetch in the middle of a view
       // transition holds the old frame on screen until it resolves.
       if (b.dataset.go === 'lately') void needLately()
+      if (b.dataset.go === 'tasks') void needTasks()
+    })
+  }
+
+  /*
+    Ticking one off, from the portfolio (#173).
+
+    `task_state` rather than a portfolio-specific action: it is the same row the
+    project view ticks, which is the whole argument for aggregating rather than
+    duplicating. It also means undo (#118) works here for free, because the
+    inverse was recorded by the same RPC.
+  */
+  for (const b of root.querySelectorAll('[data-tick]')) {
+    b.addEventListener('click', async () => {
+      await attempt(b, 'Marking done…', () =>
+        act('task_state', { p_task_id: b.dataset.tick, p_state: 'done' }),
+      )
+      await refresh()
     })
   }
 
@@ -5525,7 +5698,32 @@ const GOOGLE_START = API.replace(/\/hq-api$/, '/google-oauth/start')
   and a dozen screenshots on every load is a cost paid by everyone for a page
   few of them want. So it is fetched when it is first asked for and kept.
 */
-const latest = { lately: null }
+
+/*
+  The portfolio task list (#173).
+
+  Its own payload for the same reason Lately has one: it is a screen you
+  navigate to, and folding it into `studio` would make every first paint pay for
+  a list most loads never render.
+
+  Unlike Lately it is also read for the RAIL — the count beside the nav item —
+  so it is fetched once the shell is up rather than only when the screen is
+  opened. A nav entry that says "Tasks" and nothing else cannot tell him whether
+  to press it, and the whole complaint behind this issue is that work across
+  projects is invisible until you go looking.
+*/
+async function needTasks() {
+  if (latest.tasks !== null) return
+  try {
+    latest.tasks = await read('portfolio_tasks')
+  } catch {
+    // Left as an empty list rather than an error. A task screen that cannot
+    // reach the office should say there is nothing to show; #119's strip is
+    // what says the office is unreachable, and saying it twice is noise.
+    latest.tasks = { counts: {}, tasks: [] }
+  }
+  render()
+}
 
 async function needLately() {
   if (latest.lately !== null) return
@@ -5540,8 +5738,10 @@ async function needLately() {
 }
 
 async function refresh() {
-  // A write can add a ledger row, so the kept copy is now behind.
+  // A write can add a ledger row, so the kept copy is now behind. Ticking a
+  // task is a write, so the task list is behind for exactly the same reason.
   latest.lately = null
+  latest.tasks = null
   await Promise.all([
     hydrate(API, (() => {
       try {

@@ -178,7 +178,7 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-276 migrations · 958 unit tests · ~52 live suites, all green.
+281 migrations · 964 unit tests · ~54 live suites, all green.
 
 **Since 2026-09-11 the studio can take things back (#118, migrations
 0263-0266).** Every write with an EXACT inverse records it at the moment it
@@ -220,6 +220,25 @@ what it should have been. `body` stays: prose is what Grant reads. The duties
 that report "nothing changed" now say so in a field. Still prose-only:
 `research_summary`, `tasks_extracted` and `draft_document`, which need their
 handlers taught to ask the model for structure.
+
+**The office knows what it can do, per person (#148, migrations 0277-0279).**
+`app.capability_index(staff)` is generated on every call from
+`tool_permissions`, `staff_tools`, `knowledge_connectors`, `connection_health`
+and `tool_requests`, and answers four different questions — can / must ask /
+nobody may / already refused. It replaces `verbsNow()`, a hand-written list in
+TypeScript that covered three of twenty-one tools; the verbs are a column now,
+so the office can correct one without a deploy. It also fixed a duplicate that
+had been in **every capability brief the office had ever sent**: Slack and
+Telegram each have two `connection_health` rows and the surfaces branch never
+deduped.
+
+**Tasks exist across the whole portfolio (#173, migrations 0280-0281).**
+`tasks.project_id` is nullable, so a task can belong to no dashboard project;
+`app.hq_portfolio_tasks()` aggregates every open one with overdue, waiting,
+stale, unowned and suggested computed on read in Grant's timezone; and the
+studio has a Tasks screen whose first row answers *"what should I be doing
+next"* rather than only listing. Ticking one there is the same row the project
+view ticks, so undo works for free.
 
 **The office recognises a failure it has seen before (#132, migrations
 0274-0276).** `failure_signatures` counts a repeat instead of logging it again,

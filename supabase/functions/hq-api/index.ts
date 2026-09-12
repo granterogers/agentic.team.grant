@@ -128,6 +128,15 @@ const SECTIONS: Readonly<
   // What the build session is doing, as it does it — so Grant can open the page
   // instead of a terminal (0170).
   build: { fn: 'hq_build' },
+  /*
+    Every open task, across every project and none (#173, migration 0280).
+
+    Its own section rather than a field on `studio`, for the reason `lately` and
+    `document` are: the studio payload is what the first paint needs, and a
+    portfolio task list is a screen you navigate TO. Folding it in would make
+    every page load pay for a list most loads never render.
+  */
+  portfolio_tasks: { fn: 'hq_portfolio_tasks', args: { p_limit: 200 } },
 }
 
 /**
@@ -196,6 +205,13 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
 
     Found while building Calendar sync (#94), whose whole job is putting dated
     tasks in a diary: the plan query correctly returned nothing to do.
+  */
+  /*
+    `p_project` stays required and may now be an EMPTY STRING, which means the
+    task belongs to no dashboard project (#173, migration 0281). Required
+    rather than optional deliberately: omitting it would make "I forgot to say
+    which project" and "this belongs to none" the same request, and only one of
+    those should file a task where Grant is not looking.
   */
   task_add: { fn: 'hq_task_add', required: ['p_project', 'p_title'] },
   // Contacts (#24, #99). A name and a project; everything else — role, org,

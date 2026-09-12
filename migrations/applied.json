@@ -277,5 +277,7 @@
   "0276_a_subject_is_an_id_not_a_token.sql": "80fde21bee20d91e63944148fe32053deef3dfa43375a0660d7b27dbbfd42ad8",
   "0277_a_capability_index_the_office_generates.sql": "4db9a90c870903854bcb22cf9e991986c5a5ba4b999b29422cb2a48a3efdaf01",
   "0278_a_surface_is_not_listed_twice.sql": "43aeda044184cf43a874dad8af1b242485c5a63403d3137212efac8a696cd066",
-  "0279_one_row_per_surface_worst_state_first.sql": "d5598c409c407c38ed170909b20729e4e1c67f1a9f8fb5974c9fc2cc741f5f08"
+  "0279_one_row_per_surface_worst_state_first.sql": "d5598c409c407c38ed170909b20729e4e1c67f1a9f8fb5974c9fc2cc741f5f08",
+  "0280_tasks_across_the_whole_portfolio.sql": "e05e35744482f31719aa00df59d680ae50cd66f5638a3643269f87c851b64438",
+  "0281_a_task_with_no_project_can_be_created.sql": "b7b2092a9dbd7dc196a453259dccc4701864b036a7a0e0e3e9035314268dc3fb"
 }
