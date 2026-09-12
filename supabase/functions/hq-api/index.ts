@@ -61,6 +61,17 @@ const SECTIONS: Readonly<
   // whole shell at once and a page that fetches per section feels broken while
   // being correct — the argument 0120 made for the tool catalogue.
   studio: { fn: 'hq_studio' },
+  /*
+    "Has anything changed" (#117, migration 0262).
+
+    One row, five numbers and a timestamp. The studio polls this while the tab
+    is in front of you and only refetches `studio` when the digest differs, so
+    the common answer — nothing has happened — costs a few hundred bytes.
+
+    Its own section rather than a field on `studio`, because the whole point is
+    that it can be asked without paying for the payload it guards.
+  */
+  pulse: { fn: 'hq_pulse' },
   // The Settings viewer, in the shapes settings.js already exports (#68).
   studio_settings: { fn: 'hq_studio_settings' },
   /*

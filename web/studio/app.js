@@ -19,6 +19,7 @@ import { hydrateUsage, usageTab } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
 import * as panels from './panels.js'
+import * as pulse from './pulse.js'
 import * as people from './people.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
@@ -5554,6 +5555,16 @@ async function live() {
   void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
   })
+
+  /*
+    And then keep watching (#117).
+
+    `refresh` rather than a bespoke update path: it is the same re-read every
+    write already calls, so there is exactly one route from "the data changed"
+    to "the page shows it". A second one would drift, and the version that
+    drifted would be this one — the rarely-exercised background path.
+  */
+  pulse.watch(API, token, refresh)
 }
 
 live()

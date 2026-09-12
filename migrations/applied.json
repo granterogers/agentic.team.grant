@@ -259,5 +259,6 @@
   "0258_the_trace_prunes_itself.sql": "ea34f10552db88b56ea6d97200f26c59bd5b99ff986e69b34dd4a6320efa3379",
   "0259_something_that_measures_an_answer.sql": "7a673f6d3047129a9d305a93ecf7fbc61a69cffba78f251213179e874f46d6d1",
   "0260_a_fair_grader_needs_the_facts.sql": "650ac00983d6722cdb57b8d53340cbc96ce40764cb0ee980d78a2f734c520a4b",
-  "0261_the_grader_cannot_know_what_the_office_holds.sql": "80f2ff56672434eff8b809839e616bebd310ff43e3942384433f03aa4212abb7"
+  "0261_the_grader_cannot_know_what_the_office_holds.sql": "80f2ff56672434eff8b809839e616bebd310ff43e3942384433f03aa4212abb7",
+  "0262_a_cheap_way_to_ask_whether_anything_changed.sql": "e483a022c0f1fb66f564813322332ba90ebc8d6afcf4c8063aad57e4b460e386"
 }
