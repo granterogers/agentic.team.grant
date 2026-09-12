@@ -46,6 +46,7 @@
     "verify:modules": "tsx scripts/verify/modules.ts",
     "verify:times": "tsx scripts/verify/times.ts",
     "verify:waiting": "tsx scripts/verify/waiting.ts",
+    "verify:conversation": "tsx scripts/verify/conversation.ts",
     "verify:dryrun": "tsx scripts/verify/dryrun.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",

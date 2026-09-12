@@ -178,7 +178,18 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-293 migrations · 976 unit tests · ~59 live suites, all green.
+293 migrations · 976 unit tests · ~60 live suites, all green.
+
+**Claire has a conversation, and says back everything she was asked (#63, #60,
+`verify:conversation`).** Both mechanisms were built in an earlier session and
+neither had a proof, which is why both Issues stayed open after the code landed
+— this repository's own #72 pattern with the halves swapped. The suite is the
+last box on each: a two-message exchange where the second is understood in terms
+of the first, and Grant's 11 September voice note replayed verbatim with all six
+clauses accounted for. Nothing needed fixing in the office; two of the suite's
+own checks did — one asserted `create_project` where the planner correctly emits
+`project` (the handler decides its fate later), and one was written so it could
+not fail.
 
 **Project switching works, and three bugs were hiding behind one red check
 (#177, migrations 0291-0293).** `verify:agents` was 50/53 on "project
