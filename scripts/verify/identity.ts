@@ -407,18 +407,71 @@ const alias = `the ${run} thing`
     confident.length === 0 && plausible.length > 0 && guessed?.p === null,
   )
 
-  // And the invariant that makes the two-confident-match case unreachable, so a
-  // future change that drops the unique index fails here rather than silently
-  // reintroducing the coin toss.
-  const uniq = await one(`
-    select count(*) n from pg_indexes
-     where schemaname = 'public' and indexname = 'project_aliases_normalised_uniq'
+  /*
+    And the invariant that makes the two-confident-match case unreachable.
+
+    This used to assert that `project_aliases_normalised_uniq` existed BY NAME,
+    with a comment saying a future change that dropped it should fail here
+    rather than silently reintroduce the coin toss. It did exactly that when
+    0282 dropped it — and the drop was correct, so the check was right to fire
+    and wrong in what it asked.
+
+    The property itself is already covered above: *"the same phrase cannot mean
+    two projects"*, through `add_project_alias`, which is the sanctioned writer
+    and names the owner rather than raising a constraint. A second copy of that
+    would be a second thing to keep in step.
+
+    What is NOT covered is the half 0282 was actually for. A global unique index
+    counted ARCHIVED projects, so thirty-two retired probes held 561 routing
+    phrases that live projects should have had — the same table whose missing
+    rows caused #44. The trigger that replaced it checks only among projects
+    Grant can be routed to, and that behaviour is new, so it is what gets a
+    check.
+
+    Asserted through `add_project_alias` rather than a raw insert, for the
+    reason the first attempt at this demonstrated twice: a raw insert failed on
+    a generated column and then on a check constraint, and the FIRST of those
+    was reported as a PASS. A refusal for the wrong reason looks exactly like
+    the rule working.
+  */
+  const taken = `identity proof ${run} uniqueness probe`
+  /*
+    Named so the RUN comes before the word, because the teardown at the bottom
+    matches `identity-proof-<run>%` and a slug of `identity-proof-rival-<run>`
+    falls outside it. Three of these leaked into Grant's project switcher before
+    that was noticed, which is the cheapest possible reminder that a teardown
+    matching a prefix only covers subjects named to fall under it.
+  */
+  const rival = await one(`
+    select app.hq_create_project(${lit(`Identity proof ${run} rival`)}, 'upload',
+      ${lit(`${SUBJECT}-rival`)}, null, true) as r
   `)
+  const rivalId = String(((rival?.r ?? {}) as { project_id?: string }).project_id ?? '')
+
+  await one(`select app.add_project_alias(${lit(projectId)}::uuid, ${lit(taken)}) as r`)
+  const blocked = (
+    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+  )?.r as { error?: string; conflicts_with?: string }
   record(
-    'and one phrase can still only ever mean one project',
-    Number(uniq?.n) === 1 ? 'the global uniqueness index is in place' : 'THE UNIQUE INDEX IS GONE',
-    Number(uniq?.n) === 1,
+    'CONTROL: while the holder is active, the phrase is not free',
+    blocked?.error === undefined ? 'it was allowed' : String(blocked.error).slice(0, 80),
+    String(blocked?.conflicts_with) === projectId,
   )
+
+  await db.execute(`
+    update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid
+  `)
+  const freed = (
+    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+  )?.r as { error?: string }
+  record(
+    'and an archived project stops holding a phrase a live one should get',
+    freed?.error === undefined ? 'the phrase was released' : String(freed.error).slice(0, 80),
+    freed?.error === undefined,
+  )
+  await db.execute(`
+    update public.projects set status = 'active' where project_id = ${lit(projectId)}::uuid
+  `)
 
   /*
     An identifier in the words outranks the switch.

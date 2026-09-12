@@ -178,7 +178,27 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-290 migrations · 976 unit tests · ~59 live suites, all green.
+293 migrations · 976 unit tests · ~59 live suites, all green.
+
+**Project switching works, and three bugs were hiding behind one red check
+(#177, migrations 0291-0293).** `verify:agents` was 50/53 on "project
+switching", and the issue was right to insist on diagnosing before fixing: it
+was **both** of its candidates plus a third nobody was looking for. The suite's
+subjects were `fixture-` named and `app.current_project` deliberately refuses a
+fixture (0164), so every check read `resolved=null` against code that partly
+worked — #45's trap again. Behind that: 0164 had added the fixture guard by
+retyping the function from memory and dropped 0026's `order by switched_at desc
+… limit 1`, so **clearing a project context did nothing** (an inner join drops
+the switch-to-NULL that un-scoping is, and the previous project persisted for
+ever), "the latest wins" was whatever the planner returned first, and the guard
+fell back to an older switch instead of declining. 0292 then let
+`app.project_delete` sweep the switch log, without which a project that had ever
+been the subject of a conversation was undeletable — and said so with the raw
+constraint name 0282 exists to avoid. 0293 is the same shape one table over:
+0282 loosened the alias uniqueness to ACTIVE projects to release 561 phrases,
+and `app.add_project_alias` — the only writer anybody calls — still pre-checked
+against all of them, so the release was unreachable from the day it shipped.
+`verify:agents` is 56/56 and `verify:identity` 30/30.
 
 **What is waiting on Grant is where the work is (#151, migrations
 0289-0290).** The landing page has shown "2 things waiting on you" since 0240;

@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **290 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **293 applied.**
 
 ---
 
@@ -412,6 +412,37 @@ Each of these cost real time. They are here so they cost it once.
   second column: a sentinel satisfies the constraint and lies. Fixed in the
   column (0284), not in the four readers. Grep for `default ''` before writing a
   coalesce against a text column.
+- **A check that asserts the MECHANISM breaks on a correct refactor.**
+  `verify:identity` asserted that the index `project_aliases_normalised_uniq`
+  existed *by name*, with a comment saying a future change that dropped it
+  should fail here. 0282 dropped it deliberately — replacing it with a trigger,
+  because the predicate has to read `projects.status` and a partial index may
+  only reference its own table — so the check fired on a correct change and
+  said "THE UNIQUE INDEX IS GONE". Assert the property (a phrase is claimed by
+  at most one project Grant can be routed to), not the artefact that currently
+  implements it.
+- **A refusal for the wrong reason looks exactly like the rule working.** The
+  replacement check above did a raw insert and asserted only that *something*
+  threw. It threw because the column is `alias`, not `phrase` — and reported a
+  PASS. Then it threw on a generated column, and passed again. Assert on the
+  message (`refused.includes('already routes to')`), or go through the
+  sanctioned writer, which names what it refused and why.
+- **Loosening a constraint does not loosen the function that pre-checks it.**
+  0282 replaced a global unique index with a trigger scoped to ACTIVE projects,
+  to release 561 routing phrases held by retired probes. `app.add_project_alias`
+  — the only writer anybody calls — does its own pre-flight conflict check with
+  no `status` filter, so every one of those phrases was still refused and 0282's
+  headline benefit was unreachable from the day it shipped (0293). #72's shape
+  in the hardest place to see it: both halves correct alone, only their
+  disagreement wrong. When you change a constraint, grep for the function that
+  checks the same thing in advance to give a better error.
+- **A teardown that matches a PREFIX only covers subjects named to fall under
+  it.** `verify:identity` tears down `identity-proof-<run>%`. A subject added
+  later as `Identity proof rival <run>` derives the slug
+  `identity-proof-rival-<run>`, which is outside that prefix — three of them
+  reached Grant's project switcher. Name the extra subject so the run stays
+  where the prefix expects it (`Identity proof <run> rival`), rather than
+  widening the teardown.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

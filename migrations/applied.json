@@ -288,5 +288,8 @@
   "0287_a_task_can_be_born_a_milestone.sql": "3c273b08ee6a531e9bf3e61544374f8e3a5a0d55d6424e593de05efcd87687fe",
   "0288_a_time_travels_with_its_instant.sql": "9a77a673459beeba3150a68f1ca52fb7b2741bf970392c74243d2da38e47e6b9",
   "0289_the_waiting_list_is_where_the_work_is.sql": "7497b5d3921e3c67daca296b2b893858370007a9b4acf1f2a2b303b0eb4cc3af",
-  "0290_an_answered_job_takes_the_legal_road_back.sql": "ef2e9aac4f9844e612f495e24bed2d75bdd6ca4b219dc4c42d951e7834ef3ab6"
+  "0290_an_answered_job_takes_the_legal_road_back.sql": "ef2e9aac4f9844e612f495e24bed2d75bdd6ca4b219dc4c42d951e7834ef3ab6",
+  "0291_the_latest_switch_is_the_one_that_counts.sql": "7661875db0b39ab73f403201e095a0144175d67d15ef864018e1370407bde64e",
+  "0292_a_debris_projects_switches_are_debris_too.sql": "bec31c0ef195712a546a74135fb0fc1cee9243fc13060a7c76daaedf1dba736a",
+  "0293_the_front_door_agrees_with_the_lock.sql": "0f6a0599fdb64cb59b7a747cf26a1b900381faae4236c0cf15f5e9593a1410ae"
 }
