@@ -958,7 +958,7 @@ function contactCard(c, i) {
       </span>
       <span class="t-meta">${esc(c.role)}${bits.length > 0 ? ` · ${esc(bits.join(' · '))}` : ''}</span>
       ${(() => {
-        const on = people.labelsOn(c.name)
+        const on = people.labelsFor(c)
         return on.length === 0 ? '' :
           `<span class="tags">${on.map((l) =>
             `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>`
@@ -1201,7 +1201,7 @@ function peopleTab(p) {
   const chosen = state.label
   const shown = chosen === null
     ? p.contacts
-    : p.contacts.filter((c) => people.labelsOn(c.name).some((l) => l.id === chosen))
+    : p.contacts.filter((c) => people.labelsFor(c).some((l) => l.id === chosen))
 
   return `<div class="tabbody">
     <div class="tabhead">
@@ -1214,7 +1214,7 @@ function peopleTab(p) {
       <button class="pill ${chosen === null ? 'on' : ''}" data-filter="">All
         <span class="n">${p.contacts.length}</span></button>
       ${defined.map((l) => {
-        const n = p.contacts.filter((c) => people.labelsOn(c.name).some((x) => x.id === l.id)).length
+        const n = p.contacts.filter((c) => people.labelsFor(c).some((x) => x.id === l.id)).length
         return `<button class="pill ${l.hue} ${chosen === l.id ? 'on' : ''}" data-filter="${l.id}">
           <span class="swatchdot"></span>${esc(l.name)}<span class="n">${n}</span></button>`
       }).join('')}
@@ -1258,7 +1258,7 @@ function peopleTab(p) {
               <span class="pbody">
                 <b>${esc(c.name)}</b>
                 <span class="t-meta">${esc(c.role ?? '')}${c.org ? ` · ${esc(c.org)}` : ''}</span>
-                <span class="tags">${people.labelsOn(c.name).map((l) =>
+                <span class="tags">${people.labelsFor(c).map((l) =>
                   `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>
                 <span class="reach">
                   ${c.email ? `<a href="mailto:${esc(c.email)}" data-stop>${esc(c.email)}</a>` : ''}
@@ -4702,7 +4702,7 @@ function openContact(c) {
         <span class="t-label">Labels</span>
         <span class="tagpick">
           ${people.labels().map((l) => {
-            const on = people.labelsOn(c.name).some((x) => x.id === l.id)
+            const on = people.labelsFor(c).some((x) => x.id === l.id)
             return `<button class="tag ${l.hue} ${on ? 'on' : 'off'}"
                      data-toggle-label="${l.id}">${esc(l.name)}</button>`
           }).join('')}
@@ -4729,7 +4729,7 @@ function openContact(c) {
 
   for (const b of v.querySelectorAll('[data-toggle-label]')) {
     b.addEventListener('click', () => {
-      people.toggleLabel(c.name, b.dataset.toggleLabel)
+      people.toggleLabel(c, b.dataset.toggleLabel)
       openContact(c)            // redraw the sheet
       render()                  // and the rows behind it
       sheet($('#viewer'), true)

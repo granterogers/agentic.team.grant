@@ -765,8 +765,19 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    state in the picker: outlined rather than filled, so ticking one is a change
    in weight rather than a change in kind. */
 .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+/*
+  12px, which is the floor, and it was 11.
+
+  Not a regression -- these chips have been 11px since they were written and no
+  check had ever seen one, because no contact had a label until #107 made a
+  contact show the labels its role already names. A rule is only enforced where
+  something renders.
+
+  All-small-caps sets well under the floor and is exactly why the floor is
+  stated in pixels: it LOOKS fine to someone who already knows what it says.
+*/
 .tag {
-  font: 600 11px/1 var(--display); font-stretch: 104%;
+  font: 600 12px/1 var(--display); font-stretch: 104%;
   font-variant-caps: all-small-caps; letter-spacing: .05em;
   padding: 4px 9px; border-radius: 999px;
   background: color-mix(in srgb, var(--hue) 16%, transparent);
