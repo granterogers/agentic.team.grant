@@ -139,11 +139,30 @@ export interface PassResult {
  * is installed, which bot pages, whether there is a key to think with. A pass
  * that assumed any of those would be a pass that half-works silently.
  */
+/**
+ * A pass, plus the kinds it can actually handle (#112).
+ *
+ * `kinds` is a property on the function rather than a second return value, so
+ * every existing caller keeps working and nothing has to be threaded through
+ * two runtimes to get at it.
+ *
+ * It exists because nine hourly jobs sat queued for eight hours: the duty
+ * enqueued `google.write_calendar_tasks`, the handler was written and
+ * registered, and the DEPLOYED worker had been built before either existed. It
+ * dequeued a kind it had never heard of and left it. Nothing was red, because a
+ * queued job is not a failed job.
+ *
+ * Reading the registry from outside is what lets a check hold it against the
+ * kinds the database enqueues. Any other way of listing the kinds would be a
+ * second copy of this array, which is the drift the check is written against.
+ */
+export type Pass = (() => Promise<PassResult>) & { readonly kinds: readonly string[] }
+
 export const buildPass = async (
   db: SqlExecutor,
   workerId: string,
   options: PassOptions = {},
-): Promise<() => Promise<PassResult>> => {
+): Promise<Pass> => {
   const log = options.log ?? ((): void => {})
   const max = options.max ?? 10
   // Timings in the log, because Grant asked for a reply inside a minute and
@@ -354,7 +373,7 @@ export const buildPass = async (
 
   log(`setup: done at ${String(Date.now() - buildStartedAt)}ms`)
 
-  return async (): Promise<PassResult> => {
+  const pass = async (): Promise<PassResult> => {
     const passStartedAt = Date.now()
     const at = (what: string): void => log(`${what} at ${String(Date.now() - passStartedAt)}ms`)
     // Button presses first. Approving a generation enqueues it, so pressing the
@@ -421,4 +440,7 @@ export const buildPass = async (
       cannotThink,
     }
   }
+
+  // The registry, readable from outside. See the note on `Pass` above.
+  return Object.assign(pass, { kinds: handlers.map((h) => h.kind) })
 }

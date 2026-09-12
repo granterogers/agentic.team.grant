@@ -595,6 +595,115 @@ if (apiKey === '') {
 }
 
 // ===========================================================================
+// Nothing is enqueued that nothing can handle (#112)
+// ===========================================================================
+
+/*
+  The check that would have caught nine hourly jobs sitting queued for eight
+  hours.
+
+  `google.write_calendar_tasks` was enqueued once an hour by a duty. Its handler
+  existed and was registered. The DEPLOYED worker had been built before either,
+  so it dequeued a kind it had never heard of and left it -- and nothing was
+  red, because a queued job is not a failed job.
+
+  Everything passed. `npm test` passed, because the handler has unit tests and
+  they test the handler. `verify:calendar` passed, because it exercises the SQL
+  and the sync function directly. Nothing anywhere compared **the kinds the
+  database enqueues** against **the kinds the worker registry declares**, so a
+  duty writing into a void was invisible.
+
+  Two halves, and both are here because they fail at different times: the static
+  one fails BEFORE a deploy, the live one catches the general case -- including
+  a handler that exists and throws before it can claim anything.
+*/
+
+const { buildPass } = await import('../../src/office/pass.ts')
+/*
+  The real registry, from the real composition root, read through the property
+  `buildPass` now exposes. Listing the kinds any other way would be a second
+  copy of that array -- which is precisely the drift this is written against.
+*/
+const built = await buildPass(db, `verify-worker-registry-${run}`, { max: 0 })
+const registered = new Set(built.kinds)
+
+const duties = (
+  await db.execute(`
+    select distinct job_kind as kind from public.responsibilities where enabled
+  `)
+).rows.map((r) => String((r as { kind: string }).kind))
+
+const homeless = duties.filter((kind) => !registered.has(kind))
+record(
+  'every kind an enabled duty enqueues has a handler registered',
+  homeless.length === 0
+    ? `${String(duties.length)} duty kind(s), all handled`
+    : `NOTHING HANDLES ${homeless.join(', ')}`,
+  homeless.length === 0,
+)
+
+/*
+  CONTROL. An assertion over two sets passes trivially if either is empty or if
+  the comparison is the wrong way round, and this one would then have said
+  nothing about the eight hours. So one handler is removed from the copy and the
+  same comparison must find it.
+*/
+const maimed = new Set(registered)
+const victim = duties.find((k) => registered.has(k)) ?? ''
+maimed.delete(victim)
+const wouldCatch = duties.filter((kind) => !maimed.has(kind))
+record(
+  'CONTROL: unregistering a handler makes that check fail',
+  victim === ''
+    ? 'no duty kind was registered to remove -- the check above proves nothing'
+    : `removing ${victim} is caught (${String(wouldCatch.length)} found)`,
+  victim !== '' && wouldCatch.length === 1 && wouldCatch[0] === victim,
+)
+
+/*
+  And the live half, which does not care WHY nothing took the job.
+
+  Too long is the period of the duty that made it: an hourly kind queued for
+  over an hour means the last one was not taken before the next arrived. An
+  hour is the floor for a kind no duty creates.
+*/
+const stuck = (await db.execute('select * from app.jobs_stuck_queued()')).rows as {
+  kind: string
+  n: number
+  oldest_minutes: number
+  period_minutes: number
+}[]
+record(
+  'and nothing is sitting queued past the period of the duty that made it',
+  stuck.length === 0
+    ? 'nothing is waiting'
+    : stuck
+        .map(
+          (s) =>
+            `${String(s.n)}x ${s.kind} oldest ${String(s.oldest_minutes)}m against a ${String(s.period_minutes)}m period`,
+        )
+        .join(' · '),
+  stuck.length === 0,
+)
+
+/*
+  The one number, which could not have shown any of this.
+
+  `office_health()` counted complete, failed and in-flight. A job nobody has
+  taken is none of those, so the dashboard stayed green for eight hours while
+  the office fell behind. Asserting the FIELD exists, not that it is zero --
+  a green office and a broken health function look identical from the outside.
+*/
+const health = (await db.execute('select app.office_health() as h')).rows[0] as {
+  h: Record<string, unknown>
+}
+record(
+  'and the health number can say so, rather than only counting failures',
+  `stalled=${String(health.h.stalled)} failed=${String(health.h.failed)}`,
+  typeof health.h.stalled === 'number' && Array.isArray(health.h.stalled_kinds),
+)
+
+// ===========================================================================
 // Report, then clean up
 // ===========================================================================
 console.log('| check | outcome | |')

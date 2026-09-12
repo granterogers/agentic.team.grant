@@ -88,11 +88,16 @@ const browser = await chromium.launch()
 const open = async (
   mode: 'live' | 'down' | 'refused' | 'hang' | 'recovers',
   hasToken: boolean,
+  healthOverride: {
+    stalled: number
+    kinds: { kind: string; n: number; oldest_minutes: number }[]
+  } | null = null,
 ): Promise<{
   label: string
   say: string
   tone: string
   retry: boolean
+  page: import('playwright').Page
   press: () => Promise<{ label: string; gone: boolean }>
   close: () => Promise<void>
 }> => {
@@ -100,6 +105,8 @@ const open = async (
   const page = await context.newPage()
   await page.addInitScript(`
     window.__S = ${JSON.stringify({ studio })};
+    window.__HEALTH = ${JSON.stringify(healthOverride)};
+    if (window.__HEALTH !== null) window.__S.studio.health = window.__HEALTH;
     window.__MODE = ${JSON.stringify(mode)};
     try {
       ${hasToken ? "localStorage.setItem('hq.token', 'verify-offline')" : "localStorage.removeItem('hq.token')"};
@@ -138,7 +145,7 @@ const open = async (
 
   const read = async (): Promise<{ label: string; say: string; tone: string; retry: boolean }> =>
     (await page.evaluate(`(() => {
-      const bar = document.querySelector('.mockbar');
+      const bar = document.querySelector('.mockbar:not(.stalledbar)');
       if (bar === null) return { label: '(no strip)', say: '', tone: '', retry: false };
       return {
         label: bar.querySelector('b')?.textContent ?? '',
@@ -157,6 +164,7 @@ const open = async (
   const now = await read()
   return {
     ...now,
+    page,
     press: async () => {
       await page.evaluate(`document.querySelector('[data-retry-office]')?.click()`)
       await page.waitForTimeout(2_500)
@@ -256,6 +264,72 @@ check(
   after.gone,
 )
 await recovers.close()
+
+// --- 6. the office answering, and falling behind (#112) ---------------------
+
+/*
+  A DIFFERENT strip from every one above, and that is the point.
+
+  Nine hourly jobs sat queued for eight hours with a green dashboard, because
+  `office_health()` counted complete, failed and in-flight and a job nobody has
+  taken is none of those. 0270 taught it to count them and 0271 put the number
+  in the studio payload -- and a number in a payload that nothing draws is #72's
+  shape, which is the failure this whole issue is a second instance of.
+
+  So: the office answering perfectly, with a stalled queue behind it.
+*/
+const behind = await open('live', true, {
+  stalled: 9,
+  kinds: [{ kind: 'google.write_calendar_tasks', n: 9, oldest_minutes: 495 }],
+})
+const stalled = (await behind.page.evaluate(`(() => {
+  const bar = document.querySelector('.stalledbar');
+  if (bar === null) return { up: false, label: '', say: '', tone: '' };
+  return {
+    up: true,
+    label: bar.querySelector('b')?.textContent ?? '',
+    say: bar.querySelector('span')?.textContent ?? '',
+    tone: bar.className,
+  };
+})()`)) as { up: boolean; label: string; say: string; tone: string }
+
+check(
+  'an office that is answering but falling behind says so',
+  stalled.up ? `${stalled.label}` : 'NOTHING IS SHOWN',
+  stalled.up && stalled.label === '9 jobs nobody has taken',
+)
+check(
+  'and names the kind and the age, rather than only counting',
+  stalled.say.slice(0, 72),
+  stalled.say.includes('google.write_calendar_tasks') && stalled.say.includes('8 hours'),
+)
+/*
+  Orange, not red. This is not an outage -- the office is right there -- and a
+  strip that looks identical to the unreachable one teaches people to read both
+  as the same thing, which is how the more alarming state ends up ignored.
+*/
+check(
+  'and it does not wear the outage colour, because it is not an outage',
+  stalled.tone,
+  stalled.tone.includes('warnbar') && !stalled.tone.includes('bad'),
+)
+check(
+  'and the calm prototype strip is not also up, so there is one message',
+  behind.label,
+  behind.label === '(no strip)',
+)
+await behind.close()
+
+/*
+  CONTROL. A healthy office must show nothing at all -- a check that only ever
+  looks at the bad case cannot tell a working warning from one stuck on.
+*/
+const fine = await open('live', true, { stalled: 0, kinds: [] })
+const quiet = (await fine.page.evaluate(
+  `document.querySelector('.stalledbar') === null`,
+)) as boolean
+check('CONTROL: a healthy office shows no such strip', quiet ? 'nothing' : 'a strip is up', quiet)
+await fine.close()
 
 await browser.close()
 server.close()

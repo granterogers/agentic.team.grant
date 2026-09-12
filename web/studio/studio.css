@@ -3077,6 +3077,14 @@ kbd {
   border-bottom-color: color-mix(in srgb, var(--bad) 42%, transparent);
 }
 .mockbar.bad b { color: var(--bad); }
+/* Orange, not red (#112). The office is answering and falling behind, which is
+   a different state from the office being unreachable, and a strip that looks
+   identical to the outage one teaches people to read both as the same thing. */
+.mockbar.warnbar {
+  background: color-mix(in srgb, var(--warn) 13%, var(--ground));
+  border-bottom-color: color-mix(in srgb, var(--warn) 42%, transparent);
+}
+.mockbar.warnbar b { color: var(--warn); }
 /* The retry sits at the end of the strip rather than under it, so the bar stays
    one line on a desktop and wraps as a unit on a phone. */
 .mockbar .btn { margin-left: auto; }

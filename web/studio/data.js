@@ -408,6 +408,22 @@ export const source = {
   misses: 0,
 }
 
+/*
+  Whether the office is keeping up (#112).
+
+  A separate object from `source`, because they answer different questions and
+  conflating them is how one masks the other. `source` is *can we see the
+  office*; this is *is the office falling behind*. A perfectly reachable office
+  with nine jobs nobody has taken is `source.live === true` and badly wrong, and
+  that combination is exactly what went unnoticed for eight hours.
+*/
+export const health = {
+  /** Jobs queued past the period of the duty that made them. */
+  stalled: 0,
+  /** Which kinds, and how long the oldest has waited. Named, not counted. */
+  kinds: [],
+}
+
 const replace = (target, rows) => {
   target.length = 0
   for (const r of rows) target.push(r)
@@ -485,6 +501,15 @@ export async function hydrate(endpoint, token) {
     for (const k of Object.keys(WAITING)) delete WAITING[k]
     if (data.waiting) Object.assign(WAITING, data.waiting)
 
+    /*
+      Reset before assigning, not merged. An office that has RECOVERED must
+      clear the warning, and a merge would leave the last bad answer on screen
+      for ever -- a stale alarm being worse than none, because the next real one
+      is ignored.
+    */
+    health.stalled = Number(data.health?.stalled ?? 0)
+    health.kinds = Array.isArray(data.health?.kinds) ? data.health.kinds : []
+
     source.live = true
     source.at = data.generated_at ?? new Date().toISOString()
     source.state = 'live'
@@ -494,6 +519,13 @@ export async function hydrate(endpoint, token) {
   } catch (e) {
     source.live = false
     source.misses += 1
+    /*
+      Unknown, not healthy. The office not answering says nothing about whether
+      it is keeping up, and leaving the last good answer on screen would be a
+      green light sourced from a page that cannot see anything.
+    */
+    health.stalled = 0
+    health.kinds = []
     /*
       Name the kind of failure, because the answer differs.
 

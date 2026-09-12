@@ -7,7 +7,7 @@
   is not, that is evidence for React and this file becomes the specification.
 */
 
-import { CREW, PROJECTS, WAITING, byId, crewBy, hydrate, source } from './data.js'
+import { CREW, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
 import { act, attempt, canWrite, onWrite, read, say, sure, token } from './office.js'
 import * as undo from './undo.js'
 import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
@@ -640,6 +640,48 @@ function markMock(root) {
       repeated failure rather than as a button that did nothing.
     */
   })
+}
+
+/*
+  The office is answering, and falling behind (#112).
+
+  A DIFFERENT strip from the one above, deliberately. That one says the page
+  cannot see the office; this one says the office is visible and is not keeping
+  up. They are opposite states and one wording for both is what let nine hourly
+  jobs sit queued for eight hours with a green dashboard -- the number everyone
+  was told to trust counted complete, failed and in-flight, and a job nobody has
+  taken is none of those.
+
+  It names the kind and the age, because "3 stuck" sends you looking and
+  "3x google.write_calendar_tasks, oldest 8h" is the answer. In this case the
+  answer was: the deployed worker was built before that handler existed.
+*/
+function markStalled(root) {
+  const existing = $('.stalledbar')
+  if (existing) existing.remove()
+  // Only when the office is actually answering. A page that cannot see anything
+  // has nothing to say about whether the queue is moving, and saying it anyway
+  // would be an alarm sourced from no information.
+  if (!source.live || health.stalled === 0) return
+
+  const worst = health.kinds[0]
+  const hours = worst === undefined ? 0 : Math.round((worst.oldest_minutes ?? 0) / 60)
+  const age =
+    worst === undefined
+      ? ''
+      : hours >= 1
+        ? ` The oldest has waited ${String(hours)} hour${hours === 1 ? '' : 's'}.`
+        : ` The oldest has waited ${String(worst.oldest_minutes ?? 0)} minutes.`
+
+  const bar = document.createElement('div')
+  bar.className = 'mockbar stalledbar warnbar'
+  bar.innerHTML = `<b>${esc(
+    `${String(health.stalled)} job${health.stalled === 1 ? '' : 's'} nobody has taken`,
+  )}</b><span>${esc(
+    `${health.kinds.map((k) => `${String(k.n)}x ${k.kind}`).join(', ')}.${age} ` +
+      'Usually this means the worker was deployed before the handler existed.',
+  )}</span>`
+  root.prepend(bar)
 }
 
 /*
@@ -3909,6 +3951,7 @@ function render() {
     it is never there at all.
   */
   markMock(root)
+  markStalled(root)
   // The rail is rebuilt on every render, so the call button is a new element
   // each time and knows nothing. A live call must not be represented by a
   // button that looks idle (#101).
