@@ -29,6 +29,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
 
 const API = 'https://www.googleapis.com/calendar/v3'
@@ -55,7 +56,9 @@ interface PlanRow {
   readonly event_id?: string
 }
 
-interface Plan {
+/** What the SQL decided. Named apart from the shared `Plan` contract (#131),
+    which is what this becomes for anyone outside this file. */
+interface CalendarWork {
   readonly create: PlanRow[]
   readonly update: PlanRow[]
   readonly remove: { task_id: string; calendar_id: string; event_id: string }[]
@@ -92,13 +95,33 @@ function eventFor(row: PlanRow): Record<string, unknown> {
   }
 }
 
-/** Put dated, open tasks in the diary, and take away the ones that are done. */
-export async function syncTasksToCalendar(
+/**
+ * Work out what would change in the diary, without changing anything (#131).
+ *
+ * Everything `syncTasksToCalendar` does BEFORE the first outward write lives
+ * here: the settings, the credential, the scope, and the SQL that decides what
+ * to create, update and remove. The sync then calls this and carries the answer
+ * out.
+ *
+ * That is the whole point, and it is why this is an extraction rather than a
+ * `describe what I would do` function written alongside: **there is no second
+ * description to drift from the first.** A dry run is the first half without
+ * the second half.
+ *
+ * `access` comes back so the caller does not fetch the credential twice.
+ */
+export async function planTasksForCalendar(
   db: SqlExecutor,
-  options: { readonly fetchImpl?: typeof fetch; readonly dryRun?: boolean } = {},
-): Promise<SyncOutcome> {
+  options: { readonly fetchImpl?: typeof fetch } = {},
+): Promise<{
+  readonly ok: boolean
+  readonly note: string
+  readonly plan: Plan
+  readonly work?: CalendarWork
+  readonly access?: GoogleAccess
+  readonly target?: string
+}> {
   const fetchImpl = options.fetchImpl ?? fetch
-  const nothing = { created: 0, updated: 0, removed: 0 }
 
   const settings = (
     await db.execute(`
@@ -116,12 +139,15 @@ export async function syncTasksToCalendar(
   ).rows[0] as { on: boolean; target: string }
 
   if (!settings.on) {
-    return { ok: true, note: 'task sync to the calendar is switched off in Settings', ...nothing }
+    const why = 'task sync to the calendar is switched off in Settings'
+    return { ok: true, note: why, plan: nothingToDo('calendar.write', why) }
   }
 
   const access = await googleAccess(db, fetchImpl)
   await recordGoogleHealth(db, access)
-  if (!access.ok) return { ok: false, note: access.reason, ...nothing }
+  if (!access.ok) {
+    return { ok: false, note: access.reason, plan: nothingToDo('calendar.write', access.reason) }
+  }
 
   const granted = access as GoogleAccess
   /*
@@ -133,15 +159,66 @@ export async function syncTasksToCalendar(
   if (
     !granted.scopes.some((s) => s.includes('auth/calendar.events') || s.endsWith('auth/calendar'))
   ) {
-    return {
-      ok: false,
-      note: `the connection has no calendar write scope — granted: ${granted.scopes.join(' ') || 'none'}`,
-      ...nothing,
-    }
+    const why = `the connection has no calendar write scope — granted: ${granted.scopes.join(' ') || 'none'}`
+    return { ok: false, note: why, plan: nothingToDo('calendar.write', why) }
   }
 
-  const plan = (await db.execute('select app.calendar_task_plan() as p')).rows[0] as { p: Plan }
-  const { create, update, remove } = plan.p
+  const answer = (await db.execute('select app.calendar_task_plan() as p')).rows[0] as {
+    p: CalendarWork
+  }
+  const work = answer.p
+
+  /*
+    One step per event, because one event appearing in his diary is what a
+    person is approving -- not the HTTP call that puts it there. `writes` is 1
+    for each because each is exactly one request.
+  */
+  const plan: Plan = {
+    tool: 'calendar.write',
+    reaches:
+      work.create.length + work.update.length + work.remove.length > 0 ? ['google:calendar'] : [],
+    steps: [
+      ...work.create.map((r) => ({
+        verb: 'create' as const,
+        what: `${r.title} on ${r.due_on}`,
+        where: 'Google Calendar',
+        writes: 1,
+      })),
+      ...work.update.map((r) => ({
+        verb: 'update' as const,
+        what: `${r.title} on ${r.due_on}`,
+        where: 'Google Calendar',
+        writes: 1,
+      })),
+      ...work.remove.map((r) => ({
+        verb: 'remove' as const,
+        what: `the event for task ${r.task_id.slice(0, 8)}`,
+        where: 'Google Calendar',
+        writes: 1,
+      })),
+    ],
+    ...(work.create.length + work.update.length + work.remove.length === 0
+      ? { note: 'the diary already matches the task list' }
+      : {}),
+  }
+
+  return { ok: true, note: 'planned', plan, work, access: granted, target: settings.target }
+}
+
+/** Put dated, open tasks in the diary, and take away the ones that are done. */
+export async function syncTasksToCalendar(
+  db: SqlExecutor,
+  options: { readonly fetchImpl?: typeof fetch; readonly dryRun?: boolean } = {},
+): Promise<SyncOutcome> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const nothing = { created: 0, updated: 0, removed: 0 }
+
+  const planned = await planTasksForCalendar(db, options)
+  if (planned.work === undefined || planned.access === undefined) {
+    return { ok: planned.ok, note: planned.note, ...nothing }
+  }
+  const { create, update, remove } = planned.work
+  const granted = planned.access
 
   if (options.dryRun) {
     return {
@@ -157,7 +234,8 @@ export async function syncTasksToCalendar(
     Authorization: `Bearer ${granted.accessToken}`,
     'Content-Type': 'application/json',
   }
-  const cal = encodeURIComponent(settings.target)
+  const target = planned.target ?? 'primary'
+  const cal = encodeURIComponent(target)
   let created = 0
   let updated = 0
   let removed = 0
@@ -179,13 +257,13 @@ export async function syncTasksToCalendar(
       continue
     }
     await db.execute(
-      `select app.calendar_link_set(${lit(row.task_id)}::uuid, ${lit(settings.target)}, ${lit(body.id)}, ${lit(row.hash)})`,
+      `select app.calendar_link_set(${lit(row.task_id)}::uuid, ${lit(target)}, ${lit(body.id)}, ${lit(row.hash)})`,
     )
     created += 1
   }
 
   for (const row of update) {
-    const on = row.calendar_id ?? settings.target
+    const on = row.calendar_id ?? target
     const r = await fetchImpl(
       `${API}/calendars/${encodeURIComponent(on)}/events/${encodeURIComponent(row.event_id ?? '')}`,
       { method: 'PATCH', headers, body: JSON.stringify(eventFor(row)) },

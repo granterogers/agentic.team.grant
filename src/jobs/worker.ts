@@ -35,6 +35,8 @@ import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
 import { redactDeep } from '../text/secrets.ts'
+import type { Plan } from '../tools/plan.ts'
+import { plannedWrites, summarise } from '../tools/plan.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -73,6 +75,37 @@ async function trace(
     )
   } catch {
     /* A trace is a record of the work, never a way for the work to fail. */
+  }
+}
+
+/**
+ * Ask a handler what it would change, and write it down (#131).
+ *
+ * Silent when a handler has no `plan` — most only read, and a plan for a read
+ * is noise. Silent on failure too, for the reason above `trace`: observability
+ * must never be a way for production to break.
+ */
+async function recordPlan(db: SqlExecutor, job: Job, handler: Handler): Promise<void> {
+  if (handler.plan === undefined) return
+  try {
+    const plan = await handler.plan(job, db)
+    const steps = JSON.stringify(plan.steps)
+    const reaches =
+      plan.reaches.length === 0
+        ? `array[]::text[]`
+        : `array[${plan.reaches.map((r) => lit(r)).join(', ')}]`
+    await db.execute(
+      `select app.job_plan_set(${lit(job.jobId)}::uuid, ${lit(plan.tool)}, ${reaches},
+         ${lit(steps)}::jsonb, ${lit(summarise(plan))}, ${String(plannedWrites(plan))})`,
+    )
+    await trace(db, job.jobId, 'plan', {
+      tool: plan.tool,
+      steps: plan.steps.length,
+      writes: plannedWrites(plan),
+      summary: summarise(plan),
+    })
+  } catch {
+    /* A plan is a description of the work, never a way for the work to fail. */
   }
 }
 
@@ -157,6 +190,22 @@ export interface HandlerOutput {
 export interface Handler {
   readonly kind: string
   handle(job: Job, db: SqlExecutor): Promise<HandlerOutput>
+  /**
+   * What this job would change OUTSIDE the office, without changing it (#131).
+   *
+   * Optional, and absent on every handler that only reads — a plan for a read
+   * is noise. Present on every one that writes outward, because an approval
+   * that cannot show what it is approving is consent to a category rather than
+   * to an action.
+   *
+   * The contract that makes it worth trusting is in `src/tools/plan.ts`: a
+   * handler that implements this performs the work by CARRYING THIS PLAN OUT,
+   * so there is no second description to drift. `verify:dryrun` holds the two
+   * against each other — it fails a handler whose planning phase touches the
+   * network at all, and one whose execution makes more outward calls than its
+   * plan accounted for.
+   */
+  plan?(job: Job, db: SqlExecutor): Promise<Plan>
 }
 
 /**
@@ -479,6 +528,20 @@ export const runJob = async (
   */
   const startedAt = Date.now()
   await trace(db, job.jobId, 'prompt', { kind: job.kind, attempt: job.attempt })
+  /*
+    What it would do, before it does it (#131).
+
+    Here rather than in each handler, for the same reason the trace is: one
+    chokepoint means a handler that grows a `plan` gets it recorded without
+    anybody remembering to wire it, and the next write-capable handler cannot
+    ship without a plan by simply forgetting.
+
+    Like `trace`, it never throws. A plan is a description OF the work and must
+    never be a way for the work to fail -- and a handler that cannot say what it
+    would do is still a handler that must be allowed to do it, or a planning bug
+    becomes an outage.
+  */
+  await recordPlan(db, job, handler)
   try {
     output = await handler.handle(job, db)
   } catch (error) {

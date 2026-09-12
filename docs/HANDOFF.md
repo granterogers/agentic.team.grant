@@ -178,7 +178,18 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-232 migrations · 927 unit tests · ~38 live suites, all green.
+266 migrations · 958 unit tests · ~48 live suites, all green.
+
+**Since 2026-09-11 the studio can take things back (#118, migrations
+0263-0266).** Every write with an EXACT inverse records it at the moment it
+still knows the previous value — a rename, a task edit, a state change, an icon
+or hue, an arrangement, a detached source — and a strip offers to reverse it.
+Everything else offers nothing and says why: a replaced project photo, a
+disconnected service (the credential is deleted from the Vault), a new project
+(the confirmation is the safeguard). `npm run verify:inverse` proves the
+exactness per action against the live database, and carries a control that
+records a deliberately WRONG inverse and requires the same comparison to catch
+it.
 
 **There is no cron and no GitHub Actions.** Grant switched Actions off on
 2026-09-08 — *"for any process"* — and everything scheduled moved to

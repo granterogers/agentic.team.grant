@@ -19,14 +19,23 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
-import { syncTasksToCalendar } from '../google/calendar-write.ts'
+import { planTasksForCalendar, syncTasksToCalendar } from '../google/calendar-write.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import type { Plan } from '../tools/plan.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 export function calendarTasksHandler(db: SqlExecutor): Handler {
   return {
     kind: 'google.write_calendar_tasks',
+    /*
+      What it would do (#131). The same function the sync itself calls to
+      decide what to do -- settings, credential, scope and the SQL that works
+      out the difference -- stopping before the first outward write. There is
+      no second description of the work here, which is the only reason this
+      can be trusted to match what happens next.
+    */
+    plan: async (): Promise<Plan> => (await planTasksForCalendar(db)).plan,
     handle: async (job: Job): Promise<HandlerOutput> => {
       const outcome = await syncTasksToCalendar(db)
 

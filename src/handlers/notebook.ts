@@ -47,6 +47,7 @@ import {
   NotebookActionError,
   NotebookActions,
 } from '../notebook/actions.ts'
+import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { allowance, deferUntil, describe, record, refused } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -499,6 +500,29 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
        * HTML of a consent banner.
        */
       kind: 'notebook.add_source',
+      /*
+        What it would do (#131). Reads the same payload and the same notebook
+        row the work itself decides from, and stops there. It deliberately does
+        NOT build a `NotebookActions` -- a dry run that touches the credential
+        path is a dry run with a way to reach Google, and verify:dryrun fails a
+        planning phase that makes any outward call at all.
+      */
+      plan: async (job: Job): Promise<Plan> => {
+        const payload = await payloadOf(db, job)
+        const url = String(payload.url ?? '')
+        const notebook = job.projectId === null ? null : await notebookFor(db, job.projectId)
+        if (notebook === null) {
+          return nothingToDo('notebook.write', 'this project has no notebook attached')
+        }
+        if (!/^https?:\/\//.test(url)) {
+          return nothingToDo('notebook.write', `${url} is not a link I can add`)
+        }
+        return {
+          tool: 'notebook.write',
+          reaches: ['google:notebooklm'],
+          steps: [{ verb: 'create', what: url, where: `NotebookLM · ${notebook.name}`, writes: 1 }],
+        }
+      },
       handle: async (job: Job): Promise<HandlerOutput> => {
         const { actions, notebook } = await need(job)
         const payload = await payloadOf(db, job)
@@ -553,6 +577,40 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
     },
     {
       kind: 'notebook.push_document',
+      /*
+        The same read the work does -- the document, scoped to the job's own
+        project, so a document id from one project cannot be planned into
+        another's notebook any more than it can be pushed there.
+      */
+      plan: async (job: Job): Promise<Plan> => {
+        const payload = await payloadOf(db, job)
+        const documentId = String(payload.document_id ?? '')
+        const notebook = job.projectId === null ? null : await notebookFor(db, job.projectId)
+        if (notebook === null) {
+          return nothingToDo('notebook.write', 'this project has no notebook attached')
+        }
+        const { rows } = await db.execute(`
+          select title from public.documents
+           where document_id = ${lit(documentId)}::uuid
+             and project_id = ${lit(String(job.projectId))}::uuid
+        `)
+        const title = (rows[0] as { title?: string } | undefined)?.title
+        if (title === undefined) {
+          return nothingToDo('notebook.write', 'no such document in this project')
+        }
+        return {
+          tool: 'notebook.write',
+          reaches: ['google:notebooklm'],
+          steps: [
+            {
+              verb: 'create',
+              what: String(title),
+              where: `NotebookLM · ${notebook.name}`,
+              writes: 1,
+            },
+          ],
+        }
+      },
       handle: async (job: Job): Promise<HandlerOutput> => {
         const { actions, notebook } = await need(job)
         const payload = await payloadOf(db, job)

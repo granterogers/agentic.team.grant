@@ -40,6 +40,7 @@
     "verify:notice": "tsx scripts/verify/notice.ts",
     "verify:delegation": "tsx scripts/verify/delegation.ts",
     "verify:drive": "tsx scripts/verify/drive.ts",
+    "verify:dryrun": "tsx scripts/verify/dryrun.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",
     "verify:trace": "tsx scripts/verify/trace.ts",
