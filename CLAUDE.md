@@ -433,6 +433,46 @@ first: an Issue body containing `npm run shots` had that command **executed**
 and its output pasted into the Issue, while every backticked path vanished.
 Issue #22 was filed twice for this reason.
 
+## When Grant sends you a pile of ideas
+
+He will. He thinks out loud, often into a voice note, often while several other
+things are already in flight — and he said what he wants done with it:
+
+> *"The user should be able to voice ideas throughout the day, provide them to
+> the development agent, and trust that they have been captured, organized and
+> preserved without automatically destabilizing the current build."*
+
+**An idea dump is a capture task, not a build task.** Unless he says otherwise,
+the deliverable is Issues, not code.
+
+The order, which is his:
+
+1. **Understand the intent** behind each idea, not just the words.
+2. **Inspect what already exists** — the schema, the open Issues, the ADRs.
+   Most "new" ideas turn out to be an existing abstraction he has not seen the
+   name of. The capability-expansion brief of 2026-09-12 asked for ten systems
+   and eight of them were already in the schema (#169 has the table).
+3. **Consolidate rather than duplicate.** Extend an open Issue with a comment
+   where one already covers it. A second Issue for the same thing is how a
+   backlog stops being readable.
+4. **Cross-reference** in both directions.
+5. **Defer implementation** where the current work has not reached a stable
+   point. Say so in the Issue rather than starting.
+6. **Preserve enough context** that a future agent can act on it without this
+   conversation. That is the whole point — the repository is the durable
+   memory, and a compaction has already destroyed one specification.
+
+And the rule that outranks the rest of it:
+
+> *"Do not allow these ideas to derail, duplicate, or destabilize work already
+> underway."*
+
+Before inventing a noun — **Skill, Capability, Tool, Plugin, Action,
+Integration, Agent, Workflow, Task, Evaluator** — check whether this office
+already has one. It has all ten. #169 lists where each one lives.
+
+---
+
 ## Documentation you must keep current
 
 When you finish a piece of work: update the Issue (or close it), update
