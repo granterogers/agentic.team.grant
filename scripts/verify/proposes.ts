@@ -29,6 +29,7 @@
  * asserted rather than assumed.
  */
 
+import { readPlan } from '../../src/agents/plan.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -139,6 +140,54 @@ try {
     'and the readings are reviewable — findable, not merely stored',
     `${String(listed.length)} job(s) with the ask beside the reading`,
     Array.isArray(listed),
+  )
+
+  // =========================================================================
+  console.log('\none question, not none and not five (#47)')
+
+  /*
+    #47's third rule: *"Ask one question, not none and not five. Where the ask
+    is genuinely ambiguous between materially different actions, the job blocks
+    with a single question addressed through Claire."*
+
+    Five questions is the failure that matters. An instruction with several
+    loose ends must still produce ONE — a message that interrogates Grant is
+    worse than one that guesses and says so, because he stops reading it.
+  */
+  /*
+    The instruction has to actually produce a PLAN. The first version of this
+    check used a vague sentence, `readPlan` returned null below two substantive
+    steps, and it asserted "0 questions in 0 steps" — passing because there was
+    nothing there rather than because the rule holds. A check that cannot fail
+    is not a check, and this file has now produced two of them.
+  */
+  const messy = readPlan(
+    'Watch https://youtu.be/abc123 and tell me what it says about pricing, ' +
+      'and what did they say about the timeline, and make an audio overview too.',
+  )
+  const questions = (messy?.steps ?? []).filter(
+    (x) => x.kind === 'ask' || x.kind === 'ambiguous_project',
+  )
+  check(
+    'a plan with several loose ends asks exactly one question',
+    `${String(questions.length)} question step(s) in ${String(messy?.steps.length ?? 0)}: ` +
+      `${(messy?.steps ?? []).map((x) => x.kind).join(', ')}`,
+    (messy?.steps.length ?? 0) > 1 && questions.length === 1,
+  )
+
+  /*
+    And the other half of "not none and not five": a CLEAR instruction must not
+    be interrogated at all. A planner that always asks something is as useless
+    as one that never does, and passes the check above.
+  */
+  const clear = readPlan(
+    'Make a slide deck and an audio overview from the Coaching for Success notebook.',
+  )
+  check(
+    'CONTROL: a clear instruction is not interrogated',
+    `${String((clear?.steps ?? []).filter((x) => x.kind === 'ask' || x.kind === 'ambiguous_project').length)} question step(s)`,
+    (clear?.steps ?? []).filter((x) => x.kind === 'ask' || x.kind === 'ambiguous_project')
+      .length === 0,
   )
 
   // =========================================================================
