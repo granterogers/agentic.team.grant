@@ -51,6 +51,7 @@
     "verify:knows": "tsx scripts/verify/knows.ts",
     "verify:proposes": "tsx scripts/verify/proposes.ts",
     "verify:acquire": "tsx scripts/verify/acquire.ts",
+    "verify:sheets": "tsx scripts/verify/sheets.ts",
     "verify:dryrun": "tsx scripts/verify/dryrun.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",

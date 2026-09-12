@@ -178,7 +178,24 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-299 migrations · 976 unit tests · ~65 live suites, all green.
+301 migrations · 976 unit tests · ~66 live suites, all green.
+
+**Every connector says what it can do, and what we never ask it for (#51,
+migrations 0300-0301).** `knowledge_connectors.notes` was prose written for a
+person; an agent cannot ask prose whether it can recover an audio overview.
+`public.connector_capabilities` is one row per verb — 24 across six connectors —
+with `reach` (`api` / `unofficial` / `browser_only` / `none`), what it costs,
+what in the office uses it, and `verified_by` saying whether that is known from
+a probe, a suite, or merely declared. The negatives are in it deliberately, as
+#51 asks: Notion has no teamspace on any version, Drive is read-only by scope,
+GitHub write is disabled at risk 3. `app.unused_capabilities()` is the gap as a
+QUERY rather than an opinion — today it returns exactly one honest row, that the
+office can create a note in a notebook and never does — and `capability_index`
+carries it as `could` so it reaches the prompt. Only the gap, not the whole
+sheet: 24 verbs on every prompt would cost more than they are worth.
+`verify:sheets` (14 checks) proves the NotebookLM rows claiming a probe are
+backed by the actual probe output, and that a verb moves in and out of the gap
+when the office stops and starts using it.
 
 **The office gained a capability without a coding session (#50, migrations
 0298-0299).** The epic's own acceptance box, done rather than simulated: Emma
