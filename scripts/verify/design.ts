@@ -257,5 +257,54 @@ ok(
   )
 }
 
+/*
+  The studio's staff map agrees with the database (#42).
+
+  `DESIGN` in `web/studio/data.js` is keyed by the REAL staff slug —
+  `chief-of-staff` — and carries the display name Grant uses — `claire` — as a
+  value. That is the right way round, and it was not always: the two disagreed,
+  so a lookup that used the display slug found nothing and the card rendered
+  without a face or a hue.
+
+  Checked from the database rather than from a list written here, because a
+  list written here is a third place for the same eight names to drift. This is
+  the same shape as the `hq_staff()`/`hq_team()` trap in CLAUDE.md: a check that
+  compares two copies of a thing must read both of them, not one and a memory.
+*/
+{
+  const { ManagementApiExecutor } = await import('../../src/db/executor.ts')
+  const token = process.env.SUPABASE_ACCESS_TOKEN
+  if (token === undefined || token === '') {
+    ok('the staff map can be checked against the database', false, 'no SUPABASE_ACCESS_TOKEN')
+  } else {
+    const db = new ManagementApiExecutor(
+      process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
+      token,
+    )
+    const live = (
+      await db.execute('select slug from public.staff where active order by slug')
+    ).rows.map((r) => String((r as { slug: string }).slug))
+
+    const data = read('web/studio/data.js')
+    const map = data.slice(data.indexOf('export const DESIGN'))
+    const mapped = [...map.slice(0, map.indexOf('\n}')).matchAll(/'([a-z-]+)':\s*\{/g)].map(
+      (m) => m[1] ?? '',
+    )
+
+    const missing = live.filter((slug) => !mapped.includes(slug))
+    const extra = mapped.filter((slug) => !live.includes(slug))
+    ok(
+      'every active agent has a face and a hue in the studio',
+      missing.length === 0,
+      `not in DESIGN: ${missing.join(', ')} — their card renders with neither`,
+    )
+    ok(
+      'and the studio does not carry anyone the office has retired',
+      extra.length === 0,
+      `in DESIGN and not on the roster: ${extra.join(', ')}`,
+    )
+  }
+}
+
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 process.exit(fail === 0 ? 0 : 1)
