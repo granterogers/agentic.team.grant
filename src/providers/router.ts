@@ -13,6 +13,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import type { UsageOutcome } from '../inference/policy.ts'
 import { recordUsage } from '../inference/record.ts'
+import { redactSecrets } from '../text/secrets.ts'
 import type { AllowedModel } from './guards.ts'
 import {
   assertModelAllowed,
@@ -468,14 +469,22 @@ export class ProviderRouter {
   }
 
   private async recordFailure(provider: string, message: string): Promise<void> {
-    // §15: redact token patterns before anything reaches stored error text.
-    // A provider error frequently carries the URL it was called with.
-    const redacted = message
-      .replace(/xox[abposr]-[A-Za-z0-9-]+/g, '[REDACTED]')
-      .replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]')
-      .replace(/sbp_[a-f0-9]+/g, '[REDACTED]')
-      .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
-      .slice(0, 400)
+    /*
+      §15: redact token patterns before anything reaches stored error text. A
+      provider error frequently carries the URL it was called with.
+
+      This was four patterns written inline here. It is now the shared list in
+      `src/text/secrets.ts`, because there were three separate vocabularies in
+      this repository — this one, the Telegram URL redactor, and the CHECK
+      constraint on `connection_health` — and each was missing what the others
+      had. This one had never heard of a Notion token, a GitHub PAT or a Google
+      refresh token, all three of which the office holds.
+
+      A redaction list in three places is a redaction list that is wrong in at
+      least two of them, and it fails silently: what you find out is that a
+      credential was stored, and you find it out late.
+    */
+    const redacted = redactSecrets(message).slice(0, 400)
     await this.db.execute(
       `select app.record_provider_failure('${provider}', '${redacted.replace(/'/g, "''")}')`,
     )

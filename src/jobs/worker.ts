@@ -34,8 +34,47 @@ import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { PagerSeverity } from '../telegram/pager.ts'
+import { redactDeep } from '../text/secrets.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+/**
+ * Say what happened, as it happens (#115).
+ *
+ * Two things this does that a caller must not have to remember.
+ *
+ * **It redacts.** Every string anywhere in `detail` goes through the shared
+ * list in `src/text/secrets.ts`. A handler passing a provider error that
+ * carries the URL it was called with is the common case, not the exotic one.
+ * The CHECK on `job_traces` is the backstop; this is the thing that stops the
+ * backstop from turning an ordinary trace into a job failure.
+ *
+ * **It never throws.** A trace is a record OF the work and must never be a way
+ * for the work to fail — a job that completed and then died writing a note
+ * about completing would be the worst possible bug to introduce here. So the
+ * write is attempted and a failure is swallowed, which is the one place in this
+ * file where swallowing is right: the alternative is that observability can
+ * break production.
+ */
+async function trace(
+  db: SqlExecutor,
+  jobId: string,
+  kind: string,
+  detail: Record<string, unknown> = {},
+  numbers: { tokensIn?: number; tokensOut?: number; pence?: number; ms?: number } = {},
+): Promise<void> {
+  const n = (v: number | undefined): string => (v === undefined ? 'null' : String(v))
+  try {
+    await db.execute(
+      `select app.job_trace_add(${lit(jobId)}::uuid, ${lit(kind)},
+         ${lit(JSON.stringify(redactDeep(detail)))}::jsonb,
+         ${n(numbers.tokensIn)}, ${n(numbers.tokensOut)},
+         ${n(numbers.pence)}, ${n(numbers.ms)})`,
+    )
+  } catch {
+    /* A trace is a record of the work, never a way for the work to fail. */
+  }
+}
 
 export interface Job {
   readonly jobId: string
@@ -432,10 +471,25 @@ export const runJob = async (
   }
 
   let output: HandlerOutput
+  /*
+    The clock starts before the handler and the trace is written whichever way
+    it ends. A job that threw is the one worth reading, so its trace has to
+    exist -- which is why this is around the try rather than inside the
+    success path.
+  */
+  const startedAt = Date.now()
+  await trace(db, job.jobId, 'prompt', { kind: job.kind, attempt: job.attempt })
   try {
     output = await handler.handle(job, db)
   } catch (error) {
     const retryable = job.attempt < 4
+    await trace(
+      db,
+      job.jobId,
+      'degradation',
+      { threw: (error as Error).message.slice(0, 300), retryable },
+      { ms: Date.now() - startedAt },
+    )
     await moveTo(
       db,
       job.jobId,
@@ -448,6 +502,26 @@ export const runJob = async (
       note: (error as Error).message.slice(0, 200),
     }
   }
+
+  await trace(
+    db,
+    job.jobId,
+    'decision',
+    {
+      // What the handler concluded, not what it wrote. `body` can be thousands
+      // of characters and is already stored on the output.
+      chars: output.body.length,
+      announce: output.announce,
+      confidence: output.confidence,
+      sources: output.sources.length,
+      evidence: output.evidence,
+      // The production path -- deterministic, drafted, reviewed -- which is the
+      // field that decides whether a reviewer is spent on this at all.
+      path: output.path,
+      model: output.model,
+    },
+    { ms: Date.now() - startedAt },
+  )
 
   // Coherence first, before spending a reviewer on something that cannot be
   // approved anyway. These are the combinations that satisfy every column

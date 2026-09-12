@@ -50,6 +50,7 @@ import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
+import { jobTracesHandler } from '../handlers/job-traces.ts'
 import { mailHandler } from '../handlers/mail.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
@@ -295,6 +296,7 @@ export const buildPass = async (
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
+    jobTracesHandler(db),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
     // "no storage key" as an outcome rather than failing, because a backup

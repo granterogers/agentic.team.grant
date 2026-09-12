@@ -42,6 +42,7 @@
     "verify:drive": "tsx scripts/verify/drive.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",
+    "verify:trace": "tsx scripts/verify/trace.ts",
     "verify:tasks": "tsx scripts/verify/tasks.ts",
     "verify:assets": "tsx scripts/verify/assets.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",

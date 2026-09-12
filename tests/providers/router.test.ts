@@ -217,7 +217,15 @@ describe('§15 — secrets never reach stored error text', () => {
     await new ProviderRouter(db, 'key', leaking).complete({ messages: MESSAGES }).catch(() => {})
 
     const recorded = db.calls('record_provider_failure').join('\n')
-    expect(recorded).toContain('[REDACTED]')
+    /*
+      `[redacted:` rather than `[REDACTED]`: the four patterns that used to live
+      inline in `recordFailure` are now the shared list in
+      `src/text/secrets.ts`, which names the family it caught so a redacted log
+      line still says what KIND of credential was there.
+
+      The second assertion is the one that matters and is unchanged.
+    */
+    expect(recorded).toContain('[redacted:')
     expect(recorded).not.toContain(secret)
   })
 })
