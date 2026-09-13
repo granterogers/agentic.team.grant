@@ -13,6 +13,7 @@ import * as undo from './undo.js'
 import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
+import * as dictate from './dictate.js'
 import * as command from './command.js'
 import * as config from './settings.js'
 import { wireCall, unwireCall, syncCallButtons, callIsLive } from './call.js'
@@ -2129,11 +2130,32 @@ function chatTab(p) {
           ? 'Claire will bring in whoever it needs.'
           : `Goes straight to ${esc(crewBy(state.askWho).name)}.`}</span>
       </label>
+      <!--
+        Dictation (#196). Speaking a message, not placing a call — the call
+        button is elsewhere and answers in two seconds; this one puts words in
+        the box for Grant to read before anything is sent.
+
+        Disabled with the reason rather than hidden where the browser cannot
+        transcribe: a control that is absent teaches nothing, and a control
+        that is present and silently dead is the defect the Issue names.
+
+        The title carries the disclosure, because in Chrome the audio goes to
+        Google to be transcribed and a person deserves to know that before
+        they press it rather than after.
+      -->
       <div class="crow">
         <textarea data-say rows="1" placeholder="Ask the team, or tell them what to do…"
                   aria-label="Message the team"></textarea>
+        <button class="btn mic" type="button" data-dictate
+                ${dictate.supported() ? '' : 'disabled'}
+                aria-pressed="false"
+                aria-label="Dictate a message"
+                title="${esc(dictate.supported() ? dictate.disclosure() : dictate.why())}">
+          ${icons.svg('mic', 18)}
+        </button>
         <button class="btn primary" type="submit">Send</button>
       </div>
+      <p class="dicsay t-meta" data-dicsay role="status" aria-live="polite"></p>
     </form>
   </div>`
 }
@@ -6052,6 +6074,21 @@ function render() {
     state.chatShown = null
   }
 
+  /*
+    A repaint invalidates the box the recogniser is writing into (#196).
+
+    The composer is rebuilt on every render — a pulse tick, a write, a tab
+    change — and the recogniser holds a reference to the textarea it started
+    with. After a rebuild that node is detached: the words keep arriving and
+    nobody can see them, and the microphone is still open on a screen with no
+    recording indicator on it, which is #102 exactly.
+
+    So any render ends the dictation. Nothing is lost — `onchange` has been
+    writing every update into `state.drafts`, and the fresh composer restores
+    it — and the microphone is never held by a page that has moved on.
+  */
+  dictate.stop()
+
   const composer = $('[data-composer]', root)
   if (composer) {
     const say = $('[data-say]', composer)
@@ -6094,6 +6131,9 @@ function render() {
 
     composer.addEventListener('submit', (e) => {
       e.preventDefault()
+      // Sending ends the dictation it came from — the words are already in the
+      // box, and holding the microphone across a send is #102 again (#196).
+      dictate.stop()
       const text = say.value.trim()
       if (text === '') return
       /*
@@ -6147,6 +6187,57 @@ function render() {
       const box = $('[data-say]')
       if (box) { box.value = keep; box.focus() }
     })
+
+    /*
+      Dictation (#196).
+
+      One press starts, the next stops; the words land in the box and nothing
+      is sent. `dictate.stop()` releases the microphone rather than asking for
+      one more result, because #102's defect was a microphone that stayed open
+      after being switched off.
+
+      Deliberately NOT calling `render()` while it runs. The studio rebuilds
+      the composer on a pulse tick, a write and every tab change, and a repaint
+      mid-sentence would swap out the textarea the recogniser is writing into.
+      The button and the status line are updated in place instead — which is
+      also why `pulse` already refuses to refetch while a textarea holds text.
+    */
+    const mic = $('[data-dictate]', composer)
+    const dicsay = $('[data-dicsay]', composer)
+    if (mic !== null && dictate.supported()) {
+      const setSaying = (words) => {
+        if (dicsay !== null) dicsay.textContent = words
+      }
+      const done = (reason) => {
+        mic.setAttribute('aria-pressed', 'false')
+        mic.classList.remove('on')
+        mic.setAttribute('aria-label', 'Dictate a message')
+        setSaying(reason === '' ? '' : reason)
+        state.drafts[state.project] = say?.value ?? ''
+        say?.focus()
+      }
+      mic.addEventListener('click', () => {
+        if (dictate.active()) {
+          dictate.stop()
+          return
+        }
+        const began = dictate.start(say, {
+          onchange: (value) => {
+            fit()
+            state.drafts[state.project] = value
+          },
+          onstop: done,
+        })
+        if (!began) {
+          setSaying('Dictation could not start. Try again.')
+          return
+        }
+        mic.setAttribute('aria-pressed', 'true')
+        mic.classList.add('on')
+        mic.setAttribute('aria-label', 'Stop dictating')
+        setSaying('Listening. Press again to stop — nothing is sent until you do.')
+      })
+    }
 
     $('[data-unattach]', composer)?.addEventListener('click', () => {
       state.attach = null

@@ -4671,3 +4671,72 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .chatbody .who { gap: var(--s2); }
   .chatbody .who .t-meta { font-size: 12px; line-height: 1.35; }
 }
+
+/* --- Dictation (#196) -------------------------------------------------------
+   Speaking a message, not placing a call. The call button is the big one in
+   the rail; this is a quiet square beside Send that puts words in the box.
+
+   44px hard, not "about 44": it is the control a thumb reaches for while
+   walking, which is the whole reason dictation exists. verify:layouts enforces
+   the floor on `pointer: coarse` and this must not be the exception.
+
+   These live at the END of the stylesheet on purpose — a media query adds no
+   specificity, so the phone rules above would silently lose to any base rule
+   written after them. Bitten three times in this file. */
+.btn.mic {
+  width: 44px; min-width: 44px; height: 44px;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+.btn.mic[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Live, and unmistakably so. Not a colour change alone: a person dictating is
+   usually not looking at the screen, and the one thing they must be able to
+   tell at a glance when they do look is whether the microphone is open. */
+.btn.mic.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.btn.mic.on::after {
+  content: '';
+  position: absolute; inset: -3px;
+  border-radius: inherit;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: micpulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+.btn.mic { position: relative; }
+@keyframes micpulse {
+  0%   { opacity: .9; transform: scale(1); }
+  100% { opacity: 0;  transform: scale(1.22); }
+}
+/* The studio never stops moving, but a person who has asked it to stop has
+   asked for this too — and a pulsing ring is exactly the kind of motion that
+   makes a vestibular disorder worse. The state stays legible without it. */
+@media (prefers-reduced-motion: reduce) {
+  .btn.mic.on::after { animation: none; opacity: .9; }
+}
+
+/* What it is doing, in words, under the row. Empty when there is nothing to
+   say — a status line that always says something is a status line nobody
+   reads. `role="status"` means a screen reader hears it without being
+   interrupted, which is #200's obligation and this control's in particular. */
+.dicsay { margin: var(--s2) 0 0; min-height: 0; }
+.dicsay:empty { display: none; }
+
+@media (max-width: 560px) {
+  /* Two full-width buttons stacked under the box is most of a phone composer.
+     A 56px column for the microphone and the rest for Send keeps the primary
+     action the primary action. */
+  .crow {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    align-items: stretch;
+    gap: var(--s3);
+  }
+  .crow textarea { grid-column: 1 / -1; min-height: 56px; }
+  .crow .btn.mic { grid-column: 1; width: 56px; min-width: 56px; height: 48px; }
+  .crow .btn.primary { grid-column: 2; justify-content: center; }
+}
