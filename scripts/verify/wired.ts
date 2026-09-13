@@ -28,7 +28,7 @@
   is false and most of the write controls are never in the DOM to be collected.
 */
 
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
@@ -53,30 +53,32 @@ const srv = createServer((q, r) => {
 await new Promise<void>((ok) => srv.listen(4418, '127.0.0.1', ok))
 
 // Every data-* attribute the source actually looks up.
-const src = [
-  'app.js',
-  'office.js',
-  'call.js',
-  'settings.js',
-  'usage.js',
-  'people.js',
-  'panels.js',
-  'canvas.js',
-  'chat.js',
-  'command.js',
-  'pdf.js',
-  'page.js',
-  'workspace.js',
-  'cover.js',
-  'data.js',
-  'alive.js',
-  'motion.js',
-  'appearance.js',
-  'skins.css',
-]
+/*
+  Every module in the studio, found rather than listed.
+
+  This was a hardcoded list of nineteen filenames, and the twentieth module was
+  uncovered by construction: `project-settings.js` (#36) queries ten data
+  attributes and the audit reported all ten as "NOT looked up by any source
+  file — these controls cannot be wired", because it had never read the file
+  that wires them.
+
+  Which is this audit's own complaint about other audits, turned on itself: a
+  check that looks somewhere other than where the code is passes, or fails, for
+  the wrong reason. A directory walk cannot go stale.
+
+  `skins.css` stays named because it is the only stylesheet that carries a
+  selector a control is addressed by, and reading every CSS file to find one
+  would be the opposite mistake.
+*/
+const walk = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : [],
+  )
+
+const src = [...walk('web/studio'), join('web/studio', 'skins.css')]
   .map((f) => {
     try {
-      return readFileSync(join('web/studio', f), 'utf8')
+      return readFileSync(f, 'utf8')
     } catch {
       return ''
     }
@@ -167,6 +169,26 @@ for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'source
   await pg.waitForTimeout(450)
   await scan(`project/${tab}`)
 }
+/*
+  Project Settings, all four panes (#36).
+
+  Its own loop rather than a fifth entry in the list above, because it has a
+  second level and a payload of its own — the pane fetches before it draws, so
+  scanning it at a tab switch's 450ms would scan the word "Reading the office…"
+  and report four screens with no controls on them, which is a green result
+  about nothing.
+
+  All four, not one. This audit had never opened the office settings sheet
+  either, until it did and found `data-hire` — the other half of a roster
+  feature whose `staff_retire` had existed alone since 0079.
+*/
+await pg.locator('[data-tab="settings"]').first().click()
+await pg.waitForTimeout(1200)
+for (const pane of ['people', 'automations', 'labels', 'project']) {
+  await pg.locator(`[data-setpane="${pane}"]`).click()
+  await pg.waitForTimeout(450)
+  await scan(`project/settings/${pane}`)
+}
 await pg.locator('[data-settings]').first().click()
 await pg.waitForTimeout(500)
 for (const t of [
@@ -188,7 +210,7 @@ const orphans = [...found].filter(([k]) => !queried.has(k))
 await b.close()
 srv.close()
 
-console.log(`\nverify:wired — ${String(found.size)} control attributes across 17 screens`)
+console.log(`\nverify:wired — ${String(found.size)} control attributes across 21 screens`)
 let bad = 0
 if (orphans.length > 0) {
   bad += orphans.length

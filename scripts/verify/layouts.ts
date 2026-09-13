@@ -88,6 +88,19 @@ const ROUTES = [
   'contacts',
   'sources',
   'activity',
+  /*
+    Project Settings, all four panes (#36).
+
+    Every one, because this audit's own header records what happens otherwise:
+    thirty-eight green states said nothing about a surface it had never opened,
+    and the first run pointed at one found three defects. Four panes is four
+    surfaces, and the pane with the switches and the text boxes is the one with
+    touch targets and 16px inputs on it.
+  */
+  'project/people',
+  'project/automations',
+  'project/labels',
+  'project/project',
   'settings/governance',
 ]
 
@@ -317,11 +330,37 @@ const CONTRAST = `(() => {
 
 const browser = await chromium.launch()
 
+/*
+  A token, so the WRITER's controls are drawn and therefore measured.
+
+  Without one `canWrite()` is false and the page draws a reader's view: no
+  textareas, no selects, no time input, no buttons. This audit reported 68
+  green states over Project Settings while having seen none of the controls on
+  it — an audit that looks somewhere other than where the user looks passes for
+  the wrong reason, and the user is a writer.
+
+  Not a real token. `verify:wired` uses the same word for the same purpose: the
+  page only asks whether one is present before drawing, and every fetch it then
+  makes fails and falls back to the invented data, which is what this audit
+  measures anyway.
+*/
+const AS_WRITER = `try{localStorage.setItem('hq.token','audit')}catch(e){}`
+
 const open = async (page: import('playwright').Page, route: string) => {
   await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(450)
   await page.locator('.project[data-open="legacy-coaching-course"]').click()
   await page.waitForTimeout(400)
+  if (route.startsWith('project/')) {
+    // The pane fetches its own payload before it draws, so the wait is longer
+    // than a tab switch: measuring at 300ms would measure the word "Reading
+    // the office…" and report a screen with nothing on it as clean.
+    await page.locator('[data-tab="settings"]').click()
+    await page.waitForTimeout(1100)
+    await page.locator(`[data-setpane="${route.slice('project/'.length)}"]`).click()
+    await page.waitForTimeout(450)
+    return
+  }
   if (route.startsWith('settings/')) {
     await page.locator('[data-settings]').first().click()
     await page.waitForTimeout(450)
@@ -359,6 +398,7 @@ for (const width of WIDTHS) {
       ? void r.continue()
       : void r.abort(),
   )
+  await ctx.addInitScript(AS_WRITER)
   const page = await ctx.newPage()
   for (const route of ROUTES) {
     await open(page, route)
@@ -396,6 +436,7 @@ for (const scheme of ['light', 'dark'] as const) {
         ? void r.continue()
         : void r.abort(),
     )
+    await ctx.addInitScript(AS_WRITER)
     await ctx.addInitScript(
       `try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'plaster' })) } catch {}`,
     )

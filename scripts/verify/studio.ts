@@ -427,6 +427,27 @@ for (const [size, opts] of SIZES) {
       await shoot(section)
     }
 
+    /*
+      Project Settings, all four panes (#36).
+
+      Every one, not a representative one. `verify:layouts` walked seven
+      project tabs for weeks and had never opened the office settings sheet;
+      pointed at one tab of it, it found three defects in the first run. An
+      audit that has never opened a surface says nothing about it, and four
+      panes is four surfaces.
+
+      The pane fetches its own payload, so the wait is longer than a tab
+      switch: the page draws "Reading the office…" first and capturing that
+      would be capturing a spinner.
+    */
+    await page.locator('[data-tab="settings"]').click()
+    await page.waitForTimeout(900)
+    for (const pane of ['people', 'automations', 'labels', 'project']) {
+      await page.locator(`[data-setpane="${pane}"]`).click()
+      await page.waitForTimeout(450)
+      await shoot(`settings-project-${pane}`)
+    }
+
     await page.locator('[data-tab="documents"]').click()
     await page.waitForTimeout(500)
 

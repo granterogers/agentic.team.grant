@@ -22,6 +22,7 @@ import * as workspace from './workspace.js'
 import * as panels from './panels.js'
 import * as pulse from './pulse.js'
 import * as people from './people.js'
+import * as projectSettings from './project-settings.js'
 import * as when from './when.js'
 import { ambient, breathe, scatter, tiltable } from './alive.js'
 import { coverSvg } from './cover.js'
@@ -58,6 +59,8 @@ const state = {
   tab: 'overview',
   // Which of AI Team's four you are looking at.
   sub: 'board',
+  // Which pane of the project's own Settings is open (#36).
+  setpane: 'people',
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
   // Whether the MCP client view is open, on the Connections tab (#91).
@@ -101,6 +104,15 @@ const SECTIONS = [
   { id: 'contacts', name: 'Contacts' },
   { id: 'sources', name: 'Sources' },
   { id: 'activity', name: 'Activity' },
+  /*
+    Project Settings (#36) — the last section of the specification's hierarchy.
+
+    Last in the rail, and in the rail rather than top-right, because #80 moved
+    every project section here and a lone control in the opposite corner would
+    be the only thing in the product that does not follow that. The sketch put
+    it top-right when the sections were a horizontal strip.
+  */
+  { id: 'settings', name: 'Settings' },
 ]
 
 /*
@@ -2612,6 +2624,7 @@ function dashboard() {
     : state.tab === 'contacts' ? named('contacts', peopleTab(p))
     : state.tab === 'sources' ? named('links', sources(p))
     : state.tab === 'activity' ? named('activity', activitySection(p))
+    : state.tab === 'settings' ? named('settings', projectSettings.section(p, state.setpane, people))
     : board
 
   return `<main class="main">
@@ -5690,6 +5703,34 @@ function render() {
     positions — the Documents panel on Overview becomes the Documents gallery.
     Anything unnamed cross-fades, which is the right default for the rest.
   */
+  /*
+    Project Settings (#36), which is the only section with a payload of its own.
+
+    Fetched on the press rather than with the shell, for the reason Lately and
+    the portfolio task list are: it is a screen you navigate TO, and a settings
+    screen folded into the first paint would be carried by every project switch
+    for the loads that never open it.
+
+    `void` because the tab must change now. Waiting on the fetch before
+    switching would leave the press looking dead for as long as the office
+    takes to answer.
+  */
+  for (const b of root.querySelectorAll('[data-setpane]')) {
+    b.addEventListener('click', () => {
+      carry(null, null, () => {
+        state.setpane = b.dataset.setpane
+        render()
+      })
+    })
+  }
+  if (state.tab === 'settings' && state.view === 'project') {
+    const open = PROJECTS.find((x) => x.slug === state.project)
+    if (open !== undefined) {
+      void projectSettings.need(open, render)
+      projectSettings.wire(root, open, people, render)
+    }
+  }
+
   for (const b of root.querySelectorAll('[data-tab]')) {
     b.addEventListener('click', () => {
       carry(null, null, () => {

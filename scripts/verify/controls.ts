@@ -615,6 +615,26 @@ for (const app of APPS) {
             },
           ] as [string, () => Promise<void>],
       ),
+      /*
+        Project Settings, all four panes (#36).
+
+        A second level under `project/settings`, so it needs its own entry
+        rather than a fifth tab above: the pane fetches its own payload before
+        it draws, and the 350ms a tab switch waits would leave this audit
+        pressing at the words "Reading the office…".
+      */
+      ...(['people', 'automations', 'labels', 'project'] as const).map(
+        (pane) =>
+          [
+            `project/settings/${pane}`,
+            async () => {
+              await intoProject('settings')
+              await page.waitForTimeout(900)
+              await page.locator(`[data-setpane="${pane}"]`).first().click()
+              await page.waitForTimeout(400)
+            },
+          ] as [string, () => Promise<void>],
+      ),
       ...(['team', 'behaviour', 'connections', 'channels', 'models', 'appearance'] as const).map(
         (tab) =>
           [
@@ -941,7 +961,19 @@ const lines = [
       ].join('\n'),
   ``,
 ]
-const slug = [only, routeFilter.join('+')].filter((x) => x !== '').join('-')
+/*
+  A filename, not a path.
+
+  `ROUTES=project/settings` put a slash in the slug, so the report was written
+  to `docs/testing/controls-desktop-project/settings.md` — a directory that
+  does not exist — and forty-five seconds per route of work ended in ENOENT
+  with every finding thrown away. The one output of the run, lost to the
+  separator in its own filter.
+*/
+const slug = [only, routeFilter.join('+')]
+  .filter((x) => x !== '')
+  .join('-')
+  .replace(/[^a-zA-Z0-9+_-]+/g, '-')
 await writeFile(`docs/testing/controls${slug === '' ? '' : `-${slug}`}.md`, lines.join('\n'))
 
 console.log(`web/hq read from: ${hqData}`)

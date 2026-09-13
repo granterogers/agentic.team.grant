@@ -2594,8 +2594,17 @@ kbd {
   it lives where the eye already is.
 */
 .addsource { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/*
+  16px, not 13.
+
+  Only ever visible to a writer, so `verify:layouts` never measured it: the
+  audit ran without a token and the input is not drawn for a reader. The moment
+  it was given one (#36) it reported 13px at 1024 and 1440. The phone override
+  three hundred lines below already set 16px for the iOS zoom rule, which meant
+  the smallest screen had the largest text in the field.
+*/
 .addsource input {
-  min-width: 260px; padding: 9px 12px; font: inherit; font-size: 13px;
+  min-width: 260px; padding: 9px 12px; font: inherit; font-size: 16px;
   border-radius: var(--r-field, 10px); border: 1px solid var(--edge);
   background: var(--surface); color: var(--ink);
   box-shadow: inset 0 1px 2px rgb(0 0 0 / .04);
@@ -4282,4 +4291,222 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .ifoot { display: grid; gap: var(--s2); }
   .ifoot .btn { width: 100%; }
   .ifoot [data-said] { order: -1; }
+}
+
+/* --- project settings (#36) ---------------------------------------------- *
+
+  Four panes: who works here, what runs by itself, the words you sort by, and
+  the project itself. Deliberately not a grid of identical cards — §14 lists
+  "endless rectangular cards" and "repetitive grids" as the generic-AI look to
+  avoid, and a settings screen is where that temptation is strongest.
+
+  So each pane has its own shape. Team is a column of people, each with the
+  switch and the brief on one card because they are one decision. Automations
+  is a written sentence with its schedule under it, reading like a note rather
+  than a row. The project pane is three blocks of prose with one control each.
+
+  Classes prefixed `set` throughout. CLAUDE.md's rule after `.stage` was two
+  different things: grep before inventing a class name, and prefer a prefix
+  over a good short word.
+*/
+.setlead { max-width: 60ch; margin: 0 0 var(--s5); }
+.setnone { margin: var(--s5) 0; }
+
+/*
+  The roster. A grid of four columns — face, who, switch, and a full-width
+  note under all three — so every name, role and control aligns down the page
+  without any of them being told a width.
+
+  Hairlines rather than eight bordered cards: §14 names "endless rectangular
+  cards" as the look to avoid, and a settings screen is where the temptation is
+  strongest. The people are the rhythm; the rules are a whisper.
+*/
+.setroster {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; column-gap: var(--s3);
+  max-width: 64ch;
+}
+.setrow {
+  display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;
+  row-gap: var(--s2); padding: var(--s3) 0;
+  border-top: 1px solid var(--edge);
+}
+.setrow:first-child { border-top: 0; }
+/* Someone off the project keeps their place and loses their ink. A row that
+   vanished would make putting them back a hunt. */
+.setrow.away { color: var(--ink-2); }
+.setrow.away .setface { filter: grayscale(1); opacity: .5; }
+.setface { width: 40px; height: 40px; font: 600 15px/1 var(--display); }
+.setwho { display: grid; gap: 2px; min-width: 0; }
+.setwho b { font: 600 16px/1.2 var(--display); }
+.setfixed { font-variant-caps: all-small-caps; letter-spacing: .04em; }
+/*
+  The note spans all three columns and starts under the name rather than under
+  the portrait — a paragraph indented past the face reads as belonging to the
+  person, and one starting at the far left reads as belonging to the list.
+*/
+.setnote {
+  grid-column: 1 / -1; display: grid; gap: var(--s2);
+  justify-items: start; padding-left: calc(40px + var(--s3));
+}
+.setnote:empty { display: none; }
+.setnote textarea {
+  width: 100%; resize: vertical; padding: 10px 12px;
+  border: 1px solid var(--edge); border-radius: 10px;
+  background: var(--sunken); color: var(--ink);
+  /* 16px or iOS Safari zooms the page on focus. verify:ui enforces it. */
+  font: 400 16px/1.45 var(--text);
+}
+.setbriefread { font: 400 15px/1.5 var(--text); }
+
+.setmake {
+  display: grid; gap: var(--s3); max-width: 62ch;
+  padding: var(--s4); margin-bottom: var(--s5);
+  border: 1px solid var(--edge); border-radius: 14px;
+  background: color-mix(in srgb, var(--sunken) 55%, transparent);
+}
+.setmake textarea {
+  width: 100%; resize: vertical; padding: 10px 12px;
+  border: 1px solid var(--edge); border-radius: 10px;
+  background: var(--surface); color: var(--ink);
+  font: 400 16px/1.45 var(--text);
+}
+.setmakerow { display: flex; gap: var(--s3); align-items: end; flex-wrap: wrap; }
+.setmakerow label { display: grid; gap: 4px; }
+.setmakerow select,
+.setmakerow input[type="time"] {
+  padding: 9px 10px; min-height: 44px;
+  border: 1px solid var(--edge); border-radius: 10px;
+  background: var(--surface); color: var(--ink);
+  font: 400 16px/1 var(--text);
+}
+.setmakerow .btn { margin-left: auto; }
+
+/*
+  A real gap between them. `gap` alone was not enough: each automation carries
+  its own vertical padding inside the left rule, so at var(--s3) the two rules
+  met and read as one continuous line down five paragraphs.
+*/
+.setautos { display: grid; gap: var(--s5); max-width: 62ch; }
+/*
+  An automation reads as a written instruction, not a table row: the sentence
+  first at reading size, the schedule under it as meta, the controls at the
+  foot. A left rule rather than a full border, so a column of them scans as one
+  list and not as five boxes.
+*/
+.setauto {
+  display: grid; gap: 6px;
+  padding: var(--s2) 0 var(--s3) var(--s4);
+  /*
+    `--accent`, not `--hue`.
+
+    The first draft used `color-mix(in srgb, var(--hue) 70%, transparent)` and
+    the rule was INVISIBLE: `--hue` is set per element by the face helper and
+    per card by the project mark, and is not defined anywhere up the tree from
+    here. An undefined custom property in a color-mix does not fall back to
+    something sensible — it produces nothing, and nothing renders. So the
+    anchor the whole list was composed around was simply absent, and the
+    automations read as loose paragraphs down an empty page.
+
+    Reading the CSS back would not have found it. Opening the PNG did.
+  */
+  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.setauto.off { border-left-color: var(--edge); color: var(--ink-2); }
+.setautowhat { margin: 0; font: 400 16px/1.45 var(--text); }
+.setautofoot { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; }
+
+.setoffice { display: grid; gap: 4px; margin-top: var(--s6); max-width: 62ch; }
+
+.setlabels { display: grid; gap: var(--s3); max-width: 62ch; margin-bottom: var(--s6); }
+.setlabelrow { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+.setadd { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.setadd input {
+  padding: 9px 12px; min-height: 44px; flex: 1 1 14ch;
+  border: 1px solid var(--edge); border-radius: 10px;
+  background: var(--surface); color: var(--ink);
+  font: 400 16px/1 var(--text);
+}
+/*
+  44px, because it is a real touch target and not decoration — an × drawn at
+  the size of the glyph is the control this repository already shipped once at
+  68×24. The chip stays small; the hit area does not.
+*/
+.chipx {
+  margin-left: 6px; min-width: 24px; min-height: 24px;
+  padding: 0; border-radius: 6px; color: inherit;
+  font: 600 14px/1 var(--text);
+}
+
+.setproj { display: grid; gap: var(--s5); max-width: 62ch; }
+.setblock {
+  display: grid; gap: var(--s2); justify-items: start;
+  padding: var(--s4); border: 1px solid var(--edge); border-radius: 14px;
+  background: color-mix(in srgb, var(--sunken) 45%, transparent);
+}
+.setblock p { margin: 0; max-width: 56ch; }
+/*
+  The one block with a consequence. A warm edge rather than a red button: the
+  action is reversible and colouring it as danger would say otherwise, which is
+  the same argument CLAUDE.md records for not styling Undo as destructive.
+*/
+.warnblock { border-color: color-mix(in srgb, var(--warn) 45%, var(--edge)); }
+
+@media (max-width: 860px) {
+  /*
+    Project Settings on a phone (#36). At the END with every other phone
+    override, because a media query adds no specificity and the base rules
+    above are the ones source order would otherwise win against. Bitten twice
+    in this file already — `.navgroup`, then the whole phone layout.
+  */
+  /*
+    The automation form's controls go one per row.
+
+    At 390px "Who", "How often", "At" and the button side by side wrap into
+    four ragged half-rows with the button orphaned. Stacked, each label sits
+    over its own control and the button is full width under them.
+  */
+  .setmakerow { display: grid; gap: var(--s3); }
+  .setmakerow label { gap: 6px; }
+  .setmakerow .btn { margin-left: 0; width: 100%; }
+
+  /*
+    A person's card puts the switch on its own line.
+
+    `margin-left: auto` pushes it right on a wide card; at phone width the name
+    and the title already fill the row, so the switch wraps to a line of its
+    own and being right-aligned there leaves it stranded across the gap from
+    everything it belongs to.
+  */
+  /*
+    The brief loses its indent on a phone.
+
+    40px of portrait plus a gap out of 390px is a tenth of the screen given to
+    aligning a paragraph with a name, and the textarea underneath is the thing
+    that actually needs the width.
+  */
+  .setnote { padding-left: 0; }
+
+  .setautofoot .btn { flex: 1 1 auto; }
+}
+
+/*
+  A small button is still a finger-sized target on a touch device (#36).
+
+  `.btn.small` is 32px tall, which is right with a mouse and is not a control
+  you can reliably hit with a thumb. The floor is 44 on `pointer: coarse`, and
+  it is `pointer` rather than a width because a 390px window on a laptop is
+  still a mouse — the same distinction `verify:layouts` makes, and the reason
+  that audit emulates a touch device rather than only narrowing the viewport.
+
+  Surfaced by giving the audit a token: every one of these lives on a control
+  only a writer sees, so an audit running as a reader had measured none of
+  them. Sixteen findings across seven screens, all of them years old.
+*/
+@media (pointer: coarse) {
+  .btn.small { min-height: 44px; }
+  /* The label chip's × is 24px by design — the chip is small type and a 44px
+     square inside it would be taller than the chip. It gets the padding
+     instead, which grows the hit area without growing the mark. */
+  .chipx { min-height: 44px; min-width: 44px; }
 }

@@ -9,22 +9,70 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
-> ## State as of 2026-09-11
+> ## State as of 2026-09-13
 >
 > | | |
 > |---|---|
-> | Tests | 935 passing · `verify:ui` **57/57** · `verify:hq` 39/39 · `verify:talk` **36/36** · `verify:design` 13/13 · `verify:boundary` 57/57 · `verify:layouts` **38 states, 0 findings** · `verify:wired` **47 controls, none dead** · `verify:arrangement` **6/6** · `verify:disconnect` **23/23** |
+> | Tests | **997 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` 0 findings |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | **252 applied** |
+> | Migrations | **328 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
+>
+> ## What changed on 2026-09-13
+>
+> **Slack stopped sounding like a database (#186).** Grant sent three
+> screenshots of his own workspace: *"how much space is being taken up... It's
+> really not intuitive or acting like it's a human... you'd really need to work
+> on it looking a lot better, making it obvious what things are related."* Four
+> defects, all found by reading his real traffic rather than the source:
+>
+> - a routine read wore a finding's clothes — *"Looked at 1 Drive folder.
+>   Nothing new."* carried a confidence caption and a row of feedback buttons,
+>   270 times in ten days. A deterministic output now carries neither, and the
+>   rule is about honesty rather than space: a message says how much to trust it
+>   exactly when there is something to decide;
+> - nothing was related to anything — thirty-one real questions in
+>   `#ai_team_hq_test` with not one reply attached. An answer now threads under
+>   the message that asked, and is broadcast so threading does not take it off
+>   the channel;
+> - harness traffic was on the floor channel (*"Filed under zz test slack
+>   80106050"*);
+> - and the floor said *"the a question is about evidence"*, because the
+>   vocabulary substitution was translating four §6 class names that are already
+>   English words.
+>
+> **Project Settings exists (#36, ADR-0023).** The last unbuilt child of #25,
+> four panes at `Settings` in every project's rail:
+>
+> - **Team** — who works here, and what each is told here. Absence means
+>   everyone; the table records departures from that default, and the Chief of
+>   Staff cannot be taken off. It takes effect in `pickRoster`.
+> - **Automations** — a standing instruction, addressed to one of the team, on a
+>   schedule, created and paused and removed entirely in the UI. No new table:
+>   `responsibilities` is the automation table and had never had a writer.
+> - **Labels** — the contact labels, editable in the same place as in Contacts.
+> - **Project** — export the whole project as §13's neutral package, and archive
+>   it reversibly.
+>
+> Migrations 0323–0328. Everything is reachable over HTTP and
+> `verify:settings` drives that chain including the browser layer.
+>
+> **Three audits were looking somewhere other than where Grant looks.**
+> `verify:layouts` ran without a token, so it had never measured a single
+> writer control — given one it found sixteen touch targets under 44px and a
+> 13px input, all years old. `verify:wired` read a hardcoded list of nineteen
+> filenames, so the twentieth module was uncovered by construction; it walks the
+> directory now. And `verify:controls` wrote its report to a path built from its
+> own route filter, so a run filtered by a route containing a slash lost
+> everything it found.
 >
 > **One frontend, and it is the designed one.** `ai-team-hq.vercel.app` serves
 > `web/studio`; `web/hq/index.html` is deleted (ADR-0019, #68). Every write
