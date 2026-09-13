@@ -5032,12 +5032,30 @@ function settingsSheet() {
       */
       const again = $(`[data-disconnect="${key}"]`) ?? $('[data-settings-body]')
       const where = outcome?.revoke_at
-      say(
-        again,
-        `${outcome?.note ?? 'Disconnected.'}${
-          where === undefined ? '' : ` Withdraw the consent at ${where}`
-        }`,
-      )
+      /*
+        Everything the office said, in the order a person needs it (#198).
+
+        What STOPPED first, because that is what he pressed the button for;
+        then what was NOT revoked, because #109 is a real defect and a
+        Disconnect that let him believe access ended would inherit it; then the
+        numbered steps only he can take, because "Always be explicit with
+        instructions!!! ... include full instructions each and every time with
+        URLs, steps to follow".
+
+        The older services answer with `note` alone and are unchanged — this
+        adds the fields Slack and Telegram return rather than replacing what
+        was there.
+      */
+      const parts = [
+        outcome?.stopped,
+        outcome?.not_revoked,
+        Array.isArray(outcome?.to_finish) && outcome.to_finish.length > 0
+          ? `To finish it: ${outcome.to_finish.map((t, i) => `${String(i + 1)}. ${t}`).join(' ')}`
+          : null,
+        outcome?.note,
+        where === undefined || where === null ? null : `Provider page: ${where}`,
+      ].filter((x) => typeof x === 'string' && x !== '')
+      say(again, parts.length === 0 ? 'Disconnected.' : parts.join(' '))
     })
   }
 

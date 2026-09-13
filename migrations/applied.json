@@ -347,5 +347,6 @@
   "0346_the_thread_says_what_could_not_be_delivered.sql": "710f4660a7880d17286eef308b6c5e4942c58e251ecc8af993a806abfcc9af45",
   "0347_try_again_from_the_thread.sql": "71f45adf96200aa68940e66a9d42f51b3d3fcf78cc0e405d910069dcb33214bd",
   "0348_what_state_each_conversation_channel_is_in.sql": "bea9162d33e19b3b397c0ea0a30516b9465840f3838990bf824d89f77399ec45",
-  "0349_a_channel_with_no_health_row_is_not_healthy.sql": "a5803308acc636e93e274297938e7ee76e97dbf5cce1d02141da2e8f379810dd"
+  "0349_a_channel_with_no_health_row_is_not_healthy.sql": "a5803308acc636e93e274297938e7ee76e97dbf5cce1d02141da2e8f379810dd",
+  "0350_disconnecting_slack_and_telegram_honestly.sql": "c209485eb79c83dd35a61ac4cc09569d6b081caa9cd9813cab5fd5dcce9ac041"
 }

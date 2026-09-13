@@ -493,8 +493,38 @@ export const ROUTES = {
   github: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
   openrouter: { how: 'tab', to: 'models', label: 'Set up in Models' },
   supabase: { how: 'tab', to: 'setup', label: 'Set up in Setting up' },
-  telegram: { how: 'tab', to: 'channels', label: 'Set up in Channels' },
-  slack: { how: 'tab', to: 'channels', label: 'Set up in Channels' },
+  /*
+    Slack and Telegram can now be disconnected (#198, migration 0350).
+
+    Both were previously set up only — the RPC refused to disconnect them and
+    was right to while the alternative was a lie. What changed is not that the
+    refusal was wrong but that the answer can now be honest: `hq_disconnect`
+    says what stopped, says plainly what was NOT revoked, and gives the exact
+    steps only Grant can take.
+
+    `costs` is what he reads before confirming, so it names what STAYS as
+    loudly as what stops — 0014's canonical-store claim is the whole reassurance
+    here, and a person about to press a red button is not in the mood to infer
+    it.
+  */
+  telegram: {
+    how: 'tab', to: 'channels', label: 'Set up in Channels', off: 'telegram',
+    costs:
+      'The office stops sending and receiving on Telegram, and the chief bot ' +
+      'token is deleted here. Everything already said there is kept and stays ' +
+      'in the conversation. The staff bots are not touched. Only BotFather can ' +
+      'revoke the token itself — the office will tell you how.',
+    revokeAt: 'https://t.me/BotFather',
+  },
+  slack: {
+    how: 'tab', to: 'channels', label: 'Set up in Channels', off: 'slack',
+    costs:
+      'The office stops reading and posting in Slack. Every message already ' +
+      'there stays, and so does everything recorded from it. The app stays ' +
+      'installed in the workspace until you remove it at Slack — the office ' +
+      'will tell you how.',
+    revokeAt: 'https://api.slack.com/apps',
+  },
   /*
     MCP opens its own view rather than sending you to another tab (#91).
 
