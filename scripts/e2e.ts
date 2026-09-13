@@ -48,12 +48,12 @@ const RESULTS = '.out/e2e-results.json'
 /**
  * Per-suite budget.
  *
- * Fifteen minutes, not nine. `verify:controls` presses 217 controls across
+ * Twenty-five minutes. `verify:controls:studio` presses 217 controls across
  * eight routes at two sizes since #180's resolution fix — it was pressing 97
- * before, and the old budget was set against that. A budget calibrated on a
- * broken suite times out the fixed one.
+ * before, and the first budget here was set against that. A budget calibrated
+ * on a broken suite times out the fixed one, twice: nine minutes, then fifteen.
  */
-const BUDGET_MS = 15 * 60 * 1000
+const BUDGET_MS = 25 * 60 * 1000
 
 /**
  * Suites this runner will not start, and why — stated here rather than by
@@ -68,6 +68,7 @@ const NEVER: Record<string, string> = {
   restore:
     'restores a backup over the live database. Run deliberately by a person, never as one of a batch',
   'github-token': 'spends a real GitHub API budget against a token flagged for rotation (#18)',
+  db: 'a chain of 46 other suites, every one of which this runner already runs individually — and it ends in `purge:fixtures --go` and `slack:tidy --go`, which are sweeps rather than checks',
   controls:
     'the umbrella over controls:studio, controls:team and controls:settings, which are run individually — together they are ~35 minutes and running both forms doubles it',
 }
@@ -274,6 +275,30 @@ const lines = [
   `- passed: **${String(passed.length)}** · failed: **${String(failed.length)}** · could not be run: **${String(stuck.length)}**`,
   `- not yet attempted: **${String(notRun.length)}**`,
   `- wall clock across the pass: **${seconds(recorded.reduce((n, s) => n + (all[s] as Result).ms, 0))}**`,
+  '',
+  '## What a green pass here does and does not mean',
+  '',
+  'Every number above is a suite exiting zero. Four things it does **not** say,',
+  'each of which cost real time to establish and none of which a pass/fail',
+  'table can carry:',
+  '',
+  '1. **Three suites are order-dependent through the shared job queue.**',
+  '   `verify:slack` and `verify:worker` both refuse to start while any job is',
+  "   live, because dequeue is global and would hand them somebody else's job",
+  '   with no handler for it. Neither cancels the jobs it creates, so in a full',
+  "   pass whichever runs second fails on the first one's debris.",
+  '   `verify:worker` scored 22/26, then 26/26, then 25/26 on three consecutive',
+  '   runs. Green here means the queue happened to be empty. See #184.',
+  '2. **`verify:controls:settings` presses 12 controls and skips 87.**',
+  '   Zero findings out of twelve presses is not coverage of the settings',
+  '   sheet. See #183, which is the same defect on the desktop leg of the',
+  '   studio suite.',
+  '3. **Sections 4, 5, 6 and 8 of #41 are only partly reached by any suite.**',
+  '   Cold starts, a 100MB file, a zero-byte file, two workers leasing the same',
+  '   job, a migration applied twice and clock skew have no suite at all.',
+  '4. **A suite that has never been run is green by assumption.** Before this',
+  '   runner existed there was no way to run all 79, and `verify:all` runs',
+  '   three. Nothing here was newly written — it was newly *executed*.',
   '',
   '## Deliberately not run',
   '',

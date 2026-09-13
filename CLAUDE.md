@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **304 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **305 applied.**
 
 ---
 
@@ -533,6 +533,32 @@ Each of these cost real time. They are here so they cost it once.
   Assert the shape of what is IN it — and against a moving target, assert the
   property rather than a count: "no name matching probe/fixture/verify" holds
   for ever, "zero walls" fails the day #49 starts working.
+- **A migration is not a deploy.** 0283 taught `syncNotion` to skip Notion
+  containers and deleted the three that existed. Fifteen minutes later
+  `duty:notion-sync` put all three back, because the deployed worker had been
+  built before 0283 and was still running the old path. The fix was in the
+  repository and not in the thing that runs. After a migration that changes
+  behaviour a HANDLER depends on, deploy the handler — and CLAUDE.md already
+  said this once, about nine hourly jobs and a worker older than the handler.
+- **Postgres NESTS block comments, so a slash-star inside one opens another.**
+  Writing the glob for the web folder inside a SQL comment produced
+  "unterminated /* comment" from a comment that visibly had an end. The
+  companion of the backtick trap, in the same sentence, in the same hour —
+  and `npm run check:templates` covers the web folder only, so neither is
+  caught in `scripts/`.
+- **A pre-condition shared by two suites is a coupling.** `verify:slack` and
+  `verify:worker` both refuse to run while any job is live — correctly, because
+  dequeue is global — and neither cancels the jobs it creates. Alone each
+  passes; in a full pass whichever runs second fails on the first one's debris,
+  and it fails as "22/26" rather than as "the queue was dirty". Suites are
+  written and run one at a time, so this class of defect only exists once
+  somebody runs them all (#184).
+- **`is_fixture` on a JOB does not imply a fixture PROJECT, and the sweep
+  assumed it did.** `purge:fixtures` retired orphaned jobs by matching the
+  PROJECT's slug — but #45's rule sends any suite testing something that
+  filters fixtures to use a REAL project, and `jobs.is_fixture` is GENERATED
+  from `requested_by`. So fixture jobs on real projects were invisible to the
+  sweep by construction, and twelve accumulated in the queue.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

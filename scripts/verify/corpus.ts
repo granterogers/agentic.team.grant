@@ -183,7 +183,19 @@ try {
     values (${lit(projectId)}::uuid, 'notion', 'database', ${lit(CONTAINER)}, 'Docs', 'database',
             '# Docs' || chr(10) || '- a row', repeat('a', 64), 14, app.now_utc())
   `)
-  const strays = async (): Promise<number> =>
+  /*
+    Scoped to the subject, and separately across everything.
+
+    One query served both questions and they are not the same question. "Did
+    the sync I just ran store a container" is about THIS project; "does the
+    corpus hold any" is about all of them. Written as one global count, three
+    real container rows elsewhere made the two scoped checks fail as well —
+    reporting a sync that had correctly skipped its container as a sync that
+    had stored one.
+
+    The global check stays, because it is the one that found those rows.
+  */
+  const strays = async (where = `and d.project_id = ${lit(projectId)}::uuid`): Promise<number> =>
     Number(
       (
         await one(`
@@ -192,6 +204,7 @@ try {
             join public.project_attachments a
               on a.project_id = d.project_id and a.connector = d.connector
              and a.external_ref = d.external_ref
+           where true ${where}
         `)
       ).n,
     )
@@ -229,7 +242,17 @@ try {
 
   // And across the whole corpus, not only this fixture — the three real rows
   // #19 named are gone and no other project has grown one.
-  check('the real corpus holds none either', 'across every project', (await strays()) === 0)
+  // The global one, which is the check that found three real container rows
+  // that `duty:notion-sync` had recreated fifteen minutes after 0283 deleted
+  // them, from a worker deployed before 0283 existed.
+  const everywhere = await strays('')
+  check(
+    'the real corpus holds none either',
+    everywhere === 0
+      ? 'across every project'
+      : `${String(everywhere)} container row(s) stored as documents`,
+    everywhere === 0,
+  )
 
   // --- #20: a page the office wrote is its output --------------------------
   console.log('\na page the office wrote is not source material (#20)')

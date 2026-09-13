@@ -63,6 +63,34 @@ const dangling = (
        union
       select lower(n.nspname || '.' || t.typname)
         from pg_type t join pg_namespace n on n.oid = t.typnamespace
+       union
+      /*
+        Runtime settings, which are not relations and never were.
+
+        app.undoing is a GUC. current_setting of it is how hq_undo, undo_none
+        and undo_offer stop an undo from recording an undo of itself. It is
+        the word app, a dot and a name, inside a STRING LITERAL -- so a regex
+        over the function body sees it and the catalogue does not, and three
+        correct functions were reported as naming a table that does not exist.
+
+        Taken from the settings the bodies themselves name rather than from a
+        hand-written list, so a new one is covered the day it is written. This
+        is the narrowest honest widening: a GUC really is a qualified name
+        that legitimately has no catalogue entry.
+
+        Two things this comment must not contain, both learned here. No
+        backtick: it lives inside a JS template literal and a backtick ends the
+        string, which is CLAUDE.md's first trap and check:templates does not
+        cover scripts. And no slash-star sequence: Postgres NESTS block
+        comments, so writing the glob for the web folder opened a nested
+        comment that was never closed.
+      */
+      select distinct lower(m[1])
+        from bodies b,
+             lateral regexp_matches(
+               b.def,
+               '(?:current_setting|set_config)\\s*\\(\\s*''((?:app|public)\\.[a-z_][a-z0-9_]*)''',
+               'gi') as m
     )
     select distinct r.fn, r.ref
       from referenced r

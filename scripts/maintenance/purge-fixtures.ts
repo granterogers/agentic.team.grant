@@ -204,6 +204,39 @@ if (orphans.rows.length > 0) {
   console.log(`\nretired ${String(orphans.rows.length)} orphaned fixture job(s).`)
 }
 
+/*
+  Fixture jobs on a REAL project, which the sweep above can never see.
+
+  It matches on the project's slug, so it only ever finds jobs belonging to a
+  fixture project. But #45's rule sends a suite that tests something which
+  FILTERS fixtures to use a real subject — and `jobs.is_fixture` is GENERATED
+  from `requested_by`, not from the project. So `verify:governs` and
+  `verify:proposes` hang fixture jobs off Grant's real projects by design, and
+  nothing has ever swept them.
+
+  They had reached twelve, sitting queued for hours. Harmless to every count
+  that excludes fixtures — which is the point of the flag — and NOT harmless to
+  `verify:slack` and `verify:worker`, both of which refuse to run while the
+  queue holds anything at all, because dequeue is global and would hand them
+  somebody else's job with no handler for it. Two suites blocked by debris that
+  every other reader was correctly ignoring.
+
+  `cancelled`, not `failed`: nothing went wrong with them. They were never
+  going to be run.
+*/
+const strandedFixtures = await db.execute(`
+  update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+    state_reason = 'fixture job never dequeued, cancelled by purge:fixtures'
+  where is_fixture
+    and state not in ('complete', 'cancelled', 'failed')
+  returning job_id
+`)
+if (strandedFixtures.rows.length > 0) {
+  console.log(
+    `\ncancelled ${String(strandedFixtures.rows.length)} fixture job(s) left in the queue.`,
+  )
+}
+
 // Delivery debris. Every `verify:*` dedupe key belongs to a verification run,
 // and a `job:*` key whose job belongs to a retired fixture project does too.
 //

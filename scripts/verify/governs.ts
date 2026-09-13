@@ -477,7 +477,25 @@ try {
     await db.execute(`delete from public.proposals where proposal_id = ${lit(proposalId)}::uuid`)
   }
   /*
-    The job STAYS, and cannot do otherwise: `job_state_transitions` is
+    Cancelled, so it does not sit in the queue.
+
+    It cannot be DELETED — `job_state_transitions` is append-only by §6 and
+    holds a foreign key to it (ADR-0022) — but a terminal state is always
+    reachable, and leaving it queued is not free: `verify:slack` and
+    `verify:worker` both refuse to run while the queue holds anything, because
+    dequeue is global and would hand them a job they have no handler for. Two
+    suites were blocked by twelve of these before anyone noticed, which is why
+    `purge:fixtures` now sweeps them too.
+  */
+  if (jobId !== '') {
+    await db.execute(`
+      update public.jobs set state = 'cancelled', finished_at = app.now_utc()
+       where job_id = ${lit(jobId)}::uuid and state not in ('complete', 'cancelled', 'failed')
+    `)
+  }
+
+  /*
+    The row STAYS, and cannot do otherwise: `job_state_transitions` is
     append-only by §6 and holds a foreign key to it, so deleting the job is
     refused by the ledger it wrote on the way in. What makes leaving it safe is
     that it is a fixture — `jobs.is_fixture` is GENERATED from `requested_by`,

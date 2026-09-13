@@ -136,10 +136,24 @@ for (const [a, b, why] of [
   // is what forcing a create means — and then the phrase belongs to whichever
   // claimed it, by design: one phrase, one project. Asserting over the shared
   // ones would be asserting that the uniqueness rule does not hold.
+  /*
+    And not fixtures, because `resolve_project_by_name` filters them BY DESIGN.
+
+    `is_fixture` is GENERATED from the slug, and the resolver excludes fixtures
+    so harness projects can never be routed to. Asserting that one resolves
+    from its own name is asserting the opposite of the feature under test —
+    and it fired on `ledger-proof-mtyxxxuc`, an active fixture left by
+    `verify:ledger`, reporting a working resolver as broken.
+
+    The property is "every active project GRANT CAN BE ROUTED TO answers to its
+    own name". A fixture is not one of those, so it is not in the population.
+    Same correction as #45's, from the other side.
+  */
   const missing = await all(`
     select p.slug, p.name
       from public.projects p
      where p.status = 'active'
+       and not p.is_fixture
        and not exists (
          select 1 from public.projects q
           where q.status = 'active' and q.project_id <> p.project_id
@@ -153,7 +167,7 @@ for (const [a, b, why] of [
   record(
     'every active project resolves from its own name',
     missing.length === 0
-      ? `${String((await all(`select 1 from public.projects where status = 'active'`)).length)} projects`
+      ? `${String((await all(`select 1 from public.projects where status = 'active' and not is_fixture`)).length)} projects`
       : `${String(missing.length)} do not: ${missing.map((m) => String(m.slug)).join(', ')}`,
     missing.length === 0,
   )
