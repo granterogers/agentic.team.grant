@@ -21,6 +21,7 @@ Telegram, Slack, a voice call and a web dashboard.
 | `docs/integration-assessment-2026-09-10.md` | what exists, what is missing, what was decided |
 | `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements — **v3, Autonomy** |
 | `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ canonical project IA — hierarchy, assets, the relational graph |
+| `docs/spec/github-persistence-brief-2026-09-13.md` | ⭐ the communications brief — verbatim; tracked by #191 |
 | `AI_TEAM_HQ_MASTER_SPEC.md` | ⭐ canonical system requirements |
 | `docs/adr/` | why each material decision was made |
 | `docs/architecture.md` | vendor bindings |

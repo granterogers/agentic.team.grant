@@ -19,7 +19,7 @@
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | **328 applied** |
+> | Migrations | **333 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -64,6 +64,32 @@
 >
 > Migrations 0323–0328. Everything is reachable over HTTP and
 > `verify:settings` drives that chain including the browser layer.
+>
+> **Phase 7 — Communications is planned but not started (#191).** Grant's
+> 13 September brief said GitHub is the durable memory and nothing important
+> may live only in a conversation. The brief is stored verbatim at
+> `docs/spec/github-persistence-brief-2026-09-13.md` and its twenty-six
+> requirement topics are now eleven Issues under **#191**, with a Prompt
+> Persistence Audit mapping every topic to its home.
+>
+> The inspection pass found more substrate than the topic list implies —
+> `inbound_commands` (0011) has every message he has ever sent, `slack_channel_map`
+> (0014) holds project-to-channel in Postgres rather than a channel topic, 0198
+> already reads both sides back for recall, and 0102 puts voice through the same
+> canonical layer. **The gap that decides everything else: there is no
+> `conversations` table and no `messages` table.** His side is in
+> `inbound_commands`, the office's in `outputs`/`deliveries`, and nothing joins
+> them into one ordered history. #192 is that model, and #195 (message identity,
+> deduplication, loop prevention) has to be right before any second surface is
+> connected — otherwise the office echoes itself.
+>
+> Two things worth knowing before picking this up. First, **the brief contains
+> the topic list and not the specification behind it** — no acceptance criteria,
+> no wireframes. Each Issue states what it inferred and where a different
+> reading would build differently; several would go materially wrong on a
+> plausible alternative. Second, accessibility (#200) is a genuine hole: ninety-four
+> open Issues and not one about it, beyond the contrast and type-size checks in
+> `verify:layouts`.
 >
 > **The space-usage critique pass, and a tool that answers its question
 > (#85).** The Issue asks for measurement rather than squinting, and it was
