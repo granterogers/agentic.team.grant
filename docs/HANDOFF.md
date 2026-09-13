@@ -83,6 +83,21 @@
 > deduplication, loop prevention) has to be right before any second surface is
 > connected — otherwise the office echoes itself.
 >
+> **Three decisions answered on the day, in ADR-0024.** Only the Chief of Staff
+> posts unprompted in a project's Slack channel, but Grant may address any
+> individual and gets that person's reply — a stored preference, not a
+> constant, because *"for now"* is load-bearing in how he said it. A Telegram
+> message naming no project lands in a reserved catch-all dashboard project
+> rather than a nullable `project_id`. And Slack sync is convergent: two
+> windows onto one history, never a mirror.
+>
+> Two of those have traps written into the ADR because they will otherwise be
+> got wrong. Applying the Slack voice rule uniformly suppresses the reply Grant
+> asked for **and looks exactly like the rule working**. And the catch-all
+> project will be swept — `check:leaks` already matches `untitled-notebook-%`,
+> so despite his phrasing it must not be named anything beginning `untitled`,
+> and there is no protection column on `projects` today.
+>
 > Two things worth knowing before picking this up. First, **the brief contains
 > the topic list and not the specification behind it** — no acceptance criteria,
 > no wireframes. Each Issue states what it inferred and where a different
