@@ -52,6 +52,7 @@
     "verify:governs": "tsx scripts/verify/governs.ts",
     "verify:references": "tsx scripts/verify/references.ts",
     "verify:addressing": "tsx scripts/verify/addressing.ts",
+    "verify:files": "tsx scripts/verify/files.ts",
     "verify:settings": "tsx scripts/verify/settings.ts",
     "verify:search": "tsx scripts/verify/search.ts",
     "verify:graph": "tsx scripts/verify/graph.ts",

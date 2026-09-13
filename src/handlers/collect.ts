@@ -34,6 +34,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { putFile } from '../files/store.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 
@@ -53,32 +54,6 @@ interface Payload {
   readonly artifact_id?: string
   readonly project_id?: string
   readonly title?: string
-}
-
-/**
- * Put the bytes in the bucket.
- *
- * Private, so this is the only way in and Telegram cannot fetch it — see the
- * note on `documents.storage_path`. `x-upsert` because a retried collection of
- * the same artifact must land on the same object rather than accumulating
- * copies of a twenty-megabyte file in a 1GB allowance.
- */
-async function store(
-  deps: CollectDeps,
-  path: string,
-  bytes: Uint8Array,
-  mime: string,
-): Promise<boolean> {
-  const r = await fetch(`https://${deps.projectRef}.supabase.co/storage/v1/object/files/${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${deps.serviceKey}`,
-      'Content-Type': mime,
-      'x-upsert': 'true',
-    },
-    body: bytes as unknown as string,
-  })
-  return r.ok
 }
 
 export function collectHandler(deps: CollectDeps): Handler {
@@ -143,8 +118,19 @@ export function collectHandler(deps: CollectDeps): Handler {
       // Keyed on the artifact, so a retry overwrites rather than duplicating.
       const path = `${projectId}/${artifactId}.${isAudio ? 'mp3' : 'bin'}`
 
-      if (!(await store(deps, path, bytes, mime))) {
-        return said('The file came back but storing it failed. Nothing was recorded.', false)
+      /*
+        The shared writer (#96), not a private one.
+
+        This function had its own `store()` and the edge function had its own
+        signing fetch — one writer, one reader, no shared idea of where files
+        live. A second writer (a PDF read out of Drive) made that a problem
+        rather than untidiness: two places deciding the bucket, the upsert and
+        the path convention is two places for them to disagree, and a file
+        written to the wrong path is a file the reader cannot find.
+      */
+      const stored = await putFile(deps.projectRef, deps.serviceKey, path, bytes, mime)
+      if (!stored.ok) {
+        return said(`The file came back but storing it failed — ${String(stored.error)}.`, false)
       }
 
       const recorded = (

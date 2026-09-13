@@ -6709,16 +6709,27 @@ async function fillDoc(doc, host) {
   }
 
   /*
-    A PDF goes to the browser's own reader, not to a reimplementation (#96).
+    A PDF goes to the browser's own reader, with a real link beside it (#96).
 
-    No bundler and no build step (ADR-0002, ADR-0011), so PDF.js is out; and a
-    CDN copy is worse than out, because the build sandbox cannot reach external
-    hosts and every capture would show an empty frame. An iframe on the file is
-    free, needs nothing, and is genuinely good on a desktop.
+    A correction to what this comment used to say. It claimed PDF.js was out
+    because there is no bundler — and `paint()`, forty lines up in this same
+    file, has been rendering real first pages with `./vendor/pdf.mjs` since
+    #23. The library is SELF-HOSTED, 330KB of it, precisely so the sandbox's
+    inability to reach a CDN does not matter. The stated reason for choosing an
+    iframe was not true.
 
-    It is unreliable on iOS Safari, which is exactly why "Open in new tab" is
-    not a nicety — on a phone it is frequently the only thing that works. So it
-    is a real link to the real file, prominent, not tucked away.
+    The iframe stays anyway, and now for a reason that holds: the browser's own
+    reader has a page count, a search box, printing and text selection that a
+    reimplementation would have to earn back, and on a desktop it is genuinely
+    better than anything worth building here. `paint()` uses the library for
+    what a library is good at — drawing one page as a cover — and this uses the
+    reader for reading.
+
+    The iframe is unreliable on iOS Safari, which is exactly why "Open the PDF
+    in a new tab" is not a nicety: on a phone it is frequently the only thing
+    that works. So it is a real link to the real file, prominent, not tucked
+    away. Swapping the frame for a pdf.js viewer is now a real option rather
+    than a blocked one, and it is a separate change with its own captures.
   */
   const mime = String(full.mime_type ?? '')
   const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(full.title ?? '')

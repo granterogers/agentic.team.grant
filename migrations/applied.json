@@ -328,5 +328,8 @@
   "0327_clearing_a_brief_is_a_value_not_an_omission.sql": "adcbf7925112c549ad57d09f01e20906cbaca4511915bd28be9954ff91fe1a0c",
   "0328_an_automation_nobody_is_named_on_is_claires.sql": "7f95ce8664783b448a7512b1b0f36df97603a18dca847e2eabd89a4e995c4370",
   "0329_a_suite_can_claim_only_its_own_work.sql": "fff5ce5b89c12c8858c7cc60d5ae43ab569cbacd55a084ffd829c9c65616ec21",
-  "0330_a_scope_gets_the_same_allowance_the_office_does.sql": "4dd8f76c5a3f843c417c9dd54dcb110b2de7a0e4f90c1806cb472102987d83d7"
+  "0330_a_scope_gets_the_same_allowance_the_office_does.sql": "4dd8f76c5a3f843c417c9dd54dcb110b2de7a0e4f90c1806cb472102987d83d7",
+  "0331_a_document_can_gain_its_original_file.sql": "3dd000af942fa6e78d282d82d2658f7a46290d23e3c095685cce789e6901ce29",
+  "0332_a_drive_file_becomes_a_document.sql": "b372e6dff502a2d3a6f403e0d8402fd9152776cb3be562b2dbf9d4990aff216a",
+  "0333_the_drive_claim_is_verified_now.sql": "1bef512b1713b10d91278339809589758eb12a8e445fcf9b3c8ed7b00ae69cd7"
 }

@@ -49,6 +49,7 @@ import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
+import { driveReadHandler } from '../handlers/drive-read.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { jobTracesHandler } from '../handlers/job-traces.ts'
 import { mailHandler } from '../handlers/mail.ts'
@@ -310,6 +311,9 @@ export const buildPass = async (
     capacityHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     briefingHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     driveWatchHandler(db),
+    // #96. The other half of what drive.watch asks about: "Add them to the
+    // project as source documents" was an option nothing implemented.
+    driveReadHandler({ db, projectRef, serviceKey }),
     collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off

@@ -120,11 +120,11 @@ try {
         await one(`
           insert into public.documents
             (project_id, connector, external_ref, title, doc_type, content,
-             content_fingerprint, content_chars, fetched_at, origin${extra === '' ? '' : ', ' + extra.split('=')[0]})
+             content_fingerprint, content_chars, fetched_at, origin${extra === '' ? '' : `, ${extra.split('=')[0]}`})
           values (${lit(projectId)}::uuid, 'upload', ${lit(`${SLUG}-${title}`)},
                   ${lit(title)}, 'note', 'body',
                   encode(extensions.digest(${lit(`${SLUG}-${title}`)}, 'sha256'), 'hex'),
-                  4, app.now_utc(), 'source'${extra === '' ? '' : ', ' + extra.split('=').slice(1).join('=')})
+                  4, app.now_utc(), 'source'${extra === '' ? '' : `, ${extra.split('=').slice(1).join('=')}`})
           returning document_id::text as id
         `)
       ).id,

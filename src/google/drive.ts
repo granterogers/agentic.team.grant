@@ -179,6 +179,128 @@ export async function driveAccess(
   return access
 }
 
+/**
+ * What Drive gives back when you ask for a file itself.
+ *
+ * `bytes` for anything with a real file behind it; `text` for a Google Doc,
+ * which has no bytes to download and must be EXPORTED into a format that does.
+ * Never both — the caller stores one or reads the other.
+ */
+export interface DriveContent {
+  readonly bytes: Uint8Array | null
+  readonly text: string | null
+  /** The mime type of what came back, which for an export is not the file's. */
+  readonly mime: string
+  readonly error: string | null
+}
+
+/**
+ * Google's own formats have no bytes, so they are exported instead.
+ *
+ * A Doc, Sheet or Slides file is a server-side object; `alt=media` on one
+ * answers 403 with "Only files with binary content can be downloaded". The
+ * export target is chosen for what the office does with it — plain text for a
+ * Doc, because the corpus is text and a .docx would have to be parsed by
+ * something that does not exist here; CSV for a Sheet for the same reason.
+ * PDF for Slides, because slides as plain text are meaningless and a PDF is at
+ * least readable in the studio's own viewer (#96).
+ */
+const EXPORT_AS: Readonly<Record<string, string>> = {
+  'application/vnd.google-apps.document': 'text/plain',
+  'application/vnd.google-apps.spreadsheet': 'text/csv',
+  'application/vnd.google-apps.presentation': 'application/pdf',
+}
+
+/** Whether this mime type is one of Google's own server-side formats. */
+export const isGoogleFormat = (mime: string): boolean =>
+  mime.startsWith('application/vnd.google-apps.')
+
+/**
+ * Read one file out of Drive.
+ *
+ * `drive.readonly` already permits this — readonly restricts WRITES, not
+ * downloads — so this needs no new scope, no reconnect and no credential
+ * Grant has not already granted. That matters, because
+ * `connector_capabilities` has claimed since 0300 that the office can
+ * *"read a file's text"* through Drive, marked `verified_by: 'suite'`, with
+ * nothing in the repository implementing it. Every agent's connector sheet has
+ * been telling them so. This is the function that makes the claim true; the
+ * alternative was disabling the row, and a capability the credential already
+ * covers is worth ten minutes rather than a retraction.
+ *
+ * A folder is refused rather than downloaded, because `alt=media` on one
+ * returns a confusing 403 rather than saying what is wrong.
+ *
+ * The size ceiling is the bucket's (0205), checked BEFORE the download rather
+ * than after: fetching ninety megabytes to discover it cannot be stored spends
+ * the bandwidth and the time for nothing.
+ */
+export async function readFile(
+  access: GoogleAccess,
+  fileId: string,
+  mimeType: string,
+  fetchImpl: typeof fetch = fetch,
+  maxBytes = 100 * 1024 * 1024,
+): Promise<DriveContent> {
+  const fail = (error: string): DriveContent => ({ bytes: null, text: null, mime: '', error })
+
+  if (mimeType === 'application/vnd.google-apps.folder') {
+    return fail('that is a folder, not a file')
+  }
+
+  const exportAs = EXPORT_AS[mimeType]
+  if (isGoogleFormat(mimeType) && exportAs === undefined) {
+    return fail(`Drive cannot export a ${describeKind(mimeType)}`)
+  }
+
+  const url =
+    exportAs === undefined
+      ? `${API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`
+      : `${API}/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportAs)}`
+
+  const r = await fetchImpl(url, { headers: { Authorization: `Bearer ${access.accessToken}` } })
+  if (!r.ok) {
+    const detail = (await r.text().catch(() => '')).slice(0, 200)
+    return fail(`drive ${String(r.status)}: ${detail}`)
+  }
+
+  /*
+    The header is a hint, not a promise — Drive omits it on some exports — so
+    it is checked when present and the real length is checked after. Both, not
+    either: the header saves a pointless download and only the real length is
+    true.
+  */
+  const claimed = Number(r.headers.get('content-length') ?? '0')
+  if (claimed > maxBytes) {
+    return fail(`that file is ${String(Math.round(claimed / 1024 / 1024))} MB, over the limit`)
+  }
+
+  const buffer = await r.arrayBuffer()
+  if (buffer.byteLength > maxBytes) {
+    return fail(
+      `that file is ${String(Math.round(buffer.byteLength / 1024 / 1024))} MB, over the limit`,
+    )
+  }
+  if (buffer.byteLength === 0) return fail('Drive returned an empty file')
+
+  /*
+    An export comes back as TEXT and is stored as text; a download comes back
+    as BYTES and is stored in the bucket. Returning both for either would make
+    every caller decide which one it meant, which is the decision this
+    function exists to make once.
+
+    A PDF export (Slides) is the exception the shape already covers: it is a
+    binary export, so it takes the bytes branch by its target mime type rather
+    than by whether it was exported.
+  */
+  const outMime = exportAs ?? mimeType
+  const isText = outMime.startsWith('text/') || outMime === 'application/json'
+  if (isText) {
+    return { bytes: null, text: new TextDecoder().decode(buffer), mime: outMime, error: null }
+  }
+  return { bytes: new Uint8Array(buffer), text: null, mime: outMime, error: null }
+}
+
 /** A person's description of a Drive mime type. */
 export function describeKind(mime: string): string {
   if (mime === 'application/vnd.google-apps.folder') return 'folder'
