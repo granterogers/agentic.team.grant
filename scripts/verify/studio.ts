@@ -333,6 +333,33 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('talk-about-a-document')
 
+    /*
+      IMPORT TO PROJECT, open (#28).
+
+      Captured because the sheet is the whole of that Issue's user-facing half,
+      and §14A's loop is render, capture, LOOK. A form nobody has looked at is a
+      form with a 12px label and a select that zooms the page on focus, and
+      neither of those shows up in any check.
+
+      Guarded: the mock has one output with an id, and a data shape that grows
+      an unimportable row later should not fail the capture run.
+    */
+    await page.locator('[data-tab="team"]').click()
+    await page.waitForTimeout(400)
+    const outputsTab = page.locator('[data-sub="outputs"]').first()
+    if ((await outputsTab.count()) > 0) {
+      await outputsTab.click()
+      await page.waitForTimeout(400)
+    }
+    const importBtn = page.locator('[data-import]').first()
+    if ((await importBtn.count()) > 0) {
+      await importBtn.click()
+      await page.waitForTimeout(700)
+      await shoot('import-to-project')
+      await page.locator('[data-import-close]').first().click()
+      await page.waitForTimeout(400)
+    }
+
     await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
 

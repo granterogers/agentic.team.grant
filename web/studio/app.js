@@ -1876,11 +1876,27 @@ function teamTab(p) {
               </span>
             </div>`}
         <div class="wctl">
-          ${r.state === 'review' ? `
-            <button class="btn primary" data-decide="approve" data-row-id="${esc(r.id)}">Add to project</button>
-            <button class="btn" data-decide="discard" data-row-id="${esc(r.id)}">Drop</button>` : ''}
-          ${r.state === 'approved' || r.state === 'discarded'
-            ? `<button class="btn" data-decide="reopen" data-row-id="${esc(r.id)}">Undo</button>` : ''}
+          <!--
+            IMPORT TO PROJECT is a STEP, not a button (#28).
+
+            The specification draws it as its own box with four things chosen
+            inside it, and the reason is that the moment an output enters the
+            project is the only moment anybody will ever choose them. "Add to
+            project" as a single press meant a document with no collection, no
+            tags and no relations, filed nowhere, findable only by scrolling.
+
+            Opening the sheet rather than importing immediately, and the sheet
+            can still be submitted with nothing filled in — that means "yes, and
+            I have nothing to add", which is a real answer.
+
+            No backticks in this comment: template literal.
+          -->
+          ${r.state === 'review' && r.output?.id ? `
+            <button class="btn primary" data-import="${esc(r.output.id)}"
+              data-import-title="${esc(r.output.title)}">Import to project…</button>
+            <button class="btn" data-drop="${esc(r.output.id)}">Drop</button>` : ''}
+          ${(r.state === 'approved' || r.state === 'discarded') && r.output?.id
+            ? `<button class="btn" data-undecide="${esc(r.output.id)}">Undo</button>` : ''}
           ${talkBtn('request', r.id, r.ask)}
         </div>
       </div>
@@ -3981,6 +3997,163 @@ function appearanceTab() {
   without asking, what they are plugged into, how they reach you, what it
   costs, and how it looks.
 */
+/**
+ * IMPORT TO PROJECT — the step, in a sheet (#28).
+ *
+ * Four fields, all optional, and each one is a thing that can only sensibly be
+ * chosen NOW: a collection, some tags, the task it belongs to, and the source
+ * it came out of. Once the document is in the gallery among eighty others,
+ * nobody goes back and files it.
+ *
+ * Provenance is deliberately absent from the form. `import_output` takes it
+ * from the output itself — the job and the author — so there is nothing here to
+ * fill in wrongly, and #28 asks for it to be *"carried automatically and not
+ * removable"*. It is shown, as a line of prose, so Grant can see what will be
+ * recorded.
+ *
+ * Uses the viewer element rather than a third overlay: `sheet()` already
+ * handles Escape, the backdrop, focus and the shell blur, and CLAUDE.md records
+ * that five copies of that behaviour drift the first time one changes.
+ */
+function importSheet(p) {
+  const v = $("#viewer")
+  if (v === null || state.importing === null || state.importing === undefined) return
+  const it = state.importing
+  const tasks = (p.tasks ?? []).filter((t) => t.state !== 'done')
+  const sources = (p.sources ?? []).filter((x) => x.id)
+  const collections = [...new Set((p.documents ?? []).flatMap((d) => d.collections ?? []))]
+
+  /*
+    `.sheet`, which is the class that IS the frame.
+
+    The first draft wrote `.sheetin`, which does not exist anywhere in the
+    stylesheet — so the sheet had no surface, no border, no padding and no
+    max-height: the header rendered its own white block and the four fields and
+    both buttons sat loose on the page behind it, half outside the card.
+
+    Nothing failed. `smoke`, `check:templates` and `verify:wired` were all green
+    — a class that does not exist is not a syntax error, and no check reads the
+    stylesheet. Found by opening the PNG, which is what §14A's loop is for.
+
+    `.sheethead` below has negative margins sized to `.sheet`'s padding, so the
+    two only work together.
+  */
+  v.innerHTML = `<div class="sheet importsheet" role="dialog" aria-modal="true"
+       aria-label="Import to project">
+    <!--
+      The artefact, then where it is going. A form is what this IS; a transfer
+      is what it MEANS, and the page glyph plus the arrow says the second in the
+      space the first was using anyway.
+
+      The close control is the one the sheet header already has, not a bare
+      icon button: that header is a flex row and its existing close class
+      already undoes the floating version's positioning. Inventing a second
+      one put the X hard against the title instead of at the right edge.
+
+      No backticks in this comment: template literal.
+    -->
+    <header class="sheethead">
+      <span class="ipage">${pageSvg(it.title, 'made')}</span>
+      <div style="flex:1 1 auto;min-width:0">
+        <span class="t-label">Import to project</span>
+        <h2 style="margin:2px 0 0">${esc(it.title)}</h2>
+        <span class="t-meta">Into ${esc(p.name)}</span>
+      </div>
+      <button class="close inhead" data-import-close aria-label="Close">✕</button>
+    </header>
+
+    <label class="ifield">
+      <span class="t-label">Collection</span>
+      <input data-import-collection list="import-collections" placeholder="Research, Planning, Reference…"
+             aria-label="Which collection this belongs in">
+      <datalist id="import-collections">
+        ${collections.map((c) => `<option value="${esc(c)}"></option>`).join('')}
+      </datalist>
+      <span class="t-meta">A new name makes a new collection.</span>
+    </label>
+
+    <label class="ifield">
+      <span class="t-label">Tags</span>
+      <input data-import-tags placeholder="pricing, q4, competitor"
+             aria-label="Tags, separated by commas">
+      <span class="t-meta">Comma separated. Lower case, so filtering works.</span>
+    </label>
+
+    <label class="ifield">
+      <span class="t-label">Related task</span>
+      <select data-import-task aria-label="The task this belongs to">
+        <option value="">— none —</option>
+        ${tasks.map((t) => `<option value="${esc(t.id ?? '')}">${esc(t.title)}</option>`).join('')}
+      </select>
+    </label>
+
+    <label class="ifield">
+      <span class="t-label">Came from</span>
+      <select data-import-source aria-label="The source this came out of">
+        <option value="">— none —</option>
+        ${sources.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}
+      </select>
+    </label>
+
+    <!--
+      Shown, not asked. The office takes the job and the author off the output
+      itself, so there is nothing here to get wrong, and #28 wants provenance
+      unremovable rather than editable.
+
+      No backticks in this comment: template literal.
+    -->
+    <p class="t-meta iprov">Who wrote it and which job it came from are recorded
+      automatically, and cannot be edited afterwards.</p>
+
+    <div class="ifoot" data-saidwrap>
+      <span class="t-meta" data-said></span>
+      <button class="btn" data-import-close>Cancel</button>
+      <button class="btn primary" data-import-go="${esc(it.output)}">Import</button>
+    </div>
+  </div>
+  <div class="sheetfade" aria-hidden="true"></div>`
+
+  // Two of them — the header X and the Cancel button — so this is a loop, not
+  // a `?.` on the first one.
+  for (const b of v.querySelectorAll("[data-import-close]")) {
+    b.addEventListener("click", () => {
+      state.importing = null
+      sheet(v, false)
+    })
+  }
+
+  $("[data-import-go]", v)?.addEventListener("click", async (e) => {
+    const b = e.currentTarget
+    const tags = String($("[data-import-tags]", v)?.value ?? "")
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t !== "")
+    const done = await attempt(
+      b,
+      "Importing…",
+      () =>
+        act("output_import", {
+          p_output: b.dataset.importGo,
+          p_collection: String($("[data-import-collection]", v)?.value ?? "").trim() || null,
+          // An empty array and null are different to the RPC: null LEAVES the
+          // tags alone, an empty array replaces them with nothing. A new
+          // document has none either way, so null is the honest one.
+          p_tags: tags.length > 0 ? tags : null,
+          p_related_task: $("[data-import-task]", v)?.value || null,
+          p_related_source: $("[data-import-source]", v)?.value || null,
+        }),
+      (r) => `In the project${r?.collection ? ` under ${String(r.collection)}` : ""}.`,
+    )
+    if (done) {
+      state.importing = null
+      sheet(v, false)
+      await refresh()
+    }
+  })
+
+  sheet(v, true)
+}
+
 function settingsSheet() {
   const v = $('#settings')
   const body =
@@ -5815,7 +5988,45 @@ function render() {
     })
   }
 
-  // The review gate. Approving is what moves an artifact into the project.
+  /*
+    The review gate, and it lives in the office now (#28).
+
+    `workspace.decide` wrote to `localStorage`, so the decision Grant made on a
+    laptop was invisible on his phone and invisible to every agent — and the
+    thing #28 calls "what moves an artifact into the project" moved nothing.
+    Import creates the document; Drop and Undo set `reviewer_status`.
+  */
+  for (const b of root.querySelectorAll('[data-import]')) {
+    b.addEventListener('click', () => {
+      state.importing = { output: b.dataset.import, title: b.dataset.importTitle }
+      importSheet(byId(state.project))
+    })
+  }
+  for (const b of root.querySelectorAll('[data-drop]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Dropping…',
+        () => act('output_decide', { p_output: b.dataset.drop, p_verdict: 'rejected' }),
+        'Dropped. It stays on the record.',
+      )
+      if (done) await refresh()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-undecide]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Undoing…',
+        () => act('output_decide', { p_output: b.dataset.undecide, p_verdict: 'pending' }),
+        'Back in the waiting list.',
+      )
+      if (done) await refresh()
+    })
+  }
+
+  // The old localStorage gate, still here for the mock rows that carry no
+  // output id — the prototype data has no real outputs behind it.
   for (const b of root.querySelectorAll('[data-decide]')) {
     b.addEventListener('click', () => {
       const verdict = b.dataset.decide

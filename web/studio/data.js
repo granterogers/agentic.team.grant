@@ -230,7 +230,13 @@ const FALLBACK_PROJECTS = [
         from: 'Grant · chat', who: 'oliver', asked: '2 days ago',
         context: { kind: 'project', title: 'Legacy Coaching Course' },
         state: 'review', delivered: '2 days ago',
-        output: { title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+        /*
+          `id` is the OUTPUT's, since #28. The row's own `id` is the JOB's, and
+          IMPORT TO PROJECT acts on one output — a job can produce several and
+          the card is showing one of them. Without an id here the mock renders
+          the old single-press button and the sheet cannot be captured at all.
+        */
+        output: { id: 'o1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
         derived: ['WS01 — Legacy Opening Assessment', 'Journey VS Destination'],
       },
       {

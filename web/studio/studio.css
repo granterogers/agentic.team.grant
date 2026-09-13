@@ -71,6 +71,52 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 :root { --rail: 220px; }
 .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
 
+/*
+  The import sheet (#28).
+
+  A form, and it should read as one — four labelled fields stacked, not a grid
+  of controls. It reuses `.sheetin` so the frame, the blur behind and the
+  escape behaviour are the ones every other sheet has; only the inside is new.
+
+  16px on every input and select, not for looks: below that iOS Safari zooms
+  the whole page on focus, and a form you have to pinch back out of after every
+  field is a form nobody completes.
+*/
+/* `.sheet` provides the frame; this only arranges what is inside it. */
+.importsheet { display: grid; gap: var(--s4); align-content: start; }
+
+/*
+  The artefact itself, at the head of the sheet.
+
+  Small — 44px — because it is an identifier and not a preview: the point is
+  that Grant can see he is filing THIS thing, and a large thumbnail would make
+  the sheet about looking at it rather than about where it goes.
+*/
+.ipage { flex: none; width: 44px; height: 56px; display: block; }
+.ipage svg { width: 100%; height: 100%; border-radius: 3px; box-shadow: var(--lift-1); }
+
+.ifield { display: grid; gap: 6px; }
+.ifield input,
+.ifield select {
+  min-height: 44px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: var(--r-control);
+  background: var(--ground); color: var(--ink);
+  font: inherit; font-size: 16px; width: 100%;
+}
+.ifield input:focus-visible,
+.ifield select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The line that says what is recorded whether or not he fills anything in. */
+.iprov {
+  margin: 0; padding: var(--s3);
+  border-left: 2px solid var(--edge); background: var(--wash);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+}
+
+.ifoot { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+/* The message takes the slack, so the two buttons stay together on the right. */
+.ifoot [data-said] { flex: 1 1 auto; min-width: 0; }
+
 @media (max-width: 860px) { .shell { grid-template-columns: minmax(0, 1fr); } }
 
 .rail {
@@ -4205,4 +4251,35 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
     so it is pinned to the viewport width instead of the trigger.
   */
   .sendmenu { min-width: 0; width: max-content; max-width: calc(100vw - var(--s5)); }
+}
+
+@media (max-width: 860px) {
+  /*
+    The import sheet on a phone (#28). At the END, with the other phone
+    overrides — a media query adds no specificity and the base rules are two
+    thousand lines up.
+
+    The buttons go full width and the message above them, because at 390px
+    "Cancel" and "Import" side by side with a sentence between them wraps into
+    three ragged rows.
+  */
+  /*
+    The import sheet's HEADER on a phone (#28).
+
+    First capture: the header took 700px of a 900px screen. The h2 inherits a
+    desktop size, so "Course one-pager" wrapped onto two enormous lines and
+    "Into Legacy Coaching Course" onto two more — and the form the sheet exists
+    for was entirely below the fold.
+
+    Which is Grant's complaint about Slack — "how much space is being taken up"
+    — reproduced in the thing built while fixing it. §14A's loop caught it on
+    the first look, which is the whole argument for capturing before shipping.
+  */
+  .importsheet .sheethead { gap: var(--s3); padding-bottom: var(--s3); }
+  .importsheet .sheethead h2 { font-size: 20px; line-height: 1.15; }
+  .importsheet .ipage { width: 34px; height: 44px; }
+
+  .ifoot { display: grid; gap: var(--s2); }
+  .ifoot .btn { width: 100%; }
+  .ifoot [data-said] { order: -1; }
 }

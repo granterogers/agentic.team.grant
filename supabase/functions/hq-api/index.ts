@@ -456,6 +456,30 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     second asset, which only `compare` needs and the RPC refuses without.
   */
   send_to_agent: { fn: 'send_to_agent', required: ['p_kind', 'p_id', 'p_action'] },
+  /*
+    The import gate (#28, migration 0315).
+
+    "Approving is what moves an artifact into the project", and until now that
+    decision lived in `localStorage` — a note in Grant's browser that did not
+    survive a different device and that no agent could see. `approve_document`
+    had existed with a public wrapper the whole time and nothing called it.
+
+    Only the document is required. A sheet that refuses to submit until four
+    fields are filled in is a sheet he closes; approving with nothing chosen
+    means "yes, and I have nothing to add".
+  */
+  /*
+    IMPORT TO PROJECT — where an output becomes a document (#28, 0317).
+
+    Only the output is required. The other five are the sheet's fields, and a
+    sheet that will not submit until they are all filled in is a sheet Grant
+    closes: importing with nothing chosen means "yes, and I have nothing to
+    add".
+  */
+  output_import: { fn: 'import_output', required: ['p_output'] },
+  output_decide: { fn: 'decide_output', required: ['p_output', 'p_verdict'] },
+  document_approve: { fn: 'approve_document', required: ['p_document'] },
+  document_discard: { fn: 'discard_document', required: ['p_document'] },
   document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
   document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
   collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },

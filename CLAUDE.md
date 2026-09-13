@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **314 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **322 applied.**
 
 ---
 
@@ -676,6 +676,37 @@ Each of these cost real time. They are here so they cost it once.
   `slack:tidy`'s pattern widened to match. Grant had already asked for this
   once — *"I don't want a bunch of weird alphanumeric channel names"* — and the
   answer that time was a cleanup rule, which only runs when the run finishes.
+- **NULL is not equal to NULL in a unique index, so `on conflict` catches
+  nothing.** `documents_one_per_external_ref` is unique on
+  `(connector, external_parent_ref, external_ref)`; an imported output has a
+  NULL parent, two nulls are distinct, and importing the same output twice made
+  two documents. It took three migrations to make the conflict target MATCH the
+  index (0317 guessed the columns, 0319 read `pg_indexes`, 0320 added the
+  partial predicate) and a fourth to notice that matching it was not enough
+  (0322). The fix is a narrow partial index whose columns contain nothing
+  nullable — not `= ''`, which is 0177's sentinel again.
+- **A comment claiming a property is worth nothing without a check behind it.**
+  0317's own header said *"pressing Import twice imports one document"*. It
+  did not, for five migrations, and `verify:import` found it on its first
+  complete run.
+- **The backtick trap is not only about HTML comments in `web/`.** Three times
+  in one session: an HTML comment in `app.js`, a SQL comment inside a
+  migration heredoc, and a SQL comment inside a template literal in
+  `scripts/verify/import.ts`. `check:templates` covers `web/**` only, so the
+  other two announce themselves as an esbuild parse error a long way from the
+  cause. No backticks inside any comment that lives inside a template literal.
+- **Copying another suite's teardown copies its assumptions.**
+  `verify:import` cancelled its job the way `verify:proposes` does — but that
+  job was `complete`, which is TERMINAL, and `enforce_job_transition` refuses
+  complete → cancelled and is right to: a finished job did not later get
+  cancelled. Cancelling is the teardown for a job left QUEUED. Check which
+  state your suite actually leaves behind.
+- **A class name that does not exist is not an error.** The import sheet was
+  written with `.sheetin`, which appears nowhere in the stylesheet, so it had
+  no surface, no border, no padding and no max-height — the header drew its own
+  white block and the fields and both buttons sat loose on the page behind it.
+  `smoke`, `check:templates` and `verify:wired` were all green. Found by
+  opening the PNG, which is what §14A's loop is for.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

@@ -312,5 +312,13 @@
   "0311_one_vocabulary_for_both_halves_of_the_graph.sql": "b4bc948b9306b28a12170c1eac40e1703aa5b206776b34d4c4be838ca3253fc4",
   "0312_an_asset_can_be_renamed_tagged_and_filed.sql": "0fe3e6dc49b7442ed3ab5d60d7f12b567990854c89d1d0f6a45e77dfb826af3c",
   "0313_send_this_to_someone_and_say_what_to_do_with_it.sql": "56c7b2a382d70de466a0c7802d4910d5f3b8fb0500ba421fdcb50dabbf861ba9",
-  "0314_the_studio_is_the_teamhq_channel.sql": "0620ee3cd5609e01ef52e8f51aff432b9df0068b5e11f375d1c4c1c151ea4175"
+  "0314_the_studio_is_the_teamhq_channel.sql": "0620ee3cd5609e01ef52e8f51aff432b9df0068b5e11f375d1c4c1c151ea4175",
+  "0315_approving_is_what_moves_it_into_the_project.sql": "b4e8ed7f92df0a8034e09f10e539c7bf0eff7f36380957b9b685fdf3259c1841",
+  "0316_a_source_has_a_name_too.sql": "a281c34e1b23ddcd21751bacc018a88760b06f0b95cda1fb6e68130a3c0dec2f",
+  "0317_import_to_project_is_where_an_output_becomes_a_document.sql": "c85b4acad03caefe0f58fa799ead51c0acc23da2e6cafd7ed6ad5e19dbe8855b",
+  "0318_the_card_knows_which_output_it_is_showing.sql": "c9be38ea3d3d84515492439519725147a8927c7c1711115454d41ee70845570d",
+  "0319_the_conflict_target_is_the_index_that_exists.sql": "e68f04e27ae197975a6dd11e4eab90c53d7e86f43152fea33cd008bb59906447",
+  "0320_a_partial_index_needs_its_predicate_in_the_conflict_target.sql": "543189a283c218602fb00da115d565314b9d93d07671fcbc65bd9f54f0b54d86",
+  "0321_dropping_an_output_is_a_decision_not_a_deletion.sql": "eb5f67188f94ec7e18d972e49083269b21f319cbcedb469b38cf50963fb1be85",
+  "0322_null_is_not_equal_to_null_in_a_unique_index.sql": "94814d2ea082a5090b2802c7e8e61a94f0257b5df287253d80ce7b0033f0f9fd"
 }
