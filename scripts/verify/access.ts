@@ -183,6 +183,105 @@ const audit = async (
     }
   }
 
+  /*
+    Every control has a name a screen reader can say (#200).
+
+    axe's `button-name` and `link-name` rules cover most of this and are
+    already running above — but they are scoped to what axe considers a
+    violation, and an icon button whose only label is a `title` passes axe
+    while being read aloud inconsistently across screen readers. So this asks
+    the browser's own accessible-name computation, on every visible
+    interactive element, on the screen the audit is standing on.
+
+    #200 suggested growing an existing audit rather than writing a new one, and
+    named `verify:wired` — but that one collects `data-*` attributes and never
+    computes a name, while this one is already walking the same screens with
+    axe loaded. Here is cheaper and closer to the question.
+  */
+  const nameless = (await page.evaluate(`(() => {
+    const out = []
+    const sel = 'button, a[href], [role="button"], [role="tab"], input, select, textarea'
+    for (const el of document.querySelectorAll(sel)) {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) continue
+      const cs = getComputedStyle(el)
+      if (cs.visibility === 'hidden' || cs.display === 'none') continue
+      const name = (
+        el.getAttribute('aria-label') ??
+        (el.getAttribute('aria-labelledby') === null
+          ? null
+          : (document.getElementById(el.getAttribute('aria-labelledby'))?.textContent ?? null)) ??
+        (el.textContent ?? '') ??
+        ''
+      ).trim()
+      const alt = el.querySelector('img[alt]')?.getAttribute('alt') ?? ''
+      const titled = el.getAttribute('title') ?? ''
+      if (name === '' && alt.trim() === '' && titled.trim() === '') {
+        out.push(el.tagName.toLowerCase() + '.' + String(el.className).slice(0, 34))
+      }
+    }
+    return out
+  })()`)) as string[]
+  check(
+    `${label} — every visible control has a name`,
+    nameless.length === 0
+      ? 'all named'
+      : `${String(nameless.length)} without one: ${nameless.slice(0, 3).join(' · ')}`,
+    nameless.length === 0,
+  )
+
+  /*
+    Heading order, and the landmarks around it (#200).
+
+    A screen reader user moves by heading and by landmark before they read
+    anything, so a page whose levels jump from h1 to h4 is a page whose
+    structure lies about what contains what. Checked as "never skips a level
+    going down", which is the actual rule — going back UP any number of levels
+    is normal and correct at the end of a section.
+  */
+  const structure = (await page.evaluate(`(() => {
+    const levels = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+      .filter((h) => h.getBoundingClientRect().height > 0)
+      .map((h) => Number(h.tagName.slice(1)))
+    const skips = []
+    for (let i = 1; i < levels.length; i += 1) {
+      if (levels[i] - levels[i - 1] > 1) skips.push(levels[i - 1] + '->' + levels[i])
+    }
+    return {
+      levels,
+      skips,
+      main: document.querySelectorAll('main, [role="main"]').length,
+      nav: document.querySelectorAll('nav, [role="navigation"]').length,
+      h1: levels.filter((l) => l === 1).length,
+    }
+  })()`)) as { levels: number[]; skips: string[]; main: number; nav: number; h1: number }
+  /*
+    The count is in the message on purpose.
+
+    A screen with ONE heading can never skip a level, so this check passes for
+    the wrong reason and would keep passing through any amount of structural
+    decay — the shape of "a check that asks whether a list is an ARRAY passes
+    while the list is wrong". Printing how many were found is what stops a
+    green line meaning nothing: today it says `1 heading`, which is a finding
+    in itself and is filed rather than asserted here, because adding headings
+    is a design change and not a check's business.
+  */
+  check(
+    `${label} — the headings never skip a level`,
+    structure.skips.length === 0
+      ? `${String(structure.levels.length)} heading${structure.levels.length === 1 ? '' : 's'}: h${structure.levels.join(', h')}`.slice(
+          0,
+          70,
+        )
+      : `skips ${structure.skips.join(', ')}`,
+    structure.skips.length === 0,
+  )
+  check(
+    `${label} — and there is exactly one main landmark to jump to`,
+    `${String(structure.main)} main, ${String(structure.nav)} nav`,
+    structure.main === 1 && structure.nav >= 1,
+  )
+
   check(`${label} — nothing thrown`, thrown[0] ?? 'none', thrown.length === 0)
   await ctx.close()
 }
