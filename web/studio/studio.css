@@ -4875,3 +4875,60 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
    this stylesheet already records. */
 .u-surf li .m { margin-left: auto; }
 .u-surf li .m + .m { margin-left: var(--s2); }
+
+/* --- Which state each conversation surface is in (#198) ---------------------
+   Above the connector grid, and deliberately a LIST rather than more cards:
+   these are five short states read together, and five more tiles would say
+   "these are the same kind of thing as the connectors below", which is the
+   generic-AI-UI answer and also untrue. */
+.convstates { margin: var(--s5) 0 var(--s2); }
+.convstates h3 { margin: 0 0 var(--s3); }
+.convlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.conv {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: start;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.convbody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.convbody b { font: 600 14px/1.3 var(--text); }
+/* `.m` and `.meta` are muted only under an `li`; `.t-meta` is not, so these
+   are the right class. Checked rather than assumed — the rule is
+   `li .m, .meta { … }` and its ancestor requirement has caught people. */
+.convbody .t-meta { font-size: 12.5px; line-height: 1.4; }
+.convword { white-space: nowrap; align-self: center; opacity: .85; }
+
+/* The dot carries the state as colour, and `.convword` carries it as a word.
+   Colour alone is the failure axe exists to catch, and it is also just harder
+   to read at a glance. */
+.convdot {
+  width: 10px; height: 10px; border-radius: 50%;
+  margin-top: 5px;
+  background: var(--ink-2);
+}
+.c-carrying   .convdot { background: oklch(0.68 0.15 150); }
+.c-here       .convdot { background: var(--accent); }
+.c-quiet      .convdot { background: oklch(0.72 0.10 220); }
+.c-degraded   .convdot { background: oklch(0.72 0.16 70); }
+.c-degraded   { border-color: color-mix(in srgb, oklch(0.72 0.16 70) 40%, var(--edge)); }
+.c-disconnected .convdot { background: oklch(0.62 0.19 25); }
+.c-disconnected { border-color: color-mix(in srgb, oklch(0.62 0.19 25) 35%, var(--edge)); }
+.c-never      .convdot { background: var(--ink-2); }
+.c-unchecked  .convdot {
+  background: transparent;
+  border: 2px solid var(--ink-2);
+  width: 10px; height: 10px;
+}
+
+@media (max-width: 560px) {
+  /* The word wraps under the body rather than squeezing the sentence into a
+     column of one word per line — the #67 shape, which is not overflow and
+     not small type and so is invisible to every audit that is not a person
+     looking at the capture. */
+  .conv { grid-template-columns: 10px 1fr; }
+  .convword { grid-column: 2; align-self: start; }
+}

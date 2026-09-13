@@ -97,8 +97,19 @@ for (const file of FILES) {
 
 if (bad > 0) {
   console.log(`\ncheck:templates FAILED — ${bad} problem${bad === 1 ? '' : 's'}`)
-  console.log('A backtick in an HTML comment inside a template literal ends the string.')
-  console.log('The page then renders nothing. Use plain words inside those comments.')
+  /*
+    The advice, but only when it is the advice.
+
+    This check does two jobs — it parses each file as a module, and it looks
+    for a backtick inside an HTML comment — and it printed the backtick
+    sentence for BOTH. A duplicate `const` sent somebody hunting for a backtick
+    that was not there while the error above said, correctly, "Identifier
+    already declared". A failure message that names the wrong cause is worse
+    than a bare count: it points somewhere, and somewhere is wrong.
+  */
+  console.log('Each line above says what it found. A backtick inside an HTML comment inside a')
+  console.log('template literal ends the string and the page then renders nothing — but any')
+  console.log('other parse error is reported here too, and reads exactly as it says.')
   process.exit(1)
 }
 console.log(

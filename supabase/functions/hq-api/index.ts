@@ -145,6 +145,15 @@ const SECTIONS: Readonly<
   */
   conversation_growth: { fn: 'conversation_growth' },
   /*
+    Which state each conversation surface is in (#198).
+
+    Not a field on `connections`: that one answers "is this credential alive",
+    and this answers "can Grant have a conversation there, and is anything
+    wrong with it right now" — which needs the credential AND the traffic AND
+    the last day of delivery failures together. Two questions, two sections.
+  */
+  conversation_channels: { fn: 'conversation_channels' },
+  /*
     The MCP server, as a page (#91).
 
     Its own section rather than part of `studio_settings`, because it is the

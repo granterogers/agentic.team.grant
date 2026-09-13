@@ -345,5 +345,7 @@
   "0344_the_conversation_can_be_measured_rather_than_guessed.sql": "0681c69e3e14f556ee63bac638bc20ccd7aa23a122f481a3a7dc71f797bcfa31",
   "0345_a_message_is_not_lost_because_a_provider_was_down.sql": "d1ce4939b39794088b8d3d6b8f814337aedca8843d171f7e03829a8d68c76578",
   "0346_the_thread_says_what_could_not_be_delivered.sql": "710f4660a7880d17286eef308b6c5e4942c58e251ecc8af993a806abfcc9af45",
-  "0347_try_again_from_the_thread.sql": "71f45adf96200aa68940e66a9d42f51b3d3fcf78cc0e405d910069dcb33214bd"
+  "0347_try_again_from_the_thread.sql": "71f45adf96200aa68940e66a9d42f51b3d3fcf78cc0e405d910069dcb33214bd",
+  "0348_what_state_each_conversation_channel_is_in.sql": "bea9162d33e19b3b397c0ea0a30516b9465840f3838990bf824d89f77399ec45",
+  "0349_a_channel_with_no_health_row_is_not_healthy.sql": "a5803308acc636e93e274297938e7ee76e97dbf5cce1d02141da2e8f379810dd"
 }

@@ -259,7 +259,33 @@ const readable = (n) => {
  * why, because a settings pane showing a stack trace is worse than one showing
  * a design.
  */
+/*
+  Which state each conversation surface is in (#198).
+
+  Its own read, allowed to fail on its own. Not folded into the settings
+  payload: it is answerable without paying for that payload, and a failure here
+  should cost this one block rather than blanking the whole Settings screen —
+  the shape of #119, where one slow fetch in a Promise.all left the page
+  saying everything was fine.
+
+  Empty until it has been read. A card with invented states on it is exactly
+  the defect #90 was about, and inventing "connected" is the reassuring
+  direction, which is the worse one.
+*/
+export const CONVO_CHANNELS = []
+
 export async function hydrateSettings(read) {
+  void read('conversation_channels')
+    .then((rows) => {
+      if (Array.isArray(rows)) {
+        CONVO_CHANNELS.length = 0
+        CONVO_CHANNELS.push(...rows)
+      }
+    })
+    .catch(() => {
+      CONVO_CHANNELS.length = 0
+    })
+
   try {
     const d = await read('studio_settings')
     if (!d || !Array.isArray(d.behaviours)) throw new Error('unexpected shape')

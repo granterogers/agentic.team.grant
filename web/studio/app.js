@@ -4016,10 +4016,82 @@ function connectionsTab() {
 }
 
 /** Channels — which surface reaches Grant, and when. */
+/*
+  The conversation's own surfaces, and what state each is in (#198).
+
+  Above the connector grid rather than inside it, because they answer different
+  questions. The grid says "is this credential alive"; this says "can Grant
+  have a conversation there, and is anything wrong with it right now" — which
+  needs the credential AND the traffic AND the last day of delivery failures
+  together, and no one of those can answer it.
+
+  Five states, each with its own sentence from the office rather than a word
+  the page dresses up. #198 asks for never-connected to read as an INVITATION
+  and not an error, and that difference is entirely the wording — so the
+  wording is the RPC's, in one place, and this draws it.
+*/
+function conversationStates() {
+  const rows = config.CONVO_CHANNELS
+  if (!Array.isArray(rows) || rows.length === 0) return ''
+  /*
+    Named `lastSeen`, not `when` — a local `const when` shadows the module
+    namespace imported at the top of this file, so `when.words(iso)` inside it
+    resolves to the arrow function's own binding and throws "when.words is not
+    a function". The throw happens while `settingsSheet` is building its
+    template, BEFORE `innerHTML` is assigned, so the old pane stays on screen
+    and the symptom is "the Channels tab does nothing" — four steps from the
+    cause, and invisible until the page errors were printed.
+  */
+  const lastSeen = (iso) =>
+    iso === null || iso === undefined ? 'never' : when.words(iso)
+  return `<section class="convstates">
+    <h3 class="t-label">The conversation</h3>
+    <ul class="convlist">
+      ${rows.map((c) => `<li class="conv c-${esc(String(c.state))}">
+        <span class="convdot" aria-hidden="true"></span>
+        <div class="convbody">
+          <b>${esc(String(c.label))}</b>
+          <span class="t-meta">${esc(String(c.says))}</span>
+          <span class="t-meta from">
+            ${c.messages > 0
+              ? `${esc(String(c.messages))} message${c.messages === 1 ? '' : 's'}, last ${esc(lastSeen(c.last_at))}`
+              : 'nothing yet'}${c.recent_failures > 0
+              ? ` · ${esc(String(c.recent_failures))} could not be delivered today`
+              : ''}
+          </span>
+        </div>
+        <!--
+          The state as a WORD as well as a colour. A dot alone is the
+          conveyed-by-colour-only failure axe exists to catch, and it is also
+          simply harder to read. No backticks in this comment.
+        -->
+        <span class="t-label convword">${esc(CONVO_WORD[String(c.state)] ?? String(c.state))}</span>
+      </li>`).join('')}
+    </ul>
+  </section>`
+}
+
+/*
+  The state names a person sees. Kept beside the renderer rather than in the
+  RPC because these are labels and the RPC's `says` is the sentence — two
+  registers for two jobs, and putting the label in SQL would mean a migration
+  to reword a chip.
+*/
+const CONVO_WORD = {
+  here: 'You are here',
+  carrying: 'Carrying',
+  quiet: 'Ready',
+  degraded: 'Struggling',
+  disconnected: 'Disconnected',
+  never: 'Not connected',
+  unchecked: 'Unverified',
+}
+
 function channelsTab() {
   return `<div class="setbody">
     <p class="t-lead" style="margin:0">How the office reaches you. Only the Chief of
       Staff sends; everyone else still does the work.</p>
+    ${conversationStates()}
     <div class="servicegrid">
       ${config.CHANNELS.map((c) => {
         const m = MARKS[c.key] ?? { svg: '', tint: 'currentColor' }
