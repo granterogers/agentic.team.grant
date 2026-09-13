@@ -390,9 +390,40 @@ Each of these cost real time. They are here so they cost it once.
   (`document.elementFromPoint` at its centre IS the element) and then
   `click({ force: true })`. And a view transition paints an overlay over the
   WHOLE page for ~900ms, during which every `elementFromPoint` returns the root.
+- **A sweep that presses every control will press the one that hides the
+  others, and the page will remember.** `verify:controls` reported 91 of 182
+  desktop controls as unpressable — the same thirteen on every route, the
+  entire left rail — for weeks, while the phone leg reported 2. The cause is
+  one press: the chevron at the top left collapses the sidebar, and the studio
+  stores that in `localStorage` because a person who collapses a sidebar means
+  it. Every rail control after that press is behind `main`. The buttons still
+  RESOLVE — a collapsed rail clips them rather than removing them, so they keep
+  a box and Playwright counts them as visible — which is why it read as an
+  actionability mystery rather than a shut sidebar. The audit's `openRail()`
+  was called at NAVIGATION, which is one press too early. There is a
+  `shutDock()` beside it that exists for exactly the same reason and had
+  already been learned once (#103).
+- **The rule above the two rules above: `catch {}` around a Playwright click
+  throws away the only thing that says why.** #183 spent three attempts and two
+  ruled-out hypotheses on that skip count, because the actionability log was
+  being discarded. The log names which of the five checks failed and, for
+  occlusion, which element is in the way:
+
+      - element is visible, enabled and STABLE
+      - scrolling into view if needed
+      - <main class="main">…</main> intercepts pointer events
+
+  "Element is not stable" and "intercepts pointer events" have completely
+  different causes and completely different fixes, and a bare count cannot tell
+  you which you have. Two of the three fixes tried for #183 — force-clicking,
+  and a taller viewport — were reasonable, changed nothing, and were reverted;
+  the log found it in one run. **91 pressed / 91 unpressable became 289 / 1,
+  and none of the 198 newly-reached controls was dead** — which is the other
+  half of the lesson: a blind audit is not necessarily hiding defects, and you
+  cannot know that until it can see.
 - **A control that nothing looks up is a control nothing can have wired.**
   `verify:controls` presses things, costs minutes per route, and only covers
-  what it can reach. `npm run verify:wired` walks seventeen screens, collects
+  what it can reach. `npm run verify:wired` walks twenty-one screens, collects
   every `data-*` attribute on every visible button and link, and fails if any
   source file never queries it. It found `data-hire` — the other half of a
   roster feature whose `staff_retire` had existed alone since 0079 — which a

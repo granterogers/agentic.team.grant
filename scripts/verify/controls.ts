@@ -818,11 +818,87 @@ for (const app of APPS) {
           pass. Something in the sweep's own sequence is covering them, and
           that is worth a session of its own rather than a fourth guess.
         */
-        try {
-          await use.click({ timeout: 2500 })
-        } catch {
+        /*
+          #183, and the answer is the one CLAUDE.md predicted after all.
+
+          Ninety-one skips a run on desktop and two on the phone, always the
+          same controls. #183 ruled out "the studio never stops moving" by
+          hit-testing them in a settled page and finding all thirteen
+          reachable — but a hit test measures OCCLUSION, and the actionability
+          log, which `catch {}` had been discarding, says something else:
+
+              locator resolved to <button data-call class="callbtn" …>
+              attempting click action
+                waiting for element to be visible, enabled and STABLE
+                element is not stable
+
+          It resolves, it is visible, it is enabled, and it never stops moving.
+          `breathe()` and `scatter()` run for as long as the page is open and
+          the rail is where the ambient motion lives — which is also exactly
+          why the phone leg never saw it: the rail is not on screen there.
+
+          One retry with `force: true`, and ONLY for that message. Force
+          bypasses occlusion as well as motion, so blanket-forcing would turn a
+          genuinely covered control — the `[data-grip]` class of defect this
+          suite exists to catch — into a green press. "Intercepts pointer
+          events" stays a skip, and so does everything else.
+
+          The reason is recorded either way. A skip with no reason attached is
+          how ninety-one of them sat in a report for weeks reading like
+          coverage.
+        */
+        const press = async (): Promise<string | null> => {
+          /*
+            Re-open the rail first, and this is #183.
+
+            One of the controls this sweep presses is the chevron at the top
+            left — "Collapse the sidebar" — and the page REMEMBERS that, in
+            `localStorage`, because a person who collapses a sidebar means it.
+            The rail then has no width, `main` covers where its buttons are,
+            and every rail control pressed afterwards fails with exactly what
+            the actionability log says:
+
+                - <main class="main">…</main> intercepts pointer events
+              - retrying click action
+                - element is outside of the viewport
+
+            The buttons still RESOLVE — a collapsed rail clips them rather than
+            removing them, so they keep a box and Playwright counts them as
+            visible — which is why this looked like an actionability mystery
+            rather than a shut sidebar. Thirteen rail controls × seven routes =
+            91 skipped a run, on desktop only, because the phone has no
+            collapsing rail. 289 pressed and 1 unpressable afterwards, against
+            91 and 91 before.
+
+            `openRail` was already called at navigation, which is one press too
+            early: the chevron is pressed after it. It is idempotent — it looks
+            for `.shell.shut` and does nothing otherwise — so calling it before
+            every press costs one selector count and closes the hole.
+
+            The same shape as `shutDock` two hundred lines up, which exists
+            because the dock is remembered for the same reason (#103). #183's
+            own guess was right: something in the sweep's own sequence was over
+            them. It is the sweep's own press.
+          */
+          await openRail()
+          try {
+            await use.click({ timeout: 2500 })
+            return null
+          } catch (e) {
+            return e instanceof Error ? e.message : String(e)
+          }
+        }
+        const failure = await press()
+        if (failure !== null) {
           skipped++
-          unreached.push(`${size}/${name}  ${label}`)
+          const why = failure
+            .split('\n')
+            .map((x) => x.trim())
+            .filter((x) => x !== '' && !x.startsWith('Call log'))
+            .slice(0, 6)
+            .join(' · ')
+            .slice(0, 300)
+          unreached.push(`${size}/${name}  ${label}  — ${why}`)
           continue // covered by something else, or moved — not a dead control
         }
         await page.waitForTimeout(260)

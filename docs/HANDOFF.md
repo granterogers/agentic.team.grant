@@ -65,6 +65,26 @@
 > Migrations 0323–0328. Everything is reachable over HTTP and
 > `verify:settings` drives that chain including the browser layer.
 >
+> **Two suites no longer need the whole queue to themselves (#184, ADR in
+> 0329–30).** `verify:slack` and `verify:worker` both refused to start while
+> any job was live anywhere, because dequeue is global — so in a full pass
+> whichever ran second failed on the first one's debris, as "22/26" rather than
+> as "the queue was dirty". `dequeue_job` gained `p_requested_by`, which
+> narrows both the claim and the capacity question to one scope. Both
+> directions now pass back to back with no purge between them.
+>
+> **The control audit had been blind to half the product, and the recorded
+> explanation was the wrong one (#183).** 91 of 182 desktop controls
+> unpressable, the same thirteen every route, the entire left rail — while the
+> phone leg skipped two. The cause is one press: the sweep presses the chevron
+> that collapses the sidebar, the studio REMEMBERS that in `localStorage`, and
+> every rail control after it is behind `main`. The buttons still resolve,
+> because a collapsed rail clips them rather than removing them, which is why
+> it read as an actionability mystery. Found by keeping the actionability log
+> that `catch {}` had been discarding — two reasonable fixes tried before that
+> (force-clicking, a taller viewport) changed nothing and were reverted.
+> **13 unpressable → 0** on the first route measured.
+>
 > **Three audits were looking somewhere other than where Grant looks.**
 > `verify:layouts` ran without a token, so it had never measured a single
 > writer control — given one it found sixteen touch targets under 44px and a
