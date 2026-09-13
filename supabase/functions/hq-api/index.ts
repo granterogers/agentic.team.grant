@@ -279,6 +279,16 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // than here — the page is not the only thing that could call this, and a
   // guard in the caller is a guard in one of the callers.
   set_setting: { fn: 'hq_set_setting', required: ['p_key', 'p_value'] },
+  /*
+    Send it again (#202).
+
+    Takes a JOB, not a delivery, because that is the vocabulary the thread has
+    — a message in the conversation is an output and an output knows its job.
+    Only the FAILED deliveries of that job are queued, so a retry of an answer
+    that reached Telegram and not Slack does not send the Telegram one twice;
+    the idempotency is #195's and is used rather than restated.
+  */
+  retry_send: { fn: 'retry_job_deliveries', required: ['p_job_id'] },
   // Editing a person, and retiring one. There is no delete and there will not
   // be: outputs, routing decisions and deliveries all name a staff member, and
   // a roster that can lose a row is a history that stops explaining itself.

@@ -2102,6 +2102,32 @@ const bubble = (m) => {
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history, before the office was watching</span>' : ''}
         ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer comes
           back in Slack and Telegram too.</span>` : ''}
+        <!--
+          Could not be delivered (#202).
+
+          Silence looks the same whether the office has not answered yet or the
+          answer could not reach him, and those mean opposite things: one is
+          wait, the other is act. Only drawn when a delivery genuinely failed —
+          an answer read here was never a delivery at all, and marking every
+          one of them undelivered would be the alarming wording for the normal
+          state, which is the mistake #119 records.
+
+          The retry is a person's decision, and it is the only door out of a
+          failed delivery: the worker that gave up must not quietly change its
+          mind. No backticks in this comment.
+        -->
+        ${m.delivery === 'failed' ? `<span class="t-meta undeliv">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 8v5M12 16.5v.1M12 3.2L1.8 20.8h20.4z"/></svg>
+          Could not be delivered${m.undelivered > 1
+            ? ` to ${esc(String(m.undelivered))} places`
+            : ''}.
+          ${canWrite() && m.job !== null
+            ? `<button type="button" class="linky" data-retry-send="${esc(String(m.job))}">Try again</button>`
+            : ''}
+        </span>` : ''}
+        ${m.delivery === 'sending' ? '<span class="t-meta pendmark">Still going out…</span>' : ''}
       </div>
     </div>`
   }
@@ -6456,6 +6482,39 @@ function render() {
         setSaying('Listening. Press again to stop — nothing is sent until you do.')
       })
     }
+
+    /*
+      Send it again (#202).
+
+      Delegated from the composer block because the button lives in a bubble
+      inside the thread, which is rebuilt on every render — a listener bound to
+      the button itself would be lost on the next repaint, and the repaint
+      happens the moment the retry succeeds.
+    */
+    $('[data-thread]', root)?.addEventListener('click', (e) => {
+      const btn = e.target.closest?.('[data-retry-send]')
+      if (!btn) return
+      const job = btn.getAttribute('data-retry-send')
+      if (job === null || job === '') return
+      btn.disabled = true
+      btn.textContent = 'Sending…'
+      void act('retry_send', { p_job_id: job })
+        .then(async (r) => {
+          /*
+            The office's own sentence, not one invented here. `retry_job_deliveries`
+            returns `says` precisely so the page does not have to guess whether
+            one delivery was queued or four.
+          */
+          announce(r?.says ?? 'Queued again.')
+          await chat.load(state.project, byId(state.project)?.id, tokenNow())
+          keepingPlace(() => { render() })
+        })
+        .catch((err) => {
+          btn.disabled = false
+          btn.textContent = 'Try again'
+          announce(`It could not be queued: ${err instanceof Error ? err.message : String(err)}`)
+        })
+    })
 
     $('[data-unattach]', composer)?.addEventListener('click', () => {
       state.attach = null

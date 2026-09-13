@@ -37,6 +37,7 @@
     "verify:access": "tsx scripts/verify/access.ts",
     "verify:chat": "tsx scripts/verify/chat.ts",
     "verify:dictation": "tsx scripts/verify/dictation.ts",
+    "verify:transport": "tsx scripts/verify/transport.ts",
     "verify:echo": "tsx scripts/verify/echo.ts",
     "wide": "tsx scripts/verify/wide.ts",
     "verify:github-token": "tsx scripts/verify/github-token-live.ts",

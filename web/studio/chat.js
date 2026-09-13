@@ -78,6 +78,18 @@ const asBubble = (m) => ({
   // Rendered differently, because implying it was present would be a claim.
   backfilled: m.backfilled === true,
   surface: m.surface ?? null,
+  /*
+    Whether the answer actually reached him (#202).
+
+    Null for an answer that was never a delivery — most of them, read here in
+    the studio — and 'sent', 'sending' or 'failed' when it was. Kept as the
+    office's own word rather than turned into a boolean: "sending" and "failed"
+    are different things to say and a boolean would have to pick one of them to
+    be the false case.
+  */
+  delivery: m.delivery ?? null,
+  undelivered: Number(m.undelivered ?? 0),
+  job: m.job ?? null,
 })
 
 /**
