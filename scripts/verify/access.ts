@@ -45,6 +45,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
 
 const ROOT = 'web/studio'
 const PORT = 4616
@@ -124,6 +125,7 @@ const audit = async (
     ...(width < 500 ? { isMobile: true, hasTouch: true, deviceScaleFactor: 3 } : {}),
   })
   await ctx.addInitScript(AS_WRITER)
+  await ctx.addInitScript(seedAppearance(dark ? 'dark' : 'light'))
   const page = await ctx.newPage()
   const thrown: string[] = []
   page.on('pageerror', (e) => thrown.push(e.message))

@@ -40,6 +40,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
 
 const ROOT = 'web/studio'
 const PORT = 4615
@@ -437,9 +438,7 @@ for (const scheme of ['light', 'dark'] as const) {
         : void r.abort(),
     )
     await ctx.addInitScript(AS_WRITER)
-    await ctx.addInitScript(
-      `try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'plaster' })) } catch {}`,
-    )
+    await ctx.addInitScript(seedAppearance(scheme, { palette, texture: 'plaster' }))
     const page = await ctx.newPage()
     /*
       Two surfaces, not one. The overview is the page you land on; governance

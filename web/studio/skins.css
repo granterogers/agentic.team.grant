@@ -275,6 +275,38 @@
 }
 
 /*
+  The stone family (#206, second pass). Grant: "Stone is a good one."
+
+  Scales differ by how big the material's own features are. Granite's crystals
+  are millimetres and terrazzo's chips are centimetres, so painting them at the
+  same size would make one invisible and the other a pattern of blobs.
+*/
+:root[data-texture="granite"], [data-texture="granite"] {
+  --tex-src: url("textures/granite.webp");
+  --tex-size: 150px; --tex-fine: 68px;
+}
+:root[data-texture="basalt"], [data-texture="basalt"] {
+  --tex-src: url("textures/basalt.webp");
+  --tex-size: 190px; --tex-fine: 86px;
+}
+:root[data-texture="sandstone"], [data-texture="sandstone"] {
+  --tex-src: url("textures/sandstone.webp");
+  --tex-size: 155px; --tex-fine: 70px;
+}
+/* The largest features of any material here, so the largest tile — at 180px a
+   terrazzo chip is a smudge and the floor is a rash. */
+:root[data-texture="terrazzo"], [data-texture="terrazzo"] {
+  --tex-src: url("textures/terrazzo.webp");
+  --tex-size: 260px; --tex-fine: 120px;
+}
+/* Directional, and the one material where the FINE scale is the point: brushed
+   lines across a 120px button read as a machined surface. */
+:root[data-texture="steel"], [data-texture="steel"] {
+  --tex-src: url("textures/steel.webp");
+  --tex-size: 165px; --tex-fine: 58px;
+}
+
+/*
   The dark scheme takes the highlight cut of the same material.
 
   Both selectors, and in this order, because the studio has three states: an
@@ -289,6 +321,11 @@
   :root:not([data-scheme="light"])[data-texture="oak"] { --tex-src: url("textures/oak-light.webp"); }
   :root:not([data-scheme="light"])[data-texture="linen"] { --tex-src: url("textures/linen-light.webp"); }
   :root:not([data-scheme="light"])[data-texture="concrete"] { --tex-src: url("textures/concrete-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="granite"] { --tex-src: url("textures/granite-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="basalt"] { --tex-src: url("textures/basalt-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="sandstone"] { --tex-src: url("textures/sandstone-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="terrazzo"] { --tex-src: url("textures/terrazzo-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="steel"] { --tex-src: url("textures/steel-light.webp"); }
 }
 :root[data-scheme="dark"][data-texture="plaster"] { --tex-src: url("textures/plaster-light.webp"); }
 :root[data-scheme="dark"][data-texture="paper"] { --tex-src: url("textures/paper-light.webp"); }
@@ -296,6 +333,11 @@
 :root[data-scheme="dark"][data-texture="oak"] { --tex-src: url("textures/oak-light.webp"); }
 :root[data-scheme="dark"][data-texture="linen"] { --tex-src: url("textures/linen-light.webp"); }
 :root[data-scheme="dark"][data-texture="concrete"] { --tex-src: url("textures/concrete-light.webp"); }
+:root[data-scheme="dark"][data-texture="granite"] { --tex-src: url("textures/granite-light.webp"); }
+:root[data-scheme="dark"][data-texture="basalt"] { --tex-src: url("textures/basalt-light.webp"); }
+:root[data-scheme="dark"][data-texture="sandstone"] { --tex-src: url("textures/sandstone-light.webp"); }
+:root[data-scheme="dark"][data-texture="terrazzo"] { --tex-src: url("textures/terrazzo-light.webp"); }
+:root[data-scheme="dark"][data-texture="steel"] { --tex-src: url("textures/steel-light.webp"); }
 
 /*
   `--tex` is what `body` paints, and it stays for compatibility: the ground's
@@ -306,7 +348,12 @@
 :root[data-texture="travertine"], [data-texture="travertine"],
 :root[data-texture="oak"], [data-texture="oak"],
 :root[data-texture="linen"], [data-texture="linen"],
-:root[data-texture="concrete"], [data-texture="concrete"] {
+:root[data-texture="concrete"], [data-texture="concrete"],
+:root[data-texture="granite"], [data-texture="granite"],
+:root[data-texture="basalt"], [data-texture="basalt"],
+:root[data-texture="sandstone"], [data-texture="sandstone"],
+:root[data-texture="terrazzo"], [data-texture="terrazzo"],
+:root[data-texture="steel"], [data-texture="steel"] {
   --tex: var(--tex-src);
 }
 

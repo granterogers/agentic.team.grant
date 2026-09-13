@@ -18,6 +18,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
 
 const ROOT = 'web/studio'
 const PORT = 4618
@@ -47,7 +48,20 @@ await new Promise<void>((r) => {
   })
 })
 
-const MATERIALS = ['none', 'plaster', 'paper', 'travertine', 'oak', 'linen', 'concrete']
+const MATERIALS = [
+  'none',
+  'plaster',
+  'paper',
+  'travertine',
+  'oak',
+  'linen',
+  'concrete',
+  'granite',
+  'basalt',
+  'sandstone',
+  'terrazzo',
+  'steel',
+]
 
 const browser = await chromium.launch()
 for (const dark of [false, true]) {
@@ -55,6 +69,7 @@ for (const dark of [false, true]) {
     viewport: { width: 1440, height: 900 },
     colorScheme: dark ? 'dark' : 'light',
   })
+  await ctx.addInitScript(seedAppearance(dark ? 'dark' : 'light'))
   const page = await ctx.newPage()
   await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)

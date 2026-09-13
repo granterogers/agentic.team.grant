@@ -55,6 +55,18 @@ if (supabaseToken === undefined || supabaseToken === '') {
 }
 
 const go = process.argv.includes('--go')
+/*
+  `--only a,b,c` generates just those materials.
+
+  Added when the list grew from six to eleven: without it, adding one material
+  means paying for all of them again. Small money, but a script that cannot be
+  extended without a full re-spend is a script people avoid extending.
+*/
+const onlyAt = process.argv.indexOf('--only')
+const ONLY =
+  onlyAt === -1
+    ? null
+    : new Set((process.argv[onlyAt + 1] ?? '').split(',').filter((x) => x !== ''))
 const db = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   supabaseToken,
@@ -148,20 +160,72 @@ const MATERIALS = [
       'Board-formed architectural concrete, faint timber shuttering grain and ' +
       'fine aggregate speckle, smooth cast surface.',
   },
+  /*
+    The stone family, added after Grant looked at the first six: "I'd like some
+    extra textures to choose from. Stone is a good one."
+
+    NOT named `slate`, though riven slate was the obvious candidate. `slate` is
+    already one of the five PALETTES, and a texture sharing a name with a
+    palette is the collision CLAUDE.md records twice — `.stage` meaning two
+    things, `.kind.doc` colliding with `.doc`. Basalt is the same riven,
+    cleaved, dark stone under a name nothing else has taken.
+  */
+  {
+    id: 'granite',
+    name: 'Granite',
+    note: 'Crystalline, even speckle',
+    prompt:
+      'Honed grey granite, fine even crystalline speckle of quartz and feldspar, ' +
+      'flat cut stone surface.',
+  },
+  {
+    id: 'basalt',
+    name: 'Basalt',
+    note: 'Riven, cleaved',
+    prompt:
+      'Riven basalt stone, cleaved layered surface with fine vesicular pitting ' +
+      'and shallow flaking, dark volcanic rock.',
+  },
+  {
+    id: 'sandstone',
+    name: 'Sandstone',
+    note: 'Fine even grain',
+    prompt:
+      'Sawn sandstone block, fine uniform sedimentary grain with faint bedding ' +
+      'lines, matte quarried surface.',
+  },
+  {
+    id: 'terrazzo',
+    name: 'Terrazzo',
+    note: 'Chips in matrix',
+    prompt:
+      'Polished terrazzo floor, small irregular stone chips suspended in a ' +
+      'smooth cement matrix, evenly scattered.',
+  },
+  {
+    id: 'steel',
+    name: 'Steel',
+    note: 'Brushed, directional',
+    prompt:
+      'Brushed stainless steel sheet, fine straight parallel abrasion lines, ' +
+      'uniform satin metal finish.',
+  },
 ] as const
 
+const WANTED = MATERIALS.filter((m) => ONLY === null || ONLY.has(m.id))
+
 console.log(`model: ${MODEL} ${SIZE} ${QUALITY}`)
-console.log(`materials: ${String(MATERIALS.length)}`)
-for (const m of MATERIALS) console.log(`  ${m.id.padEnd(11)} ${m.note}`)
+console.log(`materials: ${String(WANTED.length)} of ${String(MATERIALS.length)}`)
+for (const m of WANTED) console.log(`  ${m.id.padEnd(11)} ${m.note}`)
 console.log(
-  `estimated: $${(MATERIALS.length * ESTIMATED_PER_IMAGE).toFixed(2)} (cap $${HARD_CAP_USD.toFixed(2)})`,
+  `estimated: $${(WANTED.length * ESTIMATED_PER_IMAGE).toFixed(2)} (cap $${HARD_CAP_USD.toFixed(2)})`,
 )
 if (!go) {
   console.log('\nDRY RUN. Nothing generated and nothing spent. Re-run with --go.')
   console.log('Then: python3 scripts/staff/tile-textures.py   to make them tile and compress.')
   process.exit(0)
 }
-if (MATERIALS.length * ESTIMATED_PER_IMAGE > HARD_CAP_USD) {
+if (WANTED.length * ESTIMATED_PER_IMAGE > HARD_CAP_USD) {
   console.error('the estimate exceeds the hard cap; refusing to start')
   process.exit(1)
 }
@@ -170,7 +234,7 @@ await mkdir(`${OUT_DIR}/raw`, { recursive: true })
 
 let spent = 0
 let made = 0
-for (const m of MATERIALS) {
+for (const m of WANTED) {
   const response = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },

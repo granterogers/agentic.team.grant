@@ -14,6 +14,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
 
 const ROOT = 'web/studio'
 const OUT = '.out'
@@ -58,6 +59,7 @@ const SIZES = [
 for (const [size, opts] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
     const ctx = await browser.newContext({ ...opts, colorScheme: scheme })
+    await ctx.addInitScript(seedAppearance(scheme))
     const page = await ctx.newPage()
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))

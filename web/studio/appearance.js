@@ -40,6 +40,11 @@ export const TEXTURES = [
   { id: 'oak', name: 'Oak', note: 'Quarter-sawn grain' },
   { id: 'linen', name: 'Linen', note: 'Woven, slubbed' },
   { id: 'concrete', name: 'Concrete', note: 'Board-formed, fine' },
+  { id: 'granite', name: 'Granite', note: 'Crystalline, even speckle' },
+  { id: 'basalt', name: 'Basalt', note: 'Riven, cleaved' },
+  { id: 'sandstone', name: 'Sandstone', note: 'Fine even grain' },
+  { id: 'terrazzo', name: 'Terrazzo', note: 'Chips in matrix' },
+  { id: 'steel', name: 'Steel', note: 'Brushed, directional' },
 ]
 
 const KEY = 'studio.appearance'
@@ -56,7 +61,22 @@ export const SCHEMES = [
   { id: 'dark', name: 'Dark' },
 ]
 
-const DEFAULTS = { palette: 'paper', texture: 'plaster', own: null, ownName: '', scheme: 'system' }
+/*
+  Dark concrete, on Grant's instruction (#206):
+
+    "let's go for a dark concrete for now just to ensure that it can be changed
+     within the settings later on"
+
+  The point is as much the mechanism as the look — a default that is three
+  stored values rather than three constants, so changing his mind later is
+  three clicks in Appearance and no code.
+
+  `scheme: 'dark'` rather than `'system'` is the one that overrides something
+  he might not expect: it ignores the operating system's preference until he
+  sets it back. That is what he asked for and it is the first control in the
+  panel.
+*/
+const DEFAULTS = { palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: 'dark' }
 
 /*
   Grant's own texture.
