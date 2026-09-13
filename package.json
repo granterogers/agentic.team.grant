@@ -33,6 +33,7 @@
     "shots": "npm run smoke && tsx scripts/verify/studio.ts",
     "probe": "tsx scripts/verify/probe.ts",
     "space": "tsx scripts/verify/space.ts",
+    "verify:history": "tsx scripts/verify/history.ts",
     "wide": "tsx scripts/verify/wide.ts",
     "verify:github-token": "tsx scripts/verify/github-token-live.ts",
     "notion:import": "tsx scripts/notion/import.ts",

@@ -331,5 +331,9 @@
   "0330_a_scope_gets_the_same_allowance_the_office_does.sql": "4dd8f76c5a3f843c417c9dd54dcb110b2de7a0e4f90c1806cb472102987d83d7",
   "0331_a_document_can_gain_its_original_file.sql": "3dd000af942fa6e78d282d82d2658f7a46290d23e3c095685cce789e6901ce29",
   "0332_a_drive_file_becomes_a_document.sql": "b372e6dff502a2d3a6f403e0d8402fd9152776cb3be562b2dbf9d4990aff216a",
-  "0333_the_drive_claim_is_verified_now.sql": "1bef512b1713b10d91278339809589758eb12a8e445fcf9b3c8ed7b00ae69cd7"
+  "0333_the_drive_claim_is_verified_now.sql": "1bef512b1713b10d91278339809589758eb12a8e445fcf9b3c8ed7b00ae69cd7",
+  "0334_a_place_for_what_names_no_project.sql": "aaf20c97a4aa47ee2330fc46868f135378167a6c0e45feec2f5f790a53c95521",
+  "0335_one_ordered_history_whatever_surface_it_came_from.sql": "e9a73ef5b7dc4238ab7380640b232aa85d00ccda96f52036ae5a832467d676b7",
+  "0336_a_message_and_its_answer_are_one_conversation.sql": "a03b9e8fe372ef75e2780268e1d7b5bc2f22c80a7022a1ed31eb8334d3737c88",
+  "0337_the_project_a_surface_named_is_where_the_work_goes.sql": "c7334114ae69ec66d397c953dea419c6f066735c91042ec9d8c8a257184e4e2a"
 }

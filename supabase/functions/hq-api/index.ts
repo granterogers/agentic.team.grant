@@ -118,6 +118,22 @@ const SECTIONS: Readonly<
   */
   document: { fn: 'studio_document', arg: 'p_document_id' },
   /*
+    One project's conversation, both sides, in order (#192).
+
+    Takes `?id=<project uuid>` through the same `arg` door as `document`, and
+    for the same reason: the caller names WHICH conversation and nothing else.
+    Project isolation is enforced inside `conversation_history` — both halves
+    of the union filter on that project — so there is no widening parameter
+    here and deliberately so.
+
+    Its own section rather than a field on `studio`, because a conversation
+    grows without bound and the shell must not pay for it on first paint. Same
+    argument as `document` and `lately`. The RPC's own default is 50 messages;
+    paging is by `p_before`, which no caller can reach yet — when the studio
+    needs to scroll back, that becomes a second query parameter here.
+  */
+  conversation: { fn: 'conversation_history', arg: 'p_project_id' },
+  /*
     The MCP server, as a page (#91).
 
     Its own section rather than part of `studio_settings`, because it is the
