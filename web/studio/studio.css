@@ -1238,16 +1238,39 @@ body::after {
   transition: none; z-index: 20; box-shadow: var(--lift-3);
   transform: rotate(-.4deg) scale(1.01);
 }
+/*
+  #85. The header was 53px of a 300px panel — 18%, and 29% of the shortest one
+  — for a 16px label, six times over on the Overview tab. 37 of those 53px were
+  not the label: 28px of it was the resize-and-remove controls, which are
+  `opacity: 0` until the panel is hovered.
+
+  That is #67's trap in a second place, and CLAUDE.md already states the rule:
+  *"`opacity: 0` hides pixels, not layout."* Three buttons nobody can see were
+  setting the height of every panel header on the board.
+
+  So the controls come OUT of the flow and hang at the right, and the header is
+  sized by its label again. `padding-right` reserves the 88px they occupy
+  (3 × 28px plus two 2px gaps) so a long panel name never runs underneath them.
+  The vertical padding drops to `--s2`, which is what a label strip wants once
+  it is not also housing a 28px button.
+
+  33px rather than 53px, on six panels: 120px of content back on one screen,
+  and no decoration removed — because the pixels were never showing anything.
+*/
 .panel > header {
+  position: relative;
   display: flex; align-items: center; gap: var(--s2);
-  padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  padding: var(--s2) 96px var(--s2) var(--s4);
   cursor: grab; touch-action: none; user-select: none;
   border-bottom: 1px solid var(--edge);
   background: color-mix(in srgb, var(--sunken) 45%, transparent);
 }
 .panel.lifted > header { cursor: grabbing; }
 .panel > header h3 { margin: 0; flex: 1; }
-.pctl { display: flex; gap: 2px; opacity: 0; transition: opacity .16s; }
+.pctl {
+  position: absolute; right: var(--s2); top: 50%; transform: translateY(-50%);
+  display: flex; gap: 2px; opacity: 0; transition: opacity .16s;
+}
 .panel:hover .pctl, .panel:focus-within .pctl { opacity: 1; }
 .pctl button {
   width: 28px; height: 28px; border-radius: 6px; color: var(--ink-3);
@@ -1294,8 +1317,12 @@ body::after {
 }
 .panel::before {
   /* Below the header, not at the very top: the header is opaque and sits above
-     the scroller, so a fade at `top: 1px` would be painted behind it. */
-  top: 49px; height: 22px;
+     the scroller, so a fade at `top: 1px` would be painted behind it.
+
+     This number is the header's height and has to follow it — #85 took the
+     header from 53px to 33px, and a fade left at 49px would have floated in
+     the middle of the first row. Measured with `npm run space`, not guessed. */
+  top: 33px; height: 22px;
   background: linear-gradient(to top, transparent, var(--surface) 88%);
 }
 .panel.more::after, .panel.above::before { opacity: 1; }
@@ -4509,4 +4536,34 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
      square inside it would be taller than the chip. It gets the padding
      instead, which grows the hit area without growing the mark. */
   .chipx { min-height: 44px; min-width: 44px; }
+}
+
+/*
+  #85. The phone does not get instructions for something the phone cannot do.
+
+  Measured with `npm run space`: on a 390×844 phone the first pixel of actual
+  project content is 703px down — 83% of the first screen is furniture before
+  one module, task or document appears. The two largest items above it are the
+  project head (135px) and this row (115px), and 51px of the row is the
+  sentence *"Drag a panel by its title. Add what this project needs, drop what
+  it does not."*
+
+  On a phone the board is not draggable at all. The block above sets
+  `.panel { position: static }`, `header { cursor: default }` and hides the
+  resize controls, deliberately — one column has nothing to arrange and a drag
+  competes with the scroll. So that sentence is not merely decoration on the
+  screen with the least room; it is decoration describing a gesture that has
+  been switched off. Two lines of type teaching a person to try something that
+  will not work.
+
+  The BUTTONS stay. "Add panel" and "Reset" change which panels exist, and that
+  is as true stacked as it is on a board. Only the drag instruction goes, and
+  the row collapses to the height of the controls it actually holds.
+
+  Written here rather than in the `max-width: 860px` block three hundred lines
+  above, because a media query adds no specificity and this file has twice had
+  a phone rule silently overridden by a base rule further down.
+*/
+@media (max-width: 860px) {
+  .tabhead .t-lead { display: none; }
 }

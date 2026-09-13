@@ -740,6 +740,36 @@ Each of these cost real time. They are here so they cost it once.
   opening the PNG, which is what §14A's loop is for.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
+- **`opacity: 0` hides pixels, not layout — and it happened a second time, in
+  the panel headers.** `.pctl`'s three 28px buttons are invisible until the
+  panel is hovered, and they were setting the height of every panel header on
+  the board: 53px for a 16px label, 18% of a 300px panel and 29% of the
+  shortest one, six times over on one screen. Exactly #67, three months later,
+  in a different file. `position: absolute` plus a reserved `padding-right` is
+  the fix both times. **Grep for `opacity: 0` in a flex or grid row before
+  believing the row's height.**
+- **Reading a capture produces confident, wrong findings — `npm run space`
+  exists because three out of four of mine were wrong.** #85's pass off the
+  PNG claimed 350px of empty rail (the rail is 880 of 900px used), claimed the
+  clipped panels had no affordance (the #108 fade is on at `opacity: 1` on
+  every one) and claimed the phone's top bar sliced the project title (20px of
+  clearance at `scrollTop: 0` — it is the capture's own scroll). Two of those
+  three I would have "fixed", and one would have meant rewriting a mechanism
+  that already worked. `probe` answers "how big is this box" when you already
+  suspect an element; `space` answers "which of forty boxes is spending the
+  room", which is the question a capture actually raises. Look at the PNG to
+  find WHERE to measure, never to decide WHAT is wrong.
+- **A phone rule can be decoration for a gesture the phone has switched off.**
+  The board's *"Drag a panel by its title"* hint cost 51px on a 390px screen
+  where `.panel` is `position: static`, the header is `cursor: default` and the
+  resize controls are `display: none` — the drag is deliberately off there. Not
+  merely clutter on the smallest screen: instructions to try something that
+  cannot work. When a media query disables a behaviour, grep for the copy that
+  teaches it.
+- **`verify:controls` now takes more than ten minutes.** #183's fix took it
+  from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
+  The npm script already splits itself desktop-then-phone; give the call a real
+  timeout and let it print rather than backgrounding it.
 
 ---
 

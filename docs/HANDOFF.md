@@ -65,6 +65,36 @@
 > Migrations 0323–0328. Everything is reachable over HTTP and
 > `verify:settings` drives that chain including the browser layer.
 >
+> **The space-usage critique pass, and a tool that answers its question
+> (#85).** The Issue asks for measurement rather than squinting, and it was
+> right to: three of four findings read off the capture were **wrong** — the
+> rail is 880 of 900px used, the #108 fade is on at `opacity: 1` on every
+> clipped panel, and the phone's "clipped" title has 20px of clearance at
+> `scrollTop: 0` (it is the capture's own scroll). Two survived.
+>
+> A panel header was **53px of a 300px panel for a 16px label**, because 28px
+> of it was the resize controls — which are `opacity: 0` until hover. #67's
+> trap in a second place. Absolutely positioned now: **53px → 33px**, 120px of
+> content back on one Overview screen, and Documents and Lately stopped
+> clipping at all.
+>
+> On a 390×844 phone the first pixel of project content was **703px down —
+> 83% of the first screen furniture**, and 51px of that was a sentence telling
+> you to drag panels on a viewport where `.panel { position: static }` and the
+> drag is deliberately switched off. Hidden there: **703px → 632px**.
+>
+> `npm run space` is the new tool. It reports only — no thresholds — and prints
+> each panel's header share, whether the fade is actually on per panel, how
+> much of each container is empty, and how far down the first content pixel is
+> with everything above it named. `probe` answers "how big is this box";
+> `space` answers "which of forty boxes is spending the room".
+>
+> Still open and deliberately not touched: the phone is 75% furniture on its
+> first screen, `.projhead` being 135px of it. That is a compositional fix (a
+> collapsing head, or the crew and toggle moving into the sticky bar), not a
+> padding edit, and shrinking the parts individually is the densification the
+> Issue warns against.
+>
 > **Two suites no longer need the whole queue to themselves (#184, ADR in
 > 0329–30).** `verify:slack` and `verify:worker` both refused to start while
 > any job was live anywhere, because dequeue is global — so in a full pass
