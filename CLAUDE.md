@@ -249,6 +249,23 @@ always look like overflow and never are: SVG children (their geometry ignores
 the viewport that clips them) and anything inside a scroll container or a fixed
 element.
 
+```
+npm run space
+```
+
+answers the OTHER question a capture raises: not "how big is this box" but
+"which of forty boxes is spending the room". Per panel it prints the header's
+share of the panel and whether the #108 fade is actually on; per container, how
+much is empty; and on a phone, how far down the first pixel of real content is
+with everything stacked above it named. It reports and fails nothing.
+
+Reach for it before believing anything you think you can see in a PNG. #85's
+first pass off the capture produced four findings and **three were wrong** — a
+rail that is 880 of 900px used, a fade that was already on at `opacity: 1`, and
+a "clipped" title with 20px of clearance. Two of the three would have been
+"fixed". Look at the PNG to decide WHERE to measure; never to decide WHAT is
+wrong.
+
 ---
 
 ## Traps this repository has already fallen into
