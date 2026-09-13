@@ -164,3 +164,8 @@ aiteamhq-portable-*.sha256
 # committing it would add a megabyte-scale binary-ish blob per revision for
 # nothing. Same reasoning as any other build product.
 team-hq-dashboard.html
+
+# Issue #206. The generated source photographs: 14 MB of PNG that exists only
+# to be re-tuned. The processed tiles beside it ARE committed, and regenerating
+# these costs about $0.07 through npm run textures -- --go.
+web/studio/textures/raw/

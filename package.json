@@ -118,6 +118,8 @@
     "verify:tts": "tsx scripts/verify/tts.ts",
     "verify:telegram": "tsx scripts/verify/telegram.ts",
     "avatars:photo": "tsx scripts/staff/generate-photo-avatars.ts",
+    "textures": "tsx scripts/staff/generate-textures.ts",
+    "textures:sheet": "tsx scripts/verify/texture-sheet.ts",
     "deploy:hq": "tsx scripts/deploy/hq.ts",
     "deploy:voice": "tsx scripts/deploy/voice.ts",
     "slack:tidy": "tsx scripts/slack/tidy-channels.ts",

@@ -20,13 +20,26 @@ export const PALETTES = [
   { id: 'moss', name: 'Moss', note: 'Deep green and stone' },
 ]
 
+/*
+  Real materials, generated once and committed (#206).
+
+  These replaced five `feTurbulence` filters. Grant, twice: "forget the SVG and
+  AI generate some really beautiful textures, like stone or wood or whatever".
+  Named for what they actually are, because "Grain" and "Stone" described two
+  settings of the same noise function.
+
+  Marble and leather were generated and rejected before this list: marble's
+  veining is a COMPOSITION and cropped to a button it is a smear, and leather
+  at 10% grey is indistinguishable from plaster.
+*/
 export const TEXTURES = [
   { id: 'none', name: 'None', note: 'Colour only' },
-  { id: 'grain', name: 'Grain', note: 'Fine paper fibre' },
-  { id: 'plaster', name: 'Plaster', note: 'Mottled and uneven' },
-  { id: 'canvas', name: 'Canvas', note: 'Woven, tight' },
-  { id: 'linen', name: 'Linen', note: 'Soft irregular weave' },
-  { id: 'stone', name: 'Stone', note: 'Coarse, with fracture' },
+  { id: 'plaster', name: 'Plaster', note: 'Lime-washed, trowelled' },
+  { id: 'paper', name: 'Paper', note: 'Cold-press, toothed' },
+  { id: 'travertine', name: 'Travertine', note: 'Stone, softly pitted' },
+  { id: 'oak', name: 'Oak', note: 'Quarter-sawn grain' },
+  { id: 'linen', name: 'Linen', note: 'Woven, slubbed' },
+  { id: 'concrete', name: 'Concrete', note: 'Board-formed, fine' },
 ]
 
 const KEY = 'studio.appearance'
