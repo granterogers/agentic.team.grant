@@ -220,7 +220,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **322 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **350 applied.**
 
 ---
 
@@ -817,6 +817,31 @@ Each of these cost real time. They are here so they cost it once.
   asks for a scheme the way a person does, through the stored preference:
   `scripts/verify/seed-appearance.ts`. Before setting a browser-level signal in
   a test, check whether the product still reads it.
+- **A resize event arrives after the layout has already moved.** #197's
+  keyboard handling took four attempts and each was half of the real fix: pin
+  on resize (but the handler held the thread node captured at wiring time, and
+  a resize re-renders and REPLACES it, so `scrollTop` on a detached node moves
+  nothing); look it up live inside the pin (but the GUARD still measured the
+  captured node and bailed before pinning — half a fix reads exactly like no
+  fix); ask the live node (but by then the box has shrunk around the old scroll
+  position and every measurement describes the after). The answer is to REMEMBER
+  the state continuously, on every scroll and every render, and consult the
+  memory when the event fires. Anything you need to know about "before" has to
+  have been recorded before.
+- **A local `const` shadows a module namespace import, and the throw lands
+  somewhere else entirely.** `const when = (iso) => … when.words(iso)` inside a
+  render function resolved to its own binding and threw — while
+  `settingsSheet()` was building its template, BEFORE `innerHTML` was assigned,
+  so the previous pane stayed on screen and the symptom was "the Channels tab
+  does nothing". Three runs were spent on the tab wiring. Print the page errors
+  before theorising about a control: `page.on('pageerror', …)` names it in one
+  run.
+- **`check:templates` reports every parse error with its backtick advice.** A
+  duplicate `const` sent somebody hunting for a backtick that was not there,
+  while the error line above said, correctly, "Identifier already declared". A
+  failure message that names the wrong cause is worse than a bare count,
+  because it points somewhere and somewhere is wrong. Fixed in the check; read
+  the line above the advice.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

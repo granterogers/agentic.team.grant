@@ -13,19 +13,49 @@
 >
 > | | |
 > |---|---|
-> | Tests | **997 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` **289 desktop / 307 phone / 100 team, 0 findings** · `verify:history` **24/24** |
+> | Tests | **997 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` **289 desktop / 307 phone / 100 team, 0 findings** |
+> | The conversation | `npm run verify:conversation-all` — **218 checks in 4m19s**: history 50, echo 13, equivalence 16, transport 19, chat 37, dictation 38, channels 22, access 23 |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
-> | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
+> | Free tier | measured, not guessed: **48 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
+> | The conversation's growth | **25.8 messages a day** across four surfaces at ~495 bytes each — about **fifty years** of room at that rate (`public.conversation_growth()`, on the Usage page). ADR-0026 |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | **337 applied** |
+> | Migrations | **350 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
 >
+> ## Phase 7 — Communications, finished overnight 13–14 September
+
+**#191's eight children are all closed.** One conversation, every surface.
+
+| | |
+|---|---|
+| **#196** dictation | A microphone beside Send. Browser transcription (free); the button says *before* you press it that Chrome sends the audio to Google. One dictation is one message (0089's precedent). No addressing by voice — §5 forbids an adapter deciding. The microphone release is **asserted**, not assumed: `verify:dictation`, 38 checks, counts microphones opened against closed. |
+| **#205 / #200** arrivals and accessibility | "Emma replied" pinned inside the thread, plus one polite live region — deliberately not `role="log"`, which would announce the "Asking the office" placeholder as an answer. Every message carries author, time, addressee and surface as visually-hidden text. `verify:access` grew to 23 checks: every visible control has a name, one `main` landmark, heading order. |
+| **#204** retention | Measured rather than guessed, which is the point. **Nothing needs deleting and most of it could not be** — a job is permanent, so an answer is. The real unboundedness was in the READER: a `coalesce` around a column made `jobs_project_state_idx` unusable and every conversation load read every job in the table. 116ms → 32ms. **ADR-0026.** |
+| **#202** transport failures | Bounded retry (five attempts, 30s doubling to fifteen minutes, in `system_config`), a **Try again** in the thread, and `app.undelivered` with a sentence a person can act on. Nothing ever claims a revoke or a delivery it cannot prove. |
+| **#198** connection controls | Five honest states per surface — never / quiet / carrying / degraded / **unchecked**. Slack and Telegram can now be disconnected, and the answer names what was **not** revoked as clearly as what stopped. |
+| **#197** mobile | The keyboard case, which is where this screen actually failed: composer 208px of 336, thread 51px, newest message hidden. Now 156/168, nav out of the way, thread follows. |
+| **#201** proving it | `verify:equivalence` — the same sentence through four surfaces, asserted as **agreement between them** rather than against an expected value. |
+
+**Two live problems it surfaced, both real and both worth your attention:**
+
+- **Telegram is degraded** — nine `chat_not_found` delivery failures in the last 24 hours on a healthy credential. Settings → Channels shows it.
+- **21 real failed deliveries** are sitting in `app.undelivered`, now visible and retryable.
+
+**Grant's decision on 13 September, recorded as #70:** Telegram is one bot, the
+chief of staff. The other seven are to be retired; individuals are reached in
+Slack and in the studio. Not implemented yet — it was captured before starting
+so it survives the conversation.
+
+**Also filed:** #207 — a project screen has one heading, so heading navigation
+reaches nothing. Found by the new check, filed rather than asserted because the
+fix is a design change.
+
 > ## What changed on 2026-09-13
 >
 > **Slack stopped sounding like a database (#186).** Grant sent three
