@@ -307,5 +307,8 @@
   "0306_a_project_may_point_at_anything.sql": "4f68d26c1fcc96c3c11b945041c42577535d115e81f0aa1eddfea1ee287e4d76",
   "0307_aggregate_the_payload_not_the_row.sql": "7be24e5c938ffb28b4ee5c889882b17093a72b43664bb168c47cbee1dd7fb260",
   "0308_search_the_words_not_only_the_titles.sql": "bedaff6c44023b617c2da01cdd1d01e974022b3ca4f0d777223e0a9810ef3467",
-  "0309_use_the_index_that_was_already_there.sql": "50f424d9e2bb7a2f5f344b929e3532fd4eff4be4d8b012caa87693718b3df28d"
+  "0309_use_the_index_that_was_already_there.sql": "50f424d9e2bb7a2f5f344b929e3532fd4eff4be4d8b012caa87693718b3df28d",
+  "0310_the_graph_reads_the_facts_it_already_has.sql": "eb5faf6e17466e8c0ad63480a1e3d3a5c8416c1754dade285b151a8fa9a15b98",
+  "0311_one_vocabulary_for_both_halves_of_the_graph.sql": "b4bc948b9306b28a12170c1eac40e1703aa5b206776b34d4c4be838ca3253fc4",
+  "0312_an_asset_can_be_renamed_tagged_and_filed.sql": "0fe3e6dc49b7442ed3ab5d60d7f12b567990854c89d1d0f6a45e77dfb826af3c"
 }

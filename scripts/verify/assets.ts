@@ -140,10 +140,25 @@ await db.execute(`
 const { rows: out } = await db.execute(
   `select * from public.relations_of('document', '${madeId}'::uuid)`,
 )
+/*
+  The two edges BY NAME, not a count of two.
+
+  This asserted `length === 2` and went red on a correct change: 0310 made
+  `relations_of` derive the edges a column already holds, so the same document
+  — which this suite put in a collection twenty lines above — correctly gained
+  a third, `attached_to collection`. A count is a moving target the moment the
+  graph learns to see more, which is the direction it is supposed to move in.
+
+  Same correction as the one CLAUDE.md records for the index asserted by name:
+  assert the property, not the artefact that currently satisfies it.
+*/
+const verbs = (out as { verb: string; other_kind: string }[]).map(
+  (r) => `${r.verb}->${r.other_kind}`,
+)
 ok(
   'an asset can see what it came from and what it is attached to',
-  (out as unknown[]).length === 2,
-  `got ${String((out as unknown[]).length)}`,
+  verbs.includes('derived_from->document') && verbs.includes('attached_to->task'),
+  verbs.join(', '),
 )
 
 /*

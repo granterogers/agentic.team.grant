@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **309 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **312 applied.**
 
 ---
 
@@ -604,6 +604,27 @@ Each of these cost real time. They are here so they cost it once.
   lived: `app.search_documents` worked perfectly and had no public wrapper, so
   nothing with a browser could call it. The token is in the vault and
   `verify:hq` already reads it from there.
+- **Do not store a fact you can already read.** `public.relations` — the typed
+  edge table the IA document calls the point of the whole model — had never
+  held a single row, while `documents.produced_by_job`,
+  `mirrors_document_id`, `produced_by`, `document_collections`,
+  `collections.for_task_id` and four columns on `tasks` held those same facts
+  all along. Backfilling would have put every one of them in two places, and
+  0303/0304 are six migrations away in this listing: the copy is the one that
+  rots. `relations_of` DERIVES the edges a column holds and `relations` keeps
+  only what no column expresses (0310).
+- **A derived value must speak the stored vocabulary.** 0310's derived edges
+  used verbs it invented — `wrote`, `holds`, `came from` — while
+  `relations.verb` has a CHECK constraint listing ten words. Nothing failed and
+  both halves read fine to a person, but a caller filtering
+  `verb = 'assigned_to'` would have got the stored edges and silently missed
+  every derived one. Five of the six mapped onto words already there; only
+  `under` was genuinely new (0311).
+- **A count-based assertion goes red the day the thing under test gets
+  better.** `verify:assets` asserted a document had exactly 2 relations; 0310
+  taught the graph to see a third that was always true. Assert the edges BY
+  NAME. Same correction as the index asserted by name, and the third instance
+  of it in this file.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

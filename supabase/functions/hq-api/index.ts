@@ -44,7 +44,26 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 /** The complete list. A section not named here does not exist. */
 const SECTIONS: Readonly<
-  Record<string, { fn: string; args?: Record<string, unknown>; arg?: string; textArg?: string }>
+  Record<
+    string,
+    {
+      fn: string
+      args?: Record<string, unknown>
+      /** A uuid, read from `?id=`. */
+      arg?: string
+      /**
+       * Free text: which query parameter to read, and which RPC argument to
+       * put it in. A PAIR rather than one name, because `?q=` reads better in
+       * a URL than `?p_query=`, and which argument the RPC calls it is not the
+       * caller's business. The first draft used one string for both and the
+       * second section to need free text — `relations`, which wants `?kind=` —
+       * could not express itself.
+       */
+      textArg?: { param: string; arg: string }
+      /** Whether `?project=<uuid>` narrows this section. Search only. */
+      scoped?: boolean
+    }
+  >
 > = {
   overview: { fn: 'hq_overview' },
   staff: { fn: 'hq_staff' },
@@ -160,7 +179,21 @@ const SECTIONS: Readonly<
     shape, kept separate so a section cannot be talked into accepting free text
     where an id belongs.
   */
-  search: { fn: 'studio_search', args: { p_limit: 12 }, textArg: 'p_query' },
+  search: {
+    fn: 'studio_search',
+    args: { p_limit: 12 },
+    textArg: { param: 'q', arg: 'p_query' },
+    scoped: true,
+  },
+  /*
+    Everything an object relates to, both directions (#29, migrations 0310-11).
+
+    Takes two arguments where every other section takes at most one, so it uses
+    `arg` for the id and `textArg` for the kind — the kind is a short word from
+    a fixed vocabulary, and the RPC's own CHECK constraint is what validates it
+    rather than a second copy of the list here.
+  */
+  relations: { fn: 'relations_of', arg: 'p_id', textArg: { param: 'kind', arg: 'p_kind' } },
 }
 
 /**
@@ -401,6 +434,22 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     real delete here while `detach` only disables — a connector has a corpus
     behind it and ADR-0013 keeps it; a pointer does not.
   */
+  /*
+    The asset model, reachable (#29, migration 0312).
+
+    Rename, tag and file were a page's private business — `put_in_collection`
+    had a public wrapper and was in no section list, so nothing with a browser
+    or an agent could reach it, and there was no rename or tag at all. #29 is
+    explicit that these must be API-reachable and not frontend-only state.
+
+    Collections are addressed by NAME rather than by id, following
+    `put_in_collection`'s own choice: a caller holding a document and the word
+    "Research" should not have to look a uuid up first.
+  */
+  document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
+  document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
+  collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },
+  collection_take: { fn: 'take_out_of_collection', required: ['p_document', 'p_collection_name'] },
   reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
   reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
   lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
@@ -540,16 +589,23 @@ Deno.serve(async (request: Request): Promise<Response> => {
     all of it" is a different request and would be a different section.
   */
   if (section.textArg !== undefined) {
-    const q = (url.searchParams.get('q') ?? '').trim()
-    if (q === '' || q.length > 200) {
-      return json({ error: 'that section needs a query of 1 to 200 characters' }, 400)
+    const { param, arg } = section.textArg
+    const value = (url.searchParams.get(param) ?? '').trim()
+    if (value === '' || value.length > 200) {
+      return json({ error: `that section needs ${param} of 1 to 200 characters` }, 400)
     }
-    args = { ...args, [section.textArg]: q }
-    /*
-      Scoped to one project when asked. Optional, because #37 wants it scoped
-      to the current project by default and widenable to everything, and the
-      page is what knows which one you are looking at.
-    */
+    args = { ...args, [arg]: value }
+  }
+  /*
+    Scoped to one project when asked, and only where the section takes it.
+
+    #37 wants search scoped to the current project by default and widenable to
+    everything, and the page is what knows which one you are looking at. Gated
+    on the SECTION rather than on the parameter being present, because passing
+    `p_project` to an RPC with no such argument is an error, not a no-op — and
+    `relations` was about to be the first section to prove it.
+  */
+  if (section.scoped === true) {
     const within = url.searchParams.get('project') ?? ''
     if (within !== '') {
       if (!UUID.test(within)) return json({ error: 'project must be an id' }, 400)
