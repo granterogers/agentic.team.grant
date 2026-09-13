@@ -13,13 +13,13 @@
 >
 > | | |
 > |---|---|
-> | Tests | **997 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` 0 findings |
+> | Tests | **997 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` **289 desktop / 307 phone / 100 team, 0 findings** · `verify:history` **24/24** |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
 > | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
 > | Free tier | measured, not guessed: **31 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | **333 applied** |
+> | Migrations | **337 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -65,7 +65,45 @@
 > Migrations 0323–0328. Everything is reachable over HTTP and
 > `verify:settings` drives that chain including the browser layer.
 >
-> **Phase 7 — Communications is planned but not started (#191).** Grant's
+> **Phase 7 has started: #192 is built (0334–0337, ADR-0025).**
+> `app.conversation_history(project_id, limit, before)` returns one project's
+> conversation, both sides, in order, whatever surface each message arrived on,
+> at `hq-api?section=conversation&id=<project>`. `verify:history` drives the
+> whole chain including HTTP, 24/24.
+>
+> **There is no conversations table**, and that is the decision to argue with
+> rather than discover. `public.relations` is six migrations back in CLAUDE.md's
+> trap list — the edge table that never held a row while six columns held the
+> same facts — so the history is DERIVED from `inbound_commands` and `outputs`.
+> The one fact no column expressed was `inbound_commands.project_id`: 57 of 251
+> commands have no job at all, so a fifth of everything Grant has said could not
+> be attributed anywhere. ADR-0025 names the signal that would make a
+> conversations table earn its place: a requirement for more than one thread per
+> project, not a feeling that the model looks thin.
+>
+> Adding one fact took three migrations and two of them were defects caught by
+> the suite. 0336: `enqueue_inbound` resolves the job's project separately, so
+> one exchange could split across two conversations. 0337: it then had to READ
+> the column, which 0335 and 0336 had left write-only — 0298's `web.search` with
+> the sign flipped, and the studio sending from a project page would have been
+> misfiled from the day it shipped. Found by printing where the job actually
+> landed; the earlier check asserted only that command and job AGREED and passed
+> while both pointed at the wrong project. **Agreement is not correctness.**
+>
+> 0334 also creates the reserved **Unnamed** project (ADR-0024) and the
+> protection it needed: `projects.reserved_reason`, and `project_delete` refuses
+> a row carrying one. It is not `is_fixture` and is deliberately not named
+> anything beginning `untitled`, because `check:leaks` sweeps
+> `untitled-notebook-%`.
+>
+> **Also found, and corrected in the plan:** most of #195 already exists.
+> `inbound_commands.dedupe_key` is NOT NULL, UNIQUE and shaped
+> `<surface>:<kind>:<id>`; `deliveries.dedupe_key` is unique too and
+> `deliveries.message_ref` already holds the external id of everything the
+> office has sent. What is genuinely left there is loop prevention, not identity
+> or dedup.
+>
+> **Phase 7 — the rest is planned, not started (#191).** Grant's
 > 13 September brief said GitHub is the durable memory and nothing important
 > may live only in a conversation. The brief is stored verbatim at
 > `docs/spec/github-persistence-brief-2026-09-13.md` and its twenty-six
