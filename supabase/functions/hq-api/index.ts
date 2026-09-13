@@ -372,6 +372,22 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     raised again while the row stands, which is what makes a decline stick
     rather than becoming a nag. Reopening is allowed and is a person's call.
   */
+  /*
+    Pointing a project at something we cannot log into (#35, migration 0306).
+
+    Only the slug and the link are required: the kind and the title are
+    inferred from the URL, because a form with a kind dropdown and a title
+    field is three decisions for something Grant pasted in one gesture, and
+    §31 calls an avoidable request for manual configuration a design failure.
+    Both are still accepted, so a wrong guess is correctable.
+
+    On the configuring side of the line: a reference holds nothing, so adding
+    one and removing one both lose nothing. That is exactly why `remove` is a
+    real delete here while `detach` only disables — a connector has a corpus
+    behind it and ADR-0013 keeps it; a pointer does not.
+  */
+  reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
+  reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
   lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
   proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
 }

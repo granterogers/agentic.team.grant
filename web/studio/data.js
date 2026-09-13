@@ -195,10 +195,24 @@ const FALLBACK_PROJECTS = [
         health: 'ok', last: '2 days ago', gave: 6 },
       { kind: 'connector', name: 'NotebookLM', what: 'The interview corpus',
         health: 'ok', last: '4 hours ago', gave: 12 },
-      { kind: 'reference', name: 'Journey vs Destination (published)', what: 'The piece Priya came through',
-        last: 'Added 3 weeks ago', gave: 0 },
-      { kind: 'reference', name: 'Zoom cloud recordings', what: 'Interview recordings, not yet pulled in',
-        last: 'Added 1 week ago', gave: 0 },
+      /*
+        References, in the shape `app.studio_sources` returns since #35
+        (migration 0306): a `via` naming what kind of thing it is, a real URL,
+        and NO health, last-read or contribution count.
+
+        Those three are null on purpose rather than missing. A reference is a
+        pointer — it never fails, nothing syncs it, and nothing has read it —
+        so a card that showed "Read never" beside a bookmark would be inventing
+        a state it does not have.
+      */
+      { kind: 'reference', id: 'm-r1', ref: 'website', via: 'A website',
+        name: 'innergy.com/journey-vs-destination',
+        url: 'https://innergy.com/journey-vs-destination',
+        what: 'The piece Priya came through', health: null, last: null, gave: null },
+      { kind: 'reference', id: 'm-r2', ref: 'application', via: 'An application',
+        name: 'zoom.us/recording', url: 'https://zoom.us/recording',
+        what: 'Interview recordings, not yet pulled in',
+        health: null, last: null, gave: null },
     ],
 
     /*

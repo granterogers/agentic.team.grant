@@ -1993,7 +1993,7 @@ function sources(p) {
         No backticks in this comment: template literal.
       -->
       ${canWrite() ? `<span data-saidwrap class="addsource">
-        <input data-src-ref placeholder="Paste a Notion, Drive or notebook link" aria-label="A link to connect">
+        <input data-src-ref placeholder="Paste any link — a notebook, a Drive folder, a website, an API" aria-label="A link to connect">
         <button class="btn" data-add-source="${esc(p.slug)}">Connect</button>
         <span class="t-meta" data-said></span>
       </span>` : ''}
@@ -2037,7 +2037,7 @@ function sources(p) {
                 x.health !== 'ok' ? esc(x.problem ?? 'switched off')
                 : x.last === 'never' ? 'Not read yet'
                 : `Read ${esc(x.last)}`}</span>`
-            : `<span class="t-meta">${esc(x.last)}</span>`}
+            : x.last ? `<span class="t-meta">${esc(x.last)}</span>` : ''}
           <!--
             Counted per CONNECTOR, not per attachment, because documents record
             which connector they came through and not which of its data sources.
@@ -2050,9 +2050,24 @@ function sources(p) {
           -->
           ${x.gave > 0 ? `<span class="t-meta">${x.gave} via ${esc(x.via ?? 'it')}</span>` : ''}
           <span class="t-meta" data-said></span>
+          <!--
+            Disconnect and Remove are different acts and say so.
+
+            Detaching a connector DISABLES the row and keeps the corpus it fed
+            (ADR-0013), so the word is Disconnect and the documents survive.
+            A reference holds nothing at all, so removing it is a real delete
+            and there is nothing to warn about. One button, two verbs, because
+            offering Disconnect on a bookmark implies a corpus that is not
+            there.
+
+            No backticks in this comment: template literal.
+          -->
           ${canWrite() && x.id
-            ? `<button class="btn small quiet" data-detach="${esc(x.id)}"
-                 data-name="${esc(x.name)}">Disconnect</button>`
+            ? x.kind === 'reference'
+              ? `<button class="btn small quiet" data-unref="${esc(x.id)}"
+                   data-name="${esc(x.name)}">Remove</button>`
+              : `<button class="btn small quiet" data-detach="${esc(x.id)}"
+                   data-name="${esc(x.name)}">Disconnect</button>`
             : ''}
         </span>
       </article>`).join('')}</div>
@@ -4640,13 +4655,45 @@ function render() {
         field?.focus()
         return
       }
-      const done = await attempt(b, 'Connecting…', () =>
-        act('attach', { p_slug: b.dataset.addSource, p_ref: ref }),
-      )
+      /*
+        A connector if one claims it, a plain reference otherwise (#35).
+
+        `hq_attach` reads `knowledge_connectors` and works out whether a link
+        is a Notion database, a Drive folder or a notebook. Anything else — a
+        website, an API, a competitor's pricing page — is not a connector and
+        never will be, so it becomes a reference instead of an error.
+
+        Tried in that order rather than by inspecting the URL here, because the
+        registry is the thing that knows which links are claimed and this page
+        would be a second copy of that knowledge, drifting.
+      */
+      const done = await attempt(b, 'Adding…', async () => {
+        try {
+          return await act('attach', { p_slug: b.dataset.addSource, p_ref: ref })
+        } catch (error) {
+          const why = error instanceof Error ? error.message : String(error)
+          // Only fall through when the refusal was "nothing here recognises
+          // this". A connector that IS recognised and failed for its own
+          // reason — a bad token, a page we cannot see — must keep saying so.
+          if (!/not (?:a )?recognis|no connector|could not tell|unrecognis/i.test(why)) throw error
+          return await act('reference_add', { p_slug: b.dataset.addSource, p_url: ref })
+        }
+      }, (r) => (r?.kind === undefined ? 'Connected.' : `Added as ${String(r.kind)}.`))
       if (done) {
         if (field) field.value = ''
         await refresh()
       }
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-unref]')) {
+    b.addEventListener('click', async () => {
+      // No confirmation. A reference is a pointer with nothing behind it, and
+      // pasting the link again restores it exactly — asking would be ceremony
+      // over an act that loses nothing.
+      const done = await attempt(b, 'Removing…', () =>
+        act('reference_remove', { p_reference_id: b.dataset.unref }), 'Removed.')
+      if (done) await refresh()
     })
   }
 

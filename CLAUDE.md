@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **305 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **307 applied.**
 
 ---
 
@@ -559,6 +559,15 @@ Each of these cost real time. They are here so they cost it once.
   filters fixtures to use a REAL project, and `jobs.is_fixture` is GENERATED
   from `requested_by`. So fixture jobs on real projects were invisible to the
   sweep by construction, and twelve accumulated in the queue.
+- **`jsonb_agg(x)` where `x` is a subquery alias aggregates the ROW, not the
+  payload.** 0306 unioned two halves of a list as `(ord, at, v)` rows and
+  wrote `jsonb_agg(x order by x.ord, x.at)`; every element came back as
+  `{"ord":0,"at":"…","v":{…}}`, so the page read `kind` and `name` off the top
+  level and got null for every field of every source. It did not throw and the
+  array was the right LENGTH — a card with nothing in it, which has no
+  overflow, no small type and no bad contrast. Name the column
+  (`jsonb_agg(alias.v order by alias.ord)`), and keep the sort keys out of the
+  payload.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

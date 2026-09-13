@@ -303,5 +303,7 @@
   "0302_what_the_office_learned_and_why.sql": "997685183838ff30710124c66111bbec00dfeb8b333cff199548af58ba8ba8dd",
   "0303_a_probe_is_not_a_wall_the_office_hit.sql": "0dc6de5cff9e134f5af3bd2a578fa29a0bcabb3893b0328e4ac5f4fb493ae6d7",
   "0304_either_half_may_say_it_is_a_fixture.sql": "bd3419f99308202420824dda740d82dd027059951257876bf6cfa1508dc8a60f",
-  "0305_the_containers_came_back.sql": "ddaa5cda73ddcdff7019346462e361691c5462bada5aea444bedf77bde88ecb8"
+  "0305_the_containers_came_back.sql": "ddaa5cda73ddcdff7019346462e361691c5462bada5aea444bedf77bde88ecb8",
+  "0306_a_project_may_point_at_anything.sql": "4f68d26c1fcc96c3c11b945041c42577535d115e81f0aa1eddfea1ee287e4d76",
+  "0307_aggregate_the_payload_not_the_row.sql": "7be24e5c938ffb28b4ee5c889882b17093a72b43664bb168c47cbee1dd7fb260"
 }
