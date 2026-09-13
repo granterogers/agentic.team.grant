@@ -490,6 +490,18 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     nobody named the Chief of Staff takes it, as everywhere else — and so is the
     second asset, which only `compare` needs and the RPC refuses without.
   */
+  /*
+    Saying something in a project, with no asset attached (#26, #193).
+
+    `send_to_agent` above is the asset path — send THIS document to Emma. This
+    is the composer: free text, optionally addressed to one of the team.
+
+    `p_addressed_to` is deliberately not required. Not choosing is a valid way
+    to send a message, and #26 says keyword routing stays the fallback when
+    Grant does not pick — a composer that forces you to name somebody makes the
+    common case the awkward one.
+  */
+  say: { fn: 'say_in_project', required: ['p_project_id', 'p_text'] },
   send_to_agent: { fn: 'send_to_agent', required: ['p_kind', 'p_id', 'p_action'] },
   /*
     The import gate (#28, migration 0315).

@@ -445,6 +445,88 @@ try {
   void enq2
 
   // -----------------------------------------------------------------------
+  console.log('\nthe studio can say something, not just act on something')
+
+  /*
+    #26 and #193. `send_to_agent` needs an asset; this is the composer.
+    Driven through the RPC here and over HTTP below, because the studio reaches
+    it through hq-api and that is the layer a missing public wrapper breaks.
+  */
+  const spoke = (
+    await one(
+      `select app.say_in_project(${lit(mine)}::uuid, ${lit(`Said from the studio ${run}`)}, 'research-director') as v`,
+    )
+  ).v as {
+    ok?: boolean
+    command?: string
+    job?: string
+    addressed_to?: string
+    addressee_dropped?: string
+  }
+  check(
+    'saying something makes a real command and real work',
+    `command ${String(spoke?.command).slice(0, 8)}, job ${String(spoke?.job).slice(0, 8)}`,
+    spoke?.ok === true && typeof spoke.job === 'string' && spoke.job !== '',
+  )
+  check(
+    'and it is addressed to the person who was picked',
+    String(spoke?.addressed_to),
+    spoke?.addressed_to === 'research-director',
+  )
+
+  const spokenHistory = await history(mine, 100)
+  check(
+    'it appears in that project’s conversation, from Grant',
+    `${String(spokenHistory.length)} message(s)`,
+    spokenHistory.some(
+      (m) => String(m.body).includes('Said from the studio') && m.from === 'grant',
+    ),
+  )
+  check(
+    'on the teamhq surface — not a new word for the web dashboard (0313)',
+    String(spokenHistory.find((m) => String(m.body).includes('Said from the studio'))?.surface),
+    spokenHistory.find((m) => String(m.body).includes('Said from the studio'))?.surface ===
+      'teamhq',
+  )
+
+  /*
+    The case that decides whether this is safe. `addressed_to` is a foreign key
+    to `staff`, so a slug naming nobody would fail the INSERT and lose the
+    whole message — which is exactly what happened to Grant once through the
+    Slack adapter, recorded in CLAUDE.md.
+  */
+  const badName = (
+    await one(
+      `select app.say_in_project(${lit(mine)}::uuid, ${lit(`Addressed to nobody ${run}`)}, 'nobody-at-all') as v`,
+    )
+  ).v as { ok?: boolean; addressed_to?: string | null; addressee_dropped?: string }
+  check(
+    'an addressee naming nobody does NOT lose the message',
+    `ok=${String(badName?.ok)}, addressed_to=${String(badName?.addressed_to)}`,
+    badName?.ok === true && (badName.addressed_to ?? null) === null,
+  )
+  check(
+    'and the composer is told the name was dropped rather than it happening silently',
+    String(badName?.addressee_dropped),
+    badName?.addressee_dropped === 'nobody-at-all',
+  )
+  check(
+    'the words still reach the conversation',
+    'checked',
+    (await history(mine, 100)).some((m) => String(m.body).includes('Addressed to nobody')),
+  )
+
+  const empty = (await one(`select app.say_in_project(${lit(mine)}::uuid, '   ') as v`)).v as {
+    ok?: boolean
+    error?: string
+  }
+  check(
+    'and saying nothing is refused in English, not by a constraint name',
+    String(empty?.error),
+    empty?.ok === false && String(empty?.error).includes('nothing to say'),
+  )
+
+  // -----------------------------------------------------------------------
   console.log('\nthe layer the studio actually uses')
 
   const base = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/hq-api`
@@ -480,6 +562,37 @@ try {
       'a malformed project id is refused at the door, not by Postgres',
       `http ${String(bad.status)}`,
       bad.status === 400,
+    )
+
+    /*
+      The write action over HTTP. A read wrapper can exist while the write one
+      does not — `verify:search` found exactly that shape — so both legs are
+      driven rather than one standing in for the other.
+    */
+    const posted = await fetch(base, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${hqToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'say',
+        args: { p_project_id: mine, p_text: `Said over HTTP ${run}` },
+      }),
+    })
+    // A read section answers `{data}`; an action answers `{action, result}`.
+    // Two shapes on one endpoint, and reading the wrong one reports http 200
+    // with ok=undefined — which looks like a broken action and is a broken test.
+    const postedBody = (await posted.json().catch(() => ({}))) as {
+      result?: { ok?: boolean; error?: string }
+    }
+    check(
+      'and the studio can SAY something over HTTP, not only read',
+      `http ${String(posted.status)}, ok=${String(postedBody.result?.ok)}`,
+      posted.ok && postedBody.result?.ok === true,
+    )
+    const saidOverHttp = await history(mine, 100)
+    check(
+      'and what it said is in the conversation, through the whole chain',
+      'checked',
+      saidOverHttp.some((m) => String(m.body).includes('Said over HTTP')),
     )
 
     const noAuth = await fetch(`${base}?section=conversation&id=${mine}`)
