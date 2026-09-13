@@ -804,6 +804,19 @@ Each of these cost real time. They are here so they cost it once.
   four real surfaces and `kind` is hardcoded, so **no suite driving the real
   enqueue path could produce a fixture job at all** until 0342 added
   `%:verify-%`. If a suite believes its work is invisible, make it assert that.
+- **An explicit preference makes the media query the audits were setting
+  inert.** The studio's default scheme became `'dark'` (Grant asked for dark
+  concrete), and an explicit choice writes `data-scheme` on the root — every
+  dark block in `skins.css` is guarded `:not([data-scheme="light"])`, so
+  `prefers-color-scheme` stopped deciding anything. Four audits were standing
+  in for a light user through Playwright's `colorScheme`, which sets only that
+  media query: `verify:layouts` reported 25 contrast failures on a correct
+  change, and `npm run shots` wrote PNGs named `-light` that were dark. The
+  wrong-payload trap with the sign flipped — red rather than green, which is
+  the lucky direction and the only reason it was caught in one run. An audit
+  asks for a scheme the way a person does, through the stored preference:
+  `scripts/verify/seed-appearance.ts`. Before setting a browser-level signal in
+  a test, check whether the product still reads it.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
