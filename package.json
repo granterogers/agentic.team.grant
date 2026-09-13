@@ -39,6 +39,8 @@
     "verify:dictation": "tsx scripts/verify/dictation.ts",
     "verify:transport": "tsx scripts/verify/transport.ts",
     "verify:channels": "tsx scripts/verify/channels.ts",
+    "verify:equivalence": "tsx scripts/verify/equivalence.ts",
+    "verify:conversation-all": "npm run verify:history && npm run verify:echo && npm run verify:equivalence && npm run verify:transport && npm run verify:chat && npm run verify:dictation && npm run verify:channels && npm run verify:access",
     "verify:echo": "tsx scripts/verify/echo.ts",
     "wide": "tsx scripts/verify/wide.ts",
     "verify:github-token": "tsx scripts/verify/github-token-live.ts",
