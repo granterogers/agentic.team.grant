@@ -4567,3 +4567,28 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 @media (max-width: 860px) {
   .tabhead .t-lead { display: none; }
 }
+
+/*
+  #200. A contact card is a card, and the NAME is the control.
+
+  It used to be one big button with `mailto:` and `tel:` anchors inside it —
+  a control inside a control, which is invalid HTML and which axe reports as
+  `nested-interactive`: a screen reader cannot reach the inner one at all.
+
+  The stretched-control pattern keeps every pixel of the card clickable while
+  leaving the links reachable. The name's pseudo element covers the card
+  (`.pcard` is already `position: relative`), and `.reach` sits above it.
+
+  Written at the END of the stylesheet, where phone and late overrides go —
+  `.pcard`'s own rules are four hundred lines up and a media query adds no
+  specificity, which this file has been bitten by twice.
+*/
+.pmain {
+  display: grid; gap: 3px; width: 100%; text-align: left;
+  padding: 0; background: none; border: 0; color: inherit;
+}
+.pmain b { font: 600 15.5px/1.2 var(--text); }
+/* The ring goes on the CARD. The button is most of the card and a ring drawn
+   tight around it inside a bordered card reads as a box in a box. */
+.pmain:focus-visible { outline: none; }
+.pcard:focus-within { box-shadow: var(--lift-2), 0 0 0 2px var(--accent); }

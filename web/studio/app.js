@@ -1653,12 +1653,40 @@ function peopleTab(p) {
 
               No backticks in this comment. Template literal.
             -->
-            <button class="pcard ${c.hue}" data-person="${esc(c.name)}">
+            <div class="pcard ${c.hue}">
               <span class="pbody">
-                <b>${esc(c.name)}</b>
-                <span class="t-meta">${esc(c.role ?? '')}${c.org ? ` · ${esc(c.org)}` : ''}</span>
-                <span class="tags">${people.labelsFor(c).map((l) =>
-                  `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>
+                <!--
+                  The name is the button; the card is not (#200).
+
+                  It used to be a button wrapping the whole card, with the
+                  mailto and tel anchors inside it. That is a control inside a
+                  control: invalid HTML, and axe reports it as
+                  nested-interactive because a screen reader cannot reach the
+                  inner one at all. Four contacts, every tab, both themes, and
+                  no existing check could see it — verify:wired looks up
+                  attributes, verify:controls presses what it can reach with a
+                  mouse, and neither asks whether the markup is reachable
+                  another way.
+
+                  So the links became SIBLINGS of the button rather than
+                  children of it, and the button keeps the name, the role and
+                  the labels — which is most of the card's height.
+
+                  The first attempt made only the name a button and stretched a
+                  pseudo element over the card. It passed axe and it was worse:
+                  verify:layouts immediately measured a 301x19 touch target,
+                  because the hit area and the CONTROL are not the same thing
+                  and an audit can only see the second. Reachable by thumb and
+                  19 pixels tall is the shape of a control nobody can rely on.
+
+                  No backticks in this comment. Template literal.
+                -->
+                <button class="pmain" data-person="${esc(c.name)}">
+                  <b>${esc(c.name)}</b>
+                  <span class="t-meta">${esc(c.role ?? '')}${c.org ? ` · ${esc(c.org)}` : ''}</span>
+                  <span class="tags">${people.labelsFor(c).map((l) =>
+                    `<span class="tag ${l.hue}">${esc(l.name)}</span>`).join('')}</span>
+                </button>
                 <span class="reach">
                   ${c.email ? `<a href="mailto:${esc(c.email)}" data-stop>${esc(c.email)}</a>` : ''}
                   ${c.phone ? `<a href="tel:${esc(String(c.phone).replace(/\s+/g, ''))}" data-stop>${esc(c.phone)}</a>` : ''}
@@ -1667,7 +1695,7 @@ function peopleTab(p) {
                 </span>
                 ${c.next ? `<span class="t-meta from">Next: ${esc(c.next)}</span>` : ''}
               </span>
-            </button>`).join('')}</div>`
+            </div>`).join('')}</div>`
     }
   </div>`
 }
