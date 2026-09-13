@@ -54,6 +54,7 @@
     "verify:addressing": "tsx scripts/verify/addressing.ts",
     "verify:search": "tsx scripts/verify/search.ts",
     "verify:graph": "tsx scripts/verify/graph.ts",
+    "verify:send": "tsx scripts/verify/send.ts",
     "e2e": "tsx scripts/e2e.ts",
     "verify:proposes": "tsx scripts/verify/proposes.ts",
     "verify:acquire": "tsx scripts/verify/acquire.ts",

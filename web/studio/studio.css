@@ -70,6 +70,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    apart. */
 :root { --rail: 220px; }
 .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+
 @media (max-width: 860px) { .shell { grid-template-columns: minmax(0, 1fr); } }
 
 .rail {
@@ -1351,6 +1352,68 @@ body::after {
 /* Touch has no hover. A permanently visible action is better than an invisible
    one, and at 30px it does not crowd the card. */
 @media (pointer: coarse) { .talkabout { opacity: .85; } }
+
+/*
+  The send menu (#27).
+
+  A popover anchored to the trigger, not a child of the card — the cards are
+  buttons, and a button inside a button is invalid HTML that browsers repair by
+  moving the inner one out, which is how a menu ends up rendering somewhere
+  surprising.
+
+  `position: absolute` against `.sendwrap`, which is the sibling span the card
+  already sits beside. Right-aligned, because the trigger is at the card's
+  right edge and a menu opening leftward from there stays on screen; opening
+  rightward would run off a 390px viewport on every card in the last column.
+
+  z-index above the cards and below the sheets: it must cover its neighbours
+  and must not cover a dialog.
+*/
+/*
+  `display: contents`, so the wrapper generates NO box.
+
+  `.talkabout` has been `position: absolute; right: 8px; top: 8px` against
+  `.withtalk` since it was written, and `.module` and the task row each override
+  those offsets. Wrapping the button in a positioned span made `.sendwrap` the
+  containing block instead, so the trigger left the card's corner and sat inline
+  in the flow — and the three existing overrides all stopped applying.
+
+  With `display: contents` the wrapper is not a box at all: the button
+  positions against `.withtalk` exactly as before, every override still lands,
+  and the menu anchors to the same element the trigger does. Nothing above this
+  line had to change.
+*/
+.sendwrap { display: contents; }
+
+.sendmenu {
+  /*
+    42px, not `calc(100% + …)`: the containing block is now the whole CARD, and
+    100% of that is its bottom edge — the menu would open below the card
+    instead of below the button. The trigger is at top 8 and is 30 tall.
+  */
+  position: absolute; top: 42px; right: 8px; z-index: 40;
+  display: grid; min-width: 178px; padding: var(--s1);
+  border: 1px solid var(--edge); border-radius: var(--r-card);
+  background: var(--surface); box-shadow: var(--lift-2);
+}
+
+.senditem {
+  display: block; width: 100%; text-align: left;
+  /* 44px, because this is a real touch target and not a decoration. */
+  min-height: 44px; padding: 0 var(--s3);
+  border: 0; border-radius: var(--r-control); background: none;
+  color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer;
+}
+.senditem:hover { background: var(--wash); }
+.senditem:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/*
+  Compare is disabled until there is a second thing to compare against, and it
+  says why on hover rather than vanishing — an action that disappears reads as
+  a bug, and one that is visibly not yet available teaches what it needs.
+*/
+.senditem[disabled] { color: var(--ink-3); cursor: default; }
+.senditem[disabled]:hover { background: none; }
+.senditem.quiet { color: var(--ink-2); border-top: 1px solid var(--edge); margin-top: var(--s1); }
 .module { position: relative; }
 .module .talkabout { right: 6px; top: 6px; width: 28px; height: 28px; }
 /* The task row's own face sits on the right, so the action moves in past it. */
@@ -4131,4 +4194,15 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .askwho { gap: var(--s1) var(--s2); }
   .askwho select { flex: 1 1 auto; min-width: 0; }
   .askwho .t-meta { flex-basis: 100%; white-space: normal; }
+}
+
+@media (max-width: 860px) {
+  /*
+    The send menu on a phone (#27).
+
+    At the END of the file with the other phone overrides. A 178px menu opening
+    from a card in a two-column grid can still cross the right edge at 390px,
+    so it is pinned to the viewport width instead of the trigger.
+  */
+  .sendmenu { min-width: 0; width: max-content; max-width: calc(100vw - var(--s5)); }
 }

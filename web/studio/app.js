@@ -237,17 +237,64 @@ const cover = (d) => {
   - It carries `kind` and `id`, not a sentence. When this reaches the backend
     the job gets the id; a description would have to be parsed back.
 */
-const talkBtn = (kind, id, title) => `
-  <button class="talkabout" data-talk-kind="${esc(kind)}" data-talk-id="${esc(id)}"
-          data-talk-title="${esc(title)}"
-          title="Talk to the team about this" aria-label="Talk to the team about ${esc(title)}">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/>
-    </svg>
-  </button>`
+/*
+  Send this to someone, and say what to do with it (#27).
 
-/** A card and its talk action, side by side rather than nested. */
+  This was one button meaning "talk to the team about this", which opened the
+  composer with the item attached. That left Grant typing the verb every time,
+  in whatever words occurred to him, for the office to parse back out of a
+  sentence. The specification names the actions instead — Review, Summarise,
+  Research, Critique, Extract tasks, Compare — and each one now creates a typed
+  job carrying the asset's ID.
+
+  The actions come from `config.ACTIONS`, hydrated from `public.asset_actions`.
+  Not a list in this file: they are rows so an eighth is a row and not a coding
+  session, and a page that hard-codes them is a page that disagrees with the
+  office the first time one changes.
+
+  Still a SIBLING of the card, never a child — the cards are buttons and a
+  button inside a button is invalid HTML. #27 says to keep that when the menu
+  arrives, and this does: the menu is a popover positioned against the trigger,
+  not nested inside the card.
+*/
+const talkBtn = (kind, id, title) => `
+  <span class="sendwrap">
+    <!--
+      No data-send-title. The title is in the aria-label where a screen reader
+      needs it, and the RPC looks the real one up from the asset itself — an
+      attribute nothing reads is a control nothing can have wired, which is
+      what verify:wired exists to catch and did.
+    -->
+    <button class="talkabout" data-send-kind="${esc(kind)}" data-send-id="${esc(id)}"
+            aria-haspopup="menu"
+            aria-expanded="${state.sendFor === `${kind}:${id}` ? 'true' : 'false'}"
+            title="Send to the team" aria-label="Send ${esc(title)} to the team">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20.5l1.6-4.7A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9z"/>
+      </svg>
+    </button>
+    ${state.sendFor !== `${kind}:${id}` ? '' : `<span class="sendmenu" role="menu"
+        aria-label="What should the team do with ${esc(title)}">
+      ${(config.ACTIONS ?? []).map((a) => `<button role="menuitem" class="senditem"
+          data-do-action="${esc(a.action)}" data-do-kind="${esc(kind)}"
+          data-do-id="${esc(id)}"
+          ${a.needs_two ? 'disabled title="Pick a second thing to compare against first"' : ''}
+        >${esc(a.label)}</button>`).join('')}
+      <!--
+        Custom instruction is last and is not one of the rows, because it has
+        no fixed sentence: it opens the composer with the item attached, which
+        is what the single button used to do and is still the right answer when
+        none of the six fits.
+
+        No backticks in this comment: template literal.
+      -->
+      <button role="menuitem" class="senditem quiet" data-talk-kind="${esc(kind)}"
+        data-talk-id="${esc(id)}" data-talk-title="${esc(title)}">Say something else…</button>
+    </span>`}
+  </span>`
+
+/** A card and its send action, side by side rather than nested. */
 const withTalk = (html, kind, id, title) =>
   `<span class="withtalk">${html}${talkBtn(kind, id, title)}</span>`
 
@@ -581,6 +628,24 @@ function pickCommand(index) {
 }
 
 const openCmd = () => { state.cmd = { open: true, q: '', at: 0 }; render(); $('[data-cmd-input]')?.focus() }
+/*
+  A menu that only closes by pressing its own trigger again is a menu that gets
+  left open behind whatever you do next. Escape and a click anywhere else both
+  shut it, which is what every other popover in this product does.
+*/
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.sendFor) {
+    state.sendFor = null
+    render()
+  }
+})
+document.addEventListener('click', (e) => {
+  if (!state.sendFor) return
+  if (e.target.closest?.('.sendwrap')) return
+  state.sendFor = null
+  render()
+})
+
 const closeCmd = () => {
   state.cmd = { open: false, q: '', at: 0 }
   insideFor = ''
@@ -5602,6 +5667,55 @@ function render() {
       state.tab = back?.tab ?? 'documents'
       state.sub = back?.sub ?? 'board'
       render()
+    })
+  }
+
+  /*
+    Open the menu, and only one at a time (#27).
+
+    `state.sendFor` holds which asset's menu is open rather than a boolean,
+    because two open menus on a gallery of thirty documents is a page nobody
+    can read — and because the trigger needs `aria-expanded` and only the one
+    that is open should say true.
+
+    `stopPropagation` for the same reason the old single button had it: the
+    card underneath opens the document, and pressing the send button is not
+    pressing the card. #27 asks for this by name.
+  */
+  for (const b of root.querySelectorAll('[data-send-kind]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const key = `${b.dataset.sendKind}:${b.dataset.sendId}`
+      state.sendFor = state.sendFor === key ? null : key
+      render()
+    })
+  }
+
+  /*
+    A named action, straight to the office.
+
+    No composer, no sentence to type: the RPC builds the instruction from the
+    action and carries the asset's ID as a fact beside it. `attempt` handles the
+    in-flight label and the failure text, the way every other write here does.
+  */
+  for (const b of root.querySelectorAll('[data-do-action]')) {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      const done = await attempt(
+        b,
+        'Sending…',
+        () =>
+          act('send_to_agent', {
+            p_kind: b.dataset.doKind,
+            p_id: b.dataset.doId,
+            p_action: b.dataset.doAction,
+          }),
+        (r) => `${String(r?.action ?? 'Sent')} — it is with the team.`,
+      )
+      if (done) {
+        state.sendFor = null
+        await refresh()
+      }
     })
   }
 

@@ -194,6 +194,8 @@ const SECTIONS: Readonly<
     rather than a second copy of the list here.
   */
   relations: { fn: 'relations_of', arg: 'p_id', textArg: { param: 'kind', arg: 'p_kind' } },
+  /** The named actions, so no page hard-codes them (#27). */
+  actions: { fn: 'asset_actions' },
 }
 
 /**
@@ -446,6 +448,14 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     `put_in_collection`'s own choice: a caller holding a document and the word
     "Research" should not have to look a uuid up first.
   */
+  /*
+    Send an asset to the team with a NAMED action (#27, migration 0313).
+
+    Only the asset and the verb are required. Who it goes to is optional — with
+    nobody named the Chief of Staff takes it, as everywhere else — and so is the
+    second asset, which only `compare` needs and the RPC refuses without.
+  */
+  send_to_agent: { fn: 'send_to_agent', required: ['p_kind', 'p_id', 'p_action'] },
   document_rename: { fn: 'rename_document', required: ['p_document', 'p_title'] },
   document_tag: { fn: 'tag_document', required: ['p_document', 'p_tag'] },
   collection_put: { fn: 'put_in_collection', required: ['p_document', 'p_collection_name'] },

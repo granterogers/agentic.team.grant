@@ -217,6 +217,26 @@ export const SPARE_BOTS = []
 /** The first-run checklist, from `hq_setup`. Fetched with the rest. */
 export const SETUP = {}
 
+/**
+ * What an agent can be asked to do to an asset (#27).
+ *
+ * From `public.asset_actions`, not a list in this file. They are rows so an
+ * eighth is a row and not a coding session — and a page holding its own copy
+ * is a page that disagrees with the office the first time one changes.
+ *
+ * The fallback is the six the specification names, for the same reason every
+ * other fallback here exists: §14A's loop is render, capture, critique, and a
+ * menu that is empty without a live backend is a menu nobody critiques.
+ */
+export const ACTIONS = [
+  { action: 'review', label: 'Review', needs_two: false },
+  { action: 'summarise', label: 'Summarise', needs_two: false },
+  { action: 'research', label: 'Research', needs_two: false },
+  { action: 'critique', label: 'Critique', needs_two: false },
+  { action: 'extract_tasks', label: 'Extract tasks', needs_two: false },
+  { action: 'compare', label: 'Compare', needs_two: true },
+]
+
 export const settingsSource = { live: false, why: 'not asked yet' }
 
 const replace = (target, rows) => {
@@ -269,6 +289,19 @@ export async function hydrateSettings(read) {
     replace(BEHAVIOURS, d.behaviours ?? [])
     replace(CONNECTIONS, d.connections ?? [])
     replace(CHANNELS, d.channels ?? [])
+
+    /*
+      Its own call for the same reason `studio_setup` is: the named actions are
+      a vocabulary the whole product uses, not a preference on a settings page,
+      and folding them into this payload would make every asset card depend on
+      the settings pane having loaded.
+    */
+    try {
+      const actions = await read('actions')
+      if (Array.isArray(actions) && actions.length > 0) replace(ACTIONS, actions)
+    } catch {
+      // The six from the specification stay. A menu is better than no menu.
+    }
 
     // Its own call: `hq_setup` is a different function with a different job,
     // and folding it into the settings payload would couple a checklist about

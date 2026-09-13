@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **312 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **314 applied.**
 
 ---
 
@@ -625,6 +625,27 @@ Each of these cost real time. They are here so they cost it once.
   taught the graph to see a third that was always true. Assert the edges BY
   NAME. Same correction as the index asserted by name, and the third instance
   of it in this file.
+- **`origin_channel` already has a word for the web dashboard, and it is
+  `teamhq`.** 0313 wrote `'studio'` and was refused by
+  `inbound_origin_channel_known`. ADR-0019 changed which FILES serve the web
+  dashboard; it did not make it a different channel, and `DeliveryChannel`,
+  `CHANNELS`, the callback router and the preference store all say `teamhq`.
+  Widening the constraint would have made two words for one surface — which is
+  what 0311 was spent undoing, three migrations earlier, in a different
+  vocabulary.
+- **`display: contents` is the way to wrap an element that is already
+  absolutely positioned.** Wrapping `.talkabout` in a positioned span to hang a
+  menu off it made the WRAPPER the containing block: the trigger left the
+  card's corner, sat inline in the flow, and the three existing `.module` /
+  task-row offset overrides all stopped applying. With `display: contents` the
+  wrapper generates no box, everything above keeps working, and the menu
+  anchors to the same element the trigger does.
+- **A control that only exists while a menu is open is invisible to
+  `verify:wired`.** It walks seventeen screens and collects the attributes it
+  can SEE, so the six menu items were never checked — while `data-send-title`
+  on the always-visible trigger was caught within seconds of being added. The
+  audit is honest about what it reaches; do not read its silence about a
+  popover as coverage.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 
