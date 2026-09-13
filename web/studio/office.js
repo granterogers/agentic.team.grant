@@ -118,16 +118,28 @@ export async function act(action, args = {}) {
 }
 
 /** Read one section, for the panes that want their own rather than the whole payload. */
-export async function read(section, id) {
+export async function read(section, id, extra) {
   /*
-    `id` is for the one section that takes an argument — `document` (#95).
+    `id` is for the sections that take one — `document` (#95) was the first.
 
     Appended rather than made a separate function, because the auth, the 401
     handling and the unwrapping are identical and a second copy of those is a
     second place for them to drift.
+
+    `extra` is for the ones that take something other than an id: `search`
+    takes `q` and an optional `project` (#37). Passed as an object and encoded
+    here rather than as a query string a caller builds, because a caller
+    building one is a caller that will forget to encode a space — and the
+    first thing anybody searches for has a space in it.
   */
-  const q = id === undefined ? '' : `&id=${encodeURIComponent(id)}`
-  const r = await fetch(`${API}?section=${encodeURIComponent(section)}${q}`, {
+  const parts = [`section=${encodeURIComponent(section)}`]
+  if (id !== undefined) parts.push(`id=${encodeURIComponent(id)}`)
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (v !== undefined && v !== null && v !== '') {
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    }
+  }
+  const r = await fetch(`${API}?${parts.join('&')}`, {
     headers: { Authorization: `Bearer ${token.get()}` },
   })
   if (r.status === 401) {

@@ -52,6 +52,7 @@
     "verify:governs": "tsx scripts/verify/governs.ts",
     "verify:references": "tsx scripts/verify/references.ts",
     "verify:addressing": "tsx scripts/verify/addressing.ts",
+    "verify:search": "tsx scripts/verify/search.ts",
     "e2e": "tsx scripts/e2e.ts",
     "verify:proposes": "tsx scripts/verify/proposes.ts",
     "verify:acquire": "tsx scripts/verify/acquire.ts",

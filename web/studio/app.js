@@ -252,7 +252,19 @@ const withTalk = (html, kind, id, title) =>
   `<span class="withtalk">${html}${talkBtn(kind, id, title)}</span>`
 
 const docCard = (d, i) => withTalk(`
-  <button class="doc" data-doc="${i}">
+  <!--
+    Two keys, and both are needed.
+
+    data-doc is the card's INDEX in the gallery, which is what the local
+    command-bar rows and the keyboard walk use. data-doc-id is the document's
+    real id, which is what anything arriving from the office has — a full-text
+    hit (#37) knows the id and has no idea what position the page put it in.
+    Looking one up by the other would mean the page holding a map it does not
+    need.
+
+    No backticks in this comment: template literal.
+  -->
+  <button class="doc" data-doc="${i}" data-doc-id="${esc(d.id ?? '')}">
     ${cover(d)}
     <span style="font-weight:500;font-size:13px;line-height:1.35">${esc(d.title)}</span>
     <!--
@@ -413,8 +425,20 @@ function emptyState({ says, mine, mineDo, ask }) {
 }
 
 
-function commandBar() {
-  if (!state.cmd.open) return ''
+/**
+ * The rows the command bar shows, built once.
+ *
+ * Both the renderer and the thing that ACTS on a press need this list, and for
+ * a while they each built their own. The comment on `pickCommand` already
+ * warned what that costs — "a second copy of the row list that can disagree
+ * with the one on screen, and the disagreement only shows up as the bar
+ * navigating somewhere you did not pick" — and adding #37's second group made
+ * it true: the renderer grew a group the picker did not have, so every press
+ * below the first group would have opened the wrong thing.
+ *
+ * So there is one list now, and the two callers cannot drift.
+ */
+function commandRows() {
   const p = state.view === 'project' ? byId(state.project) : null
   const all = command.candidates({
     projects: PROJECTS,
@@ -427,14 +451,39 @@ function commandBar() {
   const hits = command.search(state.cmd.q, all)
   const typed = state.cmd.q.trim()
 
+  /*
+    What is INSIDE things, under what they are called (#37).
+
+    The rows above are titles, matched locally against the payload the page
+    already holds — instant, and that is what makes the bar good. These are the
+    words inside documents and inside answers the team wrote, which the page
+    cannot hold and which arrive a moment later from `studio_search`.
+
+    A second group rather than merged and re-ranked: a local title match and a
+    full-text rank are not the same number, and interleaving them would put a
+    weak body match above the document you were obviously reaching for.
+    Grouping is also the honest thing to draw — these took a round trip and the
+    ones above did not.
+  */
+  const inside = (state.cmd.inside ?? []).filter(
+    (r) => !hits.some((h) => h.kind === 'document' && h.title === r.title),
+  )
+
   // Always last, always available. This is the whole idea.
-  const rows = [
+  return [
     ...hits,
+    ...inside,
     ...(typed === '' ? [] : [{
       kind: 'ask', id: 'ask', title: typed,
       hint: p === null ? 'Ask the team — pick a project first' : `Ask the team about ${p.name}`,
     }]),
   ]
+}
+
+function commandBar() {
+  if (!state.cmd.open) return ''
+  const rows = commandRows()
+
   const at = Math.min(state.cmd.at, Math.max(rows.length - 1, 0))
 
   return `<div class="cmdwrap" data-cmd-wrap>
@@ -501,6 +550,22 @@ function runCommand(row) {
     const c = byId(state.project).contacts[go.contact]
     if (c !== undefined) openContact(c)
   }
+  /*
+    A row that matched INSIDE a document opens the document (#37).
+
+    By its real id, not by its index on the page: these rows came from the
+    office and the office does not know or care what position the gallery has
+    put a document in. `data-doc` is an index — the local rows use it, and it
+    is the wrong key for anything that arrived over the wire.
+
+    A row that matched inside an ANSWER lands on Outputs and no further. An
+    output has no screen of its own; the honest thing is to put you where they
+    live rather than to invent a destination.
+  */
+  if (go.open !== undefined && go.open !== '') {
+    const b = $(`[data-doc-id="${go.open}"]`)
+    if (b !== null) b.click()
+  }
 }
 
 
@@ -512,22 +577,73 @@ function runCommand(row) {
  * as the bar navigating somewhere you did not pick.
  */
 function pickCommand(index) {
-  const p = state.view === 'project' ? byId(state.project) : null
-  const all = command.candidates({
-    projects: PROJECTS, project: p, sections: SECTIONS,
-    settings: config.TABS, crew: CREW, docsFor: allDocs,
-  })
-  const hits = command.search(state.cmd.q, all)
-  const typed = state.cmd.q.trim()
-  const rows = [
-    ...hits,
-    ...(typed === '' ? [] : [{ kind: 'ask', id: 'ask', title: typed }]),
-  ]
-  runCommand(rows[index])
+  runCommand(commandRows()[index])
 }
 
 const openCmd = () => { state.cmd = { open: true, q: '', at: 0 }; render(); $('[data-cmd-input]')?.focus() }
-const closeCmd = () => { state.cmd = { open: false, q: '', at: 0 } }
+const closeCmd = () => {
+  state.cmd = { open: false, q: '', at: 0 }
+  insideFor = ''
+}
+
+/*
+  What the last inside-search was FOR.
+
+  Not a timer id and not a boolean: the thing that goes wrong here is an
+  answer for "pri" arriving after the answer for "pricing" and replacing it,
+  which reads as the results going backwards as you type. Comparing the query
+  the answer was for against the query on screen is the only check that
+  survives out-of-order replies.
+*/
+let insideFor = ''
+let insideTimer = null
+
+/**
+ * Search inside documents and answers, a moment after typing stops (#37).
+ *
+ * Debounced at 220ms and floored at three characters. Every keystroke is a
+ * full-text scan of the corpus, and one per letter of "positioning" is twelve
+ * scans of which eleven are thrown away — which costs nothing visible on a
+ * fast connection and is the sort of thing that makes a free tier stop being
+ * free.
+ *
+ * Failure is silent, deliberately. The local title results are already on
+ * screen and they are the ones people use; an error bar over the top of a
+ * working search would be the page reporting its own plumbing.
+ */
+function lookInside(query) {
+  const q = String(query ?? '').trim()
+  if (insideTimer !== null) clearTimeout(insideTimer)
+  if (q.length < 3) {
+    if ((state.cmd.inside ?? []).length > 0) { state.cmd.inside = []; render() }
+    return
+  }
+  insideTimer = setTimeout(async () => {
+    try {
+      const p = state.view === 'project' ? byId(state.project) : null
+      const found = await read('search', undefined, { q, project: p?.id })
+      // The answer is for the query it was asked about, not for whatever is in
+      // the box now.
+      if (state.cmd.q.trim() !== q || !state.cmd.open) return
+      insideFor = q
+      state.cmd.inside = (Array.isArray(found) ? found : []).map((r) => ({
+        kind: r.kind === 'answer' ? 'answer' : 'inside',
+        id: String(r.ref ?? ''),
+        title: String(r.title ?? '(untitled)'),
+        // The matched words, with the marks the headline put round them
+        // stripped: this is a plain-text row and `esc` would print the tags.
+        hint: String(r.snippet ?? '').replace(/<\/?b>/g, '').trim(),
+        go: r.kind === 'answer'
+          ? { view: 'project', tab: 'team', sub: 'outputs' }
+          : { view: 'project', tab: 'documents', open: String(r.ref ?? '') },
+        place: String(r.place ?? ''),
+      }))
+      render()
+    } catch {
+      // Silent: the local results are already there and are the useful ones.
+    }
+  }, 220)
+}
 
 
 /*
@@ -5274,6 +5390,7 @@ function render() {
       state.cmd.q = input.value
       state.cmd.at = 0
       render()
+      void lookInside(input.value)
     })
     input.addEventListener('keydown', (e) => {
       const n = rowsNow().length

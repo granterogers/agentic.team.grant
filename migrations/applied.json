@@ -305,5 +305,7 @@
   "0304_either_half_may_say_it_is_a_fixture.sql": "bd3419f99308202420824dda740d82dd027059951257876bf6cfa1508dc8a60f",
   "0305_the_containers_came_back.sql": "ddaa5cda73ddcdff7019346462e361691c5462bada5aea444bedf77bde88ecb8",
   "0306_a_project_may_point_at_anything.sql": "4f68d26c1fcc96c3c11b945041c42577535d115e81f0aa1eddfea1ee287e4d76",
-  "0307_aggregate_the_payload_not_the_row.sql": "7be24e5c938ffb28b4ee5c889882b17093a72b43664bb168c47cbee1dd7fb260"
+  "0307_aggregate_the_payload_not_the_row.sql": "7be24e5c938ffb28b4ee5c889882b17093a72b43664bb168c47cbee1dd7fb260",
+  "0308_search_the_words_not_only_the_titles.sql": "bedaff6c44023b617c2da01cdd1d01e974022b3ca4f0d777223e0a9810ef3467",
+  "0309_use_the_index_that_was_already_there.sql": "50f424d9e2bb7a2f5f344b929e3532fd4eff4be4d8b012caa87693718b3df28d"
 }

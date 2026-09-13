@@ -44,7 +44,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
 /** The complete list. A section not named here does not exist. */
 const SECTIONS: Readonly<
-  Record<string, { fn: string; args?: Record<string, unknown>; arg?: string }>
+  Record<string, { fn: string; args?: Record<string, unknown>; arg?: string; textArg?: string }>
 > = {
   overview: { fn: 'hq_overview' },
   staff: { fn: 'hq_staff' },
@@ -146,6 +146,21 @@ const SECTIONS: Readonly<
     paint touches, and governance is a screen you navigate TO.
   */
   governance: { fn: 'hq_governance', args: { p_limit: 40 } },
+  /*
+    Search inside things (#37, migration 0308).
+
+    The command bar already searches TITLES client-side, over the payload the
+    page holds — instantly, which is what makes it good. This is the other
+    half: the words inside documents and inside answers the team wrote, which
+    the page cannot hold and could not reach, because `app.search_documents`
+    had no public wrapper and PostgREST exposes only `public`.
+
+    The first section to take a TEXT argument. `arg` has meant "a UUID" since
+    `document` introduced it; `textArg` is the same idea with a different
+    shape, kept separate so a section cannot be talked into accepting free text
+    where an id belongs.
+  */
+  search: { fn: 'studio_search', args: { p_limit: 12 }, textArg: 'p_query' },
 }
 
 /**
@@ -511,6 +526,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ error: 'that section needs a valid id', section: name }, 400)
     }
     args = { ...args, [section.arg]: id }
+  }
+  /*
+    A text argument, for search.
+
+    Bounded rather than validated by pattern: a search query is arbitrary text
+    by definition, so there is no shape to check. It reaches Postgres as an RPC
+    PARAMETER — never interpolated — so the cap is about cost and abuse, not
+    injection: `websearch_to_tsquery` will happily parse two kilobytes and scan
+    the corpus for it.
+
+    An empty query is refused rather than answered with everything. "Show me
+    all of it" is a different request and would be a different section.
+  */
+  if (section.textArg !== undefined) {
+    const q = (url.searchParams.get('q') ?? '').trim()
+    if (q === '' || q.length > 200) {
+      return json({ error: 'that section needs a query of 1 to 200 characters' }, 400)
+    }
+    args = { ...args, [section.textArg]: q }
+    /*
+      Scoped to one project when asked. Optional, because #37 wants it scoped
+      to the current project by default and widenable to everything, and the
+      page is what knows which one you are looking at.
+    */
+    const within = url.searchParams.get('project') ?? ''
+    if (within !== '') {
+      if (!UUID.test(within)) return json({ error: 'project must be an id' }, 400)
+      args = { ...args, p_project: within }
+    }
   }
 
   const response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {

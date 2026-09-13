@@ -219,7 +219,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **307 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **309 applied.**
 
 ---
 
@@ -583,6 +583,27 @@ Each of these cost real time. They are here so they cost it once.
   `pinned_config` is the enqueue layer's whole contribution, and asserting a
   decision before anything has decided is asserting the wrong thing at the
   wrong time.
+- **Before writing an expression, check whether the table already computes
+  it.** `public.documents` has a GENERATED, weighted tsvector column called
+  `search` (title `setweight 'A'`, body `'B'`) with a `documents_search` index
+  on it, and `app.search_documents` uses it. 0308 wrote
+  `to_tsvector(title || content) @@ q` beside it — a sequential scan against an
+  index that was right there, AND flat, so a document whose TITLE was the thing
+  you searched for ranked equal with one that mentioned it once in passing.
+  A computed expression that merely resembles a generated column is not the
+  same expression and cannot use its index. Same rule as #169's about nouns,
+  applied to columns.
+- **A row list built twice is a list that will disagree.** The command bar's
+  renderer and its keyboard picker each assembled their own; the comment on the
+  picker already warned what that costs. Adding #37's second group to the
+  renderer alone would have made every press below the first group open the
+  wrong thing. One assembly, two callers.
+- **A verify suite that skips the layer it exists for is worse than no suite.**
+  `verify:search` first read `HQ_API_TOKEN` from the environment and reported
+  "NOT CHECKED" when unset — and the HTTP layer is precisely where the defect
+  lived: `app.search_documents` worked perfectly and had no public wrapper, so
+  nothing with a browser could call it. The token is in the vault and
+  `verify:hq` already reads it from there.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

@@ -147,4 +147,15 @@ export const KIND_NAME = {
   contact: 'Person',
   task: 'Task',
   agent: 'Team',
+  /*
+    The two that come from the office rather than from the page (#37).
+
+    Named for where the match WAS rather than for what the thing is: a row
+    labelled "Document" matched its title, and one labelled "Inside" matched
+    its words. The distinction is the whole reason the second group exists, and
+    a reader who cannot see it will wonder why the same document is listed
+    twice.
+  */
+  inside: 'Inside',
+  answer: 'Answer',
 }
