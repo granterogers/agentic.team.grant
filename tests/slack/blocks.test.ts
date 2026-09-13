@@ -49,18 +49,35 @@ const message = (over: Partial<ResultMessage> = {}): ResultMessage => ({
 })
 
 describe('Slack limits, which fail silently in production', () => {
-  it('splits six buttons across two action blocks, because five is the ceiling', () => {
-    const blocks = actionBlocks([...ACTIONS], CORR)
-    expect(blocks).toHaveLength(2)
-    expect(elementsOf(blocks[0])).toHaveLength(MAX_ACTION_ELEMENTS)
-    expect(elementsOf(blocks[1])).toHaveLength(ACTIONS.length - 5)
+  it('never puts more than five elements in one block, whatever it is given', () => {
+    /*
+      The PROPERTY, not the block count. This asserted "exactly two blocks",
+      which was the arrangement of the day; #186 folded the two secondary
+      actions into one overflow, so the same eight actions now need seven
+      elements rather than eight and the arrangement changed. What must never
+      change is the ceiling: a sixth element in a block does not error, it
+      silently disappears.
+    */
+    for (const block of actionBlocks([...ACTIONS], CORR)) {
+      expect(elementsOf(block).length).toBeLessThanOrEqual(MAX_ACTION_ELEMENTS)
+    }
   })
 
-  it('keeps every button, so the sixth is not the one that disappears', () => {
-    const ids = actionBlocks([...ACTIONS], CORR).flatMap((b) =>
-      elementsOf(b).map((e) => String(e.action_id)),
+  it('keeps every action reachable, whether as a button or inside the overflow', () => {
+    /*
+      #186 put Mute 24h and More detail behind a `⋯`, so they are no longer
+      `action_id`s on elements — they are options inside one. Reachability is
+      the thing that matters and it is now asked of both shapes, which is the
+      assertion that would have caught them being dropped entirely.
+    */
+    const reachable = actionBlocks([...ACTIONS], CORR).flatMap((b) =>
+      elementsOf(b).flatMap((e) =>
+        e.type === 'overflow'
+          ? (e.options as { value: string }[]).map((o) => (JSON.parse(o.value) as { a: string }).a)
+          : [String(e.action_id)],
+      ),
     )
-    expect(ids).toEqual([...ACTIONS])
+    expect(reachable.sort()).toEqual([...ACTIONS].sort())
   })
 
   it('splits a long body rather than truncating it', () => {
@@ -93,18 +110,57 @@ describe('Slack limits, which fail silently in production', () => {
 })
 
 describe('the honesty rules', () => {
-  it('never shows confidence without the evidence type beside it', () => {
-    const line = provenanceLine(meta({ confidence: 'high', evidence: 'inferred' }))
-    expect(line).toContain('high')
-    expect(line).toContain('inferred')
+  it('never shows how sure it is without saying on what basis', () => {
+    /*
+      §12's rule, asserted as a property rather than on two literal words.
+      #186 rewrote this line into English — "Fairly confident — worked out, not
+      looked up" instead of "*medium* confidence · evidence: *inferred*" —
+      because Grant's complaint was that it read as internal field names. The
+      rule it enforces is unchanged: both halves are always present, and each
+      one MOVES when its input does. A line that dropped the basis would pass a
+      `toContain` on the confidence word and fails this.
+    */
+    const sures = new Set<string>()
+    const bases = new Set<string>()
+    for (const confidence of ['low', 'medium', 'high'] as const) {
+      for (const evidence of ['verified', 'inferred', 'speculative'] as const) {
+        const line = provenanceLine(meta({ confidence, evidence, sources: ['s'] }))
+        const [sure, basis] = line.split(' — ')
+        expect(sure, line).toBeTruthy()
+        expect(basis, line).toBeTruthy()
+        sures.add(String(sure))
+        bases.add(String(basis))
+      }
+    }
+    // Three distinct confidences and three distinct bases, so neither half is
+    // a constant string that merely looks like it is saying something.
+    expect(sures.size).toBe(3)
+    expect(bases.size).toBe(3)
   })
 
-  it('says plainly when nothing was cited, rather than omitting the sources line', () => {
-    expect(provenanceLine(meta({ sources: [] }))).toContain('no sources cited')
+  it('says plainly when nothing was cited, in every branch, rather than by omission', () => {
+    /*
+      An honesty rule, and #186's first draft weakened it: the new wording said
+      "worked out, not looked up" and left the absence of sources to be
+      inferred from that. It does imply it — to a careful reader — and §12 asks
+      for it to be STATED. Asserted across every evidence type so a future
+      branch cannot quietly drop it again.
+    */
+    for (const evidence of ['verified', 'inferred', 'speculative'] as const) {
+      const line = provenanceLine(meta({ evidence, sources: [] }))
+      expect(line.toLowerCase(), line).toMatch(/nothing/)
+    }
+    expect(provenanceLine(meta({ sources: ['a', 'b'] }))).toContain('2 sources')
+    expect(provenanceLine(meta({ sources: ['a'] }))).toContain('1 source')
   })
 
   it('labels unreviewed output, because a reader cannot discount what they were not told', () => {
-    expect(provenanceLine(meta({ reviewed: false }))).toContain('not reviewed')
+    // Wording changed in #186 — "Nobody has checked this yet" rather than
+    // "not reviewed" — because the line is read by a person on a phone. The
+    // rule is that unreviewed output is MARKED, and the warning emoji plus a
+    // sentence saying so is the mark.
+    expect(provenanceLine(meta({ reviewed: false }))).toContain('Nobody has checked this yet')
+    expect(provenanceLine(meta({ reviewed: true }))).not.toContain('Nobody has checked')
     expect(fallbackText(message({ metadata: meta({ reviewed: false }) }))).toContain(
       '[not reviewed]',
     )
@@ -143,10 +199,22 @@ describe('composition', () => {
     expect(elementsOf(without[0])[0]?.url).toBeUndefined()
   })
 
-  it('carries the correlation id into every button, so a click can be attributed', () => {
+  it('carries the correlation id into everything pressable, so a click can be attributed', () => {
+    /*
+      Including the overflow's OPTIONS (#186). Slack sends an overflow's payload
+      as `selected_option.value` and leaves the element's own `value` undefined,
+      so an overflow whose options carried no correlation would be two controls
+      that post and cannot be attributed to a message.
+    */
     for (const block of actionBlocks([...ACTIONS], CORR)) {
       for (const element of elementsOf(block)) {
-        expect(JSON.parse(String(element.value))).toMatchObject({ c: CORR })
+        if (element.type === 'overflow') {
+          for (const option of element.options as { value: string }[]) {
+            expect(JSON.parse(option.value)).toMatchObject({ c: CORR })
+          }
+        } else {
+          expect(JSON.parse(String(element.value))).toMatchObject({ c: CORR })
+        }
       }
     }
   })

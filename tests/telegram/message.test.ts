@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { toCanonicalCommand } from '../../src/channels/telegram.ts'
-import { ACTIONS } from '../../src/slack/blocks.ts'
+import { ACTIONS, provenanceLine } from '../../src/slack/blocks.ts'
 import {
   BUTTONS_PER_ROW,
   CALLBACK_ACTIONS,
@@ -28,7 +28,13 @@ const message = (over: Partial<Parameters<typeof pagerText>[0]> = {}) => ({
   staffName: 'Research Director',
   staffTitle: 'Research Director',
   body: 'All three suppliers quoted within 4% of each other.',
-  metadata: { confidence: 'medium' as const, evidence: 'inferred' as const, reviewed: true },
+  metadata: {
+    confidence: 'medium' as const,
+    evidence: 'inferred' as const,
+    reviewed: true,
+    sources: [] as readonly string[],
+    contradictions: null,
+  },
   correlationId: CORR,
   actions: [...ACTIONS],
   ...over,
@@ -143,15 +149,44 @@ describe('the keyboard', () => {
 describe('the message', () => {
   it('leads with the not-reviewed warning, because the first line is often the only one read', () => {
     const text = pagerText(
-      message({ metadata: { confidence: 'low', evidence: 'speculative', reviewed: false } }),
+      message({
+        metadata: {
+          confidence: 'low',
+          evidence: 'speculative',
+          reviewed: false,
+          sources: [],
+          contradictions: null,
+        },
+      }),
     )
     expect(text.split('\n')[0]).toContain('Not reviewed')
   })
 
-  it('never shows confidence without evidence beside it', () => {
+  it('never shows how sure it is without saying on what basis', () => {
+    /*
+      §12's rule, as a property. #186 replaced "medium confidence · evidence:
+      inferred" with the same English Slack uses — Grant called the old wording
+      *"not intuitive or acting like it's a human"* — and this asserted the two
+      literal strings, so it went red on a correct change.
+
+      Compared against `provenanceLine` itself rather than against a new pair
+      of literals: the point of the change was that BOTH surfaces say the same
+      thing, and a copy of the expected wording here could drift from Slack's
+      without anything noticing.
+    */
     const text = pagerText(message())
-    expect(text).toContain('medium confidence')
-    expect(text).toContain('evidence: inferred')
+    const expected = provenanceLine({
+      confidence: 'medium',
+      evidence: 'inferred',
+      reviewed: true,
+      sources: [],
+      contradictions: null,
+    })
+    // The pager renders Slack's `*bold*` as tags, so compare on the words.
+    expect(text).toContain(expected.replace(/\*/g, ''))
+    // And it still carries both halves, which is the rule the wording serves.
+    expect(text.toLowerCase()).toContain('confident')
+    expect(text.toLowerCase()).toContain('worked out')
   })
 
   it('does not repeat the name when the title is the same', () => {
@@ -181,7 +216,13 @@ describe('one bot, many projects: every page says which (0070)', () => {
     staffName: 'Research Director',
     staffTitle: 'Research Director',
     body: 'The two sources disagree on the launch date.',
-    metadata: { confidence: 'medium' as const, evidence: 'inferred' as const, reviewed: true },
+    metadata: {
+      confidence: 'medium' as const,
+      evidence: 'inferred' as const,
+      reviewed: true,
+      sources: [] as readonly string[],
+      contradictions: null,
+    },
     correlationId: 'c-1',
     actions: [] as const,
   }
@@ -218,7 +259,11 @@ describe('one bot, many projects: every page says which (0070)', () => {
     // warning — and a placeholder would be noise on every one of them.
     const text = pagerText({ ...base, projectName: null })
     expect(text).not.toContain('📁')
-    expect(text).not.toContain('—')
+    // The FOOTER, not a bare em dash. #186's provenance line legitimately
+    // contains one — "Fairly confident — worked out, not looked up" — so a
+    // character that used to appear only in the project footer no longer
+    // identifies it. Asserting the shape of the thing being ruled out.
+    expect(text).not.toMatch(/<i>— .+<\/i>/)
     expect(pagerText({ ...base, projectName: '   ' })).toBe(text)
     expect(pagerText(base)).toBe(text)
   })

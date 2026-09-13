@@ -190,6 +190,11 @@ export class TelegramPager {
         confidence: input.output.confidence,
         evidence: input.output.evidence,
         reviewed: input.reviewed,
+        // Passed through since #186: the provenance line is now the same
+        // shared English Slack uses, and it names how many sources there were.
+        // Empty here would say "nothing cited" about a cited finding.
+        sources: input.output.sources,
+        contradictions: input.output.contradictions,
       },
       correlationId: input.job.correlationId,
       actions: input.actions,

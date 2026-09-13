@@ -106,9 +106,14 @@ const WORKSPACE: Record<string, string> = {
  * workspace until he said *"I don't want a bunch of weird alphanumeric channel
  * names"*, which is a cleanup rule broken by the change it was supposed to
  * survive.
+ *
+ * `zz[-_]test[-_]` added with the same change that made `verify:slack` name its
+ * channels that way at CREATION rather than at teardown. Both halves are
+ * needed: the new name means a crashed run leaves obvious debris, and this
+ * means the sweep can still collect it.
  */
 const FIXTURE =
-  /^(slack[-_]office[-_]verification[-_]fixture|proj[-_]fixture[-_]slack[-_]office|gate\d[-_]probe|probe\d?[-_])/
+  /^(slack[-_]office[-_]verification[-_]fixture|proj[-_]fixture[-_]slack[-_]office|gate\d[-_]probe|probe\d?[-_]|zz[-_]test[-_])/
 
 interface Plan {
   id: string

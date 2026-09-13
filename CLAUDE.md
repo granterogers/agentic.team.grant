@@ -646,6 +646,36 @@ Each of these cost real time. They are here so they cost it once.
   on the always-visible trigger was caught within seconds of being added. The
   audit is honest about what it reaches; do not read its silence about a
   popover as coverage.
+- **An output can contradict its own metadata, and nothing was comparing
+  them.** Claire sent Grant *"I pulled the project records. The db read shows
+  five active projects: mtz08joe, …"* at 03:45. None of the five existed, and
+  the row said `evidence: inferred` — the office KNEW nothing had been read and
+  rendered that as grey caption text under a sentence claiming a database read.
+  `metadataProblems` checked the labels against each other and never against
+  the words. It takes the body now (#185). The same model had done it twice,
+  five days apart.
+- **A literal-string assertion is a wording lock, and rewording is the fix
+  half the time.** #186 rewrote the Slack and Telegram provenance line into
+  English and turned EIGHT checks red in one go — six unit tests, one live
+  Slack check and one Telegram test — every one of them asserting `'confidence'`
+  or `'no sources cited'` or `'not reviewed'` rather than the property those
+  words carried. One (`not.toContain('—')`) was using a bare em dash as a proxy
+  for the project footer, and the new line legitimately contains one. Fourth
+  instance in this file.
+- **Widening a display type can make a narrower one lie.** Sharing
+  `provenanceLine` with the pager needed `PagerMetadata` to gain `sources` —
+  and defaulting it to `[]` would have made every Telegram page say "nothing
+  cited" about findings with five citations. `pager.page` already receives the
+  whole `HandlerOutput`; pass the real value rather than a plausible default.
+- **A fixture is named at creation, not at teardown.** `verify:slack` created
+  `#slack_office_verification_fixture_12345678` and renamed it to `zz_test_…`
+  when archiving — right thing, wrong MOMENT, because a crashed run never
+  reaches teardown. Ten were sitting in Grant's Mentions above his four real
+  channels. Slack refuses to rename or delete an archived channel, so that
+  debris is permanent. Named `zz test slack …` from birth now, and
+  `slack:tidy`'s pattern widened to match. Grant had already asked for this
+  once — *"I don't want a bunch of weird alphanumeric channel names"* — and the
+  answer that time was a cleanup rule, which only runs when the run finishes.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

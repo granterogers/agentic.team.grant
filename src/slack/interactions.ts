@@ -59,6 +59,16 @@ export interface BlockActionsPayload {
     action_id?: string
     block_id?: string
     value?: string
+    /**
+     * An OVERFLOW menu puts its payload here, not in `value`.
+     *
+     * Slack sends `{type: 'overflow', selected_option: {value}}` and leaves
+     * `value` undefined. #186 moved the two secondary actions into an overflow
+     * so a message stops being four full-width buttons on a phone, and reading
+     * only `value` would have made both of them silently dead — a press, a 200,
+     * and nothing happening.
+     */
+    selected_option?: { value?: string }
     action_ts?: string
   }[]
 }
@@ -127,6 +137,7 @@ export function toCanonicalInteraction(
   if (action === undefined) {
     throw new UnsupportedSlackEventError(payload.type, 'the payload names no action')
   }
+
   const canonical = ACTION_IDS[action.action_id ?? '']
   if (canonical === undefined) {
     // Not an error to the user: an unknown action id is our own message being
@@ -186,5 +197,17 @@ export function toCanonicalInteraction(
  * worth recording and not worth acting on.
  */
 export function correlationOf(payload: BlockActionsPayload): string | null {
-  return readButtonValue(payload.actions?.[0]?.value)
+  const action = payload.actions?.[0]
+  /*
+    A button carries its payload in `value`; an OVERFLOW carries it in
+    `selected_option.value` and leaves `value` undefined (#186).
+
+    Read here, in the one place that reads it, rather than normalised at the
+    top of the dispatcher — this is the only function that touches the value at
+    all, and a second copy of the fallback is a second thing to forget.
+
+    Without it, moving Mute and More detail into an overflow would have made
+    both silently dead: a press, a 200, and nothing happening.
+  */
+  return readButtonValue(action?.value ?? action?.selected_option?.value)
 }

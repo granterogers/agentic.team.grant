@@ -22,6 +22,7 @@
 
 import type { Confidence, Evidence } from '../agents/quality.ts'
 import type { ActionId } from '../slack/blocks.ts'
+import { provenanceLine } from '../slack/blocks.ts'
 
 /** Telegram's hard limit. Ours is far below it, on purpose. */
 export const TELEGRAM_MAX_TEXT = 4096
@@ -54,6 +55,19 @@ export interface PagerMetadata {
   readonly confidence: Confidence
   readonly evidence: Evidence
   readonly reviewed: boolean
+  /**
+   * What it drew on, or verified against.
+   *
+   * Added with #186, when the provenance line became the same shared English
+   * Slack uses. It was not here before because the old line never mentioned
+   * sources — and defaulting it to empty would have made the pager say
+   * "nothing cited" about a finding with five citations, which is precisely
+   * the honesty rule that change tightened.
+   *
+   * The caller has it: `pager.page` receives the whole `HandlerOutput`.
+   */
+  readonly sources: readonly string[]
+  readonly contradictions: string | null
 }
 
 export interface PagerMessage {
@@ -184,6 +198,17 @@ export function inlineKeyboard(
  * unreviewed output is labelled first, before the body, because on a phone the
  * first line is often the only line read.
  */
+/**
+ * Slack's `*bold*` into Telegram's `<b>`, and everything else escaped.
+ *
+ * Escaping FIRST and converting after, so a body containing a literal `<` is
+ * still safe and a pair of asterisks still becomes bold. The other way round —
+ * convert then escape — turns the tags this just added into visible text.
+ */
+function slackEmphasisToHtml(line: string): string {
+  return escapeHtml(line).replace(/\*([^*]+)\*/g, '<b>$1</b>')
+}
+
 export function pagerText(message: PagerMessage): string {
   const parts: string[] = []
 
@@ -214,9 +239,22 @@ export function pagerText(message: PagerMessage): string {
   parts.push(escapeHtml(trimForPager(message.body)))
 
   if (message.metadata !== null) {
-    parts.push(
-      `<i>${escapeHtml(message.metadata.confidence)} confidence · evidence: ${escapeHtml(message.metadata.evidence)}</i>`,
-    )
+    /*
+      The same English as Slack (#186), from the same function.
+
+      This said "medium confidence · evidence: inferred" — three internal field
+      names — and Slack said exactly the same until Grant looked at his phone
+      and called it *"not intuitive or acting like it's a human"*. Fixing one
+      surface and leaving the other is how two channels end up describing the
+      same output in two vocabularies.
+
+      `provenanceLine` is pure and already shared through `Confidence` and
+      `Evidence`, so this is an import rather than a second implementation —
+      which is the whole reason the Slack one was worth putting in a function.
+      It emits Slack's `*bold*`; Telegram wants tags, so the markers are
+      converted rather than the sentence rewritten.
+    */
+    parts.push(`<i>${slackEmphasisToHtml(provenanceLine(message.metadata))}</i>`)
   }
 
   // And last, after the provenance. A long message pushes the header off the

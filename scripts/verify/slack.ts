@@ -34,7 +34,7 @@ import type { Handler, HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { dequeue, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
 import type { ResultMessage } from '../../src/slack/blocks.ts'
-import { ACTIONS } from '../../src/slack/blocks.ts'
+import { ACTIONS, provenanceLine } from '../../src/slack/blocks.ts'
 import { resolveTarget, slackChannel } from '../../src/slack/notifier.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
@@ -89,19 +89,48 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const stamp = String(Date.now()).slice(-8)
 const PROJECT_SLUG = `fixture-slack-office-${stamp}`
-// Unique per run: a channel name is claimed for good once used, archived or
-// not, so a constant fixture name would collide with yesterday's channel.
-const PROJECT_NAME = `Slack office verification fixture ${stamp}`
+/*
+  Born named as debris, not renamed into it at the end.
+
+  The channel name is derived from this, so this string is what appears in
+  Grant's sidebar. It used to be "Slack office verification fixture 12345678",
+  which became `#slack_office_verification_fixture_12345678` — and
+  `parkAndArchive` below renamed it to `zz_test_…` at teardown, which is the
+  right thing at the wrong MOMENT: a run that crashes never reaches teardown,
+  and ten of these were sitting in his Mentions on 13 September, above his four
+  real channels, each with an unread badge.
+
+  Naming it `zz_test_` at creation means a crashed run leaves a channel that is
+  already obvious debris and already sorts to the bottom of every client.
+  `parkAndArchive` still runs and is still worth keeping — it is what handles
+  the channels created before this change — it just has nothing left to fix.
+
+  Grant said this once already, in almost these words: *"I don't want a bunch
+  of weird alphanumeric channel names"*. The answer that time was a cleanup
+  rule. A cleanup rule only runs when the run finishes.
+
+  Unique per run: a channel name is claimed for good once used, archived or
+  not, so a constant fixture name would collide with yesterday's channel.
+*/
+const PROJECT_NAME = `zz test slack ${stamp}`
+/*
+  Hoisted so the suite can render the provenance line it EXPECTS from the same
+  values it sends. Inline, `message('x').metadata` is typed nullable — the
+  ResultMessage type allows a message with no metadata — and narrowing it at
+  the call site would be asserting a fact this constant simply states.
+*/
+const METADATA = {
+  confidence: 'medium',
+  evidence: 'inferred',
+  sources: ['https://example.invalid/quote'],
+  contradictions: null,
+  reviewed: true,
+} as const
+
 const message = (body: string): ResultMessage => ({
   staffTitle: 'Research Director',
   body,
-  metadata: {
-    confidence: 'medium',
-    evidence: 'inferred',
-    sources: ['https://example.invalid/quote'],
-    contradictions: null,
-    reviewed: true,
-  },
+  metadata: METADATA,
   correlationId: CORRELATION,
   actions: [...ACTIONS],
   projectUrl: null,
@@ -638,11 +667,27 @@ const resultMessage = (Array.isArray(presented.body.messages) ? presented.body.m
     (raw as { metadata?: { event_payload?: { dedupe_key?: string } } }).metadata?.event_payload
       ?.dedupe_key === `job:${E2E_JOB}:result`,
 ) as { username?: string; blocks?: unknown[] } | undefined
+/*
+  The EXACT line the renderer produces, not the word "confidence".
+
+  This asserted that the posted blocks contained the literal string
+  'confidence', which was true of `*medium* confidence · evidence: *inferred*`
+  and stopped being true when #186 rewrote the line into English — Grant's
+  complaint was that it read as internal field names. The check went red on a
+  correct change, which is the third time in this repository and is why
+  CLAUDE.md says to assert the property rather than the artefact.
+
+  Asserting the rendered line is STRONGER than either: it fails if the line is
+  missing, if it is truncated, and if the renderer and the sender ever disagree
+  about what was sent. `provenanceLine` is pure, so calling it here costs
+  nothing and cannot drift from what the office actually posts.
+*/
+const expectedLine = provenanceLine(METADATA)
 record(
   'presented as the staff member the router convened, with the §12 provenance line',
-  `username=${String(resultMessage?.username)} blocks=${String(resultMessage?.blocks?.length ?? 0)}`,
+  `username=${String(resultMessage?.username)} · line=${expectedLine.slice(0, 54)}`,
   resultMessage?.username === STAFF.name &&
-    JSON.stringify(resultMessage?.blocks ?? []).includes('confidence'),
+    JSON.stringify(resultMessage?.blocks ?? []).includes(expectedLine),
 )
 
 const stateReason = await one<{ r: string }>(

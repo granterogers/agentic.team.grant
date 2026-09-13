@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canCommit,
+  claimsToHaveRead,
   disagreementNeedsGrant,
   metadataProblems,
   reviewRequired,
@@ -69,6 +70,62 @@ describe('metadata combinations that are individually legal and jointly impossib
     expect(metadataProblems({ ...base, evidence: 'verified', sources: ['notebook:abc'] })).toEqual(
       [],
     )
+  })
+
+  /*
+    #185. The message that reached Grant's phone at 03:45 on 13 September,
+    verbatim, because a regression here is a lie sent to a person and the exact
+    words are the point.
+  */
+  describe('a claim of having read, from an output that read nothing (#185)', () => {
+    const REAL =
+      'I pulled the project records. The db read shows five active projects: ' +
+      'mtz08joe, mtyz6js5, mtyyz7zy, mtyywoxz and mty9izdi. No other project ' +
+      'entries are present.'
+
+    it('catches the message that actually reached Grant', () => {
+      const p = metadataProblems({ ...base, body: REAL })
+      expect(p.map((x) => x.field)).toEqual(['body'])
+      // The phrase is quoted back, so the failure names what it objected to
+      // rather than saying "something in here".
+      expect(p[0]?.problem).toContain('I pulled the project records')
+    })
+
+    it('catches the older one too, five days earlier and the same model', () => {
+      expect(claimsToHaveRead("I've pulled that from the Projects table.")).toBe(
+        "I've pulled that from the Projects table",
+      )
+    })
+
+    it('CONTROL: a genuine read may say it read', () => {
+      // The whole point is the CONTRADICTION, not the words. With
+      // `evidence: verified` and something to verify against, the same
+      // sentence is simply true.
+      expect(
+        metadataProblems({ ...base, evidence: 'verified', sources: ['db:projects'], body: REAL }),
+      ).toEqual([])
+    })
+
+    it('CONTROL: does not fire on honest summaries that merely mention data', () => {
+      // A check that fired on these would be turned off within a week, so the
+      // false-positive cases are pinned as hard as the true ones.
+      for (const body of [
+        'The brief suggests three priorities, and I think the second is the weakest.',
+        'Based on what we have, the launch is the risk.',
+        'The records show four projects.',
+        'According to the brief, Priya came through the published piece.',
+        'I read the room on this one — nobody wants a fourth workshop.',
+        'I looked at it from the angle of the client.',
+      ]) {
+        expect(claimsToHaveRead(body), body).toBeNull()
+        expect(metadataProblems({ ...base, body })).toEqual([])
+      }
+    })
+
+    it('says nothing about an output with no body, so every other caller is unaffected', () => {
+      expect(claimsToHaveRead('')).toBeNull()
+      expect(metadataProblems(base)).toEqual([])
+    })
   })
 
   it('rejects high confidence in a speculative finding', () => {

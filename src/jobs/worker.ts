@@ -654,6 +654,10 @@ export const runJob = async (
     evidence: output.evidence,
     sources: output.sources,
     contradictions: output.contradictions,
+    // The text as well as the labels, so a body claiming a database read from
+    // an output whose evidence says nothing was read is caught here rather
+    // than on Grant's phone (#185).
+    body: output.body,
   })
   if (problems.length > 0) {
     await moveTo(
