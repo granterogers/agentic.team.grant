@@ -95,6 +95,16 @@ const state = {
   // The page-scroll listener currently installed, so a rebuild replaces it
   // rather than stacking another one on every render (#205).
   onPageScroll: null,
+  // The same, for the two resize listeners that keep the newest message in
+  // view when the keyboard opens (#197).
+  onResize: null,
+  onResize2: null,
+  /*
+    Whether the thread was showing its newest message, remembered as it changes
+    (#197). A resize event arrives after the layout has already moved, so this
+    has to be recorded continuously rather than measured when it is needed.
+  */
+  threadAtEnd: true,
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
   // Whether the MCP client view is open, on the Connections tab (#91).
@@ -6359,10 +6369,91 @@ function render() {
     threadEl.addEventListener(
       'scroll',
       () => {
+        // Remembered on every scroll, so the resize handler has an answer that
+        // describes the moment BEFORE the keyboard changed the geometry.
+        state.threadAtEnd = lookingAtNewest(threadEl)
         if (atNewest(threadEl)) forgetArrivals()
       },
       { passive: true },
     )
+    // And once now, because a conversation you have not scrolled at all is the
+    // common case and it has never fired a scroll event.
+    state.threadAtEnd = lookingAtNewest(threadEl)
+    /*
+      The keyboard opening must not hide the newest message (#197).
+
+      `.chatbody` is sized in `dvh`, so the column shrinks by itself when the
+      keyboard comes up — that is the whole of the keyboard handling and it
+      needs no `visualViewport` listener. What it does NOT do is move the
+      thread's own scroll: the box gets shorter around a scroll position that
+      was correct for a taller box, and the message you were looking at slides
+      out of view behind the composer.
+
+      So: if you were at the newest message before the resize, you still are
+      after it. If you were reading further up, you are left there — the same
+      rule `keepingPlace` applies to arrivals, for the same reason.
+    */
+    const onResize = () => {
+      /*
+        Decided BEFORE the layout settles, applied after — and looked up fresh
+        each time, which is the half that took a measurement to find.
+
+        `atNewest` has to be asked while the old geometry is still true: once
+        the box has shrunk around the old scrollTop the answer is already "no",
+        and the handler would refuse to follow at exactly the moment following
+        is the point.
+
+        And the element cannot be the one captured when this was wired. A
+        resize makes the studio re-render, which REPLACES the thread — so the
+        captured node is detached by the time the handler runs, and setting
+        `scrollTop` on it moves nothing at all. That is the eighteen-dead-panel-
+        buttons shape: everything present, everything wired, nothing connected
+        to what is on screen. Found by printing scrollHeight and seeing 261
+        where 3,561 was expected — a different element entirely.
+
+        Pinned on the next frame and again after a moment, because on iOS the
+        keyboard animates in and the viewport passes through several heights
+        before it settles.
+      */
+      /*
+        The QUESTION is asked of the live element too, not only the answer.
+
+        A first fix looked the thread up fresh inside `pin` and left the guard
+        reading the captured node — which by then was detached, so `atNewest`
+        measured a box that is not on the screen, said "no", and returned
+        before pinning anything. Half a fix reads exactly like no fix: the
+        scroll position stayed at zero and the message said the thread did not
+        follow, which was true and for a different reason than the one already
+        written down.
+      */
+      const now = $('[data-thread]')
+      if (now === null) return
+      if (state.threadAtEnd === false) return
+      const pin = () => {
+        const live = $('[data-thread]')
+        if (live === null) return
+        live.scrollTop = live.scrollHeight
+      }
+      pin()
+      requestAnimationFrame(pin)
+      window.setTimeout(pin, 180)
+      window.setTimeout(pin, 420)
+    }
+    window.removeEventListener('resize', state.onResize ?? (() => {}))
+    state.onResize = onResize
+    window.addEventListener('resize', onResize, { passive: true })
+    if (window.visualViewport !== undefined && window.visualViewport !== null) {
+      /*
+        And the visual viewport, which is the only thing that reports the
+        keyboard on iOS. `resize` on `window` does not always fire when the
+        keyboard opens there — the layout viewport is unchanged; it is the
+        VISUAL one that shrinks, which is also what `dvh` tracks.
+      */
+      window.visualViewport.removeEventListener('resize', state.onResize2 ?? (() => {}))
+      state.onResize2 = onResize
+      window.visualViewport.addEventListener('resize', onResize, { passive: true })
+    }
+
     /*
       And the PAGE's scroll, which is the one that moves on a phone. Without
       this the badge would appear correctly there and then never go away when
@@ -7545,6 +7636,32 @@ function tokenNow() {
  * pixel off the bottom because of a sub-pixel line height is a thread the
  * person believes they are at the bottom of.
  */
+/*
+  Were you looking at the newest message? — the question the keyboard asks.
+
+  Deliberately NOT `atNewest`, which answers a related but different question
+  for the arrival badge and includes a page-scroll branch. Here the thread's
+  own scroller is the whole story:
+
+    * no inner scroller means the conversation fits, so every message is on
+      screen and the newest one is by definition the one you are looking at;
+    * an inner scroller at its end means the same thing on purpose;
+    * an inner scroller anywhere else means you are reading history, and the
+      keyboard must not drag you away from it.
+
+  Remembered rather than measured on demand, because by the time a `resize`
+  event fires the layout has ALREADY changed — the box has shrunk around the
+  old scroll position and every measurement describes the after, not the
+  before. Two fixes were spent measuring at resize time before that was
+  obvious.
+*/
+function lookingAtNewest(el) {
+  if (el === null) return true
+  const own = el.scrollHeight - el.clientHeight > 8
+  if (!own) return true
+  return el.scrollHeight - el.clientHeight - el.scrollTop < 40
+}
+
 function atNewest(threadEl) {
   if (threadEl === null) return true
   const ownScroller = threadEl.scrollHeight - threadEl.clientHeight > 8

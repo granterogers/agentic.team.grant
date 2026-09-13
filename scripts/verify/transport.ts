@@ -209,7 +209,7 @@ try {
     .map((o) => Number(o.slice('retry_in_'.length)))
   check(
     'and each wait is longer than the last, up to a ceiling',
-    waits.join('s, ') + 's',
+    `${waits.join('s, ')}s`,
     waits.length >= 2 && waits.every((w, i) => i === 0 || w >= (waits[i - 1] ?? 0)),
   )
 

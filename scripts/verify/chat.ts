@@ -167,6 +167,180 @@ try {
           : `composer ends at ${String(fits.bottom)}, nav starts at ${String(fits.navTop)}`,
         fits !== null && fits.bottom <= fits.navTop,
       )
+
+      /*
+        And with the keyboard open, which is #197's central criterion.
+
+        No headless browser can raise an iOS keyboard. What one CAN do is
+        reproduce the only effect that matters to this layout: the visual
+        viewport shrinks. `.chatbody` is sized in `dvh` precisely so that
+        shrinking IS the whole of the keyboard handling — the comment on that
+        rule says so, and says it needs no `visualViewport` listener — so
+        resizing the window exercises the real mechanism rather than a stand-in
+        for it.
+
+        336px is roughly what an iPhone 14 leaves above the standard keyboard
+        and its accessory bar. The question this asks is whether the composer
+        survives losing sixty per cent of the screen, not whether it survives
+        losing exactly 508 pixels.
+      */
+      /*
+        At the newest message first, because that is where a person is when
+        they reach for the keyboard — they have just read the answer and are
+        replying to it. Opening the keyboard from halfway up the history is a
+        real case too, and there the rule is the opposite: stay where you are.
+        This checks the common one; `keepingPlace` owns the other.
+      */
+      await page.evaluate(`(() => {
+        const t = document.querySelector('[data-thread]')
+        if (t !== null) t.scrollTop = t.scrollHeight
+      })()`)
+      await page.waitForTimeout(200)
+      await page.setViewportSize({ width: 390, height: 336 })
+      await page.waitForTimeout(700)
+      await page
+        .locator('[data-say]')
+        .first()
+        .focus()
+        .catch(() => undefined)
+      await page.waitForTimeout(400)
+      const withKeyboard = (await page.evaluate(`(() => {
+        const c = document.querySelector('.chatbody .composer')
+        const t = document.querySelector('.chatbody [data-thread]')
+        const n = document.querySelector('.navgroup')
+        if (c === null) return null
+        const cr = c.getBoundingClientRect()
+        const nr = n === null ? { top: window.innerHeight } : n.getBoundingClientRect()
+        /*
+          A hidden nav is an absent nav.
+
+          A hidden element has a zero rect at the origin, so comparing against
+          a top of zero says the composer is underneath a bar that is not on
+          the screen -- which reported as a failure while the layout was
+          correct. The keyboard rule deliberately hides it, so this has to know
+          the difference between not there and at the top.
+
+          No backticks anywhere in this comment: it lives inside a template
+          literal, and one would end the string. Third time in this repository.
+        */
+        const navHidden = n === null || nr.height === 0
+        /*
+          The property is that the newest message is READABLE, not that the
+          whole bubble fits.
+
+          A single message can be taller than a 168px thread, so "its bottom is
+          above the composer" is unsatisfiable for a long one and would demand
+          a layout nobody wants. What matters is that the thread is scrolled to
+          its end — so the last line of the newest message sits at the thread's
+          bottom edge — and that the edge itself is above the composer rather
+          than behind it.
+        */
+        const tr = t === null ? null : t.getBoundingClientRect()
+        return {
+          top: Math.round(cr.top),
+          bottom: Math.round(cr.bottom),
+          navTop: navHidden ? window.innerHeight : Math.round(nr.top),
+          navHidden,
+          vh: window.innerHeight,
+          threadH: tr === null ? 0 : Math.round(tr.height),
+          atEnd: t === null ? false : t.scrollHeight - t.clientHeight - t.scrollTop < 4,
+          threadClear: tr === null ? false : tr.bottom <= cr.top + 2,
+        }
+      })()`)) as {
+        top: number
+        bottom: number
+        navTop: number
+        navHidden: boolean
+        vh: number
+        threadH: number
+        atEnd: boolean
+        threadClear: boolean
+      } | null
+
+      check(
+        'phone — with the keyboard up, the composer is still fully on screen',
+        withKeyboard === null
+          ? 'NO COMPOSER'
+          : `composer ${String(withKeyboard.top)}–${String(withKeyboard.bottom)} in a ${String(withKeyboard.vh)}px viewport`,
+        withKeyboard !== null && withKeyboard.top >= 0 && withKeyboard.bottom <= withKeyboard.vh,
+      )
+      check(
+        'phone — and it is not behind the bottom navigation',
+        withKeyboard === null
+          ? 'n/a'
+          : withKeyboard.navHidden
+            ? 'the nav is out of the way while the keyboard is up'
+            : `ends at ${String(withKeyboard.bottom)}, nav starts at ${String(withKeyboard.navTop)}`,
+        withKeyboard !== null && withKeyboard.bottom <= withKeyboard.navTop,
+      )
+      /*
+        The thread gives up the room, not the composer. That is the whole
+        design of the column — `grid-template-rows: 1fr auto` — and the failure
+        it prevents is the one the first attempt at #197 shipped: a sticky
+        composer pinned OVER the thread, so the capture showed a project head,
+        a banner, a tab strip and a composer, with the conversation nowhere.
+      */
+      check(
+        'phone — the thread yields the space rather than the composer',
+        withKeyboard === null ? 'n/a' : `thread ${String(withKeyboard.threadH)}px`,
+        withKeyboard !== null && withKeyboard.threadH > 40,
+      )
+      check(
+        'phone — and the newest message is still the one you are looking at',
+        withKeyboard === null
+          ? 'n/a'
+          : withKeyboard.atEnd
+            ? 'the thread followed the keyboard down'
+            : 'THE THREAD DID NOT FOLLOW — the newest message scrolled away',
+        withKeyboard?.atEnd === true,
+      )
+      check(
+        'phone — and the thread ends above the composer, not behind it',
+        withKeyboard === null ? 'n/a' : withKeyboard.threadClear ? 'clear' : 'OVERLAPPED',
+        withKeyboard?.threadClear === true,
+      )
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.waitForTimeout(500)
+
+      /*
+        Nothing sits under the home indicator (#197).
+
+        `.navgroup` already reserves `env(safe-area-inset-bottom)` and is the
+        pattern to copy; this asserts that every element FIXED to the bottom
+        edge does the same, rather than that one of them does. The inset is 0
+        in a headless browser, so what is checked is the RULE — that the
+        padding or offset mentions the inset — which is the property, not the
+        pixel. Checking the pixel would pass on every machine that has no notch
+        and catch nothing.
+      */
+      const insets = (await page.evaluate(`(() => {
+        const out = []
+        for (const el of document.querySelectorAll('*')) {
+          const cs = getComputedStyle(el)
+          if (cs.position !== 'fixed') continue
+          const r = el.getBoundingClientRect()
+          if (r.height === 0 || r.width === 0) continue
+          // Anchored to the bottom edge, within a hair.
+          if (Math.abs(r.bottom - window.innerHeight) > 2) continue
+          out.push({
+            what: el.tagName.toLowerCase() + '.' + String(el.className).slice(0, 24),
+            pad: cs.paddingBottom,
+            bottom: cs.bottom,
+          })
+        }
+        return out
+      })()`)) as { what: string; pad: string; bottom: string }[]
+      check(
+        'phone — every element fixed to the bottom edge reserves the home indicator',
+        insets.length === 0
+          ? 'nothing is fixed to the bottom edge'
+          : insets
+              .map((i) => `${i.what} pad ${i.pad}`)
+              .join(' · ')
+              .slice(0, 90),
+        insets.every((i) => i.pad !== '0px' || i.bottom !== '0px'),
+      )
     }
 
     // ---------------------------------------------------------------------

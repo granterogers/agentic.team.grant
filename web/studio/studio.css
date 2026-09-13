@@ -4932,3 +4932,61 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .conv { grid-template-columns: 10px 1fr; }
   .convword { grid-column: 2; align-self: start; }
 }
+
+/* --- The composer, with the keyboard up (#197) -------------------------------
+   Measured, not guessed: at 390x336 — what an iPhone 14 leaves above the
+   standard keyboard — the composer was 208px of the 336, the thread was 51px,
+   and the newest message was hidden behind the box you were typing into. That
+   is #197's second acceptance criterion failing, and it is invisible at full
+   height because at 844px there is room for everything.
+
+   A HEIGHT query, not a width one. The trigger is the keyboard, and the
+   keyboard is the only thing that makes a phone short; a width query would
+   apply this cramped layout to a phone held normally, which is the opposite of
+   what it is for.
+
+   What goes is explanation, not function. The addressee select stays and every
+   control stays pressable at 44px — the sentence under it ("Claire will bring
+   in whoever it needs") is teaching, and a person who has already opened the
+   keyboard has read it or does not need it now.
+
+   At the END of the stylesheet, where phone overrides go: a media query adds
+   no specificity, and this file has been bitten twice by writing one above the
+   base rule it meant to beat. */
+@media (max-width: 860px) and (max-height: 560px) {
+  /*
+    The bottom navigation goes away while the keyboard is up.
+
+    Not decoration: with the nav still reserved the composer ended at 274 in a
+    271px-tall gap and sat three pixels underneath it — measured, and the sort
+    of overlap that reads as a rendering glitch rather than a layout rule.
+
+    It is also what every messaging app does, and for the same reason: a person
+    who has opened the keyboard is typing, not navigating, and the nav is one
+    dismissal away from being back. Hiding it returns 66px to the conversation,
+    which on a 336px screen is a fifth of everything there is.
+  */
+  .navgroup { display: none; }
+  .shell { padding-bottom: 0; }
+  .chatbody { height: 100dvh; }
+  .chatbody .composer { padding: 6px; gap: 4px; }
+  /* The explainer, not the control. */
+  .chatbody .askwho .t-meta { display: none; }
+  .chatbody .askwho { gap: var(--s2); }
+  .chatbody .crow { gap: 6px; }
+  .chatbody .crow textarea {
+    min-height: 44px;
+    max-height: 76px;
+    /* 16px or iOS Safari zooms the page on focus — which, on the one screen
+       whose whole problem is a shrunken viewport, would be the worst possible
+       moment for it. verify:layouts enforces the floor and this must not be
+       the exception. */
+    font-size: 16px;
+  }
+  /* Still 44, because a cramped screen is where a missed tap costs most. */
+  .chatbody .crow .btn.mic { height: 44px; width: 48px; min-width: 48px; }
+  .chatbody .crow .btn.primary { min-height: 44px; }
+  /* The attached-item chip and the back bar are both context you already have
+     when you are mid-sentence. */
+  .chatbody .backbar .t-meta { display: none; }
+}
