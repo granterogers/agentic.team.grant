@@ -28,9 +28,23 @@
  *
  * ## Fixtures, and why they are safe here
  *
- * Every job this writes is `requested_by` a `verify:` name, so `is_fixture` is
- * generated true and no tally, briefing or health reading can see it. The jobs
- * are cancelled at teardown — they cannot be deleted (`job_state_transitions`
+ * `subject` is set to `verify-addressing`, which is what makes these jobs
+ * fixtures — and it took 0342 to make that possible at all.
+ *
+ * This header used to claim the jobs were already fixtures because the
+ * `dedupe_key` began `verify:`. It was wrong, and wrong in the expensive
+ * direction: `enqueue_inbound` composes `requested_by` as
+ * `<origin_channel>:<subject>`, so these were `voice:grant` and `is_fixture`
+ * was false. **Forty-three of them ran** — the office claimed them, spent
+ * tokens, produced outputs and counted them in Grant's health readings, all
+ * from a test. It is also why the `recipient_agent` assertion below failed
+ * intermittently: a live worker sometimes got there first (#203).
+ *
+ * No suite driving the real enqueue path could produce a fixture before 0342,
+ * because `origin_channel` is constrained to four real surfaces and `kind` is
+ * hardcoded — so the fix belonged in the generated column, not here.
+ *
+ * The jobs are still cancelled at teardown — they cannot be deleted (`job_state_transitions`
  * is append-only and holds a foreign key, ADR-0022) but a terminal state is
  * always reachable, and leaving them queued blocks `verify:slack` and
  * `verify:worker`, which need the queue to themselves (#184).
@@ -76,9 +90,10 @@ const turn = async (said: string, addressedTo: string | null): Promise<Record<st
     (
       await one(`
         insert into public.inbound_commands
-          (origin_channel, origin_ref, actor, instruction, addressed_to, dedupe_key)
+          (origin_channel, origin_ref, actor, instruction, addressed_to, dedupe_key, subject)
         values ('voice', ${lit(key)}, 'grant', ${lit(said)},
-                ${addressedTo === null ? 'null' : lit(addressedTo)}, ${lit(key)})
+                ${addressedTo === null ? 'null' : lit(addressedTo)}, ${lit(key)},
+                'verify-addressing')
         returning command_id::text as id
       `)
     ).id,
@@ -115,6 +130,18 @@ try {
     'Have a look at the pricing page and tell me what you think.',
     null,
   )
+  /*
+    This suite's own traffic is harness traffic, and it says so rather than
+    assuming it. The header claimed it for months while `is_fixture` was false
+    and forty-three of these jobs ran for real (#203, 0342). A claim about
+    fixture-ness with no check behind it is exactly how that happened.
+  */
+  check(
+    'and the work this suite makes is marked as harness traffic, not as Grant asking',
+    `is_fixture=${String(named.is_fixture)}`,
+    named.is_fixture === true && unaddressed.is_fixture === true,
+  )
+
   check(
     'CONTROL: the same words with nobody named carry no addressee',
     `named -> ${String(named.pinned)}, unaddressed -> ${String(unaddressed.pinned)}`,
@@ -146,18 +173,38 @@ try {
     reason, and only a missing one falls through to classification.
   */
   const handler = await sourceOf('src/handlers/instruction.ts')
-  const byName = handler.slice(
-    handler.indexOf('async function speaker'),
-    handler.indexOf('async function speaker') + 900,
-  )
+  /*
+    To the end of the function, not to a fixed character count. #203.
+
+    The first draft sliced `indexOf('async function speaker') + 900`, and #36
+    grew `speaker()` past that — so the ordering assertion below was reading a
+    window that no longer contained both landmarks, and went red on a correct
+    change. A character offset is a count, and CLAUDE.md records four separate
+    times a count-based assertion failed the day the thing under test moved.
+
+    `nextFn` is the start of whatever is declared after it, so the window grows
+    with the function instead of having to be guessed again.
+  */
+  const from = handler.indexOf('async function speaker')
+  const nextFn = handler.indexOf('\nasync function ', from + 1)
+  const nextConst = handler.indexOf('\nconst ', from + 1)
+  const ends = [nextFn, nextConst].filter((i) => i > from)
+  const byName = handler.slice(from, ends.length > 0 ? Math.min(...ends) : handler.length)
+
+  const looksUpRoster = /where slug = \$\{lit\([A-Za-z]+\)\} and active/.test(byName)
+  const prefersTheName =
+    byName.indexOf('addressed directly') > 0 &&
+    byName.indexOf('classifyIntent') > byName.indexOf('addressed directly')
   check(
     'and the handler prefers a named addressee over its own classifier',
-    /where slug = \$\{lit\(byName\)\} and active/.test(byName)
-      ? 'looked up on the roster, filtered to active, returned with a reason'
-      : 'THE HANDLER DOES NOT READ IT',
-    /where slug = \$\{lit\(byName\)\} and active/.test(byName) &&
-      byName.indexOf('addressed directly') > 0 &&
-      byName.indexOf('classifyIntent') > byName.indexOf('addressed directly'),
+    from < 0
+      ? 'THERE IS NO speaker() IN THE HANDLER'
+      : !looksUpRoster
+        ? 'THE HANDLER DOES NOT READ IT'
+        : !prefersTheName
+          ? 'it reads the roster but classifies first'
+          : `looked up on the roster, filtered to active, before classifying (${String(byName.length)} chars read)`,
+    from >= 0 && looksUpRoster && prefersTheName,
   )
 
   // =========================================================================
