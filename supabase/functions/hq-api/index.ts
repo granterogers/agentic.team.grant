@@ -196,6 +196,25 @@ const SECTIONS: Readonly<
   relations: { fn: 'relations_of', arg: 'p_id', textArg: { param: 'kind', arg: 'p_kind' } },
   /** The named actions, so no page hard-codes them (#27). */
   actions: { fn: 'asset_actions' },
+  /*
+    Project Settings (#36, migrations 0323-26).
+
+    Three sections rather than one, and not for tidiness: each is a different
+    tab of the sheet, each is read only when that tab is opened, and the export
+    is a third of a megabyte on a real project. Folding them into `studio`
+    would make every first paint carry a settings screen nobody has opened, and
+    make every project switch carry an export.
+  */
+  project_team: { fn: 'project_team', arg: 'p_project_id' },
+  project_automations: { fn: 'project_automations', arg: 'p_project_id' },
+  /*
+    The whole project, as the neutral package §13 names.
+
+    Deliberately its own section and never part of another: 338KB for Legacy
+    Coaching Course today, and it grows with the corpus. It is fetched when
+    Grant presses Export and at no other time.
+  */
+  project_export: { fn: 'project_export', arg: 'p_project_id' },
 }
 
 /**
@@ -488,6 +507,41 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
   lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
   proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
+  /*
+    Project Settings (#36, migrations 0323-26).
+
+    `p_instruction` is required on `project_instruction` and the empty string
+    is a legitimate value for it — clearing a brief is a thing Grant does, and
+    an optional argument would make "clear it" indistinguishable from "the page
+    forgot to send it".
+
+    `automation_create` requires only the project and the sentence. Everything
+    else has a default the RPC states in one place: once a day, nobody in
+    particular, which is what an automation means when you have not said
+    otherwise.
+
+    There is no `project_delete` here and there will not be. Archive is
+    reversible and is what this sheet offers; `app.project_delete` exists for a
+    person at a terminal who has read ADR-0014, which is not a button.
+  */
+  project_staff: { fn: 'set_project_staff', required: ['p_slug', 'p_staff_slug', 'p_on'] },
+  /*
+    `p_instruction` is deliberately NOT required, and it is the only argument in
+    this map for which that is true.
+
+    The guard below treats the empty string as missing, which is right for
+    every other action it protects and wrong for this one: clearing a brief IS
+    sending an empty one, and requiring it made the clear unreachable with
+    `missing: p_instruction`. 0327 gave the argument a default of '' so that
+    "no brief sent" and "clear the brief" mean the same thing — which is the
+    only reading under which both are true.
+  */
+  project_instruction: { fn: 'set_project_instruction', required: ['p_slug', 'p_staff_slug'] },
+  automation_create: { fn: 'create_automation', required: ['p_slug', 'p_instruction'] },
+  automation_set: { fn: 'set_automation', required: ['p_automation', 'p_on'] },
+  automation_remove: { fn: 'remove_automation', required: ['p_automation'] },
+  project_archive: { fn: 'archive_project', required: ['p_slug'] },
+  project_unarchive: { fn: 'unarchive_project', required: ['p_slug'] },
 }
 
 /**

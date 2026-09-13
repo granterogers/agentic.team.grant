@@ -150,6 +150,13 @@ async function speaker(
   db: SqlExecutor,
   addressedTo: string | null,
   instruction: string,
+  /**
+   * Which dashboard project this is, so the roster respects who works on it.
+   *
+   * Null for work with no project, which is most duties. See `pickRoster`'s
+   * fourth argument and migration 0323.
+   */
+  projectId: string | null = null,
 ): Promise<Speaker> {
   const byName = addressedTo === null || addressedTo === '' ? null : addressedTo
   if (byName !== null) {
@@ -189,7 +196,30 @@ async function speaker(
     .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
     .catch(() => undefined)
 
-  const { roster, reason } = pickRoster(classified, instruction, topical as never)
+  /*
+    Who works on this project (#36, migration 0323).
+
+    Undefined rather than empty on failure, and the distinction is load-bearing
+    in the same way the `topical` catch above is: undefined means "no
+    restriction", an empty array would mean "nobody works here" and would send
+    every piece of work on every project to the Chief of Staff the first time
+    the query hiccupped.
+  */
+  const onProject =
+    projectId === null
+      ? undefined
+      : await db
+          .execute(`select unnest(app.staff_on_project(${lit(projectId)}::uuid)) as slug`)
+          .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
+          .then((xs) => (xs.length === 0 ? undefined : xs))
+          .catch(() => undefined)
+
+  const { roster, reason } = pickRoster(
+    classified,
+    instruction,
+    topical as never,
+    onProject as never,
+  )
   const chosen = roster[0] ?? 'chief-of-staff'
   const { rows } = await db.execute(`
     select slug, name, title, communication_style, responsibilities
@@ -978,7 +1008,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       )
       instruction = resolved.instruction
 
-      const who = await speaker(deps.db, payload.addressed_to ?? null, instruction)
+      const who = await speaker(
+        deps.db,
+        payload.addressed_to ?? null,
+        instruction,
+        job.projectId ?? null,
+      )
 
       /*
         Write down who it went to (#65).
@@ -1368,6 +1403,27 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       await recordSkillUse(deps.db, guidance.skills, job.jobId)
       const learned = guidanceBrief(guidance)
 
+      /*
+        What this person is told on THIS project (#36, migration 0323).
+
+        Grant: Legacy Coaching wants a different Emma from AI Learning. Applied
+        ON TOP of the remit and the style, never instead of them — a
+        per-project note that replaced the global brief would let one line
+        delete §12, and it is one line typed into a text box.
+
+        Empty for every project he has not written one for, which is all of
+        them today, so this adds nothing to the prompt until he uses it.
+      */
+      const localBrief =
+        job.projectId === null
+          ? ''
+          : await deps.db
+              .execute(
+                `select app.project_instruction_for(${lit(job.projectId)}::uuid, ${lit(who.slug)}) as v`,
+              )
+              .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? '').trim())
+              .catch(() => '')
+
       const completion =
         confirmation !== null
           ? null
@@ -1388,6 +1444,12 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     (who.communication_style === null
                       ? ''
                       : `How you talk: ${who.communication_style} `) +
+                    // After the remit and the style, and before anything about
+                    // the conversation: it is a standing fact about the work,
+                    // not an instruction about this reply.
+                    (localBrief === ''
+                      ? ''
+                      : `On this project specifically, Grant has told you: ${localBrief} `) +
                     'You are replying to Grant, who runs the place, in a private chat. He is ' +
                     'a colleague you know well, not a customer.\n\n' +
                     (turns.length === 0

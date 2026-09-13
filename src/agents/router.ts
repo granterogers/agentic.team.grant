@@ -413,12 +413,42 @@ export const pickRoster = (
     routing degrades to what it did yesterday instead of to nothing.
   */
   topical?: readonly RoleSlug[],
+  /*
+    Who works on THIS project (#36, migration 0323).
+
+    Grant can take a specialist off a project in Settings, and the Issue asks
+    for that to take effect rather than merely to be stored — a setting nothing
+    reads is #64 with the sign reversed, and being told YES about something
+    that does not happen is the expensive direction.
+
+    Passed in for the same reason `topical` is: this function is pure, and
+    every routing rule in it stays testable without a database. Omitted means
+    no restriction, which is what a project with no decisions recorded against
+    it deserves and what every caller that has no project should get.
+  */
+  onProject?: readonly RoleSlug[],
 ): { readonly roster: readonly RoleSlug[]; readonly reason: string } => {
-  const ceiling = ROSTER_CEILINGS[classification.intent]
+  const here = (r: RoleSlug): boolean => onProject === undefined || onProject.includes(r)
+  const ceiling = ROSTER_CEILINGS[classification.intent].filter(here)
   if (ceiling.length === 0) {
+    /*
+      Two different empties, and saying which is the whole value of the line.
+
+      A `thought` convenes nobody because §9 says trivial work spawns no
+      subagents. An `assignment` on a project Grant has taken every specialist
+      off ALSO convenes nobody, and reporting that as "trivial work" would
+      hide his own setting from him in the one place he would look for it.
+      Either way the Chief of Staff picks it up, which is what an empty roster
+      means everywhere else in this system.
+    */
+    const wasFull = ROSTER_CEILINGS[classification.intent].length > 0
     return {
       roster: [],
-      reason: `${classification.intent} needs no specialist (§9: trivial work spawns no subagents)`,
+      reason: wasFull
+        ? `${classification.intent} would normally go to ` +
+          `${ROSTER_CEILINGS[classification.intent].join(', ')}, and none of them are on ` +
+          'this project, so the Chief of Staff has it'
+        : `${classification.intent} needs no specialist (§9: trivial work spawns no subagents)`,
     }
   }
 
@@ -437,6 +467,8 @@ export const pickRoster = (
 
   const fromRoster =
     topical ?? TOPIC_ROLES.filter((t) => t.pattern.test(instruction)).map((t) => t.role)
+  // `ceiling` is already filtered to who is on the project, so the
+  // intersection carries that restriction without a second mention of it.
   const chosen = ceiling.filter((r) => fromRoster.includes(r))
 
   // Nothing topical matched: take the single cheapest-to-justify role from the
@@ -467,6 +499,8 @@ export const route = (
     readonly justification?: string
     /** From `app.who_knows_about`. See `pickRoster`. */
     readonly topical?: readonly RoleSlug[]
+    /** From `app.staff_on_project`. See `pickRoster`. */
+    readonly onProject?: readonly RoleSlug[]
   } = {},
 ): RoutingDecision => {
   const classification = classifyIntent(instruction)
@@ -482,7 +516,7 @@ export const route = (
           'the reading was too uncertain to act on, so the decision is to ask ' +
           'rather than to convene anyone',
       }
-    : pickRoster(classification, instruction, options.topical)
+    : pickRoster(classification, instruction, options.topical, options.onProject)
 
   let resolution: DuplicateResolution = 'none_found'
   let linkedJobId: string | null = null

@@ -320,5 +320,11 @@
   "0319_the_conflict_target_is_the_index_that_exists.sql": "e68f04e27ae197975a6dd11e4eab90c53d7e86f43152fea33cd008bb59906447",
   "0320_a_partial_index_needs_its_predicate_in_the_conflict_target.sql": "543189a283c218602fb00da115d565314b9d93d07671fcbc65bd9f54f0b54d86",
   "0321_dropping_an_output_is_a_decision_not_a_deletion.sql": "eb5f67188f94ec7e18d972e49083269b21f319cbcedb469b38cf50963fb1be85",
-  "0322_null_is_not_equal_to_null_in_a_unique_index.sql": "94814d2ea082a5090b2802c7e8e61a94f0257b5df287253d80ce7b0033f0f9fd"
+  "0322_null_is_not_equal_to_null_in_a_unique_index.sql": "94814d2ea082a5090b2802c7e8e61a94f0257b5df287253d80ce7b0033f0f9fd",
+  "0323_who_works_on_this_project_and_what_they_are_told_here.sql": "17a4cde3666f2669607a1ef0661285921f97d70fd201cd5f39d23f6938b9ec7b",
+  "0324_an_automation_grant_can_make_himself.sql": "a863310e12ac525f2eee7541fce4de7b5c0ca21d84fe53dcce1737744aab9707",
+  "0325_a_project_you_can_take_with_you.sql": "1ce5f98ec089067ea516f677c108e74d1bdf71c588a8d18f3996d032d8fc7db9",
+  "0326_an_export_carries_no_identity_of_ours.sql": "92bb054b8da8e15d3c3d123baf3655e446c6e06502bad26fe58acb337d63f487",
+  "0327_clearing_a_brief_is_a_value_not_an_omission.sql": "adcbf7925112c549ad57d09f01e20906cbaca4511915bd28be9954ff91fe1a0c",
+  "0328_an_automation_nobody_is_named_on_is_claires.sql": "7f95ce8664783b448a7512b1b0f36df97603a18dca847e2eabd89a4e995c4370"
 }
