@@ -82,6 +82,8 @@ interface Msg {
 let mine = ''
 let theirs = ''
 
+const num = async (sql: string): Promise<number> => Number((await one(sql)).n ?? -1)
+
 const history = async (project: string, limit = 50): Promise<Msg[]> => {
   const r = await one(
     `select app.conversation_history(${lit(project)}::uuid, ${String(limit)}) as v`,
@@ -524,6 +526,83 @@ try {
     'and saying nothing is refused in English, not by a constraint name',
     String(empty?.error),
     empty?.ok === false && String(empty?.error).includes('nothing to say'),
+  )
+
+  // -----------------------------------------------------------------------
+  console.log('\nhistory can be reconstructed, and reconstructing it does not wake the office')
+
+  const histTs = '1699999999.000700'
+  const back1 = (
+    await one(`
+      select app.record_slack_history(${lit(myChannel)}, ${lit(histTs)}, 'U0OLD',
+        ${lit(`Something said months ago ${run}`)}) as v
+    `)
+  ).v as { ok?: boolean; outcome?: string; command?: string }
+  check(
+    'an old message imports into the channel’s project',
+    `${String(back1?.outcome)}`,
+    back1?.ok === true && back1.outcome === 'added',
+  )
+
+  /*
+    The property this whole feature turns on. Every message in a channel's
+    history is an instruction as far as the router is concerned, so a backfill
+    that enqueued would have the office act on every request Grant made since
+    March — each job doing exactly what it was told.
+  */
+  const woke = await num(`
+    select count(*)::int as n from public.inbound_commands
+     where command_id = ${lit(String(back1?.command))}::uuid and job_id is not null
+  `)
+  check(
+    'and it makes NO work — importing history does not make the office act on it',
+    `${String(woke)} job(s)`,
+    woke === 0,
+  )
+
+  const back2 = (
+    await one(`
+      select app.record_slack_history(${lit(myChannel)}, ${lit(histTs)}, 'U0OLD',
+        ${lit(`Something said months ago ${run}`)}) as v
+    `)
+  ).v as { outcome?: string }
+  check(
+    'importing twice imports once — the same key that makes a redelivery safe',
+    String(back2?.outcome),
+    back2?.outcome === 'already there',
+  )
+
+  const reconstructed = (await history(mine, 100)).find((m) =>
+    String(m.body).includes('Something said months ago'),
+  )
+  check(
+    'it reads back in the conversation',
+    String(reconstructed?.body).slice(0, 40),
+    reconstructed !== undefined,
+  )
+  check(
+    'and it is marked as reconstructed — the office did not witness it and must not imply it did',
+    `backfilled=${String((reconstructed as { backfilled?: boolean } | undefined)?.backfilled)}`,
+    (reconstructed as { backfilled?: boolean } | undefined)?.backfilled === true,
+  )
+  const live = (await history(mine, 100)).find((m) =>
+    String(m.body).includes('Said from the studio'),
+  )
+  check(
+    'while a message the office DID witness is not',
+    `backfilled=${String((live as { backfilled?: boolean } | undefined)?.backfilled)}`,
+    (live as { backfilled?: boolean } | undefined)?.backfilled === false,
+  )
+
+  const unmapped = (
+    await one(`
+      select app.record_slack_history('C0NEVERMAPPED', '1699999999.000800', 'U0OLD', 'orphan') as v
+    `)
+  ).v as { ok?: boolean; error?: string }
+  check(
+    'and a channel that maps to no project is refused rather than filed anywhere',
+    String(unmapped?.error).slice(0, 50),
+    unmapped?.ok === false && String(unmapped?.error).includes('maps to no project'),
   )
 
   // -----------------------------------------------------------------------

@@ -119,6 +119,7 @@
     "deploy:hq": "tsx scripts/deploy/hq.ts",
     "deploy:voice": "tsx scripts/deploy/voice.ts",
     "slack:tidy": "tsx scripts/slack/tidy-channels.ts",
+    "slack:backfill": "tsx scripts/slack/backfill.ts",
     "hq:token": "tsx scripts/deploy/hq-token.ts",
     "verify:hq": "tsx scripts/verify/hq.ts",
     "backup:notify": "tsx scripts/backup/notify-failure.ts",
