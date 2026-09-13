@@ -27,6 +27,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { press } from './press.ts'
 
 const ROOT = 'web/studio'
 const PORT = 4617
@@ -130,11 +131,7 @@ try {
     */
     await page.locator('[data-say]').first().fill(`sent ${draft}`)
     await page.waitForTimeout(200)
-    await page
-      .locator('[data-composer] button[type="submit"], [data-composer] .btn.primary')
-      .first()
-      .click({ force: true })
-      .catch(() => undefined)
+    await press(page, '[data-composer] .btn.primary')
     await page.waitForTimeout(900)
     const afterSend = await page.evaluate(
       `document.querySelector('[data-say]') === null ? 'GONE' : document.querySelector('[data-say]').value`,
@@ -171,6 +168,244 @@ try {
         fits !== null && fits.bottom <= fits.navTop,
       )
     }
+
+    // ---------------------------------------------------------------------
+    /*
+      Something arrived while you were reading further up (#205, #200).
+
+      Driven through the page's own arrival path rather than by setting the
+      state directly: `chat.send` writes a message from somebody who is not
+      Grant, and `keepingPlace` is the thing under test. Asserting on
+      `state.arrived` would be asserting the mechanism rather than the
+      property, which this file already has three corrections about.
+
+      The thread is scrolled AWAY from the bottom first, because that is the
+      whole condition — at the bottom the message is on screen and a badge
+      would be noise, and a suite that never scrolls up would pass while the
+      feature was hard-coded to never appear.
+    */
+    /*
+      A conversation long enough to scroll, first.
+
+      The default thread is four messages in a 260px box: `scrollHeight` equals
+      `clientHeight`, so being "scrolled away from the bottom" is not a state
+      that exists, and the badge is correctly never shown. The first draft of
+      this check spent three runs reading that as "the affordance is broken"
+      while the affordance was right and the fixture was 258 pixels tall.
+
+      Filled through the module's own `send`, which is what the composer calls
+      — so the thread is made long the way a real one gets long.
+    */
+    await page.evaluate(`(async () => {
+      const chat = await import('/chat.js')
+      for (let i = 0; i < 14; i += 1) chat.send('legacy-coaching-course', 'earlier note ' + i, null, 'everyone')
+    })()`)
+    /*
+      Reopened through the same helper the top of this file uses, rather than
+      by clicking the tabs directly.
+
+      On a phone the section tabs live in a rail that the chat has scrolled
+      past, so a direct `[data-tab]` click lands on nothing and the suite ends
+      up measuring a screen with no conversation on it — which reported as
+      "NO CONTROL" and "NO MESSAGES", four steps from the cause. The
+      conversation itself survives the reload: it is in localStorage.
+    */
+    await openChat(page)
+    /*
+      Which scroller is in charge, and can it be scrolled away from at all.
+
+      Two answers by width, and this is the finding the phone leg produced: on
+      a desktop the thread is a box with its own max-height and its own
+      scrollbar; on a phone it has neither and the PAGE scrolls, so the
+      thread's own numbers say "at the bottom" for ever. A suite that asked the
+      thread on both would have reported the phone as having no case to test,
+      and the product would have shipped a badge that could never appear on the
+      surface #205 exists for.
+    */
+    const scrolls = (await page.evaluate(`(() => {
+      const t = document.querySelector('[data-thread]')
+      if (t === null) return null
+      const own = t.scrollHeight - t.clientHeight > 8
+      return { own, room: own ? t.scrollHeight - t.clientHeight
+                              : Math.round(t.getBoundingClientRect().height - window.innerHeight) }
+    })()`)) as { own: boolean; room: number } | null
+    check(
+      `${label} — the conversation is long enough to be scrolled away from`,
+      scrolls === null
+        ? 'NO THREAD'
+        : `${scrolls.own ? 'the thread scrolls' : 'the page scrolls'}, ${String(scrolls.room)}px of room`,
+      scrolls !== null && scrolls.room > 80,
+    )
+
+    // Away from the newest message, through whichever scroller that is.
+    await page.evaluate(`(() => {
+      const t = document.querySelector('[data-thread]')
+      if (t === null) return
+      if (t.scrollHeight - t.clientHeight > 8) t.scrollTop = 0
+      else window.scrollTo(0, Math.max(0, t.getBoundingClientRect().top + window.scrollY - 40))
+    })()`)
+    await page.waitForTimeout(250)
+
+    const badgeBefore = await page.evaluate(
+      `(() => { const b = document.querySelector('[data-arrived]'); return b === null ? 'MISSING' : (b.hidden ? 'hidden' : 'shown') })()`,
+    )
+    check(
+      `${label} — nothing is announced before anything arrives`,
+      String(badgeBefore),
+      badgeBefore === 'hidden',
+    )
+
+    /*
+      A reply lands — through the product's own path, not a hook.
+
+      The composer is used the way a person uses it and the office's turn
+      endpoint is answered with a canned reply, so what runs is `chat.ask`
+      replacing its own placeholder. That matters more than convenience: the
+      placeholder KEEPS ITS ID and only stops being pending, so this is exactly
+      the arrival a length comparison cannot see, and driving it any other way
+      would test a path the product does not take.
+
+      Scrolled back up immediately after sending, because sending puts you at
+      the bottom by design — and the badge's whole condition is that you are
+      not there.
+    */
+    /*
+      Answered after a beat, on purpose.
+
+      The office takes seconds to think; a route that fulfils instantly answers
+      before the suite can scroll back up, and then the arrival lands while the
+      thread is at the bottom — which is the case where there is correctly no
+      badge. The first draft of this check failed for exactly that reason and
+      read as "the badge never appears".
+    */
+    await page.route('**/turn', async (r) => {
+      await new Promise((done) => setTimeout(done, 1200))
+      await r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          speak: 'I have read the corpus and there are three themes.',
+          did: 'answered',
+        }),
+      })
+    })
+    await page.locator('[data-say]').first().fill('what are the themes?')
+    await page.waitForTimeout(150)
+    const sent = await press(page, '[data-composer] .btn.primary')
+    check(`${label} — Send can actually be pressed`, sent ? 'pressed' : 'NEVER REACHABLE', sent)
+    await page.waitForTimeout(250)
+    // Back up, before the answer lands — again, whichever scroller is in charge.
+    await page.evaluate(`(() => {
+      const t = document.querySelector('[data-thread]')
+      if (t === null) return
+      if (t.scrollHeight - t.clientHeight > 8) t.scrollTop = 0
+      else window.scrollTo(0, Math.max(0, t.getBoundingClientRect().top + window.scrollY - 40))
+    })()`)
+    await page.waitForTimeout(2200)
+
+    const badge = (await page.evaluate(`(() => {
+      const b = document.querySelector('[data-arrived]')
+      if (b === null) return null
+      const says = b.querySelector('[data-arrived-says]')
+      const r = b.getBoundingClientRect()
+      return { hidden: b.hidden, says: says === null ? '' : says.textContent,
+               name: b.getAttribute('aria-label') ?? '',
+               w: Math.round(r.width), h: Math.round(r.height) }
+    })()`)) as { hidden: boolean; says: string; name: string; w: number; h: number } | null
+
+    check(
+      `${label} — a message arriving above you says so`,
+      badge === null ? 'NO CONTROL' : badge.hidden ? 'STILL HIDDEN' : `"${badge.says}"`,
+      badge !== null && !badge.hidden,
+    )
+    check(
+      `${label} — and it names who spoke rather than counting`,
+      badge === null ? 'n/a' : `"${badge.says}"`,
+      badge !== null && /replied|new messages/i.test(badge.says),
+    )
+    check(
+      `${label} — the jump control is at least 44px tall`,
+      badge === null ? 'n/a' : `${String(badge.w)} by ${String(badge.h)}`,
+      badge !== null && badge.h >= 44,
+    )
+    check(
+      `${label} — with a name a screen reader can say`,
+      badge === null ? 'n/a' : badge.name,
+      badge !== null && badge.name.trim() !== '',
+    )
+
+    /*
+      And the announcement, which is the half a badge cannot do. #200 asks for
+      an arriving message to be ANNOUNCED — a polite live region, so it is
+      heard at the next pause rather than interrupting.
+    */
+    const live = (await page.evaluate(`(() => {
+      const r = document.getElementById('hq-announce')
+      if (r === null) return null
+      return { politeness: r.getAttribute('aria-live'), words: r.textContent }
+    })()`)) as { politeness: string; words: string } | null
+    check(
+      `${label} — and a screen reader is told, politely`,
+      live === null ? 'NO LIVE REGION' : `${live.politeness}: "${String(live.words).slice(0, 40)}"`,
+      live !== null && live.politeness === 'polite' && String(live.words).trim() !== '',
+    )
+
+    // --- pressing it takes you there, and it goes away --------------------
+    await press(page, '[data-arrived]')
+    await page.waitForTimeout(900)
+    const after = (await page.evaluate(`(() => {
+      const b = document.querySelector('[data-arrived]')
+      const t = document.querySelector('[data-thread]')
+      if (t === null) return { hidden: true, atBottom: false }
+      const own = t.scrollHeight - t.clientHeight > 8
+      const atBottom = own
+        ? t.scrollHeight - t.clientHeight - t.scrollTop < 60
+        : t.getBoundingClientRect().bottom - window.innerHeight < 60
+      return { hidden: b === null ? true : b.hidden, atBottom }
+    })()`)) as { hidden: boolean; atBottom: boolean }
+    check(
+      `${label} — pressing it scrolls to the newest message`,
+      after.atBottom ? 'at the bottom' : 'DID NOT MOVE',
+      after.atBottom,
+    )
+    check(`${label} — and dismisses itself`, after.hidden ? 'gone' : 'STILL SHOWING', after.hidden)
+
+    // --- every message says who, when and where, non-visually -------------
+    /*
+      #200: author, time and addressee available non-visually, not conveyed by
+      portrait and colour alone. On screen the office's name is drawn and
+      Grant's is not — his messages are identified by being on the right, which
+      is nothing at all to somebody listening.
+    */
+    const attributed = (await page.evaluate(`(() => {
+      const msgs = [...document.querySelectorAll('[data-thread] .msg')]
+      if (msgs.length === 0) return null
+      const missing = msgs.filter((m) => {
+        const a = m.querySelector('.aonly')
+        return a === null || (a.textContent ?? '').trim() === ''
+      })
+      const first = msgs[0].querySelector('.aonly')
+      return { total: msgs.length, missing: missing.length,
+               sample: first === null ? '' : (first.textContent ?? '').trim() }
+    })()`)) as { total: number; missing: number; sample: string } | null
+    check(
+      `${label} — every message says who said it and when, non-visually`,
+      attributed === null
+        ? 'NO MESSAGES'
+        : `${String(attributed.total - attributed.missing)}/${String(attributed.total)} — e.g. "${attributed.sample}"`,
+      attributed !== null && attributed.missing === 0,
+    )
+    check(
+      `${label} — the thread is a list, so its length is knowable before reading it`,
+      String(
+        await page.evaluate(
+          `(() => { const t = document.querySelector('[data-thread]'); return t === null ? 'NONE' : t.getAttribute('role') })()`,
+        ),
+      ),
+      (await page.evaluate(
+        `(() => { const t = document.querySelector('[data-thread]'); return t === null ? '' : t.getAttribute('role') })()`,
+      )) === 'list',
+    )
 
     check(`${label} — nothing thrown`, thrown[0] ?? 'none', thrown.length === 0)
     await ctx.close()

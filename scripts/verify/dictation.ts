@@ -35,6 +35,7 @@ import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { press } from './press.ts'
 
 const ROOT = 'web/studio'
 const PORT = 4619
@@ -114,49 +115,6 @@ window.__say = (words, final) => {
   return true
 }
 `
-
-/*
-  Press it for real, which in this studio is not `click()`.
-
-  CLAUDE.md records both halves of why. The page never stops moving —
-  `breathe()` and `scatter()` run for as long as it is open — so Playwright's
-  stability check can never pass inside it; and a view transition paints an
-  overlay across the WHOLE page for about 900ms, during which `elementFromPoint`
-  at any coordinate returns the root. `force: true` skips the actionability
-  wait but still dispatches at a POINT, so a press during that window lands on
-  the overlay and is silently lost.
-
-  The desktop leg of this suite failed its first five checks on exactly that,
-  and reported it as "the microphone never opened" — a symptom four steps from
-  the cause. So: hit-test until the element at its own centre really is the
-  element, and only then press.
-*/
-const press = async (page: import('playwright').Page, selector: string): Promise<boolean> => {
-  const el = page.locator(selector).first()
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const box = await el.boundingBox()
-    if (box !== null) {
-      /*
-        Passed as a STRING, for the reason `probe.ts` and `space.ts` both do it:
-        this project's tsconfig has no `dom` lib, so a closure touching
-        `document` cannot typecheck even though it only ever runs in a browser.
-      */
-      const mine = await page.evaluate(`(() => {
-        const want = document.querySelector(${JSON.stringify(selector)})
-        const at = document.elementFromPoint(${String(box.x + box.width / 2)}, ${String(
-          box.y + box.height / 2,
-        )})
-        return want !== null && at !== null && (want === at || want.contains(at))
-      })()`)
-      if (mine) {
-        await el.click({ force: true })
-        return true
-      }
-    }
-    await page.waitForTimeout(100)
-  }
-  return false
-}
 
 const browser = await chromium.launch()
 

@@ -4655,6 +4655,25 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   */
   .chatbody .thread { max-height: none; min-height: 0; }
   /*
+    And the wrapper #205 put around the thread has to be transparent to that
+    sizing, or the column stops working.
+
+    `.chatbody` is `grid-template-rows: 1fr auto`, so the 1fr row is now the
+    WRAPPER rather than the thread. Without these two lines the wrapper takes
+    the row, the thread inside it is unconstrained, and it grows to its content
+    — 3,561px of conversation in a 3,561px box, which means it never scrolls
+    internally, the page scrolls instead, and the composer ends up underneath
+    the fixed navigation with a long enough thread. Measured, after a suite
+    reported "Send can never be pressed" and the press log named
+    BUTTON.navitem as the thing in the way.
+
+    `min-height: 0` on both: a grid or flex item's default `min-height: auto`
+    refuses to shrink below its content, which is the whole mechanism by which
+    an inner scroller fails to appear.
+  */
+  .chatbody .threadwrap { min-height: 0; display: grid; grid-template-rows: 1fr; }
+  .chatbody .threadwrap > .thread { min-height: 0; height: 100%; }
+  /*
     Tighter, because on a phone the composer competes with the conversation for
     the same screen rather than sitting beside it.
   */
@@ -4739,4 +4758,94 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .crow textarea { grid-column: 1 / -1; min-height: 56px; }
   .crow .btn.mic { grid-column: 1; width: 56px; min-width: 56px; height: 48px; }
   .crow .btn.primary { grid-column: 2; justify-content: center; }
+}
+
+/* --- Said, but not shown (#200) ---------------------------------------------
+   The attribution a screen reader gets and a sighted person does not: they
+   already have it from position, colour and the label above the words.
+
+   Not `display: none` and not `visibility: hidden` — both remove it from the
+   accessibility tree as well, which is the opposite of the point. The clip
+   rectangle is the one technique that leaves the text readable to assistive
+   technology while occupying no pixels. */
+.aonly {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Something arrived while you were reading further up (#205) -------------
+   `keepingPlace` already gets the scroll right; this is the half #199 left.
+
+   Inside the thread's own wrapper, NOT fixed to the viewport. `.thread` has a
+   backdrop-filter on it, and backdrop-filter establishes a containing block —
+   a fixed child would anchor to that element rather than the screen, which is
+   how a bottom navigation bar once rendered across the top of the page.
+
+   Not a grey pill with a number in it. It carries the accent, one live dot,
+   the person's name and an arrow that says which way "newest" is — the WOW
+   gate applies to the small, frequently-seen elements most of all. */
+.threadwrap { position: relative; }
+
+.arrived {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s4);
+  transform: translateX(-50%);
+  z-index: 3;
+
+  display: inline-flex; align-items: center; gap: var(--s2);
+  min-height: 44px;
+  padding: 0 var(--s4) 0 var(--s3);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--edge));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent));
+  color: var(--ink);
+  font: 600 13.5px/1 var(--text);
+  letter-spacing: .01em;
+  cursor: pointer;
+  box-shadow: var(--lift-2);
+}
+.arrived:hover { background: color-mix(in srgb, var(--surface) 84%, var(--accent)); }
+.arrived svg { opacity: .7; }
+
+/* One live dot, because a thing that has just happened should look like it
+   just happened. It is the only motion here — the button itself does not
+   slide, bounce or fade in: the studio already never stops moving, and one
+   more animated arrival is noise rather than signal. */
+.arrdot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: arrdot 2.2s ease-out infinite;
+}
+@keyframes arrdot {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arrdot { animation: none; }
+}
+
+@media (max-width: 560px) {
+  /*
+    Absolute inside the thread's wrapper on a phone too, NOT fixed to the
+    viewport — because `.chatbody` restores an inner scroller there, so the
+    bottom of the wrapper really is the bottom of the visible conversation.
+
+    A first attempt made this `position: fixed` on the theory that the page was
+    the scroller. It was, but only because the wrapper had broken the column;
+    fixing the cause made the fixed position wrong. Recorded rather than
+    deleted: the reasoning was sound and the premise was a bug.
+
+    It sits directly above the composer, which is the most crowded place in the
+    product, so it never covers the box you were typing into.
+  */
+  .arrived { bottom: var(--s3); font-size: 13px; padding: 0 var(--s3) 0 10px; }
 }

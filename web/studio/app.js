@@ -73,6 +73,28 @@ const state = {
   // Whether the chat has been scrolled into view for this project already, so
   // a repaint does not drag the page back while somebody is reading (#197).
   chatShown: null,
+  /*
+    What arrived while you were reading further up (#205).
+
+    `keepingPlace` already gets the SCROLL right — stay put unless you were at
+    the bottom — and #199 deliberately left the other half: when a message
+    lands above you, nothing says so, and you find it by scrolling or you do
+    not find it.
+
+    Per project, and reset when you reach the bottom. `who` is the last
+    person to speak, because "Emma replied" is worth more than "1 new
+    message"; `n` counts them because two of Emma is not one of Emma.
+  */
+  arrived: { project: null, n: 0, who: null },
+  // The ids the thread has already shown, so an arrival can be told from a
+  // repaint of the same conversation (#205).
+  seen: { project: null, ids: null },
+  // Set by `keepingPlace` for the length of one redraw: were you reading
+  // further up when this happened? Only it can know (#205).
+  wasReading: false,
+  // The page-scroll listener currently installed, so a rebuild replaces it
+  // rather than stacking another one on every render (#205).
+  onPageScroll: null,
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
   // Whether the MCP client view is open, on the Connections tab (#91).
@@ -1993,6 +2015,38 @@ function teamTab(p) {
   one that drifted would have been the dock, because it is the one nobody has
   open while editing the other.
 */
+/*
+  One message's attribution, in words (#200).
+
+  The name is repeated from the visible label rather than shared with it,
+  because the visible one is `aria-hidden` — a screen reader hearing "Emma
+  Research Emma, Research, at 14:32" would be worse than either alone. The
+  visible label keeps its own typography; this one keeps the facts.
+
+  The time is deliberately the time and not "2 hours ago": a relative time read
+  aloud is a fact that was true when the page was drawn, and a conversation
+  page can be open all day.
+
+  The surface matters more here than it looks. A message Grant sent from Slack
+  and a message he sent here are the same conversation (#192), and on screen
+  they are indistinguishable — which is right. Non-visually there is nothing
+  else to go on, so it is said.
+*/
+const saidBy = (who, m) => {
+  const name = who === 'grant' ? 'You' : (crewBy(who)?.name ?? 'The office')
+  const role = who === 'grant' ? '' : `, ${crewBy(who)?.role ?? ''}`
+  const at = m.at === undefined || m.at === null || m.at === ''
+    ? ''
+    : `, ${new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  const to = m.to === undefined || m.to === null || m.to === ''
+    ? ''
+    : `, to ${crewBy(m.to)?.name ?? String(m.to)}`
+  const where = m.surface === undefined || m.surface === null || m.surface === 'teamhq'
+    ? ''
+    : `, from ${String(m.surface)}`
+  return `${name}${role}${at}${to}${where}`
+}
+
 const bubble = (m) => {
     if (m.from === 'grant') {
       /*
@@ -2001,17 +2055,32 @@ const bubble = (m) => {
         from a channel's past. Adding it only to the office's replies would
         have marked the rare case and missed the common one.
       */
-      return `<div class="msg mine">
+      /*
+        Who, when and to whom — available to a screen reader (#200).
+
+        On screen this is carried by position (your messages are on the right)
+        and by colour, and neither exists for somebody listening to the page.
+        The visually-hidden line is the same three facts in words, first in
+        reading order so the message is attributed before it is read out.
+
+        `role=listitem` inside the thread's `role=list`: a conversation is a
+        list of messages and announcing "list, 14 items" is how you know how
+        much there is before you start.
+      */
+      return `<div class="msg mine" role="listitem">
+        <span class="aonly">${esc(saidBy('grant', m))}</span>
         ${m.context ? `<span class="ctxchip">${esc(m.context.title)}</span>` : ''}
         <p>${esc(m.text)}</p>
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history</span>' : ''}
       </div>`
     }
     const c = crewBy(m.from)
-    return `<div class="msg theirs ${m.bad ? 'bad' : ''}" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
+    return `<div class="msg theirs ${m.bad ? 'bad' : ''}" role="listitem"
+         style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
       ${face(c, 30)}
       <div class="mbody">
-        <span class="t-label">${esc(c.name)} · ${esc(c.role)}</span>
+        <span class="aonly">${esc(saidBy(m.from, m))}</span>
+        <span class="t-label" aria-hidden="true">${esc(c.name)} · ${esc(c.role)}</span>
         <p>${esc(m.text)}</p>
         <!--
           What the office is doing with it (#103).
@@ -2081,14 +2150,58 @@ function chatTab(p) {
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>`}
-    <div class="thread" data-thread>
-      ${messages.length === 0
-        ? `<div class="empty">
-            <p class="t-meta">Nothing said about ${esc(p.name)} yet. Ask for something, or
-              press the talk button on any document, person or task to start with that
-              already attached.</p>
-          </div>`
-        : messages.map(bubble).join('')}
+    <!--
+      The thread is a LIST of messages, and says so (#200). A person listening
+      to the page is told how many there are before the first one is read out,
+      and can move between them with one key rather than by word.
+
+      It is deliberately NOT a live region. Marking the whole thread live would
+      announce the "Asking the office" placeholder as though it were an answer,
+      which is the exact thing #200 rules out — a reply is announced and a
+      typing indicator is not. The announcement is made by hand, once, for
+      messages that are real. No backticks in this comment.
+    -->
+    <div class="threadwrap">
+      <!--
+        The list role only when there IS a list.
+
+        role=list requires every child to be a listitem, and the empty state is
+        a paragraph explaining that nothing has been said yet. axe caught it on
+        four of eleven screens the moment the role was added, which is the
+        argument for running it: the markup read fine and was wrong.
+        No backticks in this comment.
+      -->
+      <div class="thread" data-thread ${messages.length === 0 ? '' : 'role="list"'}
+           aria-label="Conversation about ${esc(p.name)}">
+        ${messages.length === 0
+          ? `<div class="empty">
+              <p class="t-meta">Nothing said about ${esc(p.name)} yet. Ask for something, or
+                press the talk button on any document, person or task to start with that
+                already attached.</p>
+            </div>`
+          : messages.map(bubble).join('')}
+      </div>
+      <!--
+        What arrived while you were reading further up (#205).
+
+        Inside the thread's own wrapper rather than fixed to the viewport, for
+        a reason this repository has already paid for: backdrop-filter
+        establishes a containing block, so a fixed child anchors to that
+        element instead of the screen, and the composer area is exactly where
+        that has bitten before.
+
+        Hidden with the hidden attribute rather than a class, so it is out of
+        the accessibility tree as well as off the screen — a button a screen
+        reader can reach and a sighted person cannot is worse than no button.
+      -->
+      <button type="button" class="arrived" data-arrived hidden
+              aria-label="Jump to the newest message">
+        <span class="arrdot" aria-hidden="true"></span>
+        <span data-arrived-says>New message</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 5v13M6 13l6 6 6-6"/></svg>
+      </button>
     </div>
     <form class="composer" data-composer>
       ${a === null ? '' : `<div class="attached">
@@ -6089,12 +6202,107 @@ function render() {
   */
   dictate.stop()
 
+  /*
+    The new-message affordance (#205).
+
+    Wired before the composer because it belongs to the thread, and because it
+    has to be drawn from `state.arrived` on EVERY render — the button is
+    rebuilt with the rest of the page, so a badge set during one repaint would
+    vanish on the next one if only the arrival path drew it.
+  */
+  const arrivedBtn = $('[data-arrived]', root)
+  const threadEl = $('[data-thread]', root)
+  if (arrivedBtn !== null && threadEl !== null) {
+    noteArrivals()
+    const showArrived = () => {
+      const mine = state.arrived.project === state.project && state.arrived.n > 0
+      arrivedBtn.hidden = !mine
+      if (!mine) return
+      const says = $('[data-arrived-says]', arrivedBtn)
+      /*
+        "Emma replied" beats "1 new message", which is #205's own wording, and
+        it is worth the branch: a name tells you whether to look now.
+      */
+      const words =
+        state.arrived.n === 1
+          ? `${state.arrived.who} replied`
+          : `${String(state.arrived.n)} new messages`
+      if (says !== null) says.textContent = words
+      arrivedBtn.setAttribute('aria-label', `${words} — jump to the newest`)
+    }
+    showArrived()
+
+    /*
+      It goes away when you get there yourself, which is the half that makes it
+      unobtrusive: a badge you have to dismiss is a chore.
+
+      `passive` because this never calls `preventDefault` and a scroll listener
+      that might is a scroll listener the browser cannot optimise — on a phone
+      that is the difference between a thread that glides and one that stutters.
+    */
+    threadEl.addEventListener(
+      'scroll',
+      () => {
+        if (atNewest(threadEl)) forgetArrivals()
+      },
+      { passive: true },
+    )
+    /*
+      And the PAGE's scroll, which is the one that moves on a phone. Without
+      this the badge would appear correctly there and then never go away when
+      the person scrolled down to the message it was pointing at.
+    */
+    const onPageScroll = () => {
+      if (atNewest(threadEl)) forgetArrivals()
+    }
+    window.removeEventListener('scroll', state.onPageScroll ?? (() => {}))
+    state.onPageScroll = onPageScroll
+    window.addEventListener('scroll', onPageScroll, { passive: true })
+
+    arrivedBtn.addEventListener('click', () => {
+      /*
+        Scroll whichever scroller is in charge. On a phone the thread has none
+        of its own, so scrolling it does nothing at all and the button would
+        look dead — pressed, dismissed, and you are still where you were.
+      */
+      if (threadEl.scrollHeight - threadEl.clientHeight > 8) {
+        threadEl.scrollTo({ top: threadEl.scrollHeight, behavior: 'smooth' })
+      } else {
+        threadEl.scrollIntoView({ block: 'end', behavior: 'smooth' })
+      }
+      forgetArrivals()
+      /*
+        Focus follows the jump (#200): pressing a control that moves you
+        somewhere and leaving focus behind on the now-hidden control is how
+        focus ends up on `body`, which is the acceptance criterion this is
+        answering. The last message takes it.
+      */
+      const last = threadEl.querySelector('.msg:last-of-type')
+      if (last !== null) {
+        last.setAttribute('tabindex', '-1')
+        last.focus({ preventScroll: true })
+      }
+    })
+  }
+
   const composer = $('[data-composer]', root)
   if (composer) {
     const say = $('[data-say]', composer)
     const thread = $('[data-thread]', root)
-    // A thread you have to scroll to read is a thread you do not read.
-    if (thread) thread.scrollTop = thread.scrollHeight
+    /*
+      A thread you have to scroll to read is a thread you do not read — so it
+      opens at the bottom. But NOT while somebody is reading further up (#205).
+
+      This line ran on every render, unconditionally, and it undid the whole
+      point of `keepingPlace` for one frame: the jump to the bottom fired the
+      thread's own scroll listener, which correctly concluded that the reader
+      had reached the newest message and dismissed the badge — and only then
+      did `keepingPlace` put the scroll back where it was. The badge could
+      therefore never be seen, while every part of the mechanism behind it
+      worked. A defect made entirely of two correct behaviours in the wrong
+      order.
+    */
+    if (thread && state.wasReading !== true) thread.scrollTop = thread.scrollHeight
 
     // Grow to fit, up to a point. A one-line box for a paragraph is a box that
     // hides what you wrote from you.
@@ -6166,9 +6374,19 @@ function render() {
           transcript of this browser.
         */
         await chat.load(state.project, byId(state.project)?.id, token.get())
-        render()
-        const after = $('[data-thread]')
-        if (after) after.scrollTop = after.scrollHeight
+        /*
+          Through `keepingPlace`, not a bare render (#205).
+
+          This used to force the thread to the bottom when the answer landed.
+          That is right most of the time — you asked, so you want the answer —
+          and wrong in the case that matters: somebody who asked a question and
+          then scrolled up to re-read what the answer is about gets the ground
+          yanked from under them, which is precisely the annoyance #199 fixed
+          everywhere else. `keepingPlace` still scrolls to the answer when you
+          are at the bottom, which is almost always; when you are not, the
+          badge says the answer is there.
+        */
+        keepingPlace(() => { render() })
       })
     })
 
@@ -7159,17 +7377,173 @@ function tokenNow() {
  * off the bottom because of a sub-pixel line height is a thread the person
  * thinks they are at the bottom of.
  */
+/**
+ * Are you looking at the newest message? (#205)
+ *
+ * Two scrollers, and which one is in charge depends on the width. On a desktop
+ * the thread is a box with its own `max-height` and its own scrollbar. On a
+ * phone it has neither — the conversation is in the page flow and the PAGE
+ * scrolls, so `scrollHeight` equals `clientHeight` and the thread's own
+ * numbers say "you are at the bottom" for ever.
+ *
+ * That is not a rounding error, it is the whole feature missing on the surface
+ * that needs it most: on a phone the badge could never have appeared, and
+ * every check written against the thread's own scroll would have passed while
+ * it could not. Found by measuring rather than by reading the stylesheet —
+ * 3561 tall in a 3561 box.
+ *
+ * 40px of slack for the same reason `keepingPlace` allows it: a thread one
+ * pixel off the bottom because of a sub-pixel line height is a thread the
+ * person believes they are at the bottom of.
+ */
+function atNewest(threadEl) {
+  if (threadEl === null) return true
+  const ownScroller = threadEl.scrollHeight - threadEl.clientHeight > 8
+  if (ownScroller) {
+    return threadEl.scrollHeight - threadEl.clientHeight - threadEl.scrollTop < 40
+  }
+  // The page is the scroller: the newest message is at the thread's bottom
+  // edge, so the question is whether that edge is on screen.
+  return threadEl.getBoundingClientRect().bottom - window.innerHeight < 40
+}
+
 function keepingPlace(draw) {
   const before = $('[data-thread]')
   const was = before === null ? null : before.scrollTop
-  const wasAtBottom =
-    before !== null && before.scrollHeight - before.clientHeight - before.scrollTop < 40
+  const wasAtBottom = before !== null && atNewest(before)
+
+  /*
+    Whether a message that lands during this redraw should raise a badge (#205).
+
+    The DECISION is here because only here can it be answered — after the
+    redraw the old scroll position is gone. The DETECTION is somewhere else,
+    in `noteArrivals`, because a reply can also land on a path that never
+    comes through this function.
+
+    Read once and cleared by whoever reads it, so a stale "you were scrolled
+    up" cannot leak into an unrelated repaint half an hour later.
+  */
+  state.wasReading = before !== null && !wasAtBottom
 
   draw()
 
   const after = $('[data-thread]')
-  if (after === null || was === null) return
+  if (after === null || was === null) {
+    state.wasReading = false
+    return
+  }
   after.scrollTop = wasAtBottom ? after.scrollHeight : was
+  if (wasAtBottom) forgetArrivals()
+  state.wasReading = false
+}
+
+/**
+ * What has arrived since the last time this ran (#205, #200).
+ *
+ * Called from the render path rather than from `keepingPlace`, because a reply
+ * lands by two routes and only one of them goes through that function: the
+ * background refresh does, and the composer's own round trip does not — it
+ * calls `render` directly and then again when the answer replaces the
+ * placeholder. Detection in `keepingPlace` alone would have missed the common
+ * case entirely, which is the same shape as asserting at the wrong layer.
+ *
+ * Identity, not count. A message can arrive without the count changing: the
+ * optimistic placeholder KEEPS ITS ID and merely stops being pending when the
+ * real answer replaces it, so a length comparison sees nothing happen at the
+ * exact moment the thing everybody is waiting for happens. So the witness is
+ * the set of ids that are REAL — somebody else's words, not pending, not still
+ * in flight — and anything newly in that set has arrived.
+ */
+function noteArrivals() {
+  const now = chat.thread(state.project) ?? []
+  /*
+    Somebody else's words, and not a placeholder.
+
+    Deliberately NOT also filtering `inflight`. `send` marks the optimistic
+    placeholder both pending AND in flight, and `ask` clears only `pending`
+    when the real answer replaces it — so excluding in-flight messages here
+    excluded the arrival for ever, and the badge could never appear on the one
+    path the product actually takes. What `inflight` was guarding against is
+    your own optimistic copy, and `from !== 'grant'` already excludes that.
+  */
+  const real = now.filter((m) => m.from !== 'grant' && m.pending !== true)
+  const ids = new Set(real.map((m) => String(m.id)))
+
+  // First sight of a conversation is not an arrival — everything in it
+  // arrived before you opened it, and a badge saying so on entry is the
+  // "14 new messages" that greets you with your own history.
+  if (state.seen.project !== state.project || state.seen.ids === null) {
+    state.seen = { project: state.project, ids }
+    return
+  }
+
+  const fresh = real.filter((m) => !state.seen.ids.has(String(m.id)))
+  state.seen = { project: state.project, ids }
+  if (fresh.length === 0) return
+
+  const last = fresh[fresh.length - 1]
+  const who = crewBy(last.from)?.name ?? 'The office'
+
+  /*
+    Announced whether or not it is visible (#200).
+
+    `polite` rather than `assertive`: a reply is worth hearing at the next
+    pause, and interrupting somebody mid-sentence is the behaviour that gets
+    live regions switched off. Said even when the thread is at the bottom and
+    the message is plainly on screen — a screen reader user has no "plainly".
+  */
+  announce(
+    fresh.length === 1
+      ? `${who} replied: ${String(last.text ?? '').slice(0, 160)}`
+      : `${String(fresh.length)} new messages, the last from ${who}`,
+  )
+
+  // The badge only when it is needed. At the bottom the message is already on
+  // screen, and a badge pointing at something you can see is noise.
+  if (state.wasReading !== true) return
+  const same = state.arrived.project === state.project
+  state.arrived = {
+    project: state.project,
+    n: (same ? state.arrived.n : 0) + fresh.length,
+    who,
+  }
+}
+
+/**
+ * Say something to a screen reader without saying it to anybody else (#200).
+ *
+ * One region, created once and reused, living outside the studio's own DOM so
+ * a render cannot take it away mid-announcement — which is the classic way a
+ * live region ends up announcing nothing: it is replaced in the same frame the
+ * text is written into it, and the assistive technology never sees a change.
+ *
+ * Cleared before writing, because writing the same string twice is not a
+ * change and a second identical arrival would be silent.
+ */
+function announce(words) {
+  if (typeof document === 'undefined') return
+  let region = document.getElementById('hq-announce')
+  if (region === null) {
+    region = document.createElement('div')
+    region.id = 'hq-announce'
+    region.className = 'aonly'
+    region.setAttribute('role', 'status')
+    region.setAttribute('aria-live', 'polite')
+    region.setAttribute('aria-atomic', 'true')
+    document.body.appendChild(region)
+  }
+  region.textContent = ''
+  // A tick later, or the clear and the write collapse into one mutation and
+  // there is nothing for the screen reader to notice.
+  window.setTimeout(() => { region.textContent = words }, 60)
+}
+
+/** Nothing is waiting below any more (#205). */
+function forgetArrivals() {
+  if (state.arrived.n === 0) return
+  state.arrived = { project: null, n: 0, who: null }
+  const badge = $('[data-arrived]')
+  if (badge !== null) badge.hidden = true
 }
 
 async function live() {
