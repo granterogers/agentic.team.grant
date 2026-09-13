@@ -401,8 +401,63 @@ export function usageTab(data = USAGE) {
 
     ${area(data.by_day)}
     ${consumers(data.top_models)}
+    ${growthCard(GROWTH)}
   </div>`
 }
+
+/*
+  How fast the conversation is growing (#204).
+
+  On the Usage page rather than on its own, because it is the same question as
+  every other figure here — what are we spending, and how long can we keep
+  spending it — and a page per number is how a dashboard becomes a filing
+  cabinet.
+
+  The numbers are MEASURED. #204 asked three questions and the first was the
+  growth rate per connected surface, from real traffic, once two surfaces were
+  syncing. Both are, so this is a reading rather than an estimate, and it is a
+  function rather than a script so it stays true tomorrow.
+
+  Fixtures are excluded in the RPC, which is the whole reason the Slack figure
+  fell from 117 rows to 45 the moment it was measured properly. Harness traffic
+  reported as growth is the trap this repository has a paragraph about.
+*/
+function growthCard(g) {
+  if (g === null || !Array.isArray(g.surfaces)) return ''
+  const gb = (n) => `${(Number(n) / 1024 / 1024).toFixed(0)} MB`
+  const pct = Math.round((Number(g.db_bytes) / Number(g.tier_bytes)) * 100)
+  const years = g.years_of_room === null || g.years_of_room === undefined
+    ? null
+    : Number(g.years_of_room)
+  return `<section class="u-growth setcard">
+    <header>
+      <span class="t-label">The conversation</span>
+      <span class="t-meta">${esc(String(g.messages_a_day))} messages a day across
+        ${esc(String(g.surfaces.length))} surface${g.surfaces.length === 1 ? '' : 's'},
+        about ${esc(String(g.bytes_a_message))} bytes each</span>
+    </header>
+    <ul class="u-surf">
+      ${g.surfaces.map((s) => `<li>
+        <b>${esc(String(s.surface))}</b>
+        <span class="m">${esc(String(s.a_day))} a day</span>
+        <span class="m">${esc(String(s.rows))} so far</span>
+      </li>`).join('')}
+    </ul>
+    <p class="t-meta">
+      The database is ${esc(gb(g.db_bytes))} of the free tier's ${esc(gb(g.tier_bytes))}
+      — ${esc(String(pct))}%.
+      ${years === null
+        ? 'Nothing has been said yet, so there is no rate to project.'
+        : `At this rate there is room for about ${esc(String(years))} more years of
+           conversation. Nothing needs deleting, and most of it could not be:
+           an answer hangs off a job, and a job is permanent by design.`}
+    </p>
+  </section>`
+}
+
+/** Null until it has been read. A card with invented numbers on it is the
+    defect this whole file's header is about. */
+export let GROWTH = null
 
 /*
   ---------------------------------------------------------------------------
@@ -424,6 +479,23 @@ export const USAGE = { ...FALLBACK_USAGE }
 export const usageSource = { live: false, why: 'not asked yet' }
 
 export async function hydrateUsage(read) {
+  /*
+    Asked separately and allowed to fail on its own (#204).
+
+    Not folded into the same try: a growth reading that is missing should cost
+    the growth card and nothing else, and putting it inside would have made an
+    unrelated failure blank the whole Usage page — which is the shape of #119,
+    where one slow fetch in a Promise.all left the page on its default state
+    saying everything was fine.
+  */
+  void read('conversation_growth')
+    .then((g) => {
+      if (g !== null && typeof g === 'object' && Array.isArray(g.surfaces)) GROWTH = g
+    })
+    .catch(() => {
+      GROWTH = null
+    })
+
   try {
     const d = await read('usage_overview')
     if (!d || !Array.isArray(d.services)) throw new Error('unexpected shape')

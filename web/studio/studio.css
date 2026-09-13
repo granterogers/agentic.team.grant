@@ -4849,3 +4849,29 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   */
   .arrived { bottom: var(--s3); font-size: 13px; padding: 0 var(--s3) 0 10px; }
 }
+
+/* --- How fast the conversation is growing (#204) ----------------------------
+   On the Usage page, in the same card language as the service tiles above it,
+   because it answers the same question those do. */
+.u-growth { margin-top: var(--s5); }
+.u-growth > header {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-bottom: var(--s3);
+}
+.u-surf {
+  list-style: none; margin: 0 0 var(--s3); padding: 0;
+  display: grid; gap: 2px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.u-surf li {
+  display: flex; align-items: baseline; gap: var(--s2);
+  padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--sunken) 40%, transparent);
+}
+.u-surf b { font: 600 13.5px/1.2 var(--text); text-transform: capitalize; }
+/* `.m` is muted only with an `li` ancestor — `li .m, .meta { … }`. These are
+   inside an li, so the rule applies. Checked rather than assumed: using it
+   outside a list renders at full body size and full ink, which is the trap
+   this stylesheet already records. */
+.u-surf li .m { margin-left: auto; }
+.u-surf li .m + .m { margin-left: var(--s2); }

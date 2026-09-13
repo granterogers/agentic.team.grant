@@ -134,6 +134,17 @@ const SECTIONS: Readonly<
   */
   conversation: { fn: 'conversation_history', arg: 'p_project_id' },
   /*
+    How fast the conversation is growing, and how much room is left (#204).
+
+    Its own section for the same reason `pulse` is: it is a cheap question that
+    should be answerable without paying for a payload it is not part of. And it
+    is HERE rather than in a script because of the instruction that outranks
+    most others — "I want to reduce my dependence on Claude or another coding
+    interface for maintaining and extending the system." A number an agent has
+    to run something to get is a number Grant does not have.
+  */
+  conversation_growth: { fn: 'conversation_growth' },
+  /*
     The MCP server, as a page (#91).
 
     Its own section rather than part of `studio_settings`, because it is the

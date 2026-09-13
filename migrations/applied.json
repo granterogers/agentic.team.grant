@@ -341,5 +341,6 @@
   "0340_a_project_connected_today_is_not_a_conversation_that_starts_today.sql": "09c32d1f2059a217ed4feedd0eabe4b2a1317fbdcf82381947ce1b3533fad6a9",
   "0341_a_message_about_nothing_in_particular_goes_somewhere_honest.sql": "aea28c7ffa96ff9e9b8a207ca4443173f7b6340c83012a1d0145952e16fc254e",
   "0342_a_suite_that_enqueues_can_mark_its_own_traffic.sql": "ffa1350ebf05653d22f1abbc0ac359cc68ce49a6181838b06da3e530bd19738f",
-  "0343_the_digest_notices_that_something_was_said.sql": "902637ec6ba358b3c3f314c915deef9a4fd1c62f41af0aea40c9fe4ad1090b82"
+  "0343_the_digest_notices_that_something_was_said.sql": "902637ec6ba358b3c3f314c915deef9a4fd1c62f41af0aea40c9fe4ad1090b82",
+  "0344_the_conversation_can_be_measured_rather_than_guessed.sql": "0681c69e3e14f556ee63bac638bc20ccd7aa23a122f481a3a7dc71f797bcfa31"
 }
