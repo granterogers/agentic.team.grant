@@ -333,6 +333,118 @@ try {
   )
 
   // -----------------------------------------------------------------------
+  console.log('\na message from a project’s Slack channel joins that project’s conversation')
+
+  /*
+    0338, the inbound half of #193.
+
+    Driven through `enqueue_inbound` with a real `origin_ref` rather than
+    through the signed endpoint — `verify:echo` already proves the signed path,
+    and what is under test here is which project the canonical layer resolves,
+    not whether Slack's signature verifies.
+
+    The rival project is mapped too, and to a DIFFERENT channel, so the check
+    cannot pass by there being only one answer available.
+  */
+  /*
+    A real workspace: `slack_channel_map.team_id` is a foreign key to
+    `slack_workspaces`, so an invented team is refused. Read rather than
+    hardcoded, so this does not go red when the workspace changes.
+  */
+  const team = String(
+    (await one(`select team_id as v from public.slack_workspaces order by team_id limit 1`)).v ??
+      '',
+  )
+  const myChannel = `C0HIST${run.slice(0, 4).toUpperCase()}`
+  const theirChannel = `C0RIVL${run.slice(0, 4).toUpperCase()}`
+  const mappings: readonly (readonly [string, string])[] = [
+    [myChannel, mine],
+    [theirChannel, theirs],
+  ]
+  for (const [chan, proj] of mappings) {
+    await db.execute(`
+      insert into public.slack_channel_map
+        (channel_id, team_id, project_id, channel_name, purpose, active)
+      values (${lit(chan)}, ${lit(team)}, ${lit(proj)}::uuid,
+              ${lit(`zz test history ${run}`)}, 'project', true)
+    `)
+  }
+
+  const fromSlack = String(
+    (
+      await one(`
+        insert into public.inbound_commands
+          (origin_channel, origin_ref, actor, instruction, dedupe_key)
+        values ('slack', ${lit(`${myChannel}:1700000000.000900`)}, 'U0HIST',
+                ${lit(`Asked in the channel ${run}`)},
+                ${lit(`slack:message:${myChannel}:1700000000.000900`)})
+        returning command_id as v
+      `)
+    ).v ?? '',
+  )
+  const enq2 = (await one(`select app.enqueue_inbound(${lit(fromSlack)}::uuid) as v`)).v as {
+    job_id?: string
+  }
+  const landed = String(
+    (
+      await one(
+        `select project_id::text as v from public.inbound_commands where command_id = ${lit(fromSlack)}::uuid`,
+      )
+    ).v ?? '',
+  )
+  check(
+    '0338 — it lands on the project that owns the channel, not the last one touched',
+    `channel ${myChannel} -> ${landed.slice(0, 8)} (wanted ${mine.slice(0, 8)})`,
+    landed === mine,
+  )
+
+  const slackHistory = await history(mine, 100)
+  check(
+    'and it reads back in that project’s conversation',
+    `${String(slackHistory.length)} message(s)`,
+    slackHistory.map((m) => String(m.body)).some((b) => b.includes('Asked in the channel')),
+  )
+  check(
+    'and not in the rival’s, whose channel is mapped elsewhere',
+    'checked',
+    !(await history(theirs, 100))
+      .map((m) => String(m.body))
+      .some((b) => b.includes('Asked in the channel')),
+  )
+
+  /*
+    An unmapped channel must still work. The fallback is the path for
+    essentially every message ever sent, and breaking it to fix the mapped case
+    would be a far worse trade.
+  */
+  const orphan = String(
+    (
+      await one(`
+        insert into public.inbound_commands
+          (origin_channel, origin_ref, actor, instruction, dedupe_key)
+        values ('slack', ${lit(`C0NOMAP${run.slice(0, 4).toUpperCase()}:1700000000.001000`)}, 'U0HIST',
+                ${lit(`Asked nowhere in particular ${run}`)},
+                ${lit(`slack:message:C0NOMAP${run.slice(0, 4).toUpperCase()}:1700000000.001000`)})
+        returning command_id as v
+      `)
+    ).v ?? '',
+  )
+  await db.execute(`select app.enqueue_inbound(${lit(orphan)}::uuid)`)
+  const orphanLanded = String(
+    (
+      await one(
+        `select project_id::text as v from public.inbound_commands where command_id = ${lit(orphan)}::uuid`,
+      )
+    ).v ?? '',
+  )
+  check(
+    'a message from an unmapped channel still lands somewhere rather than being lost',
+    `-> ${orphanLanded.slice(0, 8)}`,
+    orphanLanded !== '' && orphanLanded !== 'null',
+  )
+  void enq2
+
+  // -----------------------------------------------------------------------
   console.log('\nthe layer the studio actually uses')
 
   const base = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/hq-api`
@@ -344,14 +456,21 @@ try {
     ).v ?? '',
   )
   if (hqToken !== '') {
+    /*
+      Read the RPC again HERE rather than reusing a count from earlier: the
+      Slack section above added a message, and comparing HTTP against a stale
+      snapshot fails for a reason that has nothing to do with the HTTP layer.
+      The property worth asserting is that the two agree right now.
+    */
+    const overHttp = await history(String(agree.jp ?? mine), 100)
     const r = await fetch(`${base}?section=conversation&id=${String(agree.jp ?? mine)}`, {
       headers: { Authorization: `Bearer ${hqToken}` },
     })
     const body = (await r.json().catch(() => ({}))) as { data?: Msg[] }
     check(
       'the page can ask for a conversation over HTTP',
-      `http ${String(r.status)}, ${String((body.data ?? []).length)} message(s)`,
-      r.ok && Array.isArray(body.data) && (body.data ?? []).length === both.length,
+      `http ${String(r.status)}, ${String((body.data ?? []).length)} over HTTP vs ${String(overHttp.length)} from the RPC`,
+      r.ok && Array.isArray(body.data) && (body.data ?? []).length === overHttp.length,
     )
 
     const bad = await fetch(`${base}?section=conversation&id=not-a-uuid`, {
@@ -385,6 +504,9 @@ try {
     than removed. Asserting they are GONE would be asserting the wrong thing;
     what matters is that they are out of Grant's project list.
   */
+  await db.execute(
+    `delete from public.slack_channel_map where channel_name like ${lit(`zz test history ${run}%`)}`,
+  )
   for (const id of [mine, theirs].filter((x) => x !== '')) {
     await db.execute(`delete from public.inbound_commands where project_id = ${lit(id)}::uuid`)
     await db.execute(

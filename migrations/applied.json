@@ -335,5 +335,6 @@
   "0334_a_place_for_what_names_no_project.sql": "aaf20c97a4aa47ee2330fc46868f135378167a6c0e45feec2f5f790a53c95521",
   "0335_one_ordered_history_whatever_surface_it_came_from.sql": "e9a73ef5b7dc4238ab7380640b232aa85d00ccda96f52036ae5a832467d676b7",
   "0336_a_message_and_its_answer_are_one_conversation.sql": "a03b9e8fe372ef75e2780268e1d7b5bc2f22c80a7022a1ed31eb8334d3737c88",
-  "0337_the_project_a_surface_named_is_where_the_work_goes.sql": "c7334114ae69ec66d397c953dea419c6f066735c91042ec9d8c8a257184e4e2a"
+  "0337_the_project_a_surface_named_is_where_the_work_goes.sql": "c7334114ae69ec66d397c953dea419c6f066735c91042ec9d8c8a257184e4e2a",
+  "0338_a_question_in_a_project_channel_belongs_to_that_project.sql": "d673427fefc8daabeb83ef04d65c94e544a6c93c82042c1ff578d0e42018a625"
 }
