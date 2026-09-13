@@ -338,5 +338,6 @@
   "0337_the_project_a_surface_named_is_where_the_work_goes.sql": "c7334114ae69ec66d397c953dea419c6f066735c91042ec9d8c8a257184e4e2a",
   "0338_a_question_in_a_project_channel_belongs_to_that_project.sql": "d673427fefc8daabeb83ef04d65c94e544a6c93c82042c1ff578d0e42018a625",
   "0339_saying_something_in_a_project.sql": "cafa81c2fd7c074e0044e5f4553ae608422db72a9a689ee1b1509b9e8bdc1ed4",
-  "0340_a_project_connected_today_is_not_a_conversation_that_starts_today.sql": "09c32d1f2059a217ed4feedd0eabe4b2a1317fbdcf82381947ce1b3533fad6a9"
+  "0340_a_project_connected_today_is_not_a_conversation_that_starts_today.sql": "09c32d1f2059a217ed4feedd0eabe4b2a1317fbdcf82381947ce1b3533fad6a9",
+  "0341_a_message_about_nothing_in_particular_goes_somewhere_honest.sql": "aea28c7ffa96ff9e9b8a207ca4443173f7b6340c83012a1d0145952e16fc254e"
 }

@@ -444,6 +444,59 @@ try {
     `-> ${orphanLanded.slice(0, 8)}`,
     orphanLanded !== '' && orphanLanded !== 'null',
   )
+
+  /*
+    0341, ADR-0024. With nothing to go on, the message goes to Unnamed rather
+    than to a guess — and the setting is asserted in BOTH positions, because a
+    switch only proven in its default state is a switch nobody has tested.
+  */
+  const unnamedProject = String((await one(`select app.unnamed_project() as v`)).v ?? '')
+  check(
+    '0341 — a message naming nothing lands in Unnamed, not in a guess',
+    `-> ${orphanLanded.slice(0, 8)} (Unnamed is ${unnamedProject.slice(0, 8)})`,
+    orphanLanded === unnamedProject,
+  )
+
+  await db.execute(
+    `update public.system_config set value = 'false'::jsonb where key = 'routing.unnamed_when_unresolved'`,
+  )
+  try {
+    /*
+      Three plain statements rather than one clever CTE. The first draft did the
+      insert, the enqueue and the read in one statement and came back empty:
+      Postgres does not promise the order of a data-modifying CTE relative to a
+      subquery that reads the same row.
+    */
+    const guessCmd = String(
+      (
+        await one(`
+          insert into public.inbound_commands
+            (origin_channel, origin_ref, actor, instruction, dedupe_key)
+          values ('telegram', ${lit(`${PREFIX}-guess`)}, 'grant',
+                  ${lit(`Nothing in particular ${run}`)},
+                  ${lit(`telegram:message:${PREFIX}-guess`)})
+          returning command_id as v
+        `)
+      ).v ?? '',
+    )
+    await db.execute(`select app.enqueue_inbound(${lit(guessCmd)}::uuid)`)
+    const guessed = String(
+      (
+        await one(
+          `select project_id::text as v from public.inbound_commands where command_id = ${lit(guessCmd)}::uuid`,
+        )
+      ).v ?? '',
+    )
+    check(
+      'and turning the setting off restores the old guess — it is a switch, not a rewrite',
+      `-> ${guessed.slice(0, 8)}`,
+      guessed !== '' && guessed !== unnamedProject,
+    )
+  } finally {
+    await db.execute(
+      `update public.system_config set value = 'true'::jsonb where key = 'routing.unnamed_when_unresolved'`,
+    )
+  }
   void enq2
 
   // -----------------------------------------------------------------------
