@@ -784,6 +784,26 @@ Each of these cost real time. They are here so they cost it once.
   merely clutter on the smallest screen: instructions to try something that
   cannot work. When a media query disables a behaviour, grep for the copy that
   teaches it.
+- **#45's question has to be asked about the SPECIFIC thing, not about the
+  suite.** `verify:history` used real project names on the reasoning that
+  "`conversation_history` filters fixtures, so #45 says use real subjects".
+  True of JOBS — it excludes `jobs.is_fixture` — and false of PROJECTS, which
+  it never looks at. So the projects could have been fixtures all along, and
+  instead **thirty-two archived debris projects accumulated in one afternoon**,
+  which is #45's own pile being rebuilt by somebody quoting #45. Twenty-five of
+  them are permanent: each gathered a job, a job can never be deleted, so
+  `project_delete` refuses for ever. Ask the question about the column the
+  reader actually filters, and grep the reader to find out which one that is.
+- **A comment claiming a suite's traffic is harness traffic is worth nothing
+  without a check.** `verify:addressing`'s header said "every job this writes is
+  `requested_by` a `verify:` name, so `is_fixture` is generated true". It never
+  was: the DEDUPE KEY began `verify:`, while `enqueue_inbound` composes
+  `requested_by` as `<origin_channel>:<subject>` — so they were `voice:grant`,
+  and **43 of them ran for real**, spending tokens and landing in Grant's
+  health readings. It was also structural: `origin_channel` is constrained to
+  four real surfaces and `kind` is hardcoded, so **no suite driving the real
+  enqueue path could produce a fixture job at all** until 0342 added
+  `%:verify-%`. If a suite believes its work is invisible, make it assert that.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

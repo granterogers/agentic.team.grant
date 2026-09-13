@@ -103,6 +103,23 @@ const commandsFor = async (slackTs: string): Promise<number> =>
       where dedupe_key = ${lit(`slack:message:${CHANNEL}:${slackTs}`)}`,
   )
 
+/*
+  Register this suite's Slack user as harness traffic before sending anything.
+
+  `enqueue_inbound` composes `requested_by` as `<origin_channel>:<subject>`,
+  and `subject` comes from `subject_identities` — so mapping this actor to
+  `verify-echo` makes every job the suite causes a fixture (0342, #203).
+
+  Without it these are `slack:U0ECHOVERIFY`, which is not a fixture, and the
+  office picks them up and answers them for real. That is exactly what
+  `verify:addressing` was doing to 43 jobs before anybody noticed.
+*/
+await db.execute(`
+  insert into public.subject_identities (subject, origin_channel, actor, note)
+  values ('verify-echo', 'slack', ${lit(HUMAN)}, 'verify:echo harness traffic (#203)')
+  on conflict do nothing
+`)
+
 try {
   console.log('\na message arrives once')
 
@@ -148,6 +165,17 @@ try {
       join public.inbound_commands c on c.job_id = j.job_id
      where c.dedupe_key = ${lit(`slack:message:${CHANNEL}:${first}`)}
   `)
+  const asFixture = await num(`
+    select count(*)::int as n from public.jobs j
+      join public.inbound_commands c on c.job_id = j.job_id
+     where c.dedupe_key = ${lit(`slack:message:${CHANNEL}:${first}`)}
+       and j.is_fixture
+  `)
+  check(
+    'and that work is marked as harness traffic, not as Grant asking',
+    `${String(asFixture)} of ${String(jobs)} is a fixture`,
+    jobs === 0 || asFixture === jobs,
+  )
   check(
     'and it made one piece of work, not two — enqueue_inbound is idempotent',
     `${String(jobs)} job(s)`,

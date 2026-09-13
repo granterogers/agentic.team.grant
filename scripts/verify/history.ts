@@ -65,9 +65,28 @@ const run = Math.random().toString(36).slice(2, 10)
   added a subject called "Identity proof rival <run>", whose slug landed outside
   the teardown's prefix, and three of them reached Grant's project switcher.
 */
-const MINE = `Conversation proof ${run}`
-const THEIRS = `Conversation proof ${run} rival`
-const PREFIX = `conversation-proof-${run}`
+/*
+  FIXTURE-named projects, and the reason is #45's deciding question: does the
+  thing under test filter fixtures?
+
+  `conversation_history` filters `jobs.is_fixture` and never touches
+  `projects.is_fixture` — so a fixture PROJECT is perfectly visible to the
+  reader, and the suite loses nothing by using one.
+
+  The first draft used real names on the strength of "the reader filters
+  fixtures", which is true of jobs and false of projects. Thirty-two archived
+  debris projects accumulated in a single afternoon before `check:leaks` said
+  so — the exact pile #45 is about. A real project that gathers a job can never
+  be deleted (`job_state_transitions` is append-only, so `project_delete`
+  refuses), which is why archiving is not a teardown.
+
+  Named at creation, not renamed at teardown: a crashed run never reaches
+  teardown, which is the lesson the ten permanent `zz test slack` channels
+  taught.
+*/
+const MINE = `Fixture conversation ${run}`
+const THEIRS = `Fixture conversation ${run} rival`
+const PREFIX = `fixture-conversation-${run}`
 
 interface Msg {
   kind?: string
@@ -752,6 +771,26 @@ try {
   await db.execute(
     `delete from public.slack_channel_map where channel_name like ${lit(`zz test history ${run}%`)}`,
   )
+
+  /*
+    Cancel the jobs this run caused before removing the commands that point at
+    them. `say_in_project` is the real product path and makes real work — which
+    is right, and means the suite owes the queue a teardown. #203 is what
+    leaving them behind looks like: 43 jobs the office ran for a test.
+
+    Cancelled rather than deleted: a job can never be removed
+    (`job_state_transitions` is append-only), and only a non-terminal state can
+    move — `enforce_job_transition` refuses complete -> cancelled and is right
+    to, which `verify:import` learned by copying another suite's assumptions.
+  */
+  for (const id of [mine, theirs].filter((x) => x !== '')) {
+    await db.execute(`
+      update public.jobs
+         set state = 'cancelled', state_reason = 'verify:history probe, never run'
+       where project_id = ${lit(id)}::uuid
+         and state not in ('complete', 'cancelled', 'failed')
+    `)
+  }
   for (const id of [mine, theirs].filter((x) => x !== '')) {
     await db.execute(`delete from public.inbound_commands where project_id = ${lit(id)}::uuid`)
     await db.execute(
@@ -760,18 +799,41 @@ try {
     await db.execute(`delete from public.project_attachments where project_id = ${lit(id)}::uuid`)
   }
 
-  const left = Number(
+  /*
+    Try a real delete first. It succeeds when the run made no jobs, and is
+    refused when it did — a project holding a job can never be removed, which
+    is ADR-0022 and correct. What the assertion then checks is the property
+    that matters: nothing of this run is in Grant's project list, whether that
+    is because it was deleted or because it is archived AND a fixture.
+  */
+  for (const slug of [`${PREFIX}`, `${PREFIX}-rival`]) {
+    await db.execute(`select app.project_delete(${lit(slug)})`)
+  }
+
+  const visible = Number(
     (
       await one(`
         select count(*)::int as n from public.projects
-         where slug like ${lit(`${PREFIX}%`)} and status = 'active'
+         where slug like ${lit(`${PREFIX}%`)}
+           and (status = 'active' or not is_fixture)
       `)
     ).n,
   )
   check(
-    'teardown — no subject of this run is still in Grant’s project list',
-    `${String(left)} active`,
-    left === 0 && mine !== '',
+    'teardown — nothing of this run can reach Grant’s project list',
+    `${String(visible)} active or non-fixture`,
+    visible === 0 && mine !== '',
+  )
+
+  const liveJobs = await num(`
+    select count(*)::int as n from public.jobs
+     where state_reason = 'verify:history probe, never run'
+       and state not in ('complete', 'cancelled', 'failed')
+  `)
+  check(
+    'teardown — no probe job is still live in the queue',
+    `${String(liveJobs)} live`,
+    liveJobs === 0,
   )
 
   const strays = Number(
