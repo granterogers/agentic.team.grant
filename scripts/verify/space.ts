@@ -227,6 +227,67 @@ for (const a of f.above) {
   console.log(`    ${a.sel.padEnd(22)} ${String(a.height).padStart(4)}px at y=${String(a.y)}`)
 }
 
+/*
+  The chat, on a phone (#197).
+
+  A conversation is the one screen where the composer competes with the content
+  for the same pixels, and the phone is where that competition is decided.
+*/
+const chatTab = pp.locator('[data-tab="team"]')
+if ((await chatTab.count()) > 0) {
+  await chatTab.first().click()
+  await pp.waitForTimeout(600)
+  const sub = pp.locator('[data-sub="chat"]')
+  if ((await sub.count()) > 0) {
+    await sub.first().click()
+    await pp.waitForTimeout(600)
+  }
+  const chat = (await pp.evaluate(`(() => {
+    const box = (sel) => {
+      const el = document.querySelector(sel)
+      if (el === null) return null
+      const r = el.getBoundingClientRect()
+      return { sel, h: Math.round(r.height), w: Math.round(r.width), y: Math.round(r.top) }
+    }
+    return [box('.thread'), box('.composer'), box('[data-say]'), box('.who'),
+            box('.navgroup')].filter((x) => x !== null)
+  })()`)) as { sel: string; h: number; w: number; y: number }[]
+  console.log('\n─── phone, the chat (at the top of the page) ───')
+  const vh = 844
+  for (const b of chat) {
+    console.log(
+      `  ${b.sel.padEnd(12)} ${String(b.h).padStart(4)}px tall at y=${String(b.y).padStart(4)} · ${String(Math.round((b.h / vh) * 100)).padStart(3)}% of the viewport`,
+    )
+  }
+
+  /*
+    And again after scrolling, which is how it is actually used. The chat is a
+    sticky column: at the top of the page it sits where the flow puts it, and
+    once the project head has scrolled away it fills the screen. Measuring only
+    at scrollTop 0 would report the state nobody types in.
+  */
+  await pp.evaluate(`document.scrollingElement.scrollTop = 2000`)
+  await pp.waitForTimeout(400)
+  const scrolled = (await pp.evaluate(`(() => {
+    const box = (sel) => {
+      const el = document.querySelector(sel)
+      if (el === null) return null
+      const r = el.getBoundingClientRect()
+      return { sel, h: Math.round(r.height), y: Math.round(r.top),
+               bottom: Math.round(r.bottom) }
+    }
+    return [box('.thread'), box('.composer'), box('[data-say]'),
+            box('.navgroup')].filter((x) => x !== null)
+  })()`)) as { sel: string; h: number; y: number; bottom: number }[]
+  console.log('\n─── phone, the chat (scrolled, which is how it is used) ───')
+  for (const b of scrolled) {
+    const off = b.bottom > vh ? '  BELOW THE FOLD' : ''
+    console.log(
+      `  ${b.sel.padEnd(12)} ${String(b.h).padStart(4)}px · y=${String(b.y).padStart(4)} to ${String(b.bottom).padStart(4)}${off}`,
+    )
+  }
+}
+
 await browser.close()
 await phone.close()
 server.close()

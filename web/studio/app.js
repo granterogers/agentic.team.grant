@@ -6016,6 +6016,31 @@ function render() {
       .then((got) => { if (got !== null) render() })
   }
 
+  /*
+    On a phone, opening the chat brings the conversation to the top (#197).
+
+    The chat is a sticky column that fills the screen once the project head has
+    scrolled away — which is right while you are in it, and leaves you landing
+    on a tab whose composer is 300px below the fold. Measured:
+    `.composer` at y=1166 on an 844px screen before this, y=513 after.
+
+    `block: 'start'` rather than a bare `scrollIntoView()`: the bare form stops
+    the moment the element is technically visible, which for a fixed bottom nav
+    is exactly where the nav is — the trap `.navgroup`'s own comment records.
+
+    Once per opening, tracked on `state`, or every repaint would drag the page
+    back while somebody is reading further up. `smooth` because the page has
+    already been still for a moment and a jump reads as a reload.
+  */
+  if (state.sub === 'chat' && state.chatShown !== state.project) {
+    state.chatShown = state.project
+    if (window.matchMedia('(max-width: 860px)').matches) {
+      $('.chatbody', root)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+  } else if (state.sub !== 'chat') {
+    state.chatShown = null
+  }
+
   const composer = $('[data-composer]', root)
   if (composer) {
     const say = $('[data-say]', composer)

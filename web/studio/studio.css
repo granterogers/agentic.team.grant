@@ -4592,3 +4592,82 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
    tight around it inside a bordered card reads as a box in a box. */
 .pmain:focus-visible { outline: none; }
 .pcard:focus-within { box-shadow: var(--lift-2), 0 0 0 2px var(--accent); }
+
+/*
+  #197. On a phone the conversation IS the screen.
+
+  Measured first, with `npm run space` at 390x844:
+
+      .thread     260px at y=591
+      .composer   213px at y=863   <- below the fold
+      .navgroup    65px at y=779   <- fixed, and in front
+
+  591px of chrome above the thread on an 844px screen. The one control you have
+  to use to say anything starts below the fold, and scrolling to it brings it
+  under the fixed navigation — which the comment on `.navgroup` predicted:
+  "The composer is where this bites, because it is the one control you scroll to
+  in order to use."
+
+  ## The first attempt failed, and is recorded rather than deleted
+
+  Making only the composer `position: sticky; bottom: <nav>` did put it on
+  screen — and pinned it OVER the thread, so the capture showed a project head,
+  a banner, a tab strip and a composer, with the conversation nowhere at all.
+  Worse than the problem. §14A says stop tweaking after two failed iterations
+  and reconsider the composition; this is the reconsideration after one.
+
+  ## The composition
+
+  The chat is a column that fills what is left of the screen: the thread takes
+  the space and scrolls inside itself, the composer sits under it, and the
+  whole thing pins once you have scrolled the project head away. Above it the
+  page behaves normally, so the head is still reachable by scrolling up — it is
+  out of the way rather than gone, which is the difference between this and
+  hiding it.
+
+  `dvh`, not `vh`: on iOS `vh` is frozen at the height with the URL bar
+  retracted, so a `100vh` column is taller than the screen for as long as the
+  bar is showing — and when the keyboard opens, `dvh` shrinks and `vh` does not.
+  That is the whole of the keyboard handling, and it needs no `visualViewport`
+  listener.
+
+  One number, and it is a real one: the nav's own height, plus the inset it
+  already reserves for the home indicator.
+
+  Written at the END of the stylesheet, where phone overrides go — a media
+  query adds no specificity and `.thread` and `.composer` have base rules three
+  hundred lines up, which is the source-order trap this file has been bitten by
+  twice.
+*/
+@media (max-width: 860px) {
+  .chatbody {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: var(--s3);
+    height: calc(100dvh - 66px - env(safe-area-inset-bottom));
+    position: sticky;
+    top: 0;
+  }
+  /*
+    The thread takes what the grid gives it. Its base rules cap it at
+    `min(58vh, 560px)` with a 260px floor, which is right when it sits in a
+    scrolling page and wrong inside a column that has already been sized.
+  */
+  .chatbody .thread { max-height: none; min-height: 0; }
+  /*
+    Tighter, because on a phone the composer competes with the conversation for
+    the same screen rather than sitting beside it.
+  */
+  .chatbody .composer { padding: var(--s2); gap: 6px; }
+  /*
+    The addressee row reads as one line rather than two.
+
+    "Claire will bring in whoever it needs" is kept and made smaller, not
+    dropped — it is the answer to the question the control raises. That is the
+    opposite call from #85's drag hint, and for a reason: that sentence
+    described a gesture the phone had switched off, and this one describes what
+    will actually happen when you press Send.
+  */
+  .chatbody .who { gap: var(--s2); }
+  .chatbody .who .t-meta { font-size: 12px; line-height: 1.35; }
+}
