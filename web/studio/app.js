@@ -61,6 +61,17 @@ const state = {
   sub: 'board',
   // Which pane of the project's own Settings is open (#36).
   setpane: 'people',
+  /*
+    Unsent composer text, per project (#197).
+
+    On `state` rather than in localStorage: an unsent message is this session's
+    business, and a draft that outlived the tab would reappear days later with
+    no idea what it was about. Cleared when the message is actually sent.
+  */
+  drafts: {},
+  // Whether the chat has been scrolled into view for this project already, so
+  // a repaint does not drag the page back while somebody is reading (#197).
+  chatShown: null,
   // The item a chat message is about (#27), until it is sent or removed.
   attach: null,
   // Whether the MCP client view is open, on the Connections tab (#91).
@@ -6054,7 +6065,28 @@ function render() {
       say.style.height = 'auto'
       say.style.height = `${Math.min(say.scrollHeight, 160)}px`
     }
-    say?.addEventListener('input', fit)
+    /*
+      An unsent draft survives a repaint, and a trip to another tab (#197).
+
+      The composer is rebuilt on every render, and the studio renders on a
+      pulse tick, on a write, and on every tab change — so a half-typed message
+      was lost to a background refresh that had nothing to do with it. `pulse`
+      already refuses to refetch while a textarea holds text, which covers the
+      timer and not the other two.
+
+      Kept on `state` and per project, not in localStorage: an unsent message is
+      this session's business, and a draft that outlives the tab would reappear
+      days later with no idea what it was about.
+    */
+    say?.addEventListener('input', () => {
+      fit()
+      state.drafts[state.project] = say.value
+    })
+    const draft = state.drafts[state.project]
+    if (say !== null && typeof draft === 'string' && draft !== '' && say.value === '') {
+      say.value = draft
+      fit()
+    }
     // Enter sends, Shift+Enter breaks the line — the convention everywhere else.
     say?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); composer.requestSubmit() }
@@ -6075,6 +6107,9 @@ function render() {
       const about = state.attach
       const to = state.askWho ?? 'everyone'
       chat.send(state.project, text, about, to)
+      // It has been said, so it is no longer a draft — without this it would
+      // be restored into the empty composer on the very next render (#197).
+      state.drafts[state.project] = ''
       state.attach = null
       render()
       const t = $('[data-thread]')

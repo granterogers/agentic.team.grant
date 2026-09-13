@@ -35,6 +35,7 @@
     "space": "tsx scripts/verify/space.ts",
     "verify:history": "tsx scripts/verify/history.ts",
     "verify:access": "tsx scripts/verify/access.ts",
+    "verify:chat": "tsx scripts/verify/chat.ts",
     "verify:echo": "tsx scripts/verify/echo.ts",
     "wide": "tsx scripts/verify/wide.ts",
     "verify:github-token": "tsx scripts/verify/github-token-live.ts",
