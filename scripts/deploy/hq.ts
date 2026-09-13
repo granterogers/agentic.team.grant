@@ -220,13 +220,29 @@ const html = await readFile('web/studio/index.html', 'utf8')
   which is the exact failure the sandbox already has, and shipping it to
   production would make the one thing we cannot check locally also wrong live.
 */
-const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico'])
+/*
+  Read as bytes rather than as text. A file missing from this set is uploaded
+  as UTF-8 and arrives corrupted — which is a 404's quieter cousin, because the
+  request succeeds and the browser simply cannot decode what it gets.
+
+  `.webp` was missing, and #206's six materials were the first WebP this
+  project has ever served.
+*/
+const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico', '.webp'])
+/*
+  Not everything under `web/studio` belongs on the internet.
+
+  `textures/raw/` is 14 MB of source photographs that exist only to be
+  re-tuned — gitignored, and it would otherwise be uploaded twice (once at the
+  root and once under `studio/`) on every deploy, for nothing.
+*/
+const SKIP_DIRS = new Set(['raw'])
 const studioFiles: { file: string; data: string; encoding?: 'base64' }[] = []
 const walk = async (dir: string): Promise<void> => {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name)
     if (entry.isDirectory()) {
-      await walk(full)
+      if (!SKIP_DIRS.has(entry.name)) await walk(full)
       continue
     }
     const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
