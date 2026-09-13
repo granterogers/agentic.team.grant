@@ -43,6 +43,14 @@ const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 export interface Target {
   readonly channelId: string
   readonly threadTs: string | null
+  /**
+   * True when this reply is the one that CREATES the thread.
+   *
+   * Slack shows a threaded reply only inside its thread, so starting a thread
+   * on Grant's own question would otherwise take the answer off the channel he
+   * was reading. See `SlackMessageBody.broadcast`.
+   */
+  readonly broadcast: boolean
   /** `thread` (the question's own thread), `channel`, or `project`. */
   /**
    * How the destination was chosen. `discipline` is the staff member's own
@@ -57,6 +65,26 @@ export interface NotifierOptions {
   readonly severity?: 'trivial' | 'routine' | 'important' | 'urgent' | 'blocker'
   readonly subject?: string
   readonly projectUrlBase?: string | null
+}
+
+/**
+ * The `ts` of the message that asked, out of `inbound_commands.origin_ref`.
+ *
+ * The ref is `channel:ts` and this returns the ts only when the channel half
+ * is the channel we are about to post into. A ref that does not match is not
+ * an error worth failing a delivery over — it means the answer goes to the
+ * channel unthreaded, which is what happened for every message before this.
+ */
+export function threadParent(channelId: string, originRef: string | null): string | null {
+  if (originRef === null || originRef === '') return null
+  const cut = originRef.lastIndexOf(':')
+  if (cut <= 0) return null
+  if (originRef.slice(0, cut) !== channelId) return null
+  const ts = originRef.slice(cut + 1)
+  // Slack timestamps are `1789280759.980069`. Anything else is a placeholder —
+  // the adapter writes `unknown` when an event arrives without one — and
+  // threading under "unknown" is a `chat.postMessage` error, not a thread.
+  return /^\d+\.\d+$/.test(ts) ? ts : null
 }
 
 /**
@@ -77,7 +105,7 @@ export async function resolveTarget(
   teamId: string | null = null,
 ): Promise<Target | null> {
   const { rows } = await db.execute(`
-    select s.channel_id, s.thread_ts
+    select s.channel_id, s.thread_ts, c.origin_ref
     from public.inbound_commands c
     join public.inbound_commands_slack s on s.command_id = c.command_id
     join public.jobs j on j.job_id = c.job_id
@@ -86,12 +114,50 @@ export async function resolveTarget(
     order by c.received_at desc
     limit 1
   `)
-  const row = rows[0] as { channel_id?: string; thread_ts?: string | null } | undefined
+  const row = rows[0] as
+    | { channel_id?: string; thread_ts?: string | null; origin_ref?: string | null }
+    | undefined
   if (row?.channel_id !== undefined) {
+    /*
+      Reply UNDER the message that asked, not beside it.
+
+      Grant, 13 September, looking at three screenshots of his workspace:
+      *"you'd really need to work on it looking a lot better, making it obvious
+      what things are related to that kind of thing."*
+
+      Nothing was related to anything. He asks a question at the top level of a
+      channel; Slack tells us `thread_ts` is null because his message is not in
+      a thread; we posted the answer as a fresh top-level message. Thirty-one
+      real questions in `ai_team_hq_test` and not one of them has a reply
+      attached to it — every answer sits in the flow as though it arrived
+      unprompted, which is exactly how a database behaves and exactly not how a
+      person does.
+
+      The message's own `ts` is the thread to start. Slack has no separate act
+      of "creating a thread": posting with `thread_ts` set to another message's
+      `ts` makes that message the parent, and Grant's client then shows his
+      question with "1 reply" under it.
+
+      `origin_ref` is `channel:ts`, written by the adapter (`src/slack/events.ts`).
+      Split from the right, because a channel id cannot contain a colon and a
+      timestamp cannot either, but reading it left-to-right would break the day
+      anything is prefixed. Guarded on the channel matching, so a malformed ref
+      threads nowhere rather than into another room.
+    */
+    const parent = threadParent(row.channel_id, row.origin_ref ?? null)
+    const threadTs = row.thread_ts ?? parent
     return {
       channelId: row.channel_id,
-      threadTs: row.thread_ts ?? null,
-      via: row.thread_ts === null || row.thread_ts === undefined ? 'channel' : 'thread',
+      threadTs,
+      /*
+        Broadcast only when WE are starting the thread — that is, when Slack
+        said the asking message was not in one and we are making it a parent.
+        A reply inside a thread Grant already opened needs no broadcast: he is
+        watching it, and putting every reply back in the channel is the noise
+        this change is about.
+      */
+      broadcast: (row.thread_ts ?? null) === null && parent !== null,
+      via: threadTs === null ? 'channel' : 'thread',
     }
   }
 
@@ -129,7 +195,7 @@ export async function resolveTarget(
     const row = home.rows[0] as { channel_id?: string } | undefined
     return row?.channel_id === undefined
       ? null
-      : { channelId: row.channel_id, threadTs: null, via: 'general' }
+      : { channelId: row.channel_id, threadTs: null, broadcast: false, via: 'general' }
   }
 
   if (job.projectId === null) return await generalChannel()
@@ -166,6 +232,7 @@ export async function resolveTarget(
   return {
     channelId: found.channel_id,
     threadTs: null,
+    broadcast: false,
     via: found.discipline === null ? 'project' : 'discipline',
   }
 }
@@ -225,6 +292,7 @@ export function slackChannel(
         teamId: options.teamId,
         channelId: target.channelId,
         threadTs: target.threadTs,
+        broadcast: target.broadcast,
         purpose: 'result',
         staff: context.staff,
         staffId: context.staffId,
@@ -239,6 +307,7 @@ export function slackChannel(
             sources: output.sources,
             contradictions: output.contradictions,
             reviewed: context.reviewed,
+            routine: context.routine,
           },
           correlationId: job.correlationId,
           actions: context.actions,

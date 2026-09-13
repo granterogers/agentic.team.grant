@@ -85,8 +85,17 @@ type Result = {
   at: string
 }
 
-/** Strip ANSI colour so a tally lifted from output is comparable text. */
-const plain = (s: string): string => s.replace(/\[[0-9;]*m/g, '')
+/**
+ * Strip ANSI colour so a tally lifted from output is comparable text.
+ *
+ * Built with `RegExp` rather than written as a literal. Biome's
+ * `noControlCharactersInRegex` refuses an escape too — not only a typed
+ * control character — and it is right to: a literal ESC in a source file is
+ * invisible in a diff. Naming it once is clearer than either.
+ */
+const ESC = String.fromCharCode(27)
+const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g')
+const plain = (s: string): string => s.replace(ANSI, '')
 
 const suites = async (): Promise<string[]> => {
   const pkg = JSON.parse(await readFile('package.json', 'utf8')) as {

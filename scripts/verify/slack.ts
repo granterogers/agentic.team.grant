@@ -26,7 +26,7 @@
  */
 
 import { processCallbacks } from '../../src/channels/callbacks.ts'
-import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
+import { combinedNotifier, pagerChannel, resultContext } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { hold, release } from '../../src/jobs/quiet.ts'
@@ -125,6 +125,7 @@ const METADATA = {
   sources: ['https://example.invalid/quote'],
   contradictions: null,
   reviewed: true,
+  routine: false,
 } as const
 
 const message = (body: string): ResultMessage => ({
@@ -698,6 +699,236 @@ record(
   `state_reason=${String(stateReason?.r)}`,
   String(stateReason?.r).includes('delivered to slack via thread'),
 )
+
+// ===========================================================================
+// #186: a reply goes UNDER the message that asked, not beside it
+// ===========================================================================
+//
+// Grant, 13 September, having sent three screenshots of his workspace: "you'd
+// really need to work on it looking a lot better, making it obvious what
+// things are related to that kind of thing."
+//
+// Nothing was related to anything. Slack reports thread_ts as null for a
+// top-level message, the notifier read that as "no thread", and thirty-one
+// real questions in his test channel had not one reply attached to any of
+// them. The message's own ts, which the adapter has always written into
+// origin_ref as channel:ts, is the thread to start.
+//
+// Driven through resolveTarget rather than asserted on the composed body: the
+// destination is what this decides, and asserting the blocks would be checking
+// a layer below the one that changed.
+const topLevelJob = await one<{ id: string }>(`
+  insert into public.jobs
+    (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+  values (extensions.gen_random_uuid(), ${lit(PROJECT_ID)}::uuid,
+          ${lit(`slack-toplevel-${stamp}`)}, 'research.conclusion', 'verify:slack', 100)
+  returning job_id::text as id, correlation_id::text as corr
+`)
+const topLevel = await one<{ id: string; corr: string }>(`
+  select job_id::text as id, correlation_id::text as corr from public.jobs
+   where job_id = ${lit(String(topLevelJob?.id))}::uuid
+`)
+const ASKED_AT = '1789252035.147200'
+const topCommand = await one<{ id: string }>(`
+  insert into public.inbound_commands
+    (origin_channel, origin_ref, actor, instruction, dedupe_key, job_id, processed_at)
+  values ('slack', ${lit(`${CHANNEL}:${ASKED_AT}`)}, 'grant',
+          'Give me one sentence on whether we should switch supplier.',
+          ${lit(`slack:message:${stamp}top`)}, ${lit(String(topLevel?.id))}::uuid, app.now_utc())
+  returning command_id::text as id
+`)
+// thread_ts NULL, which is what Slack sends for a message posted at the top
+// level of a channel. That null is the whole bug.
+await db.execute(`
+  insert into public.inbound_commands_slack
+    (command_id, team_id, channel_id, thread_ts, is_dm, resolved_project_id)
+  values (${lit(String(topCommand?.id))}::uuid, ${lit(TEAM_ID)}, ${lit(CHANNEL)},
+          null, false, ${lit(PROJECT_ID)}::uuid)
+`)
+const underTheQuestion = await resolveTarget(
+  db,
+  {
+    jobId: String(topLevel?.id),
+    correlationId: String(topLevel?.corr),
+    projectId: PROJECT_ID,
+  } as unknown as Job,
+  'research-director',
+)
+record(
+  'a question asked at the top level of a channel is answered UNDER it, in a thread',
+  `via=${String(underTheQuestion?.via)} thread=${String(underTheQuestion?.threadTs)}`,
+  underTheQuestion?.via === 'thread' && underTheQuestion?.threadTs === ASKED_AT,
+)
+// Threading without this would have made every answer HARDER to see while
+// making the relationship clearer: a threaded reply is invisible in the
+// channel unless Slack is told to broadcast it. Both halves correct, the pair
+// a net loss — which is the shape of defect that passes every check.
+record(
+  'and it is broadcast, so starting a thread does not take the answer off the channel',
+  `broadcast=${String(underTheQuestion?.broadcast)}`,
+  underTheQuestion?.broadcast === true,
+)
+
+/*
+  CONTROL. Inside a thread Grant opened himself he is already watching, so
+  broadcasting every reply back into the channel is the noise this change is
+  about. Without this check the rule above is satisfied by broadcasting
+  everything.
+*/
+await db.execute(`
+  update public.inbound_commands_slack set thread_ts = ${lit('1789111111.000100')}
+   where command_id = ${lit(String(topCommand?.id))}::uuid
+`)
+const insideAThread = await resolveTarget(
+  db,
+  {
+    jobId: String(topLevel?.id),
+    correlationId: String(topLevel?.corr),
+    projectId: PROJECT_ID,
+  } as unknown as Job,
+  'research-director',
+)
+record(
+  'CONTROL: a reply inside a thread he already opened is not broadcast',
+  `thread=${String(insideAThread?.threadTs)} broadcast=${String(insideAThread?.broadcast)}`,
+  insideAThread?.threadTs === '1789111111.000100' && insideAThread?.broadcast === false,
+)
+
+/*
+  CONTROL. A ref naming another channel must thread NOWHERE rather than into a
+  room Grant is not reading — a reply in the wrong thread is a reply nobody
+  finds, which is worse than one that is merely unthreaded.
+*/
+await db.execute(`
+  update public.inbound_commands_slack set thread_ts = null
+   where command_id = ${lit(String(topCommand?.id))}::uuid;
+  update public.inbound_commands set origin_ref = ${lit(`C0SOMEWHEREELSE:${ASKED_AT}`)}
+   where command_id = ${lit(String(topCommand?.id))}::uuid
+`)
+const mismatched = await resolveTarget(
+  db,
+  {
+    jobId: String(topLevel?.id),
+    correlationId: String(topLevel?.corr),
+    projectId: PROJECT_ID,
+  } as unknown as Job,
+  'research-director',
+)
+record(
+  'CONTROL: a ref naming a different channel threads nowhere rather than into the wrong room',
+  `via=${String(mismatched?.via)} thread=${String(mismatched?.threadTs)}`,
+  mismatched?.threadTs === null && mismatched?.via === 'channel',
+)
+
+// ===========================================================================
+// #186: a routine read is not dressed up as a finding
+// ===========================================================================
+//
+// What Grant was looking at, 270 times in ten days:
+//
+//     Looked at 1 Drive folder. Nothing new.
+//     Confident — checked against 1 source.
+//     [ 👍 Useful ] [ 👎 Not useful ] [ ⋯ ]
+//
+// Two thirds of that message is furniture and neither piece does any work.
+// §12's honesty rules exist to stop INFERENCE being read as observation, and a
+// deterministic output IS observation; #59's feedback exists to correct
+// JUDGEMENT, and there is no judgement in "nothing new" to thumb down.
+//
+// Asserted through resultContext, which is where the decision is made. The
+// composed blocks are covered by tests/slack/blocks.test.ts; asserting them
+// here would be checking a layer below the one that changed.
+const dutyJob = await one<{ id: string; corr: string }>(`
+  insert into public.jobs
+    (correlation_id, project_id, idempotency_key, kind, requested_by, priority, state)
+  values (extensions.gen_random_uuid(), ${lit(PROJECT_ID)}::uuid,
+          ${lit(`slack-duty-${stamp}`)}, 'drive.watch', 'verify:slack', 100, 'queued')
+  returning job_id::text as id, correlation_id::text as corr
+`)
+const mechanical = await one<{ id: string }>(`
+  insert into public.outputs (job_id, body, deterministic, reviewer_status, reviewed_at, confidence, evidence)
+  values (${lit(String(dutyJob?.id))}::uuid, 'Looked at 1 Drive folder. Nothing new.',
+          true, 'approved', app.now_utc(), 'high', 'verified')
+  returning output_id::text as id
+`)
+const judgement = await one<{ id: string }>(`
+  insert into public.outputs (job_id, body, deterministic, reviewer_status, reviewed_at, confidence, evidence)
+  values (${lit(String(dutyJob?.id))}::uuid,
+          'All three suppliers quoted within 4% of each other.', false, 'approved',
+          app.now_utc(), 'medium', 'inferred')
+  returning output_id::text as id
+`)
+const asJob = {
+  jobId: String(dutyJob?.id),
+  correlationId: String(dutyJob?.corr),
+  projectId: PROJECT_ID,
+} as unknown as Job
+/*
+  A project URL base is passed so that `open_project` is actually on offer.
+
+  Without it the last check below reads `[].every(...)`, which is true — the
+  check would pass because the list is EMPTY rather than because the right
+  things survived, and this file has three recorded instances of exactly that.
+*/
+const URL_BASE = 'https://ai-team-hq.vercel.app'
+const routineCtx = await resultContext(db, asJob, String(mechanical?.id), URL_BASE)
+const judgementCtx = await resultContext(db, asJob, String(judgement?.id), URL_BASE)
+
+record(
+  'a mechanical read is marked routine, from the column rather than from a guess',
+  `routine=${String(routineCtx.routine)}`,
+  routineCtx.routine === true,
+)
+record(
+  'and it is offered nothing to thumb up or down, because there is no judgement in it',
+  routineCtx.actions.join(', ') || '(no actions)',
+  !routineCtx.actions.includes('feedback.useful') &&
+    !routineCtx.actions.includes('feedback.not_useful') &&
+    !routineCtx.actions.includes('more_detail') &&
+    !routineCtx.actions.includes('mute_24h'),
+)
+/*
+  CONTROL, and the one that matters most: everything above would also pass if
+  the provenance line and the feedback pair had been deleted outright — which
+  is the change #185 exists to prevent, because "worked out, not looked up" is
+  the sentence that stops an inference being read as an observation.
+*/
+record(
+  'CONTROL: a judgement on the same job keeps the caption and the whole feedback loop',
+  `routine=${String(judgementCtx.routine)} actions=${judgementCtx.actions.join(', ')}`,
+  judgementCtx.routine === false &&
+    judgementCtx.actions.includes('feedback.useful') &&
+    judgementCtx.actions.includes('feedback.not_useful'),
+)
+/*
+  And the pair that is NOT feedback survives on both. Undo is the safe action
+  and CLAUDE.md already records that discouraging it is the failure mode; Open
+  project is navigation, not an opinion.
+*/
+record(
+  'the controls that are not opinions survive a routine read',
+  routineCtx.actions.join(', ') || '(no actions)',
+  routineCtx.actions.includes('open_project') &&
+    routineCtx.actions.every((a) => a === 'undo' || a === 'open_project'),
+)
+
+/*
+  Both probe jobs cancelled the moment their checks are done, rather than left
+  to the teardown at the bottom of the file.
+
+  Neither is ever dequeued — they exist so that a real output row has a real
+  job to hang off — and a queued job that nothing will run holds capacity in a
+  global queue. #184 is the coupling this avoids: verify:worker and this suite
+  both refuse to start while any job is live, so a crashed run between here and
+  teardown fails the NEXT suite with "22/26" rather than "the queue was dirty".
+  The teardown still cancels them; this makes the window as small as it can be.
+*/
+await db.execute(`
+  update public.jobs
+     set state = 'cancelled', state_reason = 'verify:slack routing probe, never run'
+   where job_id in (${lit(String(topLevel?.id))}::uuid, ${lit(String(dutyJob?.id))}::uuid)
+     and state not in ('complete', 'cancelled', 'failed')
+`)
 
 const notifRow = await one<{ n: number }>(`
   select count(*)::int as n from public.notification_events

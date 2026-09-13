@@ -57,6 +57,18 @@ export interface ResultContext {
   readonly staffId: string | null
   /** False for §10-substantive output that has not been reviewed. */
   readonly reviewed: boolean
+  /**
+   * True when this output is a mechanical read rather than a judgement.
+   *
+   * `outputs.deterministic`, resolved here for the same reason everything else
+   * in this type is: two surfaces deciding it separately would eventually
+   * disagree, and the disagreement would show as Telegram cautioning about a
+   * folder listing that Slack presented as plain fact.
+   *
+   * See `MessageMetadata.routine` in `src/slack/blocks.ts` for what it costs a
+   * message, and why.
+   */
+  readonly routine: boolean
   readonly actions: readonly ActionId[]
   readonly projectUrl: string | null
 }
@@ -115,6 +127,7 @@ export async function resultContext(
     review?.deterministic === true ||
     review?.status === 'approved' ||
     review?.status === 'approved_with_reservations'
+  const routine = review?.deterministic === true
 
   const projectUrl =
     projectUrlBase === null || projectUrlBase === undefined || job.projectId === null
@@ -128,7 +141,7 @@ export async function resultContext(
     select app.open_approval_for_job(${lit(job.jobId)}::uuid) as id
   `)
   if ((asking.rows[0] as { id?: string | null } | undefined)?.id != null) {
-    return { staff, staffId, reviewed, actions: ['approve', 'decline'], projectUrl }
+    return { staff, staffId, reviewed, routine, actions: ['approve', 'decline'], projectUrl }
   }
 
   // Undo is offered only when there is something to undo — an offer that does
@@ -146,10 +159,37 @@ export async function resultContext(
       action !== 'approve' &&
       action !== 'decline' &&
       (action !== 'undo' || undoable) &&
-      (action !== 'open_project' || projectUrl !== null),
+      (action !== 'open_project' || projectUrl !== null) &&
+      /*
+        A mechanical read is offered nothing to judge.
+
+        👍 and 👎 are #59's feedback loop and they ask "was this the right
+        call". "Looked at 1 Drive folder. Nothing new." contains no call, so a
+        thumbs-down on it records dissatisfaction with a fact and teaches the
+        loop nothing. "More detail" has nothing more to give: the whole of the
+        output is the sentence.
+
+        What SURVIVES here is the pair that is not feedback. Undo stays
+        because a mechanical write is exactly the thing most worth undoing —
+        and CLAUDE.md already records that discouraging undo is the failure
+        mode. Open project stays because it is navigation.
+
+        Mute is the one judgement call in this list. It is the honest reply to
+        a noisy duty, and it is dropped anyway: it belongs to the whole duty
+        rather than to one run of it, muting from a message that arrives 270
+        times means finding whichever of the 270 is on screen, and the
+        preferences are where a standing decision belongs. Recorded rather
+        than assumed — if Grant reaches for it and it is not there, that is a
+        one-line change back.
+      */
+      (!routine ||
+        (action !== 'feedback.useful' &&
+          action !== 'feedback.not_useful' &&
+          action !== 'mute_24h' &&
+          action !== 'more_detail')),
   )
 
-  return { staff, staffId, reviewed, actions, projectUrl }
+  return { staff, staffId, reviewed, routine, actions, projectUrl }
 }
 
 export interface CombinedOptions {
@@ -300,6 +340,7 @@ export function pagerChannel(
         staffTitle: context.staff?.title ?? null,
         staffId: context.staffId,
         reviewed: context.reviewed,
+        routine: context.routine,
         severity: output.severity ?? severity,
         actions: context.actions,
       })

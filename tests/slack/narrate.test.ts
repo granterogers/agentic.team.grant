@@ -80,3 +80,55 @@ describe('the floor', () => {
     expect(narrate(handoff({ instruction: null }), NAMES)).toContain('office.instruction')
   })
 })
+
+/**
+ * A word that is already English is left alone.
+ *
+ * Grant's floor channel carried this, in his own workspace, for a fortnight:
+ *
+ *     One specialist: the a question is about evidence, and forbids convening
+ *     a team for it.
+ *
+ * The router had written "the question is about evidence", using `question` as
+ * the ordinary noun it is, and the vocabulary substitution replaced it with
+ * "a question" — article included. Four of the seven classes are plain English
+ * words and can only be damaged by translating them; the three spelled with an
+ * underscore are the ones that need it, and an underscore is also what makes a
+ * false match impossible.
+ */
+describe('the vocabulary substitution', () => {
+  it('leaves a class name that is already an English word untouched', () => {
+    const said = narrate(
+      handoff({
+        roster_reason: 'the question is about evidence, and forbids convening a team for it',
+      }),
+      NAMES,
+    )
+    // Capitalised, because `plainly` finishes the clause into a sentence.
+    expect(said).toContain('The question is about evidence')
+    expect(said.toLowerCase()).not.toContain('the a question')
+  })
+
+  it('still translates the ones spelled as vocabulary rather than as English', () => {
+    const said = narrate(
+      handoff({ roster_reason: 'light_investigation permits one specialist' }),
+      NAMES,
+    )
+    expect(said).not.toContain('light_investigation')
+    expect(said).toContain('A bit of digging')
+  })
+
+  /*
+    CONTROL. Every assertion above would also pass if the substitution had been
+    removed altogether — which is the tempting fix and the wrong one, because
+    the underscored terms are exactly what Grant cannot read.
+  */
+  it('CONTROL: a slug is still replaced with the person it names', () => {
+    const said = narrate(
+      handoff({ roster_reason: 'direct_command permits research-director' }),
+      NAMES,
+    )
+    expect(said).toContain('Emma')
+    expect(said).not.toContain('research-director')
+  })
+})

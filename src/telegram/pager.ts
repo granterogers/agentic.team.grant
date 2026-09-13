@@ -104,6 +104,8 @@ export class TelegramPager {
     /** The author's row id, so the delivery records who it came from. */
     readonly staffId: string | null
     readonly reviewed: boolean
+    /** See `ResultContext.routine`. Optional, and absent means a judgement. */
+    readonly routine?: boolean
     readonly severity: PagerSeverity
     readonly actions: readonly ActionId[]
   }): Promise<PagerResult> {
@@ -195,6 +197,7 @@ export class TelegramPager {
         // Empty here would say "nothing cited" about a cited finding.
         sources: input.output.sources,
         contradictions: input.output.contradictions,
+        routine: input.routine ?? false,
       },
       correlationId: input.job.correlationId,
       actions: input.actions,

@@ -36,6 +36,7 @@ const meta = (over: Partial<MessageMetadata> = {}): MessageMetadata => ({
   sources: ['https://example/one'],
   contradictions: null,
   reviewed: true,
+  routine: false,
   ...over,
 })
 
@@ -222,5 +223,66 @@ describe('composition', () => {
   it('emits no action blocks when no buttons were asked for', () => {
     const blocks = resultBlocks(message({ actions: [] }))
     expect(blocks.some((b) => b.type === 'actions')).toBe(false)
+  })
+})
+
+/**
+ * A routine read is not dressed as a finding.
+ *
+ * Grant, 13 September, on three screenshots of his phone: *"how much space is
+ * being taken up by the way you're using Slack. It's really not intuitive or
+ * acting like it's a human."*
+ *
+ * What he was looking at, and 270 times in ten days:
+ *
+ *     Looked at 1 Drive folder. Nothing new.
+ *     Confident — checked against 1 source.
+ *     [ 👍 Useful ] [ 👎 Not useful ] [ ⋯ ]
+ *
+ * The rule is about honesty rather than about space: a message says how much
+ * to trust it exactly when there is something to decide.
+ */
+describe('a mechanical read', () => {
+  const routine = (over: Partial<MessageMetadata> = {}): ResultMessage =>
+    message({ metadata: meta({ routine: true, evidence: 'verified', ...over }) })
+
+  it('carries no provenance line', () => {
+    const blocks = resultBlocks(routine())
+    const captions = blocks
+      .filter((b) => b.type === 'context')
+      .flatMap((b) => elementsOf(b).map((e) => String((e as { text?: string }).text ?? '')))
+    expect(captions.some((c) => c.includes('Confident'))).toBe(false)
+    expect(captions.some((c) => c.includes('checked against'))).toBe(false)
+  })
+
+  /*
+    CONTROL, and the one that matters most. Everything above would also pass if
+    the provenance line had been deleted outright — which is the change #185
+    exists to prevent, because "worked out, not looked up" is the sentence that
+    stops an inference being read as an observation.
+  */
+  it('CONTROL: a judgement still carries every word of it', () => {
+    const blocks = resultBlocks(message({ metadata: meta({ routine: false }) }))
+    const captions = blocks
+      .filter((b) => b.type === 'context')
+      .flatMap((b) => elementsOf(b).map((e) => String((e as { text?: string }).text ?? '')))
+    expect(captions.some((c) => c.includes('worked out, not looked up'))).toBe(true)
+  })
+
+  /*
+    A contradiction is the exception, and deliberately so: a mechanical read
+    should not produce one, and if it does, it is the most interesting thing on
+    the message. §16 says a surviving disagreement must not be averaged away,
+    and hiding it because the output was deterministic would be averaging it
+    away by category.
+  */
+  it('still shows a contradiction, which is the one thing worth interrupting for', () => {
+    const blocks = resultBlocks(
+      routine({ contradictions: 'The folder listing and the index disagree on two files.' }),
+    )
+    const sections = blocks
+      .filter((b) => b.type === 'section')
+      .map((b) => String((b.text as { text?: string } | undefined)?.text ?? ''))
+    expect(sections.some((t) => t.includes('Unresolved disagreement'))).toBe(true)
   })
 })

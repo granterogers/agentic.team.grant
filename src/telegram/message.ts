@@ -68,6 +68,16 @@ export interface PagerMetadata {
    */
   readonly sources: readonly string[]
   readonly contradictions: string | null
+  /**
+   * True when the output is a mechanical read rather than a judgement.
+   *
+   * The same flag Slack carries, for the same reason and read from the same
+   * column — see `MessageMetadata.routine` in `src/slack/blocks.ts`. Optional
+   * here only so that the several callers that build a page by hand are not
+   * all made to say `routine: false`; absent means "a judgement", which is the
+   * cautious reading and the one the honesty rules are written for.
+   */
+  readonly routine?: boolean
 }
 
 export interface PagerMessage {
@@ -254,7 +264,12 @@ export function pagerText(message: PagerMessage): string {
       It emits Slack's `*bold*`; Telegram wants tags, so the markers are
       converted rather than the sentence rewritten.
     */
-    parts.push(`<i>${slackEmphasisToHtml(provenanceLine(message.metadata))}</i>`)
+    // Skipped for a mechanical read, exactly as in Slack. A pager line saying
+    // "Confident — checked against 1 source" under "Calendar refreshed" spends
+    // a line of a lock screen on nothing.
+    if (message.metadata.routine !== true) {
+      parts.push(`<i>${slackEmphasisToHtml(provenanceLine(message.metadata))}</i>`)
+    }
   }
 
   // And last, after the provenance. A long message pushes the header off the

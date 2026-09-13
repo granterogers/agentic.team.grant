@@ -81,6 +81,40 @@ export interface MessageMetadata {
    * a reader cannot decline to rely on something they were not told about.
    */
   readonly reviewed: boolean
+  /**
+   * True when the output is a mechanical read rather than a judgement.
+   *
+   * `outputs.deterministic`, carried through rather than guessed at. It is the
+   * ONE thing that decides whether the provenance line is worth its three
+   * blocks, and it is decided here rather than by the caller so that Slack and
+   * Telegram cannot disagree about it.
+   *
+   * Grant, 13 September, looking at his phone: *"how much space is being taken
+   * up... It's really not intuitive or acting like it's a human."* He was
+   * looking at messages like these, which are 270, 124 and 110 of the last ten
+   * days' traffic respectively:
+   *
+   *     Looked at 1 Drive folder. Nothing new.
+   *     Confident — checked against 1 source.
+   *     [ 👍 Useful ] [ 👎 Not useful ] [ ⋯ ]
+   *
+   * Two thirds of that message is furniture, and neither piece of it is doing
+   * any work. §12's honesty rules exist to stop INFERENCE being read as
+   * observation — a deterministic output IS observation, so there is nothing
+   * to caution about and the caption can only say "checked against 1 source"
+   * about a folder listing. #59's feedback exists to correct JUDGEMENT, and
+   * there is no judgement in "nothing new" to thumb down.
+   *
+   * So the rule, and it is a rule about honesty rather than about space: **a
+   * message says how much to trust it exactly when there is something to
+   * decide.** A finding keeps every word of §12; a status line stops
+   * pretending to be one.
+   *
+   * A contradiction is still shown even here — see `resultBlocks`. A
+   * mechanical read should not produce one, and if it does, that is the most
+   * interesting thing on the message.
+   */
+  readonly routine: boolean
 }
 
 export interface ResultMessage {
@@ -185,7 +219,17 @@ const ON_WHAT: Readonly<Record<Evidence, string>> = {
   speculative: 'a guess',
 }
 
-export function provenanceLine(m: MessageMetadata): string {
+/**
+ * Takes everything a provenance line is made of, and nothing else.
+ *
+ * Narrower than `MessageMetadata` on purpose: `routine` decides WHETHER this
+ * line is shown and is no part of composing it, and Telegram's `PagerMetadata`
+ * — which carries `routine` as optional — could not otherwise be passed here
+ * without either widening its own type or lying about the flag.
+ */
+export type Provenance = Omit<MessageMetadata, 'routine'>
+
+export function provenanceLine(m: Provenance): string {
   const sure = HOW_SURE[m.confidence]
   const n = m.sources.length
   const sources = `${String(n)} source${n === 1 ? '' : 's'}`
@@ -362,7 +406,14 @@ export function resultBlocks(message: ResultMessage): readonly SlackBlock[] {
   for (const part of splitBody(message.body)) blocks.push(section(part))
 
   if (message.metadata !== null) {
-    blocks.push(context([provenanceLine(message.metadata)]))
+    /*
+      A routine read says nothing about how sure it is, because there is
+      nothing to be unsure about — see `MessageMetadata.routine`. The
+      contradiction below is deliberately OUTSIDE that condition: a mechanical
+      read that produced a disagreement is the one case where a status line has
+      something a person must see.
+    */
+    if (!message.metadata.routine) blocks.push(context([provenanceLine(message.metadata)]))
     const contradictions = message.metadata.contradictions
     if (contradictions !== null && contradictions.trim() !== '') {
       // Shown in full width rather than as context: a surviving disagreement is
