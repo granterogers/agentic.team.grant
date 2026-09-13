@@ -678,6 +678,43 @@ try {
   )
 
   // -----------------------------------------------------------------------
+  console.log('\nthe page can notice that something was said')
+
+  /*
+    #199, 0343. The studio does not subscribe — it asks `hq_pulse` every twenty
+    seconds and refetches only when the digest differs, because a browser
+    subscribing to Realtime would need the anon key and RLS policies making the
+    office's work readable to a credential that is public by design.
+
+    So the digest is the whole mechanism, and a conversation that does not move
+    it is a chat that sits still while messages arrive. Most conversation moves
+    it by accident — a message becomes a job — which is exactly why the case
+    worth checking is the one that makes NO job.
+  */
+  const digest = async (): Promise<string> =>
+    JSON.stringify((await one(`select app.hq_pulse() as v`)).v)
+
+  const before = await digest()
+  await db.execute(`
+    select app.record_slack_history(${lit(myChannel)}, '1699999999.000950', 'U0OLD',
+      ${lit(`A message that makes no work ${run}`)})
+  `)
+  const after = await digest()
+  check(
+    'a message that creates no job still moves the digest',
+    before === after ? 'IT DID NOT MOVE' : 'moved',
+    before !== after,
+  )
+
+  check(
+    'and the digest carries a message count, so the studio can see conversation at all',
+    JSON.parse(after).messages === undefined
+      ? 'MISSING'
+      : `messages=${String(JSON.parse(after).messages)}`,
+    typeof JSON.parse(after).messages === 'number',
+  )
+
+  // -----------------------------------------------------------------------
   console.log('\nthe layer the studio actually uses')
 
   const base = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/hq-api`

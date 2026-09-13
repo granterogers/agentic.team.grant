@@ -6939,7 +6939,58 @@ async function refresh() {
     config.hydrateSettings(read),
     hydrateUsage(read),
   ])
-  render()
+
+  /*
+    And the conversation, when one is on screen (#199).
+
+    Here rather than in a path of its own, for the reason the pulse watcher
+    already gives: `refresh` is the single route from "the data changed" to
+    "the page shows it", and a second one would drift — the version that
+    drifted being the rarely-exercised background path.
+
+    Only when the chat is open. A conversation grows without bound and every
+    other screen would be paying for a payload it does not draw.
+  */
+  if (state.sub === 'chat') {
+    await chat.load(state.project, byId(state.project)?.id, tokenNow())
+  }
+
+  keepingPlace(() => { render() })
+}
+
+/** The token, read the way every other caller here reads it. */
+function tokenNow() {
+  try {
+    return localStorage.getItem('hq.token') ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Redraw without moving the ground under someone who is reading.
+ *
+ * #199: an update must not yank the scroll away. The rule people expect from
+ * every messaging app is "stick to the bottom if I am at the bottom, and
+ * otherwise leave me exactly where I am" — being at the bottom is a statement
+ * that you want the newest thing, and being anywhere else is a statement that
+ * you are reading something.
+ *
+ * 40px of slack rather than an exact comparison: a thread that is one pixel
+ * off the bottom because of a sub-pixel line height is a thread the person
+ * thinks they are at the bottom of.
+ */
+function keepingPlace(draw) {
+  const before = $('[data-thread]')
+  const was = before === null ? null : before.scrollTop
+  const wasAtBottom =
+    before !== null && before.scrollHeight - before.clientHeight - before.scrollTop < 40
+
+  draw()
+
+  const after = $('[data-thread]')
+  if (after === null || was === null) return
+  after.scrollTop = wasAtBottom ? after.scrollHeight : was
 }
 
 async function live() {
