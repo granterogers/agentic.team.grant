@@ -326,5 +326,7 @@
   "0325_a_project_you_can_take_with_you.sql": "1ce5f98ec089067ea516f677c108e74d1bdf71c588a8d18f3996d032d8fc7db9",
   "0326_an_export_carries_no_identity_of_ours.sql": "92bb054b8da8e15d3c3d123baf3655e446c6e06502bad26fe58acb337d63f487",
   "0327_clearing_a_brief_is_a_value_not_an_omission.sql": "adcbf7925112c549ad57d09f01e20906cbaca4511915bd28be9954ff91fe1a0c",
-  "0328_an_automation_nobody_is_named_on_is_claires.sql": "7f95ce8664783b448a7512b1b0f36df97603a18dca847e2eabd89a4e995c4370"
+  "0328_an_automation_nobody_is_named_on_is_claires.sql": "7f95ce8664783b448a7512b1b0f36df97603a18dca847e2eabd89a4e995c4370",
+  "0329_a_suite_can_claim_only_its_own_work.sql": "fff5ce5b89c12c8858c7cc60d5ae43ab569cbacd55a084ffd829c9c65616ec21",
+  "0330_a_scope_gets_the_same_allowance_the_office_does.sql": "4dd8f76c5a3f843c417c9dd54dcb110b2de7a0e4f90c1806cb472102987d83d7"
 }

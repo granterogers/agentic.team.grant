@@ -523,18 +523,40 @@ record(
 const preSwept = await recoverStalled(db)
 if (preSwept.length > 0) console.log(`recovered ${String(preSwept.length)} stalled job(s).`)
 
-const live = await one<{ n: number }>(`
+/*
+  This suite claims only its own work (#184, migration 0329).
+
+  It used to refuse to start while ANY job was live anywhere — the same rule
+  and the same reason as `verify:worker`: dequeue is global and would hand this
+  script somebody else's job, for which it holds no handler.
+
+  Both suites having that precondition, and neither cancelling what it creates,
+  is the coupling: in a full pass whichever ran second failed on the first
+  one's debris, and it failed as "62/70" rather than as "the queue was dirty".
+
+  `dequeue(db, worker, …, MINE)` asks for work requested by this exact name and
+  asks the capacity question of that scope alone, so nothing else in the queue
+  is reachable from here and nothing else in the queue matters. What is left to
+  clean up is only what this suite itself left behind — the routing probes at
+  the bottom of this file cancel theirs the moment their checks are done, but a
+  run that crashed between the two would not have.
+*/
+const MINE = 'verify:slack'
+const mine = await one<{ n: number }>(`
   select count(*)::int as n from public.jobs
-  where state not in ('complete', 'cancelled', 'failed')
+  where requested_by = ${lit(MINE)}
+    and state not in ('complete', 'cancelled', 'failed')
 `)
-if (Number(live?.n) > 0) {
-  // Same rule, and the same reason, as `verify:worker`: dequeue is global and
-  // will hand this script somebody else's job, for which it has no handler.
-  console.error(
-    `the queue is not empty: ${String(live?.n)} live job(s). This suite runs a real job ` +
-      'and needs the queue to itself. `npm run purge:fixtures -- --go` clears debris.',
+if (Number(mine?.n) > 0) {
+  console.log(
+    `${String(mine?.n)} of this suite's job(s) left over from a previous run — cancelling.`,
   )
-  process.exit(2)
+  await db.execute(`
+    update public.jobs
+       set state = 'cancelled', state_reason = 'verify:slack debris from an earlier run'
+     where requested_by = ${lit(MINE)}
+       and state not in ('complete', 'cancelled', 'failed')
+  `)
 }
 
 const E2E_CORRELATION = String(
@@ -625,7 +647,7 @@ if (telegramToken !== undefined && telegramToken !== '') {
   )
 }
 const notifier = combinedNotifier(channels, db)
-const dequeued = await dequeue(db, `verify-slack-${stamp}`)
+const dequeued = await dequeue(db, `verify-slack-${stamp}`, true, true, undefined, MINE)
 const jobResult =
   dequeued === null
     ? null
@@ -973,7 +995,7 @@ await db.execute(`
           array['supplier'], 'none_found', array['research-director'],
           'Same single specialist.')
 `)
-const mutedDequeued = await dequeue(db, `verify-slack-${stamp}`)
+const mutedDequeued = await dequeue(db, `verify-slack-${stamp}`, true, true, undefined, MINE)
 const mutedResult =
   mutedDequeued === null
     ? null

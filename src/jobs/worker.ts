@@ -453,6 +453,23 @@ export const dequeue = async (
    * handed work needing a sixth (0147).
    */
   kinds?: readonly string[],
+  /**
+   * Claim only work asked for by this exact name (#184, migration 0329).
+   *
+   * Undefined means "anything", which is what every office worker means and
+   * what every caller meant before this existed.
+   *
+   * It exists because dequeue is GLOBAL, and two verification suites therefore
+   * refused to start while any job was live anywhere — correctly, since either
+   * would otherwise be handed work it holds no handler for. In a full pass
+   * whichever ran second failed on the first one's debris, and it failed as
+   * "22/26" rather than as "the queue was dirty".
+   *
+   * The scope also changes which capacity question is asked: one job at a time
+   * per scope, rather than three across the office. See 0329's header for why
+   * that is bounded rather than a way round the limit.
+   */
+  requestedBy?: string,
 ): Promise<Job | null> => {
   const { rows } = await db.execute(
     `select job_id::text as job_id, kind, correlation_id::text as correlation_id,
@@ -463,7 +480,8 @@ export const dequeue = async (
                             kinds === undefined
                               ? 'null'
                               : `array[${kinds.map(lit).join(', ')}]::text[]`
-                          })`,
+                          },
+                          ${requestedBy === undefined ? 'null' : lit(requestedBy)})`,
   )
   const r = rows[0]
   if (r === undefined) return null

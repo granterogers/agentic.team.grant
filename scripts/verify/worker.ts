@@ -76,64 +76,65 @@ if (preSwept.length > 0) {
   console.log(`recovered ${String(preSwept.length)} stalled job(s) before starting.`)
 }
 
-// The queue is GLOBAL and so is the capacity limit, so this script needs it to
-// itself: `dequeue_job` hands out whatever is next, including another suite's
-// leftovers, and a worker with no handler for a foreign job kind throws.
+// How much of THIS SUITE's work is still live.
+//
+// It used to count the whole queue, and the history of that is worth keeping
+// because it is the argument for the scope that replaced it. The queue is
+// global and so is the capacity limit, so this script needed the whole thing
+// to itself: `dequeue_job` hands out whatever is next, including another
+// suite's leftovers, and a worker with no handler for a foreign job kind
+// throws.
 //
 // Found the hard way twice. First running alongside `verify:db`, where every
 // dequeue returned null and fourteen checks went red describing a busy queue as
 // though it were a defect. Then again on leaked probe jobs from `verify:jobs`,
 // where the dequeue succeeded and handed this script somebody else's work.
 //
-// An unclear failure is a failure that gets misdiagnosed, so this refuses to
-// start. Exit code 2, distinct from the 1 that means a check actually failed.
-//
-// Since 2026-09-09 there are seven live duties, so the office is rarely idle
-// for long and "refuse immediately" started failing this suite on a queue that
-// was simply busy. The queue is already held above, so nothing NEW arrives —
-// what is left is whatever was in flight at that moment, and the honest thing
-// is to wait for it rather than to declare a working office a broken one.
-//
-// Two minutes, because a job that has not finished in two minutes is stuck
-// rather than busy, and that is worth refusing over.
+// The answer then was to wait two minutes for the office to go quiet and
+// refuse if it had not — which is honest and turns every other suite's debris
+// into this one's failure (#184). Since 0329 the dequeue is scoped instead, so
+// what is counted here is only what this suite itself left behind.
 const liveNow = async (): Promise<number> =>
   Number(
     (
       await one(`
         select count(*)::int as live from public.jobs
-         where state not in ('complete', 'cancelled', 'failed')
+         where requested_by = 'verify:worker'
+           and state not in ('complete', 'cancelled', 'failed')
       `)
     )?.live ?? 0,
   )
 
-for (let waited = 0; waited < 120 && (await liveNow()) > 0; waited += 5) {
-  if (waited === 0) console.log('waiting for the office to go quiet before starting…')
-  // The pause stops new work being CLAIMED, not work already running, so this
-  // is waiting for in-flight jobs to reach a terminal state on their own.
-  await new Promise((r) => setTimeout(r, 5_000))
-}
+/*
+  This suite claims only its own work (#184, migration 0329).
 
-const queueState = await one(`
-  select app.capacity_limit('max_concurrent_jobs', 3) as limit_,
-         (select count(*)::int from public.jobs
-           where state not in ('complete', 'cancelled', 'failed')) as live
-`)
-if (Number(queueState?.live) > 0) {
-  const others = await db.execute(`
-    select kind, state::text as state, count(*)::int as n from public.jobs
-    where state not in ('complete', 'cancelled', 'failed')
-    group by 1, 2 order by 3 desc limit 5
-  `)
-  console.error(
-    `the queue is still not empty after two minutes: ${String(queueState?.live)} live job(s).\n` +
-      others.rows
-        .map((r) => `  ${String(r.n)} x ${String(r.kind)} (${String(r.state)})`)
-        .join('\n') +
-      '\n\nThis script needs the queue to itself - dequeue is global and hands out ' +
-      "whatever is next, including another suite's work.\n" +
-      'Wait for the other run to finish, or `npm run purge:fixtures -- --go` if those are debris.',
+  It used to wait two minutes for the whole office to go quiet and then refuse
+  to run if anything was still live — correctly, because dequeue is global and
+  would hand this script a job it holds no handler for. The cost was a
+  coupling: `verify:slack` has the same precondition and neither suite cancels
+  what it creates, so in a full pass whichever ran second failed on the first
+  one's debris, as "22/26" rather than as "the queue was dirty".
+
+  `dequeue(db, WORKER, …, MINE)` asks for work requested by this exact name and
+  asks the capacity question of that scope alone. Nothing else in the queue is
+  reachable from here, so nothing else in the queue matters.
+
+  The stalled-job sweep stays: it is about THIS suite's own leases from a
+  previous crashed run, which the scope does not help with.
+*/
+const MINE = 'verify:worker'
+
+const stillMine = await liveNow()
+if (stillMine > 0) {
+  console.log(
+    `${String(stillMine)} of this suite's job(s) left over from a previous run — cancelling.`,
   )
-  process.exit(2)
+  await db.execute(`
+    update public.jobs
+       set state = 'cancelled', state_reason = 'verify:worker debris from an earlier run'
+     where requested_by = ${lit(MINE)}
+       and state not in ('complete', 'cancelled', 'failed')
+  `)
 }
 
 const project = await one(`
@@ -268,7 +269,7 @@ const reject: Reviewer = () =>
 // ===========================================================================
 
 const detJob = await enqueue('status.count_jobs', `fixture-worker-det-${run}`)
-const detDequeued = await dequeue(db, WORKER)
+const detDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const detResult = detDequeued === null ? null : await runJob(db, detDequeued, HANDLERS, approve)
 
 record(
@@ -292,7 +293,7 @@ record(
 // ===========================================================================
 
 await enqueue('research.liar', `fixture-worker-liar-${run}`)
-const liarJob = await dequeue(db, WORKER)
+const liarJob = await dequeue(db, WORKER, true, true, undefined, MINE)
 /*
   The refusal is what matters, and where it now lands.
 
@@ -365,7 +366,7 @@ record(
 // ===========================================================================
 
 const incJob = await enqueue('research.incoherent', `fixture-worker-inc-${run}`)
-const incDequeued = await dequeue(db, WORKER)
+const incDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 let reviewerCalled = false
 const countingReviewer: Reviewer = (o, j) => {
   reviewerCalled = true
@@ -392,7 +393,7 @@ record(
 // ===========================================================================
 
 const rejJob = await enqueue('research.conclusion', `fixture-worker-rej-${run}`)
-const rejDequeued = await dequeue(db, WORKER)
+const rejDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const rejResult = rejDequeued === null ? null : await runJob(db, rejDequeued, HANDLERS, reject)
 record(
   'a rejected output sends the job back rather than committing it',
@@ -406,7 +407,7 @@ record(
 )
 
 await enqueue('research.conclusion', `fixture-worker-ok-${run}`)
-const okDequeued = await dequeue(db, WORKER)
+const okDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const okResult = okDequeued === null ? null : await runJob(db, okDequeued, HANDLERS, approve)
 record(
   'an approved output commits, so review is a gate and not a wall',
@@ -419,7 +420,7 @@ record(
 // ===========================================================================
 
 const boomJob = await enqueue('research.explodes', `fixture-worker-boom-${run}`)
-const boomDequeued = await dequeue(db, WORKER)
+const boomDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const boomResult = boomDequeued === null ? null : await runJob(db, boomDequeued, HANDLERS, approve)
 record(
   'a handler that throws sends the job to retrying with the reason recorded',
@@ -436,7 +437,7 @@ record(
 )
 
 const unknownJob = await enqueue('research.nobody_handles_this', `fixture-worker-unk-${run}`)
-const unkDequeued = await dequeue(db, WORKER)
+const unkDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 let unkError = 'no error'
 if (unkDequeued !== null) {
   try {
@@ -466,7 +467,7 @@ record(
 // The half that makes pausing safe rather than merely kinder: it must leave
 // the queue. A job that stayed queued would be dequeued again immediately and
 // spin for as long as the handler is missing.
-const unkRequeued = await dequeue(db, WORKER)
+const unkRequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 record(
   'CONTROL: and it is out of the queue, so it cannot spin against the same missing handler',
   unkRequeued === null ? 'nothing dequeued' : `dequeued ${unkRequeued.kind}`,
@@ -613,7 +614,7 @@ if (apiKey === '') {
   }
 
   const liveJob = await enqueue('research.live', `fixture-worker-live-${run}`)
-  const liveDequeued = await dequeue(db, WORKER)
+  const liveDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
   let liveState = 'none'
   if (liveDequeued !== null) {
     const r = await runJob(db, liveDequeued, [...HANDLERS, liveHandler], approve)
@@ -679,6 +680,47 @@ const duties = (
     select distinct job_kind as kind from public.responsibilities where enabled
   `)
 ).rows.map((r) => String((r as { kind: string }).kind))
+
+// ===========================================================================
+// A scope is a scope (#184, migrations 0329-30)
+// ===========================================================================
+//
+// The property, not the mechanism: another suite's work sitting in the queue
+// is neither claimable from here nor a reason this suite cannot run. Asserted
+// because it is the whole of #184, and because the failure it prevents does
+// not look like itself — it looked like "22/26" rather than "the queue was
+// dirty", three consecutive runs of this file disagreeing with each other.
+const FOREIGN = 'verify:worker-someone-else'
+const foreignJob = await one(`
+  insert into public.jobs
+    (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+  values (gen_random_uuid(), ${lit(projectId)}::uuid,
+          ${lit(`fixture-foreign-${run}`)}, 'research.conclusion', ${lit(FOREIGN)}, 100)
+  returning job_id::text as id
+`)
+const notMine = await dequeue(db, WORKER, true, true, undefined, MINE)
+record(
+  "another suite's queued job is not handed to a scoped worker",
+  notMine === null ? 'nothing claimed, correctly' : `CLAIMED ${notMine.kind}`,
+  notMine === null,
+)
+/*
+  CONTROL. The check above passes just as well if the queue is empty, if the
+  capacity limit is full, or if `dequeue` is broken — which is three ways to be
+  green about nothing. An UNSCOPED claim must find the very same job.
+*/
+const unscoped = await dequeue(db, WORKER)
+record(
+  'CONTROL: an unscoped worker finds that same job, so the filter is what refused it',
+  unscoped === null ? 'NOTHING CLAIMED — the check above proved nothing' : unscoped.kind,
+  unscoped !== null && unscoped.jobId === String(foreignJob?.id),
+)
+await db.execute(`
+  update public.jobs
+     set state = 'cancelled', state_reason = 'verify:worker scope probe'
+   where requested_by = ${lit(FOREIGN)}
+     and state not in ('complete', 'cancelled', 'failed')
+`)
 
 const homeless = duties.filter((kind) => !registered.has(kind))
 record(
