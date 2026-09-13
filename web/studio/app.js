@@ -1835,6 +1835,39 @@ function chatTab(p) {
           <button type="button" data-unattach aria-label="Remove ${esc(a.title)}">×</button>
         </span>
       </div>`}
+      <!--
+        Who it is for (#26).
+
+        The specification asks for three: ask one agent, ask selected agents,
+        ask the entire team. Two of them are here and are honest end to end —
+        one named person, or the whole team — and "selected" is not, because
+        several people answering one message is several jobs sharing a thread
+        and this would be a control that looks like it does that and does not.
+
+        Everyone is the DEFAULT and is not a broadcast: with nobody named the
+        Chief of Staff takes it, and since #65 she can really bring people in.
+        So the whole team is one answer from Claire saying who she asked,
+        rather than eight near-identical replies — which is the outcome the
+        Issue asks for rather than a shortcut around it.
+
+        A select, not a row of chips: eight faces on a phone composer is most
+        of the composer, and this is a thing you set occasionally and then
+        forget. It carries a visible label so the choice is legible before you
+        send, which the Issue asks for by name.
+
+        No backticks in this comment: template literal.
+      -->
+      <label class="askwho">
+        <span class="t-label">Ask</span>
+        <select data-askwho aria-label="Who this message is for">
+          <option value="everyone"${state.askWho === 'everyone' ? ' selected' : ''}>the whole team</option>
+          ${CREW.map((c) => `<option value="${esc(c.slug)}"${
+            state.askWho === c.slug ? ' selected' : ''}>${esc(c.name)} — ${esc(c.role)}</option>`).join('')}
+        </select>
+        <span class="t-meta">${state.askWho === 'everyone' || state.askWho === undefined
+          ? 'Claire will bring in whoever it needs.'
+          : `Goes straight to ${esc(crewBy(state.askWho).name)}.`}</span>
+      </label>
       <div class="crow">
         <textarea data-say rows="1" placeholder="Ask the team, or tell them what to do…"
                   aria-label="Message the team"></textarea>
@@ -5514,17 +5547,34 @@ function render() {
         words feels broken even when it is fast.
       */
       const about = state.attach
-      chat.send(state.project, text, about)
+      const to = state.askWho ?? 'everyone'
+      chat.send(state.project, text, about, to)
       state.attach = null
       render()
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
-      void chat.ask(state.project, text, about, token.get()).then(() => {
+      void chat.ask(state.project, text, about, token.get(), to).then(() => {
         render()
         const after = $('[data-thread]')
         if (after) after.scrollTop = after.scrollHeight
       })
+    })
+
+    /*
+      Remembered on `state`, not in localStorage.
+
+      Who you are asking is a property of the conversation you are in the
+      middle of, not a preference — carrying it across a reload would mean
+      opening the studio tomorrow and silently addressing Emma because of
+      something asked last night.
+    */
+    $('[data-askwho]', composer)?.addEventListener('change', (e) => {
+      state.askWho = e.currentTarget.value
+      const keep = $('[data-say]')?.value ?? ''
+      render()
+      const box = $('[data-say]')
+      if (box) { box.value = keep; box.focus() }
     })
 
     $('[data-unattach]', composer)?.addEventListener('click', () => {

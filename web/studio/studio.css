@@ -1450,6 +1450,35 @@ body::after {
 }
 .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .attached { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+
+/*
+  Who the message is for (#26).
+
+  A row above the box rather than a control inside it: it is set once and then
+  ignored for a dozen messages, so it should be legible at a glance and out of
+  the way of the thing you are actually doing. The sentence beside it is the
+  part that earns its place — "Claire will bring in whoever it needs" is the
+  answer to the question the control raises, and without it the default reads
+  as nobody being asked.
+
+  16px on the select, not for looks: below that iOS Safari zooms the whole page
+  when it takes focus, which on a composer means the page jumps every time you
+  change who you are talking to.
+*/
+.askwho {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  min-width: 0;
+}
+.askwho select {
+  min-height: 44px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: var(--r-control);
+  background: var(--ground); color: var(--ink);
+  font: inherit; font-size: 16px; max-width: 100%;
+}
+.askwho select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* `li .m, .meta` needs an `li` ancestor; a bare `.t-meta` is styled by its own
+   class, so this one does not. */
+.askwho .t-meta { flex: 1 1 auto; min-width: 0; }
 .crow { display: flex; align-items: flex-end; gap: var(--s3); }
 .crow textarea {
   flex: 1; min-width: 0; min-height: 48px; max-height: 160px; resize: none; border: 0;
@@ -4073,4 +4102,33 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .govquote { padding-left: var(--s3); font-size: 15px; }
   .govfrom .t-meta { white-space: normal; }
   .govwalls li { flex-wrap: wrap; }
+}
+
+@media (max-width: 860px) {
+  /*
+    The addressee row on a phone (#26).
+
+    At the END of the file, like every other phone override here: a media query
+    adds no specificity and the base rules are twenty-six hundred lines up.
+
+    The sentence goes under the select rather than beside it. At 390px the two
+    of them share about eleven characters each, and the sentence is the half
+    that explains the control.
+  */
+  /*
+    A reference's name is a LINK, and a link is a touch target (#35).
+
+    The connector cards do not have this problem because their names are not
+    links — only a reference points somewhere you can follow. At 19px high it
+    failed the 44px floor on every touch width, found by `verify:layouts` the
+    first run after #35 shipped.
+
+    `inline-flex` with a min-height rather than padding, so the text stays
+    where it is and only the hit area grows.
+  */
+  .source b a { display: inline-flex; align-items: center; min-height: 44px; }
+
+  .askwho { gap: var(--s1) var(--s2); }
+  .askwho select { flex: 1 1 auto; min-width: 0; }
+  .askwho .t-meta { flex-basis: 100%; white-space: normal; }
 }

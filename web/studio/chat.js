@@ -25,6 +25,8 @@
   button is bad; a lying button is worse.
 */
 
+import { CREW } from './data.js'
+
 const KEY = 'studio.chat'
 
 const all = () => {
@@ -65,7 +67,20 @@ const ROUTE = [
   [/\b(strategy|positioning|plan|direction)\b/i, 'tom'],
 ]
 
-export function routeTo(text, context) {
+/**
+ * Who this is for.
+ *
+ * An explicit addressee wins over every guess, which is #26's whole point:
+ * routing by keyword is a guess and *"ask Emma"* is an instruction. The
+ * keywords stay as the fallback for when Grant has not chosen — he usually has
+ * not, and making him choose every time would be worse than guessing.
+ *
+ * `to` is a studio short name (`emma`), not a staff slug (`research-lead`).
+ * The translation happens once, at the edge, in `staffSlug` below — the same
+ * reason `crewBy` exists.
+ */
+export function routeTo(text, context, to) {
+  if (to !== undefined && to !== null && to !== '' && to !== 'everyone') return to
   if (context?.kind === 'contact') return 'ruby'
   for (const [re, who] of ROUTE) if (re.test(text)) return who
   return 'claire'
@@ -90,6 +105,24 @@ function replyText(text, context) {
   canonical layer and asks; it never decides. `/voice/turn` is that layer, so
   this posts to it rather than working anything out for itself.
 */
+/**
+ * The studio's short name, as the office's staff slug.
+ *
+ * `crewBy` already holds the mapping — the roster carries `slug` (the short
+ * name the studio uses, "emma") and `staffSlug` (the office's, "research-lead")
+ * — so this reads it rather than keeping a second copy that can drift. #46's
+ * rule: before inventing one, check whether the office already has it.
+ *
+ * Returns null for "everyone" and for anything unrecognised. Null means "the
+ * office decides", which is the correct outcome for both: nobody was named, so
+ * the Chief of Staff takes it.
+ */
+const staffSlug = (short) => {
+  if (short === undefined || short === null || short === '' || short === 'everyone') return null
+  const found = CREW.find((c) => c.slug === short)
+  return found?.staffSlug ?? found?.slug ?? null
+}
+
 const API = () =>
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 const TURN = () => API().replace(/\/hq-api$/, '/voice')
@@ -97,11 +130,14 @@ const TURN = () => API().replace(/\/hq-api$/, '/voice')
 /** One session per visit, so the office can group the turns of a conversation. */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
 
-export function send(slug, text, context) {
+export function send(slug, text, context, to) {
   const now = new Date().toISOString()
   const mine = {
     id: `m${Date.now()}`, from: 'grant', text, at: now,
     context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
+    // Recorded on the message, not only on the composer, so the thread shows
+    // who each thing was asked of after the composer has moved on (#26).
+    to: to ?? null,
   }
   /*
     The local guess stays, as the thing on screen WHILE the office is asked.
@@ -111,7 +147,7 @@ export function send(slug, text, context) {
     replaced by the real one — rather than being the whole of the feature,
     which is what it was.
   */
-  const who = routeTo(text, context)
+  const who = routeTo(text, context, to)
   const back = {
     id: `m${Date.now() + 1}`, from: who, text: replyText(text, context),
     at: now, pending: true,
@@ -131,14 +167,28 @@ export function send(slug, text, context) {
  * A failure leaves the placeholder and says why on it. The alternative — an
  * empty thread and a thrown error — loses what you wrote.
  */
-export async function ask(slug, text, context, token) {
+export async function ask(slug, text, context, token, to) {
   const pendingId = thread(slug).at(-1)?.id
   let reply = null
   try {
     const r = await fetch(`${TURN()}/turn`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ said: text, session: SESSION }),
+      /*
+        `to` is the studio's short name; the office wants a staff slug.
+
+        Translated here rather than sent raw, because §5 says an adapter may
+        only TRANSLATE — and turning "emma" into "research-lead" is exactly
+        that. What it must not do is decide: an unrecognised name is sent as
+        nothing at all rather than being quietly rerouted, so the office's own
+        router handles it and says why.
+
+        "everyone" sends nothing, deliberately. With no addressee the Chief of
+        Staff takes it, and #65 gave her real delegation — so asking the whole
+        team is one answer from Claire naming who she brought in, rather than
+        eight near-identical replies, which is #26's fourth criterion.
+      */
+      body: JSON.stringify({ said: text, session: SESSION, to: staffSlug(to) }),
     })
     const body = await r.json()
     if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)

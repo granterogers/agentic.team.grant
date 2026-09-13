@@ -568,6 +568,21 @@ Each of these cost real time. They are here so they cost it once.
   overflow, no small type and no bad contrast. Name the column
   (`jsonb_agg(alias.v order by alias.ord)`), and keep the sort keys out of the
   payload.
+- **A foreign key on a column an ADAPTER writes turns a bad value into a lost
+  message.** `inbound_commands.addressed_to` references `staff`, so a slug
+  naming nobody does not route badly — the INSERT fails and the whole turn
+  comes back "could not record what you said". What Grant typed is gone
+  because of who he addressed it to. The adapter now retries once with no
+  addressee, which is translation failing honestly. Before writing user input
+  into a column, check what happens when the value is wrong, not only when it
+  is right.
+- **Assert at the layer where the decision is actually made.** A first draft of
+  `verify:addressing` asserted `jobs.recipient_agent` right after
+  `enqueue_inbound` and failed — correctly, because enqueueing does not choose
+  a person. `speaker()` does, when the job RUNS. The addressee reaching
+  `pinned_config` is the enqueue layer's whole contribution, and asserting a
+  decision before anything has decided is asserting the wrong thing at the
+  wrong time.
 - **Scratch scripts must live inside the repository** so `"type": "module"`
   applies; outside it, top-level `await` fails under CJS.
 

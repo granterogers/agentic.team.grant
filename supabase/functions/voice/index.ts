@@ -132,6 +132,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const body = (await request.json().catch(() => ({}))) as {
     said?: unknown
     session?: unknown
+    to?: unknown
   }
   const said = typeof body.said === 'string' ? body.said.trim() : ''
   const session = typeof body.session === 'string' ? body.session : ''
@@ -140,6 +141,27 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // it goes into `origin_ref`, which `app.conversation_before` splits on ':'
   // to decide which turns belong together — so a session id containing a colon
   // would silently merge two conversations.
+  /*
+    Who it was addressed to (#26).
+
+    Shaped, never resolved. §5 says an adapter may only TRANSLATE — so this
+    records the slug it was given and lets `app.speaker` decide whether such a
+    person exists and is active. An adapter that looked the roster up would be
+    an adapter deciding, and it would be a second copy of a rule that already
+    lives in one place.
+
+    Anything that is not slug-shaped becomes nothing at all rather than being
+    rerouted or refused: with no addressee the Chief of Staff takes it, which
+    is the correct outcome for "I could not tell who you meant" and is what
+    every other channel already does.
+
+    This is the same path Telegram uses — there the addressee comes from WHICH
+    BOT was opened, and `speaker()` calls that "addressed directly, Grant
+    opened this person's bot". Typing it in the studio is the same act.
+  */
+  const to = typeof body.to === 'string' ? body.to.trim() : ''
+  const addressedTo = /^[a-z][a-z0-9-]{1,40}$/.test(to) ? to : null
+
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(session)) {
     return json({ error: 'a session id is required' }, 400)
   }
@@ -167,13 +189,52 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // compared a voice row against a Slack one and found this the only column
       // that differed (0104).
       instruction: said,
+      addressed_to: addressedTo,
       dedupe_key: `voice:turn:${session}.${turn}`,
     }),
   })
-  if (!stored.ok && stored.status !== 409) {
+  /*
+    An addressee that is not a person must not cost Grant his message.
+
+    `inbound_commands.addressed_to` carries a FOREIGN KEY to `staff`, so a slug
+    that names nobody does not route badly — it fails the INSERT, and the whole
+    turn comes back as "could not record what you said". The thing he typed is
+    gone, because of who he addressed it to.
+
+    So: one retry with no addressee. Not a roster lookup — §5 says an adapter
+    may only translate, and asking `staff` who exists would put a routing rule
+    in a second place. This says "I could not translate that name into a
+    person, so I recorded no addressee", which is exactly translation failing
+    honestly, and the Chief of Staff then takes it as she does for every
+    unaddressed message.
+
+    Only on 409-or-worse WITH an addressee set: an insert that failed for any
+    other reason must still fail, or this quietly swallows real breakage.
+  */
+  let attempt = stored
+  if (!attempt.ok && attempt.status !== 409 && addressedTo !== null) {
+    attempt = await fetch(`${DB_URL}/rest/v1/inbound_commands`, {
+      method: 'POST',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=ignore-duplicates,return=representation',
+      },
+      body: JSON.stringify({
+        origin_channel: 'voice',
+        origin_ref: `${session}:${turn}`,
+        actor: SUBJECT,
+        instruction: said,
+        addressed_to: null,
+        dedupe_key: `voice:turn:${session}.${turn}`,
+      }),
+    })
+  }
+  if (!attempt.ok && attempt.status !== 409) {
     return json({ error: 'could not record what you said' }, 503)
   }
-  const rows = (await stored.json().catch(() => [])) as { command_id?: string }[]
+  const rows = (await attempt.json().catch(() => [])) as { command_id?: string }[]
   const commandId = rows[0]?.command_id
   if (commandId === undefined) return json({ error: 'could not record what you said' }, 503)
 
