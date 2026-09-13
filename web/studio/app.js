@@ -1955,9 +1955,16 @@ function teamTab(p) {
 */
 const bubble = (m) => {
     if (m.from === 'grant') {
+      /*
+        The reconstructed mark belongs on THIS branch more than on the other
+        one: a backfilled conversation is mostly Grant's own messages, imported
+        from a channel's past. Adding it only to the office's replies would
+        have marked the rare case and missed the common one.
+      */
       return `<div class="msg mine">
         ${m.context ? `<span class="ctxchip">${esc(m.context.title)}</span>` : ''}
         <p>${esc(m.text)}</p>
+        ${m.backfilled ? '<span class="t-meta pendmark">From the channel history</span>' : ''}
       </div>`
     }
     const c = crewBy(m.from)
@@ -1978,6 +1985,12 @@ const bubble = (m) => {
           No backticks in this comment. Template literal.
         -->
         ${m.pending ? '<span class="t-meta pendmark">Asking the office…</span>' : ''}
+        <!--
+          Reconstructed history (0340). Imported from a channel's past, which
+          the office did not watch happen — so it says so rather than letting
+          the page imply it was there. No backticks in this comment.
+        -->
+        ${m.backfilled ? '<span class="t-meta pendmark">From the channel history, before the office was watching</span>' : ''}
         ${m.delegated ? `<span class="t-meta pendmark">Put to the team — the answer comes
           back in Slack and Telegram too.</span>` : ''}
       </div>
@@ -5960,6 +5973,21 @@ function render() {
     })
   }
 
+  /*
+    Read the office's conversation the moment the chat is on screen.
+
+    Fired and not awaited: the thread paints from whatever is already known and
+    is replaced when the answer arrives, because a chat that shows nothing for
+    a round trip reads as broken. A prototype project has no id and `load`
+    returns null, leaving the local thread in charge — which is a supported way
+    to look at this page, not a failure.
+  */
+  if (state.sub === 'chat' && !chat.isReal(state.project)) {
+    void chat
+      .load(state.project, byId(state.project)?.id, token.get())
+      .then((got) => { if (got !== null) render() })
+  }
+
   const composer = $('[data-composer]', root)
   if (composer) {
     const say = $('[data-say]', composer)
@@ -5999,7 +6027,17 @@ function render() {
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
-      void chat.ask(state.project, text, about, token.get(), to).then(() => {
+      void chat.ask(state.project, text, about, token.get(), to).then(async () => {
+        /*
+          Then re-read the office's own copy (#192).
+
+          The turn's reply is what the office SAID; the conversation is what it
+          has RECORDED, and they are not the same object — an answer delivered
+          into Slack, or a message Grant typed there, only exists in the second.
+          Reading it back is what makes this thread the record rather than a
+          transcript of this browser.
+        */
+        await chat.load(state.project, byId(state.project)?.id, token.get())
         render()
         const after = $('[data-thread]')
         if (after) after.scrollTop = after.scrollHeight

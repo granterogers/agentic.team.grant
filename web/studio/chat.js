@@ -33,8 +33,78 @@ const all = () => {
   try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} }
 }
 
-/** The thread for one project, oldest first. */
-export const thread = (slug) => all()[slug] ?? []
+/*
+  What the office holds, per project slug, once it has been asked for.
+
+  The local store below is the PROTOTYPE's thread and the optimistic tail of a
+  real one. It is not the record: a message Grant sends from Slack is in the
+  office's conversation and was never in this browser, and clearing site data
+  must not lose a word of what was said. #192 made that conversation readable;
+  this is the half that reads it.
+*/
+const office = new Map()
+
+/**
+ * The thread for one project, oldest first.
+ *
+ * Once the office's conversation has loaded it wins, with only the messages
+ * still in flight appended — a reply that has landed is in the office's copy
+ * already, and showing both would double it.
+ */
+export const thread = (slug) => {
+  const theirs = office.get(slug)
+  if (theirs === undefined) return all()[slug] ?? []
+  return [...theirs, ...(all()[slug] ?? []).filter((m) => m.inflight === true)]
+}
+
+/** Whether the office's own record is what is on screen for this project. */
+export const isReal = (slug) => office.has(slug)
+
+/*
+  A conversation message, in the shape the bubble renderer already expects.
+
+  `crewBy` matches on `staffSlug` as well as the studio's short slug, so the
+  office's own vocabulary (`chief-of-staff`) needs no translation table here —
+  which is the point: a second mapping would be the copy that drifts.
+*/
+const asBubble = (m) => ({
+  id: String(m.message_id),
+  from: m.kind === 'said' ? 'grant' : String(m.from ?? 'the-office'),
+  text: String(m.body ?? ''),
+  at: String(m.at ?? ''),
+  to: m.addressed_to ?? null,
+  context: null,
+  // Reconstructed history, not something the office watched happen (0340).
+  // Rendered differently, because implying it was present would be a claim.
+  backfilled: m.backfilled === true,
+  surface: m.surface ?? null,
+})
+
+/**
+ * Read one project's conversation from the office.
+ *
+ * Returns null when there is nothing to read — a prototype project with no id,
+ * or no token — and the local thread stays in charge. Deliberately not an
+ * error: the prototype is a supported way to look at this page.
+ */
+export async function load(slug, projectId, token) {
+  if (!projectId || !token) return null
+  try {
+    const r = await fetch(`${API()}?section=conversation&id=${encodeURIComponent(projectId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) return null
+    const body = await r.json()
+    if (!Array.isArray(body.data)) return null
+    office.set(slug, body.data.map(asBubble))
+    // What was in flight has landed, so the optimistic copy would now be a
+    // duplicate of it.
+    write(slug, (all()[slug] ?? []).filter((m) => m.inflight !== true))
+    return thread(slug)
+  } catch {
+    return null
+  }
+}
 
 const write = (slug, messages) => {
   try {
@@ -138,6 +208,8 @@ export function send(slug, text, context, to) {
     // Recorded on the message, not only on the composer, so the thread shows
     // who each thing was asked of after the composer has moved on (#26).
     to: to ?? null,
+    // Cleared the moment the office's own copy arrives (#192).
+    inflight: true,
   }
   /*
     The local guess stays, as the thing on screen WHILE the office is asked.
@@ -150,7 +222,7 @@ export function send(slug, text, context, to) {
   const who = routeTo(text, context, to)
   const back = {
     id: `m${Date.now() + 1}`, from: who, text: replyText(text, context),
-    at: now, pending: true,
+    at: now, pending: true, inflight: true,
   }
   const next = [...thread(slug), mine, back]
   write(slug, next)
