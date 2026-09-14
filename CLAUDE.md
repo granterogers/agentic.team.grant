@@ -23,6 +23,7 @@ Telegram, Slack, a voice call and a web dashboard.
 | `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ canonical project IA — hierarchy, assets, the relational graph |
 | `docs/spec/github-persistence-brief-2026-09-13.md` | ⭐ the communications brief — verbatim; tracked by #191 |
 | `docs/spec/ux-qa-governance-2026-09-14.md` | ⭐ the canonical UX QA standard — verbatim; the standing rule is below |
+| `docs/spec/backend-acceptance-2026-09-14.md` | ⭐ the canonical backend acceptance standard — verbatim; **backend readiness before human testing** |
 | `AI_TEAM_HQ_MASTER_SPEC.md` | ⭐ canonical system requirements |
 | `docs/adr/` | why each material decision was made |
 | `docs/architecture.md` | vendor bindings |
