@@ -716,7 +716,7 @@ try {
         : shaped.listed
           ? `${String(shaped.items)} item(s)`
           : 'NOT A LIST — plain text',
-      shaped !== null && shaped.listed && shaped.items === 3,
+      shaped?.listed === true && shaped.items === 3,
     )
     check(
       `${label} — and the blocks are stacked, not laid out inline`,

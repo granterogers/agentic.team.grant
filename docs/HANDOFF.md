@@ -62,6 +62,36 @@ username from the registry rather than a column.
 reaches nothing. Found by the new check, filed rather than asserted because the
 fix is a design change.
 
+> ## What changed on 2026-09-14 (evening)
+>
+> **The three Behaviour toggles were never broken (#111).** Including *"Only
+> the Chief of Staff messages me"*, the switch behind
+> `telegram.only_chief_speaks`. The audit was pressing the settings sheet's own
+> **Close** button — it sits in `.chead`, so the collector gathers it first —
+> and every control gathered after it still resolved with no box, which
+> Playwright reports as `element is not visible`.
+>
+> Third instance of one shape: `shutDock` (#103) for the dock, `openRail`
+> (#183) for the rail, and now `reopenSheet` for the sheet. *A sweep that
+> presses every control will press the one that hides the others.*
+>
+> A second half was missed by #190: it scoped the COLLECTOR to whatever is in
+> front and left the LOCATOR searching the whole document by label, so "Team"
+> matched the rail's *Call the team* button behind the sheet on six routes.
+>
+> | | before | after #190 | now |
+> |---|---|---|---|
+> | settings, desktop | 12 pressed / 93 unpressable | 12 / 3 | **92 / 0** |
+> | settings, phone | 12 / 75 | 12 / 3 | **92 / 0** |
+>
+> **0 findings on every leg**, and the other routes are unchanged: desktop
+> studio 289/1, team 101/0 and 97/0, phone project 292/3, phone portfolio 13/1.
+>
+> No product change was needed. Two false findings were caught before reaching
+> Grant: the toggles measure 58x52 in a real touch context (not the 50x29 a
+> bare viewport reports), and the report's *"6 inert (12 of those are known
+> stubs)"* was printing the allow-list's size rather than the run's.
+
 > ## What changed on 2026-09-14 (later)
 >
 > **A message that is a list arrives as a list (#209, ADR-0028).** Grant:

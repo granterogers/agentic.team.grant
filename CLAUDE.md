@@ -932,6 +932,51 @@ Each of these cost real time. They are here so they cost it once.
   gets "list, 3 items" with it. **Capture the phone before believing a list
   renders**, and prefer the element the language already has over the one you
   can assemble from breaks.
+- **A sweep that presses every control will press the one that hides the
+  others — third instance, and this time it was the sheet's own Close
+  button.** `shutDock` (#103) and `openRail` (#183) exist for the dock and the
+  rail; the settings sheet had no equivalent. Close sits in `.chead`, so the
+  collector gathers it FIRST, and every control gathered after it on that route
+  still resolves — the nodes stay in the tree — with **no box**. Playwright
+  then says `element is not visible`, which reads like a product defect. Five
+  of the six tabs had nothing left to press after Close because those controls
+  were already de-duplicated from an earlier route; the Behaviour tab had three
+  that were not, and they became #111 — including the switch Grant relies on
+  for `telegram.only_chief_speaks`. **All three work.** Settings went from 12
+  pressed / 93 unpressable, to 12 / 3 after #190, to **92 / 0**.
+- **`body.behind` is the signal for "a sheet is open", never the presence of
+  `.sheet`.** The studio leaves the sheet element in the tree and takes its box
+  away, so querying for the node reports it open while it is shut — which is
+  exactly what made the three toggles look broken. A first draft of the repair
+  logged `[open]` before every failing press, because it asked the wrong
+  question.
+- **Scoping the collector is half the rule; the LOCATOR has to be scoped
+  too.** #190 stopped the sweep gathering the ninety controls behind an open
+  sheet, and left the locator that presses them searching the whole document by
+  label text. With Settings open, "Team" is both the settings tab and the
+  rail's *Call the team* button behind the sheet — `hasText` matched both, the
+  deepest-match rule picked the unreachable one, and six routes each reported a
+  control that works. Scope the thing that FINDS a control as well as the thing
+  that lists it.
+- **A repair that runs before the CLICK can still run after the state has been
+  read.** The sheet restore was first called inside `press()`, which is one
+  step too late: by then the front-most-surface selector had already been
+  computed against a shut sheet and come back empty, so the locator was
+  unscoped again. #183's `openRail` was one step too EARLY for the mirror-image
+  reason. Restore shell state before anything reads the page, not merely before
+  the press.
+- **A report line that states an impossibility teaches the reader to skim the
+  whole report.** The control audit printed *"did nothing: 6 (12 of those are
+  known-inert prototype stubs)"* — it was printing the ALLOW-LIST's size, not
+  how many of that run's inert controls matched it. Twelve of six is not a
+  number. Same cost as `check:templates` naming the wrong cause for every parse
+  error.
+- **Measure a touch target with touch emulation on.** The Behaviour toggles
+  measure 50x29 in a bare 390px viewport and **58x52** in a real
+  `hasTouch`/`isMobile` context, because the phone rules add the padding. The
+  first reading was one sentence away from being reported to Grant as a
+  fourth false finding. `verify:ui` already walks all seven settings panes and
+  enforces the floor properly.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

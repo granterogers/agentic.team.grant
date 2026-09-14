@@ -202,6 +202,16 @@ const findings: Finding[] = []
 let pressed = 0
 let inert = 0
 /*
+  How many of THIS RUN's inert controls were known stubs — not the size of the
+  allow-list, which is what the report used to print.
+
+  It read "did nothing: 6 (12 of those are known-inert prototype stubs)", and
+  twelve of six is not a number. A report line that states an impossibility
+  teaches the reader to skim the whole report, which is the same cost as the
+  `check:templates` message that named the wrong cause for every parse error.
+*/
+let inertKnown = 0
+/*
   Controls the sweep could not press, counted rather than swallowed.
 
   A click that times out is skipped, because it usually means the element moved
@@ -351,7 +361,22 @@ for (const app of APPS) {
     Reloading is slower and cannot drift. A control audit whose own navigation
     is flaky reports flakiness as dead buttons.
   */
+    /*
+      Which settings tab the sweep is on, or null off the settings routes.
+
+      Read by `reopenSheet` below. Recorded rather than passed down because the
+      press helper is four hundred lines away and every other shell-state
+      repair in this file — `openRail`, `shutDock` — works the same way: a
+      cheap, idempotent restore that the press loop calls without knowing why
+      it is needed.
+    */
+    let settingsTab: string | null = null
+
     const home = async () => {
+      // Every route starts here, `intoSettings` included — and it records its
+      // tab AFTER calling this, so clearing here covers every other route
+      // without needing a second call site that somebody will forget.
+      leaveSettings()
       await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
       await page.waitForTimeout(600)
     }
@@ -511,6 +536,10 @@ for (const app of APPS) {
       can go wrong and a retry from a fresh load is honest for a navigation
       problem. Bounded, so a genuinely unreachable route still fails.
     */
+    const leaveSettings = () => {
+      settingsTab = null
+    }
+
     const openRail = async () => {
       const shut = await page.locator('.shell.shut').count()
       if (shut > 0) {
@@ -574,9 +603,48 @@ for (const app of APPS) {
     const intoSettings = async (tab: string) => {
       await home()
       await shutDock()
+      settingsTab = tab
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(400)
       await page.locator(`[role="tab"][data-setting="${tab}"]`).first().click()
+      await page.waitForTimeout(300)
+    }
+
+    /*
+      Re-open the settings sheet, and this is #111 — the THIRD instance.
+
+      One of the controls this sweep presses is the sheet's own Close button,
+      which sits in `.chead` and is therefore collected FIRST, before anything
+      in `.setbody`. Pressing it closes the sheet. Every control gathered after
+      it on that route still resolves — the nodes are in the tree — but they
+      have no box, so Playwright reports:
+
+          - element is not visible
+
+      which reads like a product defect and is not. On five of the six tabs
+      nothing was left to press after Close, because those controls had already
+      been pressed and de-duplicated on an earlier route. The Behaviour tab has
+      three that had not: `chief`, `browser` and `undo` — the three this Issue
+      was opened about, one of them the switch Grant relies on for
+      `telegram.only_chief_speaks`. Pressed on their own, all three work.
+
+      `shutDock` (#103) and `openRail` (#183) are the same lesson about the
+      dock and the rail: **a sweep that presses every control will press the
+      one that hides the others, and the page will remember.** The sheet had
+      no equivalent.
+
+      The signal is `body.behind`, not the presence of `.sheet`: the studio
+      leaves the sheet element in the tree and takes its box away, so
+      querying for the node reports it open while it is shut. That is exactly
+      the confusion that made the toggles look broken in the first place.
+    */
+    const reopenSheet = async () => {
+      if (settingsTab === null) return
+      const shut = await page.evaluate(`!document.body.classList.contains('behind')`)
+      if (shut !== true) return
+      await page.locator('[data-settings]').first().click()
+      await page.waitForTimeout(400)
+      await page.locator(`[role="tab"][data-setting="${settingsTab}"]`).first().click()
       await page.waitForTimeout(300)
     }
 
@@ -731,6 +799,18 @@ for (const app of APPS) {
     })()`)
 
       for (const label of labels) {
+        /*
+          Restore the sheet BEFORE the locator is built, not just before the
+          click.
+
+          The first version of this fix called `reopenSheet` inside `press`,
+          which is one step too late for the same reason `openRail` was one
+          step too early in #183: by then `frontSel` has already been computed
+          against a shut sheet, come back empty, and the locator is searching
+          the whole document again. The restore has to happen before anything
+          reads the page's state, not merely before the press.
+        */
+        await reopenSheet()
         if (label.startsWith('UNNAMED::')) {
           findings.push({
             route: `${size}/${name}`,
@@ -757,14 +837,40 @@ for (const app of APPS) {
           names. Deepest match wins: the candidate that contains no other
           candidate.
         */
-        const candidates = page
+        /*
+          Searched inside whatever is IN FRONT, for the same reason the
+          COLLECTOR is (#190) — and this half was missed.
+
+          #190 scoped the collector, so the sweep stopped gathering the ninety
+          controls behind an open sheet. It did not scope the locator that
+          presses them, which still searched the whole document by label text.
+          With Settings open, "Team" is both the settings tab and the rail's
+          "Call the team" button behind the sheet; `hasText` matched both,
+          the deepest-match rule picked the rail's, and it is untouchable —
+          six routes each reporting a control that works.
+
+          Two halves of one rule, and only one of them was applied. Scope the
+          thing that FINDS the control as well as the thing that lists it.
+        */
+        const frontSel = (await page.evaluate(
+          `(() => {
+             if (!document.body.classList.contains('behind')) return ''
+             for (const id of ['#settings', '#viewer']) {
+               const el = document.querySelector(id)
+               if (el !== null && !el.hidden) return id
+             }
+             return ''
+           })()`,
+        )) as string
+        const root = frontSel === '' ? page : page.locator(frontSel)
+        const candidates = root
           .locator('button:visible, a[href]:visible, [role="tab"]:visible, [role="option"]:visible')
           .filter({ hasText: label })
         const deep = (await candidates.evaluateAll((els) =>
           els.findIndex((el) => !els.some((other) => other !== el && el.contains(other))),
         )) as number
         const target = deep >= 0 ? candidates.nth(deep) : candidates.first()
-        const alt = page.getByLabel(label, { exact: true }).first()
+        const alt = root.getByLabel(label, { exact: true }).first()
         const use = (await candidates.count()) > 0 ? target : alt
         if ((await use.count()) === 0) continue
 
@@ -1005,6 +1111,7 @@ for (const app of APPS) {
           }
         } else if (before === after && !wrote && !moved) {
           inert++
+          if (KNOWN_INERT.has(label) || INERT_HERE.has(`${name}::${label}`)) inertKnown++
           if (!KNOWN_INERT.has(label) && !INERT_HERE.has(`${name}::${label}`) && !alreadyHere) {
             findings.push({ route: `${size}/${name}`, label, why: 'pressing it changed nothing' })
           }
@@ -1044,7 +1151,7 @@ const lines = [
   `Generated by \`npm run verify:controls\` (issue #41).`,
   ``,
   `- controls pressed: **${String(pressed)}**`,
-  `- did nothing: **${String(inert)}** (${String(KNOWN_INERT.size)} of those are known-inert prototype stubs)`,
+  `- did nothing: **${String(inert)}**${inertKnown === 0 ? '' : ` (${String(inertKnown)} of those are known-inert prototype stubs)`}`,
   `- could not be pressed (covered, or moved under the cursor): **${String(skipped)}**`,
   `- web/hq read from: ${hqData}`,
   `- findings: **${String(findings.length)}**`,
