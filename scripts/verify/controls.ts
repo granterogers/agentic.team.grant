@@ -683,7 +683,28 @@ for (const app of APPS) {
       // Every control on this route, by a stable handle.
       const labels: string[] = await page.evaluate(`(() => {
       const out = []
-      for (const el of document.querySelectorAll('button, a[href], [role="tab"], [role="option"]')) {
+      /*
+        Scoped to whatever is IN FRONT (#190).
+
+        With a sheet open the studio puts \`behind\` on the body and the shell
+        underneath gets \`pointer-events: none\`. Those controls still resolve
+        and still have a box — a covered rail is not a removed one — so the
+        collector took all ninety-odd of them and then spent 2.5 seconds each
+        failing to press something nobody can touch. Settings read as
+        "12 pressed, 93 unpressable" and the number meant nothing: it described
+        the audit, not the product.
+
+        CLAUDE.md already states the rule from the touch-target version of this
+        same mistake: an audit run over a page with something in front of it
+        must scope itself to the thing in front. This is that rule, applied to
+        the sweep rather than to a measurement.
+      */
+      const front = document.body.classList.contains('behind')
+        ? (['#settings', '#viewer']
+            .map((id) => document.querySelector(id))
+            .find((el) => el !== null && !el.hidden) ?? document)
+        : document
+      for (const el of front.querySelectorAll('button, a[href], [role="tab"], [role="option"]')) {
         if (el.closest('[hidden]') !== null) continue
         const r = el.getBoundingClientRect()
         if (r.width === 0 || r.height === 0) continue
