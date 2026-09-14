@@ -172,7 +172,7 @@ const RULES: readonly Rule[] = [
     name: 'bare-imperative',
     intent: 'light_investigation',
     pattern:
-      /^(?:research|investigate|compare|review|draft|write|summari[sz]e|analy[sz]e|outline|assess|evaluate|audit)\s+(?!of\b)/i,
+      /(?:^|(?<=[.!?;]\s{1,3}))(?:research|investigate|compare|review|draft|write|summari[sz]e|analy[sz]e|outline|assess|evaluate|audit)\s+(?!of\b)/i,
   },
 
   {
@@ -192,10 +192,25 @@ const RULES: readonly Rule[] = [
     // Safe to read this way now in a sense it would not have been last week:
     // 0083 puts every notebook generation behind Grant's own button, so the
     // cost of over-reading one is a question he answers with a tap.
+    /*
+      Anchored at the start of ANY SENTENCE, not only of the message (#237).
+
+      The `^` was right about what it excluded — "I don't want you to create a
+      task" contains "create a" and must not read as a command — and wrong
+      about where it looked. *"Do not draft the plan. Create the tasks
+      instead."* is how Grant changes his mind, the imperative is in the second
+      sentence, and nothing looked there: it fell to an unconfident `thought`,
+      convened nobody and wrote nothing. A whole SHAPE of correction — "not
+      that, this instead" — was invisible.
+
+      A lookbehind for a sentence terminator keeps the protection exactly: the
+      excluded example has its verb mid-sentence after "want you to", which
+      still matches nothing.
+    */
     name: 'make-this',
     intent: 'direct_command',
     pattern:
-      /^(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put|log|raise)\s+/i,
+      /(?:^|(?<=[.!?;]\s{1,3}))(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put|log|raise)\s+/i,
   },
 
   {

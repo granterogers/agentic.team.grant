@@ -167,3 +167,33 @@ describe('#237: a resolved referent is still a referent', () => {
     expect(ask('Add a task for the pricing page rewrite.')?.title).toBe('the pricing page rewrite')
   })
 })
+
+describe('#237: "not that — this instead" is a command', () => {
+  /*
+    How Grant changes his mind, and the shape that was invisible. The
+    imperative lives in the SECOND sentence and `make-this` was anchored at
+    the start of the MESSAGE, so the whole correction fell to an unconfident
+    `thought`: nobody convened, nothing written.
+  */
+  it.each([
+    'Do not draft the plan. Create the tasks instead.',
+    'Right — do not draft the plan. Create the tasks instead.',
+    'Forget the email. Add a task to chase it.',
+  ])('reads %s as a command', (text) => {
+    expect(classifyIntent(text).intent).toBe('direct_command')
+  })
+
+  it('still refuses the sentence the anchor existed to exclude', () => {
+    // The verb is mid-sentence after "want you to", so a sentence-start
+    // anchor excludes it exactly as the message-start anchor did.
+    const text = 'I do not want you to create a task for this.'
+    expect(classifyIntent(text).intent).not.toBe('direct_command')
+    expect(ask(text)).toBeNull()
+  })
+
+  it('creates the second thing and not the forbidden first', () => {
+    // "Do not draft" prohibits drafting; "Create the tasks" is the instruction.
+    // The prohibition guard must not read across the full stop and refuse both.
+    expect(ask('Do not draft the plan. Create the tasks instead.')).not.toBeNull()
+  })
+})

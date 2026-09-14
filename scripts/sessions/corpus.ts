@@ -91,8 +91,25 @@ export const SESSIONS: readonly Session[] = [
       {
         say: 'Right — do not draft the plan. Create the tasks instead.',
         inProject: 'alpha',
-        why: 'changed intent that swaps one ACTION for another',
-        expect: { tasks: 1 },
+        /*
+          The shape that was invisible until #237: the imperative is in the
+          SECOND sentence, and the classifier's anchor only looked at the start
+          of the message, so "not that — this instead" fell to an unconfident
+          thought and did nothing at all.
+
+          It carries no title, so the correct answer is the one question —
+          which is the third time this corpus has assumed otherwise and been
+          wrong. A referent-only command asks; that is consistent, defensible
+          behaviour and the expectation now says so.
+        */
+        why: 'changed intent that swaps one ACTION for another, imperative in sentence two',
+        expect: { says: ['called'] },
+      },
+      {
+        say: 'Call it Competitor price check.',
+        inProject: 'alpha',
+        why: 'and the swapped-to action completes',
+        expect: { tasksIn: 'alpha' },
       },
     ],
   },
