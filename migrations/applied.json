@@ -356,5 +356,6 @@
   "0355_a_job_in_a_fixture_project_is_harness_traffic.sql": "d52ca28cd5ed3267773e1146eb1a825a6b0ccc87868b2497512e440056d53bec",
   "0356_putting_slack_back_without_a_terminal.sql": "0f32228b01ec657b733e53ae0def34d8ad223f3331d66327589cf7d0cbe0087a",
   "0357_the_page_can_tell_that_slack_needs_credentials.sql": "793418cb8fe714af698ba252ace8a62436af5040b8fc9659bcf343b0a3b39795",
-  "0358_a_healthy_row_still_needs_an_action.sql": "9bbc3ce922bd22847ae5905eeecad6f58bf5852eeb214842763cb1696f3b497d"
+  "0358_a_healthy_row_still_needs_an_action.sql": "9bbc3ce922bd22847ae5905eeecad6f58bf5852eeb214842763cb1696f3b497d",
+  "0359_taking_the_two_slack_values_in_either_order.sql": "4e133366360e3cdaf6f13bf70f154c61c99aee7d738d8828cdcdf57e930150d4"
 }

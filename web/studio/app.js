@@ -3469,11 +3469,13 @@ function setupTab() {
         <label class="flab">Bot user OAuth token</label>
         <input data-sl-bot type="password" autocomplete="off" placeholder="xoxb-…"
                aria-label="Slack bot user OAuth token">
-        <span class="t-meta">Install App page, after Reinstall to Workspace.</span>
+        <span class="t-meta">Install App page, under Bot User OAuth Token. Starts xoxb-.</span>
         <label class="flab">Signing secret</label>
         <input data-sl-sig type="password" autocomplete="off" placeholder="32 hex characters"
                aria-label="Slack signing secret">
-        <span class="t-meta">Basic Information, under App Credentials.</span>
+        <span class="t-meta">Basic Information, under App Credentials. 32 characters, 0-9 and a-f.</span>
+        <span class="t-meta">If you put them in the wrong boxes it does not matter — they are
+          sorted by shape, not by which field they came from.</span>
         <div class="srow wrap">
           <a class="btn small quiet" href="https://api.slack.com/apps" target="_blank"
              rel="noopener">Open Slack app settings</a>
