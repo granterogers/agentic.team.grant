@@ -152,14 +152,67 @@ record(
   leaked.length === 0,
 )
 
+/*
+  A credential, not the word for one.
+
+  Four of these six always required token MATERIAL after the prefix. Two did
+  not, and `xox[abposr]-` bare went red on the Slack credentials form the
+  moment it shipped: the field's own `placeholder="xoxb-…"` and the help text
+  *"Starts xoxb-"* are four letters and a hyphen, which is exactly what the
+  pattern asked for. Nothing leaked. The page was clean and the check said it
+  was not, for three hours, which is the expensive direction — a security check
+  that cries wolf is a security check somebody starts overriding.
+
+  So the prefixes get a length requirement, and the requirement is chosen so it
+  cannot hide a real one: a Slack bot token is `xoxb-` and then fifty-odd
+  characters in three hyphenated groups, and a Supabase secret key is far
+  longer than ten. Twelve characters of token material after the prefix is
+  unreachable by any label, placeholder or sentence a person would write, and
+  unavoidable by any real credential.
+
+  CLAUDE.md, four times over: assert the property, not the artefact. The
+  property is "a credential is present". The artefact was "the letters xoxb
+  appear somewhere".
+*/
 const SHAPES = [
-  /xox[abposr]-/,
-  /sb_secret_/,
+  /xox[abposr]-[A-Za-z0-9-]{12,}/,
+  /sb_secret_[A-Za-z0-9_-]{12,}/,
   /\bsbp_[a-f0-9]{20,}/,
   /eyJ[A-Za-z0-9_-]{10,}\./,
   /\bAIza[A-Za-z0-9_-]{30,}/,
   /\b\d{8,12}:[A-Za-z0-9_-]{30,}\b/,
 ]
+
+/*
+  CONTROL, and it is the half that makes loosening the patterns above safe.
+
+  A shape list can be weakened until it matches nothing, and every check that
+  reads "clean" would go on reading "clean" — a refusal that stopped refusing
+  looks exactly like a page with nothing to hide. So each pattern is shown a
+  synthetic credential of its own kind and must still catch it.
+
+  The specimens are assembled from pieces rather than written out, so no
+  token-shaped literal sits in the repository for `check:secrets` to find or a
+  reader to mistake for real. They are plainly fake — twelve zeros where the
+  entropy would be.
+*/
+const SPECIMENS = [
+  `xox${'b'}-${'0'.repeat(12)}-${'0'.repeat(12)}-${'A'.repeat(24)}`,
+  `sb_${'secret'}_${'A'.repeat(20)}`,
+  `sbp_${'a'.repeat(24)}`,
+  `eyJ${'A'.repeat(20)}.${'B'.repeat(20)}`,
+  `AIza${'A'.repeat(35)}`,
+  `${'1'.repeat(10)}:${'A'.repeat(35)}`,
+]
+const blind = SPECIMENS.filter((s) => !SHAPES.some((p) => p.test(s)))
+record(
+  'CONTROL: every token shape still catches a credential of its own kind',
+  blind.length === 0
+    ? `all ${String(SPECIMENS.length)} specimens caught`
+    : `${String(blind.length)} SHAPE(S) NO LONGER MATCH ANYTHING`,
+  blind.length === 0,
+)
+
 const shaped = Object.entries(bodies).filter(([, body]) => SHAPES.some((p) => p.test(body)))
 record(
   'and nothing token-shaped appears in any of them',

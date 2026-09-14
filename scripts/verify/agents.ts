@@ -1080,6 +1080,60 @@ record(
   guarded?.p === null || guarded?.p === undefined,
 )
 
+/*
+  0361, and the reason the check above was worth distrusting even when green.
+
+  It reported 56/56 on 11 September and 55/56 on 14 September against identical
+  code, because BOTH halves of the tiebreak were undecided: switched_at is
+  app.now_utc(), which is now() — the TRANSACTION timestamp, so the two switches
+  written in one statement above share an instant to the microsecond — and
+  switch_id was gen_random_uuid(), so `order by switch_id desc` was ordering by
+  noise. Which switch counted was a coin flip, in the suite and in production
+  alike: a chat could be pointed at the project from two switches ago while
+  looking entirely reasonable.
+
+  A single green run cannot tell a fixed coin from a lucky one, so this asserts
+  the PROPERTY directly and repeatedly: write two switches in one transaction,
+  and the second must win every time. Ten rounds is not proof of determinism in
+  the mathematical sense; it is enough that a 50/50 defect survives it once in
+  a thousand runs, where one round survives every other run.
+
+  The subjects are `switchFrom` and `otherId`, the two REAL probe projects this
+  section owns and tears down at the end. Not `projectId` — that belongs to
+  section 1 and has already been retired by the time execution reaches here,
+  which this file warns about forty lines above and which the first draft of
+  this check did anyway. It failed 10 of 10 and looked exactly like a live
+  ordering defect: a retired project is a fixture, a fixture switch correctly
+  reads as no scope, and the loop counted every null as the older switch
+  winning. The test was wrong and the fix was right, in the one direction that
+  would have sent somebody rewriting a working function.
+
+  Each round uses its own scope_ref, and the rows go when the probe projects go
+  — project_delete clears project_switches (0292), so there is nothing extra to
+  tear down and nothing left on an append-only table.
+*/
+const ORDER_ROUNDS = 10
+let wrongWinner = 0
+for (let i = 0; i < ORDER_ROUNDS; i += 1) {
+  const ref = `order-proof-${run}-${String(i)}`
+  await db.execute(`
+    insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+    values ('telegram_chat', ${lit(ref)}, ${lit(switchFrom)}::uuid, 'verify:agents', 'first'),
+           ('telegram_chat', ${lit(ref)}, ${lit(otherId)}::uuid, 'verify:agents',
+            'second, and the one that counts')
+  `)
+  const seen = await one(`select app.current_project('telegram_chat', ${lit(ref)})::text as p`)
+  if (seen?.p !== otherId) wrongWinner += 1
+}
+record(
+  'project switching',
+  'REGRESSION 0361: two switches in one transaction, and the LAST one written always wins',
+  wrongWinner === 0
+    ? `${String(ORDER_ROUNDS)} rounds, the second switch won every time`
+    : `THE OLDER SWITCH WON ${String(wrongWinner)} of ${String(ORDER_ROUNDS)} ROUNDS — the tiebreak is undecided again`,
+  wrongWinner === 0,
+)
+
 // Explicit beats everything.
 const explicit = await one(`
   select app.resolve_project('telegram_chat', ${lit(scopeRef)}, ${lit(projectId)}::uuid)::text as p

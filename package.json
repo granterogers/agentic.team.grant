@@ -195,7 +195,8 @@
     "verify:motion": "tsx scripts/verify/motion.ts",
     "verify:offline": "tsx scripts/verify/offline.ts",
     "verify:design": "tsx scripts/verify/design.ts",
-    "gate": "tsx scripts/e2e.ts --gate"
+    "gate": "tsx scripts/e2e.ts --gate",
+    "coverage": "tsx scripts/coverage.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

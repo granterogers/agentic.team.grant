@@ -358,5 +358,6 @@
   "0357_the_page_can_tell_that_slack_needs_credentials.sql": "793418cb8fe714af698ba252ace8a62436af5040b8fc9659bcf343b0a3b39795",
   "0358_a_healthy_row_still_needs_an_action.sql": "9bbc3ce922bd22847ae5905eeecad6f58bf5852eeb214842763cb1696f3b497d",
   "0359_taking_the_two_slack_values_in_either_order.sql": "4e133366360e3cdaf6f13bf70f154c61c99aee7d738d8828cdcdf57e930150d4",
-  "0360_a_project_delete_that_cannot_crash_a_sweep.sql": "f236df2b03c2dfc42ed7393fc64fd4a354b27d6e9adb6067d24abafd8637635d"
+  "0360_a_project_delete_that_cannot_crash_a_sweep.sql": "f236df2b03c2dfc42ed7393fc64fd4a354b27d6e9adb6067d24abafd8637635d",
+  "0361_the_latest_switch_needs_a_tiebreaker_that_is_not_a_coin.sql": "59848695d33ebcf84d50e79410c600327e8d3e1e9f6323df8e06ab14c4a5b13b"
 }
