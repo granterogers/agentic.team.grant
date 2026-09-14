@@ -3,7 +3,26 @@
 > **Verbatim.** Grant sent this on 14 September 2026. It is stored exactly as
 > received, before anything was done with it — CLAUDE.md's first rule, because
 > a compaction has already destroyed one specification. Do not condense it.
-> The Issues raised from it are listed at the bottom.
+> The Issues raised from it are mapped in **#223** (tracking):
+>
+> | item | Issue |
+> |---|---|
+> | 1 Call the Team | #214 |
+> | 2 Message the Team | #215 |
+> | 3 Homepage dashboard | #219 |
+> | 4 Project icons and images | #221 |
+> | 5, 6 Navigation and header | #216 |
+> | 7, 8, 19 Activity, Lately, Tasks | #222 |
+> | 9, 10 Settings | #158 (with #39, #36) |
+> | 11 Project header | #188 |
+> | 12, 13, 14 Panels, distinction, Contacts | #220 |
+> | 15, 16 Documents plus, Outputs | #217 |
+> | 17 Crashes | #218 |
+> | 18 Typography | #160 |
+>
+> Two corrections recorded in #223: there is no React or hydration in this
+> codebase (ADR-0002, ADR-0011), and "project deletion" appears in the
+> priority list but in none of the numbered items, so it was not filed.
 
 ---
 
