@@ -84,7 +84,16 @@ const WAITING_TOO_LONG_MIN = 15
 
 console.log('\nverify:drains — is the queue moving\n')
 
-const waiting = await one(`
+/*
+  The question, written once.
+
+  Both the live reading and the CONTROL at the bottom of this file ask it, and
+  they must ask the SAME question or the control proves nothing about the
+  check. CLAUDE.md: a list built twice is a list that will disagree — and a
+  control built twice is worse, because it can go green while the thing it
+  claims to exercise is broken.
+*/
+const WAITING = `
   select count(*)::int as n,
          coalesce(round(max(extract(epoch from (app.now_utc() - created_at)) / 60))::int, 0) as oldest_min,
          coalesce(
@@ -96,7 +105,9 @@ const waiting = await one(`
            '') as kinds
     from public.jobs
    where state in ('queued', 'retrying')
-     and not app.harness_job(job_id)`)
+     and not app.harness_job(job_id)`
+
+const waiting = await one(WAITING)
 
 ok(
   `no real job has been waiting longer than ${String(WAITING_TOO_LONG_MIN)} minutes`,
@@ -167,6 +178,52 @@ ok(
   Number(stranded.n) === 0
     ? 'none'
     : `${String(stranded.n)} stranded in ${String(stranded.states)} — these block deploy:worker`,
+)
+
+/*
+  CONTROL: this suite goes RED when the queue actually stalls (#236).
+
+  Every other line here reports that nothing is wrong, and a check that has
+  only ever been green is indistinguishable from a check that cannot fail.
+  This one manufactures the exact condition — a REAL job, backdated well past
+  the threshold, still queued — and asserts the same query the live reading
+  above uses now says so.
+
+  Three things make the subject real rather than harness traffic, and each was
+  a way to write a control that passes for the wrong reason:
+
+  - `requested_by` must not match any `is_fixture` branch. That column is
+    GENERATED, so a fixture-shaped name would be filtered out by the very
+    predicate under test and the control would report "0 waiting" as a pass.
+  - The project must not be a fixture project either: `app.harness_job` derives
+    from the project as well as the row (0355), which is the whole point of it.
+  - And `created_at` has to actually stick. A backdate reverted by a trigger is
+    CLAUDE.md's `projects_touch_updated_at` trap, so the assertion reads the
+    age back out of the same query rather than trusting the insert.
+
+  Inside one `begin … rollback`. The CALL is wrapped, not the assertion —
+  `verify:disconnect` deleted Slack's credentials for a day by getting that
+  exactly the wrong way round.
+*/
+const proof = (
+  (
+    await db.execute(`
+      begin;
+      insert into public.jobs
+        (kind, state, requested_by, correlation_id, created_at, idempotency_key, announce)
+      values ('office.instruction', 'queued', 'telegram:grant', gen_random_uuid(),
+              app.now_utc() - interval '${String(WAITING_TOO_LONG_MIN * 4)} minutes',
+              'drains-control-' || gen_random_uuid(), false);
+      ${WAITING};
+      rollback;`)
+  ).rows as Record<string, unknown>[]
+)[0]
+ok(
+  'CONTROL: a real job stuck past the threshold makes this suite go red',
+  Number(proof?.oldest_min) > WAITING_TOO_LONG_MIN && Number(proof?.n) > 0,
+  Number(proof?.n) === 0
+    ? 'the manufactured job was NOT SEEN by the query — this check cannot fail'
+    : `saw ${String(proof?.n)} waiting, oldest ${String(proof?.oldest_min)}m`,
 )
 
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
