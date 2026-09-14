@@ -197,7 +197,8 @@
     "verify:design": "tsx scripts/verify/design.ts",
     "gate": "tsx scripts/e2e.ts --gate",
     "coverage": "tsx scripts/coverage.ts",
-    "verify:duties": "tsx scripts/verify/duties.ts"
+    "verify:duties": "tsx scripts/verify/duties.ts",
+    "verify:notebook": "tsx scripts/verify/notebook.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

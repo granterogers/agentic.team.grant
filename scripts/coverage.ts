@@ -146,9 +146,9 @@ const DOMAINS: ReadonlyArray<{
   },
   {
     domain: 'NotebookLM',
-    suites: [],
-    verdict: 'None',
-    gap: 'NO SUITE. src/notebook/ has five modules and handlers/notebook.ts exists. ADR-0013 forbids reviving the unattended sync because there is no public API and an unattended client would have to impersonate a browser session — so the honest deliverable is a capability PROBE that records each limitation as data, which is what the specification asks for: browser-only functionality is not programmatic capability.',
+    suites: ['notebook'],
+    verdict: 'Partial',
+    gap: 'verify:notebook (#227) tests the CLAIM rather than the connector, because ADR-0013 means there is no API to test. Nine of the eleven capability rows said verified_by=probe with no probe running, which is the web.search defect exactly. It now resolves the adapter the way handlers/sync.ts does and asks it. What it CANNOT cover is whether the unofficial paths still work end to end — that needs the Python tooling this environment lacks (npm run setup:python), and the adapter currently reports unavailable for that reason. So the reach values marked unofficial are trusted, not proven.',
   },
   {
     domain: 'Notion',
