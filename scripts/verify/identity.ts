@@ -577,6 +577,202 @@ const alias = `the ${run} thing`
 }
 
 // ===========================================================================
+// #224 — create, near-duplicate, rename, and what the OLD name does afterwards
+//
+// The readiness report of 14 September put Projects at Partial with exactly
+// this gap: name resolution and ambiguity were well covered, and creating,
+// renaming and the behaviour of a name after it stops being current were not
+// proven as one arc.
+//
+// Rename matters more than it looks. Grant refers to a project by whatever he
+// called it last, often weeks later and usually in a voice note. A rename that
+// leaves the old name resolving to NOTHING loses him the project. A rename that
+// leaves it resolving to something ELSE is worse, because the work lands
+// somewhere plausible and wrong.
+// ===========================================================================
+
+/*
+  RENAME RUNS INSIDE A ROLLBACK, and finding out why cost a real project.
+
+  `app.hq_rename_project` ENQUEUES an `office.rename_channels` job — sensibly,
+  because the Slack channel has to be renamed too. But a job can never be
+  deleted (`job_state_transitions` is append-only by §6), and `project_delete`
+  refuses a project holding one. So renaming a REAL project makes it permanently
+  undeletable, and the first draft of this arc left three archived projects
+  behind on its first run, which is CLAUDE.md's twenty-five-permanent-projects
+  pile being rebuilt by the suite written to close a coverage gap.
+
+  A fixture project is not the answer either: `resolve_project_by_name` filters
+  `not is_fixture`, so the name assertions below would pass for the wrong reason
+  against one. #45's question has to be asked about the SPECIFIC reader.
+
+  So the whole arc is one statement ending in `rollback`. The rename happens,
+  the job is enqueued, every question is asked of the uncommitted state — which
+  is exactly the state a caller would see — and then none of it happened.
+*/
+const RENAMED = `Identity proof ${run} renamed`
+const OTHER_NAME = `Identity proof other ${run}`
+
+const resolves = (name: string, alias: string): string => `
+  (select coalesce(
+     (select (array_agg(r.project_id))[1]::text
+        from app.resolve_project_by_name(${lit(name)}) r
+       where r.confidence >= 0.90), 'null')) as ${alias}`
+
+const arc = await one(`
+begin;
+create temp table _dupe as select app.hq_create_project(
+  ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}-dupe`)}, null, false) as r;
+create temp table _ren as select app.hq_rename_project(${lit(SLUG)}, ${lit(RENAMED)}) as r;
+create temp table _mid as
+  select (select name from public.projects where project_id = ${lit(projectId)}::uuid) as nm,
+         ${resolves(`Identity proof ${run}`, 'old_goes')},
+         ${resolves(RENAMED, 'new_goes')};
+create temp table _clash as
+  select app.hq_rename_project(${lit(SLUG)}, ${lit(OTHER_NAME)}) as r;
+update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid;
+create temp table _arch as select ${resolves(RENAMED, 'after_archive')};
+create temp table _out as
+  select (select r::text from _dupe)  as dupe,
+         (select r::text from _ren)   as ren,
+         (select nm from _mid)        as nm,
+         (select old_goes from _mid)  as old_goes,
+         (select new_goes from _mid)  as new_goes,
+         (select r::text from _clash) as clash,
+         (select after_archive from _arch) as after_archive;
+select * from _out;
+rollback;`)
+
+type Said = {
+  project_id?: string
+  ok?: boolean
+  error?: string
+  question?: string
+  needs_confirmation?: boolean
+  candidates?: { slug?: string; name?: string }[]
+}
+const said = (raw: unknown): Said => {
+  try {
+    return JSON.parse(String(raw ?? '{}')) as Said
+  } catch {
+    return {}
+  }
+}
+
+/*
+  The first draft asserted an ERROR here and was wrong about the contract, in the
+  direction worth recording: the office does something BETTER than refusing. It
+  returns `needs_confirmation` with a question and the candidates it matched —
+
+      There is already something by that name. Did you mean one of these, or is
+      'Identity proof …' genuinely new?
+
+  which is Grant's standing instruction implemented rather than merely obeyed:
+  "Please don't assume I wish to create a new project - this is a large task and
+  should always be confirmed." A check asserting `error` would have gone red on
+  correct behaviour and invited somebody to 'fix' the asking away.
+
+  So the property is: nothing was created, and the question names what it
+  collided with. Not the mechanism, and not the wording.
+*/
+const dupeSaid = said(arc?.dupe)
+record(
+  'creating a project whose name already exists does not silently duplicate it',
+  dupeSaid.project_id === undefined
+    ? 'nothing was created'
+    : `IT WAS CREATED: ${String(dupeSaid.project_id).slice(0, 8)}`,
+  dupeSaid.project_id === undefined,
+)
+record(
+  'and it ASKS, naming the project it matched, rather than deciding for him',
+  dupeSaid.needs_confirmation === true
+    ? `asked, ${String(dupeSaid.candidates?.length ?? 0)} candidate(s): ${String(dupeSaid.candidates?.[0]?.slug)}`
+    : `no question asked: ${String(dupeSaid.error ?? JSON.stringify(dupeSaid)).slice(0, 60)}`,
+  dupeSaid.needs_confirmation === true &&
+    (dupeSaid.candidates ?? []).some((c) => /identity-proof/i.test(String(c.slug))),
+)
+
+const renameSaid = said(arc?.ren)
+record(
+  'a project can be renamed through the path the page uses',
+  renameSaid.error === undefined ? 'renamed' : String(renameSaid.error).slice(0, 80),
+  renameSaid.error === undefined,
+)
+record(
+  'the new name is what the row then carries',
+  `name=${String(arc?.nm)}`,
+  String(arc?.nm) === RENAMED,
+)
+
+/*
+  THE ONE THAT MATTERS. What does the OLD name do afterwards?
+
+  Three outcomes and only one is a failure. The same project is ideal — he
+  called it that for weeks. NOTHING is acceptable and honest, because null means
+  ASK. A DIFFERENT project is the quiet disaster: the work lands somewhere
+  plausible and he does not find out for a fortnight.
+
+  Asserted as that property, never as the mechanism. Whether the office keeps
+  the old name as an alias is a design decision nobody has made; whether it can
+  route Grant somewhere wrong is not a decision at all.
+*/
+const oldGoesTo = String(arc?.old_goes ?? 'null')
+record(
+  'the OLD name never routes to a DIFFERENT project — the same one, or nothing',
+  oldGoesTo === 'null'
+    ? 'nothing, which means ask, and is honest'
+    : oldGoesTo === projectId
+      ? 'still the same project, so the old name was kept'
+      : `WRONG PROJECT: ${oldGoesTo.slice(0, 8)}`,
+  oldGoesTo === 'null' || oldGoesTo === projectId,
+)
+record(
+  'and the NEW name resolves to it, so the rename did not trade one lost project for another',
+  String(arc?.new_goes).slice(0, 8),
+  String(arc?.new_goes) === projectId,
+)
+
+/*
+  Renaming ONTO a name a live project already holds.
+
+  `hq_create_project` refuses this. `hq_rename_project` does not — the same
+  collision, one door apart, and only one of them checks. That is CLAUDE.md's
+  pre-check rule with the sign flipped: not a constraint loosened without its
+  pre-check, but a pre-check that only ever existed on one of the two writers.
+  Fixed in 0365.
+*/
+const clashSaid = said(arc?.clash)
+record(
+  'renaming onto a name a live project already holds is refused',
+  clashSaid.error === undefined
+    ? 'IT WAS ALLOWED — two projects would answer to one name'
+    : String(clashSaid.error).slice(0, 80),
+  clashSaid.error !== undefined,
+)
+
+record(
+  'an ARCHIVED project stops answering to its own name',
+  String(arc?.after_archive) === 'null'
+    ? 'nothing resolves, which is right'
+    : `STILL RESOLVES: ${String(arc?.after_archive).slice(0, 8)}`,
+  String(arc?.after_archive) === 'null',
+)
+
+/*
+  And the rollback took the enqueued rename job with it, which is the assertion
+  that makes the whole approach honest rather than merely tidy.
+*/
+const renameDebris = await one(`
+  select count(*)::int as n from public.jobs
+   where kind = 'office.rename_channels'
+     and project_id = ${lit(projectId)}::uuid`)
+record(
+  'and the rename job the rollback discarded left nothing behind',
+  `${String(renameDebris?.n)} rename job(s)`,
+  Number(renameDebris?.n) === 0,
+)
+
+// ===========================================================================
 // Tidy up
 // ===========================================================================
 

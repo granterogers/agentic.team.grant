@@ -17,7 +17,7 @@ file can know, and it is the only part worth reading.
 | partially exercised | **13** |
 | not exercised at all | **0** |
 | `verify:*` suites in the repository | **99** |
-| suites with a recorded result | **74** |
+| suites with a recorded result | **92** |
 
 ## Domains with NO suite at all
 
@@ -30,10 +30,10 @@ file can know, and it is the only part worth reading.
 | `verify:identity` | A name finds the right project, and an ambiguous one finds nobody. | green — 30/30 checks passed |
 | `verify:references` | A project may point at anything, not only at things we can log into. | green — 16/16 checks passed |
 | `verify:connections` | What each project is connected to, and what it is deliberately not. | green — 16/16 checks passed |
-| `verify:settings` | Project Settings, driven rather than described. | _not run in the last sweep_ |
+| `verify:settings` | Project Settings, driven rather than described. | green — 37/37 checks passed |
 | `verify:portfolio` | Every task Grant has, in one place, wherever it lives. | green — 21/21 checks passed |
 
-**Gap.** Name resolution, ambiguity and attachment are well covered. Creation-with-confirmation, near-duplicate creation, rename with old-name behaviour, and archive are not proven as one arc through the path Grant uses.
+**Gap.** The create / near-duplicate / rename / archive arc is now proven end to end in verify:identity (#224), and it found a real defect: hq_rename_project let two live projects answer to one name while hq_create_project refused exactly that. Fixed in 0365. Renaming a REAL project makes it permanently undeletable, because the rename enqueues a job and a job can never be removed, so the whole arc runs inside a rollback. What is still uncovered: bulk operations, and what happens to a project holding many documents when it is archived.
 
 ### Tasks — Full
 
@@ -80,7 +80,7 @@ file can know, and it is the only part worth reading.
 | suite | what it checks | last result |
 |---|---|---|
 | `verify:conversation` | Claire remembers the last few minutes, and says back everything she was asked. | green — 23/23 checks passed |
-| `verify:chat` | The conversation, behaving — the half no static check can see. | _not run in the last sweep_ |
+| `verify:chat` | The conversation, behaving — the half no static check can see. | green — 45/45 checks passed |
 | `verify:history` | One conversation, both sides, and nothing from anybody else's project. | green — 50/50 checks passed |
 | `verify:addressing` | Ask one agent, or ask the whole team — and have the office honour it. | green — 13/13 checks passed |
 | `verify:echo` | The office does not answer itself, and a redelivered event is not a second | green — 13/13 checks passed |
@@ -197,9 +197,9 @@ file can know, and it is the only part worth reading.
 
 | suite | what it checks | last result |
 |---|---|---|
-| `verify:talk` | Talk to Team, driven the way a person drives it. | _not run in the last sweep_ |
+| `verify:talk` | Talk to Team, driven the way a person drives it. | green — 36/36 checks passed |
 | `verify:tts` | The text-to-speech budget, against the live database. | green — 14/14 checks passed |
-| `verify:dictation` | The microphone is released, and this asserts it rather than believing it. | _not run in the last sweep_ |
+| `verify:dictation` | The microphone is released, and this asserts it rather than believing it. | green — 38/38 checks passed |
 | `verify:cors` | Does the browser get through? | green — 13/13 checks passed |
 
 **Gap.** Everything safe without a microphone. cors exists because a server-side fetch sends no Origin and therefore cannot detect the misconfiguration that killed the voice call for weeks. Real microphone UX is HUMAN-ONLY.
@@ -223,7 +223,7 @@ file can know, and it is the only part worth reading.
 |---|---|---|
 | `verify:undo` | Demonstrate Undo against the live database. | green — 15/15 checks passed |
 | `verify:restore` |  | _not run in the last sweep_ |
-| `verify:offline` | What the studio says when the office does not answer. | _not run in the last sweep_ |
+| `verify:offline` | What the studio says when the office does not answer. | green — 16/16 checks passed |
 
 **Gap.** restore restores a backup over the live database and is excluded from every batch by name — run deliberately, by a person.
 
@@ -279,7 +279,7 @@ file can know, and it is the only part worth reading.
 |---|---|---|
 | `verify:router` | Prove the router against the live database and the live provider. | green — 13/13 checks passed |
 | `verify:tts` | The text-to-speech budget, against the live database. | green — 14/14 checks passed |
-| `verify:hq` | Team HQ, against the deployed endpoint and the deployed page. | **FAIL** — 38/39 checks passed |
+| `verify:hq` | Team HQ, against the deployed endpoint and the deployed page. | green — 40/40 checks passed |
 
 **Gap.** Spend is reported as measured AND modelled. Free-tier headroom against Supabase, Vercel and OpenRouter is not asserted anywhere.
 
@@ -320,7 +320,7 @@ file can know, and it is the only part worth reading.
 
 | suite | what it checks | last result |
 |---|---|---|
-| `verify:agents` | Demonstrate the Phase 5 acceptance criteria against the live database. | **FAIL** — 55/56 checks passed |
+| `verify:agents` | Demonstrate the Phase 5 acceptance criteria against the live database. | green — 57/57 checks passed |
 | `verify:autonomy` | Demonstrate the Phase 6 acceptance criteria against the live database. | green — 34/34 checks passed |
 | `verify:scenario-a` |  | green — exit 0 |
 

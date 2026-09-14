@@ -1250,6 +1250,33 @@ Each of these cost real time. They are here so they cost it once.
   as "the judge's answer could not be read" and quietly changes the denominator.
   #116 already recorded a worst case of 1,091 reasoning tokens before any
   content. Raise the budget before blaming the model.
+- **Renaming a project makes it permanently undeletable.**
+  `app.hq_rename_project` enqueues an `office.rename_channels` job — correctly,
+  because renaming the Slack channel is an API call and this is SQL — and a job
+  can never be deleted, so `project_delete` refuses the project for ever. A
+  suite that renames a REAL project therefore leaves permanent debris, and the
+  first draft of #224's project arc left three archived projects on its first
+  run: CLAUDE.md's own twenty-five-project pile, rebuilt by the suite written to
+  close a coverage gap. A fixture project is not the escape either, because
+  `resolve_project_by_name` filters `not is_fixture` and the name assertions
+  would pass for the wrong reason. The arc runs inside a rollback instead, and
+  asserts that the discarded rename job left nothing behind.
+- **A pre-check that only ever existed on one of two writers.**
+  `hq_create_project` refused a name a live project already held;
+  `hq_rename_project` did not check at all, so two active projects could answer
+  to one name and Grant would be routed to whichever the resolver ranked first
+  (0365). CLAUDE.md already records 0282/0293 — a constraint loosened while its
+  pre-check stayed strict — and this is the third instance with nothing
+  loosened: the check was simply never written on the second door. **When two
+  functions write the same field, grep for the other one.**
+- **Asserting an ERROR where the office asks a QUESTION goes red on correct
+  behaviour.** The duplicate-create check was written expecting a refusal.
+  `hq_create_project` returns `needs_confirmation` with the candidates it
+  matched — *"There is already something by that name. Did you mean one of
+  these…"* — which is Grant's *"should always be confirmed"* implemented rather
+  than merely obeyed. A check asserting `error` would have invited somebody to
+  fix the asking away. Assert that nothing was created and that the question
+  names what it matched; never the mechanism, never the wording.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

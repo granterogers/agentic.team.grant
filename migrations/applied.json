@@ -362,5 +362,6 @@
   "0361_the_latest_switch_needs_a_tiebreaker_that_is_not_a_coin.sql": "59848695d33ebcf84d50e79410c600327e8d3e1e9f6323df8e06ab14c4a5b13b",
   "0362_the_corpus_grows_past_seven_cases.sql": "b60fafcc0b7c51b78f1f773a4fcfebf36c1f3541ee4d9c952c5785c5ef05919d",
   "0363_two_cases_the_grader_could_not_fairly_judge.sql": "babbe4d579d7d4e160a46370458bc29d41af11de7752c655ab59bdc494264265",
-  "0364_a_good_case_must_say_the_facts_were_observed.sql": "6c22ff6d1f6632cc01ab604f6a14bdbc2182be435960b28ae39e7d1dd60caa0b"
+  "0364_a_good_case_must_say_the_facts_were_observed.sql": "6c22ff6d1f6632cc01ab604f6a14bdbc2182be435960b28ae39e7d1dd60caa0b",
+  "0365_rename_checks_the_same_collision_create_does.sql": "7edb8c1eacef978a70b450f163159a8cc8308cd6b6e91b8602d2ec27598757b0"
 }

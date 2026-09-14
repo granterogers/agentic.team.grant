@@ -61,7 +61,7 @@ const DOMAINS: ReadonlyArray<{
     domain: 'Projects',
     suites: ['identity', 'references', 'connections', 'settings', 'portfolio'],
     verdict: 'Partial',
-    gap: 'Name resolution, ambiguity and attachment are well covered. Creation-with-confirmation, near-duplicate creation, rename with old-name behaviour, and archive are not proven as one arc through the path Grant uses.',
+    gap: 'The create / near-duplicate / rename / archive arc is now proven end to end in verify:identity (#224), and it found a real defect: hq_rename_project let two live projects answer to one name while hq_create_project refused exactly that. Fixed in 0365. Renaming a REAL project makes it permanently undeletable, because the rename enqueues a job and a job can never be removed, so the whole arc runs inside a rollback. What is still uncovered: bulk operations, and what happens to a project holding many documents when it is archived.',
   },
   {
     domain: 'Tasks',
