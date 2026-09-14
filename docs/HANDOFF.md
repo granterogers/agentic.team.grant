@@ -1210,3 +1210,42 @@ The **18 frontend suites** were not run in this pass. They belong to the UX QA
 standard, not to a backend acceptance programme, and the coverage matrix names
 them rather than leaving them out. The UX remediation epic (#223, children
 #214–#222) has not been started.
+
+### Second pass, same day — Grant said "solve part 1"
+
+Four of the five ORANGE reasons closed, and the fifth measured and bounded.
+
+| | |
+|---|---|
+| `verify:duties` | **21/21** — the domain that had nothing (#225) |
+| `verify:notebook` | **18/18** — the other one (#227). **All 30 domains now have a suite** |
+| `verify:chaos` | 21 → **29** (#228) |
+| `verify:identity` | 30 → **39** — the project create/rename/archive arc |
+| eval corpus | 7 → **20 cases**, ten good and ten poor (#171) |
+| flake tracking | per-run history keyed by commit (#226) |
+| free-tier headroom | now asserted — database 50 MB of 500, storage 102 MB of 1,024 |
+| the gate | **15/15 in 395s** |
+| the sweep | **92 of 94, 0 failed, 0 could not run** |
+
+**Two more real defects, both fixed:**
+
+- **0365 — `hq_rename_project` never checked for a name clash.** `hq_create_project`
+  refuses a name a live project already holds; rename did not check at all, so two
+  active projects could answer to one name. Reachable from Project Settings.
+- **Renaming a project makes it permanently undeletable** — the rename enqueues a
+  job and a job can never be removed. Not a bug; a property, and the reason the new
+  arc runs inside a rollback.
+
+**The finding worth remembering:** the evaluator's judge was grading *compliance*,
+not trustworthiness. Its rubric asked *"did it do what was asked?"*, which rewards a
+confident fabrication and penalises an honest refusal — the exact inversion of the
+office's first invariant. Seven historical cases could never show it; twenty with
+paired controls showed it immediately. Corrected in `JUDGE_VERSION` 2026-09-14.1.
+
+**And a limit on the instrument:** agreement moves **±2 cases between runs** of an
+unchanged corpus even with the model pinned and `temperature: 0` — measured, not
+assumed. `npm run eval` prints that margin now. #229 has the options.
+
+Still 🟠 ORANGE, for three narrower reasons: Google is unproven against a real
+Google and jointly blocked; the judge has a ±2 margin; and duties are tested to
+dispatch rather than through the handler.

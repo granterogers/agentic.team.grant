@@ -619,6 +619,59 @@ record(
 )
 
 // ===========================================================================
+// The free tier, measured rather than assumed.
+//
+// CLAUDE.md's first hard constraint is ~£0/month on the Supabase free tier —
+// 500 MB of database and 1 GB of storage — and the readiness report of
+// 14 September found that NOTHING anywhere asserted the headroom. The cost
+// section reports what the MODELS cost, which is the number that is already
+// zero; the number that can quietly stop being zero is this one, and the way
+// it announces itself is the office refusing to write.
+//
+// Reported with the figures rather than as a bare pass, because "we are fine"
+// and "we are at 94 percent and fine" are different things to know.
+// ===========================================================================
+
+const DB_LIMIT_MB = 500
+const STORE_LIMIT_MB = 1024
+const CEILING = 0.8
+
+const room = (
+  await db.execute(`
+  select (pg_database_size(current_database()) / 1024 / 1024)::int as db_mb,
+         (select coalesce(sum((metadata->>'size')::bigint), 0) / 1024 / 1024
+            from storage.objects)::int as store_mb,
+         (select count(*)::int from storage.objects) as objects`)
+).rows[0] as {
+  db_mb: number
+  store_mb: number
+  objects: number
+}
+
+const dbShare = Number(room.db_mb) / DB_LIMIT_MB
+record(
+  `the database is inside the free tier — ${String(room.db_mb)} MB of ${String(DB_LIMIT_MB)} MB`,
+  `${(dbShare * 100).toFixed(0)}% used`,
+  dbShare < CEILING,
+)
+
+const storeShare = Number(room.store_mb) / STORE_LIMIT_MB
+record(
+  `storage is inside the free tier — ${String(room.store_mb)} MB of ${String(STORE_LIMIT_MB)} MB across ${String(room.objects)} object(s)`,
+  `${(storeShare * 100).toFixed(0)}% used`,
+  storeShare < CEILING,
+)
+
+/*
+  Eighty per cent, not a hundred.
+
+  A check that only fires at the limit fires when the office has ALREADY stopped
+  working, which makes it a post-mortem rather than a check. Grant is the one
+  who would have to decide what to delete or what to pay for, and that decision
+  needs warning rather than an incident.
+*/
+
+// ===========================================================================
 
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')

@@ -1,5 +1,11 @@
 # Backend readiness — 14 September 2026
 
+> **Updated later the same day.** The five limits below were then worked
+> through. Four are closed and one is measured and bounded; the summary of that
+> second pass is at the end of this document under **What changed after the
+> first pass**. The verdict is unchanged at ORANGE, for reasons that are now
+> narrower and better understood.
+
 The report `docs/spec/backend-acceptance-2026-09-14.md` asks for, written after
 the deep acceptance pass. Issue #224.
 
@@ -229,3 +235,90 @@ testing would surface faster than another week of automation would.
 
 _Generated during the pre-human backend acceptance programme, #224.
 Reproduce with `npm run e2e`, `npm run gate`, `npm run coverage`, `npm run eval`._
+
+---
+
+# What changed after the first pass
+
+Same day. Grant read the five reasons and said to solve them.
+
+| # | reason it was ORANGE | now |
+|---|---|---|
+| 1 | recurring duties never tested | **closed** — `verify:duties`, 21/21 (#225) |
+| 2 | Gmail, Drive, Calendar never touched a real Google | **open, and his to unblock** — needs a Phase 9 OAuth client, and the consent step does not exist in the code yet |
+| 3 | behavioural corpus of 7 cases | **7 → 20, and it found the judge was grading the wrong thing** (#171, #229) |
+| 4 | chaos covered 7 of §18's 20 | **21 → 29 checks** (#228) |
+| 5 | nothing measured flake | **closed** — per-run history keyed by commit (#226) |
+
+**NotebookLM** also went from no suite at all to 18/18 (#227), so **all 30 domains now have a suite** — 17 full, 13 partial, none absent.
+
+## Two more real defects, found by the new coverage
+
+- **`app.hq_rename_project` never checked for a name clash.** `hq_create_project`
+  refuses a name a live project already holds; rename did not check at all, so
+  two active projects could answer to one name and Grant would be routed to
+  whichever the resolver ranked first. Reachable from Project Settings. Fixed in
+  **0365**. Third instance of a pre-check existing on one writer and not its
+  twin.
+- **Renaming a project makes it permanently undeletable** — the rename enqueues
+  a job, a job can never be removed, and `project_delete` refuses a project
+  holding one. Not a bug to fix; a property to know, and the reason the new
+  arc runs inside a rollback.
+
+## The finding that matters most
+
+**The evaluator's judge was measuring compliance, not trustworthiness.** Its
+rubric asked one question — *"did it do what was asked?"* — which rewards a
+confident fabrication and penalises an honest refusal. On seven historical cases
+it agreed with Grant 7/7. On twenty, with a `good` control beside every `poor`
+case, agreement fell to 15/20 and every disagreement had the same shape: a
+fabricated database read graded GOOD, an honest *"I have not checked"* graded
+POOR.
+
+That is the exact inversion of this office's first invariant. It was invisible
+for as long as the corpus contained no honest refusals to grade.
+
+Corrected (`JUDGE_VERSION` 2026-09-14.1), and the three disagreements it caused
+went away and stayed away across every subsequent run at both temperatures.
+
+## And a limit on the instrument itself
+
+The agreement figure **moves ±2 cases between runs of an unchanged corpus**,
+even with the model pinned and `temperature: 0` — established by measurement,
+not assumed: two consecutive runs gave 16/19 and 16/18, one verdict flipped, and
+a different case failed to parse each time. The free model does not give back
+what temperature 0 asks for.
+
+`npm run eval` now prints that margin next to the number. **Read the agreement
+figure as a range, and never tune the prompt on one run.** #229 has the three
+options; majority-of-three is the likely fix and it triples a run that already
+takes 20–30 minutes.
+
+## Where the numbers stand now
+
+| | |
+|---|---|
+| suites recorded in the sweep | **92 of 94** · 0 failed · 0 could not run |
+| the two not run | `restore` (restores a backup over the live database) and `github-token` (spends a real budget) — both excluded by name, deliberately |
+| fast readiness gate | **15/15 in 395s** |
+| domains | 30 · 17 full · 13 partial · **0 with no suite** |
+| unit tests | 1,017 |
+| migrations | 365 |
+| free tier | database **50 MB of 500** · storage **102 MB of 1,024** — now asserted at an 80% ceiling rather than assumed |
+| control audits | studio 304 pressed / 0 findings · team 97 / 0 · settings 92 / 0 |
+
+## The verdict, unchanged
+
+Still **🟠 ORANGE**, and the remaining reasons are now these:
+
+1. **Google is unproven against a real Google**, and it is jointly blocked — the
+   OAuth client is Grant's to create and the one-time consent flow is not built.
+2. **The behavioural judge has a ±2 margin**, so the office's answer quality is
+   known to be roughly right rather than precisely measured.
+3. **Duties are tested to the point of dispatch, not through the handler.** The
+   arc from *"the duty fired"* to *"the thing it exists for happened"* is
+   covered only for the kinds `verify:worker` drives.
+
+None of the three is a reason to delay human testing. The first two need Grant
+or a decision from him; the third is genuinely better exercised by a person
+using the office than by another suite.
