@@ -77,6 +77,7 @@
     "verify:lessons": "tsx scripts/verify/lessons.ts",
     "verify:trace": "tsx scripts/verify/trace.ts",
     "verify:tasks": "tsx scripts/verify/tasks.ts",
+    "verify:attests": "tsx scripts/verify/attests.ts",
     "verify:assets": "tsx scripts/verify/assets.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",
     "verify:db": "npm run verify:transitions && npm run verify:ledger && npm run verify:jobs && npm run verify:credentials && npm run verify:router && npm run verify:github && npm run verify:identity && npm run verify:connections && npm run verify:sync && npm run verify:knowledge && npm run verify:schema && npm run verify:notion && npm run verify:notion-write && npm run verify:mail && npm run verify:cross-interface && npm run verify:chaos && npm run verify:security && npm run verify:mcp && npm run verify:oauth && npm run verify:agents && npm run verify:autonomy && npm run verify:undo && npm run verify:learning && npm run verify:lessons && npm run verify:impediments && npm run verify:briefing && npm run verify:drive && npm run verify:delegation && npm run verify:notice && npm run verify:skills && npm run verify:boundary && npm run verify:design && npm run verify:tasks && npm run verify:assets && npm run verify:wrappers && npm run verify:cors && npm run purge:fixtures -- --go && npm run verify:ui && npm run verify:talk && npm run verify:tts && npm run verify:hq && npm run verify:telegram && npm run verify:slack && npm run verify:worker && npm run backup:rehearse && npm run purge:fixtures -- --go && npm run slack:tidy -- --go",

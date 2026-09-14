@@ -513,7 +513,16 @@ record(
 
 // Concurrency: a second worker must not be handed a job the first holds.
 await enqueue('status.count_jobs', `fixture-worker-race-${run}`)
-const [a, b] = await Promise.all([dequeue(db, `${WORKER}-a`), dequeue(db, `${WORKER}-b`)])
+// Scoped to MINE, like every other dequeue in this suite. These two were the
+// last unscoped calls left after #184, and they were reached only when the
+// office happened to have work queued: the pair picked up a real `drive.watch`
+// job, `runJob` threw `NoHandlerError` because this suite holds no handler for
+// it, and the whole suite died four sections early with a real job leased to a
+// fixture worker. A scope that covers most of a file is not a scope.
+const [a, b] = await Promise.all([
+  dequeue(db, `${WORKER}-a`, true, true, undefined, MINE),
+  dequeue(db, `${WORKER}-b`, true, true, undefined, MINE),
+])
 record(
   'two workers racing for one job do not both get it',
   `a=${a === null ? 'null' : a.jobId.slice(0, 8)} b=${b === null ? 'null' : b.jobId.slice(0, 8)}`,
@@ -535,7 +544,11 @@ await db.execute(`
       leased_until = app.now_utc() - interval '1 minute'
   where job_id = ${lit(stalled)}::uuid
 `)
-const blockedBefore = await dequeue(db, `${WORKER}-blocked`)
+// Scoped too, and this one had to be: it asserts the dequeue returns NOTHING
+// while a stalled lease holds the scope's capacity. Unscoped it would return
+// any real office job that happened to be queued and report the capacity rule
+// broken, which is a suite failing on somebody else's work.
+const blockedBefore = await dequeue(db, `${WORKER}-blocked`, true, true, undefined, MINE)
 record(
   'a job held by a dead worker still counts against capacity',
   blockedBefore === null
@@ -691,11 +704,21 @@ const duties = (
 // not look like itself — it looked like "22/26" rather than "the queue was
 // dirty", three consecutive runs of this file disagreeing with each other.
 const FOREIGN = 'verify:worker-someone-else'
+/*
+  A kind nothing else in the office enqueues, because the CONTROL below has to
+  dequeue with the scope filter genuinely off and would otherwise be handed
+  whatever the office has queued. It was: the control claimed a real
+  `drive.watch` job, reported the wrong kind, and left a duty's work running
+  under a fixture worker until its lease expired. Filtering by KIND keeps the
+  control honest — the requester filter, which is the thing under test, stays
+  off — while making it impossible to reach real work.
+*/
+const PROBE_KIND = 'research.scope_probe'
 const foreignJob = await one(`
   insert into public.jobs
     (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
   values (gen_random_uuid(), ${lit(projectId)}::uuid,
-          ${lit(`fixture-foreign-${run}`)}, 'research.conclusion', ${lit(FOREIGN)}, 100)
+          ${lit(`fixture-foreign-${run}`)}, ${lit(PROBE_KIND)}, ${lit(FOREIGN)}, 100)
   returning job_id::text as id
 `)
 const notMine = await dequeue(db, WORKER, true, true, undefined, MINE)
@@ -709,7 +732,7 @@ record(
   capacity limit is full, or if `dequeue` is broken — which is three ways to be
   green about nothing. An UNSCOPED claim must find the very same job.
 */
-const unscoped = await dequeue(db, WORKER)
+const unscoped = await dequeue(db, WORKER, true, true, [PROBE_KIND])
 record(
   'CONTROL: an unscoped worker finds that same job, so the filter is what refused it',
   unscoped === null ? 'NOTHING CLAIMED — the check above proved nothing' : unscoped.kind,

@@ -920,8 +920,14 @@ export const deliverPending = async (
     }
 
     const stored = await db.execute(
+      // `sources` is read rather than assumed empty. It used to be
+      // reconstructed as `[]`, which was harmless while nothing consulted it
+      // and stopped being harmless the moment the sending path did: #185's
+      // guard refuses a "verified" output that cites nothing, and an empty
+      // list invented here would have refused every recovered verified output
+      // for a reason that was this line's doing.
       `select body, confidence::text as confidence, evidence::text as evidence,
-              deterministic, model
+              deterministic, model, sources, contradictions
          from public.outputs where output_id = ${lit(r.output_id)}::uuid`,
     )
     // Typed as what the columns actually are, so the reconstruction below is
@@ -934,13 +940,15 @@ export const deliverPending = async (
       evidence: Evidence
       deterministic: boolean
       model: string | null
+      sources: unknown
+      contradictions: string | null
     }
     const output = {
       body: o.body,
       confidence: o.confidence,
       evidence: o.evidence,
-      sources: [],
-      contradictions: null,
+      sources: Array.isArray(o.sources) ? o.sources.map((s) => String(s)) : [],
+      contradictions: o.contradictions,
       path: o.deterministic ? ('deterministic_retrieval' as const) : ('inference' as const),
       model: o.model,
     } satisfies HandlerOutput

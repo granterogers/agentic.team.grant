@@ -11,8 +11,10 @@ import {
   claimsToHaveRead,
   disagreementNeedsGrant,
   metadataProblems,
+  refuseToSend,
   reviewRequired,
   SUBSTANTIVE_KINDS,
+  unresolvableSources,
 } from '../../src/agents/quality.ts'
 
 describe('provenance decides, not importance', () => {
@@ -193,5 +195,108 @@ describe('canCommit mirrors the database trigger', () => {
     // A job that produced nothing has nothing to review. The 0018 trigger takes
     // the same view, and these two must not drift apart.
     expect(canCommit([])).toBe(true)
+  })
+})
+
+/*
+  The last gate before a person (#185).
+
+  `metadataProblems` runs when an output is created; this runs in
+  `combinedNotifier`, at the one point every channel goes through, because
+  `resumeNotifications` rebuilds an output from its stored row and sends it
+  without passing through creation at all.
+*/
+describe('what must not reach a person', () => {
+  const base = {
+    confidence: 'medium',
+    evidence: 'inferred',
+    sources: [] as readonly string[],
+    contradictions: null,
+  } as const
+
+  const REAL =
+    'I pulled the project records. The db read shows five active projects: ' +
+    'mtz08joe, mtyz6js5, mtyyz7zy, mtyywoxz and mty9izdi.'
+
+  it('refuses the message that reached Grant at 03:45', () => {
+    const r = refuseToSend({ ...base, body: REAL })
+    expect(r).not.toBeNull()
+    expect(r?.reason).toContain('I pulled the project records')
+    // The handle #49 counts it under. Lower-case and stable, because four
+    // agents hitting this wall must produce four rows that group together.
+    expect(r?.needed).toBe('evidence for a claimed read')
+  })
+
+  it('refuses a verified claim with nothing behind it', () => {
+    expect(refuseToSend({ ...base, evidence: 'verified' })?.needed).toBe('a source that resolves')
+  })
+
+  it('refuses a verified claim whose citations are prose', () => {
+    const r = refuseToSend({
+      ...base,
+      evidence: 'verified',
+      sources: ['the project records', 'internal notes'],
+    })
+    expect(r?.needed).toBe('a source that resolves')
+    expect(r?.reason).toContain('the project records')
+  })
+
+  it('sends a verified claim with real addresses', () => {
+    expect(
+      refuseToSend({
+        ...base,
+        evidence: 'verified',
+        sources: ['job:0d1f', 'google:calendar', 'db:projects', 'notebooklm:x1 Course'],
+        body: REAL,
+      }),
+    ).toBeNull()
+  })
+
+  /*
+    The judgement pairings stay at creation and are NOT refused here. Refusing
+    them at the last moment means a job that ran, produced something usable and
+    then said nothing at all, which is how a send guard gets turned off.
+  */
+  it('CONTROL: does not silence an output over a judgement call', () => {
+    expect(refuseToSend({ ...base, evidence: 'speculative', confidence: 'high' })).toBeNull()
+    expect(
+      refuseToSend({ ...base, confidence: 'high', contradictions: 'the two disagree' }),
+    ).toBeNull()
+  })
+
+  it('CONTROL: an ordinary answer is sent', () => {
+    expect(refuseToSend({ ...base, body: 'The launch is the risk, on what we have.' })).toBeNull()
+  })
+})
+
+describe('a citation is an address, not a description', () => {
+  it('accepts every shape the office actually writes', () => {
+    expect(
+      unresolvableSources([
+        'job:9a3f-11ee',
+        'google:calendar',
+        'google:gmail',
+        'notebooklm:abc Some course',
+        'db:projects',
+        'https://example.com/a',
+        'x-custom.ref+1:thing',
+      ]),
+    ).toEqual([])
+  })
+
+  it('rejects prose, a bare count, and a scheme with nothing after it', () => {
+    expect(
+      unresolvableSources(['the project records', '5 sources', 'job:', 'Some Title:', ':x', '']),
+    ).toHaveLength(6)
+  })
+
+  /*
+    The first version of this was a whitelist of permitted schemes and it
+    refused `db:projects`, which is a perfectly good address nobody had thought
+    to write down. A whitelist fails whenever the office grows a source it did
+    not have, and it fails by refusing to speak.
+  */
+  it('CONTROL: a scheme nobody has thought of yet still resolves', () => {
+    expect(unresolvableSources(['linear:ENG-402', 'figma:file/xyz'])).toEqual([])
   })
 })

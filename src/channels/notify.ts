@@ -24,6 +24,7 @@
  * every channel's actual outcome, including the boring ones.
  */
 
+import { refuseToSend } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { HandlerOutput, Job, Notifier, NotifyOutcome } from '../jobs/worker.ts'
 import type { ActionId } from '../slack/blocks.ts'
@@ -249,6 +250,51 @@ export function combinedNotifier(
     )
     if ((quiet.rows[0] as { announce?: boolean } | undefined)?.announce === false) {
       return { delivered: false, note: 'nothing worth announcing' }
+    }
+
+    /*
+      The last gate before a person (#185).
+
+      On 13 September Claire told Grant, at 03:45, that she had pulled the
+      project records and that the database read showed five active projects.
+      None of the five existed, and the output row said `evidence: inferred` —
+      the office knew nothing had been read, and rendered that knowledge as
+      grey caption text UNDER the sentence claiming the read.
+
+      `metadataProblems` now refuses that combination when the output is
+      CREATED, which is the right place and not the only one that matters:
+      `resumeNotifications` rebuilds an output from its stored row and sends it
+      without passing through creation at all. So the rule is asserted again
+      here, at the one point every channel goes through, for the same reason
+      the `announce` gate above is here rather than in each channel.
+
+      Refused, not fixed. Editing the sentence would put words in an agent's
+      mouth, and dropping it silently is what #185 objects to in the first
+      place — so it becomes an impediment, which is #49's mechanism for "an
+      agent could not do this" and the surface Grant already reads it on.
+    */
+    const refusal = refuseToSend({
+      confidence: output.confidence,
+      evidence: output.evidence,
+      sources: output.sources,
+      contradictions: output.contradictions,
+      body: output.body,
+    })
+    if (refusal !== null) {
+      // Never throws. A job that failed to send and then failed to write down
+      // why it failed to send is the worst outcome available here, and the
+      // note below is the fallback record either way.
+      try {
+        await db.execute(
+          `select app.cannot(${lit(job.jobId)}::uuid, 'missing_data',
+             ${lit(refusal.needed)}, 'the sending path',
+             ${lit(refusal.reason.slice(0, 500))},
+             ${lit(`output ${outputId} was written and not sent`)})`,
+        )
+      } catch {
+        /* Recording a refusal must not become a second failure. */
+      }
+      return { delivered: false, note: `not sent: ${refusal.reason}`.slice(0, 200) }
     }
 
     const context = await resultContext(db, job, outputId, options.projectUrlBase)

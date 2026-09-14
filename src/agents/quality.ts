@@ -208,6 +208,34 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     })
   }
 
+  /*
+    A citation that is not an address (#185).
+
+    "verified with no sources" was already refused above; this is the same rule
+    one step in, because a model that has been told it must cite something
+    writes "the project records" and satisfies a length check. Every handler in
+    `src/handlers` writes `<scheme>:<ref>`, so the shape is the office's own and
+    not an invention of this check. Caught here as well as on the sending path
+    so a job fails while somebody can still act on it, rather than producing
+    something that is refused at the last moment.
+  */
+  if (m.evidence === 'verified' && m.sources.length > 0) {
+    const bad = unresolvableSources(m.sources)
+    if (bad.length > 0) {
+      problems.push({
+        field: 'sources',
+        problem:
+          `${bad.length} of ${m.sources.length} citations are not addresses ` +
+          `(${bad
+            .map((b) => `"${String(b).slice(0, 40)}"`)
+            .join(', ')
+            .slice(0, 160)}). ` +
+          'A source is where somebody goes to check, so it needs a scheme and a ' +
+          'reference, not a description.',
+      })
+    }
+  }
+
   if (m.evidence === 'speculative' && m.confidence === 'high') {
     problems.push({
       field: 'confidence',
@@ -295,3 +323,113 @@ export const COMMITTABLE_STATUSES: readonly ReviewerStatus[] = [
 
 export const canCommit = (statuses: readonly ReviewerStatus[]): boolean =>
   statuses.length === 0 || statuses.every((s) => COMMITTABLE_STATUSES.includes(s))
+
+// ---------------------------------------------------------------------------
+// What must not reach a person (#185)
+// ---------------------------------------------------------------------------
+
+/*
+  `metadataProblems` runs when an output is CREATED. That is the right place to
+  catch an incoherent output and it is not the last place it can be caught,
+  because it is not the place a person is reached from.
+
+  Two paths reach a channel without passing through output creation:
+
+    - `resumeNotifications` rebuilds an output from its stored row and sends
+      it. A row written before this rule existed goes out unexamined.
+    - Anything that comes to hold `notifying` by recovery rather than by
+      running.
+
+  #185's third box says the check belongs on the SENDING path for exactly that
+  reason, so this is the guard `combinedNotifier` consults, once, for every
+  channel.
+
+  ## Deliberately narrower than `metadataProblems`
+
+  It refuses the two things that are LIES TO THE READER — a claim of having
+  looked from an output that did not, and a claim of verification with nothing
+  behind it. It does not refuse the judgement pairings (high confidence on a
+  speculative finding, high confidence alongside contradictions). Those are
+  real defects and they are already refused at creation; refusing them again
+  here would mean a job that ran, produced something usable and then said
+  nothing at all, which is how a send guard gets turned off.
+
+  The bar for this list is: **would a person, reading only the message, believe
+  something that did not happen?**
+*/
+
+/** Why an output was not sent, and the handle #49 counts it under. */
+export interface SendRefusal {
+  readonly reason: string
+  /** Lower-case, no spaces — `job_impediments.needed` groups on it. */
+  readonly needed: string
+}
+
+/**
+ * The citations that are not addresses.
+ *
+ * Shape only, and a SHAPE rather than a list. Every handler in `src/handlers`
+ * writes `<scheme>:<ref>` — `job:<uuid>`, `google:calendar`,
+ * `notebooklm:<id>`, `db:projects` — so the form is the office's own. What
+ * this rejects is prose: "the project records", "internal notes", "5 sources".
+ * The five fabricated project names in #185 arrived alongside a source count,
+ * and a count is the only thing about a citation that cannot be checked.
+ *
+ * **A list of permitted schemes would be the wrong check**, and the first
+ * version of this was one: it refused `db:projects`, which is a perfectly good
+ * address, because nobody had thought to write `db` down. A whitelist here
+ * fails whenever the office grows a source it did not have, and it fails by
+ * refusing to speak — which is the expensive direction. The scheme therefore
+ * only has to LOOK like a scheme: lower-case, no spaces, something after the
+ * colon.
+ *
+ * False negatives are expected, for the same reason `claimsToHaveRead` accepts
+ * them. A false positive silences a job that was fine.
+ */
+const SCHEME = /^[a-z][a-z0-9_+.-]*$/
+
+export const unresolvableSources = (sources: readonly string[]): readonly string[] =>
+  sources.filter((raw) => {
+    const s = String(raw ?? '')
+    const at = s.indexOf(':')
+    if (at < 1) return true
+    return !SCHEME.test(s.slice(0, at)) || s.slice(at + 1).trim() === ''
+  })
+
+export const refuseToSend = (m: OutputMetadata): SendRefusal | null => {
+  const readClaim = claimsToHaveRead(m.body ?? '')
+  if (readClaim !== null && (m.evidence === 'inferred' || m.evidence === 'speculative')) {
+    return {
+      needed: 'evidence for a claimed read',
+      reason:
+        `the message says "${readClaim}" while the output records evidence ` +
+        `"${m.evidence}", which means nothing was read. The sentence is the half ` +
+        'a person believes, so it is not sent (#185).',
+    }
+  }
+
+  if (m.evidence === 'verified') {
+    if (m.sources.length === 0) {
+      return {
+        needed: 'a source that resolves',
+        reason:
+          'the output claims verified evidence and cites nothing. Verified means ' +
+          'somebody can go and check, and there is nowhere to go (#185).',
+      }
+    }
+    const bad = unresolvableSources(m.sources)
+    if (bad.length > 0) {
+      return {
+        needed: 'a source that resolves',
+        reason:
+          `the output claims verified evidence and ${bad.length} of its ` +
+          `${m.sources.length} citations are not addresses: ${bad
+            .map((b) => `"${String(b).slice(0, 40)}"`)
+            .join(', ')
+            .slice(0, 200)} (#185).`,
+      }
+    }
+  }
+
+  return null
+}
