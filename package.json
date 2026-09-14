@@ -201,7 +201,8 @@
     "verify:notebook": "tsx scripts/verify/notebook.ts",
     "verify:google-live": "tsx scripts/verify/google-live.ts",
     "q": "tsx scripts/q.ts",
-    "verify:drains": "tsx scripts/verify/drains.ts"
+    "verify:drains": "tsx scripts/verify/drains.ts",
+    "verify:roster": "tsx scripts/verify/roster.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
