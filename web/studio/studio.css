@@ -1550,6 +1550,34 @@ body::after {
 }
 .msg { display: flex; gap: var(--s3); max-width: 82%; }
 .msg p { margin: 0; font: 400 15px/1.55 var(--text); }
+/*
+  The gap between paragraphs of one message (#209).
+
+  `margin: 0` above stays, so a one-paragraph message is pixel-identical to
+  what it was. This only pays for the second paragraph onward — which until
+  #209 could not exist, because the renderer put the whole body in one tag and
+  HTML collapsed every newline in it.
+
+  An em rather than a token, deliberately: it is a gap INSIDE a block of running
+  text and it should track that text's size, not the layout scale.
+*/
+.msg p + p { margin-top: .62em; }
+/*
+  A numbered list inside a message (#209).
+
+  The hanging indent is the whole point and it is what a plain line break
+  could not give: at 390px the continuation of item 1 wrapped into the column
+  item 2 began in, and three items read as five. `list-style-position` stays
+  outside so the marker sits in the gutter the padding reserves.
+*/
+.msglist {
+  margin: .62em 0 0; padding-left: 1.6em;
+  font: 400 15px/1.55 var(--text);
+  display: grid; gap: .3em;
+}
+.msglist:first-child { margin-top: 0; }
+.msglist li::marker { color: var(--ink-2); }
+.msg p + .msglist, .msglist + p { margin-top: .62em; }
 .msg.mine {
   margin-left: auto; flex-direction: column; align-items: flex-end; gap: 6px;
 }

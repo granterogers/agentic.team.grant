@@ -903,6 +903,35 @@ Each of these cost real time. They are here so they cost it once.
   deployed and the check went green. **Before filing "the office is broken",
   clear your own debris and re-run** — that is now the third time harness
   traffic has been about to be reported to Grant as a failure.
+- **HTML collapses whitespace, so a body rendered in one tag loses every
+  newline in it.** `<p>${esc(m.text)}</p>` in the studio's bubble renderer is
+  why #186's whole outcome — two or three short paragraphs, one thought each —
+  **had never once been visible on the dashboard**, while Telegram and Slack
+  showed it correctly the entire time. `verify:chat`, `verify:layouts` and
+  `verify:access` were all green over it, because one long paragraph is not
+  overflow, not low contrast, not small type and not a dead control. It
+  surfaced only when Grant asked for numbered lists and one arrived as
+  `1. first 2. second 3. third` on a single line. Before assuming a body
+  renders as written, check what the surface does with `\n`.
+- **A check that compares a measurement to a THRESHOLD can be green on one
+  device leg for the right reason and green on the other for the wrong one.**
+  #209 took three attempts and the first two failed identically: rendered
+  HEIGHT (a run-together body wraps to thirteen lines on a 390px phone and
+  clears a six-line bar) and then whether item 2 began at the paragraph's left
+  edge (the phone wrap put it there anyway, +0px, with the defect live). Both
+  went red on desktop and green on phone. **That is worse than no check** — the
+  suite reports a failure, you fix what it names, and you never learn half of
+  it was inert. What discriminates is structure compared AGAINST ITSELF: three
+  blocks, three list items, each box below the previous. Run the control on
+  every device leg, not just the one that failed.
+- **Line breaks are not a list.** #209's first fix put each numbered item on
+  its own line and the desktop capture looked finished. The phone capture
+  refuted it: at 390px the continuation of item 1 wrapped into the column item
+  2 began in, so three items read as five at the width Grant actually uses. A
+  real ordered list gets the hanging indent for nothing, and a screen reader
+  gets "list, 3 items" with it. **Capture the phone before believing a list
+  renders**, and prefer the element the language already has over the one you
+  can assemble from breaks.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

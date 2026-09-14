@@ -581,6 +581,173 @@ try {
       )) === 'list',
     )
 
+    /*
+      A reply with structure in it keeps the structure (#209).
+
+      Grant, 14 September: *"if our paragraph should be separated by bullet
+      points, enumerated bullet points. So a numbered list, just to keep things
+      easy to read and easy to refer to."*
+
+      This is the check that would have caught the older half of that. HTML
+      collapses whitespace, so a body rendered as one escaped string in one
+      paragraph tag loses every newline in it — and until #209 the studio did
+      exactly that. #186's two-or-three-paragraph reply has been arriving here
+      as ONE BLOCK since the studio existed, while Telegram and Slack showed it
+      correctly.
+
+      Nothing caught it because a long paragraph is not overflow, not low
+      contrast, not small type and not a dead control. `verify:chat`,
+      `verify:layouts` and `verify:access` were all green over the defect.
+
+      MEASURED, not read off the markup. Counting paragraph tags proves the
+      renderer split the body; only the rendered HEIGHT proves the reader can
+      see the split, and CLAUDE.md is explicit that reading the stylesheet back
+      to yourself is how you convince yourself it is right twice in a row.
+    */
+    await page.unroute('**/turn')
+    await page.route('**/turn', async (r) => {
+      await r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          speak:
+            'Three things are worth deciding before Friday.\n\n' +
+            '1. Whether the pricing note ships with the deck.\n' +
+            '2. Who owns the migration once Marcus is away.\n' +
+            '3. Whether we tell the client about the delay now.\n\n' +
+            'My view is the third one is urgent and the rest can wait.',
+          did: 'answered',
+        }),
+      })
+    })
+    await page.locator('[data-say]').first().fill('what needs deciding?')
+    await page.waitForTimeout(150)
+    await press(page, '[data-composer] .btn.primary')
+    await page.waitForTimeout(1400)
+
+    const shaped = (await page.evaluate(`(() => {
+      const msgs = [...document.querySelectorAll('[data-thread] .msg.theirs')]
+      const last = msgs[msgs.length - 1]
+      if (last === undefined) return null
+      if (!(last.textContent ?? '').includes('worth deciding')) return null
+
+      const mbody = last.querySelector('.mbody') ?? last
+      // The blocks the body was split into, in order: paragraph, list, paragraph.
+      const blocks = [...mbody.children].filter((el) => el.tagName === 'P' || el.tagName === 'OL')
+      const ol = last.querySelector('ol')
+      const items = ol === null ? [] : [...ol.querySelectorAll('li')]
+
+      // Stacked, not laid out inline beside each other. Deterministic at any
+      // width, unlike anything measured from where a word happened to wrap.
+      const stacked =
+        blocks.length < 2
+          ? null
+          : blocks.slice(1).every((el, i) => {
+              const above = blocks[i].getBoundingClientRect()
+              return el.getBoundingClientRect().top >= above.bottom - 1
+            })
+
+      /*
+        The hanging indent, measured on an item that ACTUALLY WRAPPED.
+
+        This is the property the phone needed and the desktop hid. With each
+        item merely on its own line, the continuation of item 1 began in the
+        column item 2 began in, so at 390px three items read as five.
+
+        Finding a wrapped item first, then asking where its LAST line starts,
+        is what makes this real: on a wide screen nothing wraps and there is
+        nothing to prove, so the check reports that rather than passing.
+      */
+      let wrapped = null
+      for (const li of items) {
+        const box = li.getBoundingClientRect()
+        const line = parseFloat(getComputedStyle(li).lineHeight) || 23
+        if (box.height < line * 1.5) continue
+        const node = li.firstChild
+        if (node === null || node.nodeType !== 3) continue
+        const range = document.createRange()
+        range.setStart(node, Math.max(0, node.textContent.length - 6))
+        range.setEnd(node, node.textContent.length)
+        const rects = [...range.getClientRects()]
+        const lastLine = rects[rects.length - 1]
+        if (lastLine === undefined) continue
+        wrapped = {
+          // How far the continuation sits from the item's own left edge.
+          // Zero means it hangs under the text, not under the number.
+          drift: Math.round(lastLine.left - box.left),
+          // And the gutter the marker lives in, which is what creates it.
+          gutter: ol === null ? 0 : Math.round(box.left - ol.getBoundingClientRect().left),
+        }
+        break
+      }
+
+      return {
+        blocks: blocks.length,
+        items: items.length,
+        listed: ol !== null,
+        stacked,
+        wrapped,
+      }
+    })()`)) as {
+      blocks: number
+      items: number
+      listed: boolean
+      stacked: boolean | null
+      wrapped: { drift: number; gutter: number } | null
+    } | null
+
+    check(
+      `${label} — the reply keeps its three blocks rather than running together`,
+      shaped === null ? 'THE REPLY NEVER ARRIVED' : `${String(shaped.blocks)} block(s)`,
+      shaped !== null && shaped.blocks >= 3,
+    )
+    /*
+      A real list, not three lines that look like one.
+
+      An ordered list is what HTML calls this, and a screen reader says "list,
+      3 items" before reading them — the same affordance #200 gave the thread
+      itself. Counting the items is also what fails if the renderer ever goes
+      back to putting the whole body in one tag.
+    */
+    check(
+      `${label} — a numbered list is a real list, countable before it is read`,
+      shaped === null
+        ? 'n/a'
+        : shaped.listed
+          ? `${String(shaped.items)} item(s)`
+          : 'NOT A LIST — plain text',
+      shaped !== null && shaped.listed && shaped.items === 3,
+    )
+    check(
+      `${label} — and the blocks are stacked, not laid out inline`,
+      shaped === null
+        ? 'n/a'
+        : shaped.stacked === null
+          ? 'ONLY ONE BLOCK'
+          : shaped.stacked
+            ? 'stacked'
+            : 'SIDE BY SIDE',
+      shaped !== null && shaped.stacked === true,
+    )
+    /*
+      The phone-only one, and the reason there is a phone leg at all.
+
+      Nothing wraps at 1440px, so there is no hanging indent to prove and the
+      check says so rather than passing. It is not skipped quietly: a check
+      that reports "nothing wrapped" on the leg where something should have is
+      a finding.
+    */
+    check(
+      `${label} — a wrapped item hangs under its own text, not under the next number`,
+      shaped === null
+        ? 'n/a'
+        : shaped.wrapped === null
+          ? 'nothing wrapped at this width'
+          : `continuation at +${String(shaped.wrapped.drift)}px, marker gutter ${String(shaped.wrapped.gutter)}px`,
+      shaped !== null &&
+        (shaped.wrapped === null || (shaped.wrapped.drift <= 1 && shaped.wrapped.gutter >= 12)),
+    )
+
     check(`${label} — nothing thrown`, thrown[0] ?? 'none', thrown.length === 0)
     await ctx.close()
   }

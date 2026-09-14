@@ -1472,8 +1472,33 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     'halves joined by "and", it is usually two sentences. Break the reply ' +
                     'into two or three short paragraphs with a blank line between them, one ' +
                     'thought each. A single dense block is a message he will skim and ' +
-                    'misread. Under 120 words in total, first person, no bullet points, no ' +
-                    'headings, no bold.\n\n' +
+                    'misread. Under 120 words in total, first person, no headings, no ' +
+                    'bold.\n\n' +
+                    // Grant, 14 September: *"if our paragraph should be
+                    // separated by bullet points, enumerated bullet points. So
+                    // a numbered list, just to keep things easy to read and
+                    // easy to refer to."*
+                    //
+                    // This NARROWS #186 rather than undoing it. #186 banned
+                    // bullets outright because a bulleted reply to a
+                    // conversational question reads as a report, and that is
+                    // still true — hence "prose is the default", stated first
+                    // and stated as the default rather than as an option.
+                    //
+                    // What #186 got wrong is the case where the content
+                    // genuinely IS a list. Three options rendered as prose
+                    // with semicolons cannot be replied to with "do 2 and 4",
+                    // and that referability is the whole reason he asked.
+                    //
+                    // NUMBERED and not dashes, for the same reason: a dash is
+                    // as unreferenceable as a semicolon.
+                    'Prose is the default and most replies are prose. But when what you are ' +
+                    'saying genuinely IS a list — options he is choosing between, steps in ' +
+                    'an order, separate findings, things he needs to decide — write it as a ' +
+                    'NUMBERED list, one item per line, starting each line with "1. ", "2. " ' +
+                    'and so on. Numbered rather than dashes, so he can reply "do 2 and 4". ' +
+                    'Put a short line of context before the list and stop after it. Two ' +
+                    'items or fewer is a sentence, not a list.\n\n' +
                     'Never write: "I hope this helps", "Let me know if", "Certainly", "As ' +
                     'an AI", "I have drafted", "Here is a summary of". Do not sign your ' +
                     'name — the chat already shows who you are. Do not thank him for ' +

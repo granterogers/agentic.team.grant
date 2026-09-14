@@ -62,6 +62,34 @@ username from the registry rather than a column.
 reaches nothing. Found by the new check, filed rather than asserted because the
 fix is a design change.
 
+> ## What changed on 2026-09-14 (later)
+>
+> **A message that is a list arrives as a list (#209, ADR-0028).** Grant:
+> *"if our paragraph should be separated by bullet points, enumerated bullet
+> points. So a numbered list, just to keep things easy to read and easy to
+> refer to."* The word that matters is **should** — prose stays the default and
+> #186 is narrowed, not reversed. Numbered rather than dashes, because
+> *"easy to refer to"* means replying "do 2 and 4".
+>
+> Three system prompts carried the literal instruction `no bullet points` and
+> now agree with each other. `src/projects/brief.ts` keeps its ban on purpose:
+> a project brief is a document, not a message.
+>
+> **The larger find: #186's paragraph structure had never rendered on the
+> dashboard.** `<p>${esc(m.text)}</p>` puts a whole body in one tag and HTML
+> collapses whitespace, so the model was producing paragraphs, Telegram and
+> Slack were showing them, and the studio ran every reply together into one
+> block for as long as the studio has existed. Three green suites over it.
+>
+> An all-numbered block is now a real `<ol>` — line breaks alone were tried
+> first and the phone capture refuted them, because at 390px the continuation
+> of item 1 wrapped into the column item 2 began in.
+>
+> `verify:chat` **45/45**, up from 37, and the control was run: three of the
+> four new checks go red on **both** device legs with the old rendering back.
+> Two earlier versions of the fourth check were discarded for passing on the
+> phone while the defect was live.
+
 > ## What changed on 2026-09-14
 >
 > **An agent may not say it looked when it did not (#185, ADR-0027).** The P0.
