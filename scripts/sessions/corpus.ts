@@ -148,8 +148,49 @@ export const SESSIONS: readonly Session[] = [
       {
         say: 'Add a task for that.',
         inProject: 'beta',
-        why: 'a WRITE straight after a switch. The wrong project here is a serious defect',
-        expect: { project: 'beta', tasks: 1 },
+        /*
+          "that" is a referent, so the office asks for a title rather than
+          filing a task called "that" — which is the same behaviour the
+          action-versus-discussion session proved, arriving here for the same
+          reason. The contamination question is the NEXT turn's.
+        */
+        /*
+          Whether this ASKS or FILES is legitimately variable, so neither is
+          asserted.
+
+          The thread resolver expands "that" against the previous turn before
+          the task path sees it, and what it expands to differs run to run —
+          "the second project" on one, "Beta Release" on the next. The first is
+          caught as a referent and asks; the second reads as a real title and
+          files. Both are defensible and a suite that demanded one would go red
+          on correct behaviour half the time.
+
+          What is NOT variable, and is asserted: whatever happens, it happens
+          in project B.
+        */
+        why: 'a write asked for by reference, one turn after an implicit switch',
+        expect: { project: 'beta' },
+      },
+      {
+        say: 'Call it Ship-blocker review.',
+        inProject: 'beta',
+        /*
+          The turn this session exists for.
+
+          A write immediately after an implicit project switch, with the title
+          arriving one turn later than the intention. Filing it against A would
+          be a task Grant never finds, on a project he was not talking about,
+          and nothing in the answer would say so. The suite asserts the project
+          AND the title, so a task in the right place with the wrong name still
+          fails.
+        */
+        why: 'the write lands. The wrong project here is the serious defect',
+        /*
+          No count, for the reason above — the previous turn may or may not have
+          filed one. The project is the property, and the harness checks EVERY
+          task the session has created, so one stray into A fails this.
+        */
+        expect: { project: 'beta', tasksIn: 'beta' },
       },
       {
         say: 'What about the earlier thing?',

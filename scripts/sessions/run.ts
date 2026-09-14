@@ -107,6 +107,16 @@ export interface Expect {
   readonly noWrite?: true
   /** Exactly this many tasks must exist for the session after this turn. */
   readonly tasks?: number
+  /**
+   * Every task the session has created must be in this project.
+   *
+   * Separate from `tasks` because a COUNT is the wrong assertion wherever the
+   * office may legitimately file one turn earlier or later — and the count
+   * nearly passed for the wrong reason anyway: the cross-project session
+   * counts across both its projects, so a task filed against A after a switch
+   * to B scored exactly the same "1 task".
+   */
+  readonly tasksIn?: string
   /** The answer must contain each of these, case-insensitively. */
   readonly says?: readonly string[]
   /**
@@ -263,9 +273,10 @@ export const askOnce = async (
     ids.length === 0
       ? []
       : await all(`
-          select title from public.tasks
-           where project_id = any(array[${ids.map((i) => `${lit(i)}::uuid`).join(',')}])
-           order by created_at`)
+          select t.title, coalesce(p.slug, '') as slug from public.tasks t
+            left join public.projects p on p.project_id = t.project_id
+           where t.project_id = any(array[${ids.map((i) => `${lit(i)}::uuid`).join(',')}])
+           order by t.created_at`)
   const taskCount = tasks.length
 
   const answered = String(row.answered ?? '')
@@ -303,8 +314,28 @@ export const askOnce = async (
         String(row.project_slug).includes(e.project),
         String(row.project_slug) || 'no project',
       )
-    if (e.tasks !== undefined)
+    if (e.tasks !== undefined) {
       judge(`${String(e.tasks)} task(s) exist`, taskCount === e.tasks, String(taskCount))
+      /*
+        And in the right project, which is the whole question after a switch.
+
+        The count alone nearly passed for the wrong reason: the cross-project
+        session counts tasks across BOTH its projects, so a task filed against
+        A after an implicit switch to B would have scored exactly the same
+        "1 task". A wrong-project write is the serious defect that session
+        exists for, and it would have been invisible.
+      */
+    }
+    if (e.tasksIn !== undefined) {
+      const elsewhere = tasks.filter((t) => !String(t.slug).includes(String(e.tasksIn)))
+      judge(
+        `every task so far is in ${e.tasksIn}`,
+        tasks.length > 0 && elsewhere.length === 0,
+        tasks.length === 0
+          ? 'no task was created at all, so this proves nothing'
+          : elsewhere.map((t) => `${String(t.title)} -> ${String(t.slug)}`).join(', '),
+      )
+    }
     if (e.noWrite === true) judge('no task was created', taskCount === 0, String(taskCount))
     for (const s of e.says ?? [])
       judge(`says ${JSON.stringify(s)}`, answered.toLowerCase().includes(s.toLowerCase()))
@@ -342,7 +373,7 @@ export const askOnce = async (
     intent: String(row.intent ?? ''),
     answered,
     taskCount,
-    taskTitles: tasks.map((t) => String(t.title)),
+    taskTitles: tasks.map((t) => `${String(t.title)} [${String(t.slug)}]`),
     announced: row.announce === true,
     fixture: row.fixture === true,
     passes,

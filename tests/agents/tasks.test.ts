@@ -141,3 +141,29 @@ describe('#237: the answer to the title question is accepted', () => {
     expect(NEEDS_A_TITLE).toContain(TITLE_ASKED)
   })
 })
+
+describe('#237: a resolved referent is still a referent', () => {
+  /*
+    The thread resolver expands "that" into whatever it referred to, which is
+    correct and produced a task called "the second project" — filed in the
+    right place, fabricated from nothing, and a name Grant would never find
+    anything by. Asking is better than naming a task after a pronoun with its
+    hair combed.
+  */
+  it.each([
+    'Add a task for the second project.',
+    'Add a task for the other one.',
+    'Create a task for the same thing.',
+    'Add a task for the above.',
+  ])('asks rather than titling a task %s', (text) => {
+    const r = ask(text)
+    expect(r).not.toBeNull()
+    expect(r?.title).toBeNull()
+  })
+
+  it('still takes a real title that happens to start with "the"', () => {
+    // The guard names the referential phrases, not every sentence beginning
+    // with a determiner — "the pricing page" is a perfectly good task.
+    expect(ask('Add a task for the pricing page rewrite.')?.title).toBe('the pricing page rewrite')
+  })
+})

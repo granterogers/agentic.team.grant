@@ -80,8 +80,21 @@ const SHAPES: readonly RegExp[] = [
   /\b(?:create|add|make|put|raise|log)\s+(?:a|an|the)?\s*(?:new\s+)?tasks?\b(?<title>)/i,
 ]
 
-/** Referents that look like a title and are not. */
-const NOT_A_TITLE = /^(?:that|it|this|the above|the same|those|them)\b/i
+/*
+  Referents that look like a title and are not.
+
+  The bare ones — "that", "it", "this" — plus the phrases the THREAD RESOLVER
+  produces, which is how the second group was found. #237's cross-project
+  session said *"Add a task for that."* one turn after *"same question for the
+  second project"*, the resolver correctly expanded the referent, and the
+  office filed a task called **"the second project"**. In the right project,
+  not fabricated, and a name Grant would never find anything by.
+
+  A resolved referent is still a referent. The improvement over inventing a
+  title from it is to ask, which the office now does well and in one question.
+*/
+const NOT_A_TITLE =
+  /^(?:that|it|this|those|them|the (?:above|same|second|first|other|next|last|latter|former)\b|the one\b)/i
 
 /*
   A prohibition anywhere in the sentence stops it.
