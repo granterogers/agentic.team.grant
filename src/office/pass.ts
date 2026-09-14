@@ -50,6 +50,7 @@ import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
+import { googleRevokeHandler } from '../handlers/google-revoke.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { jobTracesHandler } from '../handlers/job-traces.ts'
 import { mailHandler } from '../handlers/mail.ts'
@@ -316,6 +317,16 @@ export const buildPass = async (
     driveReadHandler({ db, projectRef, serviceKey }),
     collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
+    /*
+      #109. Registered unconditionally and deliberately so.
+
+      It only ever runs when `hq_disconnect` enqueued it, which happens because
+      Grant pressed Disconnect — and the one moment it must not be missing is
+      the moment a credential is parked waiting for it. A handler gated on
+      `google.enabled` would be absent exactly when signing out matters most,
+      and the parked token would sit there with no job that can reach it.
+    */
+    googleRevokeHandler(db),
     // The other direction: dated tasks into the diary (#94, ADR-0020). Off
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
