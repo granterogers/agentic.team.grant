@@ -121,6 +121,99 @@ describe('§9: trivial work spawns no subagents', () => {
   })
 })
 
+describe('#230: a question may reach a specialist, but the subject has to earn it', () => {
+  /*
+    The defect this closes. `ROSTER_CEILINGS.question` was `[]`, so a question
+    could never convene anybody — and `question` is 237 of the 505 routing
+    decisions this office has ever made. Five of the eight people here had never
+    been selected once, and verify:roster proved it: eight instructions each
+    written for one specific person, and every one went to the Chief of Staff.
+  */
+  it.each([
+    [
+      'finance-director',
+      'What does a fifteen percent cut to the middle tier do to our gross margin?',
+    ],
+    ['growth-director', 'What is our best campaign audience at the moment?'],
+    ['operations-director', 'Where is the bottleneck in our onboarding process?'],
+    ['communications-director', 'What wording would you use for the announcement email?'],
+  ])('reaches %s when the question is plainly about their subject', (who, text) => {
+    const c = classifyIntent(text)
+    expect(c.intent).toBe('question')
+    /*
+      Asserted, because the contested branch would produce an empty roster for a
+      different and legitimate reason. The first draft used *"which acquisition
+      channel is bringing us the best audience"*, which `classifyIntent` reads
+      as "question or direct_command" — so it convened nobody CORRECTLY, and the
+      test failure looked like the fix not working.
+    */
+    expect(c.confident).toBe(true)
+    expect(pickRoster(c, text).roster).toContain(who)
+  })
+
+  /*
+    The PRODUCTION path, which is not the one above.
+
+    `pickRoster` falls back to this file's regexes only when `topical` is
+    omitted. In the office it is always supplied, from `app.who_knows_about`
+    reading `staff.expertise` — the column Grant edits (#65, 0201). A test that
+    only exercised the fallback would be checking a path the product does not
+    take, which is CLAUDE.md's most repeated trap.
+
+    Grace is why it matters: she has NO pattern in `TOPIC_ROLES` at all, so
+    reaching her depends entirely on her stored expertise.
+  */
+  it('reaches a specialist the hardcoded fallback cannot name, via stored expertise', () => {
+    const text = 'What could go wrong if we ship this on a Friday?'
+    const c = classifyIntent(text)
+    expect(c.intent).toBe('question')
+    expect(pickRoster(c, text, ['quality-director']).roster).toEqual(['quality-director'])
+  })
+
+  /*
+    CONTROL, and the half that keeps the change safe.
+
+    The old comment — "answering from what we already hold is retrieval, not a
+    meeting" — was right about THIS kind of question, and it must keep being
+    right. Without `TOPIC_ONLY` the widened ceiling would hand every status
+    question to whoever is first in the list, which is a worse bug than the one
+    being fixed and would show up as cost on the commonest message Grant sends.
+  */
+  it.each([
+    'What is the status of the migration?',
+    'Do we have anything on record about that?',
+    'What time did it finish?',
+  ])('still convenes nobody for a question that names no subject: %s', (text) => {
+    expect(pickRoster(classifyIntent(text), text).roster).toEqual([])
+  })
+
+  it('convenes nobody when the reading is contested, despite the wider ceiling', () => {
+    /*
+      `ceiling[0]` used to be taken here. With `question` opened from [] to seven
+      roles that line would have handed every ambiguous question to the finance
+      director purely for being first in the list. §6 resolves ambiguity
+      downward and the floor for a question is the Chief of Staff.
+    */
+    const text = 'What does a fifteen percent cut to the middle tier do to our gross margin?'
+    const contested = { ...classifyIntent(text), confident: false }
+    const r = pickRoster(contested, text)
+    expect(r.roster).toEqual([])
+    expect(r.reason).toContain('Chief of Staff')
+  })
+
+  it('takes the intersection rather than the whole widened ceiling', () => {
+    // Seven roles are now permitted for a question. A question about one
+    // subject must still convene one person, not a committee of seven.
+    const text = 'What are our competitor prices?'
+    const c = classifyIntent(text)
+    expect(c.intent).toBe('question')
+    const { roster } = pickRoster(c, text)
+    expect(roster).toContain('research-director')
+    expect(roster.length).toBeLessThanOrEqual(ROSTER_CEILING)
+    expect(roster).not.toContain('operations-director')
+  })
+})
+
 describe('the roster is an intersection, not a union', () => {
   it('takes only the ceiling roles the request is actually about', () => {
     const text = 'I need you to compare competitor pricing and model the margin impact'

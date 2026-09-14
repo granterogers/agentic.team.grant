@@ -345,8 +345,41 @@ export interface RoutingDecision {
 const ROSTER_CEILINGS: Readonly<Record<IntentClass, readonly RoleSlug[]>> = {
   // A remark is a remark. Nobody is convened to hear it.
   thought: [],
-  // Answering from what we already hold is retrieval, not a meeting.
-  question: [],
+  /*
+    #230. A question may reach a specialist, but only when the SUBJECT earns it.
+
+    This was `[]` — a question could never convene anybody, by construction —
+    and `question` is 237 of the 505 routing decisions this office has ever
+    made, the largest class by a distance. So the commonest thing Grant does
+    could only ever reach the Chief of Staff, and five of the eight people here
+    had never been selected once in the system's history.
+
+    `verify:roster` proved it rather than argued it: eight instructions each
+    written for one specific person — a gross-margin question for Daniel, a
+    channel question for Ruby, a bottleneck question for Marcus — and every one
+    of them went to Claire, with the router logging "question needs no
+    specialist" each time.
+
+    The comment that used to sit here said *"answering from what we already hold
+    is retrieval, not a meeting"*, and that is TRUE OF SOME QUESTIONS. "What
+    documents do we have on this project" is retrieval. "What does a fifteen per
+    cent cut to the middle tier do to our gross margin" is a question too, and
+    it is the thing a finance director is for. §9's rule was never wrong; the
+    equation `question = trivial` was.
+
+    So the ceiling opens to every specialist and `TOPIC_ONLY` below makes them
+    earn it — the intersection with the subject matter is what decides, and a
+    question that names no subject still goes to Claire exactly as before.
+  */
+  question: [
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'operations-director',
+    'quality-director',
+    'research-director',
+    'strategy-director',
+  ],
   discussion: ['strategy-director'],
   suggestion: ['strategy-director'],
   light_investigation: ['research-director'],
@@ -354,15 +387,33 @@ const ROSTER_CEILINGS: Readonly<Record<IntentClass, readonly RoleSlug[]>> = {
   direct_command: ['research-director', 'strategy-director', 'operations-director'],
 }
 
+/**
+ * Intents where a specialist must be EARNED by the subject matter (#230).
+ *
+ * For every other class, an unmatched topic still takes `ceiling[0]` — an
+ * unclassifiable assignment is work, and somebody has to hold it. For these,
+ * an unmatched topic means NOBODY, and the Chief of Staff picks it up as she
+ * always did.
+ *
+ * That asymmetry is the whole safety of opening `question` up. Without it,
+ * every "what documents do we have" would convene a finance director on the
+ * strength of being first in a list, which is worse than the defect being
+ * fixed and would show up as cost and latency on the commonest message Grant
+ * sends.
+ */
+const TOPIC_ONLY: ReadonlySet<IntentClass> = new Set<IntentClass>(['question'])
+
 /** Subject-matter hints, so a roster is about the work and not just its class. */
 const TOPIC_ROLES: readonly { readonly role: RoleSlug; readonly pattern: RegExp }[] = [
   {
     role: 'finance-director',
-    pattern: /\b(cost|costs|pricing|price|budget|revenue|margin|forecast|spend)\b/i,
+    pattern:
+      /\b(cost|costs|pricing|prices|price|budget|budgets|revenue|margin|margins|forecast|forecasts|spend)\b/i,
   },
   {
     role: 'growth-director',
-    pattern: /\b(marketing|positioning|messaging|audience|campaign|launch|demand|brand)\b/i,
+    pattern:
+      /\b(marketing|positioning|messaging|audience|audiences|campaign|campaigns|channel|channels|launch|demand|brand)\b/i,
   },
   {
     role: 'communications-director',
@@ -374,7 +425,7 @@ const TOPIC_ROLES: readonly { readonly role: RoleSlug; readonly pattern: RegExp 
   },
   {
     role: 'research-director',
-    pattern: /\b(research|evidence|sources?|compare|competitor|benchmark|study)\b/i,
+    pattern: /\b(research|evidence|sources?|compare|competitors?|benchmarks?|study|studies)\b/i,
   },
 ]
 
@@ -453,6 +504,24 @@ export const pickRoster = (
   }
 
   if (!classification.confident) {
+    /*
+      #230. For a TOPIC_ONLY class, a contested reading convenes NOBODY.
+
+      Taking `ceiling[0]` here would hand every ambiguous question to the
+      finance director purely for being first in the list — the ceiling is now
+      seven roles wide rather than empty, so the old line would have turned a
+      fix into a much noisier bug. §6 resolves ambiguity downward and the
+      floor for a question is the Chief of Staff.
+    */
+    if (TOPIC_ONLY.has(classification.intent)) {
+      return {
+        roster: [],
+        reason:
+          `the reading was contested (${classification.considered.join(' or ')}), and a ` +
+          `${classification.intent} only convenes a specialist when the subject is clear, ` +
+          'so the Chief of Staff has it',
+      }
+    }
     // §6 resolves ambiguity downward, and a team convened off a maybe is the
     // uncontrolled workload Phase 5 rules out. One agent may ask; a committee
     // may not. Mirrors `routing_decisions_unconfident_stays_small`.
@@ -471,17 +540,28 @@ export const pickRoster = (
   // intersection carries that restriction without a second mention of it.
   const chosen = ceiling.filter((r) => fromRoster.includes(r))
 
-  // Nothing topical matched: take the single cheapest-to-justify role from the
-  // ceiling rather than all of it. An unclassifiable assignment is still work,
-  // but it is not evidence that everyone is needed.
-  const roster = chosen.length > 0 ? chosen : [ceiling[0] as RoleSlug]
+  /*
+    Nothing topical matched.
+
+    For most classes: take the single cheapest-to-justify role from the ceiling
+    rather than all of it. An unclassifiable assignment is still work, but it is
+    not evidence that everyone is needed.
+
+    For a TOPIC_ONLY class (#230): take NOBODY. A question that names no subject
+    area is the retrieval the original comment was right about, and it goes to
+    the Chief of Staff exactly as it did before this change.
+  */
+  const topicOnly = TOPIC_ONLY.has(classification.intent)
+  const roster = chosen.length > 0 ? chosen : topicOnly ? [] : [ceiling[0] as RoleSlug]
 
   return {
     roster: roster.slice(0, ROSTER_CEILING),
     reason:
       chosen.length > 0
         ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${fromRoster.join(', ')}, so the intersection was taken`
-        : `${classification.intent} permits ${ceiling.join(', ')}, but nothing in the request names a subject area, so only the first was taken`,
+        : topicOnly
+          ? `${classification.intent} only convenes a specialist when the subject is clear, and nothing in the request names one, so the Chief of Staff has it`
+          : `${classification.intent} permits ${ceiling.join(', ')}, but nothing in the request names a subject area, so only the first was taken`,
   }
 }
 
