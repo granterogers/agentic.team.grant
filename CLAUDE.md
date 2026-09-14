@@ -22,6 +22,7 @@ Telegram, Slack, a voice call and a web dashboard.
 | `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements — **v3, Autonomy** |
 | `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ canonical project IA — hierarchy, assets, the relational graph |
 | `docs/spec/github-persistence-brief-2026-09-13.md` | ⭐ the communications brief — verbatim; tracked by #191 |
+| `docs/spec/ux-qa-governance-2026-09-14.md` | ⭐ the canonical UX QA standard — verbatim; the standing rule is below |
 | `AI_TEAM_HQ_MASTER_SPEC.md` | ⭐ canonical system requirements |
 | `docs/adr/` | why each material decision was made |
 | `docs/architecture.md` | vendor bindings |
@@ -219,6 +220,55 @@ backgrounding it.
 screenshot. It surfaces at **ai-team-hq.vercel.app → What Claude is building**.
 Use it for anything that takes more than a few minutes, and **always attach
 screenshots for visual work** — a sentence about spacing is worth nothing.
+
+### UX QA, in proportion to risk
+
+Grant supplied the **Master UX QA Governance Prompt** on 14 September 2026. It is
+stored verbatim at `docs/spec/ux-qa-governance-2026-09-14.md` — **the canonical
+QA document**, and the only one. §61 of it specifies the standing rule below, in
+these words:
+
+> *"Whenever user-facing UI/UX changes, automatically run proportionate
+> real-browser UX QA against the affected surfaces using the master UX QA
+> standard. Escalate by blast radius. Do not run the full deep audit for every
+> small change. Run FULL UX QA when explicitly requested or when shared/high-risk
+> changes make scoped verification insufficient. No UI work is complete without
+> rendered, interacted-with and visually inspected evidence."*
+
+Its own summary of itself: **do the smallest QA that can credibly prove the
+change is good.** A minor local visual fix should not trigger a systems
+marathon; a navigation rewrite should. *"The objective is not maximal test
+volume. The objective is maximal confidence per unit of effort."*
+
+**Which level.** Pick by blast radius, not by how long the diff is:
+
+| Level | The change | Minimum |
+|---|---|---|
+| **1A** | small and local — spacing, one card, one icon, one empty state, local copy | smoke and static checks, render the affected screen, **open the image**, the relevant device (and the other one if responsive CSS can be touched), no overflow on that surface, the interaction still works, targeted regression |
+| **1B** | interactive — a button's behaviour, a form, sheet, dialog, navigation, the composer, the project switcher, the command bar, a Settings control, a connection flow | all of 1A, plus real browser interaction, keyboard where it matters, console and network, the relevant control audit, desktop **and** phone, the failure/empty/degraded state, targeted accessibility |
+| **1C** | shared — a shared primitive, the rail or header, shared responsive CSS, theme or tokens, the modal system, shared agent/project identity, cross-screen navigation | all of 1B, plus a sweep of the affected routes, layout verification, a phone overflow scan, representative screenshots, both themes if theme-sensitive, reduced motion if motion-sensitive, broader regression |
+| **2** | the full deep audit | the whole document |
+
+**Escalate to Level 2** when Grant asks for it; when the blast radius is hard to
+bound; when shared navigation or layout primitives, global CSS, tokens or
+themes, accessibility infrastructure, the conversation architecture, or
+auth/connection/credential flows change; when the browser QA tooling ITSELF
+changes; when a significant redesign lands; when repeated regressions say scoped
+QA is not enough; or when preparing a milestone.
+
+**How to read what he says**, from §§59–60:
+
+- *"run UX QA"* · *"check the UX"* · *"QA these UI changes"* → **proportionate**.
+  Inspect the diff, decide the surfaces, pick 1A / 1B / 1C, run it, fix, retest,
+  file Issues, report concisely. **Do not** reach for the deep audit.
+- *"run full UX QA"* · *"deep UX audit"* · *"full frontend audit"* ·
+  *"bulletproof the UX"* · *"run the master QA"* → **Level 2**.
+
+The line that outranks the rest of it, and the one this repository has already
+paid for repeatedly:
+
+> *"NO GRAPHICAL CHANGE IS COMPLETE SOLELY BECAUSE IT COMPILES, RENDERS, OR
+> PASSES A STATIC CHECK."*
 
 ---
 
