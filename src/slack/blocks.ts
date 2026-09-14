@@ -27,6 +27,7 @@
  */
 
 import type { Confidence, Evidence } from '../agents/quality.ts'
+import { claimsToHaveRead } from '../agents/quality.ts'
 
 export const MAX_BLOCKS = 50
 export const MAX_SECTION_TEXT = 3000
@@ -228,6 +229,42 @@ const ON_WHAT: Readonly<Record<Evidence, string>> = {
  * without either widening its own type or lying about the flag.
  */
 export type Provenance = Omit<MessageMetadata, 'routine'>
+
+/**
+ * Is there anything here worth a line of Grant's lock screen? (#208)
+ *
+ * Grant, 14 September, looking at a two-line hello on his phone that carried
+ * "Fairly confident — worked out, not looked up, nothing cited.":
+ *
+ *   "I don't need that confidence text... I'm trying to make a bit more human,
+ *    you know, a bit more personable, a bit more personality."
+ *
+ * He is right, and the fix is placement rather than deletion. §12 says
+ * confidence and evidence are never shown APART — it does not say they must be
+ * shown on a message that claims nothing. A line whose entire content is two
+ * absences ("not looked up, nothing cited") under "I'm here, no need for a
+ * meeting" is the product clearing its throat.
+ *
+ * The suppression is deliberately narrow, because the case it must NOT catch is
+ * #185: Claire told Grant five projects existed, in a sentence claiming a
+ * database read, with `evidence: inferred` and no sources — the identical
+ * metadata to the harmless hello. The only thing separating them is whether the
+ * WORDS make a claim, and `claimsToHaveRead` is the existing answer to exactly
+ * that question. So the body is consulted, and anything claiming to have read
+ * keeps its line.
+ *
+ * Everything that carries information keeps it too: something verified,
+ * something cited, a guess, or anything unreviewed. What goes is the case where
+ * the sentence could only ever report that nothing happened.
+ */
+export function attestsSomething(m: Provenance, body?: string): boolean {
+  if (m.evidence !== 'inferred') return true
+  if (m.sources.length > 0) return true
+  if (!m.reviewed) return true
+  // The #185 guard. An inferred answer that SAYS it looked something up is the
+  // one message on this list that most needs its provenance beside it.
+  return claimsToHaveRead(body ?? '') !== null
+}
 
 export function provenanceLine(m: Provenance): string {
   const sure = HOW_SURE[m.confidence]

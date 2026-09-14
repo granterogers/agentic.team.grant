@@ -174,12 +174,27 @@ describe('the message', () => {
       thing, and a copy of the expected wording here could drift from Slack's
       without anything noticing.
     */
-    const text = pagerText(message())
+    /*
+      On a message that ATTESTS something. #208 stopped showing the line where
+      it could only report that nothing happened, so the old fixture — inferred,
+      nothing cited, claiming nothing — is now the suppressed case and would
+      have made this assert the presence of a line that is deliberately gone.
+    */
+    const cited = message({
+      metadata: {
+        confidence: 'medium' as const,
+        evidence: 'inferred' as const,
+        reviewed: true,
+        sources: ['the supplier quotes'] as readonly string[],
+        contradictions: null,
+      },
+    })
+    const text = pagerText(cited)
     const expected = provenanceLine({
       confidence: 'medium',
       evidence: 'inferred',
       reviewed: true,
-      sources: [],
+      sources: ['the supplier quotes'],
       contradictions: null,
     })
     // The pager renders Slack's `*bold*` as tags, so compare on the words.
@@ -189,21 +204,63 @@ describe('the message', () => {
     expect(text.toLowerCase()).toContain('worked out')
   })
 
-  it('does not repeat the name when the title is the same', () => {
-    const text = pagerText(message())
-    expect(text).toContain('<b>Research Director</b>')
-    expect(text).not.toContain('Research Director · Research Director')
+  it('says nothing about confidence when there is nothing to be confident about', () => {
+    /*
+      #208. Grant, looking at a two-line hello carrying "Fairly confident —
+      worked out, not looked up, nothing cited": *"I don't need that confidence
+      text... I'm trying to make a bit more human."*
+
+      Two absences under a sentence that claims nothing is the product clearing
+      its throat. §12 is not weakened: confidence and evidence are still never
+      shown APART — here they are both absent.
+    */
+    const text = pagerText(message({ body: 'I am here. No need for a meeting.' }))
+    expect(text.toLowerCase()).not.toContain('confident')
+    expect(text.toLowerCase()).not.toContain('nothing cited')
+    // The message itself survives, obviously.
+    expect(text).toContain('I am here.')
   })
 
-  it('shows both when they differ', () => {
-    expect(pagerText(message({ staffName: 'Ada', staffTitle: 'Research Director' }))).toContain(
-      'Ada · Research Director',
+  it('but a message that CLAIMS to have read something keeps its provenance', () => {
+    /*
+      The guard that makes the suppression above safe, and the reason it
+      consults the body at all.
+
+      #185: Claire told Grant five projects existed, in a sentence claiming a
+      database read, with `evidence: inferred` and no sources — metadata
+      IDENTICAL to the harmless hello above. The only thing separating them is
+      whether the words make a claim, so the words are what decides.
+
+      Asserted on the property rather than the sentence: a wording lock here
+      would be the fifth instance in CLAUDE.md's trap list.
+    */
+    const text = pagerText(
+      message({ body: 'I pulled the project records. The db read shows five active projects.' }),
     )
+    expect(text.toLowerCase()).toContain('worked out')
   })
 
-  it('omits the author entirely for a message from no one', () => {
-    const text = pagerText(message({ staffName: null, staffTitle: null }))
-    expect(text).not.toContain('<b>')
+  it('never names the sender, whoever it is', () => {
+    /*
+      #208. Grant: *"I don't need to see the contact's name and the message. I
+      already have it, so you can remove that."*
+
+      Three tests used to live here, asserting how the name and title were
+      combined. The feature is gone: `telegram.only_chief_speaks` is true so it
+      is always Claire, and since #70 the bot is hers, so the chat is named
+      after her at the top of his screen.
+
+      Asserted over BOTH shapes the old code branched on, so a partial revert
+      shows up rather than passing on the branch nobody checked.
+    */
+    for (const who of [
+      { staffName: 'Research Director', staffTitle: 'Research Director' },
+      { staffName: 'Ada', staffTitle: 'Research Director' },
+    ]) {
+      const text = pagerText(message(who))
+      expect(text).not.toContain('Ada')
+      expect(text).not.toContain('Research Director')
+    }
   })
 
   it('stays inside Telegram hard limit even for an absurd body', () => {
@@ -236,12 +293,27 @@ describe('one bot, many projects: every page says which (0070)', () => {
     expect(lines[0]).toContain('Money Mastery')
   })
 
-  it('and on the LAST line', () => {
-    // A long message pushes the header off the top. The end is where the
-    // decision gets made, and it is the worst possible moment not to know what
-    // you are deciding about.
-    const lines = pagerText({ ...base, projectName: 'Money Mastery' }).split('\n\n')
-    expect(lines[lines.length - 1]).toContain('Money Mastery')
+  it('exactly once, never twice', () => {
+    /*
+      #208. It used to be repeated as a footer, on the reasoning that a long
+      message pushes the header off the top — true, and it made a two-line
+      hello say the same word at both ends. Grant: *"I don't need unnamed to be
+      twice. Certainly don't need to see it twice."*
+
+      Counted rather than checked for absence at the end: "not in the last
+      line" would pass if it appeared three times in the middle.
+    */
+    const text = pagerText({ ...base, projectName: 'Money Mastery' })
+    expect(text.split('Money Mastery').length - 1).toBe(1)
+  })
+
+  it('and the reserved Unnamed project reads as Conversation', () => {
+    // #208, and 0334 for why the row is called Unnamed at all. An internal
+    // name is a poor thing to read on a lock screen; Grant: *"just see
+    // conversation rather than unnamed."*
+    const text = pagerText({ ...base, projectName: 'Unnamed' })
+    expect(text).toContain('Conversation')
+    expect(text).not.toContain('Unnamed')
   })
 
   it('puts the project even above the not-reviewed warning', () => {
