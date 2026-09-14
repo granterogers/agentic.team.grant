@@ -1296,6 +1296,46 @@ Each of these cost real time. They are here so they cost it once.
   *"0 claim(s) marked api"* — green, and vacuous. Worse than a missing check,
   because the report says the question was asked. **When a check's happy path is
   "found nothing", assert first that the thing it searches is non-empty.**
+- **A ceiling that predates half the roster silently overrules every subject
+  match under it.** `ROSTER_CEILINGS.direct_command` was research, strategy and
+  operations, so *"Draft the announcement email for the pricing change"* named
+  the communications director, was refused by the table and fell to
+  `ceiling[0]` — six of eleven communications cases in the #232 corpus went to
+  the RESEARCH director, which is worse than going to Claire because the wrong
+  specialist answers confidently. Third instance of #230's shape. When you add
+  somebody to a roster, grep for every list that gates who may be convened, not
+  just the one the feature was written for.
+- **A fallback class and a real class sharing one name makes both
+  unreachable.** `classifyIntent` returns `thought` for a deliberate remark
+  ("fyi", "note to self") AND for anything its regexes did not understand.
+  `thought`'s ceiling is empty, correctly, for the first — so every indirect,
+  vague or spoken phrasing scored 0% because the right specialist was named and
+  then discarded before the subject was ever consulted. `Classification.recognised`
+  separates them. The general rule: when a default value is also a legitimate
+  value, nothing downstream can tell "we decided this" from "we did not know",
+  and 0304's asymmetry lesson applies — say which one it was.
+- **An uncertain READING is not an uncertain SUBJECT.** `pickRoster`'s
+  unconfident branch answered "which one specialist" twice and badly: nobody at
+  all for a question, even when the subject was unmistakable, and `ceiling[0]`
+  for every other class, ignoring the subject entirely. §6 correctly caps a
+  contested reading at one person; it says nothing about WHICH one, and the
+  subject is right there.
+- **A test corpus needs its own controls checked before its findings are
+  believed.** #232's first run reported a false positive on *"What time did the
+  backup finish?"* — a control that names a real operations noun, so routing it
+  to the operations director is the vocabulary WORKING. Kept, still reported,
+  marked `defensible` and excluded from the assertion: a guard that fires on
+  correct behaviour teaches you to ignore the guard. And its agreement check
+  reported a disagreement (offline=[] live=[chief-of-staff]) that was entirely
+  the harness not speaking the product's vocabulary — `roster[0] ?? 'chief-of-staff'`
+  means an empty roster IS Claire.
+- **A live-agreement sample made only of cases the OLD code also gets right
+  proves nothing about the deployed thing.** #232's first sample was two
+  fallback cases, which would have agreed against a worker built before any of
+  the work existed. The sample now includes a case no word in which names
+  anybody, so it can only route correctly through the new path — and it is
+  chosen from the run's own results, so improving the routing cannot quietly
+  turn it back into a fallback case.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
