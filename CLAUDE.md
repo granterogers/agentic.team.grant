@@ -145,6 +145,46 @@ Distinct from `telegram.direct_to_grant`, which decides *which chat*.
 `--decision` buzzes; anything else is silent. Use it when blocked or when there
 is something genuinely worth looking at. Do not narrate progress to it.
 
+### Speed, without quality loss
+
+Grant, 14 September 2026 — a standing instruction, not a one-off:
+
+> *"Optimize for **minimum wall-clock time to a verified, production-quality
+> result**. Speed must come from eliminating unnecessary work, parallelising
+> independent work, batching operations, and reducing tool/context overhead —
+> **never from reducing reasoning quality, implementation quality, testing,
+> verification, security, or completeness**."*
+>
+> *"FASTEST VERIFIED PATH, NOT FASTEST OUTPUT."*
+
+The tie-breaks he stated, in his order: **correctness wins over speed.
+Security wins over speed. Required testing wins over speed.** Where two
+approaches are of equal quality, take the faster one.
+
+What this changes in practice here:
+
+- **Batch and parallelise.** Independent reads, searches, suites and API calls
+  go in ONE message with several tool calls. Only serialise what genuinely
+  depends on a previous result.
+- **Do not re-scan what is already known.** Search narrowly before searching
+  the repository. Read the part of a large file the question needs.
+- **Cut narration, not verification.** He asked for fewer running commentaries
+  on routine steps — report results, decisions, risks and blockers. Everything
+  in `Before you push` still runs.
+- **Fail fast.** Prove the API, library or integration can support the approach
+  before building on it. Diagnose a failure before retrying it — this file
+  already records what three blind retries cost (#183, #197, #209).
+- **Fewer interruptions.** Routine, reversible calls are made and stated, not
+  asked about. Ask only when genuinely blocked, when a credential or external
+  approval is needed, or when a consequential choice cannot be inferred.
+- **Done means implemented → tested → verified → checked for regressions →
+  documented.** Code written is not done.
+
+**This does not license background work.** Read it with the next section:
+parallel means several tool calls in one message and independent suites run
+concurrently — it does not mean hiding work Grant asked to see in the
+foreground. The two instructions agree: batching is faster AND visible.
+
 ### Everything in the foreground
 
 > *"I don't like you doing background tasks. Please have all tasks that are
