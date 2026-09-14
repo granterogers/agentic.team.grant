@@ -1338,3 +1338,93 @@ vocabulary drift · a specialist available but never naturally selected · a
 mechanism existing but never naturally invoked · a heartbeat green while the queue
 is static · health checks blind to never-started work · **vacuous tests passing
 because they matched zero rows** · harness traffic mistaken for production failure.
+
+---
+
+## The backend intelligence campaign — 14 September 2026
+
+Grant asked, directly: *"Are we sure that the sub-agents are being used?"* and
+*"are we getting prompt responses when we ask messages to the team?"* The
+answers were no and mostly. This is what was measured, what was wrong, and what
+now holds.
+
+### Where it started
+
+`npm run measure` (new, #231) reads what the office ACTUALLY did, real traffic
+only, and appends every snapshot to `.out/measurements.jsonl`. The baseline:
+
+| | |
+|---|---|
+| agents ever chosen | **3 of 8** — communications, finance, growth, operations and quality had never been selected once |
+| max delegation depth | **0**, across every real job in the system's history |
+| consultations | 13 real, every one Claire choosing who answers |
+| median instruction | 53s, p95 45,656s — a 15-hour worker outage, invisible behind 1,440 successful heartbeats |
+
+### #232 — the routing understood words, not meaning
+
+`npm run verify:routing-breadth` — 91 realistic asks, 10–15 per specialist,
+ten linguistic forms, through the exact calls `handlers/instruction.ts` makes.
+**31% overall**, and 0% for every phrasing that names a subject without using
+its noun: vague, colloquial, command, speech. Grant's own examples missed.
+
+Three defects, all #230's shape:
+
+1. `app.who_knows_about` is a trigram match on `staff.expertise`. New
+   `src/agents/subject.ts` reads the request for MEANING — one cheap model
+   call, only when the literal matcher found nothing, prompt built from
+   `public.staff` so the vocabulary stays Grant's.
+2. `classifyIntent` returned `thought` both for a deliberate remark and for
+   anything it did not understand, and `thought` convenes nobody. New
+   `Classification.recognised` separates them.
+3. Five `ROSTER_CEILINGS` predated half the roster — `direct_command` could not
+   reach the communications director, so *"draft the announcement"* went to
+   research.
+
+**31% → 78%.** Communications 18% → 91%, operations 25% → 92%. Claire fallbacks
+44 → 2. The ten Claire-only negative controls still hold at zero.
+
+### #233 — a second specialist now actually does the work
+
+`app.enqueue_child` and the depth cap had existed for months with no caller.
+`pickRoster` returned up to five names and the handler used one;
+`recordDecision`'s `delegationDepth` argument had never been passed by anybody.
+
+Each additional specialist now gets a child job, `announce = false`, addressed
+directly so the chain terminates at one by construction.
+`npm run verify:collaborates` — 10/10, on the deployed worker: finance answers,
+communications gets real work, `delegation_depth` 1, a consultation between two
+specialists, zero grandchildren, and a control proving the cap still refuses.
+
+### #234 — `npm run levels`
+
+Every tool placed on Grant's six levels, generated, with harness traffic
+excluded. Eleven at L6. **Four granted to all eight agents and never
+exercised**, including `task.create` — nothing in this office has ever created
+a task. Plus a new check that every job kind named in `delivered_by` has a
+handler: zero unimplemented claims.
+
+### #235 — `npm run breadth`
+
+The coverage model first, as instructed. **27 of 37 dimensions have cases; ten
+have none**, and four of those ten are how Grant actually behaves —
+corrections, changed intent, contradictory instructions, cross-project work.
+Filed as #237. Dimensions live in `public.breadth_dimensions` (0366), editable
+by him. Tiers defined; tier 3 specified and deliberately not run.
+`npm run mutate` generates semantic variants and prints them — adoption is a
+commit, because a corpus graded by the thing under test measures nothing.
+
+### #236 — the queue check can go red
+
+`verify:drains` now manufactures a real backdated queued job in a rolled-back
+transaction and asserts the same query sees it.
+
+### What is still true and uncomfortable
+
+- **Five agents remain "never chosen" in REAL traffic**, because no real
+  traffic has arrived since the fix. The office can now reach them, proved
+  through the canonical path. Whether it does is a question only Grant's next
+  few days can answer, and `npm run measure -- --compare` is how to ask it.
+- 18 of 91 routing cases still miss, mostly genuine ownership overlaps
+  (strategy vs growth on "enterprise or SMB"). That is a `staff.expertise`
+  question and his to settle, not a routing defect.
+- `public.tasks` is empty and `github.read` has never been called.

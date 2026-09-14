@@ -312,7 +312,24 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **353 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **366 applied.**
+
+## Asking the office about itself
+
+```
+npm run measure          # what the office actually does — real traffic only, appended
+npm run levels           # where every tool sits on #234's six levels
+npm run breadth          # which of #235's coverage dimensions have no cases at all
+npm run gate             # the fifteen checks that must pass
+npm run tier1            # the intelligence corpus (tier1:fast omits the 30-minute judge)
+npm run mutate -- "…" --wants <slug>   # semantic variants of a request, printed not appended
+npm run q  -- "select …" # a query as a table
+npm run qq -- "select …" # a query whose output is not truncated — use it for function bodies
+```
+
+`measure` is the one that would have caught what nobody noticed for months: five
+of eight agents never selected, and `delegation_depth` 0 across every real job.
+It reports real and harness traffic separately, always.
 
 ---
 
@@ -1336,6 +1353,57 @@ Each of these cost real time. They are here so they cost it once.
   anybody, so it can only route correctly through the new path — and it is
   chosen from the run's own results, so improving the routing cannot quietly
   turn it back into a fallback case.
+- **A parameter no caller passes is a column that will never hold anything.**
+  `recordDecision(db, jobId, decision, delegationDepth = 0)` — the fourth
+  argument had existed since `routing_decisions` did and NOT ONE caller passed
+  it, so `delegation_depth` was 0 on every row by construction and "is the
+  office delegating" was a question the column could not answer whatever the
+  office did. Same family as a column nothing reads and a control nothing
+  presses. Grep for the callers of a defaulted parameter before believing what
+  its column says.
+- **`record_consultation`'s fifth argument is `p_requests`, not depth.** Read
+  the definition (`npm run qq`) rather than inferring an argument from the
+  shape of the call you want to make. Also: `public.preferences` does not exist
+  (it is `system_config`, and a CHANGED preference is `preference_instructions`)
+  and `deliveries` has `sent_at`, not `delivered_at`. Three guessed names in
+  one afternoon, all refused, all avoidable by one `information_schema` query.
+- **A live-agreement check whose sample the OLD code also gets right proves
+  nothing about what is deployed.** #232's first sample was two cases the
+  literal matcher already handled, so it would have agreed against a worker
+  built before the feature existed. Include a case that can ONLY pass through
+  the new path, and pick it from the run's own results so improving the code
+  cannot quietly turn it back into a fallback case.
+- **A test whose subject the product deliberately refuses is asserting against
+  a safety rule.** `verify:collaborates` first used a phrasing `classifyIntent`
+  does not recognise, so the roster was capped at one — correctly, and not as a
+  preference: `routing_decisions_unconfident_stays_small` refuses a wider
+  roster on an unconfident row. The suite went red while the office behaved
+  exactly as designed. Validate the SUBJECT of a test against the rules before
+  reading its result as a defect.
+- **Wait for the thing you are asserting about, not for its parent.** The same
+  suite broke its wait loop when the parent job was terminal and then asserted
+  on the CHILD's routing decision, which that child writes near the end of its
+  own run. It reported "no routing decision was recorded" about a job that was
+  still running — indistinguishable from the column never being written.
+- **The Supabase Management API throttles, and a 429 is not an answer.** Six
+  concurrent `who_knows_about` lookups earned `ThrottlerException`, and a
+  throttle falling through as "nobody knows about this" turns a correct routing
+  decision into a miss and moves a headline accuracy figure for reasons that
+  have nothing to do with the office. Retry with backoff; never let an infra
+  failure enter a measurement as data.
+- **A check that has only ever reported zero is indistinguishable from a check
+  that cannot report anything.** `levels`'s registration lookup reported "0
+  registry rows naming an unimplemented kind", which was correct — and it had
+  reported TEN a minute earlier because a missing import sent every lookup into
+  the catch. The zero and the ten were produced by the same code. Give any
+  found-nothing check a control that must come back positive.
+- **A dimension list in TypeScript is one Grant cannot add to.** 0366 put the
+  #235 coverage dimensions in `public.breadth_dimensions` with a trigger
+  validating tags against it, rather than a CHECK enumerating thirty-seven
+  words — which is what 0311 spent a migration undoing. The trigger matters for
+  a second reason: a misspelled dimension does not error, it silently creates a
+  zero in the matrix and hides the case from the count, which is the one
+  failure a coverage model cannot survive.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
