@@ -209,6 +209,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['verify:attests', 'an agent may not say it looked when it did not (#185)'],
   ['verify:knows', 'a false "I can\'t" and a false "I can" are both failures (#64)'],
   // Routing and delegation, which output attribution cannot prove.
+  [
+    'verify:routing-breadth',
+    'every specialist is reachable by how Grant actually talks, and nothing trivial convenes one (#232)',
+  ],
   ['verify:delegation', 'the work is actually delegated, not eight voices and one worker (#65)'],
   ['verify:handoff', 'delegation that leaves a trace'],
   [

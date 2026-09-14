@@ -529,6 +529,8 @@ type Result = Case & {
   confident: boolean
   chosen: readonly string[]
   reason: string
+  /** True when no word in the request matched and the meaning decided it. */
+  viaSemantic: boolean
   verdict: 'correct' | 'acceptable' | 'claire-fallback' | 'wrong'
 }
 
@@ -562,10 +564,14 @@ const decide = async (c: Case): Promise<Result> => {
     named anybody.
   */
   let topical: readonly RoleSlug[] = literal
+  let viaSemantic = false
   if (literal.length === 0) {
     asked++
     topical = await nameSubjects(db, router, c.ask)
-    if (topical.length > 0) named++
+    if (topical.length > 0) {
+      named++
+      viaSemantic = true
+    }
   }
   const { roster, reason } = pickRoster(classification, c.ask, topical)
 
@@ -589,6 +595,7 @@ const decide = async (c: Case): Promise<Result> => {
     chosen: roster,
     reason,
     verdict,
+    viaSemantic,
   }
 }
 
@@ -770,8 +777,23 @@ const sample = [
     case is CHOSEN FROM THIS RUN's results rather than named, so improving the
     routing cannot silently turn this half back into a fallback case.
   */
+  /*
+    Deliberately a case NO WORD in which names anybody.
+
+    This is the half that proves the deployed worker is running #232's code
+    rather than the repository's. A literal-match case would agree with the
+    live decision even against a worker built before any of this existed —
+    CLAUDE.md: a migration is not a deploy, and neither is a commit.
+  */
   CORPUS.find(
-    (c) => c.wants !== 'nobody' && (results.find((r) => r.ask === c.ask)?.chosen.length ?? 0) > 0,
+    (c) => c.wants !== 'nobody' && (results.find((r) => r.ask === c.ask)?.viaSemantic ?? false),
+  ),
+  /* And one the literal matcher DOES claim, so the ordinary path is covered too. */
+  CORPUS.find(
+    (c) =>
+      c.wants !== 'nobody' &&
+      (results.find((r) => r.ask === c.ask)?.chosen.length ?? 0) > 0 &&
+      !(results.find((r) => r.ask === c.ask)?.viaSemantic ?? false),
   ),
   CORPUS.find((c) => c.wants === 'nobody'),
 ].filter((c): c is Case => c !== undefined)
