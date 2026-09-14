@@ -328,10 +328,25 @@ try {
     String(agree.jp) === mine,
   )
 
+  /*
+    `deterministic` is TRUE, and it is not a convenience.
+
+    §10's commit gate refuses to commit a job holding an unreviewed output and
+    exempts deterministic ones -- "mark them deterministic if they came from a
+    deterministic path", in the refusal's own words. This output is a constant
+    string written by a suite; there is no model behind it and nothing to
+    review. Saying false claimed a judgement had been made that never was.
+
+    The cost was not a failed check. The output stayed pending, the job could
+    never leave committing, committing to cancelled is not a legal transition
+    so the teardown below could not clear it, and every deploy of the worker
+    FAILED on the stranded job -- for a day, on two of them, with the deploy
+    probe reporting an illegal transition four steps from this line.
+  */
   await db.execute(`
     insert into public.outputs (job_id, body, confidence, evidence, sources, deterministic)
     values (${lit(String(enq.job_id))}::uuid, ${lit(`An answer ${run}`)}, 'medium', 'inferred',
-            '[]'::jsonb, false)
+            '[]'::jsonb, true)
   `)
 
   const both = await history(String(agree.jp ?? mine), 100)
@@ -821,6 +836,26 @@ try {
     to, which `verify:import` learned by copying another suite's assumptions.
   */
   for (const id of [mine, theirs].filter((x) => x !== '')) {
+    /*
+      Cancel what can be cancelled, and FAIL what cannot.
+
+      "not in (complete, cancelled, failed)" reads like a complete guard and is
+      not: `committing` and `committed` have no edge to `cancelled`, so the
+      update raised and the job stayed exactly where it was. Two of them sat in
+      `committing` for a day breaking every worker deploy.
+
+      Two statements rather than one, because the legal move differs by state
+      and the state machine is the authority on which — `committing` and
+      `committed` can only go to `failed`, and everything else earlier in the
+      run can still be cancelled.
+    */
+    await db.execute(`
+      update public.jobs
+         set state = 'failed',
+             state_reason = 'verify:history probe, abandoned past the commit gate'
+       where project_id = ${lit(id)}::uuid
+         and state in ('committing', 'committed', 'notifying')
+    `)
     await db.execute(`
       update public.jobs
          set state = 'cancelled', state_reason = 'verify:history probe, never run'

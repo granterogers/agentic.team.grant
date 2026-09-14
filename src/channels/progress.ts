@@ -119,7 +119,30 @@ export async function announceStart(db: SqlExecutor, job: Job): Promise<string> 
   if (!WORTH_SAYING.has(job.kind)) return 'not worth saying'
 
   const speaker = await speakerFor(db, job)
-  if (speaker === null) return 'nobody with a bot to say it'
+  if (speaker === null) {
+    /*
+      Since #70 this is the ORDINARY answer, not an exceptional one.
+
+      Grant retired the seven staff bots on 14 September — "we don't need a
+      different bot for each role. In fact, we only need the chief of staff" —
+      so `speakerFor` finds no enabled bot for the routed person and there is
+      nobody to announce a start as. That is the decision working, not a fault.
+
+      Worth distinguishing in the log rather than leaving one sentence to mean
+      two things: a line that used to appear when something was misconfigured
+      now appears on every routed job, and an answer that is always the same
+      hides the day it is the same for a different reason. The work still
+      happens, the dashboard still shows it, and Claire still reports.
+    */
+    const anyStaffBot = await db.execute(
+      `select count(*)::int as n from public.telegram_bots
+        where enabled and not is_pager and staff_slug is not null`,
+    )
+    const n = Number((anyStaffBot.rows[0] as { n?: number } | undefined)?.n ?? 0)
+    return n === 0
+      ? 'staff bots are retired (#70) — only the chief of staff speaks'
+      : 'nobody with a bot to say it'
+  }
 
   const asked =
     speaker.instruction === null || speaker.instruction.trim() === ''

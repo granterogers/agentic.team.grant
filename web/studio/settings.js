@@ -146,7 +146,13 @@ const FALLBACK_BEHAVIOURS = [
 
 /** Shaped like `telegram_bots`, `slack_channel_map`, `notification_preferences`. */
 const FALLBACK_CHANNELS = [
-  { key: 'telegram', name: 'Telegram', role: 'Claire, and the pager', state: 'ok',
+  /*
+    One bot, and it is Claire's (#70, 0352). It used to read "Claire, and the
+    pager", which described two things when the registry held one row that was
+    neither — the disagreement #70 was opened about. Grant retired the seven
+    staff bots on 14 September; individuals are reached in Slack and here.
+  */
+  { key: 'telegram', name: 'Telegram', role: "Claire's bot, and only hers", state: 'ok',
     detail: 'Decisions buzz. Everything else is silent.' },
   { key: 'slack', name: 'Slack', role: 'The office floor', state: 'ok',
     detail: '6 channels — one per project, plus the queue.' },

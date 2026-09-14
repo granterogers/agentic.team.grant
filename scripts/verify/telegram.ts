@@ -691,13 +691,57 @@ record(
 )
 await db.execute(`delete from public.telegram_bots where bot_id = 'fixture-tokenless'`)
 
-const research = await botForStaff(db, 'research-director')
+/*
+  The subject is the CHIEF OF STAFF, and the assertion is a property.
+
+  It was `research-director` against a hard-coded bot id, and #70 retired that
+  bot on 14 September — so the check asserted that a bot Grant had just
+  deliberately turned off still existed. That is the second time this exact
+  check has gone stale in the same way: the comment below records the first,
+  when it named `quality-director` and Grant then MADE that bot.
+
+  CLAUDE.md's rule is to pick a control subject the change under test cannot
+  move, and say why. Claire is that subject by definition — Grant's rule is
+  "we only need the chief of staff", so she is the one person guaranteed to
+  have a bot for as long as Telegram is connected at all. And the property is
+  "resolves an enabled bot with a real token", not a particular id: an id is
+  an artefact, and asserting one is what made this brittle twice.
+*/
+const chief = await botForStaff(db, 'chief-of-staff')
 record(
-  'a staff member resolves to their own bot, with its token from the vault',
-  research === null
-    ? 'no bot resolved'
-    : `@${research.username} id=${research.botId}, token resolved (${String(research.token.length)} chars)`,
-  research !== null && research.botId === '8842154625',
+  'the one person who speaks resolves to a bot, with its token from the vault',
+  chief === null
+    ? 'no bot resolved for the chief of staff'
+    : `@${chief.username} id=${chief.botId}, token resolved (${String(chief.token.length)} chars)`,
+  chief !== null && chief.username.length > 0 && chief.token.length > 20,
+)
+
+/*
+  And the other half of #70: nobody else does.
+
+  Asserted over the whole roster rather than one name, so it holds when
+  somebody is hired and does not need editing when somebody is retired — the
+  failure mode this check has had twice already.
+*/
+const others = [
+  'research-director',
+  'strategy-director',
+  'finance-director',
+  'operations-director',
+  'growth-director',
+  'quality-director',
+  'communications-director',
+]
+const stillSpeaking: string[] = []
+for (const slug of others) {
+  if ((await botForStaff(db, slug)) !== null) stillSpeaking.push(slug)
+}
+record(
+  'and no other staff member has a bot of their own (#70)',
+  stillSpeaking.length === 0
+    ? 'seven retired, none resolving'
+    : `STILL RESOLVING: ${stillSpeaking.join(', ')}`,
+  stillSpeaking.length === 0,
 )
 
 // The negative that matters: a resolver that threw would make "Grant has not

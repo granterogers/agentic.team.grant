@@ -220,7 +220,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **351 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **353 applied.**
 
 ---
 
@@ -864,6 +864,18 @@ Each of these cost real time. They are here so they cost it once.
   absence of a fixture flag is not the presence of a real one. An INNER join is
   the fix, and the question to ask is whether the reader can name who is
   responsible for the row before it reports it.
+- **A suite's constant output must be marked `deterministic`, or the job it
+  belongs to can never be committed AND can never be cleared.** `verify:history`
+  inserted `An answer <run>` with `deterministic = false`, so §10's commit gate
+  refused — correctly: an unreviewed output must not be committed. The job then
+  sat in `committing` for ever, because `committing -> cancelled` is not a legal
+  transition and the teardown's `state not in (complete, cancelled, failed)`
+  guard reads like a complete guard and is not. Two of them stranded **every
+  `npm run deploy:worker` for a day**, reported as "illegal job transition
+  committing -> notifying" — four steps from the line that caused it. A
+  constant a suite writes IS deterministic; saying otherwise claims a judgement
+  nobody made. And a teardown must know which move each state actually allows:
+  `committing`, `committed` and `notifying` can only go to `failed`.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
