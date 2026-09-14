@@ -218,6 +218,32 @@ try {
   // previous run — as section 1 having failed.
   check('no output row was written at all', `${String(rows)} row(s)`, rows === 0)
 
+  /*
+    And it SAYS so, rather than failing into silence (#211).
+
+    The sending gate's impediment was asserted from the first version of this
+    suite; the creation gate's was not, and the creation gate is the one that
+    fires more often. Three jobs in 48 hours went to `failed` with nothing
+    recorded — two of them Grant asking from the dashboard, so he typed a
+    question and got no answer, no explanation and no row on the Governance
+    page.
+
+    Same assertion as section 2's, one gate earlier.
+  */
+  const early = await one(`
+    select kind::text as kind, needed, detail, is_fixture
+      from public.job_impediments where job_id = ${lit(liarJobId)}::uuid
+     order by created_at desc limit 1
+  `)
+  check(
+    'and the refusal is recorded, so a lost answer is visible rather than silent',
+    early.needed === undefined
+      ? '(nothing recorded — the job failed into silence)'
+      : `${String(early.needed)} — ${String(early.detail).slice(0, 80)}`,
+    early.needed === 'an answer that matches its own evidence' &&
+      String(early.detail).includes('claims to have read'),
+  )
+
   // =========================================================================
   console.log('\n2. the sending gate — the path that does not pass through creation')
 

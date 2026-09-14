@@ -352,5 +352,6 @@
   "0351_harness_traffic_that_was_reading_as_a_real_outage.sql": "238f1787f9609fc63aac5b7f3807ead8ffce7bb941673080b65670b89c229113",
   "0352_telegram_is_one_bot_the_chief_of_staff.sql": "ef966ba4ae6cce3e83f2da4294fbf4e9570934a32c3c54066ba9a05df9536854",
   "0353_a_comment_that_described_a_defect_we_have_since_fixed.sql": "d77f08c85f55573c85027ee2d450c5947d9caeb905abf1b728c50b8c2d6a76a5",
-  "0354_revoking_google_at_google_not_only_here.sql": "5fb7b5c38ffd83f19e85c38c42659afaf6b79faf19f302ce6cbc6b5c9cf74727"
+  "0354_revoking_google_at_google_not_only_here.sql": "5fb7b5c38ffd83f19e85c38c42659afaf6b79faf19f302ce6cbc6b5c9cf74727",
+  "0355_a_job_in_a_fixture_project_is_harness_traffic.sql": "d52ca28cd5ed3267773e1146eb1a825a6b0ccc87868b2497512e440056d53bec"
 }

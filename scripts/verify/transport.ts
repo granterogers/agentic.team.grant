@@ -279,6 +279,34 @@ try {
   )
 
   /*
+    Nothing the reader shows Grant belongs to a FIXTURE PROJECT (#212).
+
+    Asserted as a property, not a count, and that distinction is the whole
+    lesson of the third instance. 0342 taught `jobs.is_fixture` about
+    `%:verify-%`; 0351 corrected `telegram:4242`. Both fixed the rows that
+    existed at that moment, and a count of them goes stale the moment the
+    harness runs again — which is exactly how this came back, as 85 jobs in
+    fixture projects whose own generated flag says real, two of them showing
+    on this list under a project literally named `fixture-conversation-…`.
+
+    `jobs.is_fixture` is GENERATED and cannot see the project, so 0355 derives
+    it in `app.harness_job`. This holds whatever the harness does next.
+  */
+  const fromFixtures = await one(`
+    select count(*)::int as n,
+           coalesce(string_agg(distinct p.slug, ', '), '') as which
+      from jsonb_array_elements(app.undelivered(null, 200)) e
+      join public.projects p on p.project_id = (e->>'project')::uuid
+     where p.is_fixture`)
+  check(
+    'no row it shows Grant belongs to a fixture project',
+    Number(fromFixtures.n) === 0
+      ? 'none'
+      : `${String(fromFixtures.n)}: ${String(fromFixtures.which)}`,
+    Number(fromFixtures.n) === 0,
+  )
+
+  /*
     And the same mechanism IS visible for a real job. Without this the check
     above passes on a reader that returns nothing at all — the "teardown that
     matched nothing looks exactly like a teardown that worked" mistake, in a
@@ -307,7 +335,16 @@ try {
     select jsonb_array_length(app.undelivered(null, 200)) as n,
            (select count(*) from public.deliveries d
               join public.jobs j on j.job_id = d.job_id
-             where d.state = 'failed' and not j.is_fixture) as real_failed`)
+             -- The same definition of real the reader uses, written
+             -- independently so a disagreement means one of them is wrong.
+             -- Updated for #212: a job in a FIXTURE PROJECT is harness
+             -- traffic, which the generated is_fixture column cannot see.
+             -- This going red on 0355 is the check doing its job: the reader
+             -- had just stopped showing two rows from a fixture project and
+             -- this side still counted them. No backticks in here - the whole
+             -- query is a template literal.
+             where d.state = 'failed'
+               and not app.harness_job(j.job_id)) as real_failed`)
   const shown = Number(visible.n)
   const real = Number(visible.real_failed)
   check(

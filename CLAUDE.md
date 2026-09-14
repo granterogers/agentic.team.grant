@@ -1016,6 +1016,40 @@ Each of these cost real time. They are here so they cost it once.
   into a find-and-replace on a single letter: "Google refused:
   h[redacted][redacted]p 400 invalid_reques[redacted]". Nothing leaked and the
   sentence was destroyed, which on a real failure is all Grant would have.
+- **A job in a FIXTURE PROJECT is harness traffic, and the generated column
+  cannot see it — third instance.** 0342 taught `jobs.is_fixture` about
+  `%:verify-%`; 0351 corrected `telegram:4242`. Both fixed the ROWS that
+  existed at that moment and neither covered the shape underneath: **85 jobs
+  whose project is a fixture and whose own flag says real**, oldest 7
+  September, newest the morning it was found. `app.undelivered()` was showing
+  Grant two of them as genuine failed deliveries, under a project literally
+  named `fixture-conversation-…`. `is_fixture` is GENERATED so it may only
+  reference its own row, and a trigger-maintained copy is what 0303/0304 exist
+  to warn against — so 0355 DERIVES it once in `app.harness_job` and the three
+  readers that report to him ask that. **Assert the property, never the count:
+  "no row the reader shows Grant belongs to a fixture project" survives the
+  next harness run; a number does not, which is precisely how this came back.**
+- **A gate that refuses without recording is a lost answer, not a saved one.**
+  #185's SENDING gate writes an impediment when it refuses; the CREATION gate
+  in `runJob` was a bare `moveTo(failed)`. Three jobs in 48 hours went that way
+  — two of them Grant asking from the dashboard — so he typed a question, the
+  model claimed a read it had not done, the gate correctly stopped the lie, and
+  he received **nothing**: no answer, no explanation, no row on the Governance
+  page, just `failed` in a table he does not read. The better gate was the
+  silent one. If a guard can swallow a user's request, it has to say so
+  somewhere the user looks (#211).
+- **A second independent query written to the same definition must be updated
+  with it.** `verify:transport` deliberately restates "which failures are real"
+  rather than calling the reader, so a disagreement means one side is wrong.
+  0355 changed the definition and the check went red at "1 shown, 3 exist" —
+  the check working exactly as its own comment promised. Read that failure as
+  the counterpart being stale, not the reader being broken, and change both.
+- **`pg_get_functiondef` emits no trailing semicolon — twice now.** 0353 hit it
+  and 0355 hit it again, generating three definitions and joining them with a
+  blank line: `syntax error at or near "CREATE"` on the SECOND function, which
+  points at the line after the real problem. When a migration is built FROM
+  live definitions (the safe way to change one predicate in an 8,000-character
+  function without transcribing it), terminate every one.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

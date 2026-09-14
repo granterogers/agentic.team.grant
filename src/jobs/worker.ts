@@ -678,6 +678,43 @@ export const runJob = async (
     body: output.body,
   })
   if (problems.length > 0) {
+    /*
+      Say so, rather than failing into silence (#211).
+
+      #185's argument, one step earlier than #185 applied it. The SENDING gate
+      records an impediment when it refuses, because "an output that vanishes
+      is indistinguishable from a job that had nothing to say". This gate — the
+      better one, because it catches the problem before a row is written — was
+      a bare `moveTo(failed)`.
+
+      Three jobs in 48 hours went that way, two of them Grant asking from the
+      dashboard: the model claimed a read it had not done, the gate correctly
+      refused, and he got NOTHING. No answer, no explanation, no row on the
+      Governance page. The job says `failed` in a table he does not read.
+
+      Recording it makes the fabrication countable, which is the difference
+      between three silent failures and a number he can watch.
+
+      Never throws, for the reason every observability call in this file does
+      not: a job that failed and then failed again writing down why is the
+      worst bug available here.
+    */
+    try {
+      await db.execute(
+        `select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+           'an answer that matches its own evidence', 'the quality gate',
+           ${lit(
+             problems
+               .map((p) => p.problem)
+               .join(' | ')
+               .slice(0, 500),
+           )},
+           ${lit(`${job.kind} produced an output the coherence gate refused`)})`,
+      )
+    } catch {
+      /* Recording a refusal must not become a second failure. */
+    }
+
     await moveTo(
       db,
       job.jobId,
