@@ -14,8 +14,8 @@ file can know, and it is the only part worth reading.
 |---|---|
 | domains | **30** |
 | fully exercised | **17** |
-| partially exercised | **11** |
-| not exercised at all | **2** |
+| partially exercised | **12** |
+| not exercised at all | **1** |
 | `verify:*` suites in the repository | **98** |
 | suites with a recorded result | **74** |
 
@@ -24,10 +24,6 @@ file can know, and it is the only part worth reading.
 ### NotebookLM
 
 NO SUITE. src/notebook/ has five modules and handlers/notebook.ts exists. ADR-0013 forbids reviving the unattended sync because there is no public API and an unattended client would have to impersonate a browser session — so the honest deliverable is a capability PROBE that records each limitation as data, which is what the specification asks for: browser-only functionality is not programmatic capability.
-
-### Recurring duties
-
-NO DEDICATED SUITE. verify:worker reaches duty backlog incidentally. Due detection, the execution record, retry, duplicate prevention, disabled duties and stale detection are unexercised. GitHub Actions stay off — the specification agrees.
 
 ## Every domain
 
@@ -260,11 +256,14 @@ _No suite._
 
 **Gap.** chaos covers 7 of the 20 cases the master spec §18 names. The other 13 have no suite: cold starts, a 100MB file, a zero-byte file, two workers leasing one job, a migration applied twice, clock skew.
 
-### Recurring duties — None
+### Recurring duties — Partial
 
-_No suite._
+| suite | what it checks | last result |
+|---|---|---|
+| `verify:duties` | Do the recurring duties actually fire, once, when they are due? | _not run in the last sweep_ |
+| `verify:worker` | Drive real jobs through the whole pipeline, against the live database. | green — 28/28 checks passed |
 
-**Gap.** NO DEDICATED SUITE. verify:worker reaches duty backlog incidentally. Due detection, the execution record, retry, duplicate prevention, disabled duties and stale detection are unexercised. GitHub Actions stay off — the specification agrees.
+**Gap.** verify:duties (#225) covers due detection, the idempotency key, dispatch, duplicate prevention, disabled duties, the cadence floor and staleness — every call inside a rollback, because dispatch_due_responsibilities() fires EVERY due duty and would otherwise fire Grant's. What it deliberately does NOT do is run a duty HANDLER: dispatch creates a job, and running it is verify:worker's business. So the arc from "the duty fired" to "the thing the duty is for actually happened" is still only covered for the kinds verify:worker drives. That is the remaining gap, and it is why this is Partial rather than Full.
 
 ### Schema and reachability — Full
 
@@ -331,9 +330,7 @@ _No suite._
 
 ## Suites not claimed by any domain above
 
-1 backend suite(s) this matrix has not placed. An unplaced suite is a domain nobody has named:
-
-`duties`
+None — every suite in `package.json` belongs to a domain.
 
 _18 frontend audits are deliberately out of scope here. They belong to the UX QA standard in `docs/spec/ux-qa-governance-2026-09-14.md`._
 

@@ -200,9 +200,9 @@ const DOMAINS: ReadonlyArray<{
   },
   {
     domain: 'Recurring duties',
-    suites: [],
-    verdict: 'None',
-    gap: 'NO DEDICATED SUITE. verify:worker reaches duty backlog incidentally. Due detection, the execution record, retry, duplicate prevention, disabled duties and stale detection are unexercised. GitHub Actions stay off — the specification agrees.',
+    suites: ['duties', 'worker'],
+    verdict: 'Partial',
+    gap: 'verify:duties (#225) covers due detection, the idempotency key, dispatch, duplicate prevention, disabled duties, the cadence floor and staleness — every call inside a rollback, because dispatch_due_responsibilities() fires EVERY due duty and would otherwise fire Grant\'s. What it deliberately does NOT do is run a duty HANDLER: dispatch creates a job, and running it is verify:worker\'s business. So the arc from "the duty fired" to "the thing the duty is for actually happened" is still only covered for the kinds verify:worker drives. That is the remaining gap, and it is why this is Partial rather than Full.',
   },
   {
     domain: 'Schema and reachability',
