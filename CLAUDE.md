@@ -977,6 +977,45 @@ Each of these cost real time. They are here so they cost it once.
   first reading was one sentence away from being reported to Grant as a
   fourth false finding. `verify:ui` already walks all seven settings panes and
   enforces the floor properly.
+- **A verify suite that calls a real function OUTSIDE a transaction is one
+  behaviour change away from being destructive.** `verify:disconnect` wrapped
+  every assertion in `begin … rollback` EXCEPT a loop over six services that
+  were all refusals — nothing to roll back, so why pay for one. 0350 turned
+  Slack and Telegram into real disconnects, and from that afternoon **every run
+  of the suite deleted Slack's bot token and signing secret.** It did not read
+  as destructive: the check simply went red, saying "slack is refused" about a
+  service that had just been disconnected for real. Wrap the call, not the
+  assertion — the wrapper cannot know which kind it is until it has already
+  happened.
+- **A deleted secret does not merely disable its feature; a DANGLING REFERENCE
+  stops everything.** `slack_app_credentials` points at the vault by uuid and
+  `app.resolve_secret` raises `23503` on a ref that resolves to nothing, so a
+  missing Slack token took down every job in the building — `deploy:worker`
+  returned http 500 and no duty ran. A trigger then refuses to UPDATE the row
+  while ANY of its five refs dangle, so the repair has to null all of them in
+  one statement, not just the one you noticed. Nulling is what the callers
+  already handle: `resolve_secret(null)` returns null and Slack degrades alone.
+- **A delete keyed on a name nobody checked deletes nothing and reports
+  success.** 0350's Telegram branch removes `telegram.bot_token` and
+  `telegram.chief_bot_token`; the stored names are `telegram.chief.bot_token`
+  and seven staff bots. **That branch has never matched a row**, and it returns
+  `ok: true` with a note about what reconnecting will cost. It is the only
+  reason Telegram survived the defect above — luck, not design. Assert that a
+  destructive function actually removed something, by counting before and
+  after, or it is a claim with nothing behind it (#210).
+- **A comment claiming a property is worth nothing without a check — third
+  instance, and this one was about a credential.** `revokeAtGoogle`'s first
+  draft said "never rethrown with the token in it" and then interpolated
+  `error.message` straight into the outcome. `fetch` puts the request in that
+  message, so a network failure carried the whole Google refresh token into
+  `connection_health.detail`, which the studio renders. A unit test found it in
+  one run. Remove a credential you are HOLDING by value — exact, no pattern to
+  get wrong — and run `redactSecrets` after it for what you cannot enumerate.
+- **A by-value redaction needs a length floor.** The fix above stripped the
+  token with `split`/`join`, and a one-character token in a test turned that
+  into a find-and-replace on a single letter: "Google refused:
+  h[redacted][redacted]p 400 invalid_reques[redacted]". Nothing leaked and the
+  sentence was destroyed, which on a real failure is all Grant would have.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

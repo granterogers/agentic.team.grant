@@ -62,6 +62,41 @@ username from the registry rather than a column.
 reaches nothing. Found by the new check, filed rather than asserted because the
 fix is a design change.
 
+> ## What changed on 2026-09-14 (night)
+>
+> **Disconnecting Google now revokes the grant AT Google (#109, migration
+> 0354).** 0350 did the forget half honestly and could not do more, because
+> Postgres makes no HTTP calls. A `google.revoke` job finishes it: 200 means
+> revoked, 400 `invalid_token` also means revoked (already dead is still dead),
+> anything else is reported as NOT revoked with Google's own words and the
+> Connections panel says to do it by hand.
+>
+> The Issue asked for the local copy to be deleted before the revoke is
+> enqueued. That ordering cannot exist — the endpoint takes the token as its
+> argument — so the token is **parked** under a name nothing reads.
+> `app.vault_secret` gates every read and `googleAccess` asks for
+> `google.refresh_token`, which is gone the moment Disconnect is pressed.
+>
+> ### 🔴 Slack is disconnected and needs Grant — Issue #210
+>
+> **`verify:disconnect` really disconnected Slack**, deleting the bot token and
+> signing secret. The suite called `app.hq_disconnect` outside a transaction
+> for six services that were all refusals when the loop was written; 0350 made
+> Slack and Telegram real, and the loop kept asserting the old refusal.
+>
+> Worse than losing Slack: the dangling vault references made
+> `app.resolve_secret` raise, so **the worker returned http 500 and no duty
+> ran** until the refs were nulled. Slack now degrades alone.
+>
+> Telegram survived by accident — 0350 deletes `telegram.chief_bot_token` and
+> the stored name is `telegram.chief.bot_token`, so that branch has never
+> matched a row and reports success anyway. Filed in #210 as a follow-up.
+>
+> **Grant must reinstall the Slack app** — full steps in #210.
+>
+> Every `hq_disconnect` call in the suite is wrapped now, refusal or not.
+> `verify:disconnect` 30/30, 1,017 tests, worker deployed and draining.
+
 > ## What changed on 2026-09-14 (evening)
 >
 > **The three Behaviour toggles were never broken (#111).** Including *"Only
