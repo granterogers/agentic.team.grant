@@ -220,7 +220,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **350 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **351 applied.**
 
 ---
 
@@ -842,6 +842,28 @@ Each of these cost real time. They are here so they cost it once.
   failure message that names the wrong cause is worse than a bare count,
   because it points somewhere and somewhere is wrong. Fixed in the check; read
   the line above the advice.
+- **A harness that names itself correctly can still be invisible to the rule,
+  because the CHANNEL PREFIX goes in front.** `jobs.is_fixture` has a `gate-%`
+  branch; `scripts/poc/gate-3.ts` posts a Telegram webhook as user 4242, and
+  `enqueue_inbound` composes `requested_by` as `<origin_channel>:<actor>` — so
+  the value is `telegram:4242` and the branch never fires. Twenty-seven jobs
+  accumulated, and the moment #198's channel states and #202's undelivered list
+  went live they read them as real and reported **Telegram DEGRADED, twenty-one
+  undelivered messages** to Grant. Harness traffic presented as the office
+  failing, inside the two features built to make the office legible — which is
+  the worst place for it, because a health reading that cries wolf teaches him
+  to ignore health readings. A Telegram id must be numeric, so the payload
+  cannot carry a fixture-shaped name: the harness corrects its own jobs in
+  teardown instead (0351). Same defect as `verify:addressing`'s 43 real jobs,
+  which 0342 was written for and which nobody carried across to gate-3.
+- **`coalesce(x.flag, false) = false` over a LEFT JOIN treats "I know nothing
+  about this" as "this is real".** Both readers counted a delivery with NO job
+  as a genuine failure — no project, no requester, nothing to retry into, and
+  eight of them had `error_code` ending `(injected)`, a fault-injection test
+  saying so in the data. 0304's asymmetry lesson in a different costume: the
+  absence of a fixture flag is not the presence of a real one. An INNER join is
+  the fix, and the question to ask is whether the reader can name who is
+  responsible for the row before it reports it.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

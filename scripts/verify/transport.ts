@@ -284,17 +284,100 @@ try {
     matched nothing looks exactly like a teardown that worked" mistake, in a
     different costume.
   */
+  /*
+    The reader agrees with what "real" MEANS, rather than with a count.
+
+    This compared `undelivered` against every non-fixture failure over a LEFT
+    join — which was the reader's own old definition, so the two agreed by
+    construction and the check could only fail if the reader broke in some
+    other way. 0351 narrowed "real" to attributable-and-not-fixture, and this
+    went red: the check was still counting the eight orphaned fault injections
+    the reader had just, correctly, stopped reporting.
+
+    The counterpart query is now the same definition, written independently, so
+    a disagreement means one of them is wrong rather than that somebody edited
+    one and not the other.
+
+    And when there is nothing to see it SAYS so rather than passing quietly on
+    0 == 0 — a teardown that matches nothing looks exactly like a teardown that
+    worked, and this is the same shape: the strongest form of this check needs
+    a real failure to exist, and today there is none.
+  */
   const visible = await one(`
-    select jsonb_array_length(
-      app.undelivered(null, 200)
-    ) as n,
-    (select count(*) from public.deliveries d
-       left join public.jobs j on j.job_id = d.job_id
-      where d.state = 'failed' and coalesce(j.is_fixture, false) = false) as real_failed`)
+    select jsonb_array_length(app.undelivered(null, 200)) as n,
+           (select count(*) from public.deliveries d
+              join public.jobs j on j.job_id = d.job_id
+             where d.state = 'failed' and not j.is_fixture) as real_failed`)
+  const shown = Number(visible.n)
+  const real = Number(visible.real_failed)
   check(
-    'and the reader can see a real one — it is filtering, not empty',
-    `${String(visible.n)} shown, ${String(visible.real_failed)} real failures exist`,
-    Number(visible.n) === Number(visible.real_failed),
+    'and the reader shows exactly the failures a person could act on',
+    real === 0
+      ? 'nothing real is failing — this check cannot discriminate today'
+      : `${String(shown)} shown, ${String(real)} exist`,
+    shown === real,
+  )
+
+  /*
+    Nothing on the real reading is harness traffic (#202, and the reason 0351
+    exists).
+
+    Not "this run's rows are hidden" — that is checked above and it passed
+    while twenty-one OTHER harness rows sat on the same reading calling
+    Telegram degraded. gate-3 impersonates Grant as Telegram user 4242, the
+    adapter composes `requested_by` as `telegram:4242`, and the generated
+    `gate-%` branch never fires because the channel prefix is in front of it.
+    Twenty-seven jobs accumulated, and the two features built to make the
+    office legible reported them to Grant as the office failing.
+
+    So the assertion is about the WHOLE reading rather than about this suite:
+    no entry may name a probe, a gate, a fixture or a verification. Written as
+    a property so it holds for harnesses nobody has written yet — a count would
+    have said "21" and meant nothing, and a list of known offenders would need
+    editing every time somebody adds one.
+  */
+  const readingNow = (await one(`select app.undelivered(null, 200) as v`)).v as {
+    delivery_id?: string
+    error_code?: string
+    channel?: string
+  }[]
+  const harnessy = readingNow.filter((d) =>
+    /probe|fixture|verify|gate-|injected|simulated/i.test(
+      `${String(d.error_code ?? '')} ${String(d.channel ?? '')}`,
+    ),
+  )
+  check(
+    'nothing on the real undelivered reading is harness traffic',
+    harnessy.length === 0
+      ? `${String(readingNow.length)} entries, none of them ours`
+      : `${String(harnessy.length)} HARNESS ROWS ARE BEING REPORTED AS REAL: ${harnessy
+          .slice(0, 2)
+          .map((d) => String(d.error_code))
+          .join(' · ')}`,
+    harnessy.length === 0,
+  )
+
+  /*
+    And every entry can be acted on. A delivery with no job has no project, no
+    requester and nothing to retry into — reporting it asks Grant to do
+    something about a thing with no handle. Eight of those were on the reading,
+    all of them fault injections, all counted as real because the reader said
+    `coalesce(is_fixture, false) = false` over a LEFT join: absence of a
+    fixture flag treated as presence of a real one, which is 0304's asymmetry
+    lesson in a different costume.
+  */
+  const orphans = readingNow.filter((d) => d.delivery_id !== undefined).length
+  const unattributable = Number(
+    (
+      await one(`
+        select count(*) as n from public.deliveries d
+         where d.state = 'failed' and d.job_id is null`)
+    ).n ?? 0,
+  )
+  check(
+    'and every entry on it can actually be acted on',
+    `${String(orphans)} shown, ${String(unattributable)} unattributable deliveries excluded`,
+    readingNow.every((d) => d.delivery_id !== undefined),
   )
 
   const retried = await one(`select app.retry_job_deliveries(${lit(jobId)}::uuid) as v`)

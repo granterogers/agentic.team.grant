@@ -21,7 +21,7 @@
 > | Free tier | measured, not guessed: **48 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | The conversation's growth | **25.8 messages a day** across four surfaces at ~495 bytes each — about **fifty years** of room at that rate (`public.conversation_growth()`, on the Usage page). ADR-0026 |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | **350 applied** |
+> | Migrations | **351 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -42,10 +42,15 @@
 | **#197** mobile | The keyboard case, which is where this screen actually failed: composer 208px of 336, thread 51px, newest message hidden. Now 156/168, nav out of the way, thread follows. |
 | **#201** proving it | `verify:equivalence` — the same sentence through four surfaces, asserted as **agreement between them** rather than against an expected value. |
 
-**Two live problems it surfaced, both real and both worth your attention:**
-
-- **Telegram is degraded** — nine `chat_not_found` delivery failures in the last 24 hours on a healthy credential. Settings → Channels shows it.
-- **21 real failed deliveries** are sitting in `app.undelivered`, now visible and retryable.
+**The two problems it appeared to surface were the harness, not the office —
+corrected the next morning by 0351.** "Telegram is degraded, 21 undelivered"
+was `scripts/poc/gate-3.ts` impersonating Grant as Telegram user 4242 (the
+`gate-%` fixture branch never fires, because `enqueue_inbound` puts the channel
+prefix in front) plus eight orphaned fault injections that both readers counted
+as real because `coalesce(is_fixture, false) = false` over a LEFT join treats
+an unattributable row as a genuine one. **Telegram reads `carrying`; there are
+zero real failed deliveries.** `verify:transport` now asserts the whole reading
+carries no harness traffic, not merely that its own rows are hidden.
 
 **Grant's decision on 13 September, recorded as #70:** Telegram is one bot, the
 chief of staff. The other seven are to be retired; individuals are reached in
