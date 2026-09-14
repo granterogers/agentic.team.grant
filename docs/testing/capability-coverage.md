@@ -16,7 +16,7 @@ file can know, and it is the only part worth reading.
 | fully exercised | **17** |
 | partially exercised | **13** |
 | not exercised at all | **0** |
-| `verify:*` suites in the repository | **99** |
+| `verify:*` suites in the repository | **100** |
 | suites with a recorded result | **92** |
 
 ## Domains with NO suite at all
@@ -134,8 +134,9 @@ file can know, and it is the only part worth reading.
 | suite | what it checks | last result |
 |---|---|---|
 | `verify:mail` | The Gmail reader, against a fake Google and a real database. | green — 11/11 checks passed |
+| `verify:google-live` | Does the office actually reach the REAL Google? | _not run in the last sweep_ |
 
-**Gap.** Against a FAKE Google. Real transport is blocked on a Phase 9 OAuth client in a project Grant owns (ADR-0013). A readiness report must say so rather than count this as coverage.
+**Gap.** verify:mail fakes Google on purpose and should — the interesting behaviour is what the office DOES with what Google returns, and a live inbox changes under you. What was missing was that NOTHING touched the real thing; verify:google-live now does, read-only. Gmail answers. The earlier claim that this was blocked on an OAuth client was simply false: the credential has worked since 8 September and nobody checked.
 
 ### Google Drive — Partial
 
@@ -143,16 +144,18 @@ file can know, and it is the only part worth reading.
 |---|---|---|
 | `verify:drive` | Can a project be given a Drive folder, and does the office ask rather than act? | green — 42/42 checks passed |
 | `verify:sheets` | Every connector says what it can do, and what we never ask it for. | green — 14/14 checks passed |
+| `verify:google-live` | Does the office actually reach the REAL Google? | _not run in the last sweep_ |
 
-**Gap.** Same as Gmail — a fake Google.
+**Gap.** DRIVE IS NOT ACTUALLY REACHABLE. verify:google-live gets http 403 — the Drive API has never been enabled in the Google Cloud project holding the credential, so every Drive capability the office believes it has would fail on first real use. One click in the Cloud Console, and it is Grant's account.
 
 ### Google Calendar — Partial
 
 | suite | what it checks | last result |
 |---|---|---|
 | `verify:calendar` | The calendar reader, against a fake Google and a real database. | green — 7/7 checks passed |
+| `verify:google-live` | Does the office actually reach the REAL Google? | _not run in the last sweep_ |
 
-**Gap.** Same as Gmail — a fake Google.
+**Gap.** Faked in verify:calendar on purpose; verify:google-live confirms the real API answers and five calendars are visible.
 
 ### NotebookLM — Partial
 
@@ -345,4 +348,4 @@ pushed onto him disguised as something a script forgot:
 
 ---
 
-_100 files in `scripts/verify`. 99 are npm scripts; the rest are measurement tools (`probe`, `space`, `wide`, `press`, `smoke`, `studio`, `seed-appearance`, `texture-sheet`)._
+_101 files in `scripts/verify`. 100 are npm scripts; the rest are measurement tools (`probe`, `space`, `wide`, `press`, `smoke`, `studio`, `seed-appearance`, `texture-sheet`)._

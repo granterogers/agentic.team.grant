@@ -128,21 +128,21 @@ const DOMAINS: ReadonlyArray<{
   },
   {
     domain: 'Gmail',
-    suites: ['mail'],
+    suites: ['mail', 'google-live'],
     verdict: 'Partial',
-    gap: 'Against a FAKE Google. Real transport is blocked on a Phase 9 OAuth client in a project Grant owns (ADR-0013). A readiness report must say so rather than count this as coverage.',
+    gap: 'verify:mail fakes Google on purpose and should — the interesting behaviour is what the office DOES with what Google returns, and a live inbox changes under you. What was missing was that NOTHING touched the real thing; verify:google-live now does, read-only. Gmail answers. The earlier claim that this was blocked on an OAuth client was simply false: the credential has worked since 8 September and nobody checked.',
   },
   {
     domain: 'Google Drive',
-    suites: ['drive', 'sheets'],
+    suites: ['drive', 'sheets', 'google-live'],
     verdict: 'Partial',
-    gap: 'Same as Gmail — a fake Google.',
+    gap: "DRIVE IS NOT ACTUALLY REACHABLE. verify:google-live gets http 403 — the Drive API has never been enabled in the Google Cloud project holding the credential, so every Drive capability the office believes it has would fail on first real use. One click in the Cloud Console, and it is Grant's account.",
   },
   {
     domain: 'Google Calendar',
-    suites: ['calendar'],
+    suites: ['calendar', 'google-live'],
     verdict: 'Partial',
-    gap: 'Same as Gmail — a fake Google.',
+    gap: 'Faked in verify:calendar on purpose; verify:google-live confirms the real API answers and five calendars are visible.',
   },
   {
     domain: 'NotebookLM',

@@ -157,6 +157,8 @@ const NEVER: Record<string, string> = {
   restore:
     'restores a backup over the live database. Run deliberately by a person, never as one of a batch',
   'github-token': 'spends a real GitHub API budget against a token flagged for rotation (#18)',
+  'google-live':
+    "spends a real Google API quota against Grant's own account. Read-only, but run deliberately rather than as one of ninety",
   db: 'a chain of 46 other suites, every one of which this runner already runs individually — and it ends in `purge:fixtures --go` and `slack:tidy --go`, which are sweeps rather than checks',
   controls:
     'the umbrella over controls:studio, controls:team and controls:settings, which are run individually — together they are ~35 minutes and running both forms doubles it',
