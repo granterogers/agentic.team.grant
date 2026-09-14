@@ -412,6 +412,13 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
+  // #210. Both halves together: a bot token without a signing secret can post
+  // and cannot verify anything inbound, which reads as connected and is half a
+  // connection. Reinstalling produces both at the same moment.
+  set_slack_credentials: {
+    fn: 'hq_set_slack_credentials',
+    required: ['p_bot_token', 'p_signing_secret'],
+  },
   // The way back out. There was a way in and none out, which made a consent
   // granted through a browser effectively permanent from this page's side.
   forget_google: { fn: 'hq_forget_google', required: [] },

@@ -353,5 +353,8 @@
   "0352_telegram_is_one_bot_the_chief_of_staff.sql": "ef966ba4ae6cce3e83f2da4294fbf4e9570934a32c3c54066ba9a05df9536854",
   "0353_a_comment_that_described_a_defect_we_have_since_fixed.sql": "d77f08c85f55573c85027ee2d450c5947d9caeb905abf1b728c50b8c2d6a76a5",
   "0354_revoking_google_at_google_not_only_here.sql": "5fb7b5c38ffd83f19e85c38c42659afaf6b79faf19f302ce6cbc6b5c9cf74727",
-  "0355_a_job_in_a_fixture_project_is_harness_traffic.sql": "d52ca28cd5ed3267773e1146eb1a825a6b0ccc87868b2497512e440056d53bec"
+  "0355_a_job_in_a_fixture_project_is_harness_traffic.sql": "d52ca28cd5ed3267773e1146eb1a825a6b0ccc87868b2497512e440056d53bec",
+  "0356_putting_slack_back_without_a_terminal.sql": "0f32228b01ec657b733e53ae0def34d8ad223f3331d66327589cf7d0cbe0087a",
+  "0357_the_page_can_tell_that_slack_needs_credentials.sql": "793418cb8fe714af698ba252ace8a62436af5040b8fc9659bcf343b0a3b39795",
+  "0358_a_healthy_row_still_needs_an_action.sql": "9bbc3ce922bd22847ae5905eeecad6f58bf5852eeb214842763cb1696f3b497d"
 }

@@ -3346,6 +3346,15 @@ function setupTab() {
   const d = config.SETUP ?? {}
   const services = d.services ?? []
   const google = d.google ?? {}
+  /*
+    #210. From `hq_slack_setup`, not from the services list.
+
+    The first version asked `services` for an entry named "Slack". There is
+    none — Slack is listed there as "The office" — so the condition could never
+    fire and the form never rendered. Handed the same shape `google` has, so
+    nothing here has to match a display string.
+  */
+  const slack = d.slack ?? {}
   const needs = Number(d.needs_you ?? 0)
   const lamp = { ready: 'ok', action: 'degraded', off: 'off' }
 
@@ -3416,6 +3425,61 @@ function setupTab() {
         </div>`,
         )
         .join('')}</div>
+    </article>`
+        : ''
+    }
+
+    <!--
+      Putting Slack back, from the page (#210).
+
+      On 14 September a verification suite deleted the bot token and the
+      signing secret. The restore instruction sent Grant to "the Slack section
+      of Setting up", which did not exist: the only path was a script with the
+      token in an environment variable. Section 31 calls an avoidable request
+      for manual configuration a design failure, and his standing goal is
+      blunter than that - a capability that exists only as a script an agent
+      runs is a capability he does not have.
+
+      Shown only while Slack is missing its credentials, for the same reason
+      the Google form is: once it is connected these are answered, and a form
+      that stays around invites re-entering a working credential.
+
+      Both halves together because reinstalling produces both at the same
+      moment, and a bot token on its own can post while being unable to verify
+      anything inbound - which reads as connected and is half a connection.
+
+      Both fields are cleared on save. They go to the Supabase Vault through
+      the API and are never echoed, never logged and never readable back.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${
+      slack.ready === false
+        ? `<article class="behave" data-lift data-tilt="1.4" data-saidwrap>
+      <div class="bhead">
+        <b>Slack</b>
+        <span class="t-meta">${
+          slack.why_off
+            ? esc(String(slack.why_off))
+            : 'Not connected.'
+        } Reinstall the app at Slack, then paste the two values it gives you.</span>
+        <span class="t-meta" data-said></span>
+      </div>
+      <div class="gsetup">
+        <label class="flab">Bot user OAuth token</label>
+        <input data-sl-bot type="password" autocomplete="off" placeholder="xoxb-…"
+               aria-label="Slack bot user OAuth token">
+        <span class="t-meta">Install App page, after Reinstall to Workspace.</span>
+        <label class="flab">Signing secret</label>
+        <input data-sl-sig type="password" autocomplete="off" placeholder="32 hex characters"
+               aria-label="Slack signing secret">
+        <span class="t-meta">Basic Information, under App Credentials.</span>
+        <div class="srow wrap">
+          <a class="btn small quiet" href="https://api.slack.com/apps" target="_blank"
+             rel="noopener">Open Slack app settings</a>
+          <button class="btn primary" data-save-slack>Reconnect Slack</button>
+        </div>
+      </div>
     </article>`
         : ''
     }
@@ -5043,6 +5107,36 @@ function settingsSheet() {
         submitted again. Either way it does not stay on the page.
       */
       if (secretBox) secretBox.value = ''
+      if (done) await afterWrite()
+    })
+  }
+
+  for (const b of v.querySelectorAll('[data-save-slack]')) {
+    b.addEventListener('click', async () => {
+      const wrap = b.closest('[data-saidwrap]')
+      const botBox = wrap?.querySelector('[data-sl-bot]')
+      const sigBox = wrap?.querySelector('[data-sl-sig]')
+      const bot = String(botBox?.value ?? '').trim()
+      const sig = String(sigBox?.value ?? '').trim()
+      if (bot === '' || sig === '') {
+        say(b, 'Both values are needed — reinstalling gives you both.', 'warn')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Reconnecting…',
+        async () => await act('set_slack_credentials', { p_bot_token: bot, p_signing_secret: sig }),
+        'Slack is back. The office can post and verify again.',
+      )
+      /*
+        Cleared whatever happened, exactly as the Google secret is.
+
+        On success both are in the vault and these copies are redundant; on
+        failure the commonest cause is the two boxes swapped, and leaving a
+        wrong credential in a password field is how it gets submitted twice.
+      */
+      if (botBox) botBox.value = ''
+      if (sigBox) sigBox.value = ''
       if (done) await afterWrite()
     })
   }
