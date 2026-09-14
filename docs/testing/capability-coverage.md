@@ -16,7 +16,7 @@ file can know, and it is the only part worth reading.
 | fully exercised | **17** |
 | partially exercised | **11** |
 | not exercised at all | **2** |
-| `verify:*` suites in the repository | **97** |
+| `verify:*` suites in the repository | **98** |
 | suites with a recorded result | **74** |
 
 ## Domains with NO suite at all
@@ -331,7 +331,9 @@ _No suite._
 
 ## Suites not claimed by any domain above
 
-None — every suite in `package.json` belongs to a domain.
+1 backend suite(s) this matrix has not placed. An unplaced suite is a domain nobody has named:
+
+`duties`
 
 _18 frontend audits are deliberately out of scope here. They belong to the UX QA standard in `docs/spec/ux-qa-governance-2026-09-14.md`._
 
@@ -348,4 +350,4 @@ pushed onto him disguised as something a script forgot:
 
 ---
 
-_98 files in `scripts/verify`. 97 are npm scripts; the rest are measurement tools (`probe`, `space`, `wide`, `press`, `smoke`, `studio`, `seed-appearance`, `texture-sheet`)._
+_99 files in `scripts/verify`. 98 are npm scripts; the rest are measurement tools (`probe`, `space`, `wide`, `press`, `smoke`, `studio`, `seed-appearance`, `texture-sheet`)._

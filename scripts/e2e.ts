@@ -41,9 +41,98 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 
 const RESULTS = '.out/e2e-results.json'
+
+/**
+ * Every result ever recorded, one JSON object per line, never overwritten.
+ *
+ * Issue #226. `RESULTS` above holds ONE result per suite and the next run
+ * replaces it, which is fine for "what is the state now" and useless for the
+ * question that actually caught a defect on 14 September: *has this suite ever
+ * disagreed with itself?*
+ *
+ * `verify:agents` reported 56/56 on 11 September and 55/56 on 14 September
+ * against identical code, because a tiebreak was a random uuid (0361). It had
+ * been flaky for at least three days, and the only reason anyone found out is
+ * that the same suite happened to run twice against the same commit and
+ * somebody happened to compare. Nothing in the repository was keeping the
+ * evidence.
+ *
+ * CLAUDE.md already says a suite that has never been run is not evidence. This
+ * is the next sentence: a suite that has been run ONCE is barely more.
+ *
+ * Keyed by COMMIT, which is the whole design. Two different verdicts against
+ * the same commit is a flake. Two different verdicts across a change is just a
+ * change, and treating those alike would report every fix as flakiness and
+ * every regression as flakiness too.
+ */
+const HISTORY = '.out/e2e-history.jsonl'
+
+/** The commit under test. Unknown rather than guessed when git cannot say. */
+const commit = await new Promise<string>((resolve) => {
+  const child = spawn('git', ['rev-parse', '--short', 'HEAD'], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  let out = ''
+  child.stdout.on('data', (b: Buffer) => {
+    out += b.toString()
+  })
+  child.on('close', () => resolve(out.trim() === '' ? 'unknown' : out.trim()))
+  child.on('error', () => resolve('unknown'))
+})
+
+type Seen = { suite: string; status: string; tally: string; ms: number; at: string; commit: string }
+
+const remember = async (r: Result): Promise<void> => {
+  await mkdir('.out', { recursive: true })
+  const line: Seen = {
+    suite: r.suite,
+    status: r.status,
+    tally: r.tally,
+    ms: r.ms,
+    at: r.at,
+    commit,
+  }
+  await appendFile(HISTORY, `${JSON.stringify(line)}\n`)
+}
+
+/**
+ * Suites that have given more than one verdict for the same commit.
+ *
+ * Not "more than one verdict ever" — that is a fix, or a regression, and both
+ * are supposed to happen.
+ */
+const flaky = async (): Promise<
+  Array<{ suite: string; commit: string; verdicts: string[]; runs: number }>
+> => {
+  if (!existsSync(HISTORY)) return []
+  const seen = new Map<string, { statuses: Map<string, number>; suite: string; commit: string }>()
+  for (const raw of (await readFile(HISTORY, 'utf8')).split('\n')) {
+    if (raw.trim() === '') continue
+    let row: Seen
+    try {
+      row = JSON.parse(raw) as Seen
+    } catch {
+      continue
+    }
+    if (row.commit === 'unknown') continue
+    const key = `${row.suite}@${row.commit}`
+    const at = seen.get(key) ?? { statuses: new Map(), suite: row.suite, commit: row.commit }
+    at.statuses.set(row.status, (at.statuses.get(row.status) ?? 0) + 1)
+    seen.set(key, at)
+  }
+  return [...seen.values()]
+    .filter((v) => v.statuses.size > 1)
+    .map((v) => ({
+      suite: v.suite,
+      commit: v.commit,
+      verdicts: [...v.statuses.entries()].map(([k, n]) => `${k} x${String(n)}`),
+      runs: [...v.statuses.values()].reduce((a, b) => a + b, 0),
+    }))
+    .sort((a, b) => a.suite.localeCompare(b.suite))
+}
 
 /**
  * Per-suite budget.
@@ -301,6 +390,7 @@ if (argv.includes('--gate')) {
     )
     const r = await run(script.replace(/^verify:/, ''), script)
     results.push(r)
+    await remember(r)
     console.log(
       `\n  -> ${r.status.toUpperCase()} in ${String(Math.round(r.ms / 1000))}s${r.tally === '' ? '' : ` — ${r.tally}`}`,
     )
@@ -387,6 +477,7 @@ if (!argv.includes('--report')) {
     const result = await run(suite)
     all[suite] = result
     await save(all)
+    await remember(result)
     console.log(
       `\n  -> ${result.status.toUpperCase()} in ${String(Math.round(result.ms / 1000))}s${
         result.tally === '' ? '' : ` — ${result.tally}`
@@ -492,6 +583,27 @@ if (stuck.length > 0) {
   }
 }
 
+const wobbly = await flaky()
+if (wobbly.length > 0) {
+  /*
+    Its own section, above Passed, because a flaky suite reads as a passing one
+    on the run you happen to look at. #226.
+  */
+  lines.push(
+    '## Flaky — more than one verdict for the SAME commit',
+    '',
+    'A suite here has disagreed with itself against unchanged code. That is not',
+    'a fix and not a regression; it is a result that cannot be trusted in either',
+    'direction. `verify:agents` was in exactly this state for three days and',
+    'nobody knew, because nothing kept the evidence.',
+    '',
+    '| suite | commit | verdicts |',
+    '|---|---|---|',
+    ...wobbly.map((w) => `| \`verify:${w.suite}\` | \`${w.commit}\` | ${w.verdicts.join(', ')} |`),
+    '',
+  )
+}
+
 lines.push(
   '## Passed',
   '',
@@ -522,6 +634,8 @@ await writeFile(REPORT, lines.join('\n'))
 console.log(
   `\ne2e — ${String(passed.length)} passed, ${String(failed.length)} failed, ${String(stuck.length)} could not run, ${String(notRun.length)} not yet attempted`,
 )
+for (const w of wobbly)
+  console.log(`  FLAKY    verify:${w.suite} @ ${w.commit}  ${w.verdicts.join(', ')}`)
 for (const r of failed) console.log(`  FAIL     verify:${r.suite}  ${r.tally}`)
 for (const r of stuck) console.log(`  ${r.status.toUpperCase().padEnd(8)} verify:${r.suite}`)
 console.log(`report: ${REPORT}`)
