@@ -1249,3 +1249,92 @@ assumed. `npm run eval` prints that margin now. #229 has the options.
 Still 🟠 ORANGE, for three narrower reasons: Google is unproven against a real
 Google and jointly blocked; the judge has a ±2 margin; and duties are tested to
 dispatch rather than through the handler.
+
+---
+
+## Backend intelligence breadth — the programme after the acceptance pass
+
+Grant, 14 September, after the routing fix landed. Specification stored verbatim
+at `docs/spec/backend-intelligence-breadth-2026-09-14.md`.
+
+> The backend plumbing has extensive deterministic coverage, but **intelligence
+> breadth is NOT yet proven.**
+
+**The epic is #231.** If you are picking this project up, read that Issue and the
+spec file before touching the router.
+
+### What was measured, and it is the point
+
+Production, not a suite. All 505 routing decisions ever recorded:
+
+| roster | times |
+|---|---|
+| Emma | 269 |
+| Claire | 146 |
+| nobody | 70 |
+| Tom | 20 |
+
+**Oliver, Daniel, Ruby, Marcus and Grace had never been selected once.**
+`delegation_depth` was **0 across all 505**. Consultations: 19 against ~267 real
+instructions.
+
+`verify:delegation` and `verify:handoff` both passed throughout. They prove the
+mechanism works WHEN DRIVEN. They prove nothing about whether real traffic uses
+it — and that distinction is the spine of the whole programme.
+
+### Fixed
+
+`ROSTER_CEILINGS.question` was `[]`, evaluated before subject-matter routing, and
+`question` is 237 of 505 — so the commonest thing Grant does could not reach a
+specialist. Opened to all seven with `TOPIC_ONLY` making them earn it. Deployed.
+
+**4 distinct people now, up from 2. Daniel and Ruby routed to for the first time
+in the system's history.** `verify:roster` 5/7 → 7/7.
+
+### Not fixed, and deliberately not fixed by adding three phrases
+
+Marcus, Grace and Tom still missed on their own targeted asks. Grant:
+
+> Do NOT solve this merely by adding the three exact failed phrases. The
+> requirement is **semantic breadth**. If the current architecture fundamentally
+> cannot generalise beyond keywords, identify that as an **architectural
+> limitation**.
+
+His own example settles the likely answer: *"Run the numbers if we sell it
+cheaper"* is plainly a finance question and matches no word in any expertise list.
+
+### The Issues that carry it
+
+| | |
+|---|---|
+| **#231** | the epic — evidence, all eleven workstreams, 14 acceptance criteria |
+| **#232** | routing breadth, confusion matrix, negative controls, overlapping domains (A–D) |
+| **#233** | real multi-agent collaboration — `delegation_depth > 0` proven in canonical state (E) |
+| **#234** | agent action/capability coverage, six levels from "in code" to "observed" (F) |
+| **#235** | intelligence breadth coverage model, tiers 1/2/3, mutation testing (G–H) |
+| **#236** | prove `verify:drains` goes RED — a guard nobody has seen fail (J) |
+| **#176** | production utilisation telemetry (I) — extended by comment, its P3 now questionable |
+| **#65** | closed, criteria unmet in production — carried forward by #233 |
+
+### Also landed in this pass
+
+- **`verify:drains`**, in the fast gate. The worker was absent ~15 hours on
+  13 September while pg_cron logged **1,440 successful heartbeats**; eleven of
+  Grant's messages waited. `office_health` has no word for "waiting" and still
+  does not — that gap is #236.
+- **`verify:google-live`** 12/12, and a correction: Gmail, Drive and Calendar were
+  **never** blocked on an OAuth client. The credential has worked since
+  8 September. The readiness report said otherwise and was wrong. The Drive API
+  had genuinely never been enabled — one click, now fixed.
+- **`npm run q`**, a plain query helper, after three attempts to read a fifteen-row
+  answer failed on the shape of the `db-query.sh` wrapper rather than the query.
+
+### Standing rule from this programme (workstream K)
+
+Every genuine defect becomes a permanent regression **property**, never a test of
+the phrase that exposed it. Banked so far: questions structurally unable to reach
+specialists · ambiguous questions taking `ceiling[0]` · expertise/fallback
+vocabulary drift · a specialist available but never naturally selected · a
+mechanism existing but never naturally invoked · a heartbeat green while the queue
+is static · health checks blind to never-started work · **vacuous tests passing
+because they matched zero rows** · harness traffic mistaken for production failure.
