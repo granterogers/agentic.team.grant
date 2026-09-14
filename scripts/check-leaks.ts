@@ -126,11 +126,33 @@ const corpus = (
 if (process.argv.includes('--sweep')) {
   const go = rows.filter((r) => r.removable)
   console.log(`\nsweeping ${String(go.length)} removable debris project(s)…`)
+  /*
+    One project's failure must not abandon the other ten.
+
+    0360's sweep died five projects into eleven on a raw 23503 out of
+    `project_delete` — a project that had ever had a Slack channel could not be
+    removed, and the throw took the rest of the run with it. 0360 fixes the
+    function so it REFUSES rather than raises; this is the belt to that braces.
+    A sweep that stops early looks exactly like a sweep that finished, which is
+    CLAUDE.md's teardown trap wearing the other face.
+  */
+  let stopped = 0
   for (const r of go) {
-    const said = (
-      await db.execute(`select public.project_delete('${r.slug.replace(/'/g, "''")}') as r`)
-    ).rows[0] as { r: { ok?: boolean; error?: string } }
-    console.log(`  ${r.slug}: ${said.r.ok === true ? 'gone' : String(said.r.error)}`)
+    try {
+      const said = (
+        await db.execute(`select public.project_delete('${r.slug.replace(/'/g, "''")}') as r`)
+      ).rows[0] as { r: { ok?: boolean; error?: string } }
+      console.log(`  ${r.slug}: ${said.r.ok === true ? 'gone' : String(said.r.error)}`)
+      if (said.r.ok !== true) stopped += 1
+    } catch (error) {
+      stopped += 1
+      console.log(`  ${r.slug}: THREW — ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  if (stopped > 0) {
+    console.log(
+      `\n${String(stopped)} project(s) could not be removed. The sweep continued past each.`,
+    )
   }
   const left = (
     await db.execute('select count(*)::int as n from app.project_debris() where removable')

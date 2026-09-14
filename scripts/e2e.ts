@@ -73,6 +73,71 @@ const NEVER: Record<string, string> = {
     'the umbrella over controls:studio, controls:team and controls:settings, which are run individually — together they are ~35 minutes and running both forms doubles it',
 }
 
+/**
+ * THE FAST READINESS GATE.
+ *
+ * Grant's backend acceptance specification (2026-09-14) asks for two levels,
+ * and only one of them existed. `npm run e2e` is the DEEP ACCEPTANCE SWEEP:
+ * ninety-odd suites, ninety-plus minutes, run deliberately. There was nothing
+ * short enough to run routinely.
+ *
+ * `verify:all` looks like the missing thing and is not. It is
+ * `verify` + `audit:credentials` + `verify:db`, and `verify:db` is a
+ * FORTY-SEVEN command chain that ends in `purge:fixtures --go` and
+ * `slack:tidy --go` — destructive sweeps, not checks. Nobody runs that
+ * routinely and nobody should.
+ *
+ * So this is the curated list, and every entry is here for a stated reason.
+ * The specification names what a fast gate must cover: highest-value backend
+ * paths, severe regressions, persistence, isolation, routing and delegation,
+ * capability honesty, task and project operations, critical cheap
+ * integrations, and fixture cleanup. One or two suites per area, chosen for
+ * the ratio of what they would catch to what they cost.
+ *
+ * NOT in it, deliberately: anything driving a browser (that is the UX QA
+ * standard's job, and `verify:controls:studio` alone is sixteen minutes),
+ * anything spending a real external budget, and anything whose failure would
+ * be a known-open Issue rather than a new regression.
+ *
+ * Keep it under about six minutes. A gate that takes fifteen is a gate that
+ * gets skipped, and a skipped gate is worse than no gate because the
+ * repository still believes it has one.
+ */
+const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
+  // Persistence and the shapes a client actually reaches.
+  ['verify:schema', "the schema's own dangling references"],
+  [
+    'verify:wrappers',
+    'every RPC a client calls is reachable — PostgREST exposes only `public`, and a missing wrapper is invisible until called',
+  ],
+  [
+    'verify:transitions',
+    'the job state machine in the database and the one in the code still agree',
+  ],
+  // Capability honesty. The invariant the whole specification is built around.
+  ['verify:attests', 'an agent may not say it looked when it did not (#185)'],
+  ['verify:knows', 'a false "I can\'t" and a false "I can" are both failures (#64)'],
+  // Routing and delegation, which output attribution cannot prove.
+  ['verify:delegation', 'the work is actually delegated, not eight voices and one worker (#65)'],
+  ['verify:handoff', 'delegation that leaves a trace'],
+  [
+    'verify:cross-interface',
+    'the same instruction through any surface uses the same canonical layer (§22 B)',
+  ],
+  // Project and task operations — what Grant touches most.
+  ['verify:identity', 'a name finds the right project, and an ambiguous one finds nobody'],
+  ['verify:tasks', 'the task system, driven rather than described'],
+  // Isolation. One project cannot see another.
+  ['verify:history', "one conversation, both sides, and nothing from anybody else's project"],
+  // Transport honesty — a message Grant sent must not vanish.
+  ['verify:transport', 'a message does not disappear because a provider was down'],
+  // Permissions and the public surface.
+  ['verify:security', 'the public surface, probed as an attacker would'],
+  ['verify:dryrun', 'a dry run that writes anything is not a dry run'],
+  // Fixture hygiene is part of the test, not a chore after it.
+  ['check:leaks', "no suite left a project, job or channel in Grant's real views"],
+]
+
 type Result = {
   suite: string
   status: 'pass' | 'fail' | 'timeout' | 'error'
@@ -141,7 +206,7 @@ const tallyOf = (lines: string[]): string => {
   return ''
 }
 
-const run = (suite: string): Promise<Result> =>
+const run = (suite: string, script = `verify:${suite}`): Promise<Result> =>
   new Promise((resolve) => {
     const started = Date.now()
     const out: string[] = []
@@ -158,7 +223,7 @@ const run = (suite: string): Promise<Result> =>
       three healthy suites as broken, which is the same class of lie as an
       audit that passes for the wrong reason.
     */
-    const child = spawn('npm', ['run', `verify:${suite}`], {
+    const child = spawn('npm', ['run', script], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
       detached: true,
@@ -219,6 +284,77 @@ const argv = process.argv.slice(2)
 const flag = (name: string): string | undefined => {
   const i = argv.indexOf(`--${name}`)
   return i === -1 ? undefined : argv[i + 1]
+}
+
+if (argv.includes('--gate')) {
+  /*
+    The gate always runs fresh. Resuming is right for a ninety-minute sweep
+    and wrong for a gate: "already recorded" from an hour ago is not an answer
+    to "is it safe to push now". So no load, no resume, no --limit.
+  */
+  const results: Result[] = []
+  console.log(`\nreadiness gate — ${String(GATE.length)} checks\n`)
+  for (const [n, [script, why]] of GATE.entries()) {
+    const bar = '='.repeat(72)
+    console.log(
+      `\n${bar}\ngate ${String(n + 1)}/${String(GATE.length)} — ${script}\n  ${why}\n${bar}`,
+    )
+    const r = await run(script.replace(/^verify:/, ''), script)
+    results.push(r)
+    console.log(
+      `\n  -> ${r.status.toUpperCase()} in ${String(Math.round(r.ms / 1000))}s${r.tally === '' ? '' : ` — ${r.tally}`}`,
+    )
+  }
+
+  const bad = results.filter((r) => r.status !== 'pass')
+  const total = results.reduce((a, r) => a + r.ms, 0)
+  const stamp = new Date().toISOString().slice(0, 10)
+
+  const rows = results.map((r, i) => {
+    const why = GATE[i]?.[1] ?? ''
+    const mark = r.status === 'pass' ? 'green' : r.status === 'fail' ? 'RED' : 'COULD NOT RUN'
+    return `| \`${GATE[i]?.[0] ?? r.suite}\` | ${mark} | ${r.tally === '' ? '—' : r.tally} | ${String(Math.round(r.ms / 1000))}s | ${why} |`
+  })
+
+  const doc = [
+    '# Fast readiness gate',
+    '',
+    `Generated by \`npm run gate\` on ${stamp}. Issue #224.`,
+    '',
+    `**${bad.length === 0 ? 'GREEN' : 'RED'}** — ${String(results.length - bad.length)} of ${String(results.length)} passed in ${String(Math.round(total / 1000))}s.`,
+    '',
+    'This is the SHORT gate. It is not the deep acceptance sweep, and passing it',
+    'is not a claim about the whole backend — `npm run e2e` is that claim. What a',
+    'green gate says is narrower and still worth having: no severe regression in',
+    'persistence, isolation, routing, delegation, capability honesty, project and',
+    'task operations, the public surface, or fixture hygiene.',
+    '',
+    '| check | verdict | tally | time | why it is in the gate |',
+    '|---|---|---|---|---|',
+    ...rows,
+    '',
+  ]
+  for (const r of bad) {
+    doc.push(
+      `## \`${GATE[results.indexOf(r)]?.[0] ?? r.suite}\` — ${r.status}`,
+      '',
+      '```',
+      ...r.tail,
+      '```',
+      '',
+    )
+  }
+  await mkdir('docs/testing', { recursive: true })
+  await writeFile('docs/testing/readiness-gate.md', doc.join('\n'))
+
+  console.log(
+    `\ngate — ${String(results.length - bad.length)}/${String(results.length)} passed in ${String(Math.round(total / 1000))}s`,
+  )
+  for (const [i, r] of results.entries())
+    if (r.status !== 'pass')
+      console.log(`  ${r.status.toUpperCase().padEnd(8)} ${GATE[i]?.[0] ?? r.suite}  ${r.tally}`)
+  console.log('report: docs/testing/readiness-gate.md')
+  process.exit(bad.length === 0 ? 0 : 1)
 }
 
 const all = await load()
@@ -375,11 +511,24 @@ if (notRun.length > 0) {
 }
 
 await mkdir('docs/testing', { recursive: true })
-await writeFile('docs/testing/e2e-2026-09-11.md', lines.join('\n'))
+/*
+  The report used to be written to `e2e-2026-09-11.md` — a date baked into the
+  filename, so every run after the eleventh overwrote a file whose own name
+  said it was from a day it was not. Dated at generation now.
+*/
+const REPORT = `docs/testing/e2e-${new Date().toISOString().slice(0, 10)}.md`
+await writeFile(REPORT, lines.join('\n'))
 
 console.log(
   `\ne2e — ${String(passed.length)} passed, ${String(failed.length)} failed, ${String(stuck.length)} could not run, ${String(notRun.length)} not yet attempted`,
 )
 for (const r of failed) console.log(`  FAIL     verify:${r.suite}  ${r.tally}`)
 for (const r of stuck) console.log(`  ${r.status.toUpperCase().padEnd(8)} verify:${r.suite}`)
-console.log('report: docs/testing/e2e-2026-09-11.md')
+console.log(`report: ${REPORT}`)
+
+/*
+  A runner that always exits 0 cannot gate anything, and a caller that trusts
+  it is being told a sweep with twelve failures succeeded. `stuck` counts too:
+  the specification is explicit that "could not be tested" is never a pass.
+*/
+process.exit(failed.length + stuck.length === 0 ? 0 : 1)
