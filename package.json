@@ -203,6 +203,7 @@
     "q": "tsx scripts/q.ts",
     "verify:drains": "tsx scripts/verify/drains.ts",
     "verify:roster": "tsx scripts/verify/roster.ts",
+    "verify:routing-breadth": "tsx scripts/verify/routing-breadth.ts",
     "measure": "tsx scripts/measure.ts"
   },
   "devDependencies": {
