@@ -226,6 +226,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['verify:security', 'the public surface, probed as an attacker would'],
   ['verify:dryrun', 'a dry run that writes anything is not a dry run'],
   // Fixture hygiene is part of the test, not a chore after it.
+  [
+    'verify:drains',
+    'the queue is actually moving — a dead worker once left Grant waiting fifteen hours while the heartbeat logged 1,440 successes',
+  ],
   ['check:leaks', "no suite left a project, job or channel in Grant's real views"],
 ]
 
