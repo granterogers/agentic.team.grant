@@ -98,6 +98,21 @@ export interface CompletionRequest {
   /** Optional explicit model. Omit to take the highest-priority usable one. */
   readonly model?: string
   readonly maxTokens?: number
+  /**
+   * Sampling temperature, when the caller needs the SAME answer twice.
+   *
+   * Omitted for ordinary work — the office is not trying to be deterministic
+   * when it writes to Grant, and pinning it there would make every reply
+   * flatter for no benefit.
+   *
+   * `npm run eval` sets it to 0, and that is not a preference. A judge left at
+   * the provider default gave 17/19 and then 16/19 on an UNCHANGED corpus with
+   * different cases disagreeing each run, which is the same defect as 0361's
+   * random tiebreak wearing a different hat: a number that changes when nothing
+   * under test changed is not a measurement. The router already pins the judge
+   * MODEL for exactly this reason and stopped one step short.
+   */
+  readonly temperature?: number
   /** Ties the call to a job for usage accounting and the ledger. */
   readonly correlationId?: string
   /**
@@ -303,6 +318,7 @@ export class ProviderRouter {
     const body = buildRequestBody(model, {
       messages: request.messages,
       ...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
+      ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
     })
 
     // `response.json()` is `unknown`, correctly: the provider's response is

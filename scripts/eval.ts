@@ -227,7 +227,22 @@ const judge = async (
         case, not the typical one, or the harness silently loses whichever case
         is hardest — which is the one most worth grading.
       */
-      maxTokens: 2_000,
+      maxTokens: 4_000,
+      /*
+        Zero, because this is an instrument.
+
+        The model was already pinned — the header explains that three runs
+        judged by three mixtures moved the agreement figure and that a number
+        which changes when nothing under test changed is not a measurement. It
+        pinned the model and left the SAMPLING free, so the same judge on the
+        same corpus still gave 17/19 and then 16/19 with different cases
+        disagreeing, and one case flipping from poor to good.
+
+        That is 0361's coin flip in the measuring instrument, and chasing the
+        last two disagreements before fixing it would have been fitting the
+        corpus to noise.
+      */
+      temperature: 0,
       model: JUDGE_MODEL,
     })
     const found = /\{[\s\S]*\}/.exec(result.content)
@@ -367,6 +382,27 @@ const run = recorded.r
 const mean = scored.reduce((a, s) => a + s.score, 0) / scored.length
 console.log(`\njudge: ${model} (prompt ${JUDGE_VERSION})`)
 console.log(`agreement with Grant's own corrections: ${String(run.agreed)}/${String(run.cases)}`)
+/*
+  The margin, printed with the number rather than buried in a comment.
+
+  This figure MOVES BY ONE OR TWO CASES between runs of an unchanged corpus, and
+  that was established rather than assumed: two consecutive runs on the same
+  twenty cases, the same pinned model and `temperature: 0` gave 16/19 and 16/18,
+  with one verdict flipping outright, the same case scoring 5/5 and then 3/5,
+  and a different case failing to parse each time.
+
+  The model was already pinned because three mixtures gave three answers. Pinning
+  the sampling as well was the obvious next step and it is NOT SUFFICIENT on a
+  free model — the provider does not give back what temperature 0 asks for.
+
+  So the honest reading is a range, and saying so here is what stops the next
+  person tuning the prompt against noise. Chasing the last two disagreements
+  before this was measured would have been fitting the corpus to a coin.
+*/
+console.log(
+  '  (this figure moves +/- 2 cases between runs on free models, even pinned and at' +
+    ' temperature 0 — read it as a range, and never tune the prompt on one run)',
+)
 for (const d of run.disagreed) {
   console.log(
     `  disagreed on ${d.slug}: he said ${d.expected}, the judge said ${d.judged} — ${d.reason.slice(0, 80)}`,

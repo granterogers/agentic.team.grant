@@ -1235,6 +1235,21 @@ Each of these cost real time. They are here so they cost it once.
   show**, and a rubric that never mentions the context makes the column dead
   weight. "No tool call was made" is only evidence if the rubric says a claimed
   read without one is the worst thing in the list.
+- **`temperature: 0` does not make a free model deterministic, and the judge
+  proves it.** `eval.ts` already pinned the judge MODEL because three mixtures
+  gave three answers, then left the SAMPLING free. Pinning it as well was the
+  obvious next step and it is not sufficient: two consecutive runs of an
+  unchanged corpus, same pinned model, temperature 0, gave 16/19 and 16/18 —
+  one verdict flipped outright, two cases moved two points, and a DIFFERENT case
+  failed to parse each time. Ask for temperature 0 anyway, it costs nothing, and
+  then **print the margin next to the number** so nobody tunes a prompt against
+  a coin. A systematic five-case bias still shows through a two-case margin,
+  which is the useful thing to know about it (#229).
+- **Some of that noise is not sampling — it is the reasoning budget.** A judge
+  given `maxTokens: 2000` spends it thinking and returns no content, which lands
+  as "the judge's answer could not be read" and quietly changes the denominator.
+  #116 already recorded a worst case of 1,091 reasoning tokens before any
+  content. Raise the budget before blaming the model.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
