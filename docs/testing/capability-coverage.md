@@ -252,7 +252,7 @@ file can know, and it is the only part worth reading.
 | `verify:failures` | A failure the office recognises. | green — 16/16 checks passed |
 | `verify:chaos` | Failure injection across every integration (Phase 10). | green — 21/21 checks passed |
 
-**Gap.** chaos covers 7 of the 20 cases the master spec §18 names. The other 13 have no suite: cold starts, a 100MB file, a zero-byte file, two workers leasing one job, a migration applied twice, clock skew.
+**Gap.** verify:chaos went 21 -> 29 for #228: two workers dequeuing at once (exactly one wins, and the winner's lease carries its own name), an expired lease RECOVERED to retrying with the dead worker's claim released, a migration recorded twice refused by the ledger, empty title and empty content recorded rather than judged, and a terminal job refused a move back into flight. Still uncovered: cold starts, a 100MB file, rate limiting as distinct from one 429, and tool-response corruption that is valid JSON of the wrong shape.
 
 ### Recurring duties — Partial
 
