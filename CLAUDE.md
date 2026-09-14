@@ -1277,6 +1277,24 @@ Each of these cost real time. They are here so they cost it once.
   than merely obeyed. A check asserting `error` would have invited somebody to
   fix the asking away. Assert that nothing was created and that the question
   names what it matched; never the mechanism, never the wording.
+- **`connector_capabilities` is keyed to KNOWLEDGE CONNECTORS, and there are
+  only six of them.** A dashboard project is attached to a `drive`, a `notion`,
+  a `notebooklm`, a `github`, an `mcp` or an `upload` — that is what the table
+  is for, and a foreign key enforces it. Gmail and Calendar are not project
+  sources and have no rows there, which looks alarming and is correct. What
+  agents are actually told comes from **`tool_permissions`**, read by
+  `capabilityBrief`: `gmail.read`, `gmail.search`, `calendar.read` and
+  `calendar.write` are on, and `gmail.send` is deliberately off while the
+  `gmail.compose` scope is granted — the scope makes sending possible and the
+  switch is what stops it. A migration adding Gmail to the wrong table was
+  written and refused by that foreign key before it could confuse anybody.
+- **A check can pass because it asked a question the schema cannot answer.**
+  `verify:google-live`'s first capability check queried
+  `connector_capabilities` for connectors named `gmail`, `google_drive` and
+  `google_calendar`. None exists, so it matched nothing and reported
+  *"0 claim(s) marked api"* — green, and vacuous. Worse than a missing check,
+  because the report says the question was asked. **When a check's happy path is
+  "found nothing", assert first that the thing it searches is non-empty.**
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

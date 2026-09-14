@@ -184,25 +184,54 @@ ok(
 )
 
 /*
-  What the office TELLS people about Google has to match what Google just said.
+  What the office TELLS its agents about Google has to match what Google just
+  said. This is #64's shape applied to a connector.
 
-  This is #64's shape applied to a connector rather than an agent: the capability
-  sheets are what `capabilityBrief` reads, and a sheet claiming a reach the
-  credential does not carry is how an agent promises Grant something that cannot
-  happen. Checked in the direction that costs work — a claim with nothing behind
-  it — rather than in both, because a scope granted and unused is only waste.
+  The FIRST draft of this check queried `connector_capabilities` for connectors
+  called 'gmail', 'google_drive' and 'google_calendar'. None of those exist —
+  that table is keyed to KNOWLEDGE CONNECTORS, the things a dashboard project is
+  attached to, and Gmail is not one. So the query matched nothing and the check
+  passed with "0 claims", which is a check passing because it asked a question
+  about a table that could never answer it. Vacuously true, and green.
+
+  `tool_permissions` is what `capabilityBrief` reads and therefore what every
+  agent is actually told. Asked of that instead, the answer is reassuring and
+  worth asserting: gmail.read, gmail.search, calendar.read and calendar.write
+  are enabled and the credential behind them is live.
 */
-const claims = (
+const tools = (
   await db.execute(`
-    select verb, reach from public.connector_capabilities
-     where connector in ('gmail', 'google_drive', 'google_calendar')
-       and reach = 'api'
-     order by connector, verb`)
-).rows as { verb: string; reach: string }[]
+    select tool, enabled from public.tool_permissions
+     where tool like 'gmail.%' or tool like 'calendar.%'
+     order by tool`)
+).rows as { tool: string; enabled: boolean }[]
+
 ok(
-  'every Google capability the office claims as api has a live credential behind it',
-  claims.length === 0 || granted.length > 0,
-  `${String(claims.length)} claim(s) marked api, and the credential is live`,
+  'the office actually has Google tools on its books, so this check is not vacuous',
+  tools.length > 0,
+  tools.map((t) => `${t.tool}${t.enabled ? '' : ' (off)'}`).join(', '),
+)
+
+const enabledReads = tools.filter((t) => t.enabled && /\.(read|search)$/.test(t.tool))
+ok(
+  'every ENABLED Google read tool has a live credential behind it',
+  enabledReads.length > 0 && granted.length > 0,
+  `${String(enabledReads.length)} enabled read tool(s), credential live`,
+)
+
+/*
+  And the one that must stay off.
+
+  `gmail.send` is DISABLED while `gmail.compose` sits in the granted scopes, and
+  that gap is deliberate: the scope makes sending possible and the switch is
+  what stops it. A tool flipped on by accident would let an agent email somebody
+  as Grant, which is the least reversible thing in the building.
+*/
+const send = tools.find((t) => t.tool === 'gmail.send')
+ok(
+  'gmail.send is switched OFF, even though the scope to send exists',
+  send !== undefined && send.enabled === false,
+  send === undefined ? 'no gmail.send row at all' : `enabled=${String(send.enabled)}`,
 )
 
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
