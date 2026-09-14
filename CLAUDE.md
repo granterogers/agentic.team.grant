@@ -1141,6 +1141,56 @@ Each of these cost real time. They are here so they cost it once.
   points at the line after the real problem. When a migration is built FROM
   live definitions (the safe way to change one predicate in an 8,000-character
   function without transcribing it), terminate every one.
+- **`order by <timestamp> desc, <uuid> desc` is a coin flip, and it decided
+  which project a chat was pointed at.** `app.current_project` broke ties with
+  `gen_random_uuid()` while `switched_at` defaults to `app.now_utc()`, which is
+  `now()` — the TRANSACTION timestamp, identical to the microsecond for two rows
+  written in one statement. So "the latest switch wins" was true on average.
+  `verify:agents` reported **56/56 on 11 September and 55/56 on 14 September
+  against identical code**, and both runs were honest. 0291 had fixed the order
+  of the FILTER and left the order of the ROWS undecided. A monotonic identity
+  column is the tiebreaker (0361) — assigned by the sequence at INSERT, so it
+  reflects write order where the clock cannot. **Before ordering by a uuid,
+  ask what it is standing in for.** `min(uuid)` is already in this list; this is
+  the same mistake wearing an ORDER BY.
+- **A suite that has been run ONCE is barely more evidence than one that has
+  never been run.** The flake above was invisible for at least three days and
+  was found only because the same suite happened to run twice against the same
+  code and somebody happened to compare. `e2e.ts` keys one result per suite and
+  the next run overwrites it, so a suite failing one run in three looks like a
+  suite that failed, got fixed, and passes. Keyed to the COMMIT, two different
+  verdicts is the signal; across a change it is just a change (#226).
+- **Validate the test before you change production code.** The regression check
+  written for 0361 failed **10 of 10** on its first run and looked exactly like
+  a live ordering defect. It had reused a subject an earlier section of the same
+  file had already retired — the file warns about this forty lines above — and a
+  retired project is a fixture, a fixture switch correctly reads as no scope,
+  and every null counted as the older switch winning. The test was wrong and the
+  fix was right, which is the one direction that sends somebody rewriting a
+  function that works.
+- **A security check that cries wolf is one somebody starts overriding.**
+  `verify:hq`'s token-shape list had a bare `/xox[abposr]-/`, and it matched the
+  Slack credential field's own `placeholder="xoxb-…"` and the help text *"Starts
+  xoxb-"*. Nothing had leaked. Four of the six shapes already required token
+  MATERIAL after the prefix and two did not. Assert the property — a credential
+  is present — not the artefact, which was "the letters xoxb appear somewhere";
+  fourth instance of that correction in this file. **And loosening a security
+  pattern needs a control**: each shape is now shown a synthetic credential of
+  its own kind and must still catch it, because a shape list can be weakened
+  until it matches nothing and every check goes on reading "clean". Build the
+  specimens from concatenated pieces so no token-shaped literal sits in the
+  repository.
+- **32 foreign keys point at `public.projects` and only nine cascade.**
+  `app.project_delete` cleared attachments and the switch log and not
+  `slack_channel_map`, so a project that had ever had a Slack channel could
+  never be deleted — and it failed by RAISING `23503` out of a SECURITY DEFINER
+  function rather than refusing, which killed `check:leaks --sweep` five
+  projects into eleven and abandoned the other six. Two defects in one crash,
+  and fixing only the named table would bring the second one back. 0360 clears
+  the mapping AND turns any remaining violation into a sentence naming what
+  holds the project. A sweep must also continue past one failure and say how
+  many it could not remove: **a sweep that stops early looks exactly like a
+  sweep that finished.**
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

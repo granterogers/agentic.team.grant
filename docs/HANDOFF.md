@@ -1145,3 +1145,68 @@ the time before the hardening is finished.
 is no public API, so an unattended client must impersonate a browser session,
 which is exactly what the ban named. Pasting a source in by hand still works and
 produces a document like any other.
+
+---
+
+## Pre-human backend acceptance — 14 September 2026
+
+Grant supplied a **Pre-Human Backend Acceptance & Full-System Stress Test**
+specification (`docs/spec/backend-acceptance-2026-09-14.md`, verbatim) and a
+**Master UX QA Governance Prompt** (`docs/spec/ux-qa-governance-2026-09-14.md`,
+verbatim). Backend readiness comes first — the acceptance document ends
+*"BACKEND READINESS FIRST. HUMAN TESTING SECOND."*
+
+The programme is #224. **Verdict: 🟠 ORANGE — begin human testing, with five
+named limits.** Full report: `docs/testing/backend-readiness-2026-09-14.md`.
+
+### What was run
+
+All **74 backend suites**: 72 passed on the sweep, 0 timed out, **0 could not be
+run**, and both failures were real and are fixed. Plus 1,017 unit tests, the
+behavioural evaluator, and the coverage matrix. Roughly 95 minutes of wall clock
+at **£0** — free-tier models only.
+
+### What is new
+
+| | |
+|---|---|
+| `npm run gate` | the **fast readiness gate**, 15 curated checks in 384s. It did not exist: `verify:all` is `verify` + `audit:credentials` + `verify:db`, and `verify:db` is a 47-command chain ending in two destructive sweeps |
+| `npm run coverage` | the Phase 1 **capability coverage matrix**, generated from the repository. 30 domains: 17 full, 11 partial, **2 with no suite at all** |
+
+### The two real defects, both fixed
+
+- **0361 — "the latest switch wins" was decided by a coin flip.** `switched_at`
+  is the transaction timestamp and `switch_id` was a random uuid, so two
+  switches in one transaction ordered arbitrarily. In production that points a
+  chat at the project from two switches ago. A monotonic identity column now
+  breaks the tie, with a ten-round regression check.
+- **0360 — `app.project_delete` could not remove a project that had ever had a
+  Slack channel**, and crashed the sweep rather than refusing. 11 debris
+  projects have since been swept out of Grant's views; zero remain.
+
+Four smaller ones: `e2e.ts` always exited 0; its report filename had a stale
+date baked in; `check:leaks --sweep` aborted on first failure; and a
+token-shape security check matched its own help text.
+
+### The five reasons it is ORANGE, in the order they would bite
+
+1. **Recurring duties have never been tested** (#225) — the only thing that acts
+   without Grant asking.
+2. **Gmail, Drive and Calendar have never touched a real Google** — blocked on a
+   Phase 9 OAuth client (ADR-0013).
+3. **The behavioural corpus is 7 cases** (#171). The judge agrees with Grant
+   7/7, so the instrument is sound; it has almost nothing to measure.
+4. **`verify:chaos` covers 7 of §18's 20 cases** (#228).
+5. **`verify:agents` was flaky for three days and nothing measures flake**
+   (#226).
+
+**NotebookLM has no suite either** (#227) — and the deliverable there is a
+capability probe recording limitations as data, never a revival of the sync,
+which ADR-0013 refused.
+
+### Not done, deliberately
+
+The **18 frontend suites** were not run in this pass. They belong to the UX QA
+standard, not to a backend acceptance programme, and the coverage matrix names
+them rather than leaving them out. The UX remediation epic (#223, children
+#214–#222) has not been started.
