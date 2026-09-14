@@ -93,6 +93,7 @@ import {
 } from '../agents/plan.ts'
 import { remember } from '../agents/remember.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
+import { nameSubjects } from '../agents/subject.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
@@ -151,6 +152,15 @@ async function speaker(
   addressedTo: string | null,
   instruction: string,
   /**
+   * How the office reaches a model, for the semantic fallback below.
+   *
+   * Optional, and its absence is not an error: without it routing is exactly
+   * what it was before #232 — the trigram matcher and nothing else. Every
+   * caller in production passes it; a test that only wants the literal path
+   * omits it and gets the literal path.
+   */
+  router: ProviderRouter | null = null,
+  /**
    * Which dashboard project this is, so the roster respects who works on it.
    *
    * Null for work with no project, which is most duties. See `pickRoster`'s
@@ -191,10 +201,37 @@ async function speaker(
     degrading to "chief-of-staff answers everything" is the very complaint
     this is fixing.
   */
-  const topical = await db
+  const literal = await db
     .execute(`select slug from app.who_knows_about(${lit(instruction)}, 3)`)
     .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
     .catch(() => undefined)
+
+  /*
+    And when no word in the request names anybody, read it for MEANING (#232).
+
+    `who_knows_about` is a trigram match against `staff.expertise`, so it can
+    only find a specialist whose subject Grant happened to name. Measured over
+    91 realistic asks it reached the right person 31% of the time, and 0% for
+    every phrasing that describes a subject without using its noun — which is
+    how he talks, especially into a voice note. His own example, *"Run the
+    numbers if we sell it cheaper"*, matches no word in any expertise list.
+
+    Only when the literal matcher found NOTHING. An expertise hit is Grant's
+    own vocabulary saying who this belongs to and a model does not get to
+    overrule it; this is the else branch, not a second opinion. It also keeps
+    the cost where it belongs — no extra call on the requests that already
+    route correctly.
+
+    `undefined` from the query above means the lookup FAILED, which is not the
+    same as finding nobody, and the distinction is load-bearing exactly as it
+    is for `onProject` below: a failed lookup falls through to `TOPIC_ROLES`
+    untouched rather than spending a model call to paper over a database
+    hiccup.
+  */
+  const topical =
+    literal === undefined || literal.length > 0 || router === null
+      ? literal
+      : await nameSubjects(db, router, instruction, {}).catch(() => literal)
 
   /*
     Who works on this project (#36, migration 0323).
@@ -1012,6 +1049,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         deps.db,
         payload.addressed_to ?? null,
         instruction,
+        deps.router,
         job.projectId ?? null,
       )
 

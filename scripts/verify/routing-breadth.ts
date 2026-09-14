@@ -42,8 +42,10 @@
 
 import { classifyIntent } from '../../src/agents/intent.ts'
 import { pickRoster, type RoleSlug } from '../../src/agents/router.ts'
+import { nameSubjects } from '../../src/agents/subject.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { ProviderRouter } from '../../src/providers/router.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -54,6 +56,12 @@ const db: SqlExecutor = new ManagementApiExecutor(
   process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg',
   token,
 )
+/*
+  The key is resolved from the vault by the router itself, so the environment
+  variable is optional here — a local run with one set keeps working and a run
+  without one still reaches a model. Never printed.
+*/
+const router = new ProviderRouter(db, process.env.OPENROUTER_API_KEY ?? '')
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 let pass = 0
@@ -524,14 +532,41 @@ type Result = Case & {
   verdict: 'correct' | 'acceptable' | 'claire-fallback' | 'wrong'
 }
 
-const results: Result[] = []
-for (const c of CORPUS) {
+/*
+  How many cases the semantic layer was actually asked about, and how many it
+  named somebody for.
+
+  Reported, and then asserted on. Every failure inside `nameSubjects` — no
+  model, a rate limit, an empty completion — comes back as an empty array by
+  design, which is correct for the product and catastrophic for a measurement:
+  a run where every free model refused us would print the same 31% as a run
+  where the layer works and would read as "the fix did nothing". The counters
+  are what tell those two apart.
+*/
+let asked = 0
+let named = 0
+
+const decide = async (c: Case): Promise<Result> => {
   const classification = classifyIntent(c.ask)
-  const topical = (
+  const literal = (
     (await db.execute(`select slug from app.who_knows_about(${lit(c.ask)}, 3)`)).rows as {
       slug: RoleSlug
     }[]
   ).map((r) => r.slug)
+
+  /*
+    The same else-branch handlers/instruction.ts takes (#232).
+
+    Not a second opinion: an expertise hit is Grant's own vocabulary saying who
+    this belongs to, and the model is only asked when no word in the request
+    named anybody.
+  */
+  let topical: readonly RoleSlug[] = literal
+  if (literal.length === 0) {
+    asked++
+    topical = await nameSubjects(db, router, c.ask)
+    if (topical.length > 0) named++
+  }
   const { roster, reason } = pickRoster(classification, c.ask, topical)
 
   const verdict: Result['verdict'] =
@@ -547,15 +582,32 @@ for (const c of CORPUS) {
             ? 'claire-fallback'
             : 'wrong'
 
-  results.push({
+  return {
     ...c,
     intent: classification.intent,
     confident: classification.confident,
     chosen: roster,
     reason,
     verdict,
-  })
+  }
 }
+
+/*
+  Six at a time.
+
+  Ninety-one cases, roughly half of which now make a model call, is four
+  minutes serially and forty seconds in small batches — and the office is not
+  the thing under test here, so there is no reason to be gentle with it beyond
+  staying well inside a free tier's rate limit. Batched rather than unbounded
+  because ninety-one simultaneous requests to a free endpoint is how you get
+  429s that look like the layer failing to name anybody.
+*/
+const results: Result[] = []
+for (let i = 0; i < CORPUS.length; i += 6) {
+  results.push(...(await Promise.all(CORPUS.slice(i, i + 6).map(decide))))
+  process.stdout.write('.')
+}
+console.log('')
 
 // ---------------------------------------------------------------------------
 // The confusion matrix
@@ -628,6 +680,9 @@ console.log(
 console.log(`  fell back to Claire   ${String(fellBack.length)}`)
 console.log(`  went to the wrong specialist ${String(wrong.length)}`)
 console.log(
+  `  read for meaning   ${String(asked)} cases had no literal match; the semantic layer named somebody for ${String(named)}`,
+)
+console.log(
   `  false positives on the ${String(controls.length)} Claire-only controls: ${String(falsePositives.length)}` +
     (defensible.length === 0
       ? ''
@@ -660,6 +715,28 @@ for (const t of targets.filter((x) => x !== 'nobody')) {
   numbers above look good is to widen everything, which puts a model call on
   every "how are we doing?" — #230's fix was one line from doing exactly that.
 */
+/*
+  The semantic layer was actually reached.
+
+  Every failure inside `nameSubjects` degrades to an empty array on purpose,
+  so a run in which every free model refused us produces exactly the numbers a
+  run with no semantic layer at all produces. Without this check the suite
+  would report the pre-#232 accuracy and read as "the fix did nothing", which
+  is the most expensive possible way to be wrong about your own measurement.
+
+  Asserted as a PROPERTY rather than a rate: it named somebody at least once.
+  A threshold here would be a second, worse copy of the accuracy figures below
+  and would go red the day the literal matcher improves enough that hardly
+  anything reaches this layer.
+*/
+ok(
+  'the semantic layer was reached and answered, so these numbers describe it',
+  asked === 0 || named > 0,
+  asked === 0
+    ? 'every case matched literally — nothing to read for meaning'
+    : `${String(named)}/${String(asked)} named somebody`,
+)
+
 ok(
   'trivial work still goes to Claire alone — no false-positive specialists',
   falsePositives.length === 0,

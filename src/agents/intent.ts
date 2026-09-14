@@ -68,6 +68,33 @@ export interface Classification {
   readonly matched: readonly string[]
   /** The classes that were plausible, cheapest first. */
   readonly considered: readonly IntentClass[]
+  /**
+   * Whether any rule recognised this text at all.
+   *
+   * `intent` is `thought` in two completely different situations and until
+   * #232 nothing downstream could tell them apart:
+   *
+   *   - Grant wrote a remark and said so — *"fyi"*, *"just thinking"*, *"note
+   *     to self"*. A deliberate remark. §9 is right that it convenes nobody.
+   *   - No rule matched, so the cheapest reading was taken as a safe default.
+   *     *"Run the numbers if we sell it cheaper."* is that case, and it is not
+   *     a remark — it is a piece of work whose phrasing this file's regexes do
+   *     not cover.
+   *
+   * Collapsing the two sent every indirect, vague or spoken phrasing to the
+   * class that convenes nobody, which is #230's defect one layer up: measured
+   * over the #232 corpus, `vague`, `colloquial` and `speech` scored 0% and
+   * every one of them had a specialist correctly identified and then discarded
+   * here. `pickRoster` reads this to let an UNRECOGNISED request reach at most
+   * one specialist when the subject is clear, while a deliberate remark still
+   * reaches nobody.
+   *
+   * Not `confident`, which already means something else: a contested reading
+   * is text two rules both understood, and unrecognised text is text no rule
+   * understood. CLAUDE.md records what conflating two sources that fail in
+   * different directions costs.
+   */
+  readonly recognised: boolean
   /** Non-secret, shown to Grant when a clarification is warranted. */
   readonly reason: string
 }
@@ -257,6 +284,7 @@ export const classifyIntent = (instruction: string): Classification => {
     return {
       intent: 'thought',
       confident: false,
+      recognised: false,
       matched: [],
       considered: [],
       reason: 'the instruction was empty, so the cheapest class was taken',
@@ -280,6 +308,7 @@ export const classifyIntent = (instruction: string): Classification => {
     return {
       intent: 'thought',
       confident: false,
+      recognised: false,
       matched: [],
       considered: [],
       reason:
@@ -295,6 +324,7 @@ export const classifyIntent = (instruction: string): Classification => {
   return {
     intent,
     confident: !contested,
+    recognised: true,
     matched,
     considered,
     reason: contested

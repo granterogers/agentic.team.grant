@@ -187,18 +187,38 @@ describe('#230: a question may reach a specialist, but the subject has to earn i
     expect(pickRoster(classifyIntent(text), text).roster).toEqual([])
   })
 
-  it('convenes nobody when the reading is contested, despite the wider ceiling', () => {
+  it('convenes nobody when the reading is contested AND no subject is named', () => {
     /*
       `ceiling[0]` used to be taken here. With `question` opened from [] to seven
       roles that line would have handed every ambiguous question to the finance
       director purely for being first in the list. §6 resolves ambiguity
-      downward and the floor for a question is the Chief of Staff.
+      downward and the floor for a question with no subject is the Chief of
+      Staff.
     */
-    const text = 'What does a fifteen percent cut to the middle tier do to our gross margin?'
+    const text = 'What is the status of that thing?'
     const contested = { ...classifyIntent(text), confident: false }
     const r = pickRoster(contested, text)
     expect(r.roster).toEqual([])
     expect(r.reason).toContain('Chief of Staff')
+  })
+
+  it('convenes exactly one when the reading is contested but the subject is not', () => {
+    /*
+      #232. The half the rule above used to get wrong.
+
+      An uncertain READING is not an uncertain SUBJECT. This sentence is
+      unmistakably a question for the finance director and reads as both a
+      question and a discussion, so the old rule sent it to Claire for being
+      AMBIGUOUS rather than for being unclear — and `verify:routing-breadth`
+      measured what that costs across the corpus. One person, never a team,
+      which is also the shape `routing_decisions_unconfident_stays_small`
+      requires of the recorded row.
+    */
+    const text = 'What does a fifteen percent cut to the middle tier do to our gross margin?'
+    const contested = { ...classifyIntent(text), confident: false }
+    const r = pickRoster(contested, text, ['finance-director'])
+    expect(r.roster).toEqual(['finance-director'])
+    expect(r.reason).toContain('contested')
   })
 
   it('takes the intersection rather than the whole widened ceiling', () => {
@@ -215,15 +235,25 @@ describe('#230: a question may reach a specialist, but the subject has to earn i
 })
 
 describe('the roster is an intersection, not a union', () => {
-  it('takes only the ceiling roles the request is actually about', () => {
+  it('takes only the roles the request is actually about', () => {
     const text = 'I need you to compare competitor pricing and model the margin impact'
     const c = classifyIntent(text)
     expect(c.intent).toBe('assignment')
     const { roster } = pickRoster(c, text)
-    // finance matches the topic but is NOT in assignment's ceiling, so a union
-    // would have pulled it in. The intersection must not.
+    /*
+      Research and finance are both genuinely named by this sentence and both
+      are now permitted for an assignment — #232 widened these ceilings after
+      measuring what a ceiling that predates half the roster costs: *"Draft the
+      announcement email"* named the communications director, was refused by
+      the table, and went to research instead.
+
+      What must still hold is that the roster is an INTERSECTION. Quality and
+      operations have nothing to do with competitor pricing and a union of
+      ceiling and subject would have pulled the whole class in.
+    */
     expect(roster).toContain('research-director')
-    expect(roster).not.toContain('finance-director')
+    expect(roster).not.toContain('quality-director')
+    expect(roster).not.toContain('operations-director')
   })
 
   it('falls back to one role, not the whole ceiling, when no subject is named', () => {
@@ -312,5 +342,87 @@ describe('the duplicate resolution', () => {
     const text = 'I need you to research the pricing'
     const d = route(text, await scanForDuplicates(withCandidate(), text))
     expect(d.distinctJustification).toMatch(/no caller justification/)
+  })
+})
+
+describe('#232: text no rule understood, whose subject is clear', () => {
+  /*
+    `classifyIntent` falls back to `thought` for anything its regexes do not
+    cover and `thought` convenes nobody, so a correctly identified specialist
+    was discarded before the subject was ever consulted. Measured over the
+    91-case corpus in `verify:routing-breadth`, every phrasing that describes a
+    subject without naming it scored 0%.
+  */
+  it('reaches one specialist when the subject is named', () => {
+    const text = 'Run the numbers if we sell it cheaper.'
+    const c = classifyIntent(text)
+    expect(c.recognised).toBe(false)
+    const r = pickRoster(c, text, ['finance-director'])
+    expect(r.roster).toEqual(['finance-director'])
+    expect(r.reason).toContain('no intent rule matched')
+  })
+
+  it('never convenes more than one, however many the subject names', () => {
+    // An unrecognised request is not evidence that a team is needed, and the
+    // row it produces is unconfident — `routing_decisions_unconfident_stays_small`
+    // permits exactly one.
+    const text = 'Run the numbers if we sell it cheaper.'
+    const r = pickRoster(classifyIntent(text), text, [
+      'finance-director',
+      'growth-director',
+      'strategy-director',
+    ])
+    expect(r.roster).toHaveLength(1)
+  })
+
+  it('still convenes nobody when nothing names a subject', () => {
+    const text = 'Sort that out for me when you get a chance.'
+    const r = pickRoster(classifyIntent(text), text, [])
+    expect(r.roster).toEqual([])
+    expect(r.reason).toContain('Chief of Staff')
+  })
+
+  it('respects who is on the project', () => {
+    // Grant can take a specialist off a project in Settings, and this branch
+    // must not be the one place that ignores it (#36, migration 0323).
+    const text = 'Run the numbers if we sell it cheaper.'
+    const r = pickRoster(classifyIntent(text), text, ['finance-director'], ['research-director'])
+    expect(r.roster).toEqual([])
+  })
+
+  it('leaves a DELIBERATE remark convening nobody', () => {
+    /*
+      The distinction that makes the branch safe. §9 is about a remark Grant
+      chose to make, not about text the classifier failed to parse, and
+      `recognised` is what separates them.
+    */
+    const text = 'fyi the pricing page went live this morning'
+    const c = classifyIntent(text)
+    expect(c.intent).toBe('thought')
+    expect(c.recognised).toBe(true)
+    expect(pickRoster(c, text, ['finance-director']).roster).toEqual([])
+  })
+})
+
+describe('#232: the communications director can be reached at all', () => {
+  /*
+    `direct_command`'s ceiling was research, strategy and operations, so
+    drafting — which is the one thing a communications director exists for —
+    could not reach them. Six of the corpus's eleven communications cases went
+    to the research director, which is worse than going to Claire: the wrong
+    specialist answers confidently.
+  */
+  it('routes a drafting command to communications when the subject says so', () => {
+    const text = 'Draft the announcement email for the pricing change.'
+    const { roster } = pickRoster(classifyIntent(text), text, ['communications-director'])
+    expect(roster).toContain('communications-director')
+  })
+
+  it('leaves the fallback for an unnamed subject where it was', () => {
+    // The first entry of each widened ceiling is unchanged, because that is
+    // what an unclassifiable request of the class still falls back to.
+    const text = 'I need you to handle it'
+    const { roster } = pickRoster(classifyIntent(text), text, [])
+    expect(roster).toEqual(['research-director'])
   })
 })
