@@ -363,5 +363,6 @@
   "0362_the_corpus_grows_past_seven_cases.sql": "b60fafcc0b7c51b78f1f773a4fcfebf36c1f3541ee4d9c952c5785c5ef05919d",
   "0363_two_cases_the_grader_could_not_fairly_judge.sql": "babbe4d579d7d4e160a46370458bc29d41af11de7752c655ab59bdc494264265",
   "0364_a_good_case_must_say_the_facts_were_observed.sql": "6c22ff6d1f6632cc01ab604f6a14bdbc2182be435960b28ae39e7d1dd60caa0b",
-  "0365_rename_checks_the_same_collision_create_does.sql": "7edb8c1eacef978a70b450f163159a8cc8308cd6b6e91b8602d2ec27598757b0"
+  "0365_rename_checks_the_same_collision_create_does.sql": "7edb8c1eacef978a70b450f163159a8cc8308cd6b6e91b8602d2ec27598757b0",
+  "0366_the_dimensions_grant_named_and_which_have_no_cases.sql": "66720b1577dee187518683109196da2469bc891c4a5879061d23b483ad0dd9db"
 }
