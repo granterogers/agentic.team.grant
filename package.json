@@ -204,6 +204,7 @@
     "verify:drains": "tsx scripts/verify/drains.ts",
     "verify:roster": "tsx scripts/verify/roster.ts",
     "breadth": "tsx scripts/breadth.ts",
+    "session": "tsx scripts/sessions/cli.ts",
     "tier1": "npm run verify:routing-breadth && npm run verify:collaborates && npm run eval",
     "tier1:fast": "npm run verify:routing-breadth && npm run verify:collaborates",
     "levels": "tsx scripts/levels.ts",

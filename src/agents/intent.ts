@@ -195,7 +195,30 @@ const RULES: readonly Rule[] = [
     name: 'make-this',
     intent: 'direct_command',
     pattern:
-      /^(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put)\s+/i,
+      /^(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put|log|raise)\s+/i,
+  },
+
+  {
+    /*
+      The same imperative, after an affirmation — and the reason it is separate
+      from `make-this` is the anchor.
+
+      `make-this` is anchored at `^`, deliberately: "I don't want you to create
+      a task" contains "create a" and must not read as a command. But so does
+      *"Yes, do it. Create the task."*, which is Grant confirming something he
+      has just been asked about — and it fell through to an unconfident
+      `thought`, the class that convenes nobody and writes nothing (#237). A
+      session found it: three of four action-versus-discussion turns behaved
+      correctly and the fourth, the only one that was actually a command, did
+      nothing.
+
+      Anchored after the affirmation rather than unanchored, so the protection
+      `make-this` bought is kept: the sentence must OPEN with the agreement.
+    */
+    name: 'affirmed-imperative',
+    intent: 'direct_command',
+    pattern:
+      /^(?:yes|yeah|yep|yup|ok|okay|right|sure|fine|correct|agreed|go on|do it|go ahead)\b[\s,.!;:—–-]*(?:then\b[\s,]*)?(?:do it\b|go ahead\b|please\b[\s,]*)?(?:generate|make|create|produce|build|record|prepare|add|attach|upload|push|send|post|put|log|raise|do it)\b/i,
   },
 
   // --- suggestion: an idea offered, not an instruction given.

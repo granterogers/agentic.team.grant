@@ -81,6 +81,7 @@ import {
 } from '../agents/capability.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
+import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -94,6 +95,7 @@ import {
 import { remember } from '../agents/remember.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { nameSubjects } from '../agents/subject.ts'
+import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../agents/tasks.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
@@ -209,7 +211,6 @@ async function speaker(
   // possible routing rather than a second classifier: §9's roster ceilings
   // already encode who a kind of request belongs to, and the instruction
   // handler is not the place to re-litigate them.
-  const { classifyIntent } = await import('../agents/intent.ts')
   const { pickRoster } = await import('../agents/router.ts')
   const classified = classifyIntent(instruction)
 
@@ -300,6 +301,47 @@ async function speaker(
         alsoConvened,
       }
     : { ...s, reason, alsoConvened }
+}
+
+/**
+ * File a task, and say what happened — never what is about to happen.
+ *
+ * #237. The reply this replaces was *"Sure, I'll create it"* followed by
+ * nothing being created, which is §10's invariant broken in the future tense:
+ * a promise of an action is a claim about an action. Either the task exists
+ * when this returns or the sentence says exactly what is missing.
+ *
+ * Through `app.task_add`, which takes the project id the job already holds
+ * (0367). The slug door, `hq_task_add`, resolves a name and refuses a fixture
+ * project — both right for something a person types and wrong for a job that
+ * resolved its project several hundred lines ago.
+ */
+async function addTask(db: SqlExecutor, job: Job, asked: TaskRequest): Promise<string> {
+  if (asked.title === null) return NEEDS_A_TITLE
+
+  const said = await db
+    .execute(`
+      select app.task_add(
+        ${job.projectId === null ? 'null' : `${lit(String(job.projectId))}::uuid`},
+        ${lit(asked.title)}, null, null, null, false, 'the office',
+        ${lit(job.jobId)}::uuid) as r`)
+    .catch((error: unknown) => ({
+      rows: [{ r: { error: (error as Error).message.slice(0, 200) } }],
+    }))
+  const answer = (said.rows[0] as { r?: { error?: string; title?: string } } | undefined)?.r
+
+  /*
+    A refusal is reported, never swallowed.
+
+    CLAUDE.md: a swallowed error on a write nobody reads back is
+    indistinguishable from a feature that was never built — which is precisely
+    how this whole gap survived. The writer returns its reason as data rather
+    than raising, so there is a sentence to pass on.
+  */
+  if (answer?.error !== undefined) {
+    return `I could not add that one: ${answer.error}.`
+  }
+  return `Added it: **${answer?.title ?? asked.title}**.`
 }
 
 /**
@@ -1501,7 +1543,68 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const wanted = notebookRequest(instruction)
       const made =
         wanted === null ? null : await act(deps.db, job, wanted.kinds, wanted.instructions)
-      const confirmation = linked === null ? made : made === null ? linked : `${linked}\n\n${made}`
+
+      /*
+        And a task, which until #237 the office could not create at all.
+
+        `task.create` was in `tool_permissions`, enabled, granted to all eight
+        agents and printed in every capability brief, while the nine actions an
+        agent could actually request were all NotebookLM artefacts. A session
+        found it in one turn: *"Yes, do it. Create the task."* produced *"Sure,
+        I'll create it. I need a few details first: 1. Title 2. Due date
+        3. Owner 4. Parent task"* — and `public.tasks` stayed empty. A promise
+        it could not keep, asking for three optional fields and one that is not
+        a parameter of the writer.
+
+        `taskRequest` keys off the CLASSIFICATION, not off the word "task", and
+        that is what keeps the four-way distinction the same session proved
+        holds: a thought, a question and an explicit hold all wrote nothing.
+        Only a confident command or assignment reaches the writer.
+      */
+      const asked = taskRequest(instruction, classifyIntent(instruction))
+
+      /*
+        And the ANSWER to "what should it be called?", which is the other half.
+
+        The first version of the task path asked that question and then could
+        not accept the reply: *"Call it Review the onboarding copy."* matched no
+        task shape, fell through to prose, and the task was never created. A
+        question whose answer is dead is worse than not asking — Grant has typed
+        the same intention twice and has nothing to show for it.
+
+        The lookup is only paid for when this could plausibly BE an answer:
+        `taskRequest` did not already match, the message is short, and there is
+        a conversation behind it. An explicit "call it X" needs no lookup at all.
+      */
+      const namedLater =
+        asked !== null || instruction.trim().length > 90
+          ? null
+          : await deps.db
+              .execute(`
+                select coalesce(
+                  (select left(o.body, 500) from public.outputs o
+                     join public.inbound_commands c on c.job_id = o.job_id
+                    where c.origin_channel = 'teamhq'
+                      and c.command_id <> ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
+                      and split_part(c.origin_ref, ':', 1) = (
+                        select split_part(origin_ref, ':', 1) from public.inbound_commands
+                         where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
+                    order by c.received_at desc limit 1), '') as said`)
+              .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
+              .then((prev) => titleReply(instruction, prev === '' ? null : prev))
+              .catch(() => null)
+
+      const filed =
+        asked !== null
+          ? await addTask(deps.db, job, asked)
+          : namedLater === null
+            ? null
+            : await addTask(deps.db, job, {
+                title: namedLater,
+                matched: 'answered the title question',
+              })
+
+      const confirmation = [linked, made, filed].filter((x) => x !== null).join('\n\n') || null
 
       // The same retrieval the office uses, so an instruction answered in
       // Telegram cites the same corpus as one answered in Slack. §22's rule
@@ -1777,21 +1880,56 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         depth,
       )
 
-      // A confirmation is `verified`/`deterministic` because it reports a fact
-      // about the queue rather than an opinion: the child job exists or the
-      // insert failed. §16 exempts a deterministic output from review, which is
-      // right here — there is nothing in it for a reviewer to disagree with.
-      //
-      // Its source is the job itself. §10's gate refuses `verified` with no
-      // sources, and correctly: verified means someone can go and check.
+      /*
+        A confirmation reports a fact about the queue rather than an opinion —
+        the child job exists, the task exists, or the insert failed — so §16
+        exempts it from review and there is nothing in it for a reviewer to
+        disagree with. Its source is the job itself, because §10's gate refuses
+        `verified` with no sources and is right to: verified means someone can
+        go and check.
+
+        BUT the exemption is defined by how the answer was produced, and
+        `enforce_deterministic_claim` checks that against the record rather than
+        taking the handler's word for it: a job with ANY `inference_usage` row
+        against its correlation may not claim determinism. That guard is
+        correct and it refused a real action.
+
+        #237 found it by asking the office to create a task. The confirmation
+        was composed entirely in code — and by then the turn had already spent
+        three model calls resolving the sentence against the conversation and
+        naming its subject, so the insert was refused, the job FAILED, and
+        Grant would have received nothing at all for a task that had in fact
+        been created. Latent since the thread resolver existed; #232's semantic
+        subject namer made it likely on any turn whose wording the expertise
+        vocabulary does not match, which is most of them.
+
+        So ask the same question the guard asks, and when a model was called on
+        this correlation, send the confirmation to review instead of claiming an
+        exemption it cannot have. The words are unchanged and still true; only
+        the claim about how they were produced is dropped. The trigger's own
+        message says exactly this: *"Mark it deterministic only on a code path
+        that makes no inference call, or send it to review."*
+      */
       if (confirmation !== null) {
+        const spent = await deps.db
+          .execute(`
+            select count(*)::int as n from public.inference_usage u
+             where u.correlation_id = (select correlation_id from public.jobs
+                                        where job_id = ${lit(job.jobId)}::uuid)`)
+          .then((r) => Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0))
+          /*
+            Unreadable means assume a model was called. The expensive direction
+            is claiming an exemption the record cannot support, which fails the
+            job; the cheap direction is one unnecessary review.
+          */
+          .catch(() => 1)
         return {
           body: confirmation,
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: 'deterministic_retrieval',
+          path: spent === 0 ? 'deterministic_retrieval' : 'inference',
           model: null,
         } satisfies HandlerOutput
       }
