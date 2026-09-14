@@ -1191,6 +1191,50 @@ Each of these cost real time. They are here so they cost it once.
   holds the project. A sweep must also continue past one failure and say how
   many it could not remove: **a sweep that stops early looks exactly like a
   sweep that finished.**
+- **A global dispatcher has no scope argument and should not get one.**
+  `app.dispatch_due_responsibilities()` fires EVERY due duty — the office runs it
+  on a tick and it is meant to be global — so a suite that calls it also fires
+  Grant's real duties. Adding a scope parameter for the test's convenience would
+  mean testing a path nobody runs. The answer is that every call sits inside one
+  statement ending in `rollback`: real duties that were due are fired and
+  un-fired and stay due, and the next real tick takes them. Same shape as #184's
+  unscoped dequeue, and #210's rule decides the mechanics — **wrap the CALL, not
+  the assertion**, because a wrapper cannot know a call was destructive until it
+  already has been.
+- **`dequeue_job` only takes `state = 'queued'`, so an expired lease is not
+  reclaimed by dequeuing again.** `app.recover_stalled_jobs()` is what decides an
+  abandoned job is abandoned, and it moves the job to **`retrying`**, not
+  `queued` — deliberately, because recovery does not pretend the lost attempt
+  never happened, so `attempts` still counts and a job that strands repeatedly
+  runs out of attempts instead of looping for ever. A check written against
+  `dequeue` returned nothing and read exactly like a stranded job; a check
+  written against `queued` demanded the office forget the dead attempt. Both were
+  the wrong layer, which CLAUDE.md already warns about, twice.
+- **A report line must print the message it actually got, never one you decided
+  in advance.** A duplicate-migration check displayed `23505 duplicate key`
+  whenever anything threw, while testing for that string separately — so it went
+  red while showing the exact words it had failed to find. The real error was
+  `23502 null value in column "checksum"`: a refusal for the wrong reason, which
+  the assertion correctly rejected and the outcome line hid. Same defect as the
+  audit that printed "12 of 6".
+- **A grading rubric can be structurally wrong for this office, and a small
+  corpus hides it.** The evaluator's judge asked one question — *"did it do what
+  was asked?"* — which rewards confident completion and penalises honest refusal.
+  On seven historical cases it agreed with Grant 7/7. Expanding the corpus to
+  twenty, with a `good` control beside every `poor` case, dropped agreement to
+  15/20 and every disagreement had the same shape: it graded a fabricated
+  database read as GOOD ("provided the requested count"), nominal delegation as
+  GOOD ("asked Emma and reported her findings"), and marked as POOR an answer
+  that admitted it had not looked, one that asked which of two projects was
+  meant, and one that explicitly parked a clause. **The judge was measuring
+  compliance while the office's first invariant is not claiming what it did not
+  do.** A corpus of failures alone cannot show this — only the paired controls
+  can, because a judge that marks everything poor scores perfectly on a corpus of
+  poor answers.
+- **`eval_cases.context` exists so the grader can know what the text cannot
+  show**, and a rubric that never mentions the context makes the column dead
+  weight. "No tool call was made" is only evidence if the rubric says a claimed
+  read without one is the worst thing in the list.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
