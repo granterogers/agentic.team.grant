@@ -214,6 +214,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every specialist is reachable by how Grant actually talks, and nothing trivial convenes one (#232)',
   ],
   ['verify:delegation', 'the work is actually delegated, not eight voices and one worker (#65)'],
+  [
+    'verify:collaborates',
+    'a two-subject request reaches a second specialist as real work, and the chain stays bounded (#233)',
+  ],
   ['verify:handoff', 'delegation that leaves a trace'],
   [
     'verify:cross-interface',

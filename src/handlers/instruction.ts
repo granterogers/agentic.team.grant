@@ -123,6 +123,19 @@ interface Speaker {
   readonly communication_style: string | null
   readonly responsibilities: string | null
   readonly reason: string
+  /**
+   * The rest of the convened roster — everyone `pickRoster` chose but this one.
+   *
+   * #233. `pickRoster` returns up to `ROSTER_CEILING` names, and until now
+   * this file took `roster[0]` and threw the remainder away. It was recorded
+   * faithfully in `routing_decisions.roster`, so the office could show Grant a
+   * decision it never acted on: `delegation_depth` was 0 across every real job
+   * in the system's history and no agent had ever handed work to another.
+   *
+   * Exactly #65's shape — the decision existed and never reached the row
+   * anybody would look at — one layer further out.
+   */
+  readonly alsoConvened: readonly string[]
 }
 
 export interface InstructionDeps {
@@ -176,7 +189,19 @@ async function speaker(
     `)
     const s = rows[0] as Omit<Speaker, 'reason'> | undefined
     if (s !== undefined) {
-      return { ...s, reason: 'addressed directly — Grant opened this person’s bot' }
+      /*
+        Nobody else, and that is what stops delegation recursing.
+
+        A child job spawned for a second specialist carries `addressed_to`, so
+        it arrives here, takes this branch, and convenes nobody further. The
+        depth trigger caps it at three anyway; this makes the natural fixed
+        point one, which is what §9 wants.
+      */
+      return {
+        ...s,
+        reason: 'addressed directly — Grant opened this person’s bot',
+        alsoConvened: [],
+      }
     }
   }
 
@@ -258,6 +283,7 @@ async function speaker(
     onProject as never,
   )
   const chosen = roster[0] ?? 'chief-of-staff'
+  const alsoConvened = roster.slice(1)
   const { rows } = await db.execute(`
     select slug, name, title, communication_style, responsibilities
       from public.staff where slug = ${lit(chosen)} and active
@@ -271,8 +297,9 @@ async function speaker(
         communication_style: null,
         responsibilities: null,
         reason,
+        alsoConvened,
       }
-    : { ...s, reason }
+    : { ...s, reason, alsoConvened }
 }
 
 /**
@@ -1072,6 +1099,89 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .catch(() => undefined)
 
       /*
+        Convene the REST of the roster, for real (#233).
+
+        `pickRoster` may name up to five people and this handler used one. The
+        others were recorded in `routing_decisions.roster` and then discarded,
+        so the office could show Grant a decision it had never acted on:
+        across every real job in its history `delegation_depth` was 0 and no
+        agent had ever handed work to another. #65's shape one layer out — the
+        decision existed and never reached the thing that acts.
+
+        Each additional specialist gets a CHILD JOB, which is the mechanism the
+        schema already provides: `app.enqueue_child` inherits the correlation
+        id, the project and the requester, and `enforce_delegation_depth` caps
+        the chain at `agents.max_delegation_depth` so that delegation cannot
+        spawn delegation without a person saying so.
+
+        Three properties make this safe rather than a job multiplier:
+
+        - `p_announce => false`. Grant hears from the Chief of Staff and
+          nobody else (`telegram.only_chief_speaks`), and a hand-off that
+          messaged him would break that in the loudest possible way. The work
+          still appears on the dashboard, attributed to whoever did it, which
+          is where he asked to see it.
+        - `addressed_to` names the specialist, so the child takes the
+          addressed-directly branch of `speaker` and convenes nobody further.
+          The chain terminates at one by construction, not merely by the cap.
+        - Bookkeeping may never fail Grant's actual work. A refusal is recorded
+          as an impediment and the primary answer goes out regardless — the
+          same rule as the consultation write below, and for the reason
+          CLAUDE.md gives: a swallowed error on a write nobody reads back is
+          indistinguishable from a feature that was never built.
+      */
+      for (const other of who.alsoConvened) {
+        const spawned = await deps.db
+          .execute(`
+            select app.enqueue_child(
+              ${lit(job.jobId)}::uuid, 'office.instruction',
+              jsonb_build_object(
+                'instruction', ${lit(instruction.slice(0, 4_000))},
+                'addressed_to', ${lit(other)},
+                'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                'command_id', ${lit(String(payload.command_id ?? ''))},
+                'handed_off_by', ${lit(who.slug)}
+              ),
+              interval '0', false
+            )::text as id
+          `)
+          .catch((error: unknown) => ({ rows: [{ id: null, e: (error as Error).message }] }))
+        const row = spawned.rows[0] as { id?: string | null; e?: string } | undefined
+        if (row?.id === null || row?.id === undefined) {
+          await deps.db
+            .execute(`
+              select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                'hand-off', ${lit(who.slug)},
+                ${lit(`could not hand part of this to ${other}: ${(row?.e ?? 'unknown').slice(0, 160)}`)},
+                ${lit(instruction.slice(0, 280))})
+            `)
+            .catch(() => undefined)
+          continue
+        }
+        /*
+          And record the hand-off itself.
+
+          `requested_by` is the SPECIALIST here, not the Chief of Staff — that
+          is the whole difference between this row and the one written below
+          it, and the only way §9's economics question can distinguish "Claire
+          picked somebody" from "a specialist reached for another specialist".
+          The RPC refuses a self-consultation, which is the guard that keeps
+          that distinction honest.
+
+          The last argument is `p_requests` — provider requests, not depth.
+          Zero, because none have been spent yet; whatever judges the child's
+          output fills the rest in.
+        */
+        await deps.db
+          .execute(`
+            select public.record_consultation(${lit(job.jobId)}::uuid, ${lit(other)},
+              ${lit(who.slug)},
+              ${lit(`convened alongside ${who.slug}: ${who.reason}`.slice(0, 400))}, 0)
+          `)
+          .catch(() => undefined)
+      }
+
+      /*
         And record it as a consultation when it is genuinely a hand-off.
 
         §9's consultation economics table has never held a row, so there has
@@ -1629,13 +1739,43 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ...(job.projectId === null ? {} : { projectId: job.projectId }),
       })
       const decided = route(instruction, scan)
-      await recordDecision(deps.db, job.jobId, {
-        ...decided,
-        // The roster is the one thing not left to the classifier: Grant chose
-        // it by opening this person's bot.
-        roster: [who.slug] as never,
-        rosterReason: who.reason,
-      })
+      /*
+        The depth this job is actually at (#233).
+
+        `recordDecision`'s fourth argument has existed since the table did and
+        NO CALLER HAS EVER PASSED IT — so `delegation_depth` was 0 on every row
+        by construction, and "is the office delegating" was a question the
+        column could not answer whatever the office did. A parameter nothing
+        passes is the same defect as a column nothing reads.
+      */
+      const depth = await deps.db
+        .execute(`select app.job_depth(${lit(job.jobId)}::uuid)::int as d`)
+        .then((r) => Number((r.rows[0] as { d?: number } | undefined)?.d ?? 0))
+        .catch(() => 0)
+
+      await recordDecision(
+        deps.db,
+        job.jobId,
+        {
+          ...decided,
+          /*
+            Everyone convened, not just whoever speaks (#233).
+
+            This recorded `[who.slug]` — one name — while `pickRoster` may have
+            chosen several, so `routing_decisions.roster` was the record of a
+            decision narrower than the one made, and `npm run measure` counts
+            who the office chooses from exactly this column.
+
+            Safe against `routing_decisions_unconfident_stays_small` by
+            construction rather than by hope: `pickRoster` caps a contested
+            reading at one person, so `alsoConvened` is empty whenever
+            `confident` is false.
+          */
+          roster: [who.slug, ...who.alsoConvened] as never,
+          rosterReason: who.reason,
+        },
+        depth,
+      )
 
       // A confirmation is `verified`/`deterministic` because it reports a fact
       // about the queue rather than an opinion: the child job exists or the
