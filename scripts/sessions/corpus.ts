@@ -45,8 +45,15 @@ export const SESSIONS: readonly Session[] = [
           The answer must engage with FORTY. A polished redo that quietly keeps
           thirty is the failure Grant would notice second and trust least —
           CLAUDE.md's rule that an apology is not a fix.
+
+          Asserted as a PROPERTY rather than a literal, because a correct answer
+          can express the corrected figure in more than one way and the first
+          draft of this expectation was a wording lock. The real answer said
+          "(34 - cost) / 34" — 0.85 x 40, the price after the cut under
+          discussion — which is the correction APPLIED. Thirty would have shown
+          up as 30 or as 25.5, and neither may appear.
         */
-        expect: { says: ['40'], neverSays: ['thirty pounds'] },
+        expect: { saysAny: ['40', '34'], neverSays: ['25.5', 'thirty'] },
       },
       {
         say: 'Actually I asked the wrong person. Ask Ruby about it instead.',

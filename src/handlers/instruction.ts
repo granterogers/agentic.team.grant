@@ -1614,6 +1614,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // seconds — a correction, a fact, an instruction, a check that we had
       // followed — and each was answered as a standalone sentence because
       // nothing carried the exchange (0089).
+      /*
+        The gate's reason from a previous attempt, if there was one (#237).
+
+        `pinned_config` is where the worker leaves it, which is also where this
+        handler's own payload comes from — so it arrives with the job rather
+        than needing a second read.
+      */
+      const coherenceNote =
+        typeof (payload as { coherence_note?: unknown }).coherence_note === 'string'
+          ? String((payload as { coherence_note?: unknown }).coherence_note).slice(0, 600)
+          : null
+
       const turns = await conversationBefore(deps.db, String(payload.command_id ?? ''))
 
       const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
@@ -1794,6 +1806,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ...(context === ''
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+                /*
+                  What the coherence gate refused last time (#237).
+
+                  A previous attempt at THIS job claimed a read that never
+                  happened, the gate correctly refused it, and the worker wrote
+                  the reason here before retrying. Without this line the retry
+                  is a coin flip; with it, it is a correction.
+
+                  Placed after the documents deliberately: it is about the
+                  answer rather than about the subject, and it should be the
+                  last thing read before the conversation.
+                */
+                ...(coherenceNote === null
+                  ? []
+                  : [
+                      {
+                        role: 'system' as const,
+                        content:
+                          'A previous attempt at this exact question was REJECTED before it ' +
+                          `reached anyone. The reason: ${coherenceNote}\n\n` +
+                          'Do not describe any lookup, read, query or search as having ' +
+                          'happened. Everything above is all you have. Answer from it, and ' +
+                          'where it does not cover the question say plainly that you have ' +
+                          'not looked.',
+                      },
+                    ]),
                 // The exchange, as an exchange. Replayed as real turns rather
                 // than pasted into the system prompt as a transcript: a model
                 // handed "here is what was said" reasons about the text, and a

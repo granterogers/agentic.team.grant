@@ -289,3 +289,32 @@ describe('assertTransition', () => {
     expect(() => assertTransition('failed', 'queued')).toThrow(/terminal/)
   })
 })
+
+describe('#237: a coherence refusal retries before it fails', () => {
+  /*
+    The gate that catches a fabricated read used to move the job straight to
+    `failed`, and Grant received nothing at all — no answer, no explanation.
+    Two of four turns in an ordinary correction conversation went that way,
+    and 6% of the night's session traffic.
+
+    The worker now moves it to `retrying` while attempts remain. That is only
+    coherent if the state machine permits it, and asserting the permission here
+    rather than in the worker is deliberate: the transition table is the
+    specification, and a worker written against a move the table forbids fails
+    four steps from the line that caused it — which CLAUDE.md records costing
+    a day when two jobs stranded in `committing`.
+  */
+  it('allows running -> retrying, which is the move the gate now makes', () => {
+    expect(canTransition('running', 'retrying')).toBe(true)
+  })
+
+  it('still allows running -> failed, for the attempt that runs out', () => {
+    expect(canTransition('running', 'failed')).toBe(true)
+  })
+
+  it('lets a retrying job be picked up again', () => {
+    // Otherwise the retry is a slower way of losing the answer.
+    expect(ALLOWED_TRANSITIONS.retrying.length).toBeGreaterThan(0)
+    expect(isTerminal('retrying')).toBe(false)
+  })
+})

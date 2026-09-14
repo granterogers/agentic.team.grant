@@ -715,15 +715,56 @@ export const runJob = async (
       /* Recording a refusal must not become a second failure. */
     }
 
+    /*
+      Retry once with the refusal in hand, rather than failing into silence.
+
+      #237 measured what the bare `failed` costs. Two of four turns in an
+      ordinary correction conversation were refused here — the model wrote *"I
+      pulled the pricing notebook"* and *"I pulled the projects list"* on turns
+      where nothing was read — and Grant would have received NOTHING for both.
+      No answer, no explanation. Across the night's session traffic it was
+      6% of turns, which over a working day is a couple of questions that
+      simply vanish.
+
+      The gate is right and stays. What was wrong is what happens next: a
+      nondeterministic model that fabricated a read once will usually not
+      fabricate it again when told, and telling it is free. The problem goes
+      into `pinned_config` so the next attempt can put it in the prompt —
+      a closed loop rather than a coin flip, which is the difference between
+      this and simply raising `max_attempts`.
+
+      Bounded by the same `attempt < 4` every other retry in this file uses,
+      and the impediment above is recorded on EVERY refusal including the last,
+      so the fabrication stays countable however it ends (#211).
+    */
+    const learnable = job.attempt < 4
+    if (learnable) {
+      try {
+        await db.execute(`
+          update public.jobs
+             set pinned_config = coalesce(pinned_config, '{}'::jsonb)
+                   || jsonb_build_object('coherence_note', ${lit(
+                     problems
+                       .map((p) => p.problem)
+                       .join(' | ')
+                       .slice(0, 600),
+                   )})
+           where job_id = ${lit(job.jobId)}::uuid`)
+      } catch {
+        /* A note that could not be written is a retry without the lesson,
+           which is still better than no retry. */
+      }
+    }
+
     await moveTo(
       db,
       job.jobId,
-      'failed',
+      learnable ? 'retrying' : 'failed',
       `incoherent output metadata: ${problems.map((p) => p.field).join(', ')}`,
     )
     return {
       jobId: job.jobId,
-      finalState: 'failed',
+      finalState: learnable ? 'retrying' : 'failed',
       note: problems
         .map((p) => p.problem)
         .join(' | ')

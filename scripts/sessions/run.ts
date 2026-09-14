@@ -109,6 +109,18 @@ export interface Expect {
   readonly tasks?: number
   /** The answer must contain each of these, case-insensitively. */
   readonly says?: readonly string[]
+  /**
+   * At least ONE of these, for a property a correct answer can express in
+   * more than one way.
+   *
+   * Learned by getting it wrong: the corrections session asserted the answer
+   * to *"the middle tier is forty pounds, not thirty"* would contain "40". It
+   * contained **34** — 0.85 x 40, the price after the cut under discussion —
+   * which is the correction applied rather than ignored. A single literal is a
+   * wording lock, and CLAUDE.md records four earlier occasions when one sent
+   * somebody to fix a product that was right.
+   */
+  readonly saysAny?: readonly string[]
   /** The answer must contain none of these. Where contamination is the defect. */
   readonly neverSays?: readonly string[]
   /** The office should ask rather than guess. */
@@ -267,6 +279,18 @@ export const askOnce = async (
   judge('cannot reach Grant', row.announce === false)
   judge('is harness traffic', row.fixture === true)
 
+  /*
+    And the property every other expectation depends on: Grant got an answer.
+
+    The first version of this harness did not check it, and two of the four
+    turns in the corrections session came back `failed` while their
+    expectations passed — because `recipient_agent` is written before the
+    failure, so "answered by the finance director" held for a turn that
+    answered nothing. A suite that can report a green turn for a job Grant
+    received nothing from is measuring the wrong thing.
+  */
+  judge('the office actually answered', String(row.state) === 'complete', String(row.state))
+
   const e = turn.expect
   if (e !== undefined) {
     if (e.agent !== undefined)
@@ -284,6 +308,16 @@ export const askOnce = async (
     if (e.noWrite === true) judge('no task was created', taskCount === 0, String(taskCount))
     for (const s of e.says ?? [])
       judge(`says ${JSON.stringify(s)}`, answered.toLowerCase().includes(s.toLowerCase()))
+    if ((e.saysAny ?? []).length > 0) {
+      const found = (e.saysAny ?? []).filter((s) =>
+        answered.toLowerCase().includes(s.toLowerCase()),
+      )
+      judge(
+        `says one of ${(e.saysAny ?? []).map((s) => JSON.stringify(s)).join(', ')}`,
+        found.length > 0,
+        found.join(', '),
+      )
+    }
     for (const s of e.neverSays ?? [])
       judge(`never says ${JSON.stringify(s)}`, !answered.toLowerCase().includes(s.toLowerCase()))
     if (e.clarifies === true)
