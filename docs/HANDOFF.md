@@ -13,7 +13,7 @@
 >
 > | | |
 > |---|---|
-> | Tests | **997 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` **289 desktop / 307 phone / 100 team, 0 findings** |
+> | Tests | **1,007 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` **289 desktop / 307 phone / 100 team, 0 findings** |
 > | The conversation | `npm run verify:conversation-all` — **218 checks in 4m19s**: history 50, echo 13, equivalence 16, transport 19, chat 37, dictation 38, channels 22, access 23 |
 > | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
 > | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
@@ -21,7 +21,7 @@
 > | Free tier | measured, not guessed: **48 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
 > | The conversation's growth | **25.8 messages a day** across four surfaces at ~495 bytes each — about **fifty years** of room at that rate (`public.conversation_growth()`, on the Usage page). ADR-0026 |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | **351 applied** |
+> | Migrations | **353 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
@@ -54,12 +54,61 @@ carries no harness traffic, not merely that its own rows are hidden.
 
 **Grant's decision on 13 September, recorded as #70:** Telegram is one bot, the
 chief of staff. The other seven are to be retired; individuals are reached in
-Slack and in the studio. Not implemented yet — it was captured before starting
-so it survives the conversation.
+Slack and in the studio. **Done** — 0352 disables the seven with a stated
+reason, points the pager at `chief-of-staff`, and derives `hq_team`'s Telegram
+username from the registry rather than a column.
 
 **Also filed:** #207 — a project screen has one heading, so heading navigation
 reaches nothing. Found by the new check, filed rather than asserted because the
 fix is a design change.
+
+> ## What changed on 2026-09-14
+>
+> **An agent may not say it looked when it did not (#185, ADR-0027).** The P0.
+> Claire told Grant at 03:45 that she had pulled the project records and that
+> the database read showed five active projects; none of the five existed, and
+> the output row said `evidence: inferred` — the office knew nothing had been
+> read and rendered that knowledge as grey caption text underneath the claim.
+>
+> Two gates now, and they are not the same check. `metadataProblems` refuses
+> the combination when the output is CREATED, which is the better place — the
+> job fails while somebody can still act on it. `refuseToSend` refuses it again
+> inside `combinedNotifier`, because `resumeNotifications` rebuilds an output
+> from its stored row and sends it **without passing through creation at all**.
+>
+> The sending gate is deliberately narrower: it refuses the two things that are
+> lies to the reader, and not the judgement pairings, because a guard that
+> silences a usable answer at the last moment gets switched off. A refusal
+> writes a `job_impediments` row through `app.cannot` rather than dropping the
+> output silently — an output that vanishes between `committed` and a channel
+> is indistinguishable from a job that had nothing to say.
+>
+> `evidence: verified` now also needs citations that are ADDRESSES. The first
+> implementation was a whitelist of schemes and it refused `db:projects`; a
+> whitelist fails whenever the office grows a source it did not have, and it
+> fails by refusing to speak. It checks the shape now.
+>
+> `npm run verify:attests` — **10/10**, with the 03:45 message in it verbatim,
+> and two CONTROLs at the end: the identical sentence IS sent when the read
+> actually happened. A gate that refused everything would pass the first eight
+> checks and look exactly like the rule working.
+>
+> **`verify:worker` had three unscoped dequeues left after #184.** Reached only
+> when the office happens to have work queued, and today it did: the
+> concurrency pair claimed a real `drive.watch` job, `runJob` threw
+> `NoHandlerError`, and the suite died four sections early with a duty's work
+> leased to a fixture worker. *A scope that covers most of a file is not a
+> scope.* Now **28/28** on a clean queue.
+>
+> **The Telegram message stopped introducing itself (#208).** Grant, on a
+> screenshot: *"I don't need to see the contact's name and the message. I
+> already have it... just see conversation rather than unnamed."* The sender
+> line and the trailing project footer are gone, `Unnamed` reads as
+> *Conversation*, and the provenance line only appears when it attests
+> something — which keeps #185's protection rather than deleting it.
+>
+> **Telegram is one bot (#70).** Seven staff bots disabled with a stated
+> reason; the pager is Claire's.
 
 > ## What changed on 2026-09-13
 >

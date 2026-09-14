@@ -876,6 +876,33 @@ Each of these cost real time. They are here so they cost it once.
   constant a suite writes IS deterministic; saying otherwise claims a judgement
   nobody made. And a teardown must know which move each state actually allows:
   `committing`, `committed` and `notifying` can only go to `failed`.
+- **A scope that covers most of a file is not a scope.** #184 gave
+  `verify:worker` a dequeue scope and ten of its thirteen `dequeue` calls took
+  it; three did not, and those three are reached only when the office HAPPENS
+  to have work queued. It did: the concurrency pair claimed a real
+  `drive.watch` job, `runJob` threw `NoHandlerError` because the suite holds no
+  handler for it, and the suite died four sections early with a duty's work
+  leased to a fixture worker until the lease expired. Two more of my own runs
+  then took the same job again. The awkward one is the CONTROL that
+  DELIBERATELY dequeues unscoped to prove the filter is what refused the job —
+  it cannot take the scope, so give it a probe KIND nothing else enqueues
+  instead. Grep for every call, not the ones the fix was written for.
+- **A whitelist of permitted values fails by refusing to speak, which is the
+  expensive direction.** #185's citation check began as a list of source
+  schemes and refused `db:projects` — a perfectly good address nobody had
+  thought to write down. Every handler writes `<scheme>:<ref>`, so the SHAPE
+  was checkable without a list, and a shape cannot go stale when the office
+  grows a source it did not have. Prefer a property over an enumeration
+  wherever the enumeration is of things a future change will add to; it is the
+  same correction as asserting an index by name, five entries up.
+- **A verification that goes red on debris its own crashed runs left behind
+  looks exactly like a live defect.** `verify:worker`'s duty-backlog check
+  reported six `drive.watch` jobs queued past their ten-minute period, which
+  reads as the office falling behind. Five of the six were jobs my own crashed
+  suite runs had stranded. The queue drained to zero the moment the worker was
+  deployed and the check went green. **Before filing "the office is broken",
+  clear your own debris and re-run** — that is now the third time harness
+  traffic has been about to be reported to Grant as a failure.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
