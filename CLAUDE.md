@@ -62,11 +62,17 @@ When he reports one:
 Reopening certification needs evidence from real use that the verdict was
 wrong — not a new idea for something that could be probed.
 
+**Context compaction is expected and is NOT a stopping condition.** After one:
+reread this file, then `docs/AUTONOMOUS-RUN.md`, reconstruct the backlog from
+the issues it names, identify the current checkpoint and continue. Do not hand
+control back to Grant because a compaction happened.
+
 ## Reading order
 
 | Document | Role |
 |---|---|
 | **this file** | how to work here — standing instructions and traps |
+| **`docs/AUTONOMOUS-RUN.md`** | ⭐ **read this second.** Where the work is, the current checkpoint, and how to continue after a compaction |
 | [GitHub Issues](https://github.com/granterogers/agentic.team.grant/issues) | **all actionable work.** Milestones M0 → v1.0 |
 | `docs/HANDOFF.md` | current state, summarised |
 | `docs/testing/backend-acceptance-verdict-2026-09-15.md` | ⭐ **the GREEN verdict, what it rests on, and what it does not claim** |
