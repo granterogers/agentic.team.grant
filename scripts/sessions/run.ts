@@ -105,8 +105,50 @@ export const patiently = async <T>(what: () => Promise<T>): Promise<T> => {
   and the harness's ever diverge, one of them is wrong and the disagreement is
   what says so.
 */
-const ABSENCE =
-  /\b(?:nothing|no\s+(?:record|records|entry|entries|document|documents|note|notes|match|matches|figure|file|files|sign|data|way)|(?:don'?t|do\s+not|didn'?t|can'?t|cannot)\s+(?:have|see|find)|not\s+in\s+our|none)\b/i
+/**
+ * One typography, for every assertion in this harness.
+ *
+ * Exported so `verify:harness` can feed the same sentence in two typographies
+ * and require the same verdict — the check that stops a tenth wording lock
+ * being possible rather than merely unlikely.
+ */
+export const plain = (text: string): string =>
+  text
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[\u2018\u2019\u201b]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u00a0\u2007\u202f]/g, ' ')
+    .toLowerCase()
+
+/*
+  An absence, as a PROPERTY rather than a list of phrasings (#251).
+
+  Three shapes, and between them they cover how the office actually says it:
+
+    a bare negative noun          nothing, none, no record, no entry
+    a negated holding verb        do not have, cannot see, could not find
+    a negative determiner + noun  not any record, without any figure
+
+  Always matched against the NORMALISED answer, so a curly apostrophe cannot
+  decide whether a correct refusal counts. The ninth instance of that was an
+  answer reading "I don’t have any recorded figure … so I can’t give a current
+  cost" — honest, complete, and scored a failure.
+
+  Deliberately NOT widened to the point where anything passes: `cannotSee` pairs
+  this with a length ceiling, because the failure it exists to catch is an
+  invented summary of a document that does not exist, and a summary is long.
+*/
+const HOLDING = '(?:have|see|find|hold|got|know\\s+of|have\\s+got)'
+export const ABSENCE = new RegExp(
+  [
+    String.raw`\b(?:nothing|none)\b`,
+    String.raw`\bno\s+(?:\w+\s+){0,2}?(?:record|records|entry|entries|document|documents|note|notes|match|matches|figure|figures|file|files|sign|data|way|trace|mention)\b`,
+    String.raw`\b(?:don't|do not|didn't|did not|can't|cannot|could not|couldn't|haven't|have not|hasn't|has not|am not able to|unable to)\s+(?:\w+\s+){0,2}?${HOLDING}\b`,
+    String.raw`\b(?:not|without)\s+(?:any|a)\s+(?:\w+\s+){0,2}?(?:record|entry|document|note|figure|file|data|trace|mention)\b`,
+    String.raw`\bnot\s+(?:something|anything)\s+(?:i|we)\s+(?:can|could)\b`,
+  ].join('|'),
+  'i',
+)
 
 /** What a turn must be true of, checked against canonical state. */
 export interface Expect {
@@ -399,14 +441,23 @@ export const askOnce = async (
     Sixth instance of the wording-lock family in this repository, and the first
     where the lock was a character nobody typed.
   */
-  const plain = (text: string): string =>
-    text
-      .replace(/[\u2010-\u2015\u2212]/g, '-')
-      .replace(/[\u2018\u2019\u201b]/g, "'")
-      .replace(/[\u201c\u201d]/g, '"')
-      .replace(/[\u00a0\u2007\u202f]/g, ' ')
-      .toLowerCase()
+
   const answered = String(row.answered ?? '')
+  /*
+    EVERY semantic assertion below reads this, never `answered` (#251).
+
+    Nine wording-lock failures in this repository, two of them on one day, and
+    the last one scored an exemplary refusal as a defect because the office
+    wrote "don’t" with U+2019 while the pattern wanted an ASCII apostrophe.
+    The eighth fix corrected the substring tests and the audit that followed it
+    grepped for `.includes(` — which is why a REGEX in a sibling code path
+    survived untouched.
+
+    So the rule is structural rather than remembered: the raw answer is used
+    for LENGTH and for DISPLAY, and every test of what the answer SAYS runs on
+    the normalised form. `verify:harness` asserts that, by feeding the same
+    answer in both typographies and requiring the same verdict.
+  */
   const searchable = plain(answered)
   const passes: string[] = []
   const fails: string[] = []
@@ -506,13 +557,14 @@ export const askOnce = async (
     if (e.cannotSee === true)
       judge(
         'says it cannot see it, briefly',
-        answered.length < 600 && (/\?/.test(answered) || ABSENCE.test(answered)),
-        `${String(answered.length)} chars${ABSENCE.test(answered) ? '' : ', no absence stated'}`,
+        // Length from the raw answer, meaning from the normalised one (#251).
+        answered.length < 600 && (/\?/.test(searchable) || ABSENCE.test(searchable)),
+        `${String(answered.length)} chars${ABSENCE.test(searchable) ? '' : ', no absence stated'}`,
       )
     if (e.clarifies === true)
       judge(
         'asks rather than guesses',
-        /\?/.test(answered) && answered.length < 1200,
+        /\?/.test(searchable) && answered.length < 1200,
         `${String(answered.length)} chars`,
       )
   }

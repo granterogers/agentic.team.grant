@@ -657,6 +657,94 @@ export const readRequest = (
   split: (t: string) => readonly string[],
 ): readonly ClauseReading[] => split(message).map(readClause)
 
+/**
+ * The clause with its REQUEST FRAMING removed.
+ *
+ * ## Why this lives here and not in the action modules
+ *
+ * #249 rebuilt recognition on grammar and left `taskTitle` matching a preamble
+ * against a list of verbs — create, add, make, put, raise, log, stick, set up.
+ * The third examination walked straight through it: "Line up a task on alpha to
+ * take up references" and "Set aside a task to book the room" both reached the
+ * writer and were asked what to call something plainly in the sentence.
+ *
+ * Adding those two verbs would have reproduced #249 one layer deeper. The
+ * invariant Grant drew instead:
+ *
+ *   IF ACTION INTENT HAS ALREADY BEEN SEMANTICALLY IDENTIFIED, ARGUMENT
+ *   EXTRACTION MUST NOT REQUIRE RECOGNISING THE REQUEST'S OPEN-CLASS VERB
+ *   AGAIN.
+ *
+ * And it does not have to. `readClause` has ALREADY found the verb — an
+ * imperative is a clause whose first token is not a function word, so the verb
+ * is at position 0 by construction. This removes it by POSITION. It never needs
+ * to know what the verb was, which is why "line up", "set aside" and whatever
+ * Grant says tomorrow all work without anybody adding them anywhere.
+ *
+ * Everything else stripped here is closed-class: politeness, a modal, a
+ * desiderative opening, an indirect object, a verb particle.
+ *
+ * It does NOT strip content. What comes back is what Grant said minus the
+ * words that made it a request, so nothing he supplied can be lost by it.
+ */
+const POLITENESS =
+  /^\s*(?:please\s+|pls\s+)?(?:can|could|would|will|might)\s+(?:you|u|someone|somebody)\s+(?:please\s+)?/i
+const DESIDERATIVE_OPEN =
+  /^\s*(?:i|we)\s*(?:'d|\s+would)?\s*(?:need|needs|want|wants|like|require|requires)\s+(?:you\s+to\s+|someone\s+to\s+|somebody\s+to\s+)?/i
+const LETS = /^\s*let'?s\s+/i
+const LABEL_OPEN = /^\s*(?:task|todo|to-?do|action|reminder|note)\s*[:—-]\s*/i
+/** Particles that belong to the verb rather than to what follows it. */
+const VERB_PARTICLE = new Set([
+  'up',
+  'out',
+  'off',
+  'down',
+  'back',
+  'over',
+  'through',
+  'aside',
+  'together',
+  'along',
+  'around',
+  'in',
+  'on',
+  'away',
+  'forward',
+])
+/** An indirect object, which is closed class. */
+const INDIRECT = new Set(['me', 'us', 'him', 'her', 'them', 'myself', 'ourselves'])
+
+export const requestBody = (clause: string): string => {
+  let text = clause.trim().replace(/[.!?]+$/, '')
+
+  const labelled = LABEL_OPEN.exec(text)
+  if (labelled !== null) return text.slice(labelled[0].length).trim()
+
+  text = text.replace(/^\s*(?:please|ok|okay|right|fine|alright|now|then|so|and)\b[\s,]*/i, '')
+  const polite = POLITENESS.exec(text)
+  if (polite !== null) text = text.slice(polite[0].length)
+  const desired = DESIDERATIVE_OPEN.exec(text)
+  if (desired !== null) text = text.slice(desired[0].length)
+  const lets = LETS.exec(text)
+  if (lets !== null) text = text.slice(lets[0].length)
+
+  /*
+    The verb, by position. The tokens are walked rather than regexed so the
+    particle and the indirect object can be taken only when they are actually
+    there — "line up a task" loses two tokens, "chase the supplier" loses one,
+    and neither needs the verb to be recognised.
+  */
+  const tokens = text.split(/\s+/).filter((t) => t !== '')
+  if (tokens.length === 0) return ''
+  const head = (tokens[0] ?? '').toLowerCase().replace(/[^a-z'-]/g, '')
+  if (head === '' || NOT_IMPERATIVE_OPENERS.has(head)) return text.trim()
+  let cut = 1
+  const next = (tokens[cut] ?? '').toLowerCase()
+  if (VERB_PARTICLE.has(next)) cut += 1
+  if (INDIRECT.has((tokens[cut] ?? '').toLowerCase())) cut += 1
+  return tokens.slice(cut).join(' ').trim()
+}
+
 /** Does any clause ask the office to act? */
 export const asksForAction = (readings: readonly ClauseReading[]): boolean =>
   readings.some((r) => r.mood === 'ask')

@@ -81,3 +81,59 @@ describe('#249 — and it does not invent what Grant did not say', () => {
     expect(classifyIntent(say).recognised).toBe(true)
   })
 })
+
+describe('#254 — extraction does not need to know the verb', () => {
+  /*
+    The verbs here appear in no preamble, no shape and no matrix. If extraction
+    is structural they all work; if it has quietly become another list, they
+    will not — which is exactly how #249's fix failed in the third
+    examination, where "line up" and "set aside" were unknown words.
+
+    `requestBody` removes the verb BY POSITION, because the grammar already
+    located it: an imperative's verb is token zero, by construction.
+  */
+  const CASES: readonly [string, string][] = [
+    [
+      'Line up a task on alpha to take up references for the two we keep.',
+      'take up references for the two we keep',
+    ],
+    ['Set aside a task to book the room once they confirm.', 'book the room once they confirm'],
+    ['Pencil in a task to confirm the training day.', 'confirm the training day'],
+    ['Whack a task on the board to renew the domain.', 'renew the domain'],
+    ['Slot in a task for the quarterly review.', 'the quarterly review'],
+    ['Jot down a task to email the auditor.', 'email the auditor'],
+    ['Bung a task on alpha to reconcile the card statement.', 'reconcile the card statement'],
+    ['Queue up a task to archive the old invoices.', 'archive the old invoices'],
+    ['Draw up a task to draft the handover note.', 'draft the handover note'],
+    ['Chuck me a task to ring the bank.', 'ring the bank'],
+  ]
+  for (const [say, want] of CASES) {
+    it(`${say.slice(0, 40)} -> ${want.slice(0, 32)}`, () => {
+      expect(title(say)).toBe(want)
+    })
+  }
+
+  it('and none of those verbs appears in the source', async () => {
+    // The point, asserted rather than claimed. If somebody "fixes" a future
+    // failure by adding a verb, this goes red and says why.
+    const { readFile } = await import('node:fs/promises')
+    const raw = await readFile('src/agents/tasks.ts', 'utf8')
+    // Comments stripped — this file DISCUSSES "line up" at length, and the
+    // assertion is about what the code matches on, not about the prose.
+    const source = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    for (const verb of [
+      'line up',
+      'set aside',
+      'pencil',
+      'whack',
+      'slot in',
+      'jot',
+      'bung',
+      'queue up',
+      'draw up',
+      'chuck',
+    ]) {
+      expect(source.toLowerCase()).not.toContain(verb)
+    }
+  })
+})

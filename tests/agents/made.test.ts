@@ -90,7 +90,13 @@ describe('#248 — "make me a task" is how a person asks', () => {
     const say = 'Make the pricing review a task.'
     const asked = taskRequest(say, classifyIntent(say))
     expect(asked).not.toBeNull()
-    expect(asked?.title).toBeNull()
+    /*
+      #254 improved this again. When the title was found by pattern the office
+      had to ask; extraction by structure removes the capability noun from
+      whichever end it sits on, so "make the pricing review a task" now yields
+      the name Grant gave it and no question is needed.
+    */
+    expect(asked?.title).toBe('the pricing review')
   })
 
   const NOT_ASKS: readonly string[] = [

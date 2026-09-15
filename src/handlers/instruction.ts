@@ -1925,7 +1925,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                          where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
                     order by c.received_at desc limit 1), '') as said`)
               .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
-              .then((prev) => titleReply(instruction, prev === '' ? null : prev))
+              /*
+                The third argument is what stops a request becoming a title
+                (#255): a turn that asks for something of its own is never the
+                answer to a question about something else.
+              */
+              .then((prev) =>
+                titleReply(
+                  instruction,
+                  prev === '' ? null : prev,
+                  notebookRequest(instruction) !== null,
+                ),
+              )
               .catch(() => null)
 
       const filed =

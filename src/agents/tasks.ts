@@ -42,9 +42,10 @@
  * a phrase matcher alone would create a task on all four.
  */
 
+import { readFollowUp } from './clarify.ts'
 import { clauses } from './clauses.ts'
 import type { Classification } from './intent.ts'
-import { readRequest } from './request.ts'
+import { readRequest, requestBody } from './request.ts'
 
 /** The classes that may write. Everything cheaper discusses. */
 const MAY_WRITE = new Set(['assignment', 'direct_command'])
@@ -144,71 +145,60 @@ const FORBIDDEN =
   /\b(?:do\s*n[o']?t|don't|dont|never|hold\s+off|not\s+yet|no\s+need\s+to|without)\b[^.!?]{0,40}\b(?:creat|add|mak|rais|open|log)/i
 
 /*
-  The title, by SUBTRACTION rather than by pattern (#249).
+  The title, from the semantic structure the interpreter already built (#254).
 
-  The shapes above want the title immediately after the word "task", so "put a
-  task ON ALPHA to get three build quotes" reached the writer and arrived with
-  nothing to call it — the office asked "what should it be called?" about
-  something plainly present in the sentence. Adding `on \w+` to the pattern
-  would fix that sentence and not the next one.
+  #249's version removed a PREAMBLE matched against a list of verbs, which is
+  the defect #249 was about, one layer deeper. The third examination walked
+  through it in one turn: "Line up a task on alpha to take up references for the
+  two we keep" and "Set aside a task to book the room" both reached the writer
+  and were asked what to call something plainly in the sentence.
 
-  So instead of describing where a title IS, this removes the things a title is
-  NOT and keeps the rest:
+  `requestBody` in `request.ts` removes the framing by POSITION, because the
+  grammar already located the verb — an imperative's verb is token zero, by
+  construction. This file never learns another verb again.
 
-    - the instruction preamble: a verb, maybe an indirect object, an article,
-      and the word task
-    - a project adjunct: "on alpha", "under beta", "in the alpha project"
-    - a due-date adjunct: "by Friday", "before the end of next week"
-    - a bare link word left at the front once those have gone
+  What is left to do here is only the part that is specific to THIS action:
 
-  Subtraction generalises where description does not, because the adjuncts are
-  closed-class prepositional phrases and the title is whatever open-class text
-  survives them. It also cannot invent: everything it returns was typed by
-  Grant, which is the rule about not inventing consequential parameters.
+    - the capability's own object noun, which is how the action was identified
+    - a determiner in front of it
+    - a project adjunct, "on alpha", "under the beta project"
+    - a link word joining the frame to the content
+
+  All closed class. The due date is deliberately still not subtracted: nothing
+  extracts it into a column, so removing it from the name would lose something
+  Grant said (#253).
 */
-const PREAMBLE =
-  /^\s*(?:please\s+)?(?:can\s+you\s+|could\s+you\s+|would\s+you\s+)?(?:create|add|make|put|raise|log|stick|set\s+up)\s+(?:me|us|him|her|them|myself)?\s*(?:a|an|the)?\s*(?:new\s+)?(?:task|todo|to-?do|reminder|item)\b\s*/i
-const LABEL = /^\s*(?:task|todo|to-?do|action|reminder)\s*[:—-]\s*/i
+const OBJECT_NOUN =
+  /^\s*(?:a|an|the|another|new)?\s*(?:new\s+)?(?:tasks?|to-?dos?|todos?|reminders?|items?)\b\s*/i
 /** "on alpha", "under the beta project", "in alpha" — where it goes, not what it is. */
 const PROJECT_ADJUNCT =
-  /\s*\b(?:on|under|in|against|to)\s+(?:the\s+)?[\w-]+(?:\s+project)?\b(?=\s+(?:to|for|about)\b)/i
-/*
-  The due date is NOT subtracted, deliberately.
-
-  An earlier draft stripped "by Friday" out of the title, on the reasoning that
-  a deadline belongs in `p_due_on` rather than in the name. It does — but
-  nothing extracts it into that column, so stripping it threw away something
-  Grant had said and left the task looking undated. Lossy beats nothing only
-  when the something is recovered somewhere, and here it was not.
-
-  So the deadline stays in the title until there is a writer for it, which is
-  filed rather than improvised: inventing a date from "by Friday" means
-  choosing which Friday, and that is a consequential parameter this layer is
-  not allowed to supply.
-*/
-/** What is left once the preamble has gone, if it is only a link word. */
-const LINKING = /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying)\b\s*/i
+  /^\s*\b(?:on|under|in|against|for|to)\s+(?:the\s+)?[\w-]+(?:\s+project)?\b(?=\s+(?:to|for|about)\b)\s*/i
+/** What is left once the frame has gone, if it is only a link word. */
+const LINKING =
+  /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying|which\s+is)\b\s*/i
+/** Politeness at the end, which the opening strip cannot reach. */
+const TRAILING_PLEASE = /\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
 
 export const taskTitle = (clause: string): string | null => {
-  let text = clause.trim().replace(/[.!?]+$/, '')
-  const labelled = LABEL.test(text)
-  text = text.replace(LABEL, '')
-  if (!labelled) {
-    if (!PREAMBLE.test(text)) return null
-    text = text.replace(PREAMBLE, '')
-    text = text.replace(PROJECT_ADJUNCT, '')
-    text = text.replace(LINKING, '')
-  }
-  text = text.trim().replace(/\s+/g, ' ')
+  let text = requestBody(clause)
+  text = text.replace(OBJECT_NOUN, '')
   /*
-    Politeness at the end, which the preamble only strips from the front.
-    "Add a new task please" was producing a task called "please" — a title made
-    of a word that carries no content, which is the invention this function
-    exists to avoid.
+    A gerund joining the frame to the content: "a task ADDING to chase the
+    roofer", "a task RAISED for the renewal". Structural — an -ing or -ed word
+    immediately before "to" or "for" is part of how the request was phrased,
+    not part of what the task is called.
   */
-  text = text
-    .replace(/\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i, '')
-    .trim()
+  text = text.replace(/^\s*\w+(?:ing|ed)\s+(?=(?:to|for)\b)/i, '')
+  text = text.replace(PROJECT_ADJUNCT, '')
+  text = text.replace(LINKING, '')
+  /*
+    The capability noun can come LAST: "make the pricing review a task". The
+    object identifies which capability was asked for wherever it sits, so it is
+    removed from whichever end it is on rather than only from the front.
+  */
+  text = text.replace(/\s+(?:in)?to\s+(?:a|an)\s*(?:tasks?|to-?dos?|reminders?|items?)\s*$/i, '')
+  text = text.replace(/\s+(?:a|an|the)?\s*(?:tasks?|to-?dos?|reminders?|items?)\s*$/i, '')
+  text = text.replace(TRAILING_PLEASE, '').trim().replace(/\s+/g, ' ')
   if (text === '' || NOT_A_TITLE.test(text)) return null
   return text
 }
@@ -216,23 +206,15 @@ export const taskTitle = (clause: string): string | null => {
 /**
  * Was the office ASKED, and asked for a TASK?
  *
- * Two questions, and separating them is what #249's audit forced. The intent
- * class answers neither on its own:
+ * Two questions, separated (#249). The intent class answers neither on its
+ * own: "Could you add a task to chase the roofing quote?" matches a question
+ * rule, question is cheaper than assignment, section 6 resolves downward, and
+ * the whole thing became an enquiry while the office wrote nothing.
  *
- *   "Could you add a task to chase the roofing quote?" matches a question rule,
- *   question is cheaper than assignment, §6 resolves downward, and the whole
- *   thing became an enquiry. It is not an enquiry. It is how people ask
- *   colleagues to do things, and the office wrote nothing.
- *
- *   "I need a task adding to chase the roofing quote" is understood as an
- *   assignment and still resolved nothing, because no shape has a verb in
- *   front of the word "task".
- *
- * So the MOOD decides whether this is a request — `request.ts`, on closed
- * classes, per clause — and the OBJECT NOUN decides which capability it is
- * about. A noun is the right thing to key on: "task" is what the capability
- * operates on, and it survives every paraphrase of asking for one, where a
- * list of verbs in front of it does not.
+ * So the MOOD decides whether this is a request, and the OBJECT NOUN decides
+ * which capability it is about. A noun is the right thing to key on: "task" is
+ * what the capability operates on and it survives every paraphrase of asking
+ * for one, where a list of verbs in front of it does not.
  *
  * The intent class is kept as the other way in, so nothing that worked before
  * stops working.
@@ -308,13 +290,10 @@ export const NEEDS_A_TITLE =
   'a due date and an owner are optional and I can leave them off.'
 
 /*
-  An explicit naming reply, which needs no history to recognise.
-
-  "Call it X", "name it X", "let's call it X" — unmistakable on their own, so
-  they are matched without a lookup and without any risk of a false positive.
+  The explicit naming form moved to `clarify.ts` with the rest of the
+  follow-up reading (#255), so there is one place that decides what a reply to
+  a question is rather than two that can disagree.
 */
-const NAMING =
-  /^\s*(?:call it|name it|title it|let'?s call it|it'?s called|call the task|title:)\s*[:,-]?\s*(?<title>.+?)\s*[.!]?\s*$/i
 
 /**
  * The answer to *"what should it be called?"*, when that is what this is.
@@ -336,14 +315,27 @@ const NAMING =
  * The bare case is bounded further: short, not a question, and not itself a
  * task command (which `taskRequest` would already have caught).
  */
-export const titleReply = (instruction: string, previousAnswer: string | null): string | null => {
-  const text = instruction.trim()
-  const named = NAMING.exec(text)
-  if (named !== null) {
-    const title = (named.groups?.title ?? '').trim()
-    return title === '' || NOT_A_TITLE.test(title) ? null : title
-  }
-  if (previousAnswer === null || !previousAnswer.includes(TITLE_ASKED)) return null
-  if (text.length > 90 || text.includes('?') || text.split(/\s+/).length > 14) return null
-  return NOT_A_TITLE.test(text) ? null : text.replace(/[.!]+$/, '')
+export const titleReply = (
+  instruction: string,
+  previousAnswer: string | null,
+  resolvesAnotherAction = false,
+): string | null => {
+  /*
+    Delegated to the state machine (#255).
+
+    This used to be the whole decision, and it was three conditions long: under
+    ninety characters, no question mark, under fifteen words. "Walk me through
+    whether two is actually enough to choose from" satisfies all three, so an
+    ordinary question became the name of a task Grant never confirmed.
+
+    `readFollowUp` distinguishes the six things a next turn can be. Only one of
+    them proceeds, and everything else leaves the pending action unacted —
+    which is the safe direction, because the office asking again costs a
+    sentence and a wrong mutation costs Grant's trust in every confirmation
+    after it.
+  */
+  const pending = previousAnswer !== null && previousAnswer.includes(TITLE_ASKED)
+  const read = readFollowUp(instruction, pending, resolvesAnotherAction)
+  if (read.kind !== 'answered' || read.value === null) return null
+  return NOT_A_TITLE.test(read.value) ? null : read.value
 }
