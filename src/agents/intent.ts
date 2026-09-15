@@ -305,6 +305,70 @@ const RULES: readonly Rule[] = [
 ]
 
 /**
+ * Where an explicit delegation begins, and -1 when there is none.
+ *
+ * ## The defect
+ *
+ * *"I need you to find out what the three big competitors charge and then tell
+ * me what that means for where we position ourselves."*
+ *
+ * Three rules fire on that sentence. `i-need-you-to` argues `assignment`,
+ * correctly. `have-a-look` argues `light_investigation` because it contains
+ * "find out". `tell-me` argues `question` because it contains "tell me". Three
+ * classes means contested, contested means `confident: false`, and
+ * `routing_decisions_unconfident_stays_small` then caps the roster at ONE
+ * person — so a request that plainly needs two specialists reached one, and
+ * the recorded reason said the reading was contested.
+ *
+ * But it is not contested. "find out" and "tell me" are not competing readings
+ * of the message; they are the CONTENT of the thing being delegated. The mood
+ * of a sentence is set by its main clause, and everything after "I need you
+ * to" is subordinate to it.
+ *
+ * This is `teaching.ts`'s lesson in a second place: *"suggest WHEN we should
+ * decide"* was read as a condition because nothing distinguished a complement
+ * clause from a main one, and a work request became a global procedure.
+ * CLAUDE.md records it. Here the same blindness costs a specialist instead.
+ *
+ * ## Why only the cheaper classes are suppressed
+ *
+ * *"I need you to send the deck right now"* still reads `direct_command`, and
+ * should: a delegation does not cap how urgent the delegated thing is. What it
+ * does rule out is the message being a QUESTION, a SUGGESTION, a DISCUSSION or
+ * a REMARK — Grant has already said what it is. So anything at or above
+ * `assignment` survives the span and everything below it does not.
+ *
+ * §6 is untouched by this. Its downward rule resolves ambiguity between
+ * PLAUSIBLE readings; a mood word inside delegated content was never a
+ * plausible reading of the message, so it is not a candidate to resolve
+ * between.
+ *
+ * ## One source of truth for what a delegation looks like
+ *
+ * Read from the `i-need-you-to` rule rather than written out again. A second
+ * copy of the phrase list is a list that will disagree with the first — the
+ * trap CLAUDE.md names about rows, rosters and command-bar groups, and there
+ * is no reason it would spare a regex.
+ */
+const DELEGATION: RegExp = (() => {
+  const rule = RULES.find((r) => r.name === 'i-need-you-to')
+  if (rule === undefined) throw new Error('intent: the i-need-you-to rule is gone')
+  return rule.pattern
+})()
+
+const delegationBegins = (text: string): number => DELEGATION.exec(text)?.index ?? -1
+
+/**
+ * Is this rule's match subordinate to a delegation that opened before it?
+ *
+ * Position decides, not presence. *"What is our margin? I need you to check."*
+ * has its question BEFORE the delegation, so the question is the message's own
+ * and the reading is legitimately contested.
+ */
+const governed = (from: number, at: number, intent: IntentClass): boolean =>
+  from >= 0 && at >= from && INTENT_COST[intent] < INTENT_COST.assignment
+
+/**
  * Classify an instruction.
  *
  * The whole algorithm: collect every class the text argues for, take the
@@ -329,13 +393,22 @@ export const classifyIntent = (instruction: string): Classification => {
     }
   }
 
+  const governedFrom = delegationBegins(text)
+
   const matched: string[] = []
   const classes = new Set<IntentClass>()
   for (const rule of RULES) {
-    if (rule.pattern.test(text)) {
-      matched.push(rule.name)
-      classes.add(rule.intent)
+    const hit = rule.pattern.exec(text)
+    if (hit === null) continue
+    if (governed(governedFrom, hit.index, rule.intent)) {
+      // Kept in the audit trail, excluded from the reading. A misparse is
+      // debuggable either way, and silently dropping a rule that fired is how
+      // a classifier becomes impossible to argue with.
+      matched.push(`${rule.name} (inside the delegation)`)
+      continue
     }
+    matched.push(rule.name)
+    classes.add(rule.intent)
   }
 
   if (classes.size === 0) {

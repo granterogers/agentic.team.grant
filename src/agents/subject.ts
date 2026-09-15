@@ -149,10 +149,10 @@ const roster = async (db: SqlExecutor): Promise<readonly Person[]> => {
  * for the finance-director". Measured against the 91-case corpus rather than
  * assumed; the ten negative controls are what would catch it.
  */
-export const readSlugs = (content: string): readonly RoleSlug[] => {
+export const readSlugs = (content: string, most: number = MOST): readonly RoleSlug[] => {
   const said = content.toLowerCase()
   const found = ROLE_SLUGS.filter((r) => !NEVER.has(r) && said.includes(r))
-  return found.slice(0, MOST)
+  return found.slice(0, most)
 }
 
 /**
@@ -166,6 +166,16 @@ export const nameSubjects = async (
   router: ProviderRouter,
   instruction: string,
   trace: { readonly correlationId?: string; readonly jobId?: string } = {},
+  /*
+    How many names this text can justify.
+
+    `MOST` (two) is right for a whole message, which is what this was written
+    for: *"what does this cost and how do we announce it"* genuinely needs
+    both. A single CLAUSE is the other case — `clauses.ts` has already
+    separated the asks, so one clause has one subject and a second name from it
+    is the hedging the header rules out.
+  */
+  most: number = MOST,
 ): Promise<readonly RoleSlug[]> => {
   const text = instruction.trim()
   /*
@@ -223,7 +233,7 @@ export const nameSubjects = async (
     })
     .catch(() => null)
 
-  return result === null ? [] : readSlugs(result.content)
+  return result === null ? [] : readSlugs(result.content, most)
 }
 
 /** For the reason recorded against the decision, so the path taken is visible. */

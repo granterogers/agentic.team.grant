@@ -600,6 +600,100 @@ export const SESSIONS: readonly Session[] = [
       },
     ],
   },
+
+  // ---------------------------------------------------------- collaboration
+  {
+    name: 'collaborates',
+    about: 'work that genuinely needs two or three specialists, and work that does not',
+    covers: ['multi-agent-work', 'analysis', 'recommendations', 'tool-heavy-work'],
+    projects: ['alpha'],
+    /*
+      Campaign One proved ONE chain: finance -> communications. One chain is an
+      existence proof; this is whether it generalises.
+
+      Every ask here is phrased as a confident assignment, because `pickRoster`
+      caps a contested reading at one person by design and
+      `routing_decisions_unconfident_stays_small` refuses a wider roster on an
+      unconfident row — a suite that fed it ambiguous sentences would be
+      asserting against a safety rule rather than against the feature. That was
+      learned by getting it wrong in `verify:collaborates`.
+
+      The last two turns matter as much as the first four: **minimum necessary
+      collaboration**. Manufacturing delegation to improve a metric is the
+      failure mode the brief names, so single-specialist work must stay single.
+    */
+    turns: [
+      {
+        say:
+          'I need you to find out what the three big competitors charge and then ' +
+          'tell me what that means for where we position ourselves.',
+        inProject: 'alpha',
+        /*
+           Research, and then GROWTH rather than strategy — "positioning" is in
+           the growth director's `expertise` column, which is Grant's own
+           vocabulary and the thing that decides. Named as research only: the
+           second name is his column's to move, and an assertion that fixed it
+           here would go red the day he edits it.
+         */
+        why: 'two specialists: the competitor read, then what it means for us',
+        expect: { convenes: 2, convening: ['research-director'] },
+      },
+      {
+        say:
+          'I need you to work out whether the margin supports a discount and ' +
+          'decide whether it fits where we are trying to take the business.',
+        inProject: 'alpha',
+        why: 'finance -> strategy',
+        expect: { convenes: 2, convening: ['finance-director', 'strategy-director'] },
+      },
+      {
+        say:
+          'I need you to look at which channel is bringing people in and draft ' +
+          'the note we send them when they arrive.',
+        inProject: 'alpha',
+        /*
+           The clause the trigram cannot see. "which channel is bringing people
+           in" names nobody in any expertise list, so the second specialist can
+           only arrive through the semantic layer — which is the half that was
+           silently disabled until #231, because the clause beside it matched
+           "note". Counted, not named, for #229's reason.
+         */
+        why: 'growth -> communications, and the growth half is read for meaning',
+        expect: { convenes: 2, convening: ['communications-director'] },
+      },
+      {
+        say:
+          'I need you to map where the delivery process is slipping and flag ' +
+          'what could go wrong if we leave it another month.',
+        inProject: 'alpha',
+        why: 'operations -> quality, and the quality half is read for meaning',
+        expect: { convenes: 2, convening: ['operations-director'] },
+      },
+      {
+        say:
+          'I need you to find what the market charges, work out what that does ' +
+          'to our margin, and say how we should announce whatever we decide.',
+        inProject: 'alpha',
+        why: 'three specialists, genuinely — the market, the margin, the announcement',
+        expect: {
+          convenes: 3,
+          convening: ['research-director', 'finance-director', 'strategy-director'],
+        },
+      },
+      {
+        say: 'I need you to tell me our gross margin on the middle tier.',
+        inProject: 'alpha',
+        /*
+          The control, and it is the half that keeps the rest honest. One
+          question for one specialist must convene ONE specialist — a suite
+          that only rewarded collaboration would be satisfied by an office that
+          convened a committee for everything.
+        */
+        why: 'CONTROL: one specialist is enough, so exactly one is convened',
+        expect: { convenes: 1, convening: ['finance-director'] },
+      },
+    ],
+  },
 ]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)

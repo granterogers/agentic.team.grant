@@ -79,6 +79,7 @@ import {
   contradictsReality,
   EMPTY_CAPABILITY,
 } from '../agents/capability.ts'
+import { clauses } from '../agents/clauses.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
@@ -249,10 +250,49 @@ async function speaker(
   */
   const forLookup = withoutNegated(instruction)
 
-  const literal = await db
-    .execute(`select slug from app.who_knows_about(${lit(forLookup)}, 3)`)
-    .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
-    .catch(() => undefined)
+  /*
+    One lookup per ASK, not one per message (#231).
+
+    `who_knows_about` is a trigram match over whatever it is given, so a
+    whole-message match can only surface the strongest subject in the message.
+    *"look at which channel is bringing people in and draft the note we send
+    them"* is two asks for two people and came back as the communications
+    director alone — "channel" is in the growth director's expertise and lost
+    to a sentence that is mostly about writing.
+
+    `clauses.ts` carries the argument. What matters here is the pair of
+    consequences: a multi-clause request gets ONE name per clause, because the
+    clause is the thing that has one subject; a single-clause request keeps
+    three, because a single subject worth hedging about is exactly what the
+    old number was for and changing it would move every routing decision this
+    office has ever measured.
+  */
+  const asks = clauses(forLookup)
+  const perAsk = asks.length === 1 ? 3 : 1
+
+  // Nothing to look up. `withoutNegated` can empty a message that was entirely
+  // a withdrawal, and an empty VALUES list is a syntax error rather than an
+  // empty answer.
+  const found =
+    asks.length === 0
+      ? []
+      : await db
+          .execute(`
+      with ask(i, t) as (values ${asks.map((t, i) => `(${String(i)}, ${lit(t)})`).join(', ')})
+      select ask.i as i, w.slug as slug
+        from ask cross join lateral app.who_knows_about(ask.t, ${String(perAsk)}) w
+       order by ask.i`)
+          .then((r) =>
+            (r.rows as { i: number; slug: string }[]).map((x) => ({
+              i: Number(x.i),
+              slug: String(x.slug),
+            })),
+          )
+          .catch(() => undefined)
+
+  // Order matters and duplicates do not: `pickRoster`'s contested branch takes
+  // the first name, so the first ask has to come first.
+  const literal = found === undefined ? undefined : [...new Set(found.map((x) => x.slug))]
 
   /*
     And when no word in the request names anybody, read it for MEANING (#232).
@@ -276,10 +316,44 @@ async function speaker(
     untouched rather than spending a model call to paper over a database
     hiccup.
   */
-  const topical =
-    literal === undefined || literal.length > 0 || router === null
-      ? literal
-      : await nameSubjects(db, router, forLookup, {}).catch(() => literal)
+  /*
+    Per ask, for the same reason, and this is the half that was silently
+    disabled.
+
+    The old rule — consult the model only when the literal matcher found NOBODY
+    — is right, and it was being applied to the message. So one clause the
+    trigram could answer silenced the reader on every other clause, which is
+    #237's lesson (*"a misleading literal hit is exactly the case where the
+    meaning-reader is not consulted"*) in its partial form. *"flag what could go
+    wrong if we leave it another month"* names the quality director to any
+    reader and matches no expertise word; it was never asked about, because the
+    clause beside it matched "process".
+
+    Bounded to two calls. A request with five unanswerable asks is not five
+    specialists, and the roster is capped at five anyway, so the sixth lookup
+    could not change the answer — only the bill.
+  */
+  const NAMED_BY_MODEL_AT_MOST = 2
+  const unanswered =
+    found === undefined
+      ? []
+      : asks
+          .map((t, i) => ({ t, i }))
+          .filter((a) => !found.some((f) => f.i === a.i))
+          .slice(0, NAMED_BY_MODEL_AT_MOST)
+
+  const semantic =
+    literal === undefined || router === null || unanswered.length === 0
+      ? []
+      : (
+          await Promise.all(
+            unanswered.map((a) =>
+              nameSubjects(db, router, a.t, {}, asks.length === 1 ? 2 : 1).catch(() => []),
+            ),
+          )
+        ).flat()
+
+  const topical = literal === undefined ? undefined : [...new Set([...literal, ...semantic])]
 
   /*
     Who works on this project (#36, migration 0323).

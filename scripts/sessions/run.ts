@@ -135,6 +135,27 @@ export interface Expect {
   readonly neverSays?: readonly string[]
   /** The office should ask rather than guess. */
   readonly clarifies?: true
+  /**
+   * Exactly this many people on the recorded roster.
+   *
+   * Read from `routing_decisions.roster`, which is the decision itself rather
+   * than a count of who happened to answer. An exact number both ways on
+   * purpose: too few is a specialist who never got asked, and too many is the
+   * manufactured delegation the brief warns about.
+   */
+  readonly convenes?: number
+  /**
+   * These people, by name, on the recorded roster.
+   *
+   * A count alone is the weak half of this assertion: three specialists is
+   * evidence of collaboration and no evidence at all that the RIGHT people
+   * were convened, and CLAUDE.md records four separate occasions where a
+   * count-based assertion went red on a correct change or green on a wrong
+   * one. Named here are only the specialists the office's own vocabulary
+   * settles — a subject the semantic layer has to read for meaning is counted,
+   * not named, because #229 measured that layer disagreeing with itself.
+   */
+  readonly convening?: readonly string[]
 }
 
 export interface Turn {
@@ -389,6 +410,20 @@ export const askOnce = async (
     }
     for (const s of e.neverSays ?? [])
       judge(`never says ${JSON.stringify(s)}`, !searchable.includes(plain(s)))
+    if (e.convenes !== undefined || e.convening !== undefined) {
+      const roster = String(row.roster ?? '')
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean)
+      if (e.convenes !== undefined)
+        judge(
+          `${String(e.convenes)} specialist(s) convened`,
+          roster.length === e.convenes,
+          roster.join(', ') || 'nobody',
+        )
+      for (const who of e.convening ?? [])
+        judge(`${who} was convened`, roster.includes(who), roster.join(', ') || 'nobody')
+    }
     if (e.clarifies === true)
       judge(
         'asks rather than guesses',
