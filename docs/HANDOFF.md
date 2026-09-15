@@ -28,6 +28,68 @@
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
 >
+> ## Campaign Three — earning a GREEN backend verdict, 15 September
+>
+> **Not finished. This is the state mid-campaign, written so it survives a
+> compaction.** The tracking issue is #231; the standard it is being measured
+> against is `docs/spec/backend-acceptance-2026-09-14.md`.
+>
+> | | |
+> |---|---|
+> | Unit tests | **1,190 passing** |
+> | Migrations | **372 applied** |
+> | Agent x Capability matrix | **96/96 applicable cells proven**, negative control clean (`npm run matrix`) |
+> | Coverage dimensions | **37/37 have at least one case** (`npm run breadth`) — `monetisation` was the last empty one |
+> | Sessions | **250/250 expectations across 59 turns** on the development corpus |
+> | Held-out behavioural corpus | 18 turns in `scripts/sessions/holdout.ts`, committed BEFORE being run. baits 6/6 (3/6 on first contact, under a wording lock), monetisation 3/3, roster 7/9 on first contact |
+> | Routing, held out | `verify:routing-heldout` **21/28**, 11/11 checks, unchanged across the campaign's routing changes |
+>
+> **Product defects found and fixed.** Every one of these reached Grant, or
+> would have:
+>
+> - The office **replaced five facts he had just stated** with figures from an
+>   unrelated document. The prompt said "prefer" the documents and ranked
+>   nothing above them.
+> - Asked about a meeting that never happened it **invented two calendar
+>   entries with clock times**, absorbing three earlier honest "I have nothing
+>   on that" answers as evidence those things existed. Every coherence gate
+>   keys on a claim; this claimed nothing. `fabricatedWhen` now checks times and
+>   dates against what the office was actually given.
+> - **Teaching it a preference failed silently** — stored correctly, then the
+>   confirmation claimed a determinism exemption the record could not support.
+>   Fixed at one site by #237 and left at four others.
+> - *"That is not what I meant at all"* **replayed the instruction being
+>   rejected**, because resolving a contentless message against the thread
+>   reconstructs the last one.
+> - A **delegation's own content was being read as the message's mood**, which
+>   made the reading contested, which capped the roster at one person.
+> - The **subject is a property of the clause**, not the message — one answered
+>   clause was silencing the semantic reader on every other clause.
+> - The **ceiling list was deciding who answers** rather than gating who may be
+>   reached, so the announcement copy went to growth and the compliance audit
+>   went to research.
+> - **Claire was recorded as a convened specialist** on every question that
+>   convened nobody, in the column `npm run measure` counts from.
+> - A **job that ran out of attempts told Grant nothing** — now an impediment,
+>   at all three gates that could swallow an answer.
+>
+> **Open risks, stated rather than closed:**
+>
+> - **#239 — one inference provider on a free daily quota.** It ran out
+>   mid-campaign; eighteen jobs failed in thirty minutes. `app.office_health()`
+>   now reports `cannot_think` (0372) so the outage is visible, but a second
+>   provider is a paid dependency and therefore Grant's decision.
+> - **#240** — the studio does not yet draw `cannot_think`.
+> - **#242** — saying which constraint was set aside is a coin flip: the same
+>   build does it on one run and not the next. Every invariant with a
+>   MECHANISM behind it held on every run; this one has only a prompt.
+> - **#241** — `provider_health` is 40 rows of probe debris and 6 real ones.
+>
+> `npm run gate` cannot be read while the provider is out or the Supabase
+> Management API is throttling: a run during both reported 4/18 in 139 seconds,
+> which is fourteen suites failing fast rather than failing. Re-run it clean
+> before believing any number from it.
+>
 > ## Phase 7 — Communications, finished overnight 13–14 September
 
 **#191's eight children are all closed.** One conversation, every surface.

@@ -1472,6 +1472,135 @@ Each of these cost real time. They are here so they cost it once.
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real
   timeout and let it print rather than backgrounding it.
+- **A non-raw Python heredoc turns `\b` in a regex into U+0008, and nothing
+  anywhere shows it.** Writing a pattern into a file with `python3 - <<'PY'`
+  and a plain `'''…'''` string converts every `\b` to a backspace character.
+  `String.raw` then preserves it, so the regex asks for a backspace where a
+  word boundary was meant and matches nothing, for ever. The editor renders
+  nothing, `sed` prints nothing, `git diff` prints nothing, biome and tsc are
+  both happy — and `JSON.stringify(re.source)` prints the character back as the
+  two characters `\b`, so the one piece of debugging output anybody reaches for
+  CONFIRMS the pattern is correct. Eight of them in one function, and four
+  hypotheses (including a wrongly-suspected module cache) before the truth.
+  `npm run check:templates` now refuses any control character repo-wide. Use
+  `r'''…'''` or double every backslash.
+- **`String.replace(old, new)` on a string replaces EVERY occurrence, and a
+  code block you think is unique usually is not.** An absence exemption meant
+  for `claimsToHaveRead` landed in `claimsToHaveSent` and `promisesToReachOut`
+  as well, because all three end with the identical six-line
+  `for (const re of claims)` loop. Pass a count, or match something that
+  includes the function's own name. The companion trap: a multi-edit script
+  whose LAST assertion fails writes NOTHING, while the earlier edits look
+  applied because you read the diff you intended.
+- **A literal-string assertion is a wording lock — sixth instance, and this one
+  cost the only run a held-out corpus gets.** Six hallucination baits, six
+  honest answers, and the assertion listed six ways of saying "I cannot see
+  it": it scored 3/6 while nothing had been invented. "There is no entry", "I
+  do not see anything logged there" and "there is nothing on that" were the
+  three it was missing, and a list will always be missing a fourth. Assert the
+  shape — does it state an absence or ask, and is it SHORT — because an
+  invented summary of a document that does not exist is long.
+- **Every coherence gate keys on a CLAIM, so a bare assertion is invisible to
+  all of them.** `claimsToHaveRead` needs "I checked", `claimsToHaveSent` needs
+  "I posted", `claimsGrantSaid` needs "you told me". Asked about a meeting that
+  never happened, the office answered with two calendar entries, clock times, a
+  due date and named agenda items — claiming nothing, and passing every gate.
+  It had also absorbed three earlier baits in the same chat and served them
+  back as fact: its own honest *"I have nothing on Priya"* had become evidence
+  that Priya exists. What is checkable without a model is not truth but
+  DERIVABILITY: £26 follows from £40 and £14, and 3.19 PM follows from nothing.
+  `fabricatedWhen` compares times and dates against the instruction, the
+  conversation and the retrieved documents, and the handler supplies that
+  grounding because it is the only thing that knows what it showed the model.
+- **And then it read the price £63.50 as sixty-three minutes past something.**
+  The first draft was `\d{1,2}[:.]\d{2}` with an optional am/pm. It refused a
+  good answer four times, which is worse than no gate: a check that fires
+  wrongly is one somebody switches off. The colon form is now bounded to a real
+  clock and the DOT form requires am or pm, because money is far commoner here
+  than a dotted time. Missing a bare "9.30" is the cheap direction — a missed
+  invention is one bad answer, a false refusal is every good answer that
+  mentions a price.
+- **An absence is still a claim when it is about somewhere nothing looked.**
+  The honest answer to a bait — *"I checked our notebook and the project
+  documents and there is no entry"* — was refused every time, because the
+  sentence claims a look and `evidence` on an answer that found nothing can
+  only be `inferred`: there is no value in the vocabulary for "searched,
+  empty", so the office was structurally unable to say the true thing. But the
+  exemption cannot be general, and two existing #237 tests are why: *"I checked
+  GitHub and the mail folder, but I have nothing"* tells Grant not to search
+  them himself, and this path queries `public.documents` and nothing else. Draw
+  the line from what `retrieve()` actually does, not from judgement.
+- **"Prefer them" about documents outranked Grant's own sentence.** He wrote
+  five facts into one message — forty pounds a month, three tiers, email-only
+  support, two weeks to onboard, twelve-month contract — and got back £63.50
+  from an unrelated document, "dedicated 24/7 support" and "month-to-month up
+  to annual commitments". The prompt line meant *prefer documents over what you
+  merely know* and reads as *prefer them over everything*. Worse than an
+  invention, because the answer is about his own business and wrong in the
+  details he had just supplied. State the precedence in full: documents beat
+  general knowledge, and what he says beats both.
+- **A contentless rejection resolved against the thread becomes the thing being
+  rejected.** *"That is not what I meant at all."* produced *"Routed to Ruby.
+  You asked for Ruby's input on the margin impact."* — the previous turn
+  happening again, at the moment he said it was wrong. `resolveAgainstThread`
+  is doing its job: a message with no content of its own resolves into the last
+  instruction, and the last instruction is what he is rejecting. So the better
+  the resolver gets, the more confidently it rebuilds the misunderstanding.
+  Answer it in code, BEFORE the resolver, because afterwards the fragment is
+  gone. And define "carries nothing" by stripping the rejection and counting
+  what is left, not by enumerating the shapes a replacement can take — the
+  enumeration was wrong in both directions on its first run.
+- **A delegation governs its own span.** *"I need you to find out what they
+  charge and then tell me what that means"* fired three intent rules: the
+  assignment, plus `light_investigation` for "find out" and `question` for
+  "tell me". Three classes means contested, and
+  `routing_decisions_unconfident_stays_small` then caps the roster at ONE — so
+  a request plainly needing two specialists reached one, and the reason
+  recorded said the reading was contested. It was not: those words are the
+  CONTENT of the delegation. The mood of a sentence is set by its main clause.
+  `teaching.ts` already had this lesson about complement clauses; only anything
+  at or above `assignment` survives the span, so urgency is untouched.
+- **A clause is what has a subject, not a message.** `who_knows_about` is a
+  trigram match over whatever it is given, so a whole-message match has exactly
+  one winner — *"look at which channel is bringing people in and draft the note
+  we send them"* came back as communications alone, because "channel" is in the
+  growth director's expertise and lost to a sentence mostly about writing. And
+  it silenced the layer built for this: the semantic reader runs only when the
+  literal matcher finds NOBODY, which is right, and was being asked of the
+  message. One answered clause meant no clause was read for meaning. #237's
+  lesson in its partial form.
+- **The ceiling is a gate and was being used as a preference.** `pickRoster`
+  wrote `ceiling.filter(r => fromRoster.includes(r))`, so the intersection came
+  out in the order of a hardcoded list and `roster[0]` — who ANSWERS — was
+  whoever appeared first in it. *"Draft the announcement copy"* is ranked
+  communications, growth by Grant's own expertise columns and went to growth;
+  *"audit the refund policy for compliance risk"* ranked quality first and went
+  to research. #230 and #232 each fixed a version of "the ceiling's first entry
+  decided"; this was the ordinary case, and the unconfident branch had been
+  reading subject-first all along.
+- **`roster[0] ?? 'chief-of-staff'` is the right fallback and the wrong thing
+  to store.** #233 recorded `[who.slug, ...alsoConvened]` into
+  `routing_decisions.roster`, so a question that convened NOBODY was stored as
+  having convened Claire — in the column `npm run measure` counts from. 0311's
+  lesson in a column: two ways to say one thing and no reader can tell them
+  apart. Store what `pickRoster` returned, which may legitimately be empty.
+- **A job that runs out of attempts owes Grant a sentence, and three separate
+  gates had to learn it.** The coherence gate records an impediment (#211); the
+  output INSERT refusal did not, and swallowed a preference Grant had taught
+  the office; and a handler that threw until its attempts ran out recorded
+  nothing at all. Found when OpenRouter's daily free quota ran out and eighteen
+  jobs failed in thirty minutes with nothing anywhere saying the office could
+  not think. Anything that can end a turn with no answer has to say so
+  somewhere he looks.
+- **`create or replace` on a confirmation's `path` is four sites, not one.**
+  Every code-composed confirmation in `handlers/instruction.ts` is tempted to
+  claim `deterministic_retrieval`, and `enforce_deterministic_claim` refuses it
+  on any correlation that spent a model call — which, by the time a
+  confirmation is written, is most turns. #237 found it on the task
+  confirmation and fixed it THERE; the plan say-back, the Notion wiring and the
+  teaching confirmation kept the hardcoded claim, so teaching the office a
+  preference was stored correctly and then FAILED. One `howComposed()` for
+  every caller, so the next confirmation added cannot be the fifth.
 
 ---
 
