@@ -105,13 +105,40 @@ export interface Context {
    */
   readonly answeredBefore: readonly string[]
   /**
-   * Which kinds of record were actually consulted this turn.
+   * Which kinds of record were actually LOOKED AT this turn — whether or not
+   * the look found anything.
    *
-   * Empty means the answer rests entirely on the conversation and the model's
-   * own knowledge. A domain listed here is one the office genuinely looked at,
-   * so counting what it found is reporting rather than inventing.
+   * The distinction that sentence carries is the whole of it, and the first
+   * draft got it wrong by deriving this from whether documents came BACK.
+   * There are three states, not two:
+   *
+   *   - **a supported positive fact** needs the source read and the answer in
+   *     it;
+   *   - **a supported absence** — "there are no meetings on Thursday" — needs
+   *     the source read and nothing in it. A search that RAN and returned zero
+   *     rows is exactly the evidence that entitles the office to say so;
+   *   - **not checked** needs nothing, and can only be said as what the office
+   *     knows: "I have no record of one".
+   *
+   * Deriving this from the result collapsed the first two states into the
+   * third, which meant the office could never honestly report an empty search.
+   * A domain belongs here when the lookup happened.
    */
   readonly consultedDomains: readonly Domain[]
+  /**
+   * Which kinds of record the office holds in FULL this turn.
+   *
+   * A third permission, distinct from being consulted, because a search is not
+   * a census. `retrieve()` returns the best few matches for a query — so it
+   * can support *"there is nothing in our documents about renewals"* and can
+   * never support *"we hold four documents on renewals"*. The dashboard
+   * project list is the other case: it is read whole, so a count of it is
+   * reporting.
+   *
+   * Counts and exhaustiveness claims need this. Absences need only
+   * `consultedDomains`.
+   */
+  readonly completeDomains: readonly Domain[]
 }
 
 /**
@@ -122,6 +149,9 @@ export interface Context {
  */
 export const established = (c: Context): string =>
   [c.asked, ...c.saidBefore, ...c.retrieved].filter((p) => p.trim() !== '').join('\n')
+
+/** Which kinds of record the office holds in full, so a count of them is reporting. */
+export const complete = (c: Context): readonly Domain[] => c.completeDomains
 
 /**
  * Which kinds of record this turn actually looked at.

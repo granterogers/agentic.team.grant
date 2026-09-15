@@ -156,7 +156,10 @@ export interface HandlerOutput {
    * Which kinds of record were actually consulted this turn — see
    * `provenance.consulted()`. Handed to the coherence gate and never stored.
    */
-  readonly consulted?: readonly Domain[]
+  readonly consulted?: {
+    readonly consulted: readonly Domain[]
+    readonly complete: readonly Domain[]
+  }
   /**
    * Send this output as a playable audio file rather than as text (#66).
    *

@@ -94,7 +94,13 @@ import {
   readPlan,
   type Step,
 } from '../agents/plan.ts'
-import { type Context, consulted, established, PROVENANCE_NOTE } from '../agents/provenance.ts'
+import {
+  type Context,
+  complete,
+  consulted,
+  established,
+  PROVENANCE_NOTE,
+} from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { nameSubjects } from '../agents/subject.ts'
@@ -2552,14 +2558,37 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ...(projectList === '' ? [] : [projectList]),
         ],
         /*
-          Documents, when anything came back, and the dashboard projects, which
-          are read below and put in front of the model every turn. Nothing else
-          on this path reads anything: `retrieve()` queries `public.documents`
-          and there is no diary, inbox, task or contact read here at all, which
-          is why a claim about any of those can never be grounded from this
-          handler.
+          What was LOOKED AT, not what came back.
+
+          This read `context === '' ? [] : ['documents']`, which is the wrong
+          question and collapsed a supported absence into "not checked":
+          `retrieve()` runs on every one of these turns, so a search that
+          returned zero rows is precisely the evidence entitling the office to
+          say *"there is nothing in our documents about that"* — and the first
+          version forbade exactly that sentence while allowing it after a
+          search that DID find something.
+
+          `hits` is the result; the search ran whenever there was no
+          confirmation to short-circuit it. Projects are read unconditionally
+          below.
+
+          Nothing else on this path reads anything — there is no diary, inbox,
+          task or contact lookup here at all — which is why a claim about any
+          of those, positive OR negative, can never be grounded from this
+          handler. The office may still say it has no record of one; that is
+          the third state and `EPISTEMIC` protects it.
         */
-        consultedDomains: [...(context === '' ? [] : ['documents' as const]), 'projects' as const],
+        consultedDomains: [
+          ...(confirmation === null ? (['documents'] as const) : []),
+          'projects' as const,
+        ],
+        /*
+          Only the project list is held WHOLE. `retrieve()` returns the best
+          few matches for a query, so it can support "there is nothing in our
+          documents about renewals" and can never support "we hold four
+          documents on renewals" — a search is not a census.
+        */
+        completeDomains: ['projects' as const],
         answeredBefore: [
           ...turns.map((t) => t.answered ?? ''),
           ...memory.recalled.map((m) => m.answered),
@@ -2591,7 +2620,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           says is not, until something outside the conversation backs it.
         */
         grounding: established(shown),
-        consulted: consulted(shown),
+        consulted: { consulted: consulted(shown), complete: complete(shown) },
       } satisfies HandlerOutput
     },
   }

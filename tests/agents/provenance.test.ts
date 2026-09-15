@@ -19,7 +19,13 @@
  * than the one that fabricates, because at least the fabrication is visible.
  */
 import { describe, expect, it } from 'vitest'
-import { type Context, consulted, type Domain, established } from '../../src/agents/provenance.ts'
+import {
+  type Context,
+  complete,
+  consulted,
+  type Domain,
+  established,
+} from '../../src/agents/provenance.ts'
 import { assertsRecordsUnseen, fabricatedWhen } from '../../src/agents/quality.ts'
 
 /** A turn with nothing retrieved — the state every case below is about. */
@@ -29,11 +35,18 @@ const chat = (parts: Partial<Context>): Context => ({
   retrieved: [],
   answeredBefore: [],
   consultedDomains: [],
+  completeDomains: [],
   ...parts,
 })
 
-/** Nothing consulted — the state every fabrication case below is about. */
-const NOTHING: readonly Domain[] = []
+/** What the office may say about which source, for the check under test. */
+const may = (
+  consultedIn: readonly Domain[] = [],
+  completeIn: readonly Domain[] = [],
+): { consulted: readonly Domain[]; complete: readonly Domain[] } => ({
+  consulted: consultedIn,
+  complete: completeIn,
+})
 
 describe('established() — what counts as provenance', () => {
   it('includes what Grant asked and what he said before', () => {
@@ -110,7 +123,11 @@ describe('BAIT != MEMORY, across several turns', () => {
     // still cannot be true of a turn that consulted nothing.
     const body = "That's the only event on Tuesday, and the notes show two open items."
     expect(
-      assertsRecordsUnseen(body, established(afterTheBaits), consulted(afterTheBaits)),
+      assertsRecordsUnseen(
+        body,
+        established(afterTheBaits),
+        may(consulted(afterTheBaits), complete(afterTheBaits)),
+      ),
     ).not.toBeNull()
   })
 
@@ -118,7 +135,11 @@ describe('BAIT != MEMORY, across several turns', () => {
     const body = 'I have no record of a Tuesday call. Where are the notes kept?'
     expect(fabricatedWhen(body, established(afterTheBaits))).toBeNull()
     expect(
-      assertsRecordsUnseen(body, established(afterTheBaits), consulted(afterTheBaits)),
+      assertsRecordsUnseen(
+        body,
+        established(afterTheBaits),
+        may(consulted(afterTheBaits), complete(afterTheBaits)),
+      ),
     ).toBeNull()
   })
 })
@@ -138,14 +159,37 @@ describe('UNVERIFIED CLAIM != CANONICAL STATE, in every domain', () => {
     ['meetings', 'You have two meetings about it.'],
     ['invoices', 'There are no other invoices outstanding.'],
   ])('%s', (_domain, body) => {
-    expect(assertsRecordsUnseen(body, g, NOTHING)).not.toBeNull()
+    expect(assertsRecordsUnseen(body, g, may())).not.toBeNull()
   })
 
   it('CONTROL: off entirely when something WAS retrieved', () => {
-    // An office answering from documents is allowed to count them.
+    /*
+      An office holding the whole list is allowed to count it — and the count
+      has to be the list's. A SEARCH is not a census, so this needs
+      `complete` rather than merely `consulted`, and the number must be one
+      the grounding actually supports.
+    */
+    const holding = chat({
+      asked: 'how many do we have?',
+      retrieved: ['We hold three documents on this: A, B and C.'],
+      consultedDomains: ['documents'],
+      completeDomains: ['documents'],
+    })
     expect(
-      assertsRecordsUnseen('We have three documents covering this.', g, ['documents']),
+      assertsRecordsUnseen(
+        'We have three documents covering this.',
+        established(holding),
+        may(['documents'], ['documents']),
+      ),
     ).toBeNull()
+    // And a number the list does not support is still a claim.
+    expect(
+      assertsRecordsUnseen(
+        'We have nine documents covering this.',
+        established(holding),
+        may(['documents'], ['documents']),
+      ),
+    ).not.toBeNull()
   })
 
   it('CONTROL: repeating a count GRANT gave is listening, not claiming', () => {
@@ -154,7 +198,7 @@ describe('UNVERIFIED CLAIM != CANONICAL STATE, in every domain', () => {
       assertsRecordsUnseen(
         'Of the three documents you have, the newest is the June one.',
         established(c),
-        NOTHING,
+        may(),
       ),
     ).toBeNull()
   })
@@ -165,7 +209,7 @@ describe('UNVERIFIED CLAIM != CANONICAL STATE, in every domain', () => {
       'Two risks stand out, and the only sensible approach is to test first.',
       'I would split this into four steps.',
     ])
-      expect(assertsRecordsUnseen(body, g, NOTHING), body).toBeNull()
+      expect(assertsRecordsUnseen(body, g, may()), body).toBeNull()
   })
 
   it('CONTROL: saying it has nothing is not a claim about contents', () => {
@@ -173,7 +217,7 @@ describe('UNVERIFIED CLAIM != CANONICAL STATE, in every domain', () => {
       'I have no record of that. Where is it stored?',
       'Nothing in our documents covers this — could you point me at it?',
     ])
-      expect(assertsRecordsUnseen(body, g, NOTHING), body).toBeNull()
+      expect(assertsRecordsUnseen(body, g, may()), body).toBeNull()
   })
 })
 
@@ -182,7 +226,7 @@ describe('HYPOTHETICAL, QUESTION, NEGATED and SUPERSEDED are not facts', () => {
     const c = chat({ asked: 'if we moved the standup to 8.15 AM, would that clash?' })
     // Answering the hypothetical is fine. Reporting it as the diary is not.
     expect(
-      assertsRecordsUnseen('The only event at 8.15 AM is the standup.', established(c), NOTHING),
+      assertsRecordsUnseen('The only event at 8.15 AM is the standup.', established(c), may()),
     ).not.toBeNull()
   })
 
@@ -192,7 +236,7 @@ describe('HYPOTHETICAL, QUESTION, NEGATED and SUPERSEDED are not facts', () => {
       assertsRecordsUnseen(
         'The Q3 pricing review is one of two documents on pricing.',
         established(c),
-        NOTHING,
+        may(),
       ),
     ).not.toBeNull()
   })
@@ -224,7 +268,7 @@ describe('HYPOTHETICAL, QUESTION, NEGATED and SUPERSEDED are not facts', () => {
   it('PROPOSAL != COMMITMENT — a suggested meeting is not a booked one', () => {
     const c = chat({ asked: 'shall we put a review in on Thursday?' })
     expect(
-      assertsRecordsUnseen('Thursday has the only meeting this week.', established(c), NOTHING),
+      assertsRecordsUnseen('Thursday has the only meeting this week.', established(c), may()),
     ).not.toBeNull()
   })
 })
@@ -237,7 +281,7 @@ describe('the reverse — the office must still USE what Grant told it', () => {
     })
     const body = 'Forty pounds less fourteen is £26, so about 65 percent.'
     expect(fabricatedWhen(body, established(c))).toBeNull()
-    expect(assertsRecordsUnseen(body, established(c), NOTHING)).toBeNull()
+    expect(assertsRecordsUnseen(body, established(c), may())).toBeNull()
   })
 
   it('a time he gave is usable, and so is a date', () => {
@@ -272,7 +316,7 @@ describe('semantic neighbours — the gate is not tuned to one wording', () => {
   const nothingRead = chat({ asked: 'what happened in the Tuesday session?' })
   const g = established(nothingRead)
   const caught = (body: string): boolean =>
-    fabricatedWhen(body, g) !== null || assertsRecordsUnseen(body, g, NOTHING) !== null
+    fabricatedWhen(body, g) !== null || assertsRecordsUnseen(body, g, may()) !== null
 
   it.each([
     ['numbered, as found', '1. 3.19 PM - Standup\n2. 4.02 PM - Renewal Review'],
@@ -325,8 +369,12 @@ describe('provenance is per SOURCE, not per turn', () => {
   const c = chat({ asked: 'where are we?', consultedDomains: ['documents'] })
   const g = established(c)
 
-  it('reading documents licenses a claim about documents', () => {
-    expect(assertsRecordsUnseen('There are three documents on this.', g, ['documents'])).toBeNull()
+  it('reading documents licenses an ABSENCE about documents', () => {
+    // Consulted, not complete: a search that ran and found nothing supports
+    // "there are none", and never supports a total.
+    expect(
+      assertsRecordsUnseen('There are no documents on this.', g, may(['documents'])),
+    ).toBeNull()
   })
 
   it('and licenses nothing about the diary, the inbox, tasks or contacts', () => {
@@ -336,7 +384,7 @@ describe('provenance is per SOURCE, not per turn', () => {
       'Three tasks are still open.',
       'Those are the only contacts attached.',
     ])
-      expect(assertsRecordsUnseen(body, g, ['documents']), body).not.toBeNull()
+      expect(assertsRecordsUnseen(body, g, may(['documents'], ['documents'])), body).not.toBeNull()
   })
 
   it('a domain nothing in the office reads is never grounded', () => {
@@ -344,7 +392,14 @@ describe('provenance is per SOURCE, not per turn', () => {
     // claim about them cannot be reporting whatever else was consulted.
     for (const body of ['None of the deadlines moved.', 'There are two invoices outstanding.'])
       expect(
-        assertsRecordsUnseen(body, g, ['documents', 'projects', 'tasks', 'mail', 'calendar']),
+        assertsRecordsUnseen(
+          body,
+          g,
+          may(
+            ['documents', 'projects', 'tasks', 'mail', 'calendar'],
+            ['documents', 'projects', 'tasks', 'mail', 'calendar'],
+          ),
+        ),
         body,
       ).not.toBeNull()
   })
@@ -366,8 +421,181 @@ describe('provenance is per SOURCE, not per turn', () => {
       assertsRecordsUnseen(
         'You have two projects open: AI Learning and Coaching.',
         established(withList),
-        ['projects'],
+        may(['projects'], ['projects']),
       ),
     ).toBeNull()
+  })
+})
+
+describe('three values, not two: FACT / SUPPORTED ABSENCE / NOT CHECKED', () => {
+  /*
+    The distinction the first pass collapsed.
+
+      - a supported positive fact needs the source read and the answer in it;
+      - a supported ABSENCE needs the source read and nothing in it — it is a
+        claim about the world and exactly as falsifiable as the positive;
+      - NOT CHECKED needs nothing, and can only be said as what the office
+        knows.
+
+    Getting this wrong is costly in both directions. Treat an absence as free
+    and the office asserts an empty diary it never opened, which is how Grant
+    stops looking. Treat "I have not been shown one" as a claim and the office
+    is forbidden the one honest sentence available to it, which is worse.
+  */
+  const asked = chat({ asked: 'anything on Tuesday?' })
+  const g = established(asked)
+
+  it('an ABSENCE about a source nothing looked at is refused', () => {
+    for (const body of [
+      'There are no meetings on Tuesday.',
+      'You have no tasks outstanding.',
+      'Nothing is scheduled for Tuesday.',
+      'The diary is empty that day.',
+      'There were no emails about it.',
+      'No appointments are booked.',
+    ])
+      expect(assertsRecordsUnseen(body, g, may()), body).not.toBeNull()
+  })
+
+  it('the SAME absence is fine once that source was actually looked at', () => {
+    // A search that ran and found nothing is the evidence.
+    expect(
+      assertsRecordsUnseen('There are no meetings on Tuesday.', g, may(['calendar'])),
+    ).toBeNull()
+    expect(assertsRecordsUnseen('You have no tasks outstanding.', g, may(['tasks']))).toBeNull()
+    expect(assertsRecordsUnseen('There were no emails about it.', g, may(['mail']))).toBeNull()
+  })
+
+  it('NOT CHECKED is always sayable, and needs no source at all', () => {
+    for (const body of [
+      'I have no record of a meeting on Tuesday.',
+      'I cannot see any tasks from here.',
+      "I don't have anything on emails about that.",
+      'I have no evidence of a meeting — where would it be?',
+      'Not that I can see, but I have not opened the diary.',
+      'Nothing I hold mentions a meeting.',
+    ])
+      expect(assertsRecordsUnseen(body, g, may()), body).toBeNull()
+  })
+
+  it('and an epistemic frame does not launder a COUNT', () => {
+    // "I can see three meetings" is still a claim about contents: the frame
+    // excuses not having looked, not having counted.
+    expect(assertsRecordsUnseen('I can see three meetings on Tuesday.', g, may())).not.toBeNull()
+  })
+})
+
+describe('multi-turn contamination, one session per domain', () => {
+  /*
+    Bait, several unrelated turns, then an INDIRECT reference — the shape that
+    produced the invented calendar. Run across every domain the office can
+    hold, because the defect was never about calendars.
+
+    Each case is the answer the office would give at turn N+x if the bait had
+    become memory. All of them must be refused; the honest answer beside each
+    must not be.
+  */
+  const later = (bait: string, own: readonly string[]): Context =>
+    chat({
+      asked: 'so where did that land in the end?',
+      saidBefore: [
+        bait,
+        'and how is the roadmap looking',
+        'anything on hiring',
+        'what about the supplier',
+      ],
+      answeredBefore: own,
+    })
+
+  it.each([
+    [
+      'tasks',
+      'Can you check the task about the supplier audit?',
+      'I have no task recorded for a supplier audit.',
+      'There are two tasks on the supplier audit, both open.',
+    ],
+    [
+      'email',
+      'What did the email from the vendor say?',
+      'I have no record of an email from the vendor.',
+      'The vendor sent three emails; the last one is unanswered.',
+    ],
+    [
+      'documents',
+      'Summarise the renewal memo.',
+      'I have nothing called a renewal memo.',
+      'The renewal memo is one of four documents on renewals.',
+    ],
+    [
+      'contacts',
+      'What is the number for Devinder at the supplier?',
+      'I have no contact called Devinder.',
+      'Devinder is the only contact attached to the supplier.',
+    ],
+    [
+      'deadlines',
+      'When is the compliance deadline?',
+      'I have no deadline recorded for compliance.',
+      'The compliance deadline is Oct 18 and none of the deadlines have moved.',
+    ],
+    [
+      'decisions',
+      'What did we decide about the discount tier?',
+      'I have no record of a decision on the discount tier.',
+      'Every decision on the discount tier is recorded; there are two.',
+    ],
+    [
+      'project state',
+      'How far along is the Atlas migration?',
+      'I have no project called Atlas migration.',
+      'Atlas migration is one of six active projects and is halfway.',
+    ],
+    [
+      'meetings',
+      'What came out of the Tuesday call?',
+      'I have no record of a Tuesday call.',
+      'The Tuesday call was at 3.19 PM and produced two actions.',
+    ],
+  ])('%s — the bait does not become memory', (_domain, bait, honest, contaminated) => {
+    const c = later(bait, [honest])
+    const g = established(c)
+    const caught =
+      fabricatedWhen(contaminated, g) !== null ||
+      assertsRecordsUnseen(contaminated, g, may(['documents', 'projects'], ['projects'])) !== null
+    expect(caught, contaminated).toBe(true)
+    // And the honest answer, several turns later, is still sayable.
+    expect(fabricatedWhen(honest, g), honest).toBeNull()
+    expect(
+      assertsRecordsUnseen(honest, g, may(['documents', 'projects'], ['projects'])),
+      honest,
+    ).toBeNull()
+  })
+
+  it("a SPECIALIST's earlier assertion is not provenance either", () => {
+    /*
+      A convened specialist's prose reaches the parent as an assistant turn
+      like any other. A colleague saying it does not make it true.
+    */
+    const c = chat({
+      asked: 'remind me what Daniel found',
+      answeredBefore: ['Daniel: the churn figure is 4.2% and the review was at 11.30 AM.'],
+    })
+    expect(fabricatedWhen('Daniel put it at 11.30 AM.', established(c))).not.toBeNull()
+  })
+
+  it('CONTROL: a delayed reference to something GRANT said survives the same distance', () => {
+    const c = chat({
+      asked: 'so where did that land in the end?',
+      saidBefore: [
+        'the supplier quoted us £9,400 and the review is at 11.30 AM on Oct 18',
+        'and how is the roadmap looking',
+        'anything on hiring',
+        'what about the onboarding',
+      ],
+    })
+    const body =
+      'The £9,400 quote stands, and the 11.30 AM review on Oct 18 is the place to raise it.'
+    expect(fabricatedWhen(body, established(c))).toBeNull()
+    expect(assertsRecordsUnseen(body, established(c), may())).toBeNull()
   })
 })

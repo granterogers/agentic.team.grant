@@ -180,7 +180,10 @@ export interface OutputMetadata {
    * true. Undefined means the caller cannot say, and disables the check rather
    * than guessing at it.
    */
-  readonly consulted?: readonly Domain[]
+  readonly consulted?: {
+    readonly consulted: readonly Domain[]
+    readonly complete: readonly Domain[]
+  }
 }
 
 export interface MetadataProblem {
@@ -489,6 +492,45 @@ const HOLDS: Readonly<Record<Domain | 'unreachable', readonly string[]>> = {
 const plural = (w: string): string => `${w}s?`
 const RECORD = `(?:${Object.values(HOLDS).flat().map(plural).join('|')})`
 
+/**
+ * Containers, for the sentences that name the place rather than the thing.
+ *
+ * "The diary is empty" is a claim about the calendar, and "nothing is
+ * scheduled" is the same claim with no noun in it at all.
+ */
+const CONTAINER: Readonly<Record<string, Domain>> = {
+  diary: 'calendar',
+  calendar: 'calendar',
+  inbox: 'mail',
+  mailbox: 'mail',
+}
+
+/**
+ * A statement about the office's own knowledge, rather than about the world.
+ *
+ * This is the third value, and leaving it out was the defect. There are not
+ * two states here but three:
+ *
+ *   - **a supported positive fact** — "the review is on Thursday" — needs the
+ *     source read and the answer in it;
+ *   - **a supported absence** — "there are no meetings on Thursday" — needs
+ *     the source read and nothing in it. It is a claim about the world and it
+ *     is exactly as falsifiable as the positive;
+ *   - **not checked** — "I have no record of a meeting on Thursday" — needs
+ *     nothing at all, because it says only what the office has been shown.
+ *
+ * Collapsing the last two is wrong in both directions. Treat an absence as
+ * free and the office asserts an empty diary it never opened, which is how
+ * Grant stops looking. Treat "I have not been shown one" as a claim and the
+ * office is forbidden from saying the one honest thing available to it, which
+ * is worse — it would have to either invent or go silent.
+ *
+ * So the frame decides. First person about knowing beats any absence pattern
+ * in the same sentence; everything else is a claim about the world.
+ */
+const EPISTEMIC =
+  /\b(?:I\s+(?:have|'ve|do|did|am|can|could)\b[^.!?]{0,20}?\b(?:not|n't|no)\b|I\s+(?:cannot|can't|haven't|don't|doubt)\b|not\s+that\s+I\s+(?:can\s+see|know)|nothing\s+(?:I|we)\s+(?:can\s+see|hold|have|was\s+shown)|as\s+far\s+as\s+I\s+can\s+see|I\s+have\s+no\s+(?:record|evidence|sight|visibility))/i
+
 /** Which domain a record noun belongs to, so provenance can be checked per source. */
 const domainOf = (noun: string): Domain | 'unreachable' => {
   const bare = noun.toLowerCase().replace(/s$/, '')
@@ -554,23 +596,79 @@ const HOW_MANY = String.raw`(?:\d{1,4}|one|two|three|four|five|six|seven|eight|n
 export const assertsRecordsUnseen = (
   body: string,
   grounding: string,
-  consultedDomains: readonly Domain[],
+  /**
+   * What the office may say about which source.
+   *
+   * `consulted` — a lookup RAN, so an absence is reportable. `complete` — the
+   * office holds the whole list, so a count is reportable. A search is not a
+   * census, which is why these are two sets and not one: `retrieve()` returns
+   * the best few matches, so it supports "nothing in our documents about
+   * renewals" and never "we hold four documents on renewals".
+   */
+  may: { readonly consulted: readonly Domain[]; readonly complete: readonly Domain[] },
 ): string | null => {
   const text = String(body ?? '')
   if (text.trim() === '') return null
   const flat = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ')
   const known = flat(grounding)
-  const shapes: RegExp[] = [
-    // "five active projects", "three documents", "no other tasks"
-    new RegExp(String.raw`\b${HOW_MANY}\s+(?:\w+\s+){0,2}?${RECORD}\b`, 'gi'),
-    // "the only event", "all of the emails", "none of the decisions"
-    new RegExp(
-      String.raw`\b(?:the only|all(?:\s+of)?\s+the|every|none\s+of\s+the|no\s+other)\s+(?:\w+\s+){0,2}?${RECORD}\b`,
-      'gi',
-    ),
+  const shapes: { readonly needs: 'consulted' | 'complete'; readonly re: RegExp }[] = [
+    /*
+      An ABSENCE asserted about the world (#231, second pass).
+
+      "There are no meetings on Tuesday" is not the same sentence as "I have no
+      record of a meeting on Tuesday", and the first draft of this check let
+      both through because it only looked for counts and exhaustiveness. An
+      empty diary the office never opened is a claim, and it is the one that
+      makes Grant stop looking.
+
+      `EPISTEMIC` above is the escape, and it runs first: a sentence framed as
+      what the office knows is never refused however it is worded.
+    */
+    {
+      needs: 'consulted',
+      re: new RegExp(
+        String.raw`\bthere\s+(?:is|are|was|were)\s+no\s+(?:\w+\s+){0,2}?${RECORD}\b`,
+        'gi',
+      ),
+    },
+    {
+      needs: 'consulted',
+      re: new RegExp(String.raw`\b(?:you|we)\s+have\s+no\s+(?:\w+\s+){0,2}?${RECORD}\b`, 'gi'),
+    },
+    {
+      needs: 'consulted',
+      re: new RegExp(
+        String.raw`\bno\s+(?:\w+\s+){0,2}?${RECORD}\s+(?:exist|exists|are|is|were|scheduled|booked|outstanding|open|filed|logged)\b`,
+        'gi',
+      ),
+    },
+    {
+      needs: 'consulted',
+      re: /\bnothing\s+(?:is|was|has\s+been)\s+(?:scheduled|booked|filed|logged|recorded|diarised)\b/gi,
+    },
+    {
+      needs: 'consulted',
+      re: new RegExp(
+        String.raw`\bthe\s+(?:\w+\s+){0,2}?(?:${Object.keys(CONTAINER).join('|')})\s+(?:is|was)\s+(?:empty|clear|blank)\b`,
+        'gi',
+      ),
+    },
+    // A COUNT needs the whole list, not a search. "five active projects".
+    {
+      needs: 'complete',
+      re: new RegExp(String.raw`\b${HOW_MANY}\s+(?:\w+\s+){0,2}?${RECORD}\b`, 'gi'),
+    },
+    // So does exhaustiveness. "the only event", "none of the decisions".
+    {
+      needs: 'complete',
+      re: new RegExp(
+        String.raw`\b(?:the only|all(?:\s+of)?\s+the|every|none\s+of\s+the|no\s+other)\s+(?:\w+\s+){0,2}?${RECORD}\b`,
+        'gi',
+      ),
+    },
   ]
-  for (const re of shapes) {
-    for (const hit of text.matchAll(re)) {
+  for (const shape of shapes) {
+    for (const hit of text.matchAll(shape.re)) {
       const phrase = flat(hit[0]).trim()
       /*
         Grant's own words come back unrefused.
@@ -589,9 +687,62 @@ export const assertsRecordsUnseen = (
         each has to have happened for a claim about it to be reporting rather
         than inventing.
       */
+      /*
+        What the office KNOWS is never refused, however it is worded — the
+        third value. See `EPISTEMIC`.
+      */
+      const from = text.lastIndexOf('.', hit.index) + 1
+      const stop = text.indexOf('.', hit.index + hit[0].length)
+      const sentence = text.slice(from, stop === -1 ? text.length : stop + 1)
+      if (EPISTEMIC.test(sentence)) continue
       const noun = new RegExp(String.raw`\b${RECORD}\b`, 'i').exec(hit[0])?.[0] ?? ''
-      const domain = domainOf(noun)
-      if (domain !== 'unreachable' && consultedDomains.includes(domain)) continue
+      const named = new RegExp(String.raw`\b(?:${Object.keys(CONTAINER).join('|')})\b`, 'i').exec(
+        hit[0],
+      )?.[0]
+      const domain =
+        noun === '' && named !== undefined
+          ? (CONTAINER[named.toLowerCase()] as Domain)
+          : noun === '' && /scheduled|booked|diarised/i.test(hit[0])
+            ? ('calendar' as Domain)
+            : domainOf(noun)
+      const allowed = shape.needs === 'complete' ? may.complete : may.consulted
+      if (domain !== 'unreachable' && allowed.includes(domain)) {
+        /*
+          Holding the whole list licenses COUNTING it, not choosing a number.
+
+          The office is handed the live project list every turn, so "you have
+          two projects open" is reporting — and "six active projects" is a
+          claim that contradicts the thing in front of it. Being entitled to
+          count is not being entitled to be wrong, and #185's original
+          fabrication was exactly a count with real-looking names after it.
+
+          Checked against the grounding in both notations, because a model
+          writes either. A loose floor rather than a proof: the grounding has
+          other digits in it and one could coincide. It still closes the case
+          where the answer disagrees with the list it was given.
+        */
+        const said = /\b(\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten)\b/i.exec(
+          hit[0],
+        )?.[1]
+        const WORDS: Readonly<Record<string, string>> = {
+          one: '1',
+          two: '2',
+          three: '3',
+          four: '4',
+          five: '5',
+          six: '6',
+          seven: '7',
+          eight: '8',
+          nine: '9',
+          ten: '10',
+        }
+        if (said === undefined) continue
+        const digits = WORDS[said.toLowerCase()] ?? said
+        const word = Object.keys(WORDS).find((w) => WORDS[w] === digits) ?? ''
+        const inGrounding =
+          known.includes(digits) || (word !== '' && flat(grounding).includes(word))
+        if (inGrounding) continue
+      }
       return hit[0].trim().slice(0, 60)
     }
   }
