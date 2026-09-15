@@ -22,9 +22,10 @@
  * all. Long sessions are for what breaks that the short ones cannot show.
  */
 
+import { HELD_OUT } from './holdout.ts'
 import type { Session } from './run.ts'
 
-export const SESSIONS: readonly Session[] = [
+const DEVELOPMENT: readonly Session[] = [
   // ---------------------------------------------------------------- corrections
   {
     name: 'corrections',
@@ -781,5 +782,16 @@ export const SESSIONS: readonly Session[] = [
     ],
   },
 ]
+
+/*
+  The development set and the held-out set, in one list.
+
+  Concatenated rather than kept apart at every call site, because everything
+  downstream — the runner, the report, `npm run breadth`'s coverage count —
+  wants every session that exists. The separation that matters is the one in
+  `holdout.ts`: those were written before they were run and are run once, and
+  that is a discipline about WHEN, which no type can enforce.
+*/
+export const SESSIONS: readonly Session[] = [...DEVELOPMENT, ...HELD_OUT]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)

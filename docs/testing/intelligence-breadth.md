@@ -14,8 +14,8 @@ exercised it.
 | family | dimension | cases | judged | routing | executed |
 |---|---|---|---|---|---|
 | context | `connected-knowledge` | 3 | 3 | 0 | 0 |
-| context | `cross-project-work` | 9 | 0 | 0 | 9 |
-| context | `memory-dependent-work` | 8 | 0 | 0 | 8 |
+| context | `cross-project-work` | 25 | 0 | 0 | 25 |
+| context | `memory-dependent-work` | 27 | 0 | 0 | 27 |
 | context | `project-scoped-work` | 8 | 3 | 0 | 5 |
 | domain | `business-strategy` | 10 | 0 | 10 | 0 |
 | domain | `communications` | 14 | 3 | 11 | 0 |
@@ -26,35 +26,34 @@ exercised it.
 | domain | `quality-and-risk` | 11 | 0 | 11 | 0 |
 | failure | `changed-intent` | 7 | 0 | 0 | 7 |
 | failure | `contradictory-instructions` | 4 | 0 | 0 | 4 |
-| failure | `corrections` | 7 | 0 | 0 | 7 |
-| failure | `hallucination-traps` | 6 | 3 | 0 | 3 |
+| failure | `corrections` | 23 | 0 | 0 | 23 |
+| failure | `hallucination-traps` | 9 | 3 | 0 | 6 |
 | failure | `malformed-inputs` | 10 | 0 | 7 | 3 |
 | failure | `provider-failures` | 1 | 1 | 0 | 0 |
 | failure | `unavailable-capabilities` | 5 | 2 | 0 | 3 |
-| language | `ambiguous-requests` | 18 | 2 | 8 | 8 |
+| language | `ambiguous-requests` | 34 | 2 | 8 | 24 |
 | language | `long-multi-clause` | 12 | 4 | 7 | 1 |
 | language | `voice-and-speech-style` | 21 | 1 | 17 | 3 |
-| shape | `multi-agent-work` | 7 | 1 | 6 | 0 |
+| shape | `multi-agent-work` | 13 | 1 | 6 | 6 |
 | shape | `no-tool-reasoning` | 91 | 0 | 91 | 0 |
 | shape | `permission-gated-actions` | 6 | 0 | 0 | 6 |
 | shape | `single-agent-work` | 85 | 0 | 85 | 0 |
-| shape | `tool-heavy-work` | **0** | 0 | 0 | 0 |
+| shape | `tool-heavy-work` | 6 | 0 | 0 | 6 |
 | who | `agents` | 92 | 1 | 91 | 0 |
 | who | `declared-capabilities` | 5 | 5 | 0 | 0 |
 | who | `tools-and-integrations` | 3 | 3 | 0 | 0 |
 | work | `actions` | 23 | 0 | 8 | 15 |
-| work | `analysis` | 1 | 0 | 0 | 1 |
+| work | `analysis` | 7 | 0 | 0 | 7 |
 | work | `creation` | 3 | 3 | 0 | 0 |
 | work | `planning` | 1 | 1 | 0 | 0 |
 | work | `project-management` | 6 | 0 | 0 | 6 |
-| work | `recommendations` | 2 | 1 | 0 | 1 |
+| work | `recommendations` | 8 | 1 | 0 | 7 |
 | work | `research` | 11 | 0 | 11 | 0 |
 | work | `software-and-project-reasoning` | 1 | 1 | 0 | 0 |
 
-## 2 dimensions with no cases at all
+## 1 dimensions with no cases at all
 
 - `monetisation`
-- `tool-heavy-work`
 
 ## Tiers
 
