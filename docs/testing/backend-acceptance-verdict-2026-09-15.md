@@ -9,7 +9,70 @@
 
 ## The verdict
 
-**GREEN**, narrowly and with four named residual risks carried as Issues.
+**GREEN IS REVOKED. The current verdict is ORANGE**, and the reason is not one
+of the risks listed below — it is that the verdict was reached too early.
+
+Hours after it was written, the held-out bait corpus was re-read properly and
+what had been logged as "an invented calendar" turned out to be a **systemic
+provenance defect**: the office could not distinguish something that had
+APPEARED in a conversation from something it had reason to believe was true.
+Its own honest *"I have nothing on Priya"* became, four turns later, evidence
+that Priya existed. That is not a calendar bug and it was not a wording
+problem, and a verdict that called it one was wrong about the thing it was
+verdicting on.
+
+The architecture is fixed — `src/agents/provenance.ts`, and the section below
+— and 51 adversarial regressions hold it. But under the standard this campaign
+is being run to, a fix is not a verdict:
+
+> Before any GREEN verdict, a completely new adversarial corpus that has never
+> been run and has not influenced the implementation must be written, committed
+> BEFORE running, and run against a frozen implementation. If it exposes
+> another systemic defect, GREEN is revoked and the next attempt needs another
+> fresh corpus.
+
+That corpus exists — `scripts/sessions/unseen.ts`, fourteen turns, committed
+unrun at 0848ddd, which is also the freeze. **It has not been run**, because
+OpenRouter's daily free-model quota is exhausted (#239) and every job fails at
+the circuit breaker. So the evidence for GREEN is not merely incomplete; the
+one piece of it that was specified as mandatory is missing.
+
+**What this means for Grant in practice, which is the question he actually
+asked:** the office is materially better than it was this morning and the
+defect that revoked the verdict is fixed. Starting human use and UX testing is
+still reasonable. But *this document* may not call it GREEN until the unseen
+corpus has run, and if that corpus finds something, it will not be GREEN then
+either.
+
+The rest of this document stands as written and is the evidence for the
+eventual verdict, not the verdict.
+
+### The defect that revoked it
+
+Every anti-fabrication gate in the office keyed on a CLAIM — "I checked", "I
+posted", "you told me". The fabricated answer claimed nothing; it simply
+asserted, and a bare assertion was invisible to all of them. Underneath that,
+the context assembled for the model was FLAT: a row the office holds, a
+document retrieved this turn, a fact Grant stated, a noun that exists only
+because a question contained it, and a sentence the office made up an hour ago
+all arrived as undifferentiated dialogue.
+
+Three consequences, all fixed:
+
+1. The office's own earlier prose was counted as provenance, so a fabrication
+   could launder every repetition of itself.
+2. A claim about what the records CONTAIN, made having consulted nothing, was
+   unrefusable. It is now checked per SOURCE — retrieving a document licenses
+   a claim about documents and says nothing about the diary or the inbox.
+3. The handler had no canonical state at all, so *"what projects do we have
+   open?"* could only be answered from memory. It now gets the live list,
+   because the invariant must not be enforced by making the office incapable.
+
+---
+
+## The evidence (unchanged, and no longer a verdict)
+
+Four named residual risks are carried as Issues.
 
 **No — there is no backend or intelligence reason to wait.** The office is
 honest about what it has and has not done, reaches the right person most of the
