@@ -33,18 +33,57 @@ the running worker is the trap CLAUDE.md records twice.
 | **Fix or decision** | Deferred deliberately. The office already parses multi-clause requests (#60) and stores preferences as data, so both halves are machine-readable and the gate is writable — but it needs the retry loop, not a refusal. |
 | **Status** | **OPEN**, and the honest reason GREEN would still carry a caveat. |
 
-### L20 · Two provenance gaps, known and probed
+### L21 · The hostile corpus has not been run
+
+| | |
+|---|---|
+| **Blocker** | The only corpus whose result can support GREEN. Written after the freeze, committed unrun at `4743021`. |
+| **Evidence** | `scripts/sessions/hostile.ts`, 18 turns. `git diff 6de6dfc HEAD -- src/ supabase/ migrations/` is empty. |
+| **Root cause** | Not a defect — #239, the day's free model quota. Confirmed three ways: the breaker half-opens correctly on schedule and the deployed worker consumes each probe, which 429s and reopens it. |
+| **Status** | **OPEN. GREEN is unavailable until this runs against `6de6dfc`.** |
+
+### L20 · Two provenance gaps — one closed, one open
 
 | | |
 |---|---|
 | **Blocker** | A figure Grant floats in a *"suppose"* is his words, so it is grounded by construction and no text-comparison check can refuse it. And `assertsRecordsUnseen` switches off for a domain that WAS consulted, so one retrieved document licenses a total a handful of matches cannot support. |
 | **Evidence** | Reasoned from the design, not yet observed. Both are turns in the unseen corpus (`laundering` 3, `partial-evidence` 1). |
-| **Fix or decision** | Not fixed on purpose — fixing a suspected gap and then writing the test for it is the thing the brief rules out. Measure first. |
-| **Status** | **OPEN, instrumented.** |
+| **Fix or decision** | The documents-total half is now CLOSED, and not by patching the case: a search is not a census, so counts and exhaustiveness need a `complete` source while absences need only a `consulted` one. On this path only the project list is held whole. The "suppose" half stands: a figure Grant floats is his words and is in the grounding by construction, so only the prompt separates a supposition from a price. |
+| **Status** | **half closed, half OPEN and instrumented** (`hostile.planting`). |
+
+### L22 · `task.create` is granted to eight agents and has never run for real
+
+| | |
+|---|---|
+| **Blocker** | Not a defect, and stated so it is not mistaken for one. |
+| **Evidence** | `npm run levels`: granted to 8, zero real traffic. `npm run measure`: 3 of 8 agents ever chosen, `delegation_depth` 0 — in GRANT'S OWN traffic. |
+| **Root cause** | The fixes that make those reachable are days old and his traffic predates them. Acceptance traffic reaches all eight and sits at depth 1 in 78 routing decisions. |
+| **Fix or decision** | None available here. #234's Level 4 means "the office reached for it unprompted in real work", and only Grant can close it by working. |
+| **Status** | **OPEN by construction**, and deliberately not counted as harness evidence. |
 
 ---
 
 ## CLOSED
+
+### L23 · Three values, not two: FACT / SUPPORTED ABSENCE / NOT CHECKED
+
+| | |
+|---|---|
+| **Evidence** | *"There are no meetings on Tuesday"*, *"nothing is scheduled"*, *"you have no tasks outstanding"*, *"the diary is empty"* — all four passed the first provenance pass. And the reverse: `consultedDomains` was derived from whether documents came BACK, so the office was forbidden from saying *"there is nothing in our documents about that"* after a search that ran and found nothing, while allowed to say it after one that found something. |
+| **Root cause** | Two states where there are three. An absence is a claim about the world and exactly as falsifiable as a positive; "I have not been shown one" is neither. |
+| **Fix** | Absences need the source CONSULTED; counts and exhaustiveness need it COMPLETE; an epistemic frame needs nothing and runs first. A search that RAN is the evidence for an absence, whatever it returned. |
+| **Regression** | 65 unit cases — the three values each way round, eight domains of multi-turn contamination, 16 semantic neighbours, and the reverse at distance. |
+| **Canonical verification** | `verify:recovers` section 3, through `runJob`: granting `calendar` makes the identical sentence legal and the output row appear. |
+| **Deployed** | Yes, worker v364. |
+
+### L24 · Nothing asserted the six properties that matter to the person waiting
+
+| | |
+|---|---|
+| **Evidence** | `verify:chaos` proves the system stays up; `verify:failures` proves a failure is counted. Neither asserts no fabricated success, no duplicate action, no lost mutation, no stranded work, truthful status, coherent state. |
+| **Fix** | `verify:recovers`, 17/17, in the gate. Needs no model, so it runs when the provider is out — which is when somebody wants to know. |
+| **Canonical verification** | RED proved and, after a second attempt, discriminating: the first stub tripped two gates at once and could not say which refused it. |
+| **Deployed** | Suite only. |
 
 ### L1 · The office replaced five facts Grant had just stated
 

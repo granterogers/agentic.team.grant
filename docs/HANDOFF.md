@@ -28,7 +28,46 @@
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
 >
-> ## Campaign Three — GREEN revoked, and why that is the right outcome
+> ## Campaign Three — candidate frozen, GREEN one run away
+>
+> **State: ORANGE, procedurally.** No known backend or intelligence defect
+> stands between Grant and daily use. GREEN is withheld only because the final
+> unseen corpus has not run.
+>
+> | | |
+> |---|---|
+> | **Candidate build** | commit `6de6dfc`, worker **v364**, **372** migrations — `docs/testing/candidate-green-build.md` |
+> | **Freeze check** | `git diff 6de6dfc HEAD -- src/ supabase/ migrations/` must be empty |
+> | **Final corpus** | `scripts/sessions/hostile.ts`, 18 turns, committed unrun at `4743021` |
+> | **Blocked by** | #239 — the day's free model quota; every job fails at the breaker |
+>
+> The provenance work took two passes and the second is the one to read. There
+> are **three** values, not two:
+>
+> | | needs | example |
+> |---|---|---|
+> | supported POSITIVE fact | the source read, and the answer in it | "the review is Thursday" |
+> | supported ABSENCE | the source read, and nothing in it | "there are no meetings Thursday" |
+> | NOT CHECKED | nothing at all | "I have no record of one" |
+>
+> Collapsing the last two was wrong in both directions at once — *"the diary is
+> empty"* passed while the office had never opened it, and *"there is nothing
+> in our documents"* was forbidden after a search that ran and found nothing.
+> A third permission fell out of the fix: a search is not a census, so a COUNT
+> needs a complete source while an absence needs only a consulted one.
+>
+> New since: `verify:recovers` (17/17, in the gate, needs no model) for the six
+> properties that matter to whoever is waiting — no fabricated success, no
+> duplicate action, no lost mutation, no stranded work, truthful status,
+> coherent state.
+>
+> **Open and deliberate:** #242 (the constraint acknowledgement is a coin flip
+> — the last invariant with only a prompt behind it, and its fix needs live
+> validation that was not available before the freeze) and the "suppose" gap (a
+> figure Grant floats is his words, so only the prompt separates a supposition
+> from a price). Both are probed by the hostile corpus.
+>
+> ## Campaign Three — the first revocation, kept for the record
 >
 > **Read this before the numbers below.** A GREEN verdict was posted on #231
 > and then **withdrawn the same day**. What had been logged as "an invented

@@ -7,7 +7,63 @@
 > intelligence reason I should NOT begin serious human use and UX testing
 > tomorrow?*
 
-## The verdict
+## The verdict, second revision
+
+**ORANGE. GREEN is withheld, and the reason is procedural rather than a known
+defect.**
+
+Answering the question as asked — *is there any backend or intelligence reason
+Grant should NOT begin serious daily human use and UX testing?* — **no, there
+is not one I can name.** Every defect this campaign found is fixed, each with a
+mechanism and a control, and the deepest of them was found and fixed after the
+first verdict was posted and withdrawn.
+
+But this document may not say GREEN, because the standard it is written to
+requires one thing that has not happened: a completely fresh adversarial
+corpus, written after the implementation was frozen, committed before it ran,
+and run against that exact build. That corpus exists —
+`scripts/sessions/hostile.ts`, eighteen turns, committed unrun at `4743021`
+against candidate `6de6dfc` (worker v364, 372 migrations). OpenRouter's daily
+free-model quota is exhausted (#239) and every job fails at the circuit
+breaker, confirmed three separate ways. **GREEN is one clean run away and that
+run cannot happen before the UTC-midnight reset.**
+
+If it exposes a systemic defect, GREEN stays revoked, the corpus becomes
+regression material, development unfreezes and the next attempt needs another
+fresh corpus.
+
+### What changed since the first verdict
+
+The first one called an invented calendar a calendar bug. It was a systemic
+provenance defect (#243) and the office could not tell what had APPEARED in a
+conversation from what it had reason to believe. Fixing it properly took two
+passes, and the second matters as much as the first:
+
+**Pass one** — the office's own prose stopped counting as provenance, record
+claims became checkable per source, and the handler was given canonical state
+so the invariant did not make it mute.
+
+**Pass two** — three values where there had been two:
+
+| | needs | example |
+|---|---|---|
+| supported POSITIVE fact | the source read, and the answer in it | "the review is Thursday" |
+| supported ABSENCE | the source read, and nothing in it | "there are no meetings Thursday" |
+| NOT CHECKED | nothing at all | "I have no record of one" |
+
+Collapsing the last two was wrong in both directions at once: *"the diary is
+empty"* passed while the office had never opened it, and *"there is nothing in
+our documents"* was forbidden after a search that ran and found nothing. Both
+are fixed, and a third permission fell out — a search is not a census, so a
+count needs a COMPLETE source while an absence needs only a consulted one.
+
+Then `verify:recovers` (17/17) for the six properties that matter to the person
+waiting, and a candidate freeze recorded so it is checkable rather than
+asserted.
+
+---
+
+## The verdict (first revision, superseded — kept for the record)
 
 **GREEN IS REVOKED. The current verdict is ORANGE**, and the reason is not one
 of the risks listed below — it is that the verdict was reached too early.
