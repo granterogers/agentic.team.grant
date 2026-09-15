@@ -209,6 +209,21 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['verify:attests', 'an agent may not say it looked when it did not (#185)'],
   ['verify:knows', 'a false "I can\'t" and a false "I can" are both failures (#64)'],
   // Routing and delegation, which output attribution cannot prove.
+  /*
+    First of the routing checks deliberately, because it is the only one that
+    can run when the model provider cannot (#239) and it takes three seconds.
+
+    It settles the question a confident misroute makes invisible: the ceiling
+    was ordering the intersection, so "draft the announcement copy" went to
+    growth and "audit the refund policy for compliance risk" went to research
+    — plausible specialists, answering confidently, from the wrong desk.
+    `verify:routing-breadth` measures how OFTEN the right person is reached
+    across phrasings and scored both of those as hits.
+  */
+  [
+    'verify:reach',
+    'the vocabulary and the intent ceiling agree on who answers — deterministic, no model (#231)',
+  ],
   [
     'verify:routing-breadth',
     'every specialist is reachable by how Grant actually talks, and nothing trivial convenes one (#232)',
