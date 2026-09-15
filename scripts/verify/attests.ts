@@ -191,12 +191,29 @@ try {
           combinedNotifier([seen.channel], db),
         )
 
+  /*
+    The PROPERTY — the fabrication does not become an answer — not the state
+    it happens to leave the job in.
+
+    This asserted `finalState === 'failed'` and went red on a correct change.
+    #237 gave the coherence gate a retry: the refusal goes into
+    `pinned_config` and the next attempt is told what was wrong, because a
+    bare failure meant Grant received NOTHING for 6% of turns. So a refused
+    first attempt now lands in `retrying`, which is the mechanism working.
+
+    Both states satisfy the thing this suite is for, and the two checks below
+    are what actually prove it: the notifier was never reached and no output
+    row exists. CLAUDE.md records asserting the artefact rather than the
+    property five times; the tell each time is a check that goes red on an
+    improvement.
+  */
+  const refused = liarResult !== null && ['failed', 'retrying'].includes(liarResult.finalState)
   check(
-    'the job fails rather than producing the message',
+    'the message is refused rather than produced',
     liarResult === null
       ? 'nothing dequeued'
       : `${liarResult.finalState}: ${liarResult.note.slice(0, 110)}`,
-    liarResult?.finalState === 'failed' && liarResult.note.includes('claims to have read'),
+    refused && liarResult.note.includes('claims to have read'),
   )
   check(
     'and the notifier is never reached',
