@@ -263,10 +263,12 @@ Read `package.json` for the current truth rather than this list.
 | 3 | Direction captured in GitHub: #25, #220, #223, #81 | ✅ done |
 | 4 | **UX QA v2 master prompt persisted verbatim** at `docs/spec/ux-qa-v2-2026-09-15.md`, and this run state written | ✅ done |
 | 5 | **PHASE 1 — implement the whole UX backlog** | 🔨 **IN PROGRESS** |
-| 5a | **All five P0s are done and pushed** — #214, #215, #216, #217, #218, plus #222's Activity/Lately half | ✅ done |
-| 5b | P1: #219 homepage, #220 widgets, #158 settings, #188 desktop header, #25 the plane | 🔨 next |
-| 5c | P2: #221 icons, #160 typography, #222's Tasks check | not started |
-| 6 | PHASE 2 — FULL UX QA, Level 2, per §70's fifty-three-step order | not started |
+| 5a | **All five P0s done and pushed** — #214, #215, #216, #217, #218 | ✅ done |
+| 5b | **P1 done** — #219 home board (migration 0376), #220 widgets, #158 Settings as a page, #188 phone header, #222 in full | ✅ done |
+| 5c | **#25's spatial plane deliberately NOT built** — Grant said *"dont start implementation yet"* about that direction and nothing since has revoked it specifically. A major redesign is the one thing not to do autonomously. | ⏸ held, on purpose |
+| 5d | P2 remaining: #221 icon library (in tension with the 15 Sept restraint direction), #160 typography — folded into Phase 2's typography inventory | ⏳ |
+| 6 | **PHASE 2 — FULL UX QA, Level 2** | 🔨 **IN PROGRESS** |
+| 6b | §70's fifty-three-step order: design board, typography/colour/component/geometry inventories, density, accessibility structure, keyboard, motion, states, credential UX, communication UX, CORS, detector proofs | 🔨 |
 | 7 | Final report in §74's format, exactly one of PASS / PASS WITH WARNINGS / FAIL | not started |
 
 ---
@@ -305,6 +307,28 @@ everything" — so one primitive each is coherent rather than contradictory.
 Written up on #220 so Grant can overrule it with one sentence.
 
 ---
+
+## WHAT PHASE 1 ACTUALLY SHIPPED
+
+Nine commits, all pushed to `claude/phase-7-communications-kh8ow8`. Every issue
+carries a closing comment with its evidence.
+
+| | |
+|---|---|
+| **#214** | the call is a toggle; three states; failures speak. `verify:talk` 40/40 |
+| **#215** | the studio stopped inventing a reply, so waiting became visible. `verify:chat` 57/57 |
+| **#216** | a way home, My Agentic Team, faces gone; the phone switcher was **1px wide** and is now full width |
+| **#217** | Outputs has an empty state; the panel plus stopped meaning "add" |
+| **#218** | a real failure state, proved by `verify:breaks`; the crash itself is not reproducible |
+| **#219** | the home screen is a board of five panels; migration **0376** |
+| **#220** | collapse, vertical resize, category tones |
+| **#158** | Settings is a page called Global settings |
+| **#222** | Activity removed, Lately renamed, Tasks verified honest (31 of 32 rows are fixtures → #266) |
+
+**Measured:** first content pixel on a phone 632px → 481px of 844.
+**Control coverage:** ~917 presses across every route and both device legs,
+**0 unpressable, 0 findings**. Three audit defects fixed to get there.
+**Migrations:** 376 applied. **Deploys:** `deploy:hq` green.
 
 ## ENVIRONMENT LIMITATIONS
 
