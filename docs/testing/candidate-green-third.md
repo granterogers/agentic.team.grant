@@ -82,3 +82,13 @@ npm run deploy:worker
 npm run q -- "update public.providers set free_only = true, max_price_prompt = 0, \
   max_price_completion = 0, max_cost_per_call_usd = 0 where provider = 'openrouter'"
 ```
+
+---
+
+## Superseded — see the fourth freeze
+
+This candidate was examined by `third.ts` and scored 12/18, which revoked GREEN
+and produced #254 and #255. The verdict was reached on the next candidate,
+`63c5a26` / worker v391 / 375 migrations — see
+`backend-acceptance-verdict-2026-09-15.md` and
+`fourth-examination-run-2026-09-15.md`.

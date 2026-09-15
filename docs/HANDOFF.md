@@ -28,6 +28,30 @@
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
 >
+> ## VERDICT: GREEN — 2026-09-15. The backend campaign is over.
+>
+> | | |
+> |---|---|
+> | **Candidate** | commit `63c5a26`, worker **v391**, **375** migrations |
+> | **Model** | `openai/gpt-oss-120b`, with two paid fallbacks and the free tier behind them |
+> | **Verdict** | `docs/testing/backend-acceptance-verdict-2026-09-15.md` |
+> | **Next phase** | **Grant human beta.** Real usage is now the primary source of findings. |
+>
+> Four final examinations, each committed unrun against its own freeze, none
+> recycled. Three found real systemic defects; the fourth found none and scored
+> **17/18**, its one failure an expectation the session itself wrote. Gate
+> **19/20**, the single red being #252, a filed stochastic check that fails on
+> the pre-#249 baseline too.
+>
+> **What GREEN does not claim**, all recorded in the verdict and the ledger:
+> #242 is open as a caveat rather than a bar; four advertised mutations are
+> recognised and argument-extracted but never canonically executed by a suite,
+> because executing them would break the standing test rules; a task's due date
+> is representable and unextracted (#253); #250 and #252 are harness items.
+>
+> **Every genuine failure found in beta becomes a permanent regression.** That
+> is the whole mechanism now — no further autonomous testing campaign.
+>
 > ## The office runs on a paid model as of 2026-09-15 (ADR-0029)
 >
 > Grant funded the OpenRouter account and asked the office off the free tier.
