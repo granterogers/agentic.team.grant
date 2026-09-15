@@ -28,6 +28,7 @@ export const SESSIONS: readonly Session[] = [
   // ---------------------------------------------------------------- corrections
   {
     name: 'corrections',
+    covers: ['corrections', 'memory-dependent-work'],
     about: 'Grant says the previous answer was wrong, in four different ways',
     projects: ['alpha'],
     turns: [
@@ -73,6 +74,7 @@ export const SESSIONS: readonly Session[] = [
   // -------------------------------------------------------------- changed intent
   {
     name: 'changed-intent',
+    covers: ['changed-intent', 'actions'],
     about: 'the second message cancels the first',
     projects: ['alpha'],
     turns: [
@@ -117,6 +119,7 @@ export const SESSIONS: readonly Session[] = [
   // -------------------------------------------------------------- contradictions
   {
     name: 'contradictions',
+    covers: ['contradictory-instructions', 'ambiguous-requests'],
     about: 'two incompatible requirements, inside one message and across turns',
     projects: ['alpha'],
     /*
@@ -190,6 +193,7 @@ export const SESSIONS: readonly Session[] = [
   // ------------------------------------------------------------- cross-project
   {
     name: 'cross-project',
+    covers: ['cross-project-work', 'project-scoped-work', 'actions'],
     about: 'A, then B, then back to A — the contamination test',
     projects: ['alpha', 'beta'],
     turns: [
@@ -264,6 +268,7 @@ export const SESSIONS: readonly Session[] = [
   // ------------------------------------------------------- action vs discussion
   {
     name: 'action-or-not',
+    covers: ['actions', 'project-management', 'permission-gated-actions'],
     about: 'thought, question, suggestion, command — only one of them writes',
     projects: ['alpha'],
     turns: [
@@ -320,6 +325,7 @@ export const SESSIONS: readonly Session[] = [
   // --------------------------------------------------------------- voice notes
   {
     name: 'voice-note',
+    covers: ['voice-and-speech-style', 'corrections', 'changed-intent'],
     about: 'stream of consciousness with the intent buried at the end',
     projects: ['alpha'],
     turns: [
@@ -354,6 +360,7 @@ export const SESSIONS: readonly Session[] = [
   // ---------------------------------------------------------------- referents
   {
     name: 'referents',
+    covers: ['ambiguous-requests', 'memory-dependent-work', 'cross-project-work'],
     about: '"that", "the other one", "him" — and when the honest answer is a question',
     projects: ['alpha', 'beta'],
     turns: [
@@ -386,6 +393,7 @@ export const SESSIONS: readonly Session[] = [
   // ------------------------------------------------------------- multi-clause
   {
     name: 'multi-clause',
+    covers: ['long-multi-clause', 'analysis', 'recommendations'],
     about: 'eight requirements in one sentence, scored one at a time',
     projects: ['alpha'],
     turns: [
@@ -411,6 +419,7 @@ export const SESSIONS: readonly Session[] = [
   // ------------------------------------------------------------ adversarial
   {
     name: 'adversarial',
+    covers: ['hallucination-traps', 'unavailable-capabilities', 'malformed-inputs'],
     about: 'things that are not true, not possible, or not there',
     projects: ['alpha'],
     turns: [

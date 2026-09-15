@@ -34,10 +34,12 @@
  * tier's honest size is however much can finish in the foreground.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../src/db/executor.ts'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
 import { CORPUS } from './corpus/routing.ts'
+import { SESSIONS } from './sessions/corpus.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -106,8 +108,45 @@ const routingCovers = (c: (typeof CORPUS)[number]): readonly string[] => [
   ...(FORM_OF[c.form] ?? []),
 ]
 
-const counts = new Map<string, { evals: number; routing: number }>()
-for (const d of dimensions) counts.set(String(d.dimension), { evals: 0, routing: 0 })
+/*
+  The sessions, counted ONLY where they actually ran (#231 Campaign Three).
+
+  This model reported `corrections`, `changed-intent`,
+  `contradictory-instructions` and `cross-project-work` at ZERO on the morning
+  after all four were proved against the deployed worker — because it could see
+  the judged corpus and the routing corpus and not the thing that had executed.
+  A coverage model blind to executed evidence misdirects every decision that
+  reads it, which is the one failure it cannot survive.
+
+  EXECUTED is the operative word: a tag on a session is a CLAIM about what it
+  covers, and `.out/sessions.jsonl` is the record of which turns were really
+  put through `inbound_commands` and answered. An unrun case covers nothing, so
+  a session with no completed turns contributes nothing however it is tagged.
+*/
+const ran = new Map<string, number>()
+if (existsSync('.out/sessions.jsonl')) {
+  const seen = new Set<string>()
+  for (const line of (await readFile('.out/sessions.jsonl', 'utf8')).split('\n')) {
+    if (line.trim() === '') continue
+    const r = JSON.parse(line) as { session: string; index: number; state: string }
+    if (r.state !== 'complete') continue
+    const key = `${r.session}|${String(r.index)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    ran.set(r.session, (ran.get(r.session) ?? 0) + 1)
+  }
+}
+
+const counts = new Map<string, { evals: number; routing: number; sessions: number }>()
+for (const d of dimensions) counts.set(String(d.dimension), { evals: 0, routing: 0, sessions: 0 })
+for (const s of SESSIONS) {
+  const turns = ran.get(s.name) ?? 0
+  if (turns === 0) continue
+  for (const d of s.covers ?? []) {
+    const at = counts.get(d)
+    if (at !== undefined) at.sessions += turns
+  }
+}
 for (const c of evalCases) {
   for (const d of (c.dimensions ?? []) as string[]) {
     const at = counts.get(d)
@@ -123,7 +162,7 @@ for (const c of CORPUS) {
 
 const empty = dimensions.filter((d) => {
   const n = counts.get(String(d.dimension))
-  return n !== undefined && n.evals + n.routing === 0
+  return n !== undefined && n.evals + n.routing + n.sessions === 0
 })
 
 console.log(`\nintelligence breadth — ${String(dimensions.length)} dimensions\n`)
@@ -133,11 +172,11 @@ for (const d of dimensions) {
     family = String(d.family)
     console.log(`  ${family}`)
   }
-  const n = counts.get(String(d.dimension)) ?? { evals: 0, routing: 0 }
-  const total = n.evals + n.routing
+  const n = counts.get(String(d.dimension)) ?? { evals: 0, routing: 0, sessions: 0 }
+  const total = n.evals + n.routing + n.sessions
   console.log(
     `    ${String(d.dimension).padEnd(32)} ${total === 0 ? 'NO CASES' : String(total).padStart(3)}` +
-      `${total === 0 ? '' : `   (${String(n.evals)} judged, ${String(n.routing)} routing)`}`,
+      `${total === 0 ? '' : `   (${String(n.evals)} judged, ${String(n.routing)} routing, ${String(n.sessions)} executed)`}`,
   )
 }
 
@@ -195,12 +234,12 @@ const md = [
   'a suite existing must never make a dimension look covered when no case has ever',
   'exercised it.',
   '',
-  '| family | dimension | cases | judged | routing |',
-  '|---|---|---|---|---|',
+  '| family | dimension | cases | judged | routing | executed |',
+  '|---|---|---|---|---|---|',
   ...dimensions.map((d) => {
-    const n = counts.get(String(d.dimension)) ?? { evals: 0, routing: 0 }
-    const total = n.evals + n.routing
-    return `| ${String(d.family)} | \`${String(d.dimension)}\` | ${total === 0 ? '**0**' : String(total)} | ${String(n.evals)} | ${String(n.routing)} |`
+    const n = counts.get(String(d.dimension)) ?? { evals: 0, routing: 0, sessions: 0 }
+    const total = n.evals + n.routing + n.sessions
+    return `| ${String(d.family)} | \`${String(d.dimension)}\` | ${total === 0 ? '**0**' : String(total)} | ${String(n.evals)} | ${String(n.routing)} | ${String(n.sessions)} |`
   }),
   '',
   `## ${String(empty.length)} dimensions with no cases at all`,

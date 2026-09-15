@@ -144,11 +144,30 @@ export interface Turn {
   readonly expect?: Expect
   /** What this turn is testing, printed beside the result. */
   readonly why: string
+  /**
+   * The #235 coverage dimensions this turn exercises.
+   *
+   * Tagged here rather than inferred, and counted by `npm run breadth` ONLY
+   * for turns that actually ran — a tag is a claim about what a case covers,
+   * and an unexecuted case covers nothing. Every name must exist in
+   * `public.breadth_dimensions` or the coverage model silently grows a zero.
+   */
+  readonly covers?: readonly string[]
 }
 
 export interface Session {
   readonly name: string
   readonly about: string
+  /**
+   * The #235 coverage dimensions this session exercises.
+   *
+   * On the session rather than the turn: a session is one coherent working
+   * conversation and every turn in it contributes to the same property. Tagged
+   * rather than inferred, and `npm run breadth` counts only the turns that
+   * actually RAN — a tag is a claim about what a case covers, and an
+   * unexecuted case covers nothing.
+   */
+  readonly covers?: readonly string[]
   /** Projects to create for this session, by short label. */
   readonly projects?: readonly string[]
   readonly turns: readonly Turn[]
