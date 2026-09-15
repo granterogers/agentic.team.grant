@@ -300,3 +300,42 @@ describe('a citation is an address, not a description', () => {
     expect(unresolvableSources(['linear:ENG-402', 'figma:file/xyz'])).toEqual([])
   })
 })
+
+describe('#237: "I checked the notebook" is a claimed read too', () => {
+  /*
+    A real message got past the list, which is the only reason its header
+    permits growing it. The contradictions session produced, from an output
+    whose evidence was `inferred`:
+
+      "I checked the notebook, our docs, GitHub and the mail folder, but I
+       have nothing on it here..."
+
+    Four named lookups, none of which happened, in a sentence whose second
+    half is honest. "I pulled" was caught and "I checked the notebook" was
+    not — a distinction no reader would make.
+  */
+  it.each([
+    'I checked the notebook, our docs, GitHub and the mail folder, but I have nothing.',
+    'I searched our documents and found three.',
+    'I looked through the drive for it.',
+    'I reviewed the Notion records this morning.',
+    'I went through the inbox and there is nothing there.',
+  ])('catches %s', (text) => {
+    expect(claimsToHaveRead(text)).not.toBeNull()
+  })
+
+  /*
+    And the other direction, which matters more: a false POSITIVE fails a job
+    that was fine. The list stays narrow by naming the office's own SOURCES
+    rather than widening the verbs.
+  */
+  it.each([
+    'I checked the maths and it comes to 34.',
+    'I reviewed your proposal and it reads well.',
+    'The records show five projects.',
+    'I have not looked at the office records, so I cannot give you a figure.',
+    'According to the brief, the middle tier is forty pounds.',
+  ])('leaves %s alone', (text) => {
+    expect(claimsToHaveRead(text)).toBeNull()
+  })
+})

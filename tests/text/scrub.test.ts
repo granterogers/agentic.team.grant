@@ -2,7 +2,12 @@
  * The message Grant actually received, and the ones that must survive intact.
  */
 import { describe, expect, it } from 'vitest'
-import { hadScaffolding, scrub } from '../../src/text/scrub.ts'
+import {
+  hadScaffolding,
+  NOTHING_SALVAGEABLE,
+  scrub,
+  scrubbedToNothing,
+} from '../../src/text/scrub.ts'
 
 describe('model scaffolding reaching a person', () => {
   it('cuts the reply Grant was actually sent', () => {
@@ -60,5 +65,37 @@ describe('what must pass through untouched', () => {
 
   it('trims, but does not otherwise rewrite', () => {
     expect(scrub('  spaced out  ')).toBe('spaced out')
+  })
+})
+
+describe('#237: a scaffolding-only reply is recognisable, not just replaced', () => {
+  /*
+    The office put this on Grant's screen in answer to a real question, on a
+    job marked `complete`: "I started on that and my answer came back
+    malformed. Ask me again and I will retry." The free model had emitted a
+    bare tool-call token. Asking him to type the question again is passing our
+    problem to him, so the handler retries — and needs to RECOGNISE the case
+    rather than compare against a copy of the sentence.
+  */
+  it.each(['<|im_start|>', '```tool_code', '__unparsedUserInput__', '  <tool_call>  '])(
+    'reports %s as nothing salvageable',
+    (reply) => {
+      expect(scrubbedToNothing(reply)).toBe(true)
+      expect(scrub(reply)).toBe(NOTHING_SALVAGEABLE)
+    },
+  )
+
+  it.each([
+    'Here is the answer.',
+    'The margin is 34 per cent.<|im_end|>',
+    'I have not looked at the records.',
+  ])('reports %s as salvageable', (reply) => {
+    expect(scrubbedToNothing(reply)).toBe(false)
+  })
+
+  it('the constant and the function agree, so rewording cannot break recognition', () => {
+    // CLAUDE.md records five occasions when a literal-string comparison became
+    // a wording lock. Both sides come from one constant here.
+    expect(scrub('<|im_start|>')).toBe(NOTHING_SALVAGEABLE)
   })
 })

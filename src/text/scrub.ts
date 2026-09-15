@@ -71,11 +71,27 @@ export function scrub(reply: string): string {
 
   // If the scaffolding was the whole message there is nothing to salvage, and
   // an empty reply is worse than a plain one — a person is owed a sentence.
-  if (kept === '') {
-    return 'I started on that and my answer came back malformed. Ask me again and I will retry.'
-  }
+  if (kept === '') return NOTHING_SALVAGEABLE
   return kept
 }
+
+/**
+ * What a caller says when the model produced only scaffolding.
+ *
+ * Exported so a caller can RECOGNISE it rather than compare against a string
+ * of its own. #237 found the sentence on Grant's screen, on a job marked
+ * `complete` with "nothing worth announcing" — the free model had emitted a
+ * bare tool-call token, and the office's answer to a real question was an
+ * apology asking him to type it again. Passing our problem back to him.
+ *
+ * `scrubbedToNothing` lets the handler retry instead, and keep this for the
+ * last attempt, when there genuinely is nothing else to say.
+ */
+export const NOTHING_SALVAGEABLE =
+  'I started on that and my answer came back malformed. Ask me again and I will retry.'
+
+/** True when scrubbing left nothing — the reply WAS the scaffolding. */
+export const scrubbedToNothing = (reply: string): boolean => scrub(reply) === NOTHING_SALVAGEABLE
 
 /** True when there was scaffolding to remove. For logging and for tests. */
 export const hadScaffolding = (reply: string): boolean => CONTROL.some((p) => p.test(reply))

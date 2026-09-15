@@ -104,7 +104,7 @@ import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
-import { scrub } from '../text/scrub.ts'
+import { scrub, scrubbedToNothing } from '../text/scrub.ts'
 import {
   fetchTelegramAudio,
   readTranscriber,
@@ -1992,6 +1992,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // model that wanted a tool it was not offered emitted `<dots_function_call>`
       // straight into a Telegram message to Grant, and everything after that
       // token is the model talking to a harness that is not there.
+      /*
+        Only scaffolding came back — retry rather than apologise (#237).
+
+        A free model occasionally emits a bare tool-call token and nothing
+        else. `scrub` correctly refuses to show that to anybody and returns a
+        sentence instead, and the contradictions session put that sentence on
+        the screen in answer to a real question, on a job marked `complete`:
+        *"I started on that and my answer came back malformed. Ask me again and
+        I will retry."* Asking Grant to type his question a second time is
+        passing our problem to him.
+
+        Throwing hands it to the worker's existing retry, which is bounded by
+        the same `attempt < 4` as every other failure here and backs off
+        between goes. The apology survives for the LAST attempt, when there
+        genuinely is nothing else to say — a person is still owed a sentence.
+      */
+      if (scrubbedToNothing(completion.content) && job.attempt < 4) {
+        throw new Error('the model returned only scaffolding, nothing to say')
+      }
       const said = scrub(completion.content)
 
       const denied = contradictsReality(said, reach)

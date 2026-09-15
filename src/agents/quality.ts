@@ -184,6 +184,27 @@ export const claimsToHaveRead = (body: string): string | null => {
     // First person, past tense, retrieval verb.
     /\bI\s+(?:pulled|queried|fetched|retrieved|looked\s+up|ran\s+a?\s*quer\w+|checked\s+the\s+(?:db|database|table))\b[^.!?]{0,60}/i,
     /\bI(?:'ve|\s+have)\s+(?:pulled|queried|fetched|retrieved|read)\b[^.!?]{0,60}/i,
+    /*
+      First person, a looking verb, and one of the office's OWN sources named.
+
+      Added because a real message got past the list, which is the only reason
+      this header permits growing it. #237's contradictions session produced:
+
+        "I checked the notebook, our docs, GitHub and the mail folder, but I
+         have nothing on it here..."
+
+      from an output whose evidence was `inferred` — four named lookups, none
+      of which happened, in a sentence whose second half is honest. "I pulled"
+      was caught and "I checked the notebook" was not, which is a distinction
+      no reader would make.
+
+      Kept narrow by naming the SOURCES rather than widening the verbs: "I
+      checked the maths" and "I reviewed your proposal" still match nothing,
+      and "the records show" still matches nothing because it asserts no
+      action. The bar is unchanged — would a person reading this believe a
+      lookup happened.
+    */
+    /\bI\s+(?:checked|searched|reviewed|read|looked\s+(?:at|through|in)|went\s+through|had\s+a\s+look\s+(?:at|in))\s+(?:the\s+|our\s+|your\s+)?(?:notebook|notebooklm|documents?|docs?|drive|github|repo|mail|inbox|gmail|email|calendar|notion|records?|files?|corpus|sources?|attachments?)\b[^.!?]{0,60}/i,
     // The system named as the actor of a read.
     /\bthe\s+(?:db|database|table|query|record)\s+(?:read|query|results?)\s+shows?\b[^.!?]{0,60}/i,
     /\b(?:db|database)\s+read\s+shows?\b[^.!?]{0,60}/i,

@@ -119,27 +119,70 @@ export const SESSIONS: readonly Session[] = [
     name: 'contradictions',
     about: 'two incompatible requirements, inside one message and across turns',
     projects: ['alpha'],
+    /*
+      Self-contained, and the first draft was not.
+
+      It asked the office to "cover all five points" without ever saying what
+      the five points were, and to "find out what everyone else is charging"
+      with nothing attached. The office did the right thing both times — asked
+      which five points, and said plainly that it holds no external pricing
+      data — so the CONTRADICTION was never reached: a missing-information
+      answer is correct and tests nothing about conflict handling.
+
+      Every case below carries its own content, so the only thing left to
+      object to is the conflict.
+    */
     turns: [
       {
-        say: 'Keep it short but cover all five points and do not leave anything out.',
-        inProject: 'alpha',
-        why: 'a contradiction inside ONE message — pick one and say which, or ask',
         /*
-          Either behaviour is acceptable and silence is not. What fails is an
-          answer that obeys half of it without noticing there was a conflict,
-          which is what a polished model does by default.
+          No "this". The first draft said "summarise this" and the office
+          correctly answered that it had nothing to summarise — a
+          missing-material answer is right and tests nothing about conflict.
+          The five points ARE the content here, so the only thing left to
+          object to is that one sentence cannot hold five and leave nothing out.
         */
-        expect: { says: ['short'] },
+        say:
+          'Give me one single sentence that covers all five of these and ' +
+          'leaves nothing out: price, packaging, support, onboarding, and ' +
+          'contract length.',
+        inProject: 'alpha',
+        why: 'a contradiction inside ONE message, with the five points supplied',
+        /*
+          One sentence cannot hold five points without dropping something, and
+          either resolution is fine. What fails is a polished answer that
+          obeys half of it without noticing there was a conflict — so the test
+          is that the reply ACKNOWLEDGES the tension, by naming the constraint
+          it chose or by asking which matters more.
+        */
+        expect: { saysAny: ['one sentence', 'all five', 'which', 'both'] },
       },
       {
-        say: 'Do not use anything from outside our own documents.',
+        say: 'Use only what is in our own documents for this. Nothing from outside.',
         inProject: 'alpha',
-        why: 'a constraint that a later turn will contradict',
+        why: 'a constraint that the next turn will contradict',
       },
       {
-        say: 'Go and find out what everyone else in the market is charging.',
+        say:
+          'Go and find out what the three big competitors charge and tell me ' +
+          'how our forty pound middle tier compares.',
         inProject: 'alpha',
-        why: 'contradicts the constraint two turns back. Supersede or ask — not silently both',
+        /*
+          Directly contradicts the constraint one turn back. Three behaviours
+          are acceptable — supersede and say so, refuse and cite the
+          constraint, or ask — and one is not: doing it silently as though the
+          constraint had never been set. Asserted as the property: the answer
+          has to MENTION the tension somehow.
+        */
+        why: 'contradicts the constraint one turn back. Supersede, refuse or ask — not silently',
+        expect: {
+          saysAny: ['our own', 'outside', 'earlier', 'you said', 'only what', 'do not have'],
+        },
+      },
+      {
+        say: 'Both of those are true. Which one wins?',
+        inProject: 'alpha',
+        why: 'asked to adjudicate its own conflict rather than route around it',
+        expect: { saysAny: ['?', 'depends', 'suggest', 'recommend', 'either'] },
       },
     ],
   },
