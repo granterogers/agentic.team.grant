@@ -77,6 +77,7 @@
     "verify:lessons": "tsx scripts/verify/lessons.ts",
     "verify:trace": "tsx scripts/verify/trace.ts",
     "verify:tasks": "tsx scripts/verify/tasks.ts",
+    "verify:answers": "tsx scripts/verify/answers.ts",
     "verify:attests": "tsx scripts/verify/attests.ts",
     "verify:assets": "tsx scripts/verify/assets.ts",
     "verify:transitions": "tsx scripts/verify/transitions.ts",

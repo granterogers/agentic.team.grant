@@ -184,6 +184,16 @@ export interface OutputMetadata {
     readonly consulted: readonly Domain[]
     readonly complete: readonly Domain[]
   }
+  /**
+   * The office's internal tool identifiers, from `tool_permissions`.
+   *
+   * Supplied by the handler, which already builds the capability brief from
+   * the same rows. `deliberationLeak` uses them as the machinery half of its
+   * co-occurrence rule, so the list is data Grant can change rather than a
+   * blacklist in a file. Absent narrows the check rather than disabling it:
+   * call syntax and token bleed are still caught without it.
+   */
+  readonly toolNames?: readonly string[]
 }
 
 export interface MetadataProblem {
@@ -593,6 +603,114 @@ const HOW_MANY = String.raw`(?:\d{1,4}|one|two|three|four|five|six|seven|eight|n
  *
  * Returns the phrase, so the refusal can quote it rather than gesturing.
  */
+/**
+ * The same figure, however it is written.
+ *
+ * Grant writes numbers as words — "about sixty tickets a week" — and the
+ * office answers in digits. Until #247 the premise exemption below was a plain
+ * substring test, so his own figure coming back as "60 tickets" did not match
+ * "sixty tickets" in the grounding, the answer was refused as a claim about
+ * the records, and the job died after four attempts having said nothing. He
+ * asked a one-line arithmetic question and got silence.
+ *
+ * Handles the compounds a person actually dictates: "seventy five" becomes 75
+ * rather than "70 5". It stops at a hundred deliberately — beyond that people
+ * write digits, and a normaliser that tries to parse "three hundred and
+ * twelve thousand" is a parser, with a parser's bugs, for no measured gain.
+ */
+const NUMBER_WORDS: Readonly<Record<string, string>> = {
+  zero: '0',
+  one: '1',
+  two: '2',
+  three: '3',
+  four: '4',
+  five: '5',
+  six: '6',
+  seven: '7',
+  eight: '8',
+  nine: '9',
+  ten: '10',
+  eleven: '11',
+  twelve: '12',
+  thirteen: '13',
+  fourteen: '14',
+  fifteen: '15',
+  sixteen: '16',
+  seventeen: '17',
+  eighteen: '18',
+  nineteen: '19',
+  twenty: '20',
+  thirty: '30',
+  forty: '40',
+  fifty: '50',
+  sixty: '60',
+  seventy: '70',
+  eighty: '80',
+  ninety: '90',
+  hundred: '100',
+}
+
+export const numeralise = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(
+      new RegExp(String.raw`\b(${Object.keys(NUMBER_WORDS).join('|')})\b`, 'g'),
+      (w) => NUMBER_WORDS[w] ?? w,
+    )
+    // "seventy five" arrives here as "70 5", and is one number.
+    .replace(/\b([2-9]0)[ -]([1-9])\b/g, (_m, tens: string, unit: string) =>
+      String(Number(tens) + Number(unit)),
+    )
+
+/**
+ * The sentence hands the figure to the RECORDS rather than to Grant.
+ *
+ * This is the other half of #247 and it is the half that keeps the invariant
+ * honest. Normalising notation means his premise now matches the grounding —
+ * which, without this, would exempt "our records show 60 tickets a week" as
+ * well, and a conversational premise would have quietly become a canonical
+ * fact. That is precisely the loophole he named when he asked for the fix.
+ *
+ * So the exemption is for REASONING FROM a premise, never for ATTRIBUTING it.
+ * "At 60 a week that is 780 a quarter" is arithmetic on something he said.
+ * "Our records show 60 a week" is a claim about a lookup that did not happen,
+ * and the number being real does not make the provenance real.
+ *
+ * `data` is deliberately absent: "according to the data you gave me" is him
+ * again, not the records.
+ */
+/**
+ * The sentence is supposing, not reporting — the "suppose" gap.
+ *
+ * A sibling of `EPISTEMIC`, and it rests on the same argument. `EPISTEMIC`
+ * exempts a sentence framed as what the office KNOWS; this exempts one framed
+ * as what WOULD be the case. Neither is a statement about what the records
+ * contain, so neither needs a source, and grammar says so before any check
+ * does.
+ *
+ * It is what lets the office answer the whole family Grant asked for — "if
+ * that doubled", "growing ten percent a quarter this becomes", "suppose we
+ * went to annual" — where the figure is DERIVED and therefore appears in no
+ * grounding anywhere. Without it those are indistinguishable from invention,
+ * and the office can reason about nothing it was not handed.
+ *
+ * The hazard runs the other way and is handled elsewhere: a supposition must
+ * not become a fact in a later turn. It cannot, because `established()` in
+ * `provenance.ts` excludes the office's own prose — a number this sentence
+ * invents is not evidence for the next one, however confidently it was
+ * phrased.
+ *
+ * Deliberately not a mood detector. It wants an explicit marker, so a bare
+ * assertion in the present indicative — "There are 12 open tickets" — is
+ * untouched, which the regressions check in both directions.
+ */
+const HYPOTHETICAL =
+  /\b(?:if|suppose|supposing|assuming|imagine|hypothetically|say(?= \d)|were\s+(?:it|we|they|there)\s+to)\b|\b(?:would|could|might)\s+(?:be|come|work out|mean|give|need|leave|put|take|reach|rise|fall|drop)\b|\b(?:becomes?|grows?\s+to|rising\s+to|falling\s+to|projected|forecast(?:s|ed)?)\b/i
+
+const ATTRIBUTED_TO_RECORDS =
+  /\b(?:our|the|my|your)\s+(?:records?|database|db|system|files?|logs?|books?|spreadsheets?)\b|\bon file\b|\bon record\b|\bis logged\b|\bare logged\b|\blogged (?:this|in|at|on)\b/i
+
 export const assertsRecordsUnseen = (
   body: string,
   grounding: string,
@@ -667,18 +785,71 @@ export const assertsRecordsUnseen = (
       ),
     },
   ]
+  const knownNumerals = numeralise(grounding)
   for (const shape of shapes) {
     for (const hit of text.matchAll(shape.re)) {
       const phrase = flat(hit[0]).trim()
       /*
-        Grant's own words come back unrefused.
-
-        He is entitled to tell the office how many documents there are, and an
-        answer that repeats him is listening rather than claiming. Matched on
-        the phrase because that is what a repetition looks like; a DIFFERENT
-        count is a different claim and stays caught.
+        The sentence the hit sits in, needed by both exemptions below. It used
+        to be computed after the premise check and is computed first now,
+        because #247's exemption has to know whether the sentence attributes
+        the figure to the records before it can decide to allow it.
       */
-      if (known.includes(phrase)) continue
+      const from = text.lastIndexOf('.', hit.index) + 1
+      const stop = text.indexOf('.', hit.index + hit[0].length)
+      const sentence = text.slice(from, stop === -1 ? text.length : stop + 1)
+      /*
+        Grant's own words come back unrefused (#247).
+
+        He is entitled to tell the office how many tickets there are, and an
+        answer that repeats or reasons from him is listening rather than
+        claiming. Compared in BOTH notations, because he dictates "sixty" and
+        the office answers "60" — a plain substring test on those two strings
+        is a wording lock, and this one cost a real answer.
+
+        A DIFFERENT figure is a different claim and stays caught, and so does
+        the same figure ATTRIBUTED to the records: reasoning from a premise is
+        exempt, sourcing it to a lookup that did not happen is not.
+      */
+      const his = known.includes(phrase) || knownNumerals.includes(numeralise(phrase))
+      /*
+        A figure DERIVED from his, in a sentence that shows its input (#247).
+
+        "At 60 tickets a week that comes to about 780 tickets a quarter" cites
+        no record: 780 exists nowhere but in the arithmetic, and the sentence
+        hands you the 60 it came from. A sentence showing its working is
+        showing its working, not citing a lookup.
+
+        What makes this checkable without a model is the thing CLAUDE.md
+        already says about invented times — not truth, DERIVABILITY. The test
+        is not that the sum is right; it is that the answer put a figure Grant
+        supplied beside the one it produced. Being entitled to calculate is not
+        being entitled to be right, and a wrong sum is a different defect from
+        a fabricated record.
+
+        Narrow deliberately: the input must be in the SAME sentence, so a
+        figure dropped into an unrelated paragraph borrows nothing, and the
+        attribution guard still refuses "our records show 780 tickets".
+      */
+      /*
+        Two conditions this rule got wrong on its first draft, both caught by
+        the #231 provenance regressions before it shipped:
+
+        The hit must carry a number of its own. "The only event at 8.15 is the
+        standup" is an EXHAUSTIVENESS claim with no derived figure in it, so
+        there is nothing for an input to be the input OF, and exempting it let
+        an invented diary through.
+
+        And the grounding is matched by TOKEN, not substring. "15" sits inside
+        "8.15", so a substring test found the question's own time and called it
+        the input to a claim about the diary.
+      */
+      const mine = numeralise(phrase).match(/\d[\d,]*/)?.[0] ?? ''
+      const groundedNumbers = new Set(knownNumerals.match(/\b\d[\d,]*\b/g) ?? [])
+      const showsItsInput =
+        mine !== '' &&
+        (sentence.match(/\b\d[\d,]*\b/g) ?? []).some((n) => n !== mine && groundedNumbers.has(n))
+      if ((his || showsItsInput) && !ATTRIBUTED_TO_RECORDS.test(sentence)) continue
       /*
         Grounded per SOURCE, not per turn.
 
@@ -691,10 +862,13 @@ export const assertsRecordsUnseen = (
         What the office KNOWS is never refused, however it is worded — the
         third value. See `EPISTEMIC`.
       */
-      const from = text.lastIndexOf('.', hit.index) + 1
-      const stop = text.indexOf('.', hit.index + hit[0].length)
-      const sentence = text.slice(from, stop === -1 ? text.length : stop + 1)
       if (EPISTEMIC.test(sentence)) continue
+      /*
+        And a sentence that is supposing rather than reporting (#247, the
+        "suppose" gap). See HYPOTHETICAL above for why this is safe in the
+        direction that matters.
+      */
+      if (HYPOTHETICAL.test(sentence)) continue
       const noun = new RegExp(String.raw`\b${RECORD}\b`, 'i').exec(hit[0])?.[0] ?? ''
       const named = new RegExp(String.raw`\b(?:${Object.keys(CONTAINER).join('|')})\b`, 'i').exec(
         hit[0],
@@ -776,6 +950,128 @@ const BEYOND_REACH = /\b(?:github|repo|mail|inbox|gmail|e-?mails?|calendar|drive
  */
 const FOUND_NOTHING =
   /\b(?:nothing|no\s+(?:entry|entries|record|records|document|documents|match|matches|note|notes|result|results|file|files|data|sign|mention|reference)|not\s+(?:find|see|found)|(?:don'?t|do\s+not|didn'?t|did\s+not|can'?t|cannot)\s+(?:see|find|have)|turns?\s+up\s+no|came\s+back\s+empty|is\s+empty|none)\b/i
+
+/**
+ * Internal deliberation where an answer should be.
+ *
+ * ## The invariant
+ *
+ * USER-FACING OUTPUT MUST BE AN ANSWER OR AN ACTION RESULT, NEVER THE MODEL'S
+ * INTERNAL PROCESS FOR PRODUCING ONE.
+ *
+ * Every other check in this file asks whether an answer is TRUE. This one asks
+ * whether it is an ANSWER. Nothing asked that until 2026-09-15, which is how
+ * a body beginning "We need to call task.create. Attempt task.create. We need
+ * parameters: project? Not given." passed every gate in the building and was
+ * written to `outputs.body` -- read by the dashboard, Telegram, Slack, every
+ * specialist and every child agent.
+ *
+ * ## Why it happens, which is not what it first looked like
+ *
+ * It looked like chain-of-thought bleeding through a provider's channel
+ * parsing. Measurement says the cause is ours. `capabilityBrief` hands the
+ * model a catalogue of dotted tool identifiers and tells it to use them, and
+ * the office has NO tool-calling channel -- it reads prose back. A model
+ * trained to call tools, given a tool catalogue and no way to call anything,
+ * narrates the call instead. Probing gpt-oss-120b three times on one
+ * tool-shaped turn returned one deliberation and two raw tool-call JSON
+ * objects as content; none of the three was an answer.
+ *
+ * Reasoning cannot be switched off for that endpoint either -- it answers
+ * `Reasoning is mandatory for this endpoint and cannot be disabled` -- and
+ * `reasoning: { exclude: true }` only suppresses the separate `reasoning`
+ * FIELD, which was never the problem. So the cause is addressed in the prompt
+ * and the invariant is enforced here, where every surface shares it.
+ *
+ * ## Why this is not a phrase blacklist
+ *
+ * A list of "we need to", "according to policy", "we must" would refuse half
+ * the legitimate prose this office writes -- those words are ordinary English
+ * and the office reasons about needs, musts and policies all day. So no signal
+ * below fires on vocabulary alone:
+ *
+ *   1. CALL SYNTAX. Tool-call JSON, or a dotted identifier invoked with
+ *      arguments. A sentence cannot accidentally be a function call.
+ *   2. TOKEN BLEED. Sentences fused with no space after the stop --
+ *      "notebook.We can't" -- twice or more. That is a raw token stream, not
+ *      typing.
+ *   3. SELF-ADDRESSED PLANNING, and only where one sentence contains BOTH a
+ *      plan about the act of answering AND the office's internal machinery by
+ *      name. Either half alone is left entirely alone: "we need to raise the
+ *      price" is a plan with no machinery, and "db.read is switched off" is
+ *      machinery with no plan. Both are common and both stay.
+ *
+ * Measured against every output this office had written before the check
+ * existed: see `scripts/verify/answers.ts` for the run and the count.
+ *
+ * `toolNames` comes from `tool_permissions`, so the machinery half is data
+ * Grant can change rather than a list that goes stale the day a tool is added.
+ */
+export const deliberationLeak = (
+  body: string,
+  toolNames: readonly string[] = [],
+): string | null => {
+  const text = body.trim()
+  if (text === '') return null
+
+  // 1. Call syntax. A JSON object keyed by the call vocabulary, or a dotted
+  //    identifier invoked with named arguments.
+  const callJson = /[{,]\s*"(tool|name|function|arguments|parameters)"\s*:/.exec(text)
+  if (callJson !== null) {
+    return `a tool call in the answer text (${callJson[0].trim().slice(0, 40)})`
+  }
+  const callSyntax = /\b[a-z][a-z_]*\.[a-z][a-z_]*\s*\(\s*[a-z_]+\s*=/i.exec(text)
+  if (callSyntax !== null) {
+    return `a tool call in the answer text (${callSyntax[0].slice(0, 40)})`
+  }
+
+  // 2. Token bleed. Two or more sentences fused with no space after the stop.
+  //    One can be a typo or a URL; two is a stream.
+  const fused = text.match(/[a-z]{3}\.[A-Z][a-z]/g) ?? []
+  if (fused.length >= 2) {
+    return `sentences run together with no space, ${String(fused.length)} times (${fused
+      .slice(0, 2)
+      .join(', ')}) — a raw token stream rather than writing`
+  }
+
+  // 3. Self-addressed planning, per sentence, and only WITH machinery.
+  //
+  // Split on terminators AND newlines: deliberation arrives as short lines as
+  // often as as sentences.
+  const PLAN =
+    /\b(?:we|i)\s*(?:'ll|'d)?\s*(?:need to|needs to|must|should|will|shall|can|could|might|may|would)?\s*(?:call|invoke|use|query|read|perform|request|run|attempt|try)\b|^\s*attempt\b|\blet'?s\s+(?:respond|reply|answer|say|do|try|call|use)\b|\bwe'?ll\s+(?:call|request|use|query|read)\b/i
+  const MACHINERY =
+    /\bthe (?:tool|spec|schema|policy|instructions?|description)\b|\bparameters?\s*[:?]|\baccording to the tool\b|\btool call\b/i
+  const dotted = toolNames.filter((t) => t.includes('.'))
+
+  const machineryAnywhere = MACHINERY.test(text) || dotted.some((t) => text.includes(t))
+
+  // 4. A question the model is asking ITSELF, answered in the same breath by a
+  //    fragment: "project? Not given." "owner? Not supplied." A person writing
+  //    to Grant asks him a question and waits, or asks and answers in a full
+  //    sentence. This shape only counts where the body is also handling
+  //    machinery, so an ordinary self-answered question — "Is it ready? No,
+  //    not yet." — is untouched.
+  const selfQuestion = /\b[a-z]{3,}\?\s+(?:not|no|none|unknown|unclear|missing|unspecified)\b/i
+
+  for (const sentence of text.split(/(?:[.!]\s+|\n+)/)) {
+    const s = sentence.trim()
+    if (s === '') continue
+    if (machineryAnywhere && selfQuestion.test(s)) {
+      return `the answer questions itself instead of answering ("${s.slice(0, 70)}")`
+    }
+    if (!PLAN.test(s)) continue
+    const named = dotted.find((t) => s.includes(t))
+    if (named !== undefined) {
+      return `the answer plans out loud instead of answering ("${s.slice(0, 70)}")`
+    }
+    if (MACHINERY.test(s)) {
+      return `the answer plans out loud instead of answering ("${s.slice(0, 70)}")`
+    }
+  }
+
+  return null
+}
 
 export const claimsToHaveRead = (body: string): string | null => {
   const text = String(body ?? '')
@@ -1021,6 +1317,25 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           'same as existing. Say you have no record of it (#231).',
       })
     }
+  }
+
+  /*
+    Is this an ANSWER at all (#246)?
+
+    Its question is prior to every other body check here. The others ask
+    whether a claim is supported; this asks whether the text is addressed to
+    Grant. A body reading "We need to call task.create. Attempt task.create."
+    makes no claim at all and passed every gate in this file.
+  */
+  const deliberating = deliberationLeak(m.body ?? '', m.toolNames ?? [])
+  if (deliberating !== null) {
+    problems.push({
+      field: 'body',
+      problem:
+        `${deliberating}. What Grant receives has to be the answer, not the ` +
+        'working — no planning out loud, no tool calls, no scratch. Say the ' +
+        'thing itself, in prose, addressed to him (#246).',
+    })
   }
 
   const readClaim = claimsToHaveRead(m.body ?? '')

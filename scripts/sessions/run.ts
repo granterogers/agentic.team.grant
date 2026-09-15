@@ -467,9 +467,20 @@ export const askOnce = async (
     if (e.noWrite === true) judge('no task was created', taskCount === 0, String(taskCount))
     for (const s of e.says ?? []) judge(`says ${JSON.stringify(s)}`, searchable.includes(plain(s)))
     if ((e.saysAny ?? []).length > 0) {
-      const found = (e.saysAny ?? []).filter((s) =>
-        answered.toLowerCase().includes(s.toLowerCase()),
-      )
+      /*
+        Through `plain`, like `says` and `neverSays` above (#245).
+
+        This was `answered.toLowerCase().includes(...)` — the one substring test
+        in the harness that skipped the normaliser written four hundred lines
+        up for exactly this hazard. It was added after `plain` existed and
+        never joined it, and on 2026-09-15 it failed a correct refusal because
+        the office wrote "don’t" with U+2019 while the expectation listed
+        "don't". The office was right and the harness said it was wrong.
+
+        Seventh instance of the wording-lock family here, and the second where
+        the lock was a character nobody typed. One normaliser, three callers.
+      */
+      const found = (e.saysAny ?? []).filter((s) => searchable.includes(plain(s)))
       judge(
         `says one of ${(e.saysAny ?? []).map((s) => JSON.stringify(s)).join(', ')}`,
         found.length > 0,

@@ -75,6 +75,7 @@
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import {
   capabilityBrief,
+  toolNames,
   capabilityNow,
   contradictsReality,
   EMPTY_CAPABILITY,
@@ -2621,6 +2622,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         grounding: established(shown),
         consulted: { consulted: consulted(shown), complete: complete(shown) },
+        // The machinery half of #246's co-occurrence rule, from the same rows
+        // the capability brief is built from.
+        toolNames: toolNames(cap),
       } satisfies HandlerOutput
     },
   }

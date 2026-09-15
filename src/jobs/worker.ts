@@ -161,6 +161,11 @@ export interface HandlerOutput {
     readonly complete: readonly Domain[]
   }
   /**
+   * The office's internal tool identifiers, for #246's answer check. Handed to
+   * the coherence gate and never stored.
+   */
+  readonly toolNames?: readonly string[]
+  /**
    * Send this output as a playable audio file rather than as text (#66).
    *
    * On the OUTPUT, like `announce`, because the handler is the only thing that
@@ -743,6 +748,7 @@ export const runJob = async (
     ...(hadHistory === undefined ? {} : { hadHistory }),
     ...(output.grounding === undefined ? {} : { grounding: output.grounding }),
     ...(output.consulted === undefined ? {} : { consulted: output.consulted }),
+    ...(output.toolNames === undefined ? {} : { toolNames: output.toolNames }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).

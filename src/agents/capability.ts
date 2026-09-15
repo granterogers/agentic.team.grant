@@ -164,6 +164,19 @@ export async function capabilityNow(db: SqlExecutor, staffSlug?: string): Promis
  * reaching a service is a fact about our wiring, and only one of them is hers
  * to report.
  */
+/**
+ * Every tool identifier this capability knows about, whatever its state.
+ *
+ * `deliberationLeak` needs the machinery half of its co-occurrence rule, and
+ * the honest source for it is the same rows the brief is built from —
+ * including the disabled and must-ask ones, because a model narrating a call
+ * to something switched off is exactly as wrong as one narrating a call to
+ * something switched on.
+ */
+export function toolNames(cap: Capability): readonly string[] {
+  return [...cap.can, ...cap.mustAsk, ...cap.cannot].map((a) => a.tool)
+}
+
 export function capabilityBrief(cap: Capability): string {
   if (cap.reach.length === 0 && cap.can.length === 0) return ''
   const can = cap.reach.filter((r) => r.reachable).map((r) => r.service)
@@ -218,6 +231,7 @@ export function capabilityBrief(cap: Capability): string {
     // The specific sentence Grant objected to, forbidden by name.
     'And do not offer to produce something "ready for you to add" when you can ' +
     'add it yourself — if a verb above covers it, use it. ' +
+    NO_CALL_CHANNEL +
     CHANNEL_TRUTHS
   )
 }
@@ -239,6 +253,41 @@ export function capabilityBrief(cap: Capability): string {
  * not do them. `TelegramTransport` attaches the buttons; she does not have to
  * act, which is exactly why she did not know she could.
  */
+/**
+ * There is no call channel, and the catalogue above does not imply one.
+ *
+ * ## The measurement that made this necessary
+ *
+ * The brief lists dotted identifiers -- `task.create`, `db.read`,
+ * `notebook.read` -- and tells the reader to use them. The office has no
+ * tool-calling protocol: it sends prose and reads prose back. A model trained
+ * to call tools, handed a catalogue and given no way to call anything, does the
+ * only thing left and narrates the call.
+ *
+ * Probed three times on one tool-shaped turn, 2026-09-15, gpt-oss-120b returned
+ * one "We will call task.create." and two raw JSON objects. None of the three
+ * was an answer, and all three would have gone to Grant as written.
+ *
+ * It is not specific to that model and it is not new -- four outputs from the
+ * free-model months contain the same thing, including
+ * `{"tool": "notebook.read", "question": …}` sent to him whole. It is simply
+ * far commoner on a model that is good at tool use, which is precisely the
+ * model this office now runs on.
+ *
+ * So the catalogue is given a sentence saying what it is FOR. The deterministic
+ * half of the fix is `deliberationLeak` in `src/agents/quality.ts`; this is the
+ * half that stops the model wanting to do it.
+ */
+const NO_CALL_CHANNEL =
+  'One thing about the list above, because it is easy to misread: those are ' +
+  'things the OFFICE does on the strength of what you write, not functions you ' +
+  'can call. There is no call syntax here and no tool channel — your reply goes ' +
+  'to Grant exactly as you type it. So never write a tool name, a call, or any ' +
+  'JSON in your answer, and never narrate what you are about to do or which ' +
+  'tool you are weighing up. Do the thinking silently and send only the result: ' +
+  'what you found, what you did, or what you need from him. If you cannot do ' +
+  'something, say so plainly in his words rather than naming the switch. '
+
 const CHANNEL_TRUTHS =
   'Facts about how your messages are sent, which are true whether or not you ' +
   'do anything: every Telegram message you send automatically carries thumbs ' +
