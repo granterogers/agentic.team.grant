@@ -17,7 +17,8 @@ import { redactSecrets } from '../text/secrets.ts'
 import type { AllowedModel } from './guards.ts'
 import {
   assertModelAllowed,
-  assertResponseWasFree,
+  assertResponseWithinBudget,
+  type Budget,
   buildRequestBody,
   PaidCallPreventedError,
 } from './guards.ts'
@@ -135,7 +136,15 @@ export interface CompletionResult {
   readonly content: string
   readonly promptTokens: number
   readonly completionTokens: number
-  /** Always 0 — a non-zero value throws before this is constructed. */
+  /**
+   * What the provider reported for this response, in US dollars.
+   *
+   * Zero on a free model, and zero is no longer the only legal value: a cost
+   * ABOVE the provider's per-call ceiling throws before this is constructed,
+   * a cost below it is recorded. Reporting it as 0 while a funded key was
+   * charged would be the same defect as a column that can only ever say one
+   * thing.
+   */
   readonly cost: number
 }
 
@@ -144,6 +153,15 @@ interface ProviderRow {
   base_url: string
   free_only: boolean
   secret_ref: string | null
+  /**
+   * What this provider may charge, straight off its registry row.
+   *
+   * Carried on the provider rather than the model because it is a statement
+   * about what Grant has funded, not about what a model happens to cost — a
+   * new model appearing in the allow-list must not arrive with its own
+   * permission to spend.
+   */
+  budget: Budget
 }
 
 /**
@@ -184,10 +202,18 @@ export class ProviderRouter {
   private async loadAllowList(): Promise<{ provider: ProviderRow; models: AllowedModel[] }> {
     const { rows } = await this.db.execute(`
       select m.provider, m.model_id, m.pricing_prompt, m.pricing_completion,
-             p.base_url, p.free_only, p.secret_ref::text as secret_ref
+             p.base_url, p.free_only, p.secret_ref::text as secret_ref,
+             p.max_price_prompt, p.max_price_completion, p.max_cost_per_call_usd
       from public.usable_models m
       join public.providers p on p.provider = m.provider
-      order by p.priority, m.model_id
+      -- The view carries this same ORDER BY, and a view's ordering is not
+      -- guaranteed to survive being selected from, so it is restated here
+      -- rather than assumed. Restated, not re-decided: model_priority is the
+      -- column 0373 added precisely so that which model is tried first stops
+      -- being alphabetical. Leaving this line ordering by model_id alone
+      -- while the view said otherwise is what sent the first real paid request
+      -- to three free models instead — one list assembled twice, disagreeing.
+      order by p.priority, m.model_priority, m.model_id
     `)
     if (rows.length === 0) throw new NoUsableModelError()
 
@@ -198,6 +224,11 @@ export class ProviderRouter {
         base_url: String(first.base_url),
         free_only: first.free_only === true,
         secret_ref: first.secret_ref === null ? null : String(first.secret_ref),
+        budget: {
+          maxPricePrompt: Number(first.max_price_prompt ?? 0),
+          maxPriceCompletion: Number(first.max_price_completion ?? 0),
+          maxCostPerCallUsd: Number(first.max_cost_per_call_usd ?? 0),
+        },
       },
       models: rows.map((r) => ({
         model_id: String(r.model_id),
@@ -315,11 +346,15 @@ export class ProviderRouter {
     // Layers 1 and 3, before the request exists.
     assertModelAllowed(model, models, provider.free_only)
 
-    const body = buildRequestBody(model, {
-      messages: request.messages,
-      ...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
-      ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
-    })
+    const body = buildRequestBody(
+      model,
+      {
+        messages: request.messages,
+        ...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
+        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+      },
+      provider.budget,
+    )
 
     // `response.json()` is `unknown`, correctly: the provider's response is
     // untrusted input. Named so the assertion happens once, here, rather than
@@ -377,10 +412,10 @@ export class ProviderRouter {
     }
 
     // Layer 4. Throwing here rather than absorbing the charge is deliberate: a
-    // non-zero cost means an earlier layer was bypassed, which is a defect to
-    // surface, not an expense to swallow.
+    // cost above the provider's ceiling means an earlier layer was bypassed,
+    // which is a defect to surface, not an expense to swallow.
     try {
-      assertResponseWasFree(model, payload.usage)
+      assertResponseWithinBudget(model, payload.usage, provider.budget.maxCostPerCallUsd)
     } catch (error) {
       await this.recordFailure(
         provider.provider,
@@ -394,9 +429,11 @@ export class ProviderRouter {
     const content = choice?.message?.content ?? ''
 
     if (content.trim() === '') {
-      // The call succeeded and cost nothing, so this is not a provider failure
-      // and must not trip the breaker — the provider did its job. Recording
-      // success keeps the breaker honest about availability.
+      // The call succeeded, so this is not a provider failure and must not trip
+      // the breaker — the provider did its job. Recording success keeps the
+      // breaker honest about availability. On a funded key it did cost
+      // something, which is exactly why the charge is accounted below rather
+      // than dropped: an answer we could not use is the expensive kind.
       await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
       await this.account(
         provider.provider,
@@ -408,6 +445,7 @@ export class ProviderRouter {
           completion: payload.usage?.completion_tokens ?? 0,
         },
         Date.now() - startedAt,
+        payload.usage?.cost ?? 0,
       )
       throw new EmptyCompletionError(
         payload.model ?? model,
@@ -417,6 +455,7 @@ export class ProviderRouter {
     }
 
     await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
+    const costUsd = payload.usage?.cost ?? 0
     await this.account(
       provider.provider,
       payload.model ?? model,
@@ -427,6 +466,7 @@ export class ProviderRouter {
         completion: payload.usage?.completion_tokens ?? 0,
       },
       Date.now() - startedAt,
+      costUsd,
     )
 
     return {
@@ -434,7 +474,7 @@ export class ProviderRouter {
       content,
       promptTokens: payload.usage?.prompt_tokens ?? 0,
       completionTokens: payload.usage?.completion_tokens ?? 0,
-      cost: 0,
+      cost: costUsd,
     }
   }
 
@@ -460,6 +500,7 @@ export class ProviderRouter {
     request: Pick<CompletionRequest, 'correlationId' | 'jobId'>,
     tokens: { prompt: number; completion: number } = { prompt: 0, completion: 0 },
     latencyMs?: number,
+    costUsd: number | null = null,
   ): Promise<void> {
     // No correlation id means no job to attribute this to. Recorded anyway,
     // under a generated one: an unattributed call is still a call, and
@@ -474,9 +515,13 @@ export class ProviderRouter {
         outcome,
         promptTokens: tokens.prompt,
         completionTokens: tokens.completion,
-        // OpenRouter's free tier reports no cost, and §11 says that is exactly
-        // when a figure must not be called authoritative. `null` carries that.
-        providerReportedCost: null,
+        // `null` where the provider reported nothing — §11 says an unreported
+        // figure must not be called authoritative, and null carries that. On a
+        // funded key the provider DOES report, and passing the real number is
+        // what makes `inference_usage` able to answer what a day costs. It was
+        // hardcoded null while every model was free, which is a column that
+        // could only ever say one thing.
+        providerReportedCost: costUsd,
         latencyMs,
       })
     } catch {

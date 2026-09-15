@@ -137,3 +137,47 @@ constraint. The run waits for the reset instead.
 **Tomorrow the fresh 1,000 goes to the hostile corpus first.** Today's exhaustion
 was 1,014 calls of test load; the corpus is 18 turns and must not be queued
 behind another suite that eats the allowance before it.
+
+## The candidate is now historical: the office moved to a paid model
+
+2026-09-15, after the quota probe above. Grant funded the OpenRouter account and
+asked the office to switch from the free tier to a low-cost paid model. That is
+done and verified (ADR-0029), which means **the configuration this file records
+is no longer the configuration the office runs.**
+
+Nothing is lost. The candidate is preserved three ways:
+
+| Piece | Where it is |
+|---|---|
+| the code | git tag `candidate-green-free-v364` at `6de6dfc` |
+| the free models | still in `provider_models`, status usable, priority 100 |
+| the switch back | one UPDATE, below |
+
+```bash
+git checkout candidate-green-free-v364
+npm run deploy:worker
+npm run q -- "update public.providers set free_only = true, max_price_prompt = 0, \
+  max_price_completion = 0, max_cost_per_call_usd = 0 where provider = 'openrouter'"
+```
+
+The third line is the one that decides which model answers: with `free_only`
+true every paid model fails the `usable_models` predicate, whatever is deployed.
+
+### What this means for the hostile corpus, which is still unrun
+
+The corpus at `4743021` is still genuinely unseen, and the freeze on it holds.
+What has changed is which candidate it should be run against, and that is a
+real decision rather than a formality:
+
+- **Against the frozen free candidate.** Honours the acceptance brief exactly.
+  Produces a verdict about a configuration Grant is not going to use, which is
+  the wrong-payload trap this repository has recorded three times — a suite that
+  passes while pointed somewhere other than the deployed product.
+- **Against a re-frozen paid candidate.** Produces a verdict about what he will
+  actually run, and can happen immediately rather than waiting for midnight,
+  because the paid model has no daily cliff. Costs a new freeze: a new commit, a
+  new worker version, and this file rewritten.
+
+The second is the useful one, and it is Grant's call, not this session's. Until
+he says, the scheduled run stays pointed at the free candidate via the restore
+above.

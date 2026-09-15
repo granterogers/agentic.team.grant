@@ -151,7 +151,7 @@ describe('layer 4 — a charged response is a defect, not an expense', () => {
     const db = new FakeDb([model('minimax/minimax-m3:free')])
     await expect(
       new ProviderRouter(db, 'key', ok(null)).complete({ messages: MESSAGES }),
-    ).rejects.toThrow(/cannot be verified as free/)
+    ).rejects.toThrow(/cannot be verified as within budget/)
   })
 })
 

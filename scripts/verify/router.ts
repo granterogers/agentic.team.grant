@@ -41,7 +41,19 @@ const spend = async (): Promise<{ usage: number; limit: number }> => {
 }
 
 const before = await spend()
-console.log(`spend before: usage=${before.usage} limit=${before.limit}\n`)
+// What this provider is permitted to charge for ONE response (0373). Read
+// rather than hardcoded: a check that carries its own copy of a number the
+// product holds is a check that will disagree with the product.
+const ceiling = Number(
+  (
+    (
+      await db.execute(
+        `select max_cost_per_call_usd from public.providers where provider = 'openrouter'`,
+      )
+    ).rows[0] as { max_cost_per_call_usd?: string | number }
+  )?.max_cost_per_call_usd ?? 0,
+)
+console.log(`spend before: usage=${before.usage} limit=${before.limit} ceiling=$${ceiling}\n`)
 
 // --- a real completion through every layer ---------------------------------
 try {
@@ -56,7 +68,11 @@ try {
   add(
     'a real completion through all four layers',
     `model=${result.model} cost=${result.cost} tokens=${result.promptTokens}+${result.completionTokens} content=${JSON.stringify(result.content.slice(0, 30))}`,
-    result.cost === 0 && result.content.length > 0,
+    // Was `cost === 0`, which stopped being the property under test the day
+    // 0373 funded the provider: a paid model answering correctly for a
+    // thousandth of a penny would have failed this line. What layer 4 promises
+    // is that a charge never exceeds the ceiling on the provider's own row.
+    result.cost <= ceiling && result.content.length > 0,
   )
 } catch (error) {
   add(
@@ -147,8 +163,15 @@ add(
 // The precondition, asserted rather than assumed. Failover with one usable
 // model is a no-op that passes every test written for it, so the suite has to
 // establish that there is something to fail over TO before claiming it works.
-const usable = (await db.execute(`select model_id from public.usable_models order by model_id`))
-  .rows as { model_id: string }[]
+// The ROUTER's order, not alphabetical. A third copy of this ORDER BY is how
+// the line below came to report cohere/north-mini-code:free as the first
+// candidate while the router was starting at openai/gpt-oss-120b — the check
+// passed, and its evidence named the wrong model.
+const usable = (
+  await db.execute(
+    `select model_id from public.usable_models order by priority, model_priority, model_id`,
+  )
+).rows as { model_id: string }[]
 add(
   'there is more than one usable model, so failover has somewhere to go',
   `${String(usable.length)} usable: ${usable
@@ -181,7 +204,7 @@ try {
   add(
     'a rate-limited first model fails over to the next and still answers',
     `answered by ${failedOver.model}, cost=${String(failedOver.cost)}`,
-    failedOver.content.length > 0 && failedOver.cost === 0,
+    failedOver.content.length > 0 && failedOver.cost <= ceiling,
   )
   add(
     'and it answered on a DIFFERENT model than the one that was refused',
@@ -212,12 +235,40 @@ add(
   injected.n >= 1,
 )
 
-// --- spend must be unchanged ----------------------------------------------
+// --- spend must stay inside the ceiling -----------------------------------
+//
+// This asserted `after.usage === before.usage` while every model was free, and
+// that was the right assertion then. It is the wrong one now, and wrong in the
+// direction that matters: it would go red on a provider doing exactly what
+// Grant funded it to do, and somebody would "fix" it by making the office stop
+// spending. What is worth asserting is the SHAPE of the spend — that this
+// suite's handful of calls cost what a handful of calls costs, so a routing
+// mistake into an expensive model shows up here as an order of magnitude.
+// Measured from OUR ledger, not from the provider's credits endpoint.
+// The endpoint lags: this suite spent real money on its completions above and
+// the endpoint still read the figure it read before the run, so an assertion
+// against it passes while measuring nothing. A check whose happy path is
+// "found nothing" needs to be sure it could have found something.
+const ledger = (
+  await db.execute(`
+    select coalesce(sum(provider_reported_cost), 0)::float8 as spent,
+           count(*)::int as calls
+      from public.inference_usage
+     where occurred_at >= app.now_utc() - interval '5 minutes'
+       and provider_reported_cost is not null
+  `)
+).rows[0] as { spent: number; calls: number }
 const after = await spend()
 add(
-  'no money was spent by any of the above',
-  `usage ${before.usage} -> ${after.usage}`,
-  after.usage === before.usage,
+  'the run charged something, so the next assertion is not vacuous',
+  `${String(ledger.calls)} accounted call(s), $${ledger.spent.toFixed(8)} recorded ` +
+    `(provider credits endpoint lags: ${before.usage} -> ${after.usage})`,
+  ledger.calls > 0,
+)
+add(
+  'every accounted call stayed inside the per-call ceiling',
+  `$${ledger.spent.toFixed(8)} over ${String(ledger.calls)} call(s), ceiling $${ceiling} each`,
+  ledger.spent >= 0 && ledger.spent <= ceiling * ledger.calls,
 )
 
 console.log('| check | outcome | |')
