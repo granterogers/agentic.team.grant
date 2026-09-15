@@ -263,6 +263,9 @@ Read `package.json` for the current truth rather than this list.
 | 3 | Direction captured in GitHub: #25, #220, #223, #81 | ✅ done |
 | 4 | **UX QA v2 master prompt persisted verbatim** at `docs/spec/ux-qa-v2-2026-09-15.md`, and this run state written | ✅ done |
 | 5 | **PHASE 1 — implement the whole UX backlog** | 🔨 **IN PROGRESS** |
+| 5a | **All five P0s are done and pushed** — #214, #215, #216, #217, #218, plus #222's Activity/Lately half | ✅ done |
+| 5b | P1: #219 homepage, #220 widgets, #158 settings, #188 desktop header, #25 the plane | 🔨 next |
+| 5c | P2: #221 icons, #160 typography, #222's Tasks check | not started |
 | 6 | PHASE 2 — FULL UX QA, Level 2, per §70's fifty-three-step order | not started |
 | 7 | Final report in §74's format, exactly one of PASS / PASS WITH WARNINGS / FAIL | not started |
 
@@ -277,7 +280,13 @@ of it. **The project dashboard direction is #25**, verbatim at
 
 | priority | issues |
 |---|---|
-| **P0** | #214 Call the Team is a modal, should be an inline toggle that genuinely stops audio · #215 Message the Team has no in-app reply and no request states · #216 no way back to the homepage; rename Studio; simplify the header · #217 Documents `+` traps you, Outputs does nothing · #218 the studio can enter a crashed state |
+> **P0 is CLEARED.** All five, with regressions: `verify:talk` 40/40 (four new
+> checks for #214's actual claim), `verify:chat` 57/57 (up from 45),
+> `verify:breaks` proving the #218 boundary can fail, `verify:layouts` 64
+> states / 0 findings, `verify:wired` 64 controls / 21 screens.
+> First content pixel on a phone went from 632px of 844 to 500px.
+
+| **P0 — done** | #214 Call the Team is a modal, should be an inline toggle that genuinely stops audio · #215 Message the Team has no in-app reply and no request states · #216 no way back to the homepage; rename Studio; simplify the header · #217 Documents `+` traps you, Outputs does nothing · #218 the studio can enter a crashed state |
 | **P1** | #219 homepage as a global command dashboard · #220 panels as real widgets · #158 / #39 / #36 settings architecture · #188 project header too tall · #25 the project dashboard as a spatial map |
 | **P2** | #221 icon library and cover image · #222 remove Activity, rename Lately, verify Tasks loads · #160 typography changes between routes |
 | **P3** | polish found during the run |
