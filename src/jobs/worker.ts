@@ -667,11 +667,29 @@ export const runJob = async (
   // Coherence first, before spending a reviewer on something that cannot be
   // approved anyway. These are the combinations that satisfy every column
   // constraint individually and still describe something impossible.
+  /*
+    Did this conversation have any earlier turn at all? (#231 Campaign Three)
+
+    Asked once, here, because `metadataProblems` is pure and the attribution
+    check below it cannot be sound without the fact. `undefined` on any failure
+    — a job with no command id, an unreadable extent — and an undefined value
+    never accuses anybody: the check fires only on an explicit `false`.
+  */
+  const hadHistory = await db
+    .execute(`
+      select (app.conversation_extent(
+                (select (pinned_config ->> 'command_id')::uuid from public.jobs
+                  where job_id = ${lit(job.jobId)}::uuid)
+              ) ->> 'turns_total')::int > 1 as had`)
+    .then((r) => (r.rows[0] as { had?: boolean } | undefined)?.had)
+    .catch(() => undefined)
+
   const problems = metadataProblems({
     confidence: output.confidence,
     evidence: output.evidence,
     sources: output.sources,
     contradictions: output.contradictions,
+    ...(hadHistory === undefined ? {} : { hadHistory }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).

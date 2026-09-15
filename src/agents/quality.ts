@@ -150,6 +150,14 @@ export interface OutputMetadata {
    * CONSTRUCTION, plus the ones this number can disprove.
    */
   readonly acted?: number
+  /**
+   * Whether this job had ANY earlier turn in its conversation.
+   *
+   * Supplied by the worker from `app.conversation_extent`. Absent means "not
+   * established", and an absent value never accuses anybody — the attribution
+   * check below fires only on an explicit `false`.
+   */
+  readonly hadHistory?: boolean
 }
 
 export interface MetadataProblem {
@@ -164,6 +172,60 @@ export interface MetadataProblem {
  * satisfy every column constraint individually and still describe something
  * impossible, which is how a confident-sounding guess gets published.
  */
+/**
+ * Does this text tell the reader what THEY said?
+ *
+ * #231, Campaign Three. Asked *"What price did I tell you the middle tier
+ * was?"* in a chat with **no earlier turns at all**, the office answered:
+ *
+ *     "Forty-two pounds a month - that's the middle tier you told me."
+ *
+ * There was no such conversation. It invented a figure and attributed it to
+ * Grant, who would have believed he had said it. A second turn in the same
+ * empty chat produced *"You asked about the middle tier price."*
+ *
+ * Forty-two is the archetypal number a model reaches for when it has nothing,
+ * which is how this was found: a memory test planted 42, and the CONTROL chat
+ * — never told anything — produced the same figure, invalidating the
+ * experiment and exposing the real defect underneath it.
+ *
+ * ## Why this can be strict
+ *
+ * Same structure as `claimsToHaveSent`. When the conversation carried no
+ * earlier turn, "you told me" is false at the moment it is written, every
+ * time — there is nothing it could be true of. The caller supplies that fact;
+ * without it this never fires.
+ *
+ * A QUESTION about what was said is left alone ("did you mean the middle
+ * tier?"), because asking is the honest behaviour this is trying to produce.
+ */
+export const claimsGrantSaid = (body: string): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  const claims: RegExp[] = [
+    /\byou\s+(?:told|said\s+to)\s+me\b[^.!?]{0,60}/i,
+    /\byou\s+(?:said|asked|mentioned|told\s+us|wanted|described)\b[^.!?]{0,60}/i,
+    /\b(?:that\s+is|that's|thats)\s+(?:the\s+)?[a-z ]{0,30}\byou\s+(?:told|gave|mentioned|said)\b[^.!?]{0,40}/i,
+    /\bas\s+you\s+(?:said|mentioned|put\s+it)\b[^.!?]{0,60}/i,
+    /\bearlier\s+you\s+\w+\b[^.!?]{0,60}/i,
+  ]
+  for (const re of claims) {
+    const hit = re.exec(text)
+    if (hit === null) continue
+    /*
+      A question about what was said is not a claim about it.
+
+      "Did you mean the middle tier?" and "what did you say the price was?"
+      are the office asking, which is precisely the behaviour this exists to
+      encourage — refusing them would push it back towards guessing.
+    */
+    const sentence = text.slice(Math.max(0, hit.index - 60), hit.index + hit[0].length + 40)
+    if (/\?/.test(sentence)) continue
+    return hit[0].trim().slice(0, 80)
+  }
+  return null
+}
+
 /**
  * Does this text claim, in the first person, to have SENT something?
  *
@@ -348,6 +410,32 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     produces a wrong answer Grant can argue with, and a fabricated send leaves
     him waiting on people who were never asked.
   */
+  /*
+    Telling Grant what he said, in a conversation that had no earlier turn.
+
+    Strict for the same structural reason as the send check: when the office
+    carried no history, "you told me" is false at the moment it is written.
+    Only fires on an explicit `hadHistory === false`, so a caller that does not
+    establish the fact never triggers it.
+
+    This is the worst of the three claim families. A fabricated read produces a
+    wrong answer Grant can argue with; a fabricated send leaves him waiting;
+    a fabricated attribution makes him doubt his own memory.
+  */
+  if (m.hadHistory === false) {
+    const said = claimsGrantSaid(m.body ?? '')
+    if (said !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text tells Grant what he said ("${said}") and this conversation has no ` +
+          'earlier turn at all — there is nothing he could have told you. Ask what he ' +
+          'means, or say you have nothing on it; never attribute a fact to him that ' +
+          'only the model produced (#231).',
+      })
+    }
+  }
+
   const sentClaim = claimsToHaveSent(m.body ?? '')
   if (sentClaim !== null) {
     problems.push({

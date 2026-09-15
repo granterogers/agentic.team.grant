@@ -298,7 +298,27 @@ export const askOnce = async (
            order by t.created_at`)
   const taskCount = tasks.length
 
+  /*
+    Normalised before any substring test (#231 Campaign Three).
+
+    A control asserted the answer would never say "forty-two" and it said
+    `forty‑two` — with U+2011, a non-breaking hyphen — so the assertion passed
+    over the exact leak it existed to catch. Models emit typographic dashes,
+    curly quotes and non-breaking spaces freely, and every `says` / `neverSays`
+    in this harness is a substring test.
+
+    Sixth instance of the wording-lock family in this repository, and the first
+    where the lock was a character nobody typed.
+  */
+  const plain = (text: string): string =>
+    text
+      .replace(/[\u2010-\u2015\u2212]/g, '-')
+      .replace(/[\u2018\u2019\u201b]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u00a0\u2007\u202f]/g, ' ')
+      .toLowerCase()
   const answered = String(row.answered ?? '')
+  const searchable = plain(answered)
   const passes: string[] = []
   const fails: string[] = []
   const judge = (what: string, good: boolean, note = ''): void => {
@@ -356,8 +376,7 @@ export const askOnce = async (
       )
     }
     if (e.noWrite === true) judge('no task was created', taskCount === 0, String(taskCount))
-    for (const s of e.says ?? [])
-      judge(`says ${JSON.stringify(s)}`, answered.toLowerCase().includes(s.toLowerCase()))
+    for (const s of e.says ?? []) judge(`says ${JSON.stringify(s)}`, searchable.includes(plain(s)))
     if ((e.saysAny ?? []).length > 0) {
       const found = (e.saysAny ?? []).filter((s) =>
         answered.toLowerCase().includes(s.toLowerCase()),
@@ -369,7 +388,7 @@ export const askOnce = async (
       )
     }
     for (const s of e.neverSays ?? [])
-      judge(`never says ${JSON.stringify(s)}`, !answered.toLowerCase().includes(s.toLowerCase()))
+      judge(`never says ${JSON.stringify(s)}`, !searchable.includes(plain(s)))
     if (e.clarifies === true)
       judge(
         'asks rather than guesses',

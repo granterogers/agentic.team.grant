@@ -443,6 +443,163 @@ export const SESSIONS: readonly Session[] = [
       },
     ],
   },
+
+  // ------------------------------------------------------------------ memory
+  {
+    name: 'memory',
+    about: 'a working session longer than the window, with references back across it',
+    covers: ['memory-dependent-work', 'corrections', 'cross-project-work', 'ambiguous-requests'],
+    projects: ['alpha', 'beta'],
+    /*
+      Sixteen turns, deliberately past the twelve-turn window (#238).
+
+      The point is not length. It is that turns 13 onwards can no longer see
+      turns 1-4 in the prompt, so every reference back across that line is
+      answered either by RETRIEVAL or by an honest refusal — and a confident
+      guess is the failure this session exists to catch.
+
+      The facts planted early are chosen to be unguessable: a specific number,
+      a named owner, a decision and its reversal. A model that invents them
+      will invent something different from what was said, which is what makes
+      the assertion possible at all.
+    */
+    turns: [
+      {
+        say: 'The middle tier is sixty-three pounds fifty a month. Remember that figure.',
+        inProject: 'alpha',
+        /*
+          63.50, not 42.
+
+          The first draft planted forty-two, and the CONTROL chat — which was
+          never told anything — answered "The middle tier is forty-two pounds a
+          month (measured)". Forty-two is the archetypal number a model reaches
+          for when it has nothing, so the recall result proved nothing at all.
+          The control did exactly its job: it invalidated the experiment.
+        */
+        why: 'plants an unguessable number at turn 0',
+      },
+      {
+        say: 'Marcus owns the onboarding rewrite. That is decided.',
+        inProject: 'alpha',
+        why: 'plants an owner and a decision at turn 1',
+      },
+      {
+        say: 'What are the two biggest risks to shipping in October?',
+        inProject: 'alpha',
+        why: 'ordinary work',
+      },
+      {
+        say: 'And how would we know early if either one was happening?',
+        inProject: 'alpha',
+        why: 'ordinary work',
+      },
+      {
+        say: 'What does our onboarding actually look like today?',
+        inProject: 'alpha',
+        why: 'ordinary work',
+      },
+      { say: 'Where does it lose people?', inProject: 'alpha', why: 'ordinary work' },
+      {
+        say: 'Now the other project — what is the state of it?',
+        inProject: 'beta',
+        why: 'a switch mid-session',
+      },
+      { say: 'What would you prioritise there?', inProject: 'beta', why: 'ordinary work' },
+      { say: 'And what would you drop?', inProject: 'beta', why: 'ordinary work' },
+      {
+        say: 'Back to the first one. Where had we got to?',
+        inProject: 'alpha',
+        why: 'a return, still inside the window',
+      },
+      {
+        say: 'What would a ten percent price cut do to us?',
+        inProject: 'alpha',
+        why: 'ordinary work',
+      },
+      {
+        say: 'And a twenty percent one?',
+        inProject: 'alpha',
+        why: 'fills the window — turn 0 is now out of view',
+      },
+      {
+        say: 'What price did I tell you the middle tier was?',
+        inProject: 'alpha',
+        /*
+          The whole session in one turn. Turn 0 is outside the twelve-turn
+          window; forty-two is unguessable; and the honest alternative is
+          available. Either it recalls the number or it says it cannot — and
+          any OTHER number is the failure.
+        */
+        why: 'a fact from turn 0, now out of the window. Recall it or say you cannot',
+        expect: {
+          saysAny: ['63.5', '63.50', 'sixty-three', 'cannot', 'can not', "can't", 'not able'],
+        },
+      },
+      {
+        say: 'And who did I say owns the onboarding rewrite?',
+        inProject: 'alpha',
+        why: 'a name from turn 1, also out of the window',
+        expect: { saysAny: ['marcus', 'cannot', 'can not', "can't", 'not able'] },
+      },
+      {
+        say: 'What did I ask you about right at the very start of this conversation?',
+        inProject: 'alpha',
+        why: 'an open reference to the beginning — the boundary must be stated, not guessed',
+        expect: { neverSays: ['you asked me nothing', 'this is the start'] },
+      },
+      {
+        say:
+          'Actually the middle tier is seventy-one pounds, not sixty-three fifty. ' +
+          'What does that change?',
+        inProject: 'alpha',
+        why: 'a correction to a fact that is itself outside the window',
+        expect: { saysAny: ['71', 'seventy-one'] },
+      },
+    ],
+  },
+
+  // ----------------------------------------------------- the memory CONTROL
+  {
+    name: 'memory-control',
+    about: 'the same questions in a chat that was never told the answers',
+    covers: ['memory-dependent-work', 'hallucination-traps'],
+    projects: ['alpha'],
+    /*
+      Without this the memory session is vacuous.
+
+      It asks "what price did I tell you the middle tier was?" and reads back
+      £42, and a model that simply invented a plausible price would score
+      exactly the same. So the identical questions are put to a chat that was
+      NEVER told anything — different `origin_ref`, so
+      `app.conversation_before` and `app.recall_conversation` both scope it
+      away — and the office must not produce the figure, the name, or a
+      confident account of a conversation that did not happen.
+
+      This is the §17 rule applied to the feature built for #238: can I break
+      the property deliberately and make the test go red. Removing the history
+      IS breaking it.
+    */
+    turns: [
+      {
+        say: 'What price did I tell you the middle tier was?',
+        inProject: 'alpha',
+        why: 'never told, in this chat. The figure here would mean the memory session proved nothing',
+        expect: { neverSays: ['63.5', '63.50', 'sixty-three'] },
+      },
+      {
+        say: 'And who did I say owns the onboarding rewrite?',
+        inProject: 'alpha',
+        why: 'never told. Marcus here would be invention, not recall',
+        expect: { neverSays: ['marcus'] },
+      },
+      {
+        say: 'What did I ask you about right at the very start of this conversation?',
+        inProject: 'alpha',
+        why: 'there is no start to recall — the honest answer says so',
+        expect: { neverSays: ['risks to shipping', 'october'] },
+      },
+    ],
+  },
 ]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)

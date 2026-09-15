@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { excludesASubject, withoutNegated } from '../../src/agents/negation.ts'
+import { asksWhatWasSaid, excludesASubject, withoutNegated } from '../../src/agents/negation.ts'
 
 /*
   #237. A voice note routed to exactly the specialist it excluded:
@@ -61,5 +61,35 @@ describe('#237: doing nothing is the common case', () => {
     // misleading — it would send every such turn to the Chief of Staff with no
     // reason recorded.
     expect(withoutNegated('not the pricing')).toBe('not the pricing')
+  })
+})
+
+describe('#231: a question about what was said earlier', () => {
+  /*
+    Asked in a chat with no earlier turn, the office invented a figure and
+    attributed it to Grant. The provenance guards catch the claims one phrasing
+    at a time; what can be decided WITHOUT a model is the shape of the question.
+  */
+  it.each([
+    'What price did I tell you the middle tier was?',
+    'And who did I say owns the onboarding rewrite?',
+    'What did I ask you about right at the very start of this conversation?',
+    'What did we decide about the launch date?',
+    'How much did I say the tier was?',
+    'What did you say the margin was?',
+  ])('recognises %s', (text) => {
+    expect(asksWhatWasSaid(text)).toBe(true)
+  })
+
+  it.each([
+    'What is our gross margin on the middle tier?',
+    'Tell me what the competitors charge.',
+    'Draft the announcement email.',
+    'Who owns the onboarding rewrite?',
+    'What should we do about the pricing?',
+  ])('leaves the ordinary question %s alone', (text) => {
+    // A question about the WORLD is not a question about the conversation, and
+    // answering it with "I have nothing from earlier" would be a non-sequitur.
+    expect(asksWhatWasSaid(text)).toBe(false)
   })
 })

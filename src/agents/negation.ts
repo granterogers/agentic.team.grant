@@ -80,3 +80,27 @@ export const withoutNegated = (text: string): string => {
 
 /** True when the text excluded something, for the routing reason and for tests. */
 export const excludesASubject = (text: string): boolean => withoutNegated(text) !== text
+
+/*
+  A question about what was said EARLIER in this conversation.
+
+  #231, Campaign Three. Asked "What price did I tell you the middle tier was?"
+  in a chat with no earlier turn, the office answered "The middle tier is £42 a
+  month - measured", and a second time "You asked what price you told me... I
+  checked our notes; the middle tier is £42 a month." Both invented. Forty-two
+  is the archetypal number a model produces from nothing, which is how this was
+  found at all.
+
+  The provenance guards catch the CLAIMS around such an answer one phrasing at a
+  time — "you told me", "I checked our notes" — and that is whack-a-mole,
+  because no check can tell an invented number from a real one.
+
+  What CAN be decided, without a model, is the shape of the question. A request
+  for the content of an earlier turn, in a conversation the office can prove has
+  no earlier turn, has exactly one honest answer. The office gives it itself.
+*/
+const ASKS_WHAT_WAS_SAID =
+  /\b(?:what|which|who|when|how\s+much|how\s+many)\b[^.?!]{0,60}\b(?:did\s+(?:i|we|you)\s+(?:say|tell|mention|ask|decide|agree|call|name|give)|(?:i|we)\s+(?:said|told|mentioned|asked|decided|agreed)|you\s+(?:said|told|mentioned))\b/i
+
+/** True when the sentence asks the office to report an earlier turn. */
+export const asksWhatWasSaid = (text: string): boolean => ASKS_WHAT_WAS_SAID.test(text)

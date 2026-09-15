@@ -83,7 +83,7 @@ import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
-import { withoutNegated } from '../agents/negation.ts'
+import { asksWhatWasSaid, withoutNegated } from '../agents/negation.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
   createsSomething,
@@ -917,6 +917,104 @@ async function pairWithNearby(
   return null
 }
 
+/** Older turns worth quoting, and an honest account of what is out of reach. */
+interface Memory {
+  readonly recalled: readonly { at: string; minutesAgo: number; said: string; answered: string }[]
+  /** One line for the prompt, or null when the whole conversation is in view. */
+  readonly boundary: string | null
+}
+
+const NOTHING_OLDER: Memory = { recalled: [], boundary: null }
+
+/**
+ * What this chat said before the working window, when any of it is relevant.
+ *
+ * #238. `app.conversation_before` returns the last twelve turns inside the
+ * window and nothing else, and until now that was the whole of the office's
+ * memory: a reference to something older resolved against a gap, with no
+ * signal to Grant that a gap existed.
+ *
+ * ## Why this is retrieval and not a bigger window
+ *
+ * The two limits are different kinds of limit. `max_turns` is the token cost —
+ * twelve turns go into every prompt and each is paid for. `window_minutes` only
+ * decides WHICH twelve and costs nothing, which is why 0371 widened it to a day
+ * and left the turn count alone. Past twelve turns the answer has to be
+ * retrieval; stuffing a day of transcript into every prompt is what #238
+ * explicitly rules out.
+ *
+ * ## The boundary is stated even when recall finds nothing
+ *
+ * That is the half Grant asked for. A model told "there are 40 earlier turns
+ * and you can see 12" will say so; one told nothing will answer across the gap
+ * and sound certain.
+ *
+ * Never throws. A failed lookup returns no memory and no boundary line, which
+ * is exactly the behaviour that existed before this function.
+ */
+async function recallOlder(
+  db: SqlExecutor,
+  commandId: string,
+  instruction: string,
+): Promise<Memory> {
+  if (commandId === '') return NOTHING_OLDER
+
+  const extent = await db
+    .execute(`select app.conversation_extent(${lit(commandId)}::uuid) as e`)
+    .then(
+      (r) =>
+        (r.rows[0] as { e?: Record<string, number> } | undefined)?.e ?? {
+          turns_total: 0,
+          window_turns: 12,
+        },
+    )
+    .catch(() => null)
+  if (extent === null) return NOTHING_OLDER
+
+  const total = Number(extent.turns_total ?? 0)
+  const windowTurns = Number(extent.window_turns ?? 12)
+  /*
+    Nothing is out of reach, so there is nothing to say and nothing to fetch.
+    The common case, and it costs the one query above.
+  */
+  if (total <= windowTurns) return NOTHING_OLDER
+
+  const recalled = await db
+    .execute(
+      `select app.recall_conversation(${lit(commandId)}::uuid, ${lit(instruction.slice(0, 500))}, 3) as r`,
+    )
+    .then((r) => (r.rows[0] as { r?: unknown } | undefined)?.r)
+    .then((raw) =>
+      Array.isArray(raw)
+        ? raw.map((x) => {
+            const e = x as Record<string, unknown>
+            return {
+              at: String(e.at ?? ''),
+              minutesAgo: Number(e.minutes_ago ?? 0),
+              said: String(e.said ?? ''),
+              answered: String(e.answered ?? ''),
+            }
+          })
+        : [],
+    )
+    .catch(() => [])
+
+  const older = total - windowTurns
+  return {
+    recalled,
+    boundary:
+      `This conversation has ${String(total)} turns. You can see the last ` +
+      `${String(windowTurns)}; ${String(older)} earlier ${older === 1 ? 'turn is' : 'turns are'} ` +
+      'out of view. ' +
+      (recalled.length > 0
+        ? `${String(recalled.length)} older ${recalled.length === 1 ? 'turn' : 'turns'} matching this ` +
+          'question have been retrieved below — quote them if they answer it. '
+        : 'Nothing older matched this question. ') +
+      'If you are asked about something earlier and cannot establish it from what is ' +
+      'here, say plainly that you cannot rather than guessing across the gap.',
+  }
+}
+
 /**
  * The turns before this one, as the model will see them.
  *
@@ -1648,7 +1746,69 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ? String((payload as { coherence_note?: unknown }).coherence_note).slice(0, 600)
           : null
 
-      const turns = await conversationBefore(deps.db, String(payload.command_id ?? ''))
+      const turnsBefore = await conversationBefore(deps.db, String(payload.command_id ?? ''))
+      const turns = turnsBefore
+
+      /*
+        What this chat holds beyond the working window, and what of it matters
+        here (#238).
+
+        The turns were never lost — `inbound_commands` and `outputs` keep every
+        word — they were merely unreachable, so this is a retrieval gap rather
+        than a memory system that needed building. `recall_conversation`
+        searches THIS chat's older turns for the ones that match what is being
+        asked; `conversation_extent` says how far back the chat goes, which is
+        the half that makes the answer honest.
+
+        Both are skipped when the chat has nothing older than the window, which
+        is the overwhelmingly common case and costs one cheap query to
+        establish.
+      */
+      const commandId = String(payload.command_id ?? '')
+      const memory = await recallOlder(deps.db, commandId, instruction)
+
+      /*
+        Asked what was said earlier, in a conversation with nothing earlier
+        (#231, Campaign Three).
+
+        Answered by the office rather than by a model, because there is exactly
+        one honest answer and a model asked this question from an empty context
+        invents one. Measured, not assumed: the control chat produced "The
+        middle tier is £42 a month - measured" and, on a second attempt, "You
+        asked what price you told me... I checked our notes" — a figure and a
+        lookup, both from nothing.
+
+        The provenance guards catch the CLAIMS around such an answer one
+        phrasing at a time, and that is whack-a-mole: no check can tell an
+        invented number from a real one. What can be decided without a model is
+        the SHAPE of the question, and whether the conversation has anything in
+        it — both of which are facts the office already holds.
+
+        Deliberately narrow. It fires only when the question asks for the
+        content of an earlier turn AND the working window is empty AND recall
+        found nothing AND the office knows the chat is genuinely new. Any one of
+        those failing hands the turn back to the ordinary path.
+      */
+      if (
+        asksWhatWasSaid(instruction) &&
+        turnsBefore.length === 0 &&
+        memory.recalled.length === 0 &&
+        memory.boundary === null
+      ) {
+        return {
+          body:
+            'I have nothing from earlier in this conversation — this is the first thing ' +
+            'you have said to me here, so there is nothing for me to look back at. If it ' +
+            'was in another chat or on another day, tell me roughly when and I will find ' +
+            'it; otherwise tell me again and I will keep it this time.',
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'inference',
+          model: null,
+        } satisfies HandlerOutput
+      }
 
       const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
       const context = contextBlock(hits)
@@ -1828,6 +1988,37 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ...(context === ''
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+                /*
+                  What this chat said before the window, and what is out of
+                  view (#238).
+
+                  Placed before the coherence note and after the documents,
+                  because it is context rather than an instruction about the
+                  answer. The boundary line goes in even when nothing was
+                  recalled — that is the half Grant asked for: a model told
+                  "there are 40 earlier turns and you can see 12" says so, and
+                  one told nothing answers across the gap and sounds certain.
+                */
+                ...(memory.boundary === null
+                  ? []
+                  : [
+                      {
+                        role: 'system' as const,
+                        content: `${memory.boundary}${
+                          memory.recalled.length === 0
+                            ? ''
+                            : `\n\nEarlier in this conversation:\n${memory.recalled
+                                .map(
+                                  (m) =>
+                                    `- ${String(m.minutesAgo)} minutes ago he said: ${m.said}` +
+                                    (m.answered === ''
+                                      ? ''
+                                      : `\n  and the answer was: ${m.answered}`),
+                                )
+                                .join('\n')}`
+                        }`,
+                      },
+                    ]),
                 /*
                   What the coherence gate refused last time (#237).
 

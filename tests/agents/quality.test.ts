@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canCommit,
+  claimsGrantSaid,
   claimsToHaveRead,
   claimsToHaveSent,
   disagreementNeedsGrant,
@@ -388,5 +389,81 @@ describe('#237: a message nobody sent', () => {
       body: "I've posted a Slack message to the team.",
     })
     expect(problems.some((p) => p.field === 'body')).toBe(true)
+  })
+})
+
+describe('#231: telling Grant what he said, when he said nothing', () => {
+  /*
+    In a chat with NO earlier turns, asked "What price did I tell you the
+    middle tier was?", the office answered:
+
+      "Forty-two pounds a month - that's the middle tier you told me."
+
+    It invented a figure and attributed it to him. Found because a memory test
+    planted 42 and the CONTROL chat produced the same number from nothing —
+    forty-two being the archetypal number a model reaches for — which
+    invalidated the experiment and exposed the defect underneath it.
+
+    The worst of the three claim families. A fabricated read produces a wrong
+    answer he can argue with; a fabricated send leaves him waiting; a
+    fabricated attribution makes him doubt his own memory.
+  */
+  it.each([
+    "Forty-two pounds a month - that's the middle tier you told me.",
+    'You asked about the middle tier price.',
+    'You said Marcus owns the rewrite.',
+    'As you mentioned, the deadline is Friday.',
+    'Earlier you described the onboarding as slow.',
+  ])('catches %s', (text) => {
+    expect(claimsGrantSaid(text)).not.toBeNull()
+  })
+
+  /*
+    A QUESTION about what was said is the honest behaviour this exists to
+    produce. Refusing it would push the office back towards guessing.
+  */
+  it.each([
+    'Did you mean the middle tier, or the top one?',
+    'What did you say the price was? I have nothing on it here.',
+    'I do not have anything on that here.',
+    'The records show forty-two pounds.',
+  ])('leaves %s alone', (text) => {
+    expect(claimsGrantSaid(text)).toBeNull()
+  })
+
+  it('only fires when the conversation is established as empty', () => {
+    const body = "That's the middle tier you told me."
+    // Not established — never accuses.
+    expect(
+      metadataProblems({
+        confidence: 'high',
+        evidence: 'verified',
+        sources: ['job:a'],
+        contradictions: null,
+        body,
+      }).some((p) => p.problem.includes('tells Grant what he said')),
+    ).toBe(false)
+    // There WAS a conversation, so the attribution may well be true.
+    expect(
+      metadataProblems({
+        confidence: 'high',
+        evidence: 'verified',
+        sources: ['job:a'],
+        contradictions: null,
+        body,
+        hadHistory: true,
+      }).some((p) => p.problem.includes('tells Grant what he said')),
+    ).toBe(false)
+    // No earlier turn at all: there is nothing he could have told it.
+    expect(
+      metadataProblems({
+        confidence: 'high',
+        evidence: 'verified',
+        sources: ['job:a'],
+        contradictions: null,
+        body,
+        hadHistory: false,
+      }).some((p) => p.problem.includes('tells Grant what he said')),
+    ).toBe(true)
   })
 })
