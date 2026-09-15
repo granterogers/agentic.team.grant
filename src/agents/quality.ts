@@ -141,6 +141,15 @@ export interface OutputMetadata {
    * `claimsToHaveRead` for why the body has to be in here at all.
    */
   readonly body?: string
+  /**
+   * How many things this job actually DID — child jobs, tasks, consultations.
+   *
+   * Supplied by the worker, which is the only caller that can count them.
+   * Absent means "not counted", and an absent count never accuses anybody:
+   * the action check below only fires on the claims that are false by
+   * CONSTRUCTION, plus the ones this number can disprove.
+   */
+  readonly acted?: number
 }
 
 export interface MetadataProblem {
@@ -155,6 +164,47 @@ export interface MetadataProblem {
  * satisfy every column constraint individually and still describe something
  * impossible, which is how a confident-sounding guess gets published.
  */
+/**
+ * Does this text claim, in the first person, to have SENT something?
+ *
+ * #237. A voice note produced this, and Grant would have believed it:
+ *
+ *     "I've posted a Slack message to the team asking what's blocking
+ *      onboarding. We need their input before we decide anything else.
+ *      A Slack message is going out right now."
+ *
+ * `deliveries` for that job: **zero**. Child jobs: **zero**. Nobody was
+ * contacted, and he would have sat waiting for replies from a team that was
+ * never asked.
+ *
+ * ## Why this one can be strict where `claimsToHaveRead` must be narrow
+ *
+ * An agent answering an instruction has NO outbound path. The office's only
+ * way out is the notifier, which runs after the output exists and is the
+ * thing that turns this very answer into a message. So a first-person claim
+ * to have already posted, sent, emailed or messaged somebody is false at the
+ * moment it is written, every time, by construction — there is nothing to
+ * check it against because there is nothing it could be true of.
+ *
+ * Future tense is left alone. "I'll ask the team" is a plan, and §9's hand-off
+ * makes plans like that real; "I have asked the team" is a claim about the
+ * past that nothing performed.
+ */
+export const claimsToHaveSent = (body: string): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  const claims: RegExp[] = [
+    /\bI(?:'ve|\s+have)?\s+(?:just\s+)?(?:posted|sent|messaged|emailed|e-mailed|pinged|notified|forwarded)\b[^.!?]{0,60}/i,
+    /\b(?:a|the)\s+(?:slack\s+message|message|email|note)\s+(?:is|has)\s+(?:going|gone|been)\s+(?:out|sent)\b[^.!?]{0,60}/i,
+    /\bI\s+(?:have\s+)?(?:asked|contacted|reached\s+out\s+to)\s+(?:the\s+)?(?:team|everyone|them|him|her|\w+)\s+(?:on|in|via|over)\s+(?:slack|telegram|email)\b[^.!?]{0,60}/i,
+  ]
+  for (const re of claims) {
+    const hit = re.exec(text)
+    if (hit !== null) return hit[0].trim().slice(0, 80)
+  }
+  return null
+}
+
 /**
  * Does this text claim, in the first person, to have gone and looked?
  *
@@ -286,6 +336,30 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     The same model did it twice, five days apart, and it reached Grant both
     times.
   */
+  /*
+    A claim of having SENT something, from a job that sent nothing (#237).
+
+    Strict, and it can afford to be: an agent answering an instruction has no
+    outbound path at all. The notifier is the office's only way out and it runs
+    after this, on this very answer. So "I've posted a Slack message to the
+    team" is false at the moment it is written, every time.
+
+    Worse than a fabricated read, which is why it is here: a fabricated read
+    produces a wrong answer Grant can argue with, and a fabricated send leaves
+    him waiting on people who were never asked.
+  */
+  const sentClaim = claimsToHaveSent(m.body ?? '')
+  if (sentClaim !== null) {
+    problems.push({
+      field: 'body',
+      problem:
+        `the text says it sent something ("${sentClaim}"), and an agent answering an ` +
+        'instruction has no way to send anything — the notifier runs after this, on ' +
+        'this answer. Nobody was contacted. Say what you WILL do, or hand the work ' +
+        'over, but do not report a message that does not exist (#237).',
+    })
+  }
+
   const readClaim = claimsToHaveRead(m.body ?? '')
   if (readClaim !== null && (m.evidence === 'inferred' || m.evidence === 'speculative')) {
     problems.push({

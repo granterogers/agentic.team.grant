@@ -83,6 +83,7 @@ import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
+import { withoutNegated } from '../agents/negation.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
   createsSomething,
@@ -227,8 +228,29 @@ async function speaker(
     degrading to "chief-of-staff answers everything" is the very complaint
     this is fixing.
   */
+  /*
+    What the request is NOT about, removed before the subject is looked up
+    (#237).
+
+    `who_knows_about` is a trigram match, so *"i meant the onboarding not the
+    pricing"* matched PRICING and sent the work to the finance director — the
+    one specialist Grant had just excluded. Worse than a miss: a miss lands on
+    the Chief of Staff, and this lands on somebody confidently answering the
+    question he withdrew.
+
+    It also hid the semantic layer, which only runs when the literal matcher
+    finds nobody — so a misleading literal hit is exactly the case where the
+    meaning-reader is not consulted.
+
+    Only the SUBJECT LOOKUP sees the trimmed text. The instruction below is
+    untouched and the model still reads every word, because "not the pricing"
+    is information the answer needs; this decides who is asked, not what they
+    are told.
+  */
+  const forLookup = withoutNegated(instruction)
+
   const literal = await db
-    .execute(`select slug from app.who_knows_about(${lit(instruction)}, 3)`)
+    .execute(`select slug from app.who_knows_about(${lit(forLookup)}, 3)`)
     .then((r) => (r.rows as { slug: string }[]).map((x) => String(x.slug)))
     .catch(() => undefined)
 
@@ -257,7 +279,7 @@ async function speaker(
   const topical =
     literal === undefined || literal.length > 0 || router === null
       ? literal
-      : await nameSubjects(db, router, instruction, {}).catch(() => literal)
+      : await nameSubjects(db, router, forLookup, {}).catch(() => literal)
 
   /*
     Who works on this project (#36, migration 0323).

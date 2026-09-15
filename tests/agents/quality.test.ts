@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canCommit,
   claimsToHaveRead,
+  claimsToHaveSent,
   disagreementNeedsGrant,
   metadataProblems,
   refuseToSend,
@@ -337,5 +338,55 @@ describe('#237: "I checked the notebook" is a claimed read too', () => {
     'According to the brief, the middle tier is forty pounds.',
   ])('leaves %s alone', (text) => {
     expect(claimsToHaveRead(text)).toBeNull()
+  })
+})
+
+describe('#237: a message nobody sent', () => {
+  /*
+    The office told Grant this, and `deliveries` for the job was zero:
+
+      "I've posted a Slack message to the team asking what's blocking
+       onboarding. A Slack message is going out right now."
+
+    Nobody was contacted. He would have waited for replies from a team that was
+    never asked — worse than a fabricated read, which produces a wrong answer
+    he can argue with.
+  */
+  it.each([
+    "I've posted a Slack message to the team asking what's blocking onboarding.",
+    'A Slack message is going out right now.',
+    'I have emailed the three of them for their view.',
+    'I pinged Ruby about it this morning.',
+    'I sent it over to Marcus.',
+  ])('catches %s', (text) => {
+    expect(claimsToHaveSent(text)).not.toBeNull()
+  })
+
+  /*
+    Future tense is a PLAN, not a claim, and §9's hand-off makes plans like
+    these real. Refusing them would push every agent towards saying nothing
+    about what happens next.
+  */
+  it.each([
+    'I will ask the team what is blocking onboarding.',
+    "I'll put this to Marcus and come back to you.",
+    'Shall I ask the team?',
+    'The team should be asked about this.',
+    'I have not asked anyone yet.',
+  ])('leaves %s alone', (text) => {
+    expect(claimsToHaveSent(text)).toBeNull()
+  })
+
+  it('refuses the output, whatever its evidence label says', () => {
+    // Unlike the read check, this does not depend on `evidence`: there is no
+    // value of that column which makes an unsent message sent.
+    const problems = metadataProblems({
+      confidence: 'high',
+      evidence: 'verified',
+      sources: ['job:abc'],
+      contradictions: null,
+      body: "I've posted a Slack message to the team.",
+    })
+    expect(problems.some((p) => p.field === 'body')).toBe(true)
   })
 })
