@@ -61,9 +61,24 @@ const run = Date.now().toString(36)
 
 /** The subject. A real agent, because the boundary is about real agents. */
 const WHO = 'growth-director'
-/** Two tools from one family. The whole of decision 1 is that these differ. */
-const HELD = 'github.read'
-const NOT_HELD = 'github.write'
+/*
+  Two tools that differ. The whole of decision 1 is that they differ.
+
+  `github.read` stood here until 0370 withdrew it — it was advertised to all
+  eight agents with no route from a user request, and this control went red on
+  a correct change. CLAUDE.md records the same thing happening when 0298
+  disabled `web.search`: **pick a control subject the change under test cannot
+  move.**
+
+  `db.read` is that subject. It is level 0, it is how every handler reads its
+  own database, and the office cannot function without it — so no capability
+  audit will ever withdraw it. `db.delete` is its refused neighbour for the
+  same structural reason: it is level 3 and off by policy, and a policy that
+  let the office delete rows on request is not a change this suite would
+  survive anyway.
+*/
+const HELD = 'db.read'
+const NOT_HELD = 'db.delete'
 
 const mayUse = async (tool: string, who = WHO): Promise<boolean> =>
   (await one(`select app.staff_may_use(${lit(who)}, ${lit(tool)}) as m`)).m === true

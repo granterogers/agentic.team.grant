@@ -267,9 +267,17 @@ await refuses(
   const may = await one(`select app.staff_may_use('operations-director', 'github.write') as m`)
   ok('but the answer to may-I does not move', may.m === false)
 
-  // And the tool the skill also would have been fine with is still held, so the
-  // check above is not passing because everything is denied.
-  const held = await one(`select app.staff_may_use('operations-director', 'github.read') as m`)
+  /*
+    And a tool that IS held is still held, so the check above is not passing
+    because everything is denied.
+
+    `github.read` stood here until 0370 withdrew it as advertised-and-
+    unreachable, and this control went red on a correct change — the third
+    instance of the staleness CLAUDE.md records. `db.read` cannot move: it is
+    how every handler reads its own database and the office does not run
+    without it.
+  */
+  const held = await one(`select app.staff_may_use('operations-director', 'db.read') as m`)
   ok('while a tool that IS held is still held', held.m === true)
 
   await db.execute(

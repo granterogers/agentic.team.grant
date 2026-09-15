@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-15T02:23:32.913Z",
+  "at": "2026-09-15T02:27:17.067Z",
   "cells": [
     {
       "agent": "chief-of-staff",
@@ -55,11 +55,11 @@
       "agent": "chief-of-staff",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "chief-of-staff",
@@ -75,11 +75,11 @@
       "agent": "chief-of-staff",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "chief-of-staff",
@@ -115,11 +115,11 @@
       "agent": "chief-of-staff",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "chief-of-staff",
@@ -265,11 +265,11 @@
       "agent": "communications-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "communications-director",
@@ -285,11 +285,11 @@
       "agent": "communications-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "communications-director",
@@ -325,11 +325,11 @@
       "agent": "communications-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "communications-director",
@@ -475,11 +475,11 @@
       "agent": "finance-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "finance-director",
@@ -495,11 +495,11 @@
       "agent": "finance-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "finance-director",
@@ -535,11 +535,11 @@
       "agent": "finance-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "finance-director",
@@ -685,11 +685,11 @@
       "agent": "growth-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "growth-director",
@@ -705,11 +705,11 @@
       "agent": "growth-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "growth-director",
@@ -745,11 +745,11 @@
       "agent": "growth-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "growth-director",
@@ -895,11 +895,11 @@
       "agent": "operations-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "operations-director",
@@ -915,11 +915,11 @@
       "agent": "operations-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "operations-director",
@@ -955,11 +955,11 @@
       "agent": "operations-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "operations-director",
@@ -1105,11 +1105,11 @@
       "agent": "quality-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "quality-director",
@@ -1125,11 +1125,11 @@
       "agent": "quality-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "quality-director",
@@ -1165,11 +1165,11 @@
       "agent": "quality-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "quality-director",
@@ -1315,11 +1315,11 @@
       "agent": "research-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "research-director",
@@ -1335,11 +1335,11 @@
       "agent": "research-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "research-director",
@@ -1375,11 +1375,11 @@
       "agent": "research-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "research-director",
@@ -1525,11 +1525,11 @@
       "agent": "strategy-director",
       "tool": "github.read",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — reached through the MCP server, which logs every call"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
     },
     {
       "agent": "strategy-director",
@@ -1545,11 +1545,11 @@
       "agent": "strategy-director",
       "tool": "gmail.draft",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 2,
-      "status": "advertised-only",
-      "why": "L2, never reached by any traffic — src/google/mail.ts writes a draft; no canonical table records one yet"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
     },
     {
       "agent": "strategy-director",
@@ -1585,11 +1585,11 @@
       "agent": "strategy-director",
       "tool": "note.create",
       "granted": true,
-      "advertised": true,
+      "advertised": false,
       "reachable": false,
-      "atLevel": 1,
-      "status": "advertised-only",
-      "why": "L1, never reached by any traffic — real jobs of kind notebook.push_document"
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
     },
     {
       "agent": "strategy-director",

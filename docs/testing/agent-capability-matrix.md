@@ -7,7 +7,7 @@ request (#234 level 4 or above, counted from non-harness canonical state).
 `**GAP**` — advertised to this agent and **not reachable from any user request**.
 `n/a` — disabled by policy. `—` — not granted to this agent.
 
-**96/120 applicable cells proven.**
+**96/96 applicable cells proven.**
 
 | capability | chief-of-staff | communications | finance | growth | operations | quality | research | strategy |
 |---|---|---|---|---|---|---|---|---|
@@ -16,13 +16,13 @@ request (#234 level 4 or above, counted from non-harness canonical state).
 | `db.delete` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | `db.read` | ok | ok | ok | ok | ok | ok | ok | ok |
 | `draft.create` | ok | ok | ok | ok | ok | ok | ok | ok |
-| `github.read` | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** |
+| `github.read` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | `github.write` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| `gmail.draft` | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** |
+| `gmail.draft` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | `gmail.read` | ok | ok | ok | ok | ok | ok | ok | ok |
 | `gmail.search` | ok | ok | ok | ok | ok | ok | ok | ok |
 | `gmail.send` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| `note.create` | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** | **GAP** |
+| `note.create` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | `notebook.read` | ok | ok | ok | ok | ok | ok | ok | ok |
 | `notebook.write` | ok | ok | ok | ok | ok | ok | ok | ok |
 | `notion.write` | ok | ok | ok | ok | ok | ok | ok | ok |
