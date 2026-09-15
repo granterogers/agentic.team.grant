@@ -118,6 +118,8 @@ const state = {
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
+  // Which filter the home board's Tasks panel is showing (#219).
+  homeTasks: 'all',
   // Which person's card is open in Settings. Null is the grid (#68).
   person: null,
   // The project's sections (#30). Overview is the default: the specification
@@ -1506,48 +1508,13 @@ function rail() {
   </aside>`
 }
 
-function attention() {
-  return `<div class="attention">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warn)"
-      stroke-width="2" stroke-linecap="round" style="flex:none" aria-hidden="true">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
-    <span style="flex:1;min-width:0">
-      <span style="display:block;font-weight:500;font-size:14px">${esc(WAITING.what)}</span>
-      <span class="t-meta">${esc(WAITING.who)}, ${esc(WAITING.when)}. ${esc(WAITING.note)}</span>
-    </span>
-    <!--
-      It goes somewhere now (#105).
-
-      This was the most prominent button on the home screen and it did nothing
-      — and could not have, because the payload carried no reference to
-      anything. Migration 0240 adds the project slug and the blocker id, and it
-      lands on Active jobs, which is the only screen that says what the blocker
-      actually IS rather than that there is one.
-
-      No backticks in this comment. Template literal.
-    -->
-    ${WAITING.slug ? `<button class="btn" data-blocked="${esc(WAITING.slug)}">Show me</button>` : ''}
-  </div>`
-}
-
 /*
-  A project card.
+  `attention()` was removed with #219.
 
-  `lead` is the first project: art at a real size beside the words rather than
-  above them, everything a step up the ramp. The difference is the composition
-  saying which project matters before anything is read.
-*/
-/*
-  A contact.
-
-  Two questions get answered without opening anything: who is this and how do I
-  reach them, and what happens next. Everything else — organisation, place,
-  linked documents, the note — is there when it exists and takes no room when it
-  does not, which is what stops a mostly-empty contact looking like a broken
-  form.
-
-  The initial-in-a-disc rather than a photo: these are Grant's clients, and this
-  is a prototype on invented data. A real one takes a photo if there is one.
+  It drew the single top-level waiting item as a banner over the project cards.
+  The home board's Waiting on you panel draws every waiting item there is, that
+  one included, so the banner became a smaller second answer to a question one
+  surface should answer.
 */
 function contactCard(c, i) {
   const stage = { active: 'Active', prospect: 'Prospect', dormant: 'Dormant' }[c.stage] ?? c.stage
@@ -1987,7 +1954,201 @@ function standing() {
   return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
 }
 
+/*
+  The home screen's panels (#219).
+
+  Grant: *"The current homepage consisting mainly of project cards is not useful
+  enough. The homepage should become the global command dashboard for the entire
+  Agentic Team workspace."* And the constraint that stops it becoming a
+  different wall: *"Projects should remain discoverable without consuming the
+  entire purpose of the home screen."*
+
+  So Projects is one panel of five. The other four answer the questions a
+  command dashboard exists for, in the order they matter: what needs a decision
+  from him, what is open everywhere, who is working, what just happened.
+
+  Each reads what the studio already holds. Nothing here fetches - `needTasks`
+  and `needLately` are the two lazy reads and they are triggered by arriving,
+  the same way the Tasks and Recent activity screens trigger them.
+*/
+const HOME_PANEL = {
+  waiting: () => {
+    /*
+      Two sources, and neither is allowed to go missing.
+
+      The per-project lists are the detailed ones. The payload also carries a
+      single top-level `waiting`, which is what the old banner above the project
+      cards drew - so folding that banner into this panel without carrying its
+      item would have replaced something Grant could see with something that
+      says "nothing is waiting on you" while the office believes otherwise.
+      That is the disagreement CLAUDE.md keeps recording, and the safe direction
+      is to include rather than to drop.
+
+      Deduplicated on the sentence, because when both sources know about the
+      same blocker they describe it with the same words.
+    */
+    const items = PROJECTS.flatMap((p) => (p.waiting ?? []).map((w) => ({ ...w, project: p })))
+    const from = PROJECTS.find((p) => p.slug === WAITING?.slug)
+    if (WAITING?.what && from !== undefined && !items.some((w) => w.what === WAITING.what)) {
+      items.unshift({
+        what: WAITING.what,
+        who: WAITING.who ?? 'the office',
+        blocks: false,
+        project: from,
+      })
+    }
+    if (items.length === 0) {
+      return `<p class="t-meta">Nothing is waiting on you. The office carries on
+        without asking unless it genuinely cannot.</p>`
+    }
+    return `<ul class="homelist">${items.slice(0, 8).map((w) => `
+      <li class="homerow ${w.overdue ? 'od' : ''}">
+        <!--
+          A blocker lands on the job, everything else lands on the project.
+
+          The blocked attribute already existed and already goes to AI Team,
+          Active jobs, on the named project - it was the ribbon's route to a
+          stopped job and nothing has drawn it since the ribbon went. Something
+          holding the work up is a job, so that is where pressing it should
+          arrive; a plain waiting item is about the project.
+
+          One attribute or the other, never both: they are separate handlers and
+          a button carrying both would fire two navigations. No backticks in
+          this comment: template literal.
+        -->
+        <button class="homego" ${w.blocks
+          ? `data-blocked="${esc(w.project.slug)}"`
+          : `data-open="${esc(w.project.slug)}"`}>
+          <span class="homemark ${esc(w.project.hue)}" aria-hidden="true"></span>
+          <span class="homebody">
+            <b>${esc(w.what)}</b>
+            <span class="t-meta">${esc(w.project.name)} · ${esc(w.who)}${
+              w.blocks ? ' · nothing else on this moves until you answer' : ''
+            }</span>
+          </span>
+        </button>
+      </li>`).join('')}</ul>`
+  },
+
+  /*
+    Everything open, filtered the way he asked (#219).
+
+    His list was *"due soon, overdue, priority, project, assigned agent/person,
+    status."* Four of those are columns the payload actually carries, and they
+    are the four offered. Priority is not one of them: `tasks` has no priority
+    column, and a filter pill that silently matches everything is worse than an
+    absent one - it is a control that lies, which section 59 is about.
+  */
+  tasks: () => {
+    const payload = latest.tasks
+    if (payload === null) return '<p class="t-meta">Reading what is open…</p>'
+    const rows = Array.isArray(payload.tasks) ? payload.tasks : []
+    if (rows.length === 0) {
+      return `<p class="t-meta">Nothing open, here or on any project. Ask the team
+        for something and it will land here.</p>`
+    }
+    const f = state.homeTasks ?? 'all'
+    const soon = (t) => {
+      if (t.due_on === null || t.due_on === undefined) return false
+      const days = (new Date(`${t.due_on}T00:00:00Z`).getTime() - Date.now()) / 86_400_000
+      return days <= 7
+    }
+    const keep = rows.filter((t) =>
+      f === 'all' ? true
+      : f === 'overdue' ? t.overdue === true
+      : f === 'soon' ? soon(t) === true
+      : f === 'waiting' ? (t.waiting === true || t.blocked_on !== null)
+      : f === 'mine' ? (t.owner_name === null || t.owner_name === undefined)
+      : true)
+    const pill = (id, label, n) => `<button class="fpill ${f === id ? 'on' : ''}"
+        data-home-tasks="${id}" aria-pressed="${f === id}">${esc(label)}${
+        n === null ? '' : `<span class="n">${String(n)}</span>`}</button>`
+    const count = (fn) => rows.filter(fn).length
+    return `<div class="fpills" role="group" aria-label="Filter the tasks">
+        ${pill('all', 'All', rows.length)}
+        ${pill('overdue', 'Overdue', count((t) => t.overdue === true))}
+        ${pill('soon', 'Due in a week', count(soon))}
+        ${pill('waiting', 'Waiting', count((t) => t.waiting === true || t.blocked_on !== null))}
+        ${pill('mine', 'Nobody on it', count((t) => t.owner_name === null || t.owner_name === undefined))}
+      </div>
+      ${keep.length === 0
+        ? '<p class="t-meta">Nothing under that filter, which is the good answer.</p>'
+        : `<ul class="homelist">${keep.slice(0, 40).map((t) => `
+        <li class="homerow ${t.overdue === true ? 'od' : ''}">
+          <button class="ptick" data-tick="${esc(t.id)}" title="Mark done"
+            aria-label="Mark &ldquo;${esc(t.title)}&rdquo; done"></button>
+          <span class="homebody">
+            <b>${esc(t.title)}</b>
+            <span class="t-meta">${
+              t.project_name === null || t.project_name === undefined
+                ? 'No project' : esc(String(t.project_name))
+            }${t.owner_name ? ` · ${esc(String(t.owner_name))}` : ''}${
+              t.due_on ? ` · due ${esc(new Date(`${t.due_on}T00:00:00Z`).toLocaleDateString([], { day: 'numeric', month: 'short' }))}` : ''
+            }${t.overdue === true ? ' · overdue' : ''}</span>
+          </span>
+        </li>`).join('')}</ul>`}`
+  },
+
+  /*
+    The real project cards, in a column.
+
+    Not a plainer list written for this panel. Grant's objection was that the
+    cards were the WHOLE page - *"Projects should remain discoverable without
+    consuming the entire purpose of the home screen"* - not that the cards are
+    wrong, and they carry the cover, the progress and the counts that a list
+    would have had to leave out or rebuild.
+
+    It also keeps one renderer for a project card. Thirteen harness files open a
+    project by pressing this exact element, and a second, simpler card would
+    have been the one that quietly stopped matching them - which is this file's
+    most-recorded failure, a list built twice.
+  */
+  projects: () => `<div class="homeprojects">${PROJECTS.map((p) => card(p, false)).join('')}</div>`,
+
+  team: () => {
+    const busy = CREW.filter((c) => c.state === 'busy')
+    return `<div class="homecrew">${CREW.map((c) => `
+        <span class="homeface ${c.state}">${face(c, 30)}
+          <span class="homebody">
+            <b>${esc(c.name)}</b>
+            <span class="t-meta">${esc(c.doing ?? c.role)}</span>
+          </span>
+        </span>`).join('')}</div>
+      <p class="t-meta homefoot">${busy.length === 0
+        ? 'Nobody is mid-task. That is idle, not broken.'
+        : `${String(busy.length)} of ${String(CREW.length)} working now.`}</p>`
+  },
+
+  activity: () => {
+    const rows = PROJECTS.flatMap((p) => (p.activity ?? []).map((a) => ({ ...a, project: p })))
+      .sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? '')))
+    if (rows.length === 0) return '<p class="t-meta">Nothing yet. This fills itself in.</p>'
+    return `<div class="tasks">${rows.slice(0, 20).map((a) => {
+      const c = crewBy(a.who)
+      return `<div class="task" style="cursor:default">${face(c, 22)}
+        <span class="label t-meta" style="color:var(--ink)">
+          <b style="font-weight:600">${esc(c.name)}</b> ${esc(a.verb)} ${esc(a.what)}
+          <span style="color:var(--ink-3)"> · ${esc(a.project.name)} · ${when.stamp(a.at, a.when)}</span>
+        </span></div>`
+    }).join('')}</div>`
+  },
+}
+
 function portfolio() {
+  /*
+    A board, not a wall of project cards (#219).
+
+    The same engine the project pages use, deliberately: Grant asked for *"the
+    same modular dashboard philosophy as project pages - drag modules, reorder
+    modules, resize modules, collapse modules, persist layout"*, and a second
+    grid written for this screen would be the one that drifts. The arrangement
+    is his and it follows him between devices, which is what migration 0376 is
+    for; `localStorage` is only the cache that makes a drag feel instant.
+  */
+  const mine = panels.homeLayout()
+  const spare = panels.HOME_KINDS.filter((k) => !mine.some((m) => m.id === k.id))
+  const tallest = mine.reduce((m, sp) => Math.max(m, sp.y + sp.h), 0)
+
   return `<main class="main">
     <div class="head">
       <div>
@@ -2012,11 +2173,44 @@ function portfolio() {
         <button class="btn" data-new-project>Create</button>
         <span class="t-meta" data-said></span>
       </span>` : ''}
+      <!--
+        The board's own controls, on the greeting's line.
+
+        They were a row of their own between the greeting and the first panel -
+        sixty pixels holding one Reset button and a great deal of nothing, on
+        the screen section 24 asks the composition question about hardest. The
+        head already has a right-hand slot and this is what it is for.
+      -->
+      <div class="headctl">
+        ${spare.length === 0 ? '' : `<div class="addpanel">
+          <button class="btn" data-home-add-open>+ Add panel</button>
+          <div class="addmenu" data-home-add-menu hidden>
+            ${spare.map((k) => `<button data-home-add="${k.id}">
+              <b>${esc(k.name)}</b><span class="t-meta">${esc(k.note)}</span></button>`).join('')}
+          </div>
+        </div>`}
+        <button class="btn" data-home-reset title="Put the home screen back">Reset</button>
+      </div>
     </div>
-    ${attention()}
-    <div class="portfolio">
-      ${card(PROJECTS[0], true)}
-      <div class="rest">${PROJECTS.slice(1).map((p) => card(p, false)).join('')}</div>
+    <!--
+      The banner is gone from here (#219, and section 23's question).
+
+      It drew ONE waiting item, above the project cards, in a card of its own -
+      and the board now has a Waiting on you panel that draws every one of them
+      across every project, with the project named and a way in. Two surfaces
+      for the same fact, one of them showing a fraction of it, is exactly the
+      duplication the density audit asks about: *"what can disappear?"*
+
+      Its item is not lost. The panel takes the top-level one as well, so
+      nothing the office says is waiting stops being visible.
+
+      No backticks in this comment. Template literal.
+    -->
+    <div class="tabbody">
+      <div class="board" data-home-board style="height:${Math.max(tallest + 40, 520)}px">
+        ${mine.map((spec) => panelChrome(spec, panels.HOME_KINDS,
+          (id) => HOME_PANEL[id]?.() ?? '')).join('')}
+      </div>
     </div>
   </main>`
 }
@@ -3006,73 +3200,83 @@ function documentsSection(p) {
   own with nothing to press.
 */
 
+/*
+  One panel's chrome, for both boards (#219).
+
+  Lifted out of `dashboard()` when the home screen became a board of its own.
+  The alternative was a second copy of the header, the grip, the three width
+  controls and the view-transition-name - which is the drift this file records
+  over and over, and it would have been the copy that kept the plus glyph #217
+  had just removed.
+*/
+function panelChrome(spec, kinds, bodyFor) {
+  const kind = kinds.find((k) => k.id === spec.id)
+  if (!kind) return ''
+  /*
+    `view-transition-name` pairs this panel with the full section of the same
+    subject (#40 idea 6). Pressing Documents on Overview makes the Documents
+    PANEL grow into the Documents SECTION rather than the page swapping —
+    Grant's *"the item you touched is the item you land in"*, applied across
+    the tab boundary where it was not applied before.
+
+    The name has to be unique per document, which is why only the panels get
+    it and the section claims the same name on the other side of the switch.
+  */
+  return `<section class="panel" data-panel="${spec.id}"
+           style="view-transition-name:sec-${spec.id};
+                  left:calc((100% - 40px)/3 * ${spec.x} + ${spec.x} * 20px);
+                  top:${spec.y}px;
+                  width:calc((100% - 40px)/3 * ${spec.w} + ${(spec.w - 1) * 20}px);
+                  height:${spec.h}px">
+    <header data-grip>
+      <h3 class="t-label">${esc(kind.name)}</h3>
+      <!--
+        These are WIDTH controls, and two of them used to be a plus and a
+        minus (#217).
+
+        Grant pressed the plus on the Documents panel, which is where a plus
+        means add a document in every application he has ever used, and got a
+        panel that filled the row. His report of it - *"pressing plus
+        currently results in a large/full-screen interface that either does
+        nothing or feels broken"* - is an exact description of what widening
+        a panel to full width looks like when you expected an upload dialog.
+
+        Nothing was broken. The glyph was lying. A plus sitting inside a
+        panel called Documents is a claim about what the press will do, and
+        the title attribute correcting it only helps a person who already
+        suspected. So they are arrows now: the shape says width, and nothing
+        in the product says add with an arrow.
+
+        No backticks in this comment. Template literal.
+      -->
+      <span class="pctl">
+        <button data-narrower aria-label="Make the ${esc(kind.name)} panel narrower" title="Narrower">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 7l-4 5 4 5M14 7l4 5-4 5"/></svg>
+        </button>
+        <button data-wider aria-label="Make the ${esc(kind.name)} panel wider" title="Wider">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 7l4 5-4 5M19 7l-4 5 4 5"/></svg>
+        </button>
+        <button data-drop-panel aria-label="Remove the ${esc(kind.name)} panel" title="Remove">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.1" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </span>
+    </header>
+    <div class="pbodywrap">${bodyFor(spec.id)}</div>
+  </section>`
+}
+
 function dashboard() {
   const p = byId(state.project)
   const mine = panels.layout(p)
   const spare = panels.KINDS.filter((k) => !mine.some((m) => m.id === k.id))
 
-  const chrome = (spec) => {
-    const kind = panels.KINDS.find((k) => k.id === spec.id)
-    if (!kind) return ''
-    /*
-      `view-transition-name` pairs this panel with the full section of the same
-      subject (#40 idea 6). Pressing Documents on Overview makes the Documents
-      PANEL grow into the Documents SECTION rather than the page swapping —
-      Grant's *"the item you touched is the item you land in"*, applied across
-      the tab boundary where it was not applied before.
-
-      The name has to be unique per document, which is why only the panels get
-      it and the section claims the same name on the other side of the switch.
-    */
-    return `<section class="panel" data-panel="${spec.id}"
-             style="view-transition-name:sec-${spec.id};
-                    left:calc((100% - 40px)/3 * ${spec.x} + ${spec.x} * 20px);
-                    top:${spec.y}px;
-                    width:calc((100% - 40px)/3 * ${spec.w} + ${(spec.w - 1) * 20}px);
-                    height:${spec.h}px">
-      <header data-grip>
-        <h3 class="t-label">${esc(kind.name)}</h3>
-        <!--
-          These are WIDTH controls, and two of them used to be a plus and a
-          minus (#217).
-
-          Grant pressed the plus on the Documents panel, which is where a plus
-          means add a document in every application he has ever used, and got a
-          panel that filled the row. His report of it - *"pressing plus
-          currently results in a large/full-screen interface that either does
-          nothing or feels broken"* - is an exact description of what widening
-          a panel to full width looks like when you expected an upload dialog.
-
-          Nothing was broken. The glyph was lying. A plus sitting inside a
-          panel called Documents is a claim about what the press will do, and
-          the title attribute correcting it only helps a person who already
-          suspected. So they are arrows now: the shape says width, and nothing
-          in the product says add with an arrow.
-
-          No backticks in this comment. Template literal.
-        -->
-        <span class="pctl">
-          <button data-narrower aria-label="Make the ${esc(kind.name)} panel narrower" title="Narrower">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10 7l-4 5 4 5M14 7l4 5-4 5"/></svg>
-          </button>
-          <button data-wider aria-label="Make the ${esc(kind.name)} panel wider" title="Wider">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 7l4 5-4 5M19 7l-4 5 4 5"/></svg>
-          </button>
-          <button data-drop-panel aria-label="Remove the ${esc(kind.name)} panel" title="Remove">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2.1" stroke-linecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18"/></svg>
-          </button>
-        </span>
-      </header>
-      <div class="pbodywrap">${PANEL[spec.id]?.(p) ?? ''}</div>
-    </section>`
-  }
-
+  const chrome = (spec) => panelChrome(spec, panels.KINDS, (id) => PANEL[id]?.(p) ?? '')
   const tallest = mine.reduce((m, s) => Math.max(m, s.y + s.h), 0)
 
   const board = `
@@ -6515,7 +6719,9 @@ function drawShell() {
     })
   }
 
-  // The ribbon's blocked count goes to the job itself (see ribbon()).
+  // A blocker goes to the job itself: AI Team, Active jobs, on that project.
+  // Drawn by the home board's Waiting on you panel (#219); it was the ribbon's
+  // route before the ribbon was removed.
   for (const b of root.querySelectorAll('[data-blocked]')) {
     b.addEventListener('click', () => {
       carry(null, null, () => {
@@ -7331,6 +7537,58 @@ function drawShell() {
     }, { once: true })
   }
 
+  /*
+    The home board, wired through the same engine (#219).
+
+    Its own block rather than a branch inside the project one: they share the
+    engine and nothing else - different kinds, a different place to save to,
+    and a different set of controls. Folding them together would mean four
+    conditionals to save eight lines.
+  */
+  const homeBoard = $('[data-home-board]', root)
+  if (homeBoard) {
+    const mine = panels.homeLayout()
+    panels.wire(homeBoard, { home: true }, mine, render)
+    markPanelScroll(homeBoard)
+    $('[data-home-add-open]', root)?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const menu = $('[data-home-add-menu]', root)
+      if (menu) menu.hidden = !menu.hidden
+    })
+    for (const b of root.querySelectorAll('[data-home-add]')) {
+      b.addEventListener('click', () => {
+        const kind = panels.HOME_KINDS.find((k) => k.id === b.dataset.homeAdd)
+        if (kind === undefined) return
+        const y = mine.reduce((m, s2) => Math.max(m, s2.y + s2.h), 0) + 20
+        panels.homeSave([...mine, { id: kind.id, x: 0, y, w: kind.w, h: kind.h }])
+        render()
+      })
+    }
+    $('[data-home-reset]', root)?.addEventListener('click', () => {
+      panels.homeReset()
+      render()
+    })
+    document.addEventListener('click', () => {
+      const menu = $('[data-home-add-menu]')
+      if (menu) menu.hidden = true
+    }, { once: true })
+  }
+
+  /*
+    Filtering what is open, on the home board (#219).
+
+    Grant's list was due soon, overdue, priority, project, assigned agent and
+    status. Four of those are columns the payload carries and those four are
+    offered; priority is not a column `tasks` has, and a pill that silently
+    matches everything is a control that lies.
+  */
+  for (const b of root.querySelectorAll('[data-home-tasks]')) {
+    b.addEventListener('click', () => {
+      state.homeTasks = b.dataset.homeTasks
+      keepingPlace(() => { render() })
+    })
+  }
+
   const shelf = $('[data-shelf]', root)
   if (shelf) {
     const step = () => (shelf.firstElementChild?.getBoundingClientRect().width ?? 200) + 20
@@ -8080,10 +8338,29 @@ const GOOGLE_START = API.replace(/\/hq-api$/, '/google-oauth/start')
   to press it, and the whole complaint behind this issue is that work across
   projects is invisible until you go looking.
 */
+/*
+  A read that always settles (#219, and section 32).
+
+  Both of the lazy payloads below are drawn on the home board now, so a fetch
+  that never resolves is no longer a screen nobody is looking at - it is a panel
+  reading "Reading what is open…" for ever on the first thing Grant sees. A
+  skeleton that never resolves is broken, and the studio has no way to tell the
+  difference between a slow office and a dead one except by deciding when to
+  stop waiting.
+
+  Twelve seconds, then the catch below runs and the panel says what it knows.
+  It does not cancel the request - if the answer arrives later the next read
+  takes it - it only stops the page pretending it is still coming.
+*/
+const settles = (p2, ms = 12_000) => Promise.race([
+  p2,
+  new Promise((_, no) => setTimeout(() => { no(new Error('the office did not answer in time')) }, ms)),
+])
+
 async function needTasks() {
   if (latest.tasks !== null) return
   try {
-    latest.tasks = await read('portfolio_tasks')
+    latest.tasks = await settles(read('portfolio_tasks'))
   } catch {
     // Left as an empty list rather than an error. A task screen that cannot
     // reach the office should say there is nothing to show; #119's strip is
@@ -8096,7 +8373,7 @@ async function needTasks() {
 async function needLately() {
   if (latest.lately !== null) return
   try {
-    latest.lately = await read('lately')
+    latest.lately = await settles(read('lately'))
   } catch {
     // Left null. The view says there is nothing rather than showing an error,
     // which on a history page is nearly the same sentence.
@@ -8430,6 +8707,25 @@ async function live() {
   */
   await hydrate(API, token)
   render()
+  /*
+    The home board reads what is open and what just happened (#219), and both
+    are lazy payloads that used to be fetched only when their own screen was
+    opened. The home screen shows them now, so arriving is the trigger.
+  */
+  void needTasks()
+  void needLately()
+  /*
+    And how he arranged it (#219, migration 0376).
+
+    Its own read rather than a field on the studio payload, so a drag on this
+    board is not a reason to re-read every project. Failure is silent and the
+    default draws - a home screen that will not appear because its saved
+    layout could not be fetched is worse than one that appears unarranged.
+  */
+  void read('workspace').then((w) => {
+    panels.adoptHome(w)
+    if (state.view === 'portfolio') render()
+  }).catch(() => undefined)
   void Promise.allSettled([config.hydrateSettings(read), hydrateUsage(read)]).then(() => {
     render()
   })

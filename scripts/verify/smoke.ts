@@ -69,6 +69,38 @@ const steps: [string, string][] = [
 ]
 const failures: string[] = []
 
+/*
+  The #218 boundary catches a render throw, which means `pageerror` no longer
+  sees one.
+
+  That is the boundary working, and it made this suite worse at its own job: a
+  panel renderer that threw used to surface here as an uncaught error, and now
+  it surfaces as a tidy apology screen and a selector that does not resolve
+  thirty seconds later. The first time it happened the message was "waiting for
+  locator('.project[data-open=...]')", four steps from the cause.
+
+  So the failure state is checked for explicitly, everywhere, and it prints the
+  message the boundary captured - which names the real fault in one line.
+*/
+const notBroken = async (where: string): Promise<void> => {
+  const broke = await page.locator('.broke').count()
+  if (broke === 0) return
+  const why = await page.locator('.brokewhy').first().textContent()
+  failures.push(`${where}: the studio drew its failure state — ${String(why ?? '').trim()}`)
+}
+
+await notBroken('first paint')
+/*
+  Stop here if the shell did not draw. Everything below clicks something, and a
+  click against a page that is not there times out after thirty seconds and
+  reports the selector rather than the reason.
+*/
+if (failures.length > 0) {
+  console.error(`smoke FAILED\n  ${failures.join('\n  ')}`)
+  await browser.close()
+  server.close()
+  process.exit(1)
+}
 for (const [what, sel] of steps) {
   const n = await page.locator(sel).count()
   if (n === 0) failures.push(`${what}: no ${sel}`)
@@ -82,6 +114,7 @@ for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'source
   await page.locator(`[data-tab="${tab}"]`).click()
   await page.waitForTimeout(250)
   if ((await page.locator('.tabbody').count()) === 0) failures.push(`section ${tab}: empty`)
+  await notBroken(`section ${tab}`)
 }
 
 await page.locator('[data-settings]').first().click()

@@ -233,6 +233,15 @@ const SECTIONS: Readonly<
   /** The named actions, so no page hard-codes them (#27). */
   actions: { fn: 'asset_actions' },
   /*
+    How the home screen is arranged (#219, migration 0376).
+
+    Its own section rather than a field on `studio`, because it is read once on
+    the way in and written whenever a panel moves - and folding it into the
+    payload every project switch carries would make a drag on the home board a
+    reason to re-read every project.
+  */
+  workspace: { fn: 'hq_workspace_layout' },
+  /*
     Project Settings (#36, migrations 0323-26).
 
     Three sections rather than one, and not for tidiness: each is a different
@@ -396,6 +405,22 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   */
   dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
   dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
+  /*
+    And the home screen's own (#219, migration 0376).
+
+    Same argument as the pair above, one scope up. Grant asked for the homepage
+    to use "the same modular dashboard philosophy as project pages", persistence
+    included, and 0250's sentence about more than one device is truest about the
+    screen he lands on.
+
+    No slug: there is exactly one home screen, keyed on the person. A nullable
+    project on the existing table would have been the obvious move and is the
+    one CLAUDE.md warns about - two NULLs are distinct in a unique index, so the
+    conflict target would have stopped constraining anything for precisely these
+    rows.
+  */
+  workspace_layout_set: { fn: 'hq_workspace_layout_set', required: ['p_panels'] },
+  workspace_layout_reset: { fn: 'hq_workspace_layout_reset', required: [] },
   // Bringing someone in (0233). The other half of `staff_retire`, which has
   // existed alone since 0079 — the studio had a "+ Bring someone in" button
   // wired to nothing at all.

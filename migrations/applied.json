@@ -373,5 +373,6 @@
   "0372_the_office_says_when_it_cannot_think.sql": "1241e0d6046049a584f009f73950a4bfa2bd3d91bb4c8f9036ed9ff17ecf350f",
   "0373_a_budget_is_a_number_the_registry_holds.sql": "b2eca16d072bcc3d0a9c24b808d5bab0d89f497dad2fa4906f729b7d32e47aa6",
   "0374_a_fallback_that_is_awake.sql": "2f4c4245bf5515d999761cf6d50d46b33e5760600aedf7ae1b4dbe8dd2d19b17",
-  "0375_the_words_a_legal_risk_is_described_in.sql": "018838169c670dad84902cec18da6bff2b9034cd57ea890d02125fd347ad600a"
+  "0375_the_words_a_legal_risk_is_described_in.sql": "018838169c670dad84902cec18da6bff2b9034cd57ea890d02125fd347ad600a",
+  "0376_the_home_screen_is_an_arrangement_too.sql": "97040d5473bdfcfff7ac42323c5a780a101ec144736fdf6486231cd66143d841"
 }

@@ -115,6 +115,91 @@ export const KINDS = [
   { id: 'note', name: 'Note', note: 'Somewhere to write', w: 1, h: 220 },
 ]
 
+/*
+  The home screen's panels (#219, migration 0376).
+
+  Grant: *"The current homepage consisting mainly of project cards is not
+  useful enough. The homepage should become the global command dashboard for
+  the entire Agentic Team workspace... Projects should remain discoverable
+  without consuming the entire purpose of the home screen."*
+
+  So Projects is ONE panel among five rather than the page, and the four
+  beside it are the things a command dashboard is for: what is waiting on him,
+  what is open across everything, who is working right now, and what just
+  happened.
+
+  A separate list from `KINDS` on purpose. A project's Documents panel has no
+  meaning without a project, and an "everything, everywhere" version of it
+  would be a different panel wearing the same name - which is 0311's lesson
+  about two words for one thing, with the sign reversed.
+*/
+export const HOME_KINDS = [
+  { id: 'waiting', name: 'Waiting on you', note: 'Decisions the office cannot make', w: 2, h: 220 },
+  { id: 'tasks', name: 'Tasks', note: 'Everything open, across every project', w: 2, h: 420 },
+  { id: 'projects', name: 'Projects', note: 'All of them, and how each is doing', w: 1, h: 420 },
+  { id: 'team', name: 'The team', note: 'Who is working now', w: 1, h: 280 },
+  { id: 'activity', name: 'Recent activity', note: 'What the office did, most recent first', w: 1, h: 320 },
+]
+
+/*
+  The default home arrangement.
+
+  What needs him first, widest and at the top; everything open under it; the
+  projects beside them rather than instead of them. Unlike a project's default
+  this does not vary with the data - the home screen exists before there is
+  anything on it, and a first-run dashboard that draws two panels teaches
+  nothing about what it will become.
+*/
+const HOME_DEFAULT = [
+  { id: 'waiting', x: 0, y: 0, w: 2, h: 220 },
+  { id: 'projects', x: 2, y: 0, w: 1, h: 420 },
+  { id: 'tasks', x: 0, y: 244, w: 2, h: 420 },
+  { id: 'team', x: 2, y: 444, w: 1, h: 300 },
+  { id: 'activity', x: 0, y: 688, w: 3, h: 320 },
+]
+
+const HOME_KEY = 'home'
+/** What the office holds for the home screen, once it has been read. */
+let fromOffice = null
+
+/**
+ * Adopt the arrangement the office has, if there is one.
+ *
+ * Called once on the way in, with whatever `section=workspace` returned.
+ * Ignoring a malformed payload rather than throwing: a home screen that will
+ * not draw because its saved layout is odd is worse than one that draws the
+ * default.
+ */
+export function adoptHome(payload) {
+  const panels = payload?.panels
+  fromOffice = Array.isArray(panels) && panels.length > 0 ? panels : null
+}
+
+export function homeLayout() {
+  const mine = live.get(HOME_KEY)
+  if (mine !== undefined) return mine === null ? HOME_DEFAULT : mine
+  if (fromOffice !== null) return fromOffice
+  return remembered(HOME_KEY) ?? HOME_DEFAULT
+}
+
+export function homeSave(panels) {
+  live.set(HOME_KEY, panels.length === 0 ? null : panels)
+  remember(HOME_KEY, panels.length === 0 ? null : panels)
+  if (panels.length === 0) {
+    fromOffice = null
+    persist('workspace_layout_reset', {})
+    return
+  }
+  persist('workspace_layout_set', { p_panels: panels })
+}
+
+export function homeReset() {
+  live.set(HOME_KEY, null)
+  remember(HOME_KEY, null)
+  fromOffice = null
+  persist('workspace_layout_reset', {})
+}
+
 /** Sensible first arrangement — a starting point, not a rule. */
 const defaultFor = (project) => {
   const out = []
@@ -176,7 +261,17 @@ export const reset = (slug) => {
  * grid does not guarantee it — two panels can both be on the grid and still be
  * a few pixels out of line with each other.
  */
-export function wire(host, project, panels, redraw) {
+/*
+  `scope` is a dashboard project or the home screen (#219).
+
+  It used to be the project, and the only thing it was ever read for was
+  `project.slug` on the four lines that save. Two copies of this function -
+  four hundred lines of snapping, pointer capture and the #105 fix for the
+  header buttons - is exactly the drift CLAUDE.md keeps recording, so the
+  engine takes a place to save to instead.
+*/
+export function wire(host, scope, panels, redraw) {
+  const put = (ps) => { if (scope?.home === true) homeSave(ps); else save(scope.slug, ps) }
   const colWidth = () => (host.clientWidth - 2 * 20) / 3
 
   const snap = (value, others) => {
@@ -217,7 +312,7 @@ export function wire(host, project, panels, redraw) {
       if (drag === null) return
       drag = null
       el.classList.remove('lifted')
-      save(project.slug, panels)
+      put(panels)
       redraw()
     }
     grip?.addEventListener('pointerup', drop)
@@ -250,14 +345,14 @@ export function wire(host, project, panels, redraw) {
     // Width by column, because a dashboard of arbitrary widths never lines up.
     el.querySelector('[data-wider]')?.addEventListener('click', () => {
       panel.w = Math.min(3, panel.w + 1)
-      save(project.slug, panels); redraw()
+      put(panels); redraw()
     })
     el.querySelector('[data-narrower]')?.addEventListener('click', () => {
       panel.w = Math.max(1, panel.w - 1)
-      save(project.slug, panels); redraw()
+      put(panels); redraw()
     })
     el.querySelector('[data-drop-panel]')?.addEventListener('click', () => {
-      save(project.slug, panels.filter((p) => p.id !== id)); redraw()
+      put(panels.filter((p) => p.id !== id)); redraw()
     })
   }
 }

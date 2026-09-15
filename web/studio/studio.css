@@ -2492,6 +2492,65 @@ kbd {
   .callbtn.ringing .ring, .callbtn.connecting .ring { animation: none; }
 }
 
+/* --- the home board (#219) ---------------------------------------------------
+   Its panels reuse the project board's chrome, so almost nothing is needed
+   here: only the insides, and the one rule that makes the project cards behave
+   in a one-column panel rather than in the three-column grid they were written
+   for. */
+.homeprojects { display: grid; gap: var(--s3); }
+.homeprojects .project { width: 100%; }
+
+.homelist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.homerow {
+  display: flex; align-items: center; gap: var(--s3);
+  border-radius: 10px; padding: 2px;
+}
+.homerow:hover { background: var(--sunken); }
+/* Overdue earns a mark, and only overdue. A colour on every row is a colour
+   that means nothing. */
+.homerow.od { box-shadow: inset 3px 0 0 var(--bad); }
+.homego {
+  display: flex; align-items: flex-start; gap: var(--s3); text-align: left;
+  width: 100%; min-height: 44px; padding: 6px var(--s2); border-radius: 8px;
+  color: var(--ink);
+}
+.homebody { display: block; min-width: 0; flex: 1 1 auto; }
+/*
+  A project's colour, as a dot.
+
+  The first draft put the title and its meta line as two direct children of a
+  flex row, so `display: block` on the meta did nothing at all - a block-level
+  flex ITEM still sits beside its sibling, which is why the capture showed the
+  project name trailing off the end of the title instead of under it. The body
+  is its own element now and the row stacks inside it.
+*/
+.homemark {
+  flex: none; width: 10px; height: 10px; border-radius: 3px;
+  background: var(--hue, var(--ink-3)); margin-top: 5px; align-self: flex-start;
+}
+.homebody b { display: block; font-weight: 600; font-size: 14px; line-height: 1.35; }
+.homebody .t-meta, .homego .t-meta { display: block; margin-top: 2px; }
+.homerow .ptick { flex: none; }
+
+.homecrew { display: grid; gap: var(--s2); }
+.homeface { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.homeface.idle { opacity: .55; }
+.homefoot { margin: var(--s3) 0 0; }
+
+/* The filter pills over the home Tasks panel. */
+.fpills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s3); }
+.fpill {
+  min-height: 32px; padding: 0 10px; border-radius: 999px; font-size: 12.5px;
+  border: 1px solid var(--edge); color: var(--ink-2); background: var(--surface);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.fpill:hover { color: var(--ink); }
+.fpill.on { background: var(--accent-wash); color: var(--accent); border-color: transparent; font-weight: 600; }
+.fpill .n { font-size: 12px; color: inherit; opacity: .75; }
+/* 44px where a finger is what presses it, which is the rule verify:ui enforces
+   and the reason the contacts pills at 40px were a finding. */
+@media (pointer: coarse) { .fpill { min-height: 44px; padding: 0 14px; } }
+
 /* --- a request that has not been answered yet (#215) -------------------------
    Deliberately quiet. It is the absence of an answer, not an event, and a
    pulsing orange bar would make every ordinary two-second wait feel like a
