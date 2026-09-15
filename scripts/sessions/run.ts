@@ -390,10 +390,7 @@ export const askOnce = async (
  * are removed; the projects are left to `check:leaks`, because a project
  * holding a job can never be deleted (ADR-0022) and these are fixtures.
  */
-export const tidy = async (
-  jobIds: readonly string[],
-  projects: ReadonlyMap<string, string>,
-): Promise<void> => {
+export const tidy = async (jobIds: readonly string[]): Promise<void> => {
   if (jobIds.length > 0) {
     await db
       .execute(`
@@ -403,14 +400,17 @@ export const tidy = async (
            and state in ('queued', 'retrying', 'paused')`)
       .catch(() => undefined)
   }
-  const ids = [...projects.values()]
-  if (ids.length > 0) {
-    await db
-      .execute(
-        `delete from public.tasks where project_id = any(array[${ids.map((i) => `${lit(i)}::uuid`).join(',')}])`,
-      )
-      .catch(() => undefined)
-  }
+  /*
+    The tasks are KEPT, deliberately (#231 Campaign Three).
+
+    Deleting them destroyed the only proof that `task.create` is reachable:
+    `npm run levels` counts surviving rows, so the capability read as
+    never-exercised the morning after it was proven end to end. 0369 makes a
+    task created by a harness job `is_fixture`, which means every reader that
+    reports to Grant excludes it AND it stays countable — the same argument
+    0297 makes about fixture impediments, and the opposite of the debris rule,
+    because a flagged row in a fixture project is not debris.
+  */
 }
 
 export const remember = async (r: TurnResult): Promise<void> => {

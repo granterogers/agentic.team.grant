@@ -208,6 +208,7 @@
     "tier1": "npm run verify:routing-breadth && npm run verify:collaborates && npm run eval",
     "tier1:fast": "npm run verify:routing-breadth && npm run verify:collaborates",
     "levels": "tsx scripts/levels.ts",
+    "matrix": "tsx scripts/matrix.ts",
     "mutate": "tsx scripts/mutate.ts",
     "qq": "tsx scripts/qq.ts",
     "verify:collaborates": "tsx scripts/verify/collaborates.ts",

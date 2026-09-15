@@ -122,7 +122,23 @@ const kindsOf = (deliveredBy: string): readonly string[] => [
   empty subject as a clean result.
 */
 const BY_HAND: Readonly<
-  Record<string, { readonly why: string; readonly used: string; readonly witness: string }>
+  Record<
+    string,
+    {
+      readonly why: string
+      readonly used: string
+      readonly witness: string
+      /**
+       * The same question without the harness filter, when stripping `REAL`
+       * from `used` is not enough to ask it.
+       *
+       * `task.create` filters on `is_fixture` rather than on `app.harness_job`,
+       * so the generic strip below leaves it filtered and the capability reads
+       * as unreachable however many harness turns have created a task.
+       */
+      readonly any?: string
+    }
+  >
 > = {
   'db.read': {
     why: 'every handler reads its own database; a completed real job IS the evidence',
@@ -146,9 +162,19 @@ const BY_HAND: Readonly<
     witness: 'select count(*)::int as n from public.mcp_calls',
   },
   'task.create': {
-    why: 'app.hq_task_add writes public.tasks',
-    used: 'select count(*)::int as n from public.tasks',
+    /*
+      Real tasks for the LEVEL, every task for reachability.
+
+      `is_fixture` is generated from `added_by` and 0369 makes a harness job's
+      task carry the prefix — so this counts what Grant would see, and
+      `anyReached` (the same query with the filter stripped) counts what the
+      canonical path can do. #234's rule holds either way: a capability only
+      the harness has exercised is not L4.
+    */
+    why: 'app.task_add writes public.tasks',
+    used: 'select count(*)::int as n from public.tasks where not is_fixture',
     witness: 'select count(*)::int as n from public.tasks',
+    any: 'select count(*)::int as n from public.tasks',
   },
   'preference.update': {
     /*
@@ -191,6 +217,8 @@ const unclaimedKinds: string[] = []
 
 interface Row {
   tool: string
+  /** Reached through the canonical path by ANY traffic, harness included. */
+  anyReached: number
   level: number
   enabled: boolean
   granted: number
@@ -206,6 +234,7 @@ const rows: Row[] = []
 for (const t of tools) {
   const kinds = kindsOf(t.delivered_by)
   let reached = 0
+  let anyReached = 0
   let worked = 0
   let recent = 0
   let evidence = ''
@@ -216,6 +245,20 @@ for (const t of tools) {
     const list = kinds.map((k) => `'${k}'`).join(', ')
     reached = await num(
       `select count(*)::int as n from public.jobs j where ${REAL} and j.kind in (${list})`,
+    )
+    /*
+      And the same question WITHOUT the harness filter (#231 Campaign Three).
+
+      Two different questions, kept apart. This file's six levels are about
+      REAL traffic and stay that way — #234's rule is not to describe 1-3 as
+      proof of 4-6. But "can a user request reach this at all" is a fact about
+      the routing and the handler, and a harness turn through `inbound_commands`
+      on the deployed worker exercises exactly the same path as Grant typing it.
+      `npm run matrix` needs the second question; conflating them would let a
+      capability proven only by a unit test read as reachable.
+    */
+    anyReached = await num(
+      `select count(*)::int as n from public.jobs j where j.kind in (${list}) and j.state = 'complete'`,
     )
     worked = await num(
       `select count(*)::int as n from public.jobs j where ${REAL} and j.kind in (${list}) and j.state = 'complete'`,
@@ -237,6 +280,14 @@ for (const t of tools) {
     */
     const witness = await num(spec.witness)
     const used = await num(spec.used)
+    /*
+      The harness-inclusive count for the by-hand evidence.
+
+      `REAL` appears inside several of these queries; stripping it is how the
+      same sentence answers the other question. A spec with no filter in it is
+      already harness-inclusive and comes back identical, which is correct.
+    */
+    anyReached = await num(spec.any ?? spec.used.split(REAL).join('true'))
     unknown = witness === 0
     reached = used
     worked = used
@@ -252,6 +303,7 @@ for (const t of tools) {
 
   rows.push({
     tool: t.tool,
+    anyReached,
     level: t.level,
     enabled: t.enabled,
     granted: grantedTo.get(t.tool) ?? 0,
@@ -295,6 +347,30 @@ const MEANS: Readonly<Record<number, string>> = {
 const placed = rows
   .map((r) => ({ ...r, at: placeAt(r) }))
   .sort((a, b) => b.at - a.at || a.tool.localeCompare(b.tool))
+
+/*
+  Machine-readable, for the acceptance matrix (#231 Campaign Three).
+
+  `npm run matrix` needs the PLACEMENT, not the prose, and re-deriving it there
+  would be a second definition of "is this capability reachable" — which
+  CLAUDE.md records going wrong four separate times. One assembly, two callers:
+  this file decides the level and prints it for a person, or emits it for a
+  program, from the same `placed`.
+*/
+if (process.argv.includes('--json')) {
+  console.log(
+    JSON.stringify(
+      placed.map((r) => ({
+        tool: r.tool,
+        at: r.at,
+        evidence: r.evidence,
+        anyReached: r.anyReached,
+        unknown: r.unknown,
+      })),
+    ),
+  )
+  process.exit(0)
+}
 
 console.log('\nwhere every tool actually sits — #234\n')
 for (const r of placed) {

@@ -366,5 +366,6 @@
   "0365_rename_checks_the_same_collision_create_does.sql": "7edb8c1eacef978a70b450f163159a8cc8308cd6b6e91b8602d2ec27598757b0",
   "0366_the_dimensions_grant_named_and_which_have_no_cases.sql": "66720b1577dee187518683109196da2469bc891c4a5879061d23b483ad0dd9db",
   "0367_a_task_the_conversation_can_actually_create.sql": "54cbd48a9127b509cd00186a3f4d4dc2eb42df496b85321acdcf65e0b733057f",
-  "0368_a_capability_says_what_it_needs.sql": "65e95085619df518d5ce51dba5b737c0344673cc67a5f0e537a575d8a99865cd"
+  "0368_a_capability_says_what_it_needs.sql": "65e95085619df518d5ce51dba5b737c0344673cc67a5f0e537a575d8a99865cd",
+  "0369_a_task_from_harness_traffic_is_harness_traffic.sql": "676d6904ce0695e9856b5991981cf26e88e12d4d56bd131a3b64f714f7a175cd"
 }

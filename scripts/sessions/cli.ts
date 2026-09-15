@@ -194,7 +194,7 @@ for (let i = existing.length; i < session.turns.length; i++) {
   )
 }
 
-await tidy(spawned, projects)
+await tidy(spawned)
 const total = await done(session.name)
 console.log(
   `\n${session.name}: ${String(total)}/${String(session.turns.length)} turns recorded. ` +
