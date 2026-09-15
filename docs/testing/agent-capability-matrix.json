@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-15T11:44:39.597Z",
+  "at": "2026-09-15T16:44:47.648Z",
   "cells": [
     {
       "agent": "chief-of-staff",
@@ -197,9 +197,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "chief-of-staff",
@@ -407,9 +407,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "communications-director",
@@ -617,9 +617,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "finance-director",
@@ -827,9 +827,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "growth-director",
@@ -1037,9 +1037,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "operations-director",
@@ -1247,9 +1247,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "quality-director",
@@ -1457,9 +1457,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "research-director",
@@ -1667,9 +1667,9 @@
       "granted": true,
       "advertised": true,
       "reachable": true,
-      "atLevel": 1,
+      "atLevel": 2,
       "status": "proven",
-      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 23 harness turn(s); L2 in real traffic"
     },
     {
       "agent": "strategy-director",

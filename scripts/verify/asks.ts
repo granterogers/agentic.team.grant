@@ -124,6 +124,39 @@ const CONTROLS: readonly [string, string][] = [
   ['a prohibition with a verb', 'Never chase the agent without telling me first.'],
 ]
 
+/**
+ * Semantic mutations — the same non-action, said other ways.
+ *
+ * Grant's instruction: run mutations beyond the development examples. These
+ * were generated from the SHAPE of each control rather than from its wording,
+ * so a recogniser that has quietly memorised the controls scores worse here
+ * than on them. Every one contains a supported capability by name, which is
+ * what makes them the dangerous set: the failure mode is seeing EMAIL or TASK
+ * and acting.
+ */
+const MUTATIONS: readonly [string, string][] = [
+  ['speculation, new', 'It might be worth emailing the agent about the deposit at some point.'],
+  ['speculation, new 2', 'There is an argument for drafting the notice now rather than later.'],
+  ['question, new', 'Would a task help here, or is it too small to bother with?'],
+  ['question, new 2', 'Is chasing the roofer something you can even do from here?'],
+  ['quotation, new', 'Her exact words were "just put a task on it and move on".'],
+  ['quotation, new 2', 'The email said draft a response within five working days.'],
+  ['example, new', 'Take something like adding a task — that is the kind of thing I mean.'],
+  ['example, new 2', 'For instance, drafting the notice would be one option among several.'],
+  ['rejected, new', 'We looked at emailing them and decided not to.'],
+  ['rejected, new 2', 'I was going to make a task for it and then thought better of it.'],
+  ['past, new', 'I drafted the notice myself over the weekend.'],
+  ['past, new 2', 'Emma already put a task on the board for the roofing quote.'],
+  ['hypothetical, new', 'If we made a task for every one of these the list would be useless.'],
+  ['hypothetical, new 2', 'Say we drafted it today — would the landlord even read it?'],
+  ['prohibition, new', 'On no account chase the agent before I have spoken to him.'],
+  ['prohibition, new 2', 'Leave the insurance renewal alone until the survey is back.'],
+  ['report, new', 'The roofer says he will send the quote on Monday.'],
+  ['report, new 2', 'Insurance renews on the 30th and the premium has gone up.'],
+  ['preference, new', 'I prefer these things as a task rather than an email.'],
+  ['opinion, new', 'Drafting it now feels premature to me.'],
+]
+
 const report = (
   label: string,
   cases: readonly [string, string][],
@@ -144,9 +177,10 @@ const report = (
 const tuned = report('ACTION RECALL — tuned set (written against the failures)', TUNED, true)
 const held = report('ACTION RECALL — held out (written after the code, unrun)', HELD_OUT, true)
 const ctrl = report('PRECISION — controls, none of which is an action', CONTROLS, false)
+const mut = report('PRECISION — semantic mutations, generated from the shapes', MUTATIONS, false)
 
 const recall = (tuned.hit + held.hit) / (tuned.total + held.total)
-const precision = ctrl.hit / ctrl.total
+const precision = (ctrl.hit + mut.hit) / (ctrl.total + mut.total)
 
 console.log('\n| measure | result | gate |')
 console.log('|---|---|---|')
@@ -157,7 +191,7 @@ console.log(
   `| held-out recall alone | ${String(held.hit)}/${String(held.total)} (${((held.hit / held.total) * 100).toFixed(0)}%) | ≥ 85% |`,
 )
 console.log(
-  `| control precision | ${String(ctrl.hit)}/${String(ctrl.total)} (${(precision * 100).toFixed(0)}%) | 100% |`,
+  `| control precision, both sets | ${String(ctrl.hit + mut.hit)}/${String(ctrl.total + mut.total)} (${(precision * 100).toFixed(0)}%) | 100% |`,
 )
 
 /*

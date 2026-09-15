@@ -74,9 +74,26 @@ describe('#248 — "make me a task" is how a person asks', () => {
     })
   }
 
+  it('and "make X a task" is a task request, object last', () => {
+    /*
+      This was a NOT_ASKS case when #248 was written, on the reasoning that
+      "the pricing review" was the subject of the sentence. It is not — it is
+      the object, and "make X a task" is an ordinary way to ask for one. The
+      old regexes refused it and the test recorded the refusal as intended
+      behaviour.
+
+      #249 reaches the writer by mood and object noun rather than by word
+      order, so it now resolves — with no title, because "the pricing review"
+      is a referent, which means the office asks one short question instead of
+      inventing a name. That is the right outcome and it is a better one.
+    */
+    const say = 'Make the pricing review a task.'
+    const asked = taskRequest(say, classifyIntent(say))
+    expect(asked).not.toBeNull()
+    expect(asked?.title).toBeNull()
+  })
+
   const NOT_ASKS: readonly string[] = [
-    // The subject of the sentence, not the person being done a favour.
-    'Make the pricing review a task.',
     // The prohibition still wins, over the intent gate and over this.
     'Do not make me a task for this yet.',
     "Don't create a task for the renewal.",

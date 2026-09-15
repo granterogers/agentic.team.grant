@@ -83,6 +83,17 @@ const STANCE =
   companion of quality.ts's HYPOTHETICAL — the same distinction on the way in
   that that one draws on the way out.
 */
+/*
+  An example, introduced rather than asked for.
+
+  "Take something like adding a task" is grammatically an imperative and is
+  nobody's instruction — "something like" frames what follows as an
+  illustration. `actions.ts` already reads a bare "like" the same way when
+  deciding whether a notebook artifact was asked for or merely mentioned.
+*/
+const EXEMPLIFYING =
+  /^\s*(?:take\s+)?(?:something|anything|somewhere)\s+like\b|\bsomething\s+like\b/i
+
 const SUPPOSING =
   /^\s*(?:suppose|supposing|assuming|imagine|what\s+if|say\s+we|if\s+we|were\s+we)\b/i
 
@@ -94,7 +105,7 @@ const SUPPOSING =
   clause segmentation is what separates them.
 */
 const FORBIDS =
-  /\b(?:do\s*n[o']?t|don'?t|dont|never|hold\s+off|not\s+yet|no\s+need\s+to|leave\s+it|forget\s+it|cancel\s+that)\b/i
+  /\b(?:do\s*n[o']?t|don'?t|dont|never|hold\s+off|not\s+yet|no\s+need\s+to|leave\s+it|forget\s+it|cancel\s+that|on\s+no\s+account|under\s+no\s+circumstances)\b|\bleave\s+(?:\w+\s+){0,3}alone\b/i
 
 /*
   Asking ABOUT something rather than asking FOR something.
@@ -360,6 +371,96 @@ const FINITE_SECOND = new Set([
   is a command; "us", "his" and "its" end in the letters the test looks for and
   are not verbs.
 */
+/*
+  Adverbs that cannot follow an imperative verb's subject-less opening, because
+  they place the action in the past or mark it as complete.
+*/
+/*
+  Irregular past forms whose spelling differs from the stem.
+
+  A list, and a legitimate one: irregular verbs are among the most closed
+  classes English has — the set has been shrinking for a thousand years and
+  has not gained a member in living memory. This is nothing like a list of
+  phrasings, which is what #249 was about.
+
+  Only the UNAMBIGUOUS ones. "put", "set", "cut", "let", "read" and "hit" are
+  spelt the same as their stems and are perfectly good imperatives, so including
+  them would refuse real instructions to keep out reports.
+
+  Found by a semantic mutation: "…and then thought better of it" opened a
+  clause with a past tense the -ed test cannot see.
+*/
+const IRREGULAR_PAST = new Set([
+  'thought',
+  'said',
+  'went',
+  'took',
+  'saw',
+  'came',
+  'gave',
+  'found',
+  'knew',
+  'felt',
+  'bought',
+  'brought',
+  'caught',
+  'taught',
+  'sought',
+  'wrote',
+  'spoke',
+  'chose',
+  'drove',
+  'broke',
+  'wore',
+  'told',
+  'did',
+  'was',
+  'were',
+  'had',
+  'got',
+  'began',
+  'ran',
+  'sat',
+  'spent',
+  'sent',
+  'built',
+  'held',
+  'kept',
+  'meant',
+  'met',
+  'paid',
+  'heard',
+  'led',
+  'lost',
+  'made',
+  'won',
+  'left',
+  'stood',
+  'understood',
+  'forgot',
+  'grew',
+  'flew',
+  'threw',
+  'drew',
+  'knew',
+])
+
+const REPORTING_ADVERB = new Set([
+  'already',
+  'just',
+  'recently',
+  'yesterday',
+  'earlier',
+  'previously',
+  'never',
+  'always',
+  'usually',
+  'often',
+  'once',
+  'finally',
+  'eventually',
+])
+
 const FUNCTION_SECOND = new Set([
   'up',
   'out',
@@ -433,6 +534,8 @@ export const readClause = (clause: string): ClauseReading => {
   if (STANCE.test(text))
     return { text, mood: 'remark', why: 'a stance marker — the main clause is the thought' }
   if (SUPPOSING.test(text)) return { text, mood: 'remark', why: 'a supposition' }
+  if (EXEMPLIFYING.test(text))
+    return { text, mood: 'remark', why: 'an example, not an instruction' }
 
   if (LABELLED.test(text)) return { text, mood: 'ask', why: 'a labelled shorthand' }
   if (POLITE_REQUEST.test(text))
@@ -469,6 +572,20 @@ export const readClause = (clause: string): ClauseReading => {
 
   const first = w[0] ?? ''
   const second = w[1] ?? ''
+  /*
+    An imperative is a BARE STEM. A clause opening with a gerund or a past
+    tense is therefore not one, whatever the verb is — "Drafting it now feels
+    premature" and "Decided not to in the end" are things being described, not
+    things being asked for.
+
+    Structural, like the second-token test below: it reads the shape of the
+    token rather than recognising the word, so it holds for verbs nobody has
+    used yet. Found by semantic mutation rather than by the development
+    controls, which is what mutations are for.
+  */
+  if (/ing$/.test(first) || /ed$/.test(first) || IRREGULAR_PAST.has(first)) {
+    return { text, mood: 'remark', why: `"${first}" is not a bare stem, so not a command` }
+  }
   if (NOT_IMPERATIVE_OPENERS.has(first)) {
     return {
       text,
@@ -485,6 +602,14 @@ export const readClause = (clause: string): ClauseReading => {
     attached, no action needed" became an assignment, which is the false
     positive this whole design is most afraid of.
   */
+  /*
+    "Emma ALREADY put a task on the board." An imperative cannot take these —
+    "already chase the roofer" is not English — so one in second position means
+    the first token was a subject and this is a report of something done.
+  */
+  if (REPORTING_ADVERB.has(second)) {
+    return { text, mood: 'remark', why: `"${second}" makes this a report, not a command` }
+  }
   if (second === 'of') {
     return { text, mood: 'remark', why: `"${first} of" is a noun phrase, not a command` }
   }

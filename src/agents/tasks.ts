@@ -42,7 +42,9 @@
  * a phrase matcher alone would create a task on all four.
  */
 
+import { clauses } from './clauses.ts'
 import type { Classification } from './intent.ts'
+import { readRequest } from './request.ts'
 
 /** The classes that may write. Everything cheaper discusses. */
 const MAY_WRITE = new Set(['assignment', 'direct_command'])
@@ -211,16 +213,58 @@ export const taskTitle = (clause: string): string | null => {
   return text
 }
 
+/**
+ * Was the office ASKED, and asked for a TASK?
+ *
+ * Two questions, and separating them is what #249's audit forced. The intent
+ * class answers neither on its own:
+ *
+ *   "Could you add a task to chase the roofing quote?" matches a question rule,
+ *   question is cheaper than assignment, §6 resolves downward, and the whole
+ *   thing became an enquiry. It is not an enquiry. It is how people ask
+ *   colleagues to do things, and the office wrote nothing.
+ *
+ *   "I need a task adding to chase the roofing quote" is understood as an
+ *   assignment and still resolved nothing, because no shape has a verb in
+ *   front of the word "task".
+ *
+ * So the MOOD decides whether this is a request — `request.ts`, on closed
+ * classes, per clause — and the OBJECT NOUN decides which capability it is
+ * about. A noun is the right thing to key on: "task" is what the capability
+ * operates on, and it survives every paraphrase of asking for one, where a
+ * list of verbs in front of it does not.
+ *
+ * The intent class is kept as the other way in, so nothing that worked before
+ * stops working.
+ */
+const TASK_OBJECT = /\b(?:tasks?|to-?dos?|todos?)\b/i
+
+const wasAsked = (instruction: string, classification: Classification): boolean => {
+  if (MAY_WRITE.has(classification.intent) && classification.confident) return true
+  return readRequest(instruction, clauses).some((r) => r.mood === 'ask' && TASK_OBJECT.test(r.text))
+}
+
 export const taskRequest = (
   instruction: string,
   classification: Classification,
 ): TaskRequest | null => {
-  if (!MAY_WRITE.has(classification.intent)) return null
-  if (!classification.confident) return null
-  if (FORBIDDEN.test(instruction)) return null
+  if (!wasAsked(instruction, classification)) return null
+  /*
+    A prohibition stops the clause it is in, not the one beside it (#249).
+
+    FORBIDDEN was tested against the whole message with a forty-character
+    window, so "Actually do not email the roofer; make a task to chase them
+    instead" refused the task — the prohibition was on the email. A correction
+    that replaces one action with another is one of the commonest things Grant
+    does, and it was writing nothing at all.
+  */
+  const parts = clauses(instruction)
+  const permitted = parts.filter((c) => !FORBIDDEN.test(c))
+  if (permitted.length === 0) return null
+  const instructionText = permitted.join('. ')
 
   for (const shape of SHAPES) {
-    const hit = shape.exec(instruction)
+    const hit = shape.exec(instructionText)
     if (hit === null) continue
     /*
       Subtraction first, the captured group second.
@@ -230,11 +274,24 @@ export const taskRequest = (
       the title, so the title now comes from `taskTitle` and the capture is the
       fallback for a sentence subtraction cannot read.
     */
-    const raw = (taskTitle(instruction) ?? hit.groups?.title ?? '').trim().replace(/\s+/g, ' ')
+    const raw = (taskTitle(instructionText) ?? hit.groups?.title ?? '').trim().replace(/\s+/g, ' ')
     const title = raw === '' || NOT_A_TITLE.test(raw) ? null : raw
     return { title, matched: hit[0].slice(0, 80) }
   }
-  return null
+  /*
+    Asked for a task in a shape nothing describes.
+
+    "I need a task adding to chase the roofing quote" is unmistakable and fits
+    no verb-plus-noun pattern. Reaching the writer with no title is the right
+    outcome — the office asks one short question — and is strictly better than
+    the old one, which was to say nothing and do nothing.
+  */
+  const clause = permitted.find(
+    (c) => TASK_OBJECT.test(c) && readRequest(c, clauses)[0]?.mood === 'ask',
+  )
+  if (clause === undefined) return null
+  const raw = (taskTitle(clause) ?? '').trim()
+  return { title: raw === '' || NOT_A_TITLE.test(raw) ? null : raw, matched: clause.slice(0, 80) }
 }
 
 /**
