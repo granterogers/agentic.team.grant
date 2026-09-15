@@ -28,7 +28,46 @@
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
 >
-> ## Campaign Three — earning a GREEN backend verdict, 15 September
+> ## Campaign Three — GREEN revoked, and why that is the right outcome
+>
+> **Read this before the numbers below.** A GREEN verdict was posted on #231
+> and then **withdrawn the same day**. What had been logged as "an invented
+> calendar" turned out, on a proper re-read, to be a systemic provenance defect
+> (#243): the office could not distinguish something that had APPEARED in a
+> conversation from something it had reason to believe was true. Its own honest
+> *"I have nothing on Priya"* became, four turns later, evidence that Priya
+> existed.
+>
+> The architecture is fixed — `src/agents/provenance.ts`, 51 adversarial
+> regressions — but under this campaign's standard a fix is not a verdict. A
+> completely new corpus, unseen and uninfluential, must be committed BEFORE
+> running and run against a frozen implementation. That corpus is
+> `scripts/sessions/unseen.ts`, fourteen turns, committed unrun at `0848ddd`,
+> which is also the freeze. **It has not been run**, because the day's free
+> model quota is gone (#239).
+>
+> So the verdict is ORANGE on procedure rather than on product, and the
+> practical advice is unchanged: beginning human use and UX testing is
+> reasonable. Full reasoning in
+> `docs/testing/backend-acceptance-verdict-2026-09-15.md`.
+>
+> **The three things the fix changed**, each independently broken before:
+>
+> 1. the office's own prose counted as provenance, so a fabrication laundered
+>    every repetition of itself;
+> 2. a claim about what the records CONTAIN was unrefusable — now checked per
+>    SOURCE, so retrieving a document licenses a claim about documents and says
+>    nothing about the diary or the inbox;
+> 3. the handler had no canonical state at all, so *"what projects do we have
+>    open?"* could only be answered from memory. It now gets the live list.
+>
+> **Two gaps deliberately left, and probed by the unseen corpus:** a figure
+> Grant floats in a *"suppose"* is his words and therefore grounded by
+> construction, so only the prompt separates a supposition from a price; and
+> the record check switches off for a domain that WAS consulted, so one
+> retrieved document licenses a total a handful of matches cannot support.
+>
+> ## Campaign Three — the evidence, 15 September
 >
 > **Not finished. This is the state mid-campaign, written so it survives a
 > compaction.** The tracking issue is #231; the standard it is being measured
@@ -89,6 +128,22 @@
 > Management API is throttling: a run during both reported 4/18 in 139 seconds,
 > which is fourteen suites failing fast rather than failing. Re-run it clean
 > before believing any number from it.
+>
+> **Sixteen of the nineteen gate checks were run individually after the
+> provenance fix and all pass** — schema, wrappers, transitions, attests 11/11,
+> knows, reach 9/9, delegation, handoff, cross-interface, identity, tasks,
+> history 50/50, transport, security, dryrun, drains. Plus `verify:failures`
+> 16/16 and `verify:chaos` 29/29. Only `verify:routing-breadth` and
+> `verify:collaborates` need a model and could not run.
+>
+> **Failure recovery has six distinct modes, each with a passing suite:** a
+> provider outage (breaker, `cannot_think`, impediment), a coherence-gate
+> refusal (impediment plus retry with the refusal in hand), an output insert
+> refusal (impediment), a stalled job (`recover_stalled_jobs` to `retrying`,
+> attempts still counting), a delivery failure (bounded retry, Try again,
+> `app.undelivered`), and integration isolation (one down, the others working).
+> The terminal-failure impediment added today is not theoretical: it **fired
+> four times during the real quota outage**.
 >
 > ## Phase 7 — Communications, finished overnight 13–14 September
 

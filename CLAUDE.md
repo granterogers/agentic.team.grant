@@ -1601,6 +1601,49 @@ Each of these cost real time. They are here so they cost it once.
   teaching confirmation kept the hardcoded claim, so teaching the office a
   preference was stored correctly and then FAILED. One `howComposed()` for
   every caller, so the next confirmation added cannot be the fifth.
+- **Conversational appearance is not provenance, and the context reaching the
+  model could not say otherwise.** Three hallucination baits in one chat — a
+  "Q3 pricing review document", a person called "Priya", a churn figure — each
+  answered HONESTLY with *"there is no entry on that"*. Four turns later the
+  office produced two calendar entries with clock times whose agenda items were
+  those three baits: **its own denial that something existed became the evidence
+  that it existed.** The cause is not the calendar and not the wording. By the
+  time the model sees it the context is FLAT — a row the office holds, a
+  document retrieved this turn, a fact Grant stated, a noun that exists only
+  because a question contained it, and a sentence the office made up an hour ago
+  all arrive as undifferentiated dialogue, and a model handed all five as
+  dialogue uses all five as memory. `src/agents/provenance.ts` is the missing
+  distinction, stated once so the prompt, the grounding and the output checks
+  read the same definition rather than three approximations. Three rules fall
+  out of it and each was independently broken: **the office's own prose is not
+  provenance** (otherwise one fabrication launders every repetition of itself);
+  **a claim about what the records CONTAIN needs a source that was actually
+  read**, per DOMAIN, because retrieving a document says nothing about the diary;
+  and **the handler needs canonical state**, because enforcing the invariant
+  without it made *"what projects do we have open?"* unanswerable — and solving
+  fabrication by making the office incapable is a worse product than the one
+  that fabricates, since at least the fabrication is visible.
+- **Every coherence gate keyed on a CLAIM, so a bare assertion was invisible to
+  all of them.** "I checked", "I posted", "you told me" — three detectors, three
+  verbs, and an answer that simply STATES two meetings with times trips none of
+  them. When adding a gate, ask what shape of lie it cannot see; the answer here
+  was "the confident kind, with no verb in front of it", which is the shape a
+  good model produces.
+- **What is checkable without a model is not truth but DERIVABILITY.** A margin
+  of £26 follows from £40 and £14, so a number in general cannot be checked
+  against its sources. A clock time follows from nothing, so it can. That
+  asymmetry is the whole design of `fabricatedWhen`, and it is why the check is
+  narrow on purpose: it will miss an invented name and an invented percentage,
+  and it cannot fire on arithmetic, a quotation or a repetition of something
+  Grant said.
+- **A corpus that finds a defect has, by finding it, stopped being able to find
+  the next one.** The bait corpus discovered the provenance defect and then
+  influenced every line of the fix, so it is regression material and no longer
+  evidence — and neighbours of it belong in unit tests, where 32 of them
+  generated from the SHAPE of the fabrication cost seconds rather than minutes.
+  A fresh corpus, written against a frozen implementation and committed BEFORE
+  it runs, is the only thing that can answer "is there another one". The freeze
+  is a commit hash, not an intention.
 
 ---
 
