@@ -74,9 +74,41 @@ const ANNOUNCES_A_METHOD =
 const HAS_STEPS =
   /(?:\bfirst\b[^.!?]{0,120}\bthen\b)|(?:\bthen\b[^.!?]{0,120}\bthen\b)|(?:^|\n)\s*(?:\d+[.)]|[-*•])\s+\S+[\s\S]*?(?:\n)\s*(?:\d+[.)]|[-*•])\s+\S/im
 
-/** "When you write a brief, ..." — the condition half of a procedure. */
+/**
+ * "When you write a brief, ..." — the condition half of a procedure.
+ *
+ * Anchored at a CLAUSE start, which it was not (#237). A plain eight-part work
+ * request — *"...flag anything risky, suggest when we should decide, tell me
+ * who should own it..."* — matched on "when we should decide," and was filed as
+ * a global procedure called **"Shoulding decide"**. None of the eight clauses
+ * was answered, and a piece of nonsense went into the office's memory to be
+ * "put in front of the relevant work from now on".
+ *
+ * "suggest WHEN we should decide" is a complement clause: the `when` follows a
+ * verb. A condition begins its clause — at the start of the message, or after
+ * a full stop, semicolon or comma.
+ *
+ * That anchor is also what makes it safe to end the clause at a FULL STOP as
+ * well as at a comma. The condition-last form — *"Read the spec first,
+ * whenever you write a client brief"* — never matched at all before, because
+ * the pattern demanded a trailing comma the sentence does not have. Accepting
+ * the sentence end would once have swallowed "suggest when we should decide.";
+ * with the clause anchor in front of it, that phrase is excluded by where its
+ * `when` sits rather than by what follows it.
+ */
 const WHEN_YOU =
-  /\b(?:when|whenever|any time|each time|before you|after you)\b[^.!?,]{3,80}(?:,|\bthen\b)/i
+  /(?:^|(?<=[.;:]\s)|(?<=,\s))(?:when|whenever|any time|each time|before you|after you)\b[^.!?,]{3,80}(?:,|\bthen\b|[.!?]|$)/i
+
+/**
+ * A request for WORK, which is not a teaching however long it is.
+ *
+ * The second guard from #237, and the one that would have caught it on its
+ * own. Grant asking for eight things is Grant asking for eight things; an
+ * explicit teach signal overrides this, because "I need you to remember that
+ * ..." is both.
+ */
+const ASKS_FOR_WORK =
+  /^\s*(?:i\s+(?:need|want|would\s+like)\s+(?:you\s+)?to|can\s+you|could\s+you|would\s+you|please\s+(?:can\s+you\s+)?(?:give|send|make|draft|write|look|find|tell|work|compare|check))\b/i
 
 /** Explicitly asking for it to be kept, which settles the question. */
 const ASKS_TO_STORE =
@@ -147,10 +179,19 @@ export function readTeaching(instruction: string): Teaching | null {
   const standing = STANDING.test(text)
   const method = ANNOUNCES_A_METHOD.test(text) || HAS_STEPS.test(text)
   const conditional = WHEN_YOU.exec(text)
+  /*
+    A request for work is not a teaching, unless it says it is (#237).
+
+    Without this, any long instruction with a conditional clause in it became a
+    procedure — and the failure is expensive twice over: the request goes
+    unanswered AND the office's memory gains something it will apply to future
+    work.
+  */
+  const isWork = ASKS_FOR_WORK.test(text) && !asked && !standing
 
   // A procedure: it says it is one, or it has a sequence in it, and there is
   // enough of it to be worth keeping as one.
-  if ((method || (conditional !== null && text.length >= 140)) && text.length >= 60) {
+  if (!isWork && (method || (conditional !== null && text.length >= 140)) && text.length >= 60) {
     const whenToUse =
       conditional === null
         ? // No stated condition. "Always applicable" is honest and retrievable;

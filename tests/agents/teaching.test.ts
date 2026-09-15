@@ -130,3 +130,60 @@ describe('readTeaching — a procedure is a skill', () => {
     expect(t?.kind).toBe('lesson')
   })
 })
+
+describe('#237: eight things asked for is not a procedure taught', () => {
+  /*
+    This exact instruction was filed as a global skill called "Shoulding
+    decide". None of its eight clauses was answered, and the nonsense went into
+    the office's memory to be "put in front of the relevant work from now on".
+
+    Two things let it through: `when we should decide,` matched the condition
+    pattern mid-clause, and nothing distinguished a request for WORK from a
+    teaching once the text was long enough.
+  */
+  const eightClauses =
+    'I need you to look at what we charge, compare it to two competitors, ' +
+    'work out the margin at the current price, say what happens if we drop ' +
+    'it ten percent, flag anything risky about doing that, suggest when we ' +
+    'should decide, tell me who should own it, and keep the whole thing ' +
+    'under a page.'
+
+  it('is not read as a teaching at all', () => {
+    expect(readTeaching(eightClauses)).toBeNull()
+  })
+
+  it.each([
+    'Can you compare the two options and tell me when we should decide, please.',
+    'I want you to draft the note and say when we should send it, then stop.',
+    'Could you look at the pricing and flag when we should review it again?',
+  ])('leaves the work request %s alone', (text) => {
+    expect(readTeaching(text)).toBeNull()
+  })
+})
+
+describe('#237: a real teaching still lands', () => {
+  /*
+    Long enough to reach the CONDITIONAL path, which is the one #237 narrowed.
+
+    Shorter teachings were, and still are, read as a lesson rather than a
+    procedure — that is the 140-character floor doing its job and has nothing
+    to do with this change. Testing the short ones here would have asserted
+    against a threshold instead of against the anchor.
+  */
+  it.each([
+    'Whenever you write a client brief, read the spec first, check it against the last three we sent, and flag anything that contradicts what we told them before it goes out.',
+    'Read the spec first, check it against the last three we sent and flag anything that contradicts what we told them, whenever you write a client brief for somebody new.',
+  ])('still reads %s as a procedure', (text) => {
+    expect(text.length).toBeGreaterThanOrEqual(140)
+    expect(readTeaching(text)?.kind).toBe('skill')
+  })
+
+  it('an explicit teach signal beats the work-request guard', () => {
+    // "I need you to remember that ..." is both a request and a teaching, and
+    // the teaching is the part that matters.
+    const text =
+      'I need you to remember this: whenever you draft an announcement, run it ' +
+      'past Grace before it goes anywhere near a customer.'
+    expect(readTeaching(text)).not.toBeNull()
+  })
+})
