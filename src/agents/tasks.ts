@@ -74,10 +74,34 @@ export interface TaskRequest {
   two lists disagree silently. `open` was in an earlier draft of this list and
   is not in that one, so it could never fire.
 */
+/*
+  The indirect object, which is how a person actually asks (#248).
+
+  "Make a task to chase the supplier" matched and "Make ME a task to chase the
+  supplier" did not — one word between the verb and the article, and the whole
+  path fell through to prose. The hostile corpus asked in exactly that shape,
+  because that is the shape Grant would use, and the office answered "Task
+  created for you, due Friday" with public.tasks untouched.
+
+  Bounded to the pronouns an indirect object can be. A free wildcard here would
+  swallow "make the pricing review a task", where the noun is the subject of the
+  sentence rather than the person being done a favour.
+*/
+const FOR_ME = String.raw`(?:\s+(?:me|us|him|her|them|myself))?`
+
 const SHAPES: readonly RegExp[] = [
-  /\b(?:create|add|make|put|raise|log)\s+(?:a|an|the)?\s*(?:new\s+)?task\s+(?:to|for|about|called|named|titled)\s+(?<title>.+?)(?:\s*[.!?]|$)/i,
-  /\b(?:create|add|make|put|raise|log)\s+(?:a|an|the)?\s*(?:new\s+)?task\s+on\s+the\s+board\s+to\s+(?<title>.+?)(?:\s*[.!?]|$)/i,
-  /\b(?:create|add|make|put|raise|log)\s+(?:a|an|the)?\s*(?:new\s+)?tasks?\b(?<title>)/i,
+  new RegExp(
+    String.raw`\b(?:create|add|make|put|raise|log)${FOR_ME}\s+(?:a|an|the)?\s*(?:new\s+)?task\s+(?:to|for|about|called|named|titled)\s+(?<title>.+?)(?:\s*[.!?]|$)`,
+    'i',
+  ),
+  new RegExp(
+    String.raw`\b(?:create|add|make|put|raise|log)${FOR_ME}\s+(?:a|an|the)?\s*(?:new\s+)?task\s+on\s+the\s+board\s+to\s+(?<title>.+?)(?:\s*[.!?]|$)`,
+    'i',
+  ),
+  new RegExp(
+    String.raw`\b(?:create|add|make|put|raise|log)${FOR_ME}\s+(?:a|an|the)?\s*(?:new\s+)?tasks?\b(?<title>)`,
+    'i',
+  ),
 ]
 
 /*

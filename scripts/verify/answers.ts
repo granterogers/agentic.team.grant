@@ -21,7 +21,7 @@
  *                        an office uses them, none of which may be touched
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import { deliberationLeak } from '../../src/agents/quality.ts'
+import { claimsToHaveMade, deliberationLeak } from '../../src/agents/quality.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -172,6 +172,40 @@ for (const f of flagged.slice(0, 40)) {
   console.log(`      ${f.body.replace(/\s+/g, ' ').slice(0, 150)}`)
 }
 if (flagged.length > 40) console.log(`  … and ${String(flagged.length - 40)} more`)
+
+// --- #248, measured the same way -------------------------------------------
+//
+// A creation claim is only a defect when the job did nothing, and this suite
+// cannot see the acted count for historical rows. What it CAN measure is the
+// half that would hurt: how often the office says it made something at all, so
+// the size of the population the acted check will be applied to is known
+// rather than assumed.
+
+const MADE_FINE: readonly [string, string][] = [
+  ['an offer', 'I can make you a task to chase it, if that would help.'],
+  ['a plan', "I'll create the task once you tell me which project it belongs to."],
+  ['a question', 'Shall I file this as a task?'],
+  ['his own past action', 'That task was created last week by you, before I was involved.'],
+  ['a conditional draft', 'I could draft it and let you look before anything is saved.'],
+  ['nothing about making at all', 'The supplier has not sent the revised quote yet.'],
+]
+const madeWrong = MADE_FINE.filter(([, b]) => claimsToHaveMade(b) !== null)
+add(
+  "an offer, a plan, a question and somebody else's action are not creation claims",
+  madeWrong.length === 0
+    ? `${String(MADE_FINE.length)}/${String(MADE_FINE.length)} survived`
+    : madeWrong.map(([l]) => l).join(', '),
+  madeWrong.length === 0,
+)
+
+const claiming = rows.filter((r) => claimsToHaveMade(r.body) !== null)
+add(
+  'the office claims to have made something rarely enough for the acted check to be meaningful',
+  `${String(claiming.length)} of ${String(rows.length)} outputs claim a creation (${(
+    (claiming.length / Math.max(rows.length, 1)) * 100
+  ).toFixed(2)}%)`,
+  claiming.length / Math.max(rows.length, 1) < 0.15,
+)
 
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')

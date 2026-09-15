@@ -304,6 +304,108 @@ export const claimsToHaveSent = (body: string): string | null => {
 }
 
 /**
+ * Does this text claim to have MADE something?
+ *
+ * The companion of `claimsToHaveSent`, and it arrived the same way: by being
+ * absent while the office said the thing it is about. After #246 stopped the
+ * model narrating its tool deliberation, the very next run produced a clean,
+ * confident, well-written sentence —
+ *
+ *     Task "Chase supplier quote" created for you, due Friday.
+ *
+ * — and `public.tasks` gained nothing. That is worse than the deliberation it
+ * replaced. Grant can see that "We need to call task.create" is broken; he
+ * cannot see that this one is, and he will stop chasing the supplier.
+ *
+ * ## Why this is checkable, unlike most claims
+ *
+ * `acted` is the count of things the job actually did, supplied by the worker,
+ * which is the only thing that can count them. It has existed on this metadata
+ * for months and NOTHING IN THIS FILE HAS EVER READ IT — the field that
+ * disproves the claim was sitting beside the claim the whole time. Same shape
+ * as a column nothing writes and a control nothing presses, with the sign
+ * flipped.
+ *
+ * Absent means "not counted" and never accuses anybody, per the doctrine the
+ * other checks here follow. The refusal needs an explicit zero.
+ *
+ * ## What it deliberately leaves alone
+ *
+ * Future tense, conditionals and questions. "I'll set that up", "I can make
+ * you a task", "shall I file it?" are all things the office should keep
+ * saying. Only the past tense is false by construction when nothing happened.
+ */
+export const claimsToHaveMade = (body: string): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  const MADE = '(?:created|added|filed|logged|set up|made|drafted|scheduled|booked|saved)'
+  const THING = '(?:task|note|document|doc|draft|page|reminder|event|entry|record|item)'
+  const claims: RegExp[] = [
+    // "Task "X" created for you" — the shape the office actually produced.
+    new RegExp(
+      String.raw`\b${THING}\b[^.!?]{0,60}?\b(?:has been|have been|is|was|were)?\s*${MADE}\b`,
+      'i',
+    ),
+    // "I've created a task", "I have added the note".
+    new RegExp(
+      String.raw`\bI(?:'ve|\s+have)?\s+(?:just\s+)?${MADE}\s+(?:a|an|the|your|you|it|that|this)\b[^.!?]{0,60}`,
+      'i',
+    ),
+    // "Done — that is on your list now."
+    /\b(?:done|all set)\b[^.!?]{0,20}\b(?:it|that|this)\s+(?:is|'s)\s+(?:now\s+)?(?:on|in)\s+(?:your|the)\b[^.!?]{0,40}/i,
+    /*
+      The subject dropped, which is how a model reports a thing it did.
+
+          Added an all-day calendar entry for this Friday titled "Revised
+          quote reminder." It'll show up in your schedule as a reminder.
+
+      Nothing was added — the office cannot write to a calendar from this path
+      at all — and the first draft of this check missed it because every
+      pattern above wants either the noun before the verb or an explicit "I".
+      Anchored to the start of a line or a sentence so "Added to the risks you
+      listed" mid-clause is not swept up with it.
+    */
+    new RegExp(
+      String.raw`(?:^|[.!?]\s+|\n)\s*(?:${MADE})\s+(?:a|an|the|your|it|that|this)\b[^.!?]{0,70}`,
+      'i',
+    ),
+  ]
+  for (const re of claims) {
+    const hit = re.exec(text)
+    if (hit === null) continue
+    const phrase = hit[0].trim()
+    /*
+      A plan, an offer or a question is not a claim. Checked on the sentence
+      the hit sits in rather than the phrase, because "I can make you a task
+      to chase it, once you tell me which project" puts the modal a long way
+      from the verb.
+    */
+    const from = text.lastIndexOf('.', hit.index) + 1
+    const stop = text.indexOf('.', hit.index + hit[0].length)
+    const sentence = text.slice(from, stop === -1 ? text.length : stop + 1)
+    if (
+      /\b(?:will|'ll|shall|can|could|should|would|want me to|happy to|about to|going to)\b/i.test(
+        sentence,
+      )
+    ) {
+      continue
+    }
+    if (sentence.trim().endsWith('?')) continue
+    /*
+      Somebody ELSE made it, which is a report rather than a claim.
+
+      "That task was created last week by you, before I was involved" is the
+      office describing the world correctly. Without this the check accuses it
+      of having done the one thing it is explicitly saying it did not do.
+    */
+    if (/\bby (?:you|grant|him|her|them|someone|somebody|the team)\b/i.test(sentence)) continue
+    if (/\byou (?:created|added|filed|logged|made|set up|drafted|saved)\b/i.test(sentence)) continue
+    return phrase.slice(0, 80)
+  }
+  return null
+}
+
+/**
  * Does this text PROMISE to contact somebody on a channel it cannot reach?
  *
  * #231, found by a voice-note session. The office told Grant:
@@ -1263,6 +1365,26 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         'this answer. Nobody was contacted. Say what you WILL do, or hand the work ' +
         'over, but do not report a message that does not exist (#237).',
     })
+  }
+
+  /*
+    A creation claimed while the job did zero things (#248).
+
+    `m.acted` is the worker's count. Absent means not counted and never
+    accuses; an explicit zero with a past-tense creation in the text is a
+    promise Grant will act on that nothing kept.
+  */
+  if (m.acted === 0) {
+    const built = claimsToHaveMade(m.body ?? '')
+    if (built !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text says something was made ("${built}") and this job did ` +
+          'nothing — no task, no document, no child job. Say what you would ' +
+          'need in order to do it, or ask for it; do not report it as done (#248).',
+      })
+    }
   }
 
   const promised = promisesToReachOut(m.body ?? '')

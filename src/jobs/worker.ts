@@ -166,6 +166,15 @@ export interface HandlerOutput {
    */
   readonly toolNames?: readonly string[]
   /**
+   * How many things this turn actually did — #248.
+   *
+   * Absent means not counted and never accuses anybody; an explicit zero is
+   * what lets the gate refuse an answer reporting a creation that did not
+   * happen. The field on `OutputMetadata` has existed for months with no
+   * caller, which is why the check that reads it could never fire.
+   */
+  readonly acted?: number
+  /**
    * Send this output as a playable audio file rather than as text (#66).
    *
    * On the OUTPUT, like `announce`, because the handler is the only thing that
@@ -749,6 +758,7 @@ export const runJob = async (
     ...(output.grounding === undefined ? {} : { grounding: output.grounding }),
     ...(output.consulted === undefined ? {} : { consulted: output.consulted }),
     ...(output.toolNames === undefined ? {} : { toolNames: output.toolNames }),
+    ...(output.acted === undefined ? {} : { acted: output.acted }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).

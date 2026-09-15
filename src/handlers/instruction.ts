@@ -1940,6 +1940,28 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const confirmation = [linked, made, filed].filter((x) => x !== null).join('\n\n') || null
 
+      /*
+        How many things this turn actually DID (#248).
+
+        `OutputMetadata.acted` has existed for months, is documented as
+        "supplied by the worker, which is the only caller that can count them",
+        and NOTHING HAS EVER SET IT. So the check that reads it could never
+        fire, and the office reporting "Task created for you, due Friday" with
+        `public.tasks` untouched passed every gate — which is exactly what the
+        hostile corpus caught once #246 stopped it narrating instead.
+
+        Third instance of this shape in the repository: a defaulted field, no
+        caller, and a column or check that can only ever say one thing.
+        `delegation_depth` was the last one.
+
+        Counted from the three things this handler can actually perform: a
+        notebook action, a task, and the specialists it convened. Zero is a
+        real answer and is the one that matters — an absent count never
+        accuses anybody, and a wrong-but-present count would be worse than
+        none.
+      */
+      const acted = (made === null ? 0 : 1) + (filed === null ? 0 : 1) + who.alsoConvened.length
+
       // The same retrieval the office uses, so an instruction answered in
       // Telegram cites the same corpus as one answered in Slack. §22's rule
       // that the source interface must not change the organisation's
@@ -2625,6 +2647,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // The machinery half of #246's co-occurrence rule, from the same rows
         // the capability brief is built from.
         toolNames: toolNames(cap),
+        // What this turn actually did, so #248's check has a number to compare
+        // the answer against.
+        acted,
       } satisfies HandlerOutput
     },
   }
