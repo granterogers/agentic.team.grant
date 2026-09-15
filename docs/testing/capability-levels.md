@@ -18,40 +18,35 @@ from a suite's existence.
 
 | tool | level | granted to | real uses | worked | last 30d | evidence |
 |---|---|---|---|---|---|---|
-| `calendar.read` | **L6** | 8 | 166 | 166 | 166 | real jobs of kind google.read_calendar |
-| `calendar.write` | **L6** | 8 | 76 | 76 | 76 | real jobs of kind google.write_calendar_tasks |
-| `db.read` | **L6** | 8 | 1461 | 1461 | 1461 | every handler reads its own database; a completed real job IS the evidence |
-| `draft.create` | **L6** | 8 | 1481 | 1481 | 1481 | a draft is a row in public.outputs |
-| `gmail.read` | **L6** | 8 | 151 | 151 | 151 | real jobs of kind google.read_mail |
-| `gmail.search` | **L6** | 8 | 151 | 151 | 151 | real jobs of kind google.read_mail |
+| `calendar.read` | **L6** | 8 | 176 | 176 | 176 | real jobs of kind google.read_calendar |
+| `calendar.write` | **L6** | 8 | 86 | 86 | 86 | real jobs of kind google.write_calendar_tasks |
+| `db.read` | **L6** | 8 | 1580 | 1580 | 1580 | every handler reads its own database; a completed real job IS the evidence |
+| `draft.create` | **L6** | 8 | 1600 | 1600 | 1600 | a draft is a row in public.outputs |
+| `gmail.read` | **L6** | 8 | 162 | 162 | 162 | real jobs of kind google.read_mail |
+| `gmail.search` | **L6** | 8 | 162 | 162 | 162 | real jobs of kind google.read_mail |
 | `notebook.read` | **L6** | 8 | 31 | 31 | 31 | real jobs of kind notebook.ask, notebook.collect |
 | `notebook.write` | **L6** | 8 | 21 | 17 | 17 | real jobs of kind notebook.add_source, notebook.generate |
-| `notion.write` | **L6** | 8 | 73 | 73 | 73 | real jobs of kind office.notion_import, office.notion_sync |
+| `notion.write` | **L6** | 8 | 79 | 79 | 79 | real jobs of kind office.notion_import, office.notion_sync |
 | `preference.update` | **L6** | 8 | 24 | 24 | 24 | a changed preference is a row in public.preference_instructions |
-| `slack.post` | **L6** | 8 | 193 | 193 | 193 | a post is a delivery on the slack channel |
-| `github.read` | **L2** | 8 | — | — | — | reached through the MCP server, which logs every call |
-| `gmail.draft` | **L2** | 8 | — | — | — | src/google/mail.ts writes a draft; no canonical table records one yet |
-| `note.create` | **L1** | 8 | 0 | 0 | 0 | real jobs of kind notebook.push_document |
-| `task.create` | **L1** | 8 | — | — | — | app.hq_task_add writes public.tasks |
+| `slack.post` | **L6** | 8 | 203 | 203 | 203 | a post is a delivery on the slack channel |
+| `task.create` | **L1** | 8 | 0 | 0 | 0 | app.task_add writes public.tasks |
 | `db.delete` | **L0** | 0 | — | — | — | nothing in the registry says what delivers this |
+| `github.read` | **L0** | 8 | — | — | — | reached through the MCP server, which logs every call |
 | `github.write` | **L0** | 0 | — | — | — | nothing in the registry says what delivers this |
+| `gmail.draft` | **L0** | 8 | — | — | — | src/google/mail.ts writes a draft; no canonical table records one yet |
 | `gmail.send` | **L0** | 0 | — | — | — | nothing in the registry says what delivers this |
+| `note.create` | **L0** | 8 | 0 | 0 | 0 | real jobs of kind notebook.push_document |
 | `production.write` | **L0** | 0 | — | — | — | nothing in the registry says what delivers this |
 | `spend.money` | **L0** | 0 | — | — | — | nothing in the registry says what delivers this |
 | `web.search` | **L0** | 7 | — | — | — | nothing in the registry says what delivers this |
 
 ## Granted to agents and never exercised
 
-- `github.read` — granted to 8. reached through the MCP server, which logs every call
-- `gmail.draft` — granted to 8. src/google/mail.ts writes a draft; no canonical table records one yet
-- `note.create` — granted to 8. real jobs of kind notebook.push_document
-- `task.create` — granted to 8. app.hq_task_add writes public.tasks
+- `task.create` — granted to 8. app.task_add writes public.tasks
 
 ## No canonical trace exists to place these
 
 Reported as UNKNOWN rather than as level 1. #234 records the trap: a check that
 queried an empty table and reported "0 claims" as a pass.
 
-- `github.read` — reached through the MCP server, which logs every call
-- `gmail.draft` — src/google/mail.ts writes a draft; no canonical table records one yet
-- `task.create` — app.hq_task_add writes public.tasks
+None.

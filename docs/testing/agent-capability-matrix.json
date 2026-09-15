@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-15T06:10:50.451Z",
+  "at": "2026-09-15T11:44:39.597Z",
   "cells": [
     {
       "agent": "chief-of-staff",
@@ -199,7 +199,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "chief-of-staff",
@@ -409,7 +409,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "communications-director",
@@ -619,7 +619,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "finance-director",
@@ -829,7 +829,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "growth-director",
@@ -1039,7 +1039,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "operations-director",
@@ -1249,7 +1249,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "quality-director",
@@ -1459,7 +1459,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "research-director",
@@ -1669,7 +1669,7 @@
       "reachable": true,
       "atLevel": 1,
       "status": "proven",
-      "why": "reached on the canonical path by 2 harness turn(s); L1 in real traffic"
+      "why": "reached on the canonical path by 8 harness turn(s); L1 in real traffic"
     },
     {
       "agent": "strategy-director",

@@ -13,24 +13,24 @@ exercised it.
 
 | family | dimension | cases | judged | routing | executed |
 |---|---|---|---|---|---|
-| context | `connected-knowledge` | 3 | 3 | 0 | 0 |
+| context | `connected-knowledge` | 9 | 3 | 0 | 6 |
 | context | `cross-project-work` | 25 | 0 | 0 | 25 |
 | context | `memory-dependent-work` | 27 | 0 | 0 | 27 |
 | context | `project-scoped-work` | 8 | 3 | 0 | 5 |
-| domain | `business-strategy` | 10 | 0 | 10 | 0 |
+| domain | `business-strategy` | 13 | 0 | 10 | 3 |
 | domain | `communications` | 14 | 3 | 11 | 0 |
-| domain | `finance` | 15 | 0 | 15 | 0 |
+| domain | `finance` | 18 | 0 | 15 | 3 |
 | domain | `marketing-and-growth` | 11 | 0 | 11 | 0 |
-| domain | `monetisation` | **0** | 0 | 0 | 0 |
+| domain | `monetisation` | 3 | 0 | 0 | 3 |
 | domain | `operations` | 12 | 0 | 12 | 0 |
 | domain | `quality-and-risk` | 11 | 0 | 11 | 0 |
 | failure | `changed-intent` | 7 | 0 | 0 | 7 |
 | failure | `contradictory-instructions` | 4 | 0 | 0 | 4 |
 | failure | `corrections` | 23 | 0 | 0 | 23 |
-| failure | `hallucination-traps` | 9 | 3 | 0 | 6 |
+| failure | `hallucination-traps` | 15 | 3 | 0 | 12 |
 | failure | `malformed-inputs` | 10 | 0 | 7 | 3 |
 | failure | `provider-failures` | 1 | 1 | 0 | 0 |
-| failure | `unavailable-capabilities` | 5 | 2 | 0 | 3 |
+| failure | `unavailable-capabilities` | 11 | 2 | 0 | 9 |
 | language | `ambiguous-requests` | 34 | 2 | 8 | 24 |
 | language | `long-multi-clause` | 12 | 4 | 7 | 1 |
 | language | `voice-and-speech-style` | 21 | 1 | 17 | 3 |
@@ -43,17 +43,17 @@ exercised it.
 | who | `declared-capabilities` | 5 | 5 | 0 | 0 |
 | who | `tools-and-integrations` | 3 | 3 | 0 | 0 |
 | work | `actions` | 23 | 0 | 8 | 15 |
-| work | `analysis` | 7 | 0 | 0 | 7 |
+| work | `analysis` | 10 | 0 | 0 | 10 |
 | work | `creation` | 3 | 3 | 0 | 0 |
 | work | `planning` | 1 | 1 | 0 | 0 |
 | work | `project-management` | 6 | 0 | 0 | 6 |
-| work | `recommendations` | 8 | 1 | 0 | 7 |
+| work | `recommendations` | 11 | 1 | 0 | 10 |
 | work | `research` | 11 | 0 | 11 | 0 |
 | work | `software-and-project-reasoning` | 1 | 1 | 0 | 0 |
 
-## 1 dimensions with no cases at all
+## 0 dimensions with no cases at all
 
-- `monetisation`
+None.
 
 ## Tiers
 
