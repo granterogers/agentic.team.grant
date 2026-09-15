@@ -369,5 +369,6 @@
   "0368_a_capability_says_what_it_needs.sql": "65e95085619df518d5ce51dba5b737c0344673cc67a5f0e537a575d8a99865cd",
   "0369_a_task_from_harness_traffic_is_harness_traffic.sql": "676d6904ce0695e9856b5991981cf26e88e12d4d56bd131a3b64f714f7a175cd",
   "0370_stop_advertising_three_capabilities_nothing_can_reach.sql": "7354c6429d91fa57e01ef75a88e6ff3a055f595eefe143c7a0f4afecbb1e752f",
-  "0371_conversation_memory_that_survives_the_afternoon.sql": "71934d019ae410d861cbc56b6324bddf8bf6cbb11d725074254db79a96eeb2b2"
+  "0371_conversation_memory_that_survives_the_afternoon.sql": "71934d019ae410d861cbc56b6324bddf8bf6cbb11d725074254db79a96eeb2b2",
+  "0372_the_office_says_when_it_cannot_think.sql": "1241e0d6046049a584f009f73950a4bfa2bd3d91bb4c8f9036ed9ff17ecf350f"
 }

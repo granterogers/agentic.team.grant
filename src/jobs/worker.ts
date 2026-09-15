@@ -642,6 +642,37 @@ export const runJob = async (
       },
       { ms: Date.now() - startedAt },
     )
+    /*
+      A job that has run out of attempts owes Grant a sentence (#231).
+
+      #211's rule, at the last place that could still swallow one. The
+      coherence gate records an impediment when it refuses and so does the
+      insert refusal; a handler that THREW until its attempts ran out recorded
+      nothing Grant would ever see — the job says `failed` in a table he does
+      not read, and he simply never gets an answer.
+
+      Found by the campaign running into it: OpenRouter's daily free-model
+      quota ran out mid-session (429 free-models-per-day), the breaker opened
+      for an hour, and eighteen jobs failed in thirty minutes with nothing
+      anywhere saying the office could not think. That is precisely the shape
+      of outage a normal working day can produce, and silence is the worst
+      available response to it.
+
+      Only on the TERMINAL failure. A retryable one is not yet a failure, and
+      an impediment per attempt would make the Governance page a log.
+    */
+    if (!retryable) {
+      try {
+        await db.execute(
+          `select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+             'an answer at all', 'the handler',
+             ${lit((error as Error).message.slice(0, 500))},
+             ${lit(`${job.kind} ran out of attempts and produced nothing`)})`,
+        )
+      } catch {
+        /* Recording a failure must never be a second failure. */
+      }
+    }
     await moveTo(
       db,
       job.jobId,
