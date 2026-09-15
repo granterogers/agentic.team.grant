@@ -256,10 +256,23 @@ describe('the roster is an intersection, not a union', () => {
     expect(roster).not.toContain('operations-director')
   })
 
-  it('falls back to one role, not the whole ceiling, when no subject is named', () => {
+  it('convenes NOBODY when no subject is named, rather than the first of the ceiling', () => {
+    /*
+      This asserted `toHaveLength(1)` until #249, and the one was
+      `ceiling[0]` — whoever happened to be typed first in the class's list.
+      The comment on the ceiling says it outright: it is a GATE, it has never
+      had an opinion about which of its members is most apt, and the order is
+      an artefact of how it was typed.
+
+      #230, #232 and #231 each fixed a version of "the ceiling's first entry
+      decided"; this was the fourth and last, and the test was encoding it.
+      An empty roster means the Chief of Staff has it, which is the right
+      answer to an instruction whose subject nobody can name.
+    */
     const text = 'I need you to handle it'
-    const { roster } = pickRoster(classifyIntent(text), text)
-    expect(roster).toHaveLength(1)
+    const { roster, reason } = pickRoster(classifyIntent(text), text)
+    expect(roster).toEqual([])
+    expect(reason).toContain('Chief of Staff')
   })
 
   it('never exceeds the ceiling the database enforces', () => {
@@ -353,26 +366,45 @@ describe('#232: text no rule understood, whose subject is clear', () => {
     91-case corpus in `verify:routing-breadth`, every phrasing that describes a
     subject without naming it scored 0%.
   */
-  it('reaches one specialist when the subject is named', () => {
+  it('reaches the named specialist for an instruction the rules had no phrase for', () => {
+    /*
+      "Run the numbers if we sell it cheaper" is an unmistakable instruction,
+      and until #249 no rule understood it — so it was an unconfident remark
+      and the roster was capped at one for that reason. This test asserted the
+      cap.
+
+      The grammar reads it as an imperative now, which makes it a confident
+      assignment, and a confident assignment may convene the people the
+      subject names. What is still true, and is what this checks, is that the
+      person convened is the one the SUBJECT picked rather than the first of
+      the ceiling.
+    */
     const text = 'Run the numbers if we sell it cheaper.'
     const c = classifyIntent(text)
-    expect(c.recognised).toBe(false)
+    expect(c.recognised).toBe(true)
+    expect(c.reason).toContain('#249')
     const r = pickRoster(c, text, ['finance-director'])
     expect(r.roster).toEqual(['finance-director'])
-    expect(r.reason).toContain('no intent rule matched')
   })
 
-  it('never convenes more than one, however many the subject names', () => {
-    // An unrecognised request is not evidence that a team is needed, and the
-    // row it produces is unconfident — `routing_decisions_unconfident_stays_small`
-    // permits exactly one.
+  it('and the subject still decides WHO, not the order of the ceiling', () => {
+    /*
+      Also rewritten by #249. It asserted exactly one specialist, because the
+      instruction was unrecognised and
+      `routing_decisions_unconfident_stays_small` permits one — a cap earned by
+      not understanding the request, which is no longer the situation.
+
+      The property that survives, and the one worth having, is that everybody
+      convened was named by the SUBJECT: the roster is a subset of what
+      `who_knows_about` returned, in its order, and never a slice off the top
+      of a hardcoded list.
+    */
     const text = 'Run the numbers if we sell it cheaper.'
-    const r = pickRoster(classifyIntent(text), text, [
-      'finance-director',
-      'growth-director',
-      'strategy-director',
-    ])
-    expect(r.roster).toHaveLength(1)
+    const named = ['finance-director', 'growth-director', 'strategy-director'] as const
+    const r = pickRoster(classifyIntent(text), text, named)
+    expect(r.roster.length).toBeGreaterThan(0)
+    for (const who of r.roster) expect(named).toContain(who)
+    expect(r.roster[0]).toBe('finance-director')
   })
 
   it('still convenes nobody when nothing names a subject', () => {
@@ -418,11 +450,11 @@ describe('#232: the communications director can be reached at all', () => {
     expect(roster).toContain('communications-director')
   })
 
-  it('leaves the fallback for an unnamed subject where it was', () => {
-    // The first entry of each widened ceiling is unchanged, because that is
-    // what an unclassifiable request of the class still falls back to.
+  it('sends an unnamed subject to the Chief of Staff, whatever the ceiling lists', () => {
+    // Was `toEqual(['research-director'])`, which is the same artefact as the
+    // test above: research happens to be first in the assignment ceiling.
     const text = 'I need you to handle it'
     const { roster } = pickRoster(classifyIntent(text), text, [])
-    expect(roster).toEqual(['research-director'])
+    expect(roster).toEqual([])
   })
 })

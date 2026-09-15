@@ -102,6 +102,14 @@ const SHAPES: readonly RegExp[] = [
     String.raw`\b(?:create|add|make|put|raise|log)${FOR_ME}\s+(?:a|an|the)?\s*(?:new\s+)?tasks?\b(?<title>)`,
     'i',
   ),
+  /*
+    The label form, which is a different grammatical construction rather than
+    another phrasing: a noun, a colon, and the thing. "Task: chase the
+    supplier." `request.ts` already reads it as an ask and this is the writer
+    agreeing — without it the two layers disagreed, which is how a recognised
+    instruction reaches the writer and writes nothing.
+  */
+  /^\s*(?:task|todo|to-?do|action|reminder)\s*[:—-]\s*(?<title>\S.*)$/i,
 ]
 
 /*
@@ -133,6 +141,76 @@ const NOT_A_TITLE =
 const FORBIDDEN =
   /\b(?:do\s*n[o']?t|don't|dont|never|hold\s+off|not\s+yet|no\s+need\s+to|without)\b[^.!?]{0,40}\b(?:creat|add|mak|rais|open|log)/i
 
+/*
+  The title, by SUBTRACTION rather than by pattern (#249).
+
+  The shapes above want the title immediately after the word "task", so "put a
+  task ON ALPHA to get three build quotes" reached the writer and arrived with
+  nothing to call it — the office asked "what should it be called?" about
+  something plainly present in the sentence. Adding `on \w+` to the pattern
+  would fix that sentence and not the next one.
+
+  So instead of describing where a title IS, this removes the things a title is
+  NOT and keeps the rest:
+
+    - the instruction preamble: a verb, maybe an indirect object, an article,
+      and the word task
+    - a project adjunct: "on alpha", "under beta", "in the alpha project"
+    - a due-date adjunct: "by Friday", "before the end of next week"
+    - a bare link word left at the front once those have gone
+
+  Subtraction generalises where description does not, because the adjuncts are
+  closed-class prepositional phrases and the title is whatever open-class text
+  survives them. It also cannot invent: everything it returns was typed by
+  Grant, which is the rule about not inventing consequential parameters.
+*/
+const PREAMBLE =
+  /^\s*(?:please\s+)?(?:can\s+you\s+|could\s+you\s+|would\s+you\s+)?(?:create|add|make|put|raise|log|stick|set\s+up)\s+(?:me|us|him|her|them|myself)?\s*(?:a|an|the)?\s*(?:new\s+)?(?:task|todo|to-?do|reminder|item)\b\s*/i
+const LABEL = /^\s*(?:task|todo|to-?do|action|reminder)\s*[:—-]\s*/i
+/** "on alpha", "under the beta project", "in alpha" — where it goes, not what it is. */
+const PROJECT_ADJUNCT =
+  /\s*\b(?:on|under|in|against|to)\s+(?:the\s+)?[\w-]+(?:\s+project)?\b(?=\s+(?:to|for|about)\b)/i
+/*
+  The due date is NOT subtracted, deliberately.
+
+  An earlier draft stripped "by Friday" out of the title, on the reasoning that
+  a deadline belongs in `p_due_on` rather than in the name. It does — but
+  nothing extracts it into that column, so stripping it threw away something
+  Grant had said and left the task looking undated. Lossy beats nothing only
+  when the something is recovered somewhere, and here it was not.
+
+  So the deadline stays in the title until there is a writer for it, which is
+  filed rather than improvised: inventing a date from "by Friday" means
+  choosing which Friday, and that is a consequential parameter this layer is
+  not allowed to supply.
+*/
+/** What is left once the preamble has gone, if it is only a link word. */
+const LINKING = /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying)\b\s*/i
+
+export const taskTitle = (clause: string): string | null => {
+  let text = clause.trim().replace(/[.!?]+$/, '')
+  const labelled = LABEL.test(text)
+  text = text.replace(LABEL, '')
+  if (!labelled) {
+    if (!PREAMBLE.test(text)) return null
+    text = text.replace(PREAMBLE, '')
+    text = text.replace(PROJECT_ADJUNCT, '')
+    text = text.replace(LINKING, '')
+  }
+  text = text.trim().replace(/\s+/g, ' ')
+  /*
+    Politeness at the end, which the preamble only strips from the front.
+    "Add a new task please" was producing a task called "please" — a title made
+    of a word that carries no content, which is the invention this function
+    exists to avoid.
+  */
+  text = text
+    .replace(/\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i, '')
+    .trim()
+  if (text === '' || NOT_A_TITLE.test(text)) return null
+  return text
+}
+
 export const taskRequest = (
   instruction: string,
   classification: Classification,
@@ -144,7 +222,15 @@ export const taskRequest = (
   for (const shape of SHAPES) {
     const hit = shape.exec(instruction)
     if (hit === null) continue
-    const raw = (hit.groups?.title ?? '').trim().replace(/\s+/g, ' ')
+    /*
+      Subtraction first, the captured group second.
+
+      The shapes still decide WHETHER this is a task instruction — that part
+      works and is gated by the intent class above. What they were bad at is
+      the title, so the title now comes from `taskTitle` and the capture is the
+      fallback for a sentence subtraction cannot read.
+    */
+    const raw = (taskTitle(instruction) ?? hit.groups?.title ?? '').trim().replace(/\s+/g, ' ')
     const title = raw === '' || NOT_A_TITLE.test(raw) ? null : raw
     return { title, matched: hit[0].slice(0, 80) }
   }

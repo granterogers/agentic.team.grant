@@ -712,17 +712,36 @@ export const pickRoster = (
     area is the retrieval the original comment was right about, and it goes to
     the Chief of Staff exactly as it did before this change.
   */
-  const topicOnly = TOPIC_ONLY.has(classification.intent)
-  const roster = chosen.length > 0 ? chosen : topicOnly ? [] : [ceiling[0] as RoleSlug]
+  /*
+    Nobody, for every class — the fourth and last instance of "the ceiling's
+    first entry decided" (#249).
+
+    This used to read `topicOnly ? [] : [ceiling[0]]`, so a confident
+    assignment that named no subject went to whoever happened to be typed
+    first in the class's list. The comment forty lines above says it outright:
+    the ceiling is a GATE, it has never had an opinion about which of its
+    members is most apt, and the list's order is an artefact of how it was
+    typed. Taking the first of it is that artefact deciding who answers.
+
+    #230 fixed this for the empty case, #232 for the unconfident case, #231 for
+    the ordinary intersection. This is the remaining one, and it was
+    unreachable until #249 taught the classifier to recognise instructions it
+    had no phrase for — "Sort that out for me when you get a chance" was an
+    unrecognised remark before, and became a confident assignment with no
+    subject.
+
+    An empty roster is not a refusal. It means the Chief of Staff has it, which
+    is what it means everywhere else here, and she is the right answer to an
+    instruction whose subject nobody can name.
+  */
+  const roster = chosen
 
   return {
     roster: roster.slice(0, ROSTER_CEILING),
     reason:
       chosen.length > 0
         ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${fromRoster.join(', ')}, so the intersection was taken in that order of fit`
-        : topicOnly
-          ? `${classification.intent} only convenes a specialist when the subject is clear, and nothing in the request names one, so the Chief of Staff has it`
-          : `${classification.intent} permits ${ceiling.join(', ')}, but nothing in the request names a subject area, so only the first was taken`,
+        : `${classification.intent} permits ${ceiling.join(', ')}, and nothing in the request names a subject area, so the Chief of Staff has it rather than whoever is first in that list`,
   }
 }
 

@@ -34,6 +34,9 @@
  */
 
 /** §6's seven classes, cheapest first. The order is the escalation ladder. */
+import { clauses } from './clauses.ts'
+import { readRequest } from './request.ts'
+
 export const INTENT_CLASSES = [
   'thought',
   'question',
@@ -412,7 +415,42 @@ export const classifyIntent = (instruction: string): Classification => {
   }
 
   if (classes.size === 0) {
-    // Nothing matched. §6's rule says the cheapest reading, and the honest
+    /*
+      No RULE matched. That used to end the question, and #249 is what it cost:
+      the rules are a list of phrasings, so "sort out what we tell the
+      customer", "handle the supplier chase" and "work out where we stand and
+      then draft the reply" were all read as musings and none of them was done.
+      Eight of sixteen ordinary paraphrases, measured.
+
+      So the grammar is asked before giving up. `readClause` decides by MOOD,
+      using closed classes — an imperative has no subject whatever its verb is,
+      and English stopped acquiring pronouns a long time before it stopped
+      acquiring verbs. A clause it reads as an ask is an instruction the rules
+      simply had no phrase for.
+
+      What this does NOT do is escalate past `assignment`. `direct_command` is
+      the most expensive class in the ladder and stays reserved for the rules,
+      which look for an explicit deadline or an unmistakable "now": a grammar
+      that could reach the top of the cost ladder on mood alone would be a
+      grammar whose false positives are expensive. §6's downward rule is
+      unchanged — this widens what is UNDERSTOOD, never what is assumed.
+    */
+    const readings = readRequest(text, clauses)
+    const asked = readings.filter((r) => r.mood === 'ask')
+    if (asked.length > 0) {
+      return {
+        intent: 'assignment',
+        confident: true,
+        recognised: true,
+        matched: asked.map((r) => `grammar: ${r.why}`),
+        considered: ['assignment'],
+        reason:
+          `no intent rule matched, but ${String(asked.length)} clause(s) read as an ` +
+          `instruction by mood (${asked[0]?.why ?? ''}) — #249`,
+      }
+    }
+
+    // Still nothing. §6's rule says the cheapest reading, and the honest
     // cheapest reading of text we do not understand is that it is a remark —
     // NOT that it is work. An unrecognised instruction becoming an assignment
     // is precisely the unbounded-cost error the downward rule exists to stop.
@@ -420,11 +458,11 @@ export const classifyIntent = (instruction: string): Classification => {
       intent: 'thought',
       confident: false,
       recognised: false,
-      matched: [],
+      matched: readings.map((r) => `grammar: ${r.mood}`),
       considered: [],
       reason:
-        `no intent rule matched ${JSON.stringify(text.slice(0, 80))}, so it is treated as a ` +
-        'remark rather than as work. Ask before acting on it.',
+        `no intent rule matched ${JSON.stringify(text.slice(0, 80))} and no clause reads as an ` +
+        'instruction, so it is treated as a remark rather than as work. Ask before acting on it.',
     }
   }
 
