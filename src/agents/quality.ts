@@ -28,6 +28,8 @@
  * someone wrote a second caller.
  */
 
+import type { Domain } from './provenance.ts'
+
 /** How an output was produced. The only input the exemption is allowed to read. */
 export const PRODUCTION_PATHS = [
   /** A model wrote it. Always substantive. */
@@ -169,6 +171,16 @@ export interface OutputMetadata {
    * answer that mentions a time.
    */
   readonly grounding?: string
+  /**
+   * Whether anything was actually consulted for this turn.
+   *
+   * `provenance.consulted()` decides it. False means the answer rests entirely
+   * on the conversation and the model's own knowledge, which is exactly the
+   * state in which a confident claim about the office's records cannot be
+   * true. Undefined means the caller cannot say, and disables the check rather
+   * than guessing at it.
+   */
+  readonly consulted?: readonly Domain[]
 }
 
 export interface MetadataProblem {
@@ -447,6 +459,146 @@ export const fabricatedWhen = (body: string, grounding: string): string | null =
 }
 
 /**
+ * Nouns for things the office either HOLDS or does not.
+ *
+ * Every one of them is a row somewhere, or a thing a row stands for. That is
+ * what makes a claim about them checkable in principle and unfounded in fact
+ * when nothing was looked at.
+ *
+ * Deliberately not "thing", "item", "option", "idea", "point" or "risk" — an
+ * answer is allowed to enumerate its own reasoning, and a check that refused
+ * "there are three options" would stop the office thinking out loud.
+ */
+const HOLDS: Readonly<Record<Domain | 'unreachable', readonly string[]>> = {
+  calendar: ['event', 'meeting', 'call', 'appointment', 'reminder', 'attendee'],
+  documents: ['document', 'doc', 'note', 'entry', 'record', 'file', 'page', 'notebook'],
+  projects: ['project'],
+  tasks: ['task'],
+  mail: ['email', 'message'],
+  contacts: ['contact'],
+  /*
+    Nothing in this office consults these, so a claim about them is never
+    grounded — which is the honest state of it rather than an oversight. The
+    day one of them gets a reader, it moves up into a domain and the check
+    relaxes on its own.
+  */
+  unreachable: ['decision', 'deadline', 'invoice', 'ticket'],
+}
+
+/** Both numbers, because a model writes either. */
+const plural = (w: string): string => `${w}s?`
+const RECORD = `(?:${Object.values(HOLDS).flat().map(plural).join('|')})`
+
+/** Which domain a record noun belongs to, so provenance can be checked per source. */
+const domainOf = (noun: string): Domain | 'unreachable' => {
+  const bare = noun.toLowerCase().replace(/s$/, '')
+  for (const [domain, nouns] of Object.entries(HOLDS))
+    if (nouns.includes(bare)) return domain as Domain | 'unreachable'
+  return 'unreachable'
+}
+
+/**
+ * A number, in either notation, because a model writes both.
+ *
+ * "no" and "zero" are deliberately absent. *"I have no record of that"* is the
+ * honest answer this whole file exists to encourage, and the first draft
+ * refused it — `no` + `record` read as a count of records. An absence is not a
+ * claim about contents. The exhaustiveness shape below still catches *"no
+ * other invoices"*, which is one: it says something about everything that is
+ * there.
+ */
+const HOW_MANY = String.raw`(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten)`
+
+/**
+ * Does this text state what the office HAS, when the office looked at nothing?
+ *
+ * ## The generalisation, rather than the calendar
+ *
+ * The fabricated answer that prompted this listed two meetings with times and
+ * finished *"that's the only event on Tuesday"*. The times are caught by
+ * `fabricatedWhen`. This catches the other half, and the half that generalises:
+ * a definite claim about the CONTENTS of the office's records, made when
+ * nothing was retrieved and nothing canonical was read.
+ *
+ * It is the same shape as #185's *"the db read shows five active projects:
+ * mtz08joe, ..."* — none of which existed — and it is available in every
+ * domain the office touches, not just calendars. Tasks, emails, documents,
+ * contacts, deadlines, decisions and invoices are all rows, and a count or an
+ * exhaustiveness claim about any of them is either grounded or invented.
+ *
+ * ## Two shapes, both definite
+ *
+ *   - a COUNT of records: "five active projects", "three documents", "no other
+ *     tasks";
+ *   - an EXHAUSTIVENESS claim: "the only event", "all of the emails", "none of
+ *     the decisions".
+ *
+ * Both assert something checkable about persisted state. Neither can be true
+ * of a turn that consulted nothing.
+ *
+ * ## What keeps it from firing on good answers
+ *
+ * Three things, and they matter more than the patterns:
+ *
+ *   1. It is off entirely when something WAS retrieved. An office answering
+ *      from documents is allowed to count them.
+ *   2. The claim is allowed when the same words are in the grounding — if
+ *      Grant said "we have three documents on this", repeating him is not a
+ *      claim about records, it is listening.
+ *   3. `RECORD` excludes the nouns an answer uses to enumerate its own
+ *      thinking. "Three options", "two risks", "the only sensible approach"
+ *      are reasoning, not retrieval.
+ *
+ * Returns the phrase, so the refusal can quote it rather than gesturing.
+ */
+export const assertsRecordsUnseen = (
+  body: string,
+  grounding: string,
+  consultedDomains: readonly Domain[],
+): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  const flat = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ')
+  const known = flat(grounding)
+  const shapes: RegExp[] = [
+    // "five active projects", "three documents", "no other tasks"
+    new RegExp(String.raw`\b${HOW_MANY}\s+(?:\w+\s+){0,2}?${RECORD}\b`, 'gi'),
+    // "the only event", "all of the emails", "none of the decisions"
+    new RegExp(
+      String.raw`\b(?:the only|all(?:\s+of)?\s+the|every|none\s+of\s+the|no\s+other)\s+(?:\w+\s+){0,2}?${RECORD}\b`,
+      'gi',
+    ),
+  ]
+  for (const re of shapes) {
+    for (const hit of text.matchAll(re)) {
+      const phrase = flat(hit[0]).trim()
+      /*
+        Grant's own words come back unrefused.
+
+        He is entitled to tell the office how many documents there are, and an
+        answer that repeats him is listening rather than claiming. Matched on
+        the phrase because that is what a repetition looks like; a DIFFERENT
+        count is a different claim and stays caught.
+      */
+      if (known.includes(phrase)) continue
+      /*
+        Grounded per SOURCE, not per turn.
+
+        Retrieving a document licenses a claim about documents and nothing
+        else. The diary, the inbox and the task list are separate reads and
+        each has to have happened for a claim about it to be reporting rather
+        than inventing.
+      */
+      const noun = new RegExp(String.raw`\b${RECORD}\b`, 'i').exec(hit[0])?.[0] ?? ''
+      const domain = domainOf(noun)
+      if (domain !== 'unreachable' && consultedDomains.includes(domain)) continue
+      return hit[0].trim().slice(0, 60)
+    }
+  }
+  return null
+}
+
+/**
  * Sources this path never touches, whatever the sentence says about them.
  *
  * `handlers/instruction.ts` retrieves from `public.documents` and nothing else
@@ -695,6 +847,27 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           `the text gives a specific time or date ("${invented}") that appears nowhere in ` +
           'the request, the conversation or the documents that were retrieved, so it was ' +
           'made up. Say you have no record of it and ask where it is (#231).',
+      })
+    }
+  }
+
+  /*
+    A claim about what the office HOLDS, made having looked at nothing (#231).
+
+    Only when the caller says whether anything was consulted. Undefined means
+    the caller cannot tell, and a check that assumed "nothing" would refuse
+    every handler that does not report.
+  */
+  if (m.grounding !== undefined && m.consulted !== undefined) {
+    const claimed = assertsRecordsUnseen(m.body ?? '', m.grounding, m.consulted)
+    if (claimed !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text states what our records contain ("${claimed}") and nothing was read ` +
+          'this turn — no document was retrieved and no list was queried, so that is not ' +
+          'something you can know. Having been MENTIONED in this conversation is not the ' +
+          'same as existing. Say you have no record of it (#231).',
       })
     }
   }

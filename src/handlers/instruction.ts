@@ -94,6 +94,7 @@ import {
   readPlan,
   type Step,
 } from '../agents/plan.ts'
+import { type Context, consulted, established, PROVENANCE_NOTE } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { nameSubjects } from '../agents/subject.ts'
@@ -2018,6 +2019,40 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
       const context = contextBlock(hits)
+
+      /*
+        The dashboard projects, as canonical state rather than as recollection
+        (#231).
+
+        Provenance has four legitimate sources and the first of them is
+        current persisted state. Until now this handler had none of it: it
+        retrieved documents and nothing else, so *"what projects do we have
+        open?"* — a question about the office's own spine, answerable by one
+        cheap query — could only be answered from memory. Two real answers in
+        the last 146 confidently stated the project count with nothing
+        consulted, and one of them (#185's) named five projects that did not
+        exist.
+
+        Enforcing the invariant without this would have made a reasonable
+        question unanswerable, which is the failure mode the brief names: do
+        not solve fabrication by making the office incapable. Supplying the
+        list makes the honest answer and the useful answer the same sentence.
+
+        Names and slugs only, ordered and capped — this is a spine, not a
+        briefing, and `localBrief` already carries what Grant has said about
+        the project in hand.
+      */
+      const projectsNow = await deps.db
+        .execute(`
+          select slug, name from public.projects
+           where status = 'active' and not is_fixture
+           order by updated_at desc limit 25`)
+        .then((r) => (r.rows as { slug: string; name: string }[]).map((p) => p.name))
+        .catch(() => [] as string[])
+      const projectList =
+        projectsNow.length === 0
+          ? ''
+          : `The dashboard projects open right now, ${String(projectsNow.length)} of them: ${projectsNow.join(', ')}.`
       // Asked once per answer rather than described in the prompt as a
       // constant: a connector switched off an hour ago must change what she
       // says she can do.
@@ -2133,6 +2168,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         'mind and checks you have followed — read the latest message as a ' +
                         'continuation, not as a fresh request, and do not repeat what you ' +
                         'have already said.\n\n') +
+                    /*
+                      Where the line is between what was said and what is true
+                      (#231).
+
+                      Placed with the conversation note because it is about how
+                      to READ the turns above, not about how to write the
+                      answer. The recovery half of a pair: `provenance.ts`
+                      explains the argument, `assertsRecordsUnseen` and
+                      `fabricatedWhen` are what happen when this is ignored,
+                      and CLAUDE.md records why a prompt alone is not enough —
+                      the same build obeys one run and not the next.
+                    */
+                    `${PROVENANCE_NOTE}\n\n` +
                     // Grant: *"I want messages in general from everyone to be
                     // more human and easier to read."* Two things, and the
                     // second was the one being missed: the replies were
@@ -2248,6 +2296,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ...(context === ''
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+                // Canonical state, so a question about the office's own spine
+                // has an answer that is both honest and useful.
+                ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
                 /*
                   What this chat said before the window, and what is out of
                   view (#238).
@@ -2489,6 +2540,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             `ignore it — the honest version is that I could not find what you asked about, ` +
             `not that I cannot get in.)`
 
+      /*
+        The context, tagged. Assembled from the same values that went into the
+        prompt, so it cannot drift from what the model was actually shown.
+      */
+      const shown: Context = {
+        asked: instruction,
+        saidBefore: [...turns.map((t) => t.said), ...memory.recalled.map((m) => m.said)],
+        retrieved: [
+          ...(context === '' ? [] : [context]),
+          ...(projectList === '' ? [] : [projectList]),
+        ],
+        /*
+          Documents, when anything came back, and the dashboard projects, which
+          are read below and put in front of the model every turn. Nothing else
+          on this path reads anything: `retrieve()` queries `public.documents`
+          and there is no diary, inbox, task or contact read here at all, which
+          is why a claim about any of those can never be grounded from this
+          handler.
+        */
+        consultedDomains: [...(context === '' ? [] : ['documents' as const]), 'projects' as const],
+        answeredBefore: [
+          ...turns.map((t) => t.answered ?? ''),
+          ...memory.recalled.map((m) => m.answered),
+        ],
+      }
+
       return {
         body: answer,
         confidence: 'medium',
@@ -2498,21 +2575,23 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         path: 'inference',
         model: completion.model,
         /*
-          Everything a specific could legitimately have come FROM (#231).
+          What this answer was entitled to know, tagged by where it came from
+          (#231).
 
-          The instruction, every earlier turn in the window, whatever was
-          recalled from beyond it, and the retrieved documents — assembled
-          from the same values that went into the prompt, so it cannot drift
-          from what the model actually saw. The gate compares clock times and
-          dates against it; a date in the answer and in none of this was
-          invented.
+          The first version of this put the office's OWN earlier answers into
+          the grounding alongside Grant's words and the retrieved documents.
+          That is the defect it was built to catch, one layer up: a figure the
+          office invented in turn two becomes, in turn five, a figure "in the
+          conversation" and therefore grounded — so a fabrication launders
+          every repetition of itself.
+
+          `provenance.ts` carries the argument. Here the only thing that
+          matters is that `answeredBefore` is passed in and deliberately left
+          out of `established()`: what Grant says is evidence, what the office
+          says is not, until something outside the conversation backs it.
         */
-        grounding: [
-          instruction,
-          context,
-          memory.recalled.map((m) => `${m.said} ${m.answered}`).join(' '),
-          turns.map((t) => `${t.said} ${t.answered ?? ''}`).join(' '),
-        ].join('\n'),
+        grounding: established(shown),
+        consulted: consulted(shown),
       } satisfies HandlerOutput
     },
   }

@@ -30,6 +30,7 @@
  * process never runs is not a recovery mechanism.
  */
 
+import type { Domain } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
@@ -151,6 +152,11 @@ export interface HandlerOutput {
    * (#231).
    */
   readonly grounding?: string
+  /**
+   * Which kinds of record were actually consulted this turn — see
+   * `provenance.consulted()`. Handed to the coherence gate and never stored.
+   */
+  readonly consulted?: readonly Domain[]
   /**
    * Send this output as a playable audio file rather than as text (#66).
    *
@@ -733,6 +739,7 @@ export const runJob = async (
     contradictions: output.contradictions,
     ...(hadHistory === undefined ? {} : { hadHistory }),
     ...(output.grounding === undefined ? {} : { grounding: output.grounding }),
+    ...(output.consulted === undefined ? {} : { consulted: output.consulted }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).
