@@ -168,12 +168,31 @@ export function routeTo(text, context, to) {
   return 'claire'
 }
 
-/** What the team says back. Honest about being a prototype. */
-function replyText(text, context) {
-  const about = context ? `“${context.title}”` : 'this project'
-  if (/\?\s*$/.test(text.trim())) return `Reading ${about} now — I will come back with an answer.`
-  return `Taking that on for ${about}. It will show up in Team as soon as there is something to look at.`
-}
+/*
+  Nothing is invented while we wait (#215).
+
+  This used to be `replyText`, which composed a sentence in an agent's voice -
+  *"Taking that on for this project. It will show up in Team as soon as there
+  is something to look at."* - and wrote it into the thread the instant the
+  send button was pressed, attributed to a person picked by keyword, before
+  anything had been asked of anybody.
+
+  Grant's report of it: *"a message can be sent and get no reply for minutes,
+  with no state shown."* He is describing exactly this. He DID get a reply -
+  immediately, confident, and made up - so nothing on screen ever said the
+  request was still in the air. The fabrication was the reason the waiting was
+  invisible.
+
+  It is also the office's first invariant leaking into the interface. The
+  backend spent a whole certification campaign learning not to claim what it
+  had not done; the dashboard was doing it in the composer.
+
+  So the placeholder is a STATE, not a message. It says which of four things is
+  true - sending, waiting, answered, failed - and it says nothing else.
+*/
+
+/** The moment a request was handed over, for the waiting row to count from. */
+const startedAt = () => Date.now()
 
 /*
   Where a typed message goes (#103).
@@ -231,10 +250,22 @@ export function send(slug, text, context, to) {
     replaced by the real one — rather than being the whole of the feature,
     which is what it was.
   */
+  /*
+    The waiting row carries everything a retry needs.
+
+    `said`, `context` and `to` are kept on it because a failure is the one
+    moment the composer has already been cleared - #197 clears the draft on
+    send, correctly - so without them the only copy of what Grant typed would
+    be the bubble above, as escaped HTML. Retry has to resend the words, not a
+    reconstruction of them.
+  */
   const who = routeTo(text, context, to)
   const back = {
-    id: `m${Date.now() + 1}`, from: who, text: replyText(text, context),
+    id: `m${Date.now() + 1}`, from: who, text: '',
     at: now, pending: true, inflight: true,
+    waiting: 'sending', since: startedAt(),
+    said: text, to: to ?? null,
+    context: context ? { kind: context.kind, id: context.id, title: context.title } : null,
   }
   const next = [...thread(slug), mine, back]
   write(slug, next)
@@ -251,8 +282,58 @@ export function send(slug, text, context, to) {
  * A failure leaves the placeholder and says why on it. The alternative — an
  * empty thread and a thrown error — loses what you wrote.
  */
-export async function ask(slug, text, context, token, to) {
+/**
+ * How long the studio waits before it says so, in milliseconds.
+ *
+ * Not a cancellation - the office may still be working, and a turn that takes
+ * two minutes has happened. It is the point at which silence stops being
+ * informative and the page owes Grant a sentence. #211's rule, on the surface
+ * he is looking at: anything that can end with no answer has to say so
+ * somewhere he looks.
+ */
+const PATIENCE = 90_000
+
+/** Move a waiting row to its next state, in place, without disturbing the rest. */
+function mark(slug, id, patch) {
+  const next = thread(slug).map((m) => (m.id === id ? { ...m, ...patch } : m))
+  write(slug, next)
+  return next
+}
+
+export async function ask(slug, text, context, token, to, onState) {
   const pendingId = thread(slug).at(-1)?.id
+  /*
+    Sending, then waiting.
+
+    Two states rather than one spinner, because they fail differently and a
+    person reads them differently: still sending is a network you can retry in
+    a second, waiting is a team that has your request. The flip happens when
+    the request has been handed to the browser and we are on the awaiting side
+    of it - which is the only honest place to draw the line from here.
+  */
+  let settled = false
+  const tell = (patch) => {
+    /*
+      A timer that fires after the answer has landed must do NOTHING.
+
+      Both of these are set before the request goes out and the request can beat
+      them: a fast reply arrives in 200ms, the row becomes the answer, and then
+      the 400ms timer marks that answer as "thinking" and the thread shows a
+      spinner over a finished reply for ever. The first run of this code did
+      exactly that and `verify:chat` reported it as "STILL WAITING AFTER THE
+      ANSWER LANDED", which is the check earning its place.
+
+      Clearing the timers is not enough on its own - one of them can already be
+      on the queue when the answer resolves - so the flag is what actually
+      decides, and the clears are the tidy-up.
+    */
+    if (settled) return
+    mark(slug, pendingId, patch)
+    if (typeof onState === 'function') onState()
+  }
+  const late = setTimeout(() => { tell({ waiting: 'slow' }) }, PATIENCE)
+  const soon = setTimeout(() => { tell({ waiting: 'thinking' }) }, 400)
+
   let reply = null
   try {
     const r = await fetch(`${TURN()}/turn`, {
@@ -280,13 +361,55 @@ export async function ask(slug, text, context, token, to) {
   } catch (e) {
     reply = { text: `I could not reach the office: ${e.message}`, failed: true }
   }
+  settled = true
+  clearTimeout(late)
+  clearTimeout(soon)
 
-  const next = thread(slug).map((m) =>
-    m.id === pendingId
-      ? { ...m, text: reply.text, pending: false, bad: reply.failed === true,
-          delegated: reply.did === 'delegated' }
-      : m,
-  )
+  /*
+    The waiting row becomes the answer, or becomes a failure that can be tried
+    again.
+
+    `said`, `to` and `context` survive on a failed row and are dropped from a
+    successful one - a retry button on an answer would be a control that means
+    nothing, and #59's rule is that a control that cannot help should not be
+    drawn.
+  */
+  const next = thread(slug).map((m) => {
+    if (m.id !== pendingId) return m
+    if (reply.failed === true) {
+      return { ...m, text: reply.text, pending: false, bad: true, waiting: 'failed' }
+    }
+    const { said, ...rest } = m
+    void said
+    return {
+      ...rest, text: reply.text, pending: false, bad: false, waiting: null,
+      delegated: reply.did === 'delegated',
+    }
+  })
   write(slug, next)
   return next
+}
+
+/**
+ * Send the same words again (#215).
+ *
+ * Grant asked for Retry by name. It rewrites the failed row back to sending
+ * rather than appending a second question, because he asked once - a thread
+ * that grows a duplicate every time the network hiccups is a worse record than
+ * one that says a request took two attempts.
+ */
+export async function retry(slug, id, token, onState) {
+  const row = thread(slug).find((m) => m.id === id)
+  if (row === undefined || typeof row.said !== 'string' || row.said === '') return thread(slug)
+  mark(slug, id, { waiting: 'sending', bad: false, pending: true, text: '', since: startedAt() })
+  if (typeof onState === 'function') onState()
+  /*
+    `ask` keys on the LAST row in the thread, which is what a fresh send always
+    is. A retry is not: the failed row may have anything after it. So the row is
+    moved to the end first, which also puts the retry where a person looks for
+    it - at the bottom, with the newest thing.
+  */
+  const moved = [...thread(slug).filter((m) => m.id !== id), thread(slug).find((m) => m.id === id)]
+  write(slug, moved.filter((m) => m !== undefined))
+  return ask(slug, row.said, row.context ?? null, token, row.to ?? undefined, onState)
 }

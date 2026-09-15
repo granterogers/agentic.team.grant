@@ -2492,6 +2492,30 @@ kbd {
   .callbtn.ringing .ring, .callbtn.connecting .ring { animation: none; }
 }
 
+/* --- a request that has not been answered yet (#215) -------------------------
+   Deliberately quiet. It is the absence of an answer, not an event, and a
+   pulsing orange bar would make every ordinary two-second wait feel like a
+   fault. A dot that turns, the sentence, and the seconds. */
+.waitrow { align-items: center; }
+.waitrow .mbody { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.waitsay { color: var(--ink-2); }
+.waitage {
+  font-variant-numeric: tabular-nums; color: var(--ink-3);
+  /* Tabular figures so the number does not jitter the sentence beside it once
+     a second, which is the thing that makes a counter feel cheap. */
+}
+.waitspin {
+  width: 15px; height: 15px; flex: none; border-radius: 50%;
+  border: 2px solid var(--edge); border-top-color: var(--accent);
+  animation: waitspin 900ms linear infinite;
+}
+@keyframes waitspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .waitspin { animation: none; border-top-color: var(--accent); opacity: .7; }
+}
+.waitrow .btn { min-height: 34px; padding: 0 var(--s3); }
+@media (pointer: coarse) { .waitrow .btn { min-height: 44px; } }
+
 /* What the call is saying about itself, under the button that is the call. */
 .callsay {
   margin: 6px 2px 0; color: var(--ink-2); font-size: 12px; line-height: 1.35;

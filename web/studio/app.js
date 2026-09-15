@@ -1165,6 +1165,25 @@ function paintDock() {
     paintDock()
   })
 
+  /*
+    Retry, in the dock as well (#215).
+
+    The dock lives OUTSIDE `#root` so `render()` never wipes it - which is the
+    whole point of #103 - and that also means `render()` never WIRES it. A
+    control drawn by `bubble` therefore needs wiring on both sides, and
+    `verify:wired` cannot catch the gap: it checks that an attribute is looked
+    up somewhere in the source, and this one is, in the other half.
+  */
+  tickWaiting()
+
+  for (const b of el.querySelectorAll('[data-chat-retry]')) {
+    b.addEventListener('click', () => {
+      if (!p) return
+      void chat.retry(p.slug, b.dataset.chatRetry, token.get(), () => { paintDock() })
+        .then(() => { paintDock() })
+    })
+  }
+
   $('[data-dockform]', el)?.addEventListener('submit', (e) => {
     e.preventDefault()
     const text = String(box?.value ?? '').trim()
@@ -1172,7 +1191,8 @@ function paintDock() {
     if (box) box.value = ''
     chat.send(p.slug, text, null)
     paintDock()
-    void chat.ask(p.slug, text, null, token.get()).then(() => { paintDock() })
+    void chat.ask(p.slug, text, null, token.get(), undefined, () => { paintDock() })
+      .then(() => { paintDock() })
   })
 }
 
@@ -2281,6 +2301,57 @@ const bubble = (m) => {
         ${m.backfilled ? '<span class="t-meta pendmark">From the channel history</span>' : ''}
       </div>`
     }
+    /*
+      A request that has not been answered is a STATE, not a message (#215).
+
+      Grant: *"Investigate why a message can currently be sent and still have no
+      response several minutes later. Surface useful states such as Sending,
+      Thinking/processing, Delivered, Failed, Retry. Do not leave the user
+      wondering whether anything happened."*
+
+      The reason he was left wondering is that the studio invented a reply. The
+      moment Send was pressed it wrote a sentence in a named agent's voice -
+      picked by keyword, before anyone had been asked - so the thread showed an
+      instant, confident answer and nothing anywhere said the real request was
+      still in the air. Waiting was invisible because it had already been
+      painted over.
+
+      So while the office has not answered, this draws what is actually true and
+      nothing else: which of four states the request is in, and how long it has
+      been there. No name, no face, no voice - because nobody has spoken yet,
+      and attributing silence to Emma is the same class of claim the backend
+      spent a certification campaign learning not to make.
+
+      No backticks in this comment. Template literal.
+    */
+    if (typeof m.waiting === 'string' && m.waiting !== '' && m.waiting !== 'failed') {
+      const said = {
+        sending: 'Sending to the office…',
+        thinking: 'With the team. They are working on it.',
+        slow: 'No answer yet. The office may still be working — it also answers in Slack and Telegram.',
+      }[m.waiting] ?? 'Waiting.'
+      return `<div class="msg theirs waitrow" role="listitem" aria-live="polite">
+        <span class="waitspin" aria-hidden="true"></span>
+        <div class="mbody">
+          <!--
+            The same visually-hidden attribution every other message carries
+            (#200). A waiting row IS a message in the thread - it occupies a
+            listitem and it is what somebody listening hears next - so leaving
+            it out would make the conversation's narration skip a beat exactly
+            where the explanation is. No backticks in this comment.
+          -->
+          <span class="aonly">The team${
+            m.at ? `, ${new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''
+          } — has not answered yet</span>
+          <span class="t-meta waitsay">${esc(said)}</span>
+          ${typeof m.since === 'number'
+            ? `<span class="t-meta waitage" data-waiting-since="${m.since}"></span>` : ''}
+          ${m.waiting === 'slow' && typeof m.said === 'string'
+            ? `<button class="btn" data-chat-retry="${esc(m.id)}">Ask again</button>` : ''}
+        </div>
+      </div>`
+    }
+
     const c = crewBy(m.from)
     return `<div class="msg theirs ${m.bad ? 'bad' : ''}" role="listitem"
          style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
@@ -2289,6 +2360,17 @@ const bubble = (m) => {
         <span class="aonly">${esc(saidBy(m.from, m))}</span>
         <span class="t-label" aria-hidden="true">${esc(c.name)} · ${esc(c.role)}</span>
         ${prose(m.text)}
+        <!--
+          A failure that can be tried again (#215).
+
+          Grant asked for Retry by name. Only on a row that still carries the
+          words, because a button that cannot resend anything is worse than no
+          button - which is #105's whole lesson about empty states.
+
+          No backticks in this comment. Template literal.
+        -->
+        ${m.waiting === 'failed' && typeof m.said === 'string'
+          ? `<button class="btn" data-chat-retry="${esc(m.id)}">Try again</button>` : ''}
         <!--
           What the office is doing with it (#103).
 
@@ -5744,6 +5826,7 @@ function drawShell() {
     follows whatever you are looking at.
   */
   paintDock()
+  tickWaiting()
 
   for (const b of root.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => {
@@ -6522,6 +6605,21 @@ function drawShell() {
     when collapsed — an eight-item panel above every project is a panel the eye
     learns to skip, and skipping is the one thing this must never teach.
   */
+  /*
+    Ask again (#215).
+
+    The row holds the words, so this resends them rather than reconstructing
+    them from the bubble above - which is escaped HTML by then, and which #197
+    has already cleared from the composer.
+  */
+  for (const b of root.querySelectorAll('[data-chat-retry]')) {
+    b.addEventListener('click', () => {
+      void chat.retry(state.project, b.dataset.chatRetry, token.get(), () => {
+        keepingPlace(() => { render() })
+      }).then(() => { keepingPlace(() => { render() }) })
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-waiting-toggle]')) {
     b.addEventListener('click', () => {
       state.waitingOpen = !state.waitingOpen
@@ -7016,7 +7114,11 @@ function drawShell() {
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
-      void chat.ask(state.project, text, about, token.get(), to).then(async () => {
+      void chat.ask(state.project, text, about, token.get(), to, () => {
+        // Sending -> waiting -> no answer yet. Each of those is a repaint, and
+        // without this the row would say "Sending" until the answer landed.
+        keepingPlace(() => { render() })
+      }).then(async () => {
         /*
           Then re-read the office's own copy (#192).
 
@@ -8117,6 +8219,39 @@ function atNewest(threadEl) {
   // The page is the scroller: the newest message is at the thread's bottom
   // edge, so the question is whether that edge is on screen.
   return threadEl.getBoundingClientRect().bottom - window.innerHeight < 40
+}
+
+/*
+  How long a request has been waiting, counted up (#215).
+
+  One interval for the whole page, started when a waiting row appears and
+  cleared when the last one goes, so an idle studio has no timer at all. It
+  writes textContent rather than re-rendering: a render every second would
+  fight the composer for focus and reset the caret, which is #197's lesson
+  about a handler that redraws under somebody's hands.
+
+  `when.words` is not used here on purpose. It rounds to "just now" and then to
+  minutes, and the whole value of this line is in the first sixty seconds -
+  "18s" is the difference between a page that is working and a page that is
+  stuck.
+*/
+let ageTimer = null
+
+function tickWaiting() {
+  const marks = document.querySelectorAll('[data-waiting-since]')
+  if (marks.length === 0) {
+    if (ageTimer !== null) { clearInterval(ageTimer); ageTimer = null }
+    return
+  }
+  for (const el of marks) {
+    const since = Number(el.dataset.waitingSince)
+    if (!Number.isFinite(since)) continue
+    const secs = Math.max(0, Math.round((Date.now() - since) / 1000))
+    el.textContent = secs < 60
+      ? `${secs}s`
+      : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`
+  }
+  if (ageTimer === null) ageTimer = setInterval(tickWaiting, 1000)
 }
 
 function keepingPlace(draw) {

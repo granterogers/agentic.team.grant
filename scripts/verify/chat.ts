@@ -367,12 +367,24 @@ try {
       this check spent three runs reading that as "the affordance is broken"
       while the affordance was right and the fixture was 258 pixels tall.
 
-      Filled through the module's own `send`, which is what the composer calls
-      — so the thread is made long the way a real one gets long.
+      Filled through the module's own `send` AND `ask`, which is what the
+      composer calls — so the thread is made long the way a real one gets long.
+
+      `send` alone is no longer enough. Before #215 it wrote an invented reply
+      straight into the thread, so fourteen calls produced a conversation of
+      twenty-eight settled messages. Now it writes a request that has not been
+      answered, correctly, and fourteen of those left fourteen spinners on
+      screen for the rest of the run — which is this seed encoding the old
+      behaviour rather than the product being wrong. Asking as well settles
+      each one against the mocked route above, which is also the honest thing
+      for a fixture that is pretending to be history.
     */
     await page.evaluate(`(async () => {
       const chat = await import('/chat.js')
-      for (let i = 0; i < 14; i += 1) chat.send('legacy-coaching-course', 'earlier note ' + i, null, 'everyone')
+      for (let i = 0; i < 14; i += 1) {
+        chat.send('legacy-coaching-course', 'earlier note ' + i, null, 'everyone')
+        await chat.ask('legacy-coaching-course', 'earlier note ' + i, null, 'tok', 'everyone')
+      }
     })()`)
     /*
       Reopened through the same helper the top of this file uses, rather than
@@ -747,6 +759,171 @@ try {
       shaped !== null &&
         (shaped.wrapped === null || (shaped.wrapped.drift <= 1 && shaped.wrapped.gutter >= 12)),
     )
+
+    /* --- #215: a request that has not been answered says so ------------------
+
+       Grant: *"a message can be sent and get no reply for minutes, with no
+       state shown... Surface useful states such as Sending, Thinking, Failed,
+       Retry. Do not leave the user wondering whether anything happened."*
+
+       The cause was not a missing spinner. The studio INVENTED a reply the
+       instant Send was pressed - a sentence in a named agent's voice, chosen by
+       keyword, before anything had been asked - so the thread showed an
+       immediate confident answer and the real request waited behind it,
+       invisible. These checks assert the user-visible property in both
+       directions: the waiting state is drawn, and nothing pretends to be an
+       answer while it is.
+    */
+    await page.unroute('**/turn')
+    let slowTurns = 0
+    await page.route('**/turn', async (r) => {
+      slowTurns += 1
+      await new Promise((done) => setTimeout(done, 2500))
+      await r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          speak: 'Three themes, and the third is the interesting one.',
+          did: 'answered',
+        }),
+      })
+    })
+    await page.locator('[data-say]').first().fill('what does the corpus say')
+    await page.waitForTimeout(120)
+    await press(page, '[data-composer] .btn.primary')
+    await page.waitForTimeout(900)
+
+    /*
+      Scoped to what came AFTER the question, not to the whole thread.
+
+      The first draft counted every reply on screen and reported one fabricated
+      answer about a thread that legitimately held several real ones from
+      earlier in this same run. Validate the check before believing it: the
+      property is "nothing has spoken SINCE the question", and the way to ask
+      that is to look at what follows the last thing Grant said.
+    */
+    const waiting = (await page.evaluate(`(() => {
+      const row = document.querySelector('.waitrow')
+      const msgs = [...document.querySelectorAll('.msg')]
+      const lastMine = msgs.map((m, i) => [m, i]).filter(([m]) => m.classList.contains('mine')).pop()
+      const after = lastMine === undefined ? [] : msgs.slice(lastMine[1] + 1)
+      return {
+        drawn: row !== null,
+        says: row === null ? '' : (row.textContent || '').replace(/\\s+/g, ' ').trim(),
+        age: row === null ? '' : (row.querySelector('.waitage')?.textContent || ''),
+        impostors: after.filter((m) => !m.classList.contains('waitrow')).length,
+      }
+    })()`)) as { drawn: boolean; says: string; age: string; impostors: number }
+
+    check(
+      `${label} — a request in flight draws a waiting state`,
+      waiting.drawn ? waiting.says.slice(0, 64) : 'NOTHING ON SCREEN SAYS IT IS WAITING',
+      waiting.drawn && /sending|with the team/i.test(waiting.says),
+    )
+    check(
+      `${label} — and says how long it has been waiting`,
+      waiting.age === '' ? 'NO ELAPSED TIME' : waiting.age,
+      /^\d+s$|^\d+m/.test(waiting.age),
+    )
+    /*
+      The one that would have caught the original defect. Before #215 this count
+      was 1 within milliseconds of pressing Send, and the text was an invented
+      sentence signed by whichever agent a keyword matched.
+    */
+    check(
+      `${label} — and nothing answers in an agent's voice before the office has`,
+      waiting.impostors === 0
+        ? 'no reply yet, correctly'
+        : `${String(waiting.impostors)} FABRICATED REPLY`,
+      waiting.impostors === 0,
+    )
+
+    await page.waitForTimeout(2600)
+    const landed = (await page.evaluate(`(() => {
+      const bodies = document.querySelectorAll('.msg.theirs .mbody')
+      return {
+        gone: document.querySelectorAll('.waitrow').length,
+        stuck: [...document.querySelectorAll('.waitrow')].map((r) => (r.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80)).join(' /// '),
+        last: (bodies[bodies.length - 1] ? bodies[bodies.length - 1].textContent : '' || '').replace(/\\s+/g, ' ').trim(),
+      }
+    })()`)) as { gone: number; stuck: string; last: string }
+    check(
+      `${label} — the waiting state becomes the answer`,
+      landed.gone === 0 ? landed.last.slice(0, 60) : `STILL WAITING: ${landed.stuck}`,
+      landed.gone === 0 && landed.last.includes('Three themes'),
+    )
+
+    /* --- and a failure can be tried again ---------------------------------- */
+    await page.unroute('**/turn')
+    let attempts = 0
+    await page.route('**/turn', async (r) => {
+      attempts += 1
+      if (attempts === 1) {
+        await r.abort('failed')
+        return
+      }
+      await r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ speak: 'Second time lucky, here it is.', did: 'answered' }),
+      })
+    })
+    await page.locator('[data-say]').first().fill('try the flaky one')
+    await page.waitForTimeout(120)
+    await press(page, '[data-composer] .btn.primary')
+    await page.waitForTimeout(1200)
+
+    /*
+      Counted, not asserted at zero.
+
+      An earlier section of this suite deliberately makes the office fail, so
+      the thread already holds a bad row before this one exists. Asserting
+      "no bad rows after the retry" therefore fails on a correct retry, which
+      is the check being wrong about the fixture rather than the product being
+      wrong. The property is that THIS row stops being bad, so the count has to
+      go down by exactly one.
+    */
+    const badBefore = (await page.evaluate(
+      'document.querySelectorAll(".msg.theirs.bad").length',
+    )) as number
+    const failedRow = (await page.evaluate(`(() => {
+      const retry = document.querySelector('[data-chat-retry]')
+      return {
+        retry: retry !== null,
+        label: retry === null ? '' : (retry.textContent || '').trim(),
+        bad: document.querySelectorAll('.msg.theirs.bad').length,
+      }
+    })()`)) as { retry: boolean; label: string; bad: number }
+    check(
+      `${label} — a failed request is marked as failed and offers to try again`,
+      failedRow.retry
+        ? `${failedRow.label} (${String(failedRow.bad)} marked bad)`
+        : 'NO WAY TO TRY AGAIN',
+      failedRow.retry && failedRow.bad > 0,
+    )
+
+    if (failedRow.retry) {
+      await press(page, '[data-chat-retry]')
+      await page.waitForTimeout(1400)
+      const after = (await page.evaluate(`(() => ({
+        text: document.body.textContent.includes('Second time lucky'),
+        stillBad: document.querySelectorAll('.msg.theirs.bad').length,
+        mine: [...document.querySelectorAll('.msg.mine')].filter((m) => (m.textContent || '').includes('try the flaky one')).length,
+      }))()`)) as { text: boolean; stillBad: number; mine: number }
+      /*
+        One question, two attempts. A retry that appends a second copy of what
+        Grant typed makes the thread a worse record than the failure did - he
+        asked once.
+      */
+      check(
+        `${label} — trying again answers, without duplicating the question`,
+        after.text
+          ? `answered, ${String(after.mine)} copy of the question, bad ${String(badBefore)}→${String(after.stillBad)}`
+          : 'THE RETRY DID NOT ANSWER',
+        after.text && after.stillBad === badBefore - 1 && after.mine === 1,
+      )
+    }
+    void slowTurns
 
     check(`${label} — nothing thrown`, thrown[0] ?? 'none', thrown.length === 0)
     await ctx.close()
