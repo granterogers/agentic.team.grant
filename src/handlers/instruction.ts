@@ -140,6 +140,26 @@ interface Speaker {
    * anybody would look at — one layer further out.
    */
   readonly alsoConvened: readonly string[]
+  /**
+   * What `pickRoster` actually returned, which may be EMPTY.
+   *
+   * Separate from `slug` because the two answer different questions and
+   * conflating them made one of them unanswerable (#231). `slug` is who
+   * speaks, and it falls back to the Chief of Staff when nobody was convened —
+   * that fallback is right and is how the whole system reads an empty roster.
+   *
+   * #233 then recorded `[slug, ...alsoConvened]` into
+   * `routing_decisions.roster`, so a question that convened NOBODY was stored
+   * as having convened Claire. `npm run measure` counts who the office chooses
+   * from that column, so she was being counted as a chosen specialist every
+   * time no specialist was chosen, and "nobody was convened" stopped being
+   * countable at all.
+   *
+   * 0311's lesson in a column rather than in a vocabulary: two ways to say one
+   * thing, and the reader cannot tell them apart. The stored roster is this
+   * one; the speaker is still `slug`.
+   */
+  readonly convened: readonly string[]
 }
 
 export interface InstructionDeps {
@@ -237,7 +257,7 @@ async function speaker(
       select slug, name, title, communication_style, responsibilities
         from public.staff where slug = ${lit(byName)} and active
     `)
-    const s = rows[0] as Omit<Speaker, 'reason'> | undefined
+    const s = rows[0] as Omit<Speaker, 'reason' | 'alsoConvened' | 'convened'> | undefined
     if (s !== undefined) {
       /*
         Nobody else, and that is what stops delegation recursing.
@@ -251,6 +271,9 @@ async function speaker(
         ...s,
         reason: 'addressed directly — Grant opened this person’s bot',
         alsoConvened: [],
+        // Addressing somebody IS convening them, so this one is not empty:
+        // Grant picked the specialist himself.
+        convened: [s.slug],
       }
     }
   }
@@ -427,11 +450,12 @@ async function speaker(
   )
   const chosen = roster[0] ?? 'chief-of-staff'
   const alsoConvened = roster.slice(1)
+  const convened = roster
   const { rows } = await db.execute(`
     select slug, name, title, communication_style, responsibilities
       from public.staff where slug = ${lit(chosen)} and active
   `)
-  const s = rows[0] as Omit<Speaker, 'reason'> | undefined
+  const s = rows[0] as Omit<Speaker, 'reason' | 'alsoConvened' | 'convened'> | undefined
   return s === undefined
     ? {
         slug: 'chief-of-staff',
@@ -441,8 +465,9 @@ async function speaker(
         responsibilities: null,
         reason,
         alsoConvened,
+        convened,
       }
-    : { ...s, reason, alsoConvened }
+    : { ...s, reason, alsoConvened, convened }
 }
 
 /**
@@ -2360,7 +2385,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             reading at one person, so `alsoConvened` is empty whenever
             `confident` is false.
           */
-          roster: [who.slug, ...who.alsoConvened] as never,
+          /*
+            What was CONVENED, which is not always who speaks (#231).
+
+            `[who.slug, ...]` put the Chief of Staff in the roster of every
+            question that convened nobody — see `convened` on `Speaker`.
+          */
+          roster: who.convened as never,
           rosterReason: who.reason,
         },
         depth,
@@ -2466,6 +2497,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         contradictions: null,
         path: 'inference',
         model: completion.model,
+        /*
+          Everything a specific could legitimately have come FROM (#231).
+
+          The instruction, every earlier turn in the window, whatever was
+          recalled from beyond it, and the retrieved documents — assembled
+          from the same values that went into the prompt, so it cannot drift
+          from what the model actually saw. The gate compares clock times and
+          dates against it; a date in the answer and in none of this was
+          invented.
+        */
+        grounding: [
+          instruction,
+          context,
+          memory.recalled.map((m) => `${m.said} ${m.answered}`).join(' '),
+          turns.map((t) => `${t.said} ${t.answered ?? ''}`).join(' '),
+        ].join('\n'),
       } satisfies HandlerOutput
     },
   }

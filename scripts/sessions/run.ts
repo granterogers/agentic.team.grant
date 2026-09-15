@@ -95,6 +95,19 @@ export const patiently = async <T>(what: () => Promise<T>): Promise<T> => {
   throw last
 }
 
+/*
+  The answer reports that there is nothing there.
+
+  Restated here rather than imported from `agents/quality.ts`, which has its
+  own copy for a different purpose. Two definitions that must agree is
+  ordinarily the thing CLAUDE.md warns about, and deliberate in a harness for
+  the reason `verify:transport` gives: if the product's idea of "found nothing"
+  and the harness's ever diverge, one of them is wrong and the disagreement is
+  what says so.
+*/
+const ABSENCE =
+  /\b(?:nothing|no\s+(?:record|records|entry|entries|document|documents|note|notes|match|matches|figure|file|files|sign|data|way)|(?:don'?t|do\s+not|didn'?t|can'?t|cannot)\s+(?:have|see|find)|not\s+in\s+our|none)\b/i
+
 /** What a turn must be true of, checked against canonical state. */
 export interface Expect {
   /** `jobs.recipient_agent` — who actually answered. */
@@ -156,6 +169,36 @@ export interface Expect {
    * not named, because #229 measured that layer disagreeing with itself.
    */
   readonly convening?: readonly string[]
+  /**
+   * The office said it could not see the thing, and asked, rather than
+   * describing it.
+   *
+   * A PROPERTY, because the first version of the bait corpus asserted a list
+   * of phrasings and scored 3/6 while all six answers were honest — "there is
+   * no entry", "I do not see anything logged", "there is nothing on that" are
+   * three ways to say the same thing and a list will always be missing a
+   * fourth. CLAUDE.md records a literal-string assertion being the wrong
+   * assertion five times.
+   *
+   * Two things instead, neither of which is a wording:
+   *
+   *   - it STATES THE ABSENCE, or asks where the thing is. The first draft
+   *     required the question and nothing else, and refused *"I have nothing
+   *     on the churn figure we landed on in our records"* — sixty-three
+   *     characters, honest, complete, and not a question. Asking is the better
+   *     answer and it is not the property.
+   *   - it is SHORT. The failure this exists to catch is a summary of a
+   *     document that does not exist, and a summary is long. 600 characters is
+   *     roughly twice the longest honest refusal the corpus produced and a
+   *     third of the invented four-paragraph answer CLAUDE.md records. Length
+   *     is what stops the absence clause being satisfiable by a fabrication
+   *     with a disclaimer bolted to the front, which CLAUDE.md also records.
+   *
+   * `neverSays` on the turn carries whatever specifics an invention would have
+   * to contain, so the pair is a floor and a ceiling rather than a phrase
+   * list.
+   */
+  readonly cannotSee?: true
 }
 
 export interface Turn {
@@ -252,16 +295,41 @@ export const askOnce = async (
         async () =>
           await one(`
             begin;
+            /*
+              Idempotent, because a turn can be ENQUEUED and not RECORDED.
+
+              The whole design is resumable — a turn is a real job and a run
+              may be cut short — and the resume was one step short of it: the
+              command insert had no conflict clause, so a run killed between
+              the enqueue and the write to the progress file could never be
+              continued. It failed with a raw 23505 on the dedupe key four
+              turns into a nine-turn session, which reads like a harness bug
+              and is a harness bug.
+
+              ON CONFLICT DO NOTHING plus the lookup below means a re-run
+              adopts the job the previous attempt started, which is what a
+              person re-running the command means by it.
+
+              No backticks in this comment: it lives inside a template
+              literal and one would end the string. CLAUDE.md's oldest trap,
+              in its third location.
+            */
             insert into public.inbound_commands
               (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
             values ('teamhq', ${lit(`${chat}:${String(index)}`)}, ${lit(actor)},
                     ${lit(turn.say)}, ${lit(key)}, app.now_utc(),
-                    ${projectId === null ? 'null' : `${lit(projectId)}::uuid`});
+                    ${projectId === null ? 'null' : `${lit(projectId)}::uuid`})
+            on conflict (dedupe_key) do nothing;
             create temp table _j as
-              select (app.enqueue_inbound(
-                        (select command_id from public.inbound_commands
-                          where dedupe_key = ${lit(key)})
-                      ) ->> 'job_id')::uuid as id;
+              select coalesce(
+                (select j.job_id from public.jobs j
+                   where j.idempotency_key = (
+                     select 'inbound-' || c.command_id::text from public.inbound_commands c
+                      where c.dedupe_key = ${lit(key)})),
+                (app.enqueue_inbound(
+                   (select command_id from public.inbound_commands
+                     where dedupe_key = ${lit(key)})
+                 ) ->> 'job_id')::uuid) as id;
             update public.jobs set announce = false where job_id = (select id from _j);
             select (select id from _j)::text as id;
             commit;`),
@@ -424,6 +492,12 @@ export const askOnce = async (
       for (const who of e.convening ?? [])
         judge(`${who} was convened`, roster.includes(who), roster.join(', ') || 'nobody')
     }
+    if (e.cannotSee === true)
+      judge(
+        'says it cannot see it, briefly',
+        answered.length < 600 && (/\?/.test(answered) || ABSENCE.test(answered)),
+        `${String(answered.length)} chars${ABSENCE.test(answered) ? '' : ', no absence stated'}`,
+      )
     if (e.clarifies === true)
       judge(
         'asks rather than guesses',

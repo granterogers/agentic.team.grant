@@ -12,6 +12,7 @@ import {
   claimsToHaveRead,
   claimsToHaveSent,
   disagreementNeedsGrant,
+  fabricatedWhen,
   metadataProblems,
   promisesToReachOut,
   refuseToSend,
@@ -510,5 +511,126 @@ describe('promisesToReachOut (#231)', () => {
       body: "I'll post this on Slack for you.",
     })
     expect(problems.some((p) => p.problem.includes('named channel'))).toBe(true)
+  })
+})
+
+describe('a read that found nothing is not a claim (#231)', () => {
+  it('lets the honest bait answers through', () => {
+    for (const body of [
+      'I checked our notebook and the project documents for any note titled Q3 pricing review, and there is no entry.',
+      'I searched the office records for anything referencing Priya and renewal risk, but there is nothing on that.',
+      'I scanned our notebook for a competitor teardown and I do not see anything logged there.',
+      'I looked through our documents for the Tuesday call and found nothing.',
+    ])
+      expect(claimsToHaveRead(body), body).toBeNull()
+  })
+
+  it('CONTROL: still catches the read that produced facts', () => {
+    // #185, verbatim in shape. A claimed read PRODUCING five things that do
+    // not exist is the whole reason this gate exists.
+    expect(
+      claimsToHaveRead(
+        'I pulled the project records. The db read shows five active projects: mtz08joe, k2p91x, and three others.',
+      ),
+    ).not.toBeNull()
+  })
+
+  it('CONTROL: a negation that is not an absence still counts as a claim', () => {
+    // "not up to date" is a claim about what IS in there.
+    expect(
+      claimsToHaveRead(
+        'I checked the notebook and it is not up to date, the figures are from June.',
+      ),
+    ).not.toBeNull()
+  })
+
+  it('CONTROL: an absence about somewhere this path never looks is still a claim', () => {
+    /*
+      The two #237 cases, and they are right. "There is nothing in the inbox"
+      tells Grant not to search the inbox, and this path queries
+      `public.documents` and nothing else.
+    */
+    for (const body of [
+      'I checked the notebook, our docs, GitHub and the mail folder, but I have nothing on it here.',
+      'I went through the inbox and there is nothing there.',
+      'I checked the calendar for Tuesday events but it turns up no matches.',
+    ])
+      expect(claimsToHaveRead(body), body).not.toBeNull()
+  })
+
+  it('CONTROL: an absence in a LATER sentence does not excuse the claim', () => {
+    expect(
+      claimsToHaveRead(
+        'I pulled the records and the margin is 62 percent. There is nothing on churn.',
+      ),
+    ).not.toBeNull()
+  })
+})
+
+describe('fabricatedWhen (#231)', () => {
+  const GROUNDING = 'Remind me what we decided in the Tuesday call.'
+
+  it('catches the invented calendar the held-out baits produced', () => {
+    const body =
+      '1. 3.19 PM - Weekly Standup - Completed: action items for Q3 pricing review (due Fri Oct 18)\n' +
+      "2. 4.02 PM - Client Renewal Review - Open issues: need Priya's churn analysis."
+    expect(fabricatedWhen(body, GROUNDING)).not.toBeNull()
+  })
+
+  it('catches a single invented time and a single invented date', () => {
+    expect(fabricatedWhen('The call was at 4.02 PM.', GROUNDING)).not.toBeNull()
+    expect(fabricatedWhen('It is due Oct 18.', GROUNDING)).not.toBeNull()
+    expect(fabricatedWhen('Signed on 2026-10-18.', GROUNDING)).not.toBeNull()
+  })
+
+  it('CONTROL: a time Grant supplied is his, not an invention', () => {
+    expect(
+      fabricatedWhen('Your 3.19 PM standup is the one to move.', 'Move the 3.19 PM standup.'),
+    ).toBeNull()
+  })
+
+  it('CONTROL: a date in a retrieved document is grounded', () => {
+    expect(
+      fabricatedWhen(
+        'The contract runs to Oct 18.',
+        'Our documents: the contract ends Oct 18 this year.',
+      ),
+    ).toBeNull()
+  })
+
+  it('CONTROL: arithmetic on his own figures is not a specific this checks', () => {
+    // A margin of £26 IS derivable from £40 and £14, which is exactly why
+    // numbers in general are out of scope here.
+    expect(
+      fabricatedWhen(
+        'Forty pounds less fourteen is £26, so 65 percent.',
+        'price is 40, cost is 14',
+      ),
+    ).toBeNull()
+  })
+
+  it('CONTROL: an honest refusal mentions no time at all', () => {
+    expect(
+      fabricatedWhen('I have no record of a Tuesday call. Where is it stored?', GROUNDING),
+    ).toBeNull()
+  })
+})
+
+describe('fabricatedWhen does not read money as a clock (#231)', () => {
+  it('CONTROL: a price is not a time', () => {
+    // It read £63.50 as 63 minutes past something and refused a good answer
+    // four times. A gate that fires wrongly is worse than no gate.
+    for (const body of [
+      'The middle tier is £63.50 a month.',
+      'That comes to 26.00 after costs.',
+      'Margin works out at 64.65 percent.',
+    ])
+      expect(fabricatedWhen(body, 'what is the margin'), body).toBeNull()
+  })
+
+  it('still catches a real clock time', () => {
+    expect(fabricatedWhen('The standup was at 3.19 PM.', 'what happened')).not.toBeNull()
+    expect(fabricatedWhen('It ran 15:45 to 16:30.', 'what happened')).not.toBeNull()
+    expect(fabricatedWhen('He called at 9am.', 'what happened')).not.toBeNull()
   })
 })

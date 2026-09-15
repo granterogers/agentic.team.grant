@@ -141,6 +141,17 @@ export interface HandlerOutput {
    */
   readonly announce?: boolean
   /**
+   * Everything the answer could legitimately have taken a SPECIFIC from — the
+   * instruction, the conversation replayed into the prompt, and the documents
+   * retrieved for it.
+   *
+   * Handed to the coherence gate and never stored. The handler is the only
+   * thing that knows what it put in front of the model, and `fabricatedWhen`
+   * cannot ask "was this in the input" without being told what the input was
+   * (#231).
+   */
+  readonly grounding?: string
+  /**
    * Send this output as a playable audio file rather than as text (#66).
    *
    * On the OUTPUT, like `announce`, because the handler is the only thing that
@@ -690,6 +701,7 @@ export const runJob = async (
     sources: output.sources,
     contradictions: output.contradictions,
     ...(hadHistory === undefined ? {} : { hadHistory }),
+    ...(output.grounding === undefined ? {} : { grounding: output.grounding }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather
     // than on Grant's phone (#185).

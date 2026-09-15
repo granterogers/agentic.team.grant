@@ -672,9 +672,34 @@ export const pickRoster = (
   }
 
   const fromRoster = subjects(topical, instruction)
-  // `ceiling` is already filtered to who is on the project, so the
-  // intersection carries that restriction without a second mention of it.
-  const chosen = ceiling.filter((r) => fromRoster.includes(r))
+  /*
+    Ordered by the SUBJECT, not by the ceiling (#231).
+
+    `ceiling` is already filtered to who is on the project, so either
+    direction carries that restriction — but the direction decides WHO
+    ANSWERS, because `handlers/instruction.ts` takes `roster[0]` as the
+    speaker and hands the rest the work as subagents.
+
+    Written the other way round, the hardcoded ceiling list picked. Held-out
+    acceptance traffic found it twice in nine turns: *"Draft the announcement
+    copy for the tier change"* was ranked communications, growth by
+    `who_knows_about` — correctly, "announcement", "copy" and "draft" are all
+    in the communications director's expertise — and `light_investigation`'s
+    ceiling lists growth before communications, so Ruby answered. *"Audit the
+    refund policy for compliance risk"* ranked quality first and went to
+    research the same way.
+
+    The ceiling is a GATE. It says who this class of request may reach; it has
+    never had an opinion about which of them is most apt, and the list's order
+    is an artefact of how it was typed. `who_knows_about` returns a ranking,
+    from Grant's own expertise columns, and it was being thrown away.
+
+    #230 and #232 both fixed a version of "the ceiling's first entry decided",
+    for the empty case and the unconfident case. This is the third and it is
+    the ordinary one. The unconfident branch above already reads
+    subject-first, so the two branches now agree.
+  */
+  const chosen = fromRoster.filter((r) => ceiling.includes(r))
 
   /*
     Nothing topical matched.
@@ -694,7 +719,7 @@ export const pickRoster = (
     roster: roster.slice(0, ROSTER_CEILING),
     reason:
       chosen.length > 0
-        ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${fromRoster.join(', ')}, so the intersection was taken`
+        ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${fromRoster.join(', ')}, so the intersection was taken in that order of fit`
         : topicOnly
           ? `${classification.intent} only convenes a specialist when the subject is clear, and nothing in the request names one, so the Chief of Staff has it`
           : `${classification.intent} permits ${ceiling.join(', ')}, but nothing in the request names a subject area, so only the first was taken`,

@@ -158,6 +158,17 @@ export interface OutputMetadata {
    * check below fires only on an explicit `false`.
    */
   readonly hadHistory?: boolean
+  /**
+   * Everything the answer could legitimately have taken a specific FROM — the
+   * instruction, the conversation replayed into the prompt, and the retrieved
+   * documents.
+   *
+   * Supplied by the handler, because the handler is the only thing that knows
+   * what it put in front of the model. Undefined disables `fabricatedWhen`
+   * entirely: a comparison with nothing to compare against would refuse every
+   * answer that mentions a time.
+   */
+  readonly grounding?: string
 }
 
 export interface MetadataProblem {
@@ -344,6 +355,125 @@ export const promisesToReachOut = (body: string): string | null => {
  * that was fine, so the list stays short and grows only when a real message
  * gets past it.
  */
+/**
+ * Times and dates in the answer that were in nothing the office was given.
+ *
+ * ## The output this exists for
+ *
+ * Asked *"Remind me what we decided in the Tuesday call"* — about a meeting
+ * that never happened, in a project holding no calendar — the office replied:
+ *
+ *     1. 3.19 PM - Weekly Standup - Completed: action items for Q3 pricing
+ *        review (due Fri Oct 18)
+ *     2. 4.02 PM - Client Renewal Review - Open issues: need Priya's churn
+ *        analysis, pending Q3 pricing review summary, pending decision on
+ *        discount tier.
+ *     That's the only event on Tuesday.
+ *
+ * Two meetings with clock times, a due date, and named agenda items — none of
+ * which exist. Worse, it had absorbed the three earlier baits in the same
+ * chat (a Q3 pricing review, a person called Priya, a churn figure) and served
+ * them back as calendar entries: the office's own honest *"I have nothing on
+ * Priya"* three turns earlier had become evidence that Priya exists.
+ *
+ * ## Why the existing gates could not see it
+ *
+ * Every one of them keys on a CLAIM. `claimsToHaveRead` needs "I checked";
+ * `claimsToHaveSent` needs "I posted"; `claimsGrantSaid` needs "you told me".
+ * This output claims nothing. It simply asserts, and an assertion with no
+ * verb of retrieval in front of it was invisible.
+ *
+ * ## What is checkable without a model
+ *
+ * Not "is this true" — nothing here can know that. But a clock time or a
+ * calendar date is a specific that cannot be REASONED to. A margin of £26 can
+ * be derived from £40 and £14, which is why numbers in general are not
+ * checked here; 3.19 PM cannot be derived from anything. So if the answer
+ * contains one and it appears nowhere in the instruction, the conversation or
+ * the documents that were retrieved, the office made it up.
+ *
+ * Narrow on purpose, and the narrowness is what makes it a rule rather than a
+ * guess. It will miss an invented name and an invented percentage. It cannot
+ * fire on an answer that is doing arithmetic, quoting a document, or repeating
+ * something Grant said, because all three are in the grounding.
+ */
+export const fabricatedWhen = (body: string, grounding: string): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  const flat = (v: string): string => v.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const known = flat(grounding)
+  const MONTH = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec'
+  const shapes: RegExp[] = [
+    /*
+      A clock time, and the hour has to be an HOUR.
+
+      The first draft was `\d{1,2}[:.]\d{2}` with an optional am/pm, and it
+      read the price **£63.50** as 63 minutes past something. The gate then
+      refused a perfectly good monetisation answer four times, which cost four
+      model calls and — since a gate that fires wrongly is worse than no gate —
+      would have taught the next person to switch it off.
+
+      So the colon form is bounded to a real 24-hour clock, and the DOT form
+      requires am or pm, because "63.50" and "3.19 PM" are otherwise the same
+      shape and money is far commoner here than a dotted time. The cost is
+      missing a bare "9.30", which is the cheap direction: a missed invention
+      is one bad answer, and a false refusal is every good answer that
+      mentions a price.
+    */
+    /\b(?:[01]?\d|2[0-3]):[0-5]\d\b/g,
+    /\b(?:1[0-2]|0?\d)[:.][0-5]\d\s*(?:am|pm)\b/gi,
+    /\b(?:1[0-2]|0?\d)\s*(?:am|pm)\b/gi,
+    // A calendar date: Oct 18, 18 October, 2026-10-18.
+    new RegExp(String.raw`\b(?:${MONTH})[a-z]*\.?\s+\d{1,2}\b`, 'gi'),
+    new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+(?:${MONTH})[a-z]*\b`, 'gi'),
+    /\b\d{4}-\d{2}-\d{2}\b/g,
+  ]
+  for (const re of shapes) {
+    for (const hit of text.matchAll(re)) {
+      const token = flat(hit[0])
+      if (token === '' || known.includes(token)) continue
+      /*
+        A bare hour that is also just a number is not worth a refusal: "9am"
+        is a specific, "2.00" in a sentence about money is not. The clock
+        shapes above already require a colon, a point or an am/pm, which is
+        the whole discrimination — this only guards the degenerate case where
+        stripping punctuation leaves two digits that could be anything.
+      */
+      if (/^\d{1,2}$/.test(token)) continue
+      return hit[0].trim().slice(0, 40)
+    }
+  }
+  return null
+}
+
+/**
+ * Sources this path never touches, whatever the sentence says about them.
+ *
+ * `handlers/instruction.ts` retrieves from `public.documents` and nothing else
+ * — `retrieve()` calls `app.search_documents`. GitHub, the inbox, the
+ * calendar, Drive, Notion and Slack are other tools on other paths, so a
+ * sentence claiming to have looked in one of them is false here whether it
+ * reports a finding or an absence.
+ *
+ * This is what keeps #237's case caught while #231's are let through. *"I
+ * checked the notebook, our docs, GitHub and the mail folder, but I have
+ * nothing on it here"* is not modesty about a lookup that happened — it tells
+ * Grant four places have been searched, so he does not search them himself,
+ * and two of the four never were. An absence IS a claim when it is about
+ * somewhere nothing looked.
+ */
+const BEYOND_REACH = /\b(?:github|repo|mail|inbox|gmail|e-?mails?|calendar|drive|notion|slack)\b/i
+
+/**
+ * The sentence reports that the look came back empty.
+ *
+ * Deliberately about ABSENCE and not about negation in general: "I checked the
+ * notebook and it is not up to date" is a claim about what is in there and
+ * stays caught. The phrases here all say the search returned no rows.
+ */
+const FOUND_NOTHING =
+  /\b(?:nothing|no\s+(?:entry|entries|record|records|document|documents|match|matches|note|notes|result|results|file|files|data|sign|mention|reference)|not\s+(?:find|see|found)|(?:don'?t|do\s+not|didn'?t|did\s+not|can'?t|cannot)\s+(?:see|find|have)|turns?\s+up\s+no|came\s+back\s+empty|is\s+empty|none)\b/i
+
 export const claimsToHaveRead = (body: string): string | null => {
   const text = String(body ?? '')
   if (text.trim() === '') return null
@@ -379,7 +509,40 @@ export const claimsToHaveRead = (body: string): string | null => {
   ]
   for (const re of claims) {
     const hit = re.exec(text)
-    if (hit !== null) return hit[0].trim().slice(0, 80)
+    if (hit === null) continue
+    /*
+      A read that found NOTHING is not a claim about anything (#231).
+
+      The held-out bait corpus found this. Every honest answer to "summarise
+      the Q3 pricing review" has the same shape — *"I checked our notebook and
+      the project documents and there is no entry"* — and every one of them was
+      refused here, because the sentence claims a look and `evidence` on an
+      answer that found nothing can only be `inferred`. There is no value in
+      the evidence vocabulary for "searched, empty", so the office was
+      structurally unable to say the true thing.
+
+      It cost two attempts on one turn and four on another, and on the first it
+      made the answer WORSE: the refused attempt said "I don't have the Q3
+      pricing review document in our records"; the retry that replaced it said
+      "I need the document name or ID to pull it", which reads as a lookup
+      about to happen rather than one that came back empty.
+
+      Safe in a way #185 was not, and the asymmetry is the argument. That case
+      was *"I pulled the project records. The db read shows five active
+      projects: mtz08joe, ..."* — a claimed read PRODUCING five facts, none of
+      which existed. A claimed read reporting an absence produces nothing, so
+      there is nothing in it for Grant to act on wrongly — unless the absence is
+      about somewhere nothing looked, which `BEYOND_REACH` above is for.
+
+      Scoped to the sentence the claim sits in, like the question escape hatch
+      in `claimsGrantSaid`: a later sentence asserting a fact carries no read
+      claim of its own and was never covered by this one.
+    */
+    const from = text.lastIndexOf('.', hit.index) + 1
+    const end = text.indexOf('.', hit.index + hit[0].length)
+    const sentence = text.slice(from, end === -1 ? text.length : end + 1)
+    if (FOUND_NOTHING.test(sentence) && !BEYOND_REACH.test(sentence)) continue
+    return hit[0].trim().slice(0, 80)
   }
   return null
 }
@@ -514,6 +677,26 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         'and let him ask, or hand the work to the specialist, but do not promise a ' +
         'message that will never be sent (#231).',
     })
+  }
+
+  /*
+    A specific nothing gave it (#231).
+
+    Only when the caller supplies the grounding. Without it there is nothing
+    to compare against, and a check that fires on an empty comparison would
+    refuse every answer that mentions a time.
+  */
+  if (m.grounding !== undefined) {
+    const invented = fabricatedWhen(m.body ?? '', m.grounding)
+    if (invented !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `the text gives a specific time or date ("${invented}") that appears nowhere in ` +
+          'the request, the conversation or the documents that were retrieved, so it was ' +
+          'made up. Say you have no record of it and ask where it is (#231).',
+      })
+    }
   }
 
   const readClaim = claimsToHaveRead(m.body ?? '')
