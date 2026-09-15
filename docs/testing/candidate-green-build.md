@@ -73,3 +73,35 @@ move; `src/`, the edge functions and the migrations may not.
    granted to eight and never exercised for real. All are honest: the fixes
    that make those reachable are days old and his traffic predates them. Only
    he can close them.
+
+## Freeze verification — 2026-09-15 11:58 UTC
+
+Checked read-only, immediately before the hostile-corpus run, so that a later
+reader can tell whether the run was made against the thing this file records.
+
+| Recorded | Command | Observed |
+|---|---|---|
+| commit `6de6dfc` | `git diff --stat 6de6dfc HEAD -- src/ supabase/ migrations/` | no output — identical |
+| corpus `4743021` | `git diff --stat 4743021 HEAD -- scripts/sessions/hostile.ts` | no output — identical |
+| worker v364 | `GET /v1/projects/<ref>/functions/worker` | `version 364`, `ACTIVE` |
+| 372 migrations | `npm run check:migrations` | 372 migrations, 372 recorded as applied |
+| clean tree | `git status --porcelain` | empty |
+
+HEAD is `6e88ed0`; the two commits since the freeze touch `docs/` only, which is
+why the first row can be empty while HEAD has moved.
+
+**The worker version was read, never deployed.** `npm run deploy:worker` would
+have taken it to v365 and invalidated the record above, so the check is a plain
+read of the Management API rather than the deploy script's own probe.
+
+## Why the run has not happened yet
+
+`provider_health` for `openrouter`: `state = open`, `consecutive_failures = 10`,
+`last_error = 429 Rate limit exceeded: free-models-per-day-high-balance`. The
+free tier is a PER-DAY allowance and resets at 00:00 UTC. The breaker half-opens
+on `next_probe_at` correctly — verified three ways earlier in the campaign — and
+the deployed worker consumes each probe, 429s, and reopens it, which is the
+breaker working, not a defect.
+
+Classification: **ENVIRONMENT / PROVIDER FAILURE**, not a product defect. The day's
+consumption was test load (1,014 calls) against a real peak of 48/day.
