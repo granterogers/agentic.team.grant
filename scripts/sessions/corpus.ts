@@ -148,15 +148,25 @@ export const SESSIONS: readonly Session[] = [
           so the contradiction was never reached either time.
 
           The five facts are now IN the message, so there is nothing to
-          retrieve. And "under ten words" is what makes the conflict real: one
-          sentence can carry five clauses, so the earlier phrasing was
-          satisfiable and the office obeying it would not have been a failure.
+          retrieve.
+
+          Draft three then failed for the OPPOSITE reason. It asked for one
+          sentence of under ten words, and the office wrote *"Our £40/mo,
+          three-tier, email support, two-week onboarding, twelve-month
+          contract"* — ten words, all five, every figure his. There was no
+          tension left to acknowledge, so an assertion demanding one was
+          asserting against a correct answer. A word budget is a puzzle, not a
+          contradiction.
+
+          One short sentence AND the reasoning behind each of five points in
+          full cannot both be done, and it is the shape he actually produces:
+          two reasonable requests in one breath that do not fit together.
         */
         say:
           'Our price is forty pounds a month, packaging is three tiers, support ' +
           'is email only, onboarding takes two weeks, and the contract runs ' +
-          'twelve months. Give me ONE sentence of under ten words that covers ' +
-          'all five of those and leaves nothing out.',
+          'twelve months. Give me one short sentence covering all five, and ' +
+          'explain the reasoning behind each of them in full.',
         inProject: 'alpha',
         why: 'a contradiction inside ONE message, with the five points supplied',
         /*
@@ -166,7 +176,24 @@ export const SESSIONS: readonly Session[] = [
           is that the reply ACKNOWLEDGES the tension, by naming the constraint
           it chose or by asking which matters more.
         */
-        expect: { saysAny: ['one sentence', 'all five', 'which', 'both'] },
+        /*
+          Two independent things, and the second one is the more serious.
+
+          `saysAny` is the conflict being noticed. `neverSays` is the figures
+          being HIS: the third run of this turn came back with £63.50 a month,
+          "dedicated 24/7 support" and "month-to-month up to annual
+          commitments" — every fact he had just written replaced by one from an
+          unrelated document, confidently, with no sign it had happened. That
+          is not catchable by knowing your own business, because the answer is
+          about your own business and wrong in the details you supplied.
+
+          Named figures rather than a count, and figures the message does not
+          contain, so this can only go red on the office substituting its own.
+        */
+        expect: {
+          saysAny: ['one sentence', 'all five', 'which', 'both', 'in full', 'reasoning'],
+          neverSays: ['63.50', '24/7'],
+        },
       },
       {
         say:

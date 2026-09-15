@@ -84,7 +84,7 @@ import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
-import { asksWhatWasSaid, withoutNegated } from '../agents/negation.ts'
+import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
   createsSomething,
@@ -1345,6 +1345,67 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Most messages never reach a model — `needsResolving` is a cheap test
         and self-contained sentences are returned untouched.
       */
+      /*
+        A rejection with nothing in it, answered BEFORE the resolver sees it
+        (#231).
+
+          Grant: "That is not what I meant at all."
+
+        The office replied *"Routed to Ruby. You asked for Ruby's input on the
+        margin impact, so I'm passing this to them"* — the previous turn
+        happening again, at the moment he said it was wrong. Twice on the same
+        build, so not a coin flip.
+
+        `resolveAgainstThread` is doing exactly what it is for: a message with
+        no content of its own resolves into the last instruction in the
+        conversation. But the last instruction is the thing being rejected, so
+        the better the resolver gets, the more confidently it reconstructs the
+        misunderstanding — and then the hand-off path fires on it and looks,
+        to Grant, like not being listened to.
+
+        Before the resolver, therefore, and not after: by the time resolution
+        has happened the contentless message is gone and there is nothing left
+        to recognise. Answered in code because there is exactly one honest
+        answer and a model is not needed to find it — the same argument as the
+        empty-history reply above it.
+      */
+      if (rejectsWithoutSaying(instruction)) {
+        // The thread is read again here rather than hoisted: this path is
+        // rare, the read is one query, and moving the main one earlier would
+        // put a database call in front of every message to serve this one.
+        const last = (
+          await conversationBefore(deps.db, String(payload.command_id ?? '')).catch(() => [])
+        ).at(-1)
+        /*
+          Attributed, because #65's whole finding was 499 jobs with a NULL
+          `recipient_agent` and Grant reasonably concluding nothing was being
+          delegated. This path returns before `speaker()` runs, so the row
+          would be nobody's — and an empty roster already means the Chief of
+          Staff everywhere else in this system, which is exactly who asks a
+          clarifying question.
+        */
+        await deps.db
+          .execute(`
+            update public.jobs set recipient_agent = 'chief-of-staff'
+             where job_id = ${lit(job.jobId)}::uuid`)
+          .catch(() => undefined)
+        return {
+          body:
+            'Sorry — let me not guess at that. ' +
+            (last === undefined || last.answered === null
+              ? 'What were you after?'
+              : `What did I get wrong about ${
+                  last.said.length > 80 ? `${last.said.slice(0, 77)}...` : last.said
+                }?`),
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: await howComposed(deps.db, job.jobId),
+          model: null,
+        } satisfies HandlerOutput
+      }
+
       const resolved = await resolveAgainstThread(
         deps.db,
         deps.router,
@@ -2017,6 +2078,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       : `On this project specifically, Grant has told you: ${localBrief} `) +
                     'You are replying to Grant, who runs the place, in a private chat. He is ' +
                     'a colleague you know well, not a customer.\n\n' +
+                    /*
+                      Say which constraint you set aside (#231).
+
+                      Two turns of one session, the same shape. He asked for
+                      one sentence of under ten words covering five facts —
+                      impossible — and got eleven words with no mention of it.
+                      He set a standing rule one turn earlier ("keep every
+                      answer to a single short paragraph, no lists") and then
+                      asked for a numbered list; he got the list, silently.
+
+                      Neither answer was bad. Both left him unable to tell
+                      that a thing he had asked for had been dropped, and a
+                      system that quietly obeys the most recent instruction is
+                      one whose standing rules decay without ever being
+                      argued with. One clause is the whole cost of fixing it,
+                      and asking instead would be worse — CLAUDE.md records
+                      what a gate that fails into silence costs, and this is
+                      the version that keeps answering.
+                    */
+                    'If you cannot satisfy everything he has asked for at once — his own ' +
+                    'standing instructions included — do the most useful thing and say in ' +
+                    'one clause which constraint you set aside and why. Never drop one ' +
+                    'silently.\n\n' +
                     (turns.length === 0
                       ? ''
                       : 'You are mid-conversation. The turns before this one follow; the last ' +
@@ -2102,8 +2186,39 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                         'and ask where it is or how to reach it. Only answer from general ' +
                         'knowledge if the question is a general one that does not depend ' +
                         'on anything of ours.'
-                      : ' Numbered excerpts from our documents follow. Prefer them, cite them ' +
-                        'as [1], [2], and say plainly when they do not answer the question.'),
+                      : /*
+                           Whose facts win, said out loud (#231).
+
+                           This used to be "Prefer them", meaning prefer our
+                           documents over your general knowledge — and a model
+                           reads it as prefer them over EVERYTHING, the message
+                           included. Grant wrote five facts into one sentence
+                           (forty pounds a month, three tiers, email-only
+                           support, two weeks to onboard, a twelve-month
+                           contract) and got back a price of £63.50 from an
+                           unrelated document, "dedicated 24/7 support" and
+                           "month-to-month up to annual commitments". Every
+                           figure he supplied was replaced by one he had not,
+                           confidently, with no sign it had happened.
+
+                           That is worse than an invented answer. He cannot
+                           catch it by knowing his own business, because the
+                           reply is about his own business and is wrong in the
+                           details he had just stated. A document can be a
+                           month out of date; the sentence in front of it
+                           cannot be.
+
+                           So the precedence is explicit and in the right
+                           order. Documents still beat general knowledge, which
+                           is what the line was always for.
+                         */
+                        ' Numbered excerpts from our documents follow. Cite them as [1], [2], ' +
+                        'and say plainly when they do not answer the question. Prefer them ' +
+                        'over anything you merely know.\n\nBut what Grant states in his own ' +
+                        'message outranks every document. If he gives you a figure, a name or ' +
+                        'a fact, use HIS, even where a document says otherwise — and when a ' +
+                        'document disagrees with him, say so rather than quietly choosing ' +
+                        'one.'),
                 },
                 ...(context === ''
                   ? []

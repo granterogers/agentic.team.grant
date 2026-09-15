@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { asksWhatWasSaid, excludesASubject, withoutNegated } from '../../src/agents/negation.ts'
+import {
+  asksWhatWasSaid,
+  excludesASubject,
+  rejectsWithoutSaying,
+  withoutNegated,
+} from '../../src/agents/negation.ts'
 
 /*
   #237. A voice note routed to exactly the specialist it excluded:
@@ -91,5 +96,41 @@ describe('#231: a question about what was said earlier', () => {
     // A question about the WORLD is not a question about the conversation, and
     // answering it with "I have nothing from earlier" would be a non-sequitur.
     expect(asksWhatWasSaid(text)).toBe(false)
+  })
+})
+
+describe('rejectsWithoutSaying (#231)', () => {
+  it('catches the contentless rejection that reproduced twice', () => {
+    expect(rejectsWithoutSaying('That is not what I meant at all.')).toBe(true)
+  })
+
+  it('catches the short forms', () => {
+    for (const t of [
+      'No, wrong.',
+      'nope',
+      "That's not it.",
+      'Not quite.',
+      'You have misunderstood.',
+    ])
+      expect(rejectsWithoutSaying(t), t).toBe(true)
+  })
+
+  it('CONTROL: a rejection that says what was wanted is left on the ordinary path', () => {
+    for (const t of [
+      'No, the middle tier is forty pounds.',
+      'That is wrong. I meant the onboarding.',
+      'Not that — ask Ruby instead.',
+    ])
+      expect(rejectsWithoutSaying(t), t).toBe(false)
+  })
+
+  it('CONTROL: an ordinary instruction is not a rejection', () => {
+    expect(rejectsWithoutSaying('Tell me our gross margin on the middle tier.')).toBe(false)
+    expect(rejectsWithoutSaying('')).toBe(false)
+  })
+
+  it('CONTROL: a long message has content in it somewhere', () => {
+    const long = `No. ${'The pricing work matters because of the renewal cycle. '.repeat(3)}`
+    expect(rejectsWithoutSaying(long)).toBe(false)
   })
 })

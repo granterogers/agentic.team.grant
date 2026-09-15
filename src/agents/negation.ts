@@ -104,3 +104,135 @@ const ASKS_WHAT_WAS_SAID =
 
 /** True when the sentence asks the office to report an earlier turn. */
 export const asksWhatWasSaid = (text: string): boolean => ASKS_WHAT_WAS_SAID.test(text)
+
+/*
+  A rejection that carries nothing to go on.
+
+    Grant: "That is not what I meant at all."
+
+  #231, and it reproduced twice on the same build, so it is not a coin flip.
+  The office replied *"Routed to Ruby. You asked for Ruby's input on the margin
+  impact, so I'm passing this to them."* — which is the previous turn happening
+  again, at the moment he said it was wrong.
+
+  The mechanism is `resolveAgainstThread` doing its job. A contentless message
+  resolved against the conversation becomes the last instruction in it, and the
+  last instruction is exactly the thing being rejected. So the better the
+  resolver is, the more confidently it reconstructs the misunderstanding.
+
+  What makes this decidable without a model is the SHAPE. A rejection with no
+  replacement in it has one honest answer whatever the history says, and the
+  office can give it itself rather than asking a model to guess what he meant.
+
+  Deliberately narrow, in three ways at once, because the cost of firing on a
+  rejection that DOES carry content is refusing to act on a correction Grant
+  spelled out:
+
+    - it must reject, by one of a small set of phrasings;
+    - it must be short, because a long message has content in it somewhere;
+    - it must not carry a replacement — "I meant X", "do Y instead", "it is Z"
+      are corrections with content and belong on the ordinary path.
+*/
+const REJECTS =
+  /^(?:no[,.\s]|nope\b|nah\b|wrong\b|that(?:'s| is| was)?\s+(?:not|wrong)|not\s+(?:what|that|quite|right)|you(?:'ve| have)?\s+(?:got|misunderstood))|(?:not\s+what\s+i\s+(?:meant|asked|wanted)|that(?:'s| is)\s+not\s+it)\b/i
+
+/*
+  What is left once the rejection itself is taken away.
+
+  The first draft enumerated the SHAPES a replacement can take — "I meant X",
+  "instead", "should be", a digit — and it was wrong in both directions on its
+  first run. *"That is not what I meant at all"* matched `i meant` and was
+  read as carrying content; *"No, the middle tier is forty pounds"* matched
+  none of them and was read as carrying none. An enumeration of the ways a
+  person can supply a fact is a list that will always be missing one, which is
+  the correction CLAUDE.md makes about whitelists five times over.
+
+  So the question is asked the other way round: strip the rejection and the
+  words that only ever point backwards, and count what is left. A rejection
+  with a replacement in it has words left; a bare "no, that's wrong" does not.
+*/
+const NOTHING_LEFT: ReadonlySet<string> = new Set([
+  'no',
+  'nope',
+  'nah',
+  'not',
+  'wrong',
+  'that',
+  'this',
+  'it',
+  'its',
+  'what',
+  'quite',
+  'right',
+  'all',
+  'at',
+  'the',
+  'a',
+  'an',
+  'is',
+  'was',
+  'i',
+  'you',
+  'we',
+  'meant',
+  'mean',
+  'asked',
+  'wanted',
+  'said',
+  'got',
+  'have',
+  'has',
+  'misunderstood',
+  'sorry',
+  'really',
+  'just',
+  'sure',
+  'and',
+  'but',
+  'to',
+  'me',
+  'my',
+  'your',
+  'of',
+  'for',
+  'about',
+  'am',
+  'are',
+  'be',
+  'been',
+  'think',
+  'thats',
+  'nothing',
+  'else',
+])
+
+/**
+ * The longest a rejection can be and still be carrying nothing.
+ *
+ * The cheap second opinion rather than the discrimination — the word count
+ * below is what decides. A message this long that rejects and explains has
+ * content words in it by construction.
+ */
+const BRIEF = 120
+
+/** True when the message rejects the last answer and says nothing about what was wanted. */
+export const rejectsWithoutSaying = (text: string): boolean => {
+  const t = text.trim()
+  if (t.length === 0 || t.length > BRIEF) return false
+  if (!REJECTS.test(t)) return false
+  const left = t
+    .toLowerCase()
+    .split(/[^a-z0-9']+/)
+    .map((w) => w.replace(/'/g, ''))
+    .filter((w) => w.length > 1 && !NOTHING_LEFT.has(w))
+  /*
+    Zero, not one.
+
+    A single word left over is a subject: *"That is wrong. I meant the
+    onboarding"* leaves exactly "onboarding", and that is the whole
+    correction. Firing on it would refuse to act on a fact Grant spelled out,
+    which is the expensive direction — the cheap one is a bare "no, rubbish"
+    falling through to the ordinary path, where it behaves as it does today.
+  */
+  return left.length === 0
+}
