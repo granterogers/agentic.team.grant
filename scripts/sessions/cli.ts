@@ -133,7 +133,18 @@ const projects = new Map<string, string>()
 if ((session.projects ?? []).length > 0) {
   const { db, lit } = await import('./run.ts')
   for (const label of session.projects ?? []) {
-    const slug = `fixture-sess-${label}-${session.name}-g${String(gen)}`
+    /*
+      Keyed on the session, NOT on the generation.
+
+      A reset needs a fresh CHAT, because `app.conversation_before` threads on
+      it and turn 0 of a re-run must not open with the previous run's turns
+      behind it. The PROJECT has no such requirement, and giving it a
+      generation too multiplied fixture projects one per reset — 41 of them in
+      one night, each of which gathers a job and can then never be deleted
+      (ADR-0022). Invisible to Grant because they are fixtures, and exactly the
+      pile CLAUDE.md records twice.
+    */
+    const slug = `fixture-sess-${label}-${session.name}`
     const found = (
       (
         await db.execute(
@@ -149,7 +160,7 @@ if ((session.projects ?? []).length > 0) {
       (
         await db.execute(`
           insert into public.projects (name, slug, status)
-          values (${lit(`Fixture ${label} ${session.name} g${String(gen)}`)}, ${lit(slug)}, 'paused')
+          values (${lit(`Fixture ${label} ${session.name}`)}, ${lit(slug)}, 'paused')
           returning project_id::text as id`)
       ).rows as { id: string }[]
     )[0]

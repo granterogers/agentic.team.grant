@@ -312,7 +312,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **366 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **368 applied.**
 
 ## Asking the office about itself
 
@@ -320,6 +320,10 @@ Deploys probe themselves and fail when the probe fails:
 npm run measure          # what the office actually does — real traffic only, appended
 npm run levels           # where every tool sits on #234's six levels
 npm run breadth          # which of #235's coverage dimensions have no cases at all
+npm run session -- --list          # the #237 conversation sessions
+npm run session -- --only <name>   # run one, resumable; --reset starts it again
+npm run session -- --report        # score every turn recorded
+npm run verify:routing-heldout     # routing against cases it has never seen
 npm run gate             # the fifteen checks that must pass
 npm run tier1            # the intelligence corpus (tier1:fast omits the 30-minute judge)
 npm run mutate -- "…" --wants <slug>   # semantic variants of a request, printed not appended
@@ -1404,6 +1408,66 @@ Each of these cost real time. They are here so they cost it once.
   a second reason: a misspelled dimension does not error, it silently creates a
   zero in the matrix and hides the case from the count, which is the one
   failure a coverage model cannot survive.
+- **A registry row that says a capability EXISTS but not what it NEEDS gets
+  the gap filled in by the model.** `tool_permissions.description` for
+  `task.create` was four words, so an agent invented an intake form — *"1.
+  Title 2. Due date 3. Owner 4. Parent task"* — of which three are optional and
+  **a parent task is not a parameter at all**. Invented twice, in two sessions,
+  because nothing said otherwise. 0298 made a capability claim CHECKABLE;
+  0368 makes the real ones describe their own shape. Write the sentence as
+  data, in the table Grant edits, not in the prompt builder.
+- **The office has no outbound path while it is answering, so "I've posted a
+  Slack message to the team" is false by construction.** It said exactly that,
+  and `deliveries` for the job was zero — Grant would have waited for replies
+  from people who were never asked. Worse than a fabricated read, which
+  produces a wrong answer he can argue with. `claimsToHaveSent` can be strict
+  where `claimsToHaveRead` must be narrow, precisely because there is nothing
+  it could ever be true of; future tense is left alone, because a plan is not
+  a claim.
+- **A gate that fails into silence gets quieter the better it gets.** The
+  coherence gate refused two of four turns in an ordinary conversation and
+  Grant received nothing at all. Widening its detector would have made the
+  office quieter still — so the retry landed first: the refusal goes into
+  `pinned_config` and the next attempt puts it in the prompt, which is a closed
+  loop rather than a coin flip. Ship the recovery before the stricter check.
+- **"Do not draft the plan. Create the tasks instead." is a command, and the
+  `^` anchor could not see it.** `make-this` was anchored at the start of the
+  MESSAGE, so the whole "not that, this instead" shape — which is how Grant
+  changes his mind — fell to an unconfident `thought`: nobody convened, nothing
+  written. A lookbehind for a sentence terminator keeps everything the anchor
+  bought, because the sentence it excluded ("I do not want you to create a
+  task") has its verb mid-clause.
+- **A trigram subject matcher routes "the onboarding NOT the pricing" to the
+  pricing person.** Worse than a miss: a miss lands on the Chief of Staff and
+  this lands on somebody confidently answering the question that was withdrawn.
+  It also hides the semantic layer, which only runs when the literal matcher
+  finds nobody. `withoutNegated` strips excluded subjects from the LOOKUP text
+  only — the model still reads every word — and the one way it could make
+  things worse is closed by name: a negated VERB ("I do not think the pricing
+  matters") is not a negated subject.
+- **An eight-clause work request was filed as a global procedure called
+  "Shoulding decide".** `WHEN_YOU` matched "suggest WHEN we should decide," —
+  a complement clause, not a condition — and nothing distinguished a request
+  for WORK from a teaching once the text was long enough. The request went
+  unanswered AND the office's memory gained something it would put in front of
+  unrelated work for ever. Anchor a condition at a clause start, and ask
+  whether the sentence is somebody asking for work before reading it as
+  somebody teaching.
+- **A harness expectation is a claim about the product and is wrong about half
+  the time at first.** Tonight: a correction asserted as the literal "40" when
+  the right answer said 34 (0.85 x 40, the correction APPLIED); a task count
+  where the office legitimately asks for a title first, three times; a
+  contradiction corpus that never reached a contradiction because every case
+  was missing its material, so the office honestly said so and passed; and a
+  turn whose job FAILED scoring green because `recipient_agent` is written
+  before the failure. **Read the answer before believing the assertion.**
+- **A resumable harness needs a new CHAT on reset and the SAME projects.**
+  `app.conversation_before` threads on the chat, so replaying a session into
+  the old one opens turn 0 with the previous run's turns behind it and every
+  referent test answers a question nobody asked. The PROJECT has no such
+  requirement, and giving it a generation too produced 41 fixture projects in
+  one night — every one of which gathered a job and can therefore never be
+  deleted.
 - **`verify:controls` now takes more than ten minutes.** #183's fix took it
   from 91 pressed to 289, so the run legitimately exceeds the shell's ceiling.
   The npm script already splits itself desktop-then-phone; give the call a real

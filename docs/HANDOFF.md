@@ -1428,3 +1428,60 @@ transaction and asserts the same query sees it.
   (strategy vs growth on "enterprise or SMB"). That is a `staff.expertise`
   question and his to settle, not a routing defect.
 - `public.tasks` is empty and `github.read` has never been called.
+
+---
+
+## Campaign two — can Grant live with it? — 15 September 2026
+
+Campaign one asked whether the mechanisms work. This one asked whether the
+office survives the way Grant actually talks: corrections, a changed mind, two
+projects in one conversation, references to something three turns back.
+
+**The answer is that it does now, and it did not at the start of the night.**
+Nine sessions, 34 turns, every one injected through `inbound_commands` and
+answered by the deployed worker. `npm run session -- --list`.
+
+### Eight product defects, all found by USING the office
+
+| | what Grant would have seen |
+|---|---|
+| **no path to a task** | *"Yes, do it. Create the task."* → *"Sure, I'll create it. I need a few details first: 1. Title 2. Due date 3. Owner 4. Parent task"* → and `public.tasks` stayed empty. `task.create` was granted to all eight agents with nothing routing to it |
+| **a fabricated read failed into silence** | the coherence gate refused two of four turns in one conversation and he received **nothing** — no answer, no explanation |
+| **"I've posted a Slack message to the team"** | `deliveries`: zero. He would have waited for replies from people who were never asked |
+| **"not that, this instead" did nothing** | the imperative in a second sentence was invisible to the classifier, so a whole SHAPE of correction convened nobody |
+| **"the onboarding not the pricing"** | went to the finance director — the one specialist the sentence excluded |
+| **eight clauses filed as a procedure** | a global skill called *"Shoulding decide"*, none of the eight answered, and nonsense in the office's memory |
+| **a scaffolding-only reply** | *"Ask me again and I will retry"* — the office passing its own problem back to him |
+| **an invented intake form** | the model filled in what `tool_permissions` did not say, including a parent task that is not a parameter |
+
+### What holds
+
+- **No cross-project contamination.** A → implicit switch → B → a write → back
+  to A: every turn filed correctly, and every task in the right project.
+- **Action versus discussion.** A thought, a question and an explicit hold all
+  write nothing; only the command writes. 6/6.
+- **Adversarial.** A document that does not exist is not summarised, a disabled
+  capability is not pretended, a false premise about its own history is not
+  accepted. 3/3.
+- **Routing generalises rather than memorises.** Development 79%, **held out
+  75%** on thirty formulations written afterwards — inside the noise for the
+  sample size, so no overfitting.
+
+**133/139 expectations across 34 turns.** The six that remain are the
+contradictions session, where the office answers honestly about what it lacks
+rather than engaging with the conflict, and one voice-note turn that reaches
+the Chief of Staff rather than the operations director — better than the
+excluded specialist it used to reach, not yet right.
+
+### Still uncomfortable
+
+- `conversation.max_turns` is **12** and `conversation.window_minutes` is
+  **30**. A working session longer than twelve turns cannot see its own
+  beginning, and one spanning more than half an hour loses everything older —
+  and Grant talks to this office across a day, not inside half an hour. Not
+  changed tonight: it is a cost/latency decision, not a defect.
+- 41 fixture session projects accumulated before the harness stopped
+  multiplying them. All carry a job, so none can ever be deleted (ADR-0022).
+  Invisible to Grant — they are fixtures — and permanent, like the other 22.
+- `github.read` has still never been called and `public.tasks` is empty again
+  after teardown.
