@@ -33,12 +33,12 @@ the running worker is the trap CLAUDE.md records twice.
 | **Fix or decision** | A gap, not a loss, and the difference decides the severity: the deadline is still in front of Grant, it is simply not data. An earlier draft subtracted it from the title for tidiness, which WOULD have lost it, and that is why it no longer does. Resolving "by Friday" to a date needs his timezone and a resolver that refuses rather than guesses. |
 | **Status** | **OPEN, not material.** The action executes and the confirmation is truthful. |
 
-### L27 · Two harness defects and one stochastic gate
+### L27 · One harness defect and one stochastic gate
 
 | | |
 |---|---|
-| **Blocker** | #250, #251, #252. None is a product defect; all three cost real time during the examinations. |
-| **Evidence** | A job finishing on its third attempt read as one that never answered (#250). An exemplary refusal failed over a curly apostrophe — eighth instance (#251). `verify:routing-breadth`'s trivial-work check passed once and failed twice on identical code, naming different cases each time (#252). |
+| **Blocker** | #250 and #252. #251 is closed; these two are not. |
+| **Evidence** | A job finishing on its third attempt read as one that never answered (#250, seen again as `verify:recovers` 15/17 on one run and 17/17 on the next). `verify:routing-breadth`'s trivial-work check passed once and failed twice on identical code, naming different cases each time (#252). |
 | **Fix or decision** | Filed with the evidence rather than tuned against, which is the whole point of #252: a known stochastic metric must not stop a deterministic defect being told apart from noise. |
 | **Status** | **OPEN, harness only.** Not a backend or intelligence blocker. |
 
@@ -55,6 +55,35 @@ the running worker is the trap CLAUDE.md records twice.
 ---
 
 ## CLOSED
+
+### L30 · The three-desks routing gap was data, and is fixed as data
+
+| | |
+|---|---|
+| **Blocker** | Not a defect any more. Recorded because the diagnosis matters more than the fix. |
+| **Evidence** | "flag anything that could go legally wrong with holding staff data during it" reached nobody. `staff.expertise` for quality held risk, compliance and audit — the right concepts, and not one word Grant used. |
+| **Root cause** | `who_knows_about` is a trigram match, so concepts it cannot see do not help. |
+| **Fix** | 0375 adds the legal vocabulary where Grant edits it. The router is untouched — changing it to make one clause match would have been the wrong repair to the wrong layer. The clause now reaches quality first. |
+| **Status** | **CLOSED 2026-09-15**, as configuration. |
+
+### L28 · Extraction was still enumerated by verb, and a pending question ate the next turn
+
+| | |
+|---|---|
+| **Blocker** | #254 and #255, the third examination's systemic finding in two coupled layers. |
+| **Evidence** | "Line up a task on alpha to take up references" was asked what to call something plainly in the sentence; the next turn, an ordinary question, became the title of a task Grant never confirmed. |
+| **Root cause** | #249 rebuilt RECOGNITION on grammar and left EXTRACTION matching a verb list — the same defect one layer deeper. Its consequence was worse than itself: many more requests now reached the writer untitled, so a latent path that read the next turn as the answer became live. |
+| **Fix** | `requestBody` removes request framing BY POSITION, because the grammar already located the verb at token zero; it never learns a verb again, proved on ten it has never seen plus a meta-regression that fails if one is ever added. `clarify.ts` distinguishes the six things a next turn can be and only `answered` proceeds, with a written policy on how long a pending question lasts. |
+| **Status** | **CLOSED 2026-09-15.** |
+
+### L29 · The wording lock, made structurally impossible
+
+| | |
+|---|---|
+| **Blocker** | #251. Nine instances, two on one day, the last scoring an exemplary refusal as a defect over a curly apostrophe. |
+| **Root cause** | Each fix corrected the caller in front of it. The eighth audit grepped for `.includes(` and never looked at the regexes. |
+| **Fix** | `plain()` hoisted to module scope; every semantic assertion reads the normalised answer and the raw one is left for length and display. `ABSENCE` is a property in five shapes rather than a phrase list. `verify:harness` feeds the same sentence in two typographies and requires the same verdict, checks all nine refusals this repository has ever scored wrongly, and checks four fabrications still fail — because widening until anything passes is the other way to break it. |
+| **Status** | **CLOSED 2026-09-15.** |
 
 ### L20 · Two provenance gaps — both now closed
 

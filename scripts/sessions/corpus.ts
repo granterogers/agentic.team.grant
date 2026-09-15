@@ -24,6 +24,7 @@
 
 import { HELD_OUT } from './holdout.ts'
 import { FINAL } from './final.ts'
+import { FOURTH } from './fourth.ts'
 import { HOSTILE } from './hostile.ts'
 import { THIRD } from './third.ts'
 import type { Session } from './run.ts'
@@ -803,6 +804,7 @@ export const SESSIONS: readonly Session[] = [
   ...HOSTILE,
   ...FINAL,
   ...THIRD,
+  ...FOURTH,
 ]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)
