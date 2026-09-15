@@ -76,10 +76,24 @@ const ok = (what: string, good: boolean, note = '') => {
   }
 }
 
-import { type Case, CORPUS } from '../corpus/routing.ts'
+import { HELD_OUT } from '../corpus/heldout.ts'
+import { type Case, CORPUS as DEVELOPMENT } from '../corpus/routing.ts'
+
+/*
+  Which corpus (#235 §17).
+
+  The development corpus found three routing defects and is FROZEN. Every one
+  of those fixes could in principle have been a fix to that list rather than to
+  the office's understanding, and no development score can tell the difference
+  — so `--heldout` runs thirty formulations written afterwards, none of which
+  appears in it. A large gap between the two is overfitting, and the report
+  says so rather than quoting the flattering number.
+*/
+const HELD = process.argv.includes('--heldout')
+const CORPUS = HELD ? HELD_OUT : DEVELOPMENT
 
 console.log(
-  `\nverify:routing-breadth — ${String(CORPUS.length)} cases, ${String(new Set(CORPUS.map((c) => c.wants)).size)} targets\n`,
+  `\nverify:routing-breadth${HELD ? ' (HELD OUT)' : ''} — ${String(CORPUS.length)} cases, ${String(new Set(CORPUS.map((c) => c.wants)).size)} targets\n`,
 )
 
 type Result = Case & {

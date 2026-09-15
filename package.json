@@ -212,6 +212,7 @@
     "qq": "tsx scripts/qq.ts",
     "verify:collaborates": "tsx scripts/verify/collaborates.ts",
     "verify:routing-breadth": "tsx scripts/verify/routing-breadth.ts",
+    "verify:routing-heldout": "tsx scripts/verify/routing-breadth.ts --heldout",
     "measure": "tsx scripts/measure.ts"
   },
   "devDependencies": {
