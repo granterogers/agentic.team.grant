@@ -2462,10 +2462,41 @@ kbd {
 @media (max-width: 560px) { .emptydo .btn { width: 100%; justify-content: center; } }
 
 /* Call the team, mid-call. The button says what it is doing, in place. */
+/*
+  A live call, and a call being placed (#214).
+
+  Since the button became the call rather than the door to it, its state is the
+  only thing on screen that says whether the microphone is open. Green and
+  breathing for live; the same green held back for the seconds between the press
+  and the peer connection, so the two are told apart at a glance without the
+  connecting state pretending to be the connected one.
+*/
 .callbtn.ringing {
   background: linear-gradient(180deg, color-mix(in srgb, var(--good) 80%, #fff), var(--good));
 }
 .callbtn.ringing .ring { animation-duration: .9s; }
+.callbtn.connecting {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--good) 40%, var(--surface)),
+    color-mix(in srgb, var(--good) 26%, var(--surface)));
+}
+.callbtn.connecting .ring { animation-duration: 1.6s; }
+/* The live button breathes. It is the only animated control in the rail, which
+   is what makes it readable as a state rather than as decoration. */
+@keyframes callpulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 46%, transparent); }
+  55%      { box-shadow: 0 0 0 7px color-mix(in srgb, var(--good) 0%, transparent); }
+}
+.callbtn.ringing { animation: callpulse 1.9s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .callbtn.ringing { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 34%, transparent); }
+  .callbtn.ringing .ring, .callbtn.connecting .ring { animation: none; }
+}
+
+/* What the call is saying about itself, under the button that is the call. */
+.callsay {
+  margin: 6px 2px 0; color: var(--ink-2); font-size: 12px; line-height: 1.35;
+}
+.callsay[hidden] { display: none; }
 
 /* A control that admits it is not built yet, where the press happened. */
 .btn.nope {

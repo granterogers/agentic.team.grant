@@ -16,7 +16,7 @@ import * as chat from './chat.js'
 import * as dictate from './dictate.js'
 import * as command from './command.js'
 import * as config from './settings.js'
-import { wireCall, unwireCall, syncCallButtons, callIsLive } from './call.js'
+import { wireCall, unwireCall, syncCallButtons, callIsLive, toggleCall } from './call.js'
 import { hydrateUsage, usageTab } from './usage.js'
 import { MARKS } from './logos/marks.js'
 import * as workspace from './workspace.js'
@@ -635,6 +635,26 @@ function commandRows() {
     crew: CREW,
     docsFor: allDocs,
   })
+  /*
+    The call panel is reachable, and only from here (#214).
+
+    Appended to the candidate list rather than built into `command.candidates`,
+    which takes the page's data and knows nothing about the studio's surfaces.
+    Appended BEFORE the search, so it is ranked and filtered like everything
+    else rather than always showing.
+
+    One list, two callers: this function is the single assembly the renderer and
+    the keyboard picker both read, which is the property the comment above it
+    exists to protect.
+  */
+  all.push({
+    kind: 'section',
+    id: 'call-panel',
+    title: callIsLive() ? 'The call in progress' : 'The call panel',
+    hint: 'transcript, and typing to the team',
+    go: { callpanel: true },
+  })
+
   const hits = command.search(state.cmd.q, all)
   const typed = state.cmd.q.trim()
 
@@ -716,6 +736,11 @@ function runCommand(row) {
   }
   const go = row.go ?? {}
   closeCmd()
+  if (go.callpanel === true) {
+    render()
+    openCallPanel()
+    return
+  }
   if (go.settings !== undefined) {
     state.setting = go.settings
     settingsSheet()
@@ -763,6 +788,23 @@ function runCommand(row) {
  * that can disagree with the one on screen — and the disagreement only shows up
  * as the bar navigating somewhere you did not pick.
  */
+/*
+  The call panel, on demand.
+
+  Closing it does not hang up - #101's rule, and still right: the call is a
+  module-level singleton and the panel attaches to it and detaches from it.
+  `unwireCall` drops the reference and stops nothing, which is the whole point.
+*/
+function openCallPanel() {
+  const v = $('#viewer')
+  v.innerHTML = callSheet()
+  sheet(v, true)
+  const shut = () => { unwireCall(); sheet(v, false); syncCallButtons() }
+  $('.close', v)?.addEventListener('click', shut)
+  v.addEventListener('click', (e) => { if (e.target === v) shut() })
+  wireCall(v)
+}
+
 function pickCommand(index) {
   runCommand(commandRows()[index])
 }
@@ -1362,6 +1404,21 @@ function rail() {
           <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v3"/></svg>
         <span class="lbl">Call the team</span>
       </button>
+
+      <!--
+        What the call is doing, in words, where the call is (#214).
+
+        Empty and hidden until the call has something to say, so an idle rail
+        shows nothing at all. It exists because the panel stopped being in the
+        way: with no dialog open, a call that is refused the microphone, or that
+        cannot reach the service, had nowhere to report it. A prominent control
+        that fails silently is worse than the dialog it replaced.
+
+        A live region, so it is announced rather than only drawn - section 29
+        asks for call and conversation state to reach a screen reader, and this
+        is the one piece of state a person cannot see happening.
+      -->
+      <p class="callsay t-meta" data-callsay role="status" aria-live="polite" hidden></p>
 
       <!--
         Writing to them, beside calling them (#103).
@@ -6236,16 +6293,34 @@ function drawShell() {
     if (dockOpen()) $('[data-docksay]')?.focus()
   })
 
+  /*
+    Pressing Call the team CALLS the team (#214).
+
+    Grant, in full: *"When Call the Team is pressed: do not open a modal/dialog.
+    Start the team voice/audio session directly. Change the button/icon state
+    visually to indicate that a live call is active... The same button should
+    function as a toggle: first click connect, second click disconnect. Stopping
+    the call must genuinely terminate the audio/session, not merely hide UI.
+    There should be no modal that remains stuck open."* And the sentence that
+    says what he actually wants: *"The experience should feel like toggling a
+    live microphone/call, not opening another page."*
+
+    It used to open a sheet, and the sheet's own microphone placed the call - so
+    the most prominent control in the product was two presses from doing the one
+    thing its label promised, and the thing in between was a dialog.
+
+    `toggleCall` was already there and already correct: #101 and #102 made
+    `endCall` cancel the response at the server, clear the audio the server has
+    already sent, tear down the peer connection and then silence the element, in
+    that order. So stopping genuinely stops. What was missing was a control
+    wired to it.
+
+    The panel has not gone - it holds the transcript and the typed fallback -
+    it has stopped being in the way. It opens from the command bar, which is
+    where a surface you want occasionally and not every time belongs.
+  */
   const call = $('[data-call]', root)
-  call?.addEventListener('click', () => {
-    const v = $('#viewer')
-    v.innerHTML = callSheet()
-    sheet(v, true)
-    const shut = () => { unwireCall(); sheet(v, false); syncCallButtons() }
-    $('.close', v)?.addEventListener('click', shut)
-    v.addEventListener('click', (e) => { if (e.target === v) shut() })
-    wireCall(v)
-  })
+  call?.addEventListener('click', () => { toggleCall() })
 
   for (const b of root.querySelectorAll('[data-settings]')) {
     b.addEventListener('click', () => { settingsSheet(); sheet($('#settings'), true) })

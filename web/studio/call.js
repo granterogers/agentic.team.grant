@@ -104,9 +104,34 @@ const stopTracks = (s) => {
 /** True while a call is connected or connecting. */
 export function callIsLive() { return onCall }
 
+/*
+  Where the call's state is said.
+
+  The panel, when it is open. And ALWAYS the call buttons themselves, because
+  since #214 the ordinary way to place a call is to press the microphone in the
+  rail and never open a panel at all - so if this only wrote into the panel, a
+  call that refused to connect would be completely silent. The person would
+  press Call the team, nothing would happen, and nothing anywhere would say why.
+  That is the exact failure the modal was hiding.
+
+  `data-callsay` is painted on any element that asks for it, and the button's
+  own title and accessible name carry the sentence as a fallback that needs no
+  markup at all.
+*/
+let lastSaid = ''
+
 const say = (text) => {
-  if (view?.state) view.state.textContent = text
+  lastSaid = String(text ?? '')
+  if (view?.state) view.state.textContent = lastSaid
+  if (typeof document === 'undefined') return
+  for (const el of document.querySelectorAll('[data-callsay]')) {
+    el.textContent = lastSaid
+    el.hidden = lastSaid === ''
+  }
 }
+
+/** The last thing the call said about itself, for a surface drawn afterwards. */
+export function callSays() { return lastSaid }
 
 const show = (who, text, cls) => {
   turns.unshift({ who, text, cls: cls || '' })
@@ -131,11 +156,37 @@ const paint = (host) => {
   person believes the microphone is off.
 */
 export function syncCallButtons() {
+  /*
+    Three states, not two (#214).
+
+    `onCall` goes true the instant the button is pressed and the peer connection
+    is published several seconds later, after a microphone permission prompt and
+    an SDP exchange. Painting those seconds as "on a call" is a status light
+    that lies, and painting them as "not on a call" invites a second press that
+    hangs up the connection being made. So connecting is its own state and says
+    so.
+  */
+  const connecting = onCall && pc === null
+  const live = onCall && pc !== null
+  const label = live ? 'End the call'
+    : connecting ? 'Connecting the call — press to cancel'
+    : 'Call the team'
   for (const b of document.querySelectorAll('[data-call]')) {
-    b.classList.toggle('ringing', onCall)
+    b.classList.toggle('ringing', live)
+    b.classList.toggle('connecting', connecting)
     b.setAttribute('aria-pressed', String(onCall))
-    b.setAttribute('aria-label', onCall ? 'End the call' : 'Call Claire')
-    b.title = onCall ? 'End the call' : 'Start a voice call with Claire'
+    b.setAttribute('aria-label', label)
+    b.title = live ? 'End the call'
+      : connecting ? 'Connecting. Press again to cancel.'
+      : 'Start a voice call with the team'
+    /*
+      The words change too, where there are words. Colour alone is not a state:
+      a green microphone and a blue microphone are the same microphone to anyone
+      who cannot tell them apart, and section 32 asks for states to be
+      distinguishable semantically, not only visually.
+    */
+    const lbl = b.querySelector('.lbl')
+    if (lbl !== null) lbl.textContent = live ? 'End the call' : connecting ? 'Connecting…' : 'Call the team'
   }
 }
 
@@ -465,6 +516,9 @@ export async function startCall() {
     pc = conn
     channel = ch
     speaker = out
+    // Connecting -> live. Nothing else calls this on the happy path, so without
+    // it the button would say "Connecting…" for the length of the call.
+    syncCallButtons()
     say('On a call with Claire. Talk over her whenever you like.')
   } catch (e) {
     abandon()

@@ -173,17 +173,34 @@ const openTalk = async (device: Record<string, unknown>) => {
   /*
     The call is a sheet now, not a tab.
 
-    Reached the way a person reaches it — the microphone in the rail, which is
-    the most prominent control in the interface and the one Grant asked to be
-    prominent. Pressing it opens the sheet; the sheet's own microphone is what
-    places the call, and that is the one every check below drives.
+    Reached through the command bar, which is where the call PANEL lives since
+    #214.
+
+    The microphone in the rail no longer opens anything. Grant: *"When Call the
+    Team is pressed: do not open a modal/dialog. Start the team voice/audio
+    session directly."* So a test that drives this suite by clicking it would
+    place a real call and then measure a dialog that is deliberately not there.
+
+    The panel is still the surface these checks are about - the transcript and
+    the typed fallback - and it opens from the command bar, ranked like every
+    other row. Driving it this way also means the command bar's own routing is
+    exercised on every talk run, which nothing else did.
   */
-  const reached = (await page.evaluate(`(() => {
-    const el = document.querySelector('[data-call]');
-    if (!el) return false;
-    el.click();
-    return true;
-  })()`)) as boolean
+  await page.keyboard.press('Control+k')
+  await page.waitForTimeout(300)
+  await page.locator('[data-cmd-input]').fill('call panel')
+  await page.waitForTimeout(300)
+  /*
+    A REAL press, not `element.click()`.
+
+    The command bar's rows are wired on `mousedown`, deliberately - it preserves
+    focus in the input so a mouse press behaves exactly like Enter. A synthetic
+    `click()` dispatches no mousedown, so it silently does nothing and the check
+    below reports a missing panel about a row that works perfectly.
+  */
+  const row = page.locator('[data-cmd-row]').filter({ hasText: 'The call panel' }).first()
+  const reached = (await row.count()) > 0
+  if (reached) await row.click({ force: true })
   await page.waitForTimeout(800)
   return { context, page, reached }
 }
@@ -685,30 +702,79 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
   )
 
   /*
-    And again from the state that leaked.
+    And again from the state that used to leak, through the control Grant
+    actually uses (#101, then #214).
 
-    Closing the sheet is not hanging up (#101) — the call is meant to survive
-    it. So: place a call, close the sheet, reopen it, and press stop. That is
-    the exact sequence that used to strand a microphone, and it is the sequence
-    a person performs without thinking about it.
+    Closing the panel is not hanging up - the call is meant to survive it, and
+    that is what stranded a microphone before #101. What changed with #214 is
+    what happens next: the rail's button no longer REOPENS the panel, it ends
+    the call, because Grant asked for a toggle and not a door.
+
+    So the sequence is the one a person performs: place a call, close the panel,
+    press the microphone in the rail. That must end the call and release the
+    device, with no panel involved at any point in the stop.
   */
   await page.locator('#call').tap()
   await page.waitForTimeout(400)
   await page.locator('#viewer .close').tap()
   await page.waitForTimeout(300)
+  const railLive = await page.evaluate(
+    `document.querySelectorAll('[data-call].ringing, [data-call].connecting').length > 0`,
+  )
+  record(
+    'call · the rail keeps showing a live call after the panel is closed',
+    railLive === true ? 'still shown as live' : 'THE RAIL FORGOT THE CALL',
+    railLive === true,
+  )
   await page.locator('[data-call]').first().tap()
-  await page.waitForTimeout(400)
-  await page.locator('#call').tap()
   await page.waitForTimeout(500)
   const afterRoundTrip = (await page.evaluate(
     `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
   )) as number
   record(
-    'call · and after closing the sheet mid-call and coming back, still released',
+    'call · pressing the rail microphone ends the call and releases the device',
     afterRoundTrip === 0
       ? 'no live track remains'
       : `${String(afterRoundTrip)} track(s) STILL RECORDING`,
     afterRoundTrip === 0,
+  )
+  const railIdle = await page.evaluate(
+    `document.querySelectorAll('[data-call].ringing, [data-call].connecting').length === 0`,
+  )
+  record(
+    'call · and the rail says so, without a panel being open',
+    railIdle === true ? 'back to idle' : 'THE RAIL STILL SAYS LIVE',
+    railIdle === true,
+  )
+
+  /*
+    The toggle, from a cold start and with no panel at all.
+
+    This is #214's actual claim: the most prominent control in the product
+    places a call on the first press and ends it on the second, and nothing
+    opens. Everything above reached the microphone through the panel, so without
+    this the one interaction Grant asked for would be the one nothing tests.
+  */
+  await page.locator('[data-call]').first().tap()
+  await page.waitForTimeout(600)
+  const startedBare = await page.evaluate(
+    `document.querySelectorAll('[data-call].ringing, [data-call].connecting').length > 0
+       && !document.body.classList.contains('behind')`,
+  )
+  record(
+    'call · the rail microphone places a call on its own, opening nothing',
+    startedBare === true ? 'live, and no sheet opened' : 'IT DID NOT START, OR IT OPENED A DIALOG',
+    startedBare === true,
+  )
+  await page.locator('[data-call]').first().tap()
+  await page.waitForTimeout(500)
+  const stoppedBare = (await page.evaluate(
+    `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
+  )) as number
+  record(
+    'call · and the second press genuinely stops it',
+    stoppedBare === 0 ? 'device released' : `${String(stoppedBare)} track(s) STILL RECORDING`,
+    stoppedBare === 0,
   )
 
   await context.close()
