@@ -23,6 +23,7 @@
  */
 
 import { HELD_OUT } from './holdout.ts'
+import { HOSTILE } from './hostile.ts'
 import type { Session } from './run.ts'
 import { UNSEEN } from './unseen.ts'
 
@@ -793,6 +794,6 @@ const DEVELOPMENT: readonly Session[] = [
   `holdout.ts`: those were written before they were run and are run once, and
   that is a discipline about WHEN, which no type can enforce.
 */
-export const SESSIONS: readonly Session[] = [...DEVELOPMENT, ...HELD_OUT, ...UNSEEN]
+export const SESSIONS: readonly Session[] = [...DEVELOPMENT, ...HELD_OUT, ...UNSEEN, ...HOSTILE]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)
