@@ -11,6 +11,57 @@ Operations; Ruby, Growth; Oliver, Communications; Grace, Quality & Risk) take
 jobs from a Postgres queue, act on his real projects, and reach him through
 Telegram, Slack, a voice call and a web dashboard.
 
+## Where the project is: GRANT HUMAN BETA
+
+**The backend certification campaign is COMPLETE. It ended GREEN on 15
+September 2026 and Grant accepted the verdict.** Do not reopen it, and do not
+start another development campaign, until he asks.
+
+| | |
+|---|---|
+| **Certified candidate** | commit `63c5a26`, worker **v391**, **375** migrations |
+| **Model** | `openai/gpt-oss-120b` → `qwen/qwen3.7-flash` → `mistralai/mistral-small-3.2-24b-instruct` → free tier |
+| **Verdict and evidence** | `docs/testing/backend-acceptance-verdict-2026-09-15.md` |
+| **What GREEN does NOT claim** | the same document, and `docs/testing/green-blocker-ledger.md` |
+
+Four final examinations earned it, each written after the last, each committed
+unrun against its own freeze, none recycled. Three found real systemic defects
+(#246, #247, #248, #249, #254, #255); the fourth found none and scored 17/18,
+its one failure an expectation the authoring session had written itself.
+
+### The standing rule that replaces the campaign
+
+**Do NOT write another synthetic final examination.** Four were justified
+because each of the first three found a genuine systemic defect. A fifth would
+be testing because more testing is imaginable, which is not a reason, and Grant
+has said so explicitly.
+
+What replaces it is beta. **Real usage is now the primary source of behavioural
+findings**, and a genuine failure Grant hits during normal use is worth more
+than any corpus, because nobody wrote it to find anything.
+
+When he reports one:
+
+1. **Investigate before theorising.** Read the canonical evidence — the job
+    row, the output body, the impediment, the routing decision. This file
+    records several occasions where a confident reading of a symptom was wrong
+    and one query settled it.
+2. **Classify it**, in his words: SYSTEMIC PRODUCT DEFECT · LOCAL PRODUCT
+    DEFECT · HARNESS DEFECT · EXPECTED STOCHASTIC VARIANCE · ENVIRONMENT /
+    PROVIDER FAILURE. Give the evidence for the classification, not just the
+    label.
+3. **Fix it at the appropriate abstraction.** #249 and #254 are the cautionary
+    pair: three defects filed separately were one defective abstraction, and
+    the fix for it repeated the same mistake one layer deeper. Ask whether the
+    thing that failed is an instance or a class *before* patching the instance.
+4. **Convert it into a permanent regression.** Not the sentence that failed —
+    semantic neighbours of it, and the negative controls that prove the fix did
+    not buy recall with precision.
+5. **Run the affected gates**, and say which ones and what they returned.
+
+Reopening certification needs evidence from real use that the verdict was
+wrong — not a new idea for something that could be probed.
+
 ## Reading order
 
 | Document | Role |
@@ -18,6 +69,8 @@ Telegram, Slack, a voice call and a web dashboard.
 | **this file** | how to work here — standing instructions and traps |
 | [GitHub Issues](https://github.com/granterogers/agentic.team.grant/issues) | **all actionable work.** Milestones M0 → v1.0 |
 | `docs/HANDOFF.md` | current state, summarised |
+| `docs/testing/backend-acceptance-verdict-2026-09-15.md` | ⭐ **the GREEN verdict, what it rests on, and what it does not claim** |
+| `docs/testing/green-blocker-ledger.md` | every blocker this campaign opened and how each closed |
 | `docs/integration-assessment-2026-09-10.md` | what exists, what is missing, what was decided |
 | `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements — **v3, Autonomy** |
 | `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ canonical project IA — hierarchy, assets, the relational graph |

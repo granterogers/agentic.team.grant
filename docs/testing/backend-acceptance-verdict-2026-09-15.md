@@ -81,3 +81,21 @@ always be imagined, and that is not a reason.
 **Next phase: Grant human beta.** Real usage becomes the primary source of
 behavioural findings, and every genuine failure found there becomes a permanent
 regression.
+
+---
+
+## Accepted
+
+Grant accepted this verdict on 2026-09-15 and closed the campaign:
+
+> GREEN accepted. Treat the backend certification campaign as complete and
+> preserve that status in durable project documentation. Do not create further
+> synthetic final examinations unless real-world beta use reveals evidence that
+> justifies reopening certification. From now on, genuine failures I encounter
+> during normal use should be investigated, classified, fixed at the
+> appropriate abstraction, and converted into permanent regressions. Do not
+> start another development campaign until I request it.
+
+The operating rule that follows is in `CLAUDE.md`, under **Where the project
+is: GRANT HUMAN BETA**, so it is the first thing anybody picking this up reads
+and it survives a compaction.
