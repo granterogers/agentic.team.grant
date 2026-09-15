@@ -13,15 +13,34 @@ the running worker is the trap CLAUDE.md records twice.
 
 ## OPEN
 
-### L18 · The unseen corpus has not been run
+### L25 · The advertised action surface is proven for one mutation, classified for the rest
 
 | | |
 |---|---|
-| **Blocker** | GREEN requires a corpus that is new, uninfluential, committed before running, and run against a frozen implementation. |
-| **Evidence** | `scripts/sessions/unseen.ts` exists, 14 turns, committed unrun at `0848ddd`, which is also the freeze. `git diff 0848ddd HEAD -- src/` is empty. |
-| **Root cause** | Not a defect. OpenRouter's daily free-model quota is exhausted (#239); the breaker reopens on the first real call. |
-| **Fix or decision** | Wait for the UTC-midnight reset. No `src/` change may land before it runs, or the freeze is void. |
-| **Status** | **OPEN — this is the only thing between here and a GREEN attempt.** |
+| **Blocker** | Not a defect. `task.create` is acceptance-proven end to end; four advertised mutations are deliberately NOT executed in any suite. |
+| **Evidence** | `npm run verify:capabilities`, 10/10. `calendar.write`, `notebook.write`, `notion.write` and `slack.post` each reach outside this database — a real diary entry, a real artifact, Grant's real Notion, a real channel. |
+| **Root cause** | The standing test rules forbid uncontrolled calendar events, real mail, external publication and notification storms. Executing them to fill the matrix would break a rule Grant set. |
+| **Fix or decision** | Recognition and argument extraction ARE proven for them in Part A. Canonical execution is beta evidence: the first time Grant asks for one in real work is the proof, and it costs nothing to wait for it. |
+| **Status** | **OPEN by construction**, like L22 before it, and not a reason to withhold GREEN. |
+
+### L26 · A task's due date, assignee and detail are representable and never extracted
+
+| | |
+|---|---|
+| **Blocker** | #253. `app.task_add` accepts `p_due_on`, `p_assignee`, `p_detail` and `p_milestone`; the interpreter fills none of them. |
+| **Evidence** | `verify:capabilities` prints the four on every run. "Add a task to chase the roofer by Friday" produces a task named *"chase the roofer by Friday"* with `due_on` null. |
+| **Root cause** | Argument extraction produces a title and nothing else. |
+| **Fix or decision** | A gap, not a loss, and the difference decides the severity: the deadline is still in front of Grant, it is simply not data. An earlier draft subtracted it from the title for tidiness, which WOULD have lost it, and that is why it no longer does. Resolving "by Friday" to a date needs his timezone and a resolver that refuses rather than guesses. |
+| **Status** | **OPEN, not material.** The action executes and the confirmation is truthful. |
+
+### L27 · Two harness defects and one stochastic gate
+
+| | |
+|---|---|
+| **Blocker** | #250, #251, #252. None is a product defect; all three cost real time during the examinations. |
+| **Evidence** | A job finishing on its third attempt read as one that never answered (#250). An exemplary refusal failed over a curly apostrophe — eighth instance (#251). `verify:routing-breadth`'s trivial-work check passed once and failed twice on identical code, naming different cases each time (#252). |
+| **Fix or decision** | Filed with the evidence rather than tuned against, which is the whole point of #252: a known stochastic metric must not stop a deterministic defect being told apart from noise. |
+| **Status** | **OPEN, harness only.** Not a backend or intelligence blocker. |
 
 ### L19 · Saying which constraint was set aside is a coin flip
 
@@ -33,6 +52,29 @@ the running worker is the trap CLAUDE.md records twice.
 | **Fix or decision** | Deferred deliberately. The office already parses multi-clause requests (#60) and stores preferences as data, so both halves are machine-readable and the gate is writable — but it needs the retry loop, not a refusal. |
 | **Status** | **OPEN**, and the honest reason GREEN would still carry a caveat. |
 
+---
+
+## CLOSED
+
+### L20 · Two provenance gaps — both now closed
+
+| | |
+|---|---|
+| **Blocker** | A figure Grant floats in a *"suppose"* is his words, so it is grounded by construction and no text-comparison check can refuse it. And `assertsRecordsUnseen` switches off for a domain that WAS consulted, so one retrieved document licenses a total a handful of matches cannot support. |
+| **Evidence** | Reasoned from the design, not yet observed. Both are turns in the unseen corpus (`laundering` 3, `partial-evidence` 1). |
+| **Fix or decision** | The documents-total half is now CLOSED, and not by patching the case: a search is not a census, so counts and exhaustiveness need a `complete` source while absences need only a `consulted` one. On this path only the project list is held whole. The "suppose" half stands: a figure Grant floats is his words and is in the grounding by construction, so only the prompt separates a supposition from a price. |
+| **Status** | **CLOSED 2026-09-15.** The documents-total half closed earlier, as recorded above. The "suppose" half closed with #247: `HYPOTHETICAL` in `quality.ts` is a sibling of `EPISTEMIC` — a sentence framed as what WOULD be the case makes no claim about the records, and grammar says so before any check does. It wants an explicit marker, so a bare present-indicative assertion is untouched, and the reverse hazard is shut by `established()` excluding the office’s own prose. Exercised in both directions: seven suppositions pass, five flat assertions with the same figures are still refused, and `borrowed-figure` turn 2 answered a derived conditional figure live. |
+
+### L18 · The unseen corpus has not been run
+
+| | |
+|---|---|
+| **Blocker** | GREEN requires a corpus that is new, uninfluential, committed before running, and run against a frozen implementation. |
+| **Evidence** | `scripts/sessions/unseen.ts` exists, 14 turns, committed unrun at `0848ddd`, which is also the freeze. `git diff 0848ddd HEAD -- src/` is empty. |
+| **Root cause** | Not a defect. OpenRouter's daily free-model quota is exhausted (#239); the breaker reopens on the first real call. |
+| **Fix or decision** | Wait for the UTC-midnight reset. No `src/` change may land before it runs, or the freeze is void. |
+| **Status** | **CLOSED 2026-09-15.** Superseded and then exceeded. `unseen.ts` never ran; two LATER corpora did — `hostile.ts` against `6de6dfc`/v364 and `final.ts` against `7841683`/v385, each committed unrun against its own freeze. Both found systemic defects, which is the mechanism working. A third is required before GREEN, and the requirement this blocker states is now routine rather than pending. |
+
 ### L21 · The hostile corpus has not been run
 
 | | |
@@ -40,16 +82,7 @@ the running worker is the trap CLAUDE.md records twice.
 | **Blocker** | The only corpus whose result can support GREEN. Written after the freeze, committed unrun at `4743021`. |
 | **Evidence** | `scripts/sessions/hostile.ts`, 18 turns. `git diff 6de6dfc HEAD -- src/ supabase/ migrations/` is empty. |
 | **Root cause** | Not a defect — #239, the day's free model quota. Confirmed three ways: the breaker half-opens correctly on schedule and the deployed worker consumes each probe, which 429s and reopens it. |
-| **Status** | **OPEN. GREEN is unavailable until this runs against `6de6dfc`.** |
-
-### L20 · Two provenance gaps — one closed, one open
-
-| | |
-|---|---|
-| **Blocker** | A figure Grant floats in a *"suppose"* is his words, so it is grounded by construction and no text-comparison check can refuse it. And `assertsRecordsUnseen` switches off for a domain that WAS consulted, so one retrieved document licenses a total a handful of matches cannot support. |
-| **Evidence** | Reasoned from the design, not yet observed. Both are turns in the unseen corpus (`laundering` 3, `partial-evidence` 1). |
-| **Fix or decision** | The documents-total half is now CLOSED, and not by patching the case: a search is not a census, so counts and exhaustiveness need a `complete` source while absences need only a `consulted` one. On this path only the project list is held whole. The "suppose" half stands: a figure Grant floats is his words and is in the grounding by construction, so only the prompt separates a supposition from a price. |
-| **Status** | **half closed, half OPEN and instrumented** (`hostile.planting`). |
+| **Status** | **CLOSED 2026-09-15.** Run against the paid candidate rather than `6de6dfc`, on Grant’s instruction, because the free candidate stopped being the configuration he intends to use. 15 of 18 turns held; the result is recorded verbatim in `hostile-corpus-run-2026-09-15.md`. It found #246 and #247, and #248 became reachable only after #246 was fixed. It is regression material now and may not be recycled. |
 
 ### L22 · `task.create` is granted to eight agents and has never run for real
 
@@ -59,11 +92,8 @@ the running worker is the trap CLAUDE.md records twice.
 | **Evidence** | `npm run levels`: granted to 8, zero real traffic. `npm run measure`: 3 of 8 agents ever chosen, `delegation_depth` 0 — in GRANT'S OWN traffic. |
 | **Root cause** | The fixes that make those reachable are days old and his traffic predates them. Acceptance traffic reaches all eight and sits at depth 1 in 78 routing decisions. |
 | **Fix or decision** | None available here. #234's Level 4 means "the office reached for it unprompted in real work", and only Grant can close it by working. |
-| **Status** | **OPEN by construction**, and deliberately not counted as harness evidence. |
+| **Status** | **CLOSED 2026-09-15** for the part that was ever closable here. The CAPABILITY is now acceptance-proven end to end: `verify:capabilities` drives fourteen natural forms into the writer, asserts the canonical row appears, reads it back and tears it down, and two live sessions created real tasks through the deployed worker. What remains open is not this blocker but #234’s Level 4 — "the office reached for it unprompted in Grant’s own work" — which only Grant can close by working, and which is beta evidence rather than a backend blocker. |
 
----
-
-## CLOSED
 
 ### L23 · Three values, not two: FACT / SUPPORTED ABSENCE / NOT CHECKED
 
