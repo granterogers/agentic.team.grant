@@ -28,7 +28,24 @@
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
 >
-> ## Campaign Three — candidate frozen, GREEN one run away
+> ## The office runs on a paid model as of 2026-09-15 (ADR-0029)
+>
+> Grant funded the OpenRouter account and asked the office off the free tier.
+>
+> | | |
+> |---|---|
+> | Model | **`openai/gpt-oss-120b`**, $0.037 / $0.170 per million tokens |
+> | Fallbacks | `qwen/qwen3.7-flash` (20), `mistralai/mistral-small-3.2-24b-instruct` (30), free models (100) |
+> | Cost | **$0.0082 a day** at the busiest measured real day — about **$0.25/month**. $10 on the account is ~1,200 days |
+> | Guards | none removed. §11's four layers now compare against `providers.max_price_prompt`, `max_price_completion` and `max_cost_per_call_usd`, all defaulting to **0** |
+> | Verified | one real router request: gpt-oss-120b, $0.00010472, correct on a two-part instruction · one full office turn, 5 calls, $0.000573 · `verify:router` **14/14** |
+> | Back to free | `update public.providers set free_only = true, max_price_prompt = 0, max_price_completion = 0, max_cost_per_call_usd = 0 where provider = 'openrouter'` |
+>
+> **Which model is tried first is now a decision, not alphabetical order** —
+> `provider_models.priority`, 0373. That ORDER BY lived in three places and
+> changing one of them sent the first real paid request to three free models.
+>
+> ## Campaign Three — candidate frozen, and now historical
 >
 > **State: ORANGE, procedurally.** No known backend or intelligence defect
 > stands between Grant and daily use. GREEN is withheld only because the final
@@ -36,7 +53,7 @@
 >
 > | | |
 > |---|---|
-> | **Candidate build** | commit `6de6dfc`, worker **v364**, **372** migrations — `docs/testing/candidate-green-build.md` |
+> | **Candidate build** | commit `6de6dfc`, worker **v364**, **372** migrations — `docs/testing/candidate-green-build.md`. **Preserved as the tag `candidate-green-free-v364`; no longer what the office runs** (see above) |
 > | **Freeze check** | `git diff 6de6dfc HEAD -- src/ supabase/ migrations/` must be empty |
 > | **Final corpus** | `scripts/sessions/hostile.ts`, 18 turns, committed unrun at `4743021` |
 > | **Blocked by** | #239 — the day's free model quota; every job fails at the breaker |
