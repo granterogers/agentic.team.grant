@@ -105,3 +105,35 @@ breaker working, not a defect.
 
 Classification: **ENVIRONMENT / PROVIDER FAILURE**, not a product defect. The day's
 consumption was test load (1,014 calls) against a real peak of 48/day.
+
+### Credit was added; the allowance is a daily counter, not a balance
+
+2026-09-15 12:14 UTC, after $10 of credit was added to the existing OpenRouter
+account. One minimal probe, made directly with the vaulted key so the answer
+does not depend on the breaker's own schedule:
+
+    credits endpoint: 200 {"total_credits":10,"total_usage":0}
+    chat status: 429
+    Rate limit exceeded: free-models-per-day-high-balance
+      X-RateLimit-Limit: 1000
+      X-RateLimit-Remaining: 0
+      X-RateLimit-Reset: 1789516800000   (2026-09-16 00:00:00 UTC)
+      limit_source: openrouter_free_tier_daily
+
+The credit registered and it did what credit does here: it raised the free-model
+tier from 50 to **1,000 requests a day**. It does not refill a counter that is
+already spent. Remaining is 0 against a limit of 1,000 and the provider names the
+reset itself — midnight UTC.
+
+**The paid path was deliberately not taken.** With a balance, non-free models are
+now reachable and are not subject to that daily cap, so the run could have gone
+ahead today. It would have produced acceptance evidence for a model configuration
+Grant is not going to run, which is the wrong-payload trap wearing a different
+hat: a suite that passes against something other than the deployed thing passes
+for the wrong reason. It would also change the frozen candidate before testing
+it, which the acceptance brief forbids, and add a recurring cost against the ~£0
+constraint. The run waits for the reset instead.
+
+**Tomorrow the fresh 1,000 goes to the hostile corpus first.** Today's exhaustion
+was 1,014 calls of test load; the corpus is 18 turns and must not be queued
+behind another suite that eats the allowance before it.
