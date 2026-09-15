@@ -90,6 +90,7 @@
     "bootstrap:db-password": "tsx scripts/bootstrap/reset-db-password.ts",
     "backup:roles": "tsx scripts/backup/emit-roles.ts",
     "providers:discover": "tsx scripts/providers/discover.ts",
+    "verify:fallback": "tsx scripts/verify/fallback.ts",
     "verify:router": "tsx scripts/verify/router.ts",
     "slack:rotate": "tsx scripts/slack/rotate.ts",
     "telegram:configure": "tsx scripts/telegram/configure.ts",
