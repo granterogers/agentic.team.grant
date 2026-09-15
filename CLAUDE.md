@@ -81,7 +81,8 @@ control back to Grant because a compaction happened.
 | `docs/spec/frontend-build-prompt-2026-09-10.md` | ⭐ canonical frontend requirements — **v3, Autonomy** |
 | `docs/spec/project-dashboard-ia-2026-09-10.md` | ⭐ canonical project IA — hierarchy, assets, the relational graph |
 | `docs/spec/github-persistence-brief-2026-09-13.md` | ⭐ the communications brief — verbatim; tracked by #191 |
-| `docs/spec/ux-qa-governance-2026-09-14.md` | ⭐ the canonical UX QA standard — verbatim; the standing rule is below |
+| `docs/spec/ux-qa-v2-2026-09-15.md` | ⭐ **UX QA v2 — the operative QA standard, verbatim.** Two-level governance, the visual-coherence gate, the QA-harness audit, the eight-hour first-run contract |
+| `docs/spec/ux-qa-governance-2026-09-14.md` | the earlier UX QA standard — verbatim; still valid as the detailed 1A/1B/1C escalation text v2 subsumes |
 | `docs/spec/backend-acceptance-2026-09-14.md` | ⭐ the canonical backend acceptance standard — verbatim; **backend readiness before human testing** |
 | `docs/spec/backend-intelligence-breadth-2026-09-14.md` | ⭐ routing, delegation and intelligence-breadth stress testing — verbatim; tracked by #231 |
 | `AI_TEAM_HQ_MASTER_SPEC.md` | ⭐ canonical system requirements |
@@ -283,6 +284,26 @@ Use it for anything that takes more than a few minutes, and **always attach
 screenshots for visual work** — a sentence about spacing is worth nothing.
 
 ### UX QA, in proportion to risk
+
+**Superseded in part, 15 September 2026.** `docs/spec/ux-qa-v2-2026-09-15.md` is
+now the operative QA standard and is stored verbatim. It keeps everything below
+— the two levels, the escalation by blast radius, the proportionality rule — and
+adds three things this section did not have:
+
+1. **A visual-coherence gate that is allowed to fail QA on its own.** Green
+   tests, working buttons, no axe violations and no overflow can still be
+   **UX QA FAIL** if the product is ugly, incoherent, bloated or
+   typographically poor. Both a FUNCTIONAL UX PASS and a VISUAL COHERENCE PASS
+   are required.
+2. **The QA harness is itself a subject of the audit.** Prove a detector can
+   fail — synthetic failure, confirm red, restore, confirm green — and never
+   commit the defect.
+3. **Design-system inventories**: typography, colour, components, geometry,
+   information density, and space as a measured metric.
+
+The wording rule is unchanged: *"run UX QA"* means proportionate Level 1;
+*"RUN FULL UX QA"* means Level 2.
+
 
 Grant supplied the **Master UX QA Governance Prompt** on 14 September 2026. It is
 stored verbatim at `docs/spec/ux-qa-governance-2026-09-14.md` — **the canonical
