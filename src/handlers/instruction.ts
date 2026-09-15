@@ -164,6 +164,52 @@ interface Payload {
  * with its reasoning, and "Grant chose this person by opening their bot" is a
  * better reason than anything a classifier produces.
  */
+/**
+ * How a CODE-COMPOSED confirmation may describe the way it was produced.
+ *
+ * `enforce_deterministic_claim` refuses `deterministic_retrieval` on a job that
+ * has any `inference_usage` row against its correlation, and it is right to:
+ * the claim is checkable, and a handler that can launder a model answer as a
+ * constant makes §11's whole accounting worthless.
+ *
+ * Every confirmation in this file is composed in code and every one of them is
+ * therefore tempted to claim the exemption — and by the time one is written the
+ * turn has usually already spent a model call resolving the sentence against
+ * the conversation (#63) or naming its subject (#232). So the claim is false on
+ * most turns, and a false claim does not degrade: the insert is refused, the
+ * job FAILS, and Grant receives nothing at all for an action that already
+ * happened.
+ *
+ * #237 found that on the task confirmation and fixed it THERE. Four other sites
+ * kept the hardcoded claim, and #231 found the next one the same way: *"From
+ * now on keep every answer to a single short paragraph"* was correctly
+ * understood, correctly stored as a preference, and then failed — so the office
+ * learned the rule and told him nothing. CLAUDE.md's own line, for the fourth
+ * time: when two places write the same field, grep for the other one.
+ *
+ * One function, every caller, so the next confirmation added cannot be the
+ * fifth.
+ *
+ * Unreadable means assume a model was called. The expensive direction is
+ * claiming an exemption the record cannot support, which fails the job; the
+ * cheap direction is one unnecessary review.
+ */
+const howComposed = async (
+  db: SqlExecutor,
+  jobId: string,
+): Promise<'deterministic_retrieval' | 'inference'> =>
+  await db
+    .execute(`
+      select count(*)::int as n from public.inference_usage u
+       where u.correlation_id = (select correlation_id from public.jobs
+                                  where job_id = ${lit(jobId)}::uuid)`)
+    .then((r) =>
+      Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0) === 0
+        ? ('deterministic_retrieval' as const)
+        : ('inference' as const),
+    )
+    .catch(() => 'inference' as const)
+
 async function speaker(
   db: SqlExecutor,
   addressedTo: string | null,
@@ -1601,7 +1647,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: 'deterministic_retrieval',
+          path: await howComposed(deps.db, job.jobId),
           model: null,
         } satisfies HandlerOutput
       }
@@ -1681,7 +1727,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: 'deterministic_retrieval',
+          path: await howComposed(deps.db, job.jobId),
           model: null,
         } satisfies HandlerOutput
       }
@@ -1721,7 +1767,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: 'deterministic_retrieval',
+          path: await howComposed(deps.db, job.jobId),
           model: null,
         } satisfies HandlerOutput
       }
@@ -2236,25 +2282,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         that makes no inference call, or send it to review."*
       */
       if (confirmation !== null) {
-        const spent = await deps.db
-          .execute(`
-            select count(*)::int as n from public.inference_usage u
-             where u.correlation_id = (select correlation_id from public.jobs
-                                        where job_id = ${lit(job.jobId)}::uuid)`)
-          .then((r) => Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0))
-          /*
-            Unreadable means assume a model was called. The expensive direction
-            is claiming an exemption the record cannot support, which fails the
-            job; the cheap direction is one unnecessary review.
-          */
-          .catch(() => 1)
         return {
           body: confirmation,
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
           contradictions: null,
-          path: spent === 0 ? 'deterministic_retrieval' : 'inference',
+          path: await howComposed(deps.db, job.jobId),
           model: null,
         } satisfies HandlerOutput
       }

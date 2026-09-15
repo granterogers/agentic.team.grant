@@ -268,6 +268,61 @@ export const claimsToHaveSent = (body: string): string | null => {
 }
 
 /**
+ * Does this text PROMISE to contact somebody on a channel it cannot reach?
+ *
+ * #231, found by a voice-note session. The office told Grant:
+ *
+ *     "I'll post a quick question on #team-slack asking what's keeping
+ *      onboarding from being usable. I'll hold off on any changes until we
+ *      have the team's input."
+ *
+ * `deliveries` for that job: zero. Child jobs: zero. Consultations: zero. He
+ * would have waited for input from a channel nobody was asked in — the same
+ * betrayal `claimsToHaveSent` exists for, arriving in the one tense that
+ * function deliberately leaves alone.
+ *
+ * ## Why future tense is still mostly safe, and where it stops being
+ *
+ * *"I'll ask the team"* is a plan, and §9's hand-off makes it real: convening
+ * a specialist IS asking the team, and refusing that sentence would push the
+ * office towards saying less about what it intends to do.
+ *
+ * *"I'll post it on Slack"* is not that. It names a MECHANISM, and no
+ * mechanism of that shape runs after an answer: the notifier turns this very
+ * output into a message to Grant, and nothing in the job's path opens a
+ * conversation with anybody else. So the promise is unkeepable at the moment
+ * it is written, by construction — which is the same argument
+ * `claimsToHaveSent` makes about the past tense, and it is why this can be a
+ * rule rather than a guess.
+ *
+ * The named channel is the whole discrimination. Drop it and this fires on
+ * every honest plan; keep it and it fires only on the promises nothing can
+ * keep.
+ */
+export const promisesToReachOut = (body: string): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  const CHANNEL = String.raw`(?:slack|telegram|e-?mail|whatsapp|teams|#[a-z0-9_-]+)`
+  const claims: RegExp[] = [
+    // "I'll post a question on #team-slack", "I will send them an email"
+    new RegExp(
+      String.raw`\bI(?:'ll|\s+will|\s+am\s+going\s+to|\s+shall)\s+(?:\w+\s+){0,6}?(?:post|send|message|ping|email|e-mail|drop|write)\b[^.!?]{0,40}?\b${CHANNEL}\b`,
+      'i',
+    ),
+    // "I'll ask the team on Slack", "I am going to check with them over email"
+    new RegExp(
+      String.raw`\bI(?:'ll|\s+will|\s+am\s+going\s+to|\s+shall)\s+(?:\w+\s+){0,6}?(?:ask|check\s+with|reach\s+out\s+to|contact|chase)\b[^.!?]{0,40}?\b(?:on|in|via|over|through)\s+(?:the\s+)?${CHANNEL}\b`,
+      'i',
+    ),
+  ]
+  for (const re of claims) {
+    const hit = re.exec(text)
+    if (hit !== null) return hit[0].trim().slice(0, 80)
+  }
+  return null
+}
+
+/**
  * Does this text claim, in the first person, to have gone and looked?
  *
  * Returns the phrase it found, so the failure can quote it back rather than
@@ -445,6 +500,19 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         'instruction has no way to send anything — the notifier runs after this, on ' +
         'this answer. Nobody was contacted. Say what you WILL do, or hand the work ' +
         'over, but do not report a message that does not exist (#237).',
+    })
+  }
+
+  const promised = promisesToReachOut(m.body ?? '')
+  if (promised !== null) {
+    problems.push({
+      field: 'body',
+      problem:
+        `the text promises to contact somebody on a named channel ("${promised}"), and ` +
+        'nothing in this job can do that — the notifier turns THIS answer into a ' +
+        'message to Grant and opens no other conversation. Say who should be asked ' +
+        'and let him ask, or hand the work to the specialist, but do not promise a ' +
+        'message that will never be sent (#231).',
     })
   }
 

@@ -95,6 +95,44 @@ for (const file of FILES) {
   }
 }
 
+/*
+  The invisible-character trap (#231).
+
+  A regex written into a file by a non-raw Python heredoc turns every `\b`
+  into U+0008, the BACKSPACE control character. `String.raw` then preserves it,
+  so the pattern asks for a backspace where a word boundary was meant and
+  matches nothing, for ever.
+
+  What makes it worth a check rather than a note is that nothing shows it. The
+  editor renders nothing, `sed` prints nothing, `git diff` prints nothing,
+  biome and tsc are both happy, and `JSON.stringify(re.source)` prints the
+  character back as the two characters `\b` — so the one piece of debugging
+  output a person would reach for CONFIRMS the pattern is correct. It cost a
+  detour through four hypotheses and one wrongly-suspected module cache.
+
+  Repo-wide rather than `web/**`, because the fault is in the writing tool and
+  not in the file: it lands wherever a script last wrote. Tabs, newlines and
+  carriage returns are the three controls that belong in source.
+*/
+const ALLOWED_CONTROLS: ReadonlySet<number> = new Set([0x09, 0x0a, 0x0d])
+for (const file of globSync('{src,scripts,tests,supabase,migrations}/**/*.{ts,js,sql}')) {
+  const text = readFileSync(file, 'utf8')
+  let line = 1
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    if (ch === '\n') line += 1
+    if (code < 0x20 && !ALLOWED_CONTROLS.has(code)) {
+      fail(
+        file,
+        line,
+        `control character U+${code.toString(16).padStart(4, '0').toUpperCase()} in the source. ` +
+          'A non-raw Python heredoc turns a regex \\b into this and nothing renders it.',
+      )
+      break
+    }
+  }
+}
+
 if (bad > 0) {
   console.log(`\ncheck:templates FAILED — ${bad} problem${bad === 1 ? '' : 's'}`)
   /*
@@ -113,5 +151,5 @@ if (bad > 0) {
   process.exit(1)
 }
 console.log(
-  `check:templates clean — ${FILES.length} files parse as modules, no backticks in HTML comments`,
+  `check:templates clean — ${FILES.length} files parse as modules, no backticks in HTML comments, no stray control characters`,
 )

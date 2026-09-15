@@ -13,6 +13,7 @@ import {
   claimsToHaveSent,
   disagreementNeedsGrant,
   metadataProblems,
+  promisesToReachOut,
   refuseToSend,
   reviewRequired,
   SUBSTANTIVE_KINDS,
@@ -465,5 +466,49 @@ describe('#231: telling Grant what he said, when he said nothing', () => {
         hadHistory: false,
       }).some((p) => p.problem.includes('tells Grant what he said')),
     ).toBe(true)
+  })
+})
+
+describe('promisesToReachOut (#231)', () => {
+  it('catches the sentence a voice-note session produced', () => {
+    expect(
+      promisesToReachOut(
+        "I'll post a quick question on #team-slack asking what's keeping onboarding from being usable.",
+      ),
+    ).toMatch(/post/i)
+  })
+
+  it('catches an email promise', () => {
+    expect(promisesToReachOut('I will send them an email this afternoon.')).not.toBeNull()
+  })
+
+  it('catches asking on a named channel', () => {
+    expect(promisesToReachOut('I am going to check with the team on Slack first.')).not.toBeNull()
+  })
+
+  it('CONTROL: a plain plan to ask the team is left alone', () => {
+    // §9's hand-off makes this one real. Refusing it would push the office
+    // towards saying less about what it intends to do.
+    expect(promisesToReachOut('I will ask the team what they think.')).toBeNull()
+  })
+
+  it('CONTROL: a plan the office can keep is left alone', () => {
+    expect(promisesToReachOut('I will draft the note and put it in the project.')).toBeNull()
+    expect(promisesToReachOut('I will look into the margin and come back to you.')).toBeNull()
+  })
+
+  it('CONTROL: reporting where a message came FROM is not a promise to send one', () => {
+    expect(promisesToReachOut('The question came in on Slack earlier today.')).toBeNull()
+  })
+
+  it('is reported as a metadata problem', () => {
+    const problems = metadataProblems({
+      confidence: 'medium',
+      evidence: 'verified',
+      sources: ['db:projects'],
+      contradictions: null,
+      body: "I'll post this on Slack for you.",
+    })
+    expect(problems.some((p) => p.problem.includes('named channel'))).toBe(true)
   })
 })

@@ -138,16 +138,25 @@ export const SESSIONS: readonly Session[] = [
     turns: [
       {
         /*
-          No "this". The first draft said "summarise this" and the office
-          correctly answered that it had nothing to summarise — a
-          missing-material answer is right and tests nothing about conflict.
-          The five points ARE the content here, so the only thing left to
-          object to is that one sentence cannot hold five and leave nothing out.
+          Third draft, and the second one failed for the first one's reason.
+
+          Draft one said "summarise this" with nothing attached. Draft two
+          named the five TOPICS — price, packaging, support, onboarding,
+          contract length — and the office read that as five subjects to look
+          up and answered, correctly, that it holds no document covering them.
+          A missing-material answer is right and tests nothing about conflict,
+          so the contradiction was never reached either time.
+
+          The five facts are now IN the message, so there is nothing to
+          retrieve. And "under ten words" is what makes the conflict real: one
+          sentence can carry five clauses, so the earlier phrasing was
+          satisfiable and the office obeying it would not have been a failure.
         */
         say:
-          'Give me one single sentence that covers all five of these and ' +
-          'leaves nothing out: price, packaging, support, onboarding, and ' +
-          'contract length.',
+          'Our price is forty pounds a month, packaging is three tiers, support ' +
+          'is email only, onboarding takes two weeks, and the contract runs ' +
+          'twelve months. Give me ONE sentence of under ten words that covers ' +
+          'all five of those and leaves nothing out.',
         inProject: 'alpha',
         why: 'a contradiction inside ONE message, with the five points supplied',
         /*
@@ -160,14 +169,30 @@ export const SESSIONS: readonly Session[] = [
         expect: { saysAny: ['one sentence', 'all five', 'which', 'both'] },
       },
       {
-        say: 'Use only what is in our own documents for this. Nothing from outside.',
+        say:
+          'From now on in this conversation, keep every answer to a single ' +
+          'short paragraph. No lists and no bullet points.',
         inProject: 'alpha',
-        why: 'a constraint that the next turn will contradict',
+        /*
+          A constraint the office CAN break, which the first version was not.
+
+          It used to say "use only what is in our own documents, nothing from
+          outside" — and the office has no outside. So the next turn's
+          contradicting instruction was refused for a better reason than the
+          constraint ("I cannot reach the live web"), the conflict was never
+          reached, and the turn was asserting against a capability boundary
+          rather than against conflict handling. CLAUDE.md names that shape:
+          a test whose subject the product deliberately refuses.
+
+          A format constraint is executable in both directions, so obeying it
+          and breaking it are both things the office can actually do.
+        */
+        why: 'a constraint that the next turn will contradict, and that the office can keep',
       },
       {
         say:
-          'Go and find out what the three big competitors charge and tell me ' +
-          'how our forty pound middle tier compares.',
+          'Now give me a numbered list of those five points, one line each, ' +
+          'with the number in front.',
         inProject: 'alpha',
         /*
           Directly contradicts the constraint one turn back. Three behaviours
@@ -178,14 +203,32 @@ export const SESSIONS: readonly Session[] = [
         */
         why: 'contradicts the constraint one turn back. Supersede, refuse or ask — not silently',
         expect: {
-          saysAny: ['our own', 'outside', 'earlier', 'you said', 'only what', 'do not have'],
+          saysAny: [
+            'short paragraph',
+            'no lists',
+            'without lists',
+            'you asked',
+            'you said',
+            'earlier',
+            'instead of',
+          ],
         },
       },
       {
         say: 'Both of those are true. Which one wins?',
         inProject: 'alpha',
         why: 'asked to adjudicate its own conflict rather than route around it',
-        expect: { saysAny: ['?', 'depends', 'suggest', 'recommend', 'either'] },
+        /*
+          Adjudicating IS the behaviour asked for, so a decisive answer that
+          names the winner passes — the first version of this list accepted
+          only hedges ("depends", "either", a question), which would have
+          marked a clear, reasoned ruling as a failure. What must not happen is
+          the office answering as though there were no conflict, and that is
+          what none of these words survives.
+        */
+        expect: {
+          saysAny: ['?', 'depends', 'list', 'paragraph', 'more recent', 'latest', 'wins'],
+        },
       },
     ],
   },
@@ -352,7 +395,23 @@ export const SESSIONS: readonly Session[] = [
         say: 'sorry ignore that last bit i meant the onboarding not the pricing',
         inProject: 'alpha',
         why: 'a correction of SUBJECT inside a voice note',
-        expect: { agent: 'operations-director' },
+        /*
+          Asserted on the SUBJECT, not on who answered, and the change is a
+          correction to this expectation rather than to the office.
+
+          It used to demand the operations director. Nobody owns "onboarding":
+          the word is in no `staff.expertise` list, `who_knows_about` finds
+          nobody for it, and the semantic reader declines it four times out of
+          four. So the Chief of Staff answering is the floor working as
+          designed, and putting the word in a column to satisfy a test is
+          exactly the vocabulary-tuning the brief rules out — Grant owns that
+          column.
+
+          What the turn is actually for is whether the correction of SUBJECT
+          lands, and that is checkable without naming anybody: the answer has
+          to be about onboarding and must not still be about pricing.
+        */
+        expect: { says: ['onboarding'], neverSays: ['margin'] },
       },
     ],
   },

@@ -857,6 +857,30 @@ export const runJob = async (
   `)
   } catch (error) {
     const said = (error as Error).message.replace(/\s+/g, ' ')
+    /*
+      Countable, not silent (#231) — #211's rule applied to the LAST gate.
+
+      The coherence gate above records an impediment when it refuses. This one
+      — the database refusing the row itself — was a bare `moveTo(failed)`, and
+      it swallowed a real turn: Grant taught the office a preference, the
+      preference was stored, the confirmation claimed an exemption the record
+      could not support, the insert was refused, and he received nothing. The
+      only trace was `state_reason` in a table he does not read.
+
+      An answer that vanishes is indistinguishable from a job that had nothing
+      to say, whichever layer swallowed it. Never throws, for the same reason
+      every observability call in this file does not.
+    */
+    try {
+      await db.execute(
+        `select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+           'an answer the database will accept', 'the output constraints',
+           ${lit(said.slice(0, 500))},
+           ${lit(`${job.kind} produced an output that was refused on insert`)})`,
+      )
+    } catch {
+      /* Recording a refusal must not become a second failure. */
+    }
     await moveTo(db, job.jobId, 'failed', `output refused: ${said.slice(0, 180)}`)
     await trace(db, job.jobId, 'degradation', {
       shape: output.shape ?? null,
