@@ -164,7 +164,7 @@ const scan = async (where: string) => {
 await scan('portfolio')
 await pg.locator('.project[data-open="legacy-coaching-course"]').click()
 await pg.waitForTimeout(700)
-for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']) {
+for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings']) {
   await pg.locator(`[data-tab="${tab}"]`).first().click()
   await pg.waitForTimeout(450)
   await scan(`project/${tab}`)

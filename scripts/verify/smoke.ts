@@ -77,7 +77,8 @@ for (const [what, sel] of steps) {
 await page.locator('.project[data-open="legacy-coaching-course"]').click()
 await page.waitForTimeout(700)
 
-for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']) {
+// Activity is no longer a section (#222) - the panel on Overview replaced it.
+for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings']) {
   await page.locator(`[data-tab="${tab}"]`).click()
   await page.waitForTimeout(250)
   if ((await page.locator('.tabbody').count()) === 0) failures.push(`section ${tab}: empty`)

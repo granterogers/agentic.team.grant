@@ -23,6 +23,7 @@
     "notify": "tsx scripts/notify.ts",
     "step": "tsx scripts/step.ts",
     "smoke": "tsx scripts/verify/smoke.ts",
+    "verify:breaks": "tsx scripts/verify/breaks.ts",
     "verify:cors": "tsx scripts/verify/cors.ts",
     "verify:wrappers": "tsx scripts/verify/wrappers.ts",
     "verify:layouts": "tsx scripts/verify/layouts.ts",

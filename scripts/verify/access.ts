@@ -109,7 +109,7 @@ const check = (what: string, said: string, ok: boolean): void => {
 const browser = await chromium.launch()
 
 /** Every screen worth auditing, and how to reach it. */
-const ROUTES = ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']
+const ROUTES = ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings']
 
 const audit = async (
   label: string,

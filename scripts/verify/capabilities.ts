@@ -33,12 +33,13 @@
  * than executed to fill a row. An audit that manufactures execution to look
  * complete is worth less than one that says where the evidence stops.
  */
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
+
+import { notebookRequest } from '../../src/agents/actions.ts'
 import { clauses } from '../../src/agents/clauses.ts'
 import { classifyIntent } from '../../src/agents/intent.ts'
-import { notebookRequest } from '../../src/agents/actions.ts'
 import { readRequest } from '../../src/agents/request.ts'
 import { taskRequest } from '../../src/agents/tasks.ts'
+import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {

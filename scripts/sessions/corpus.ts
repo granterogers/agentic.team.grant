@@ -22,12 +22,12 @@
  * all. Long sessions are for what breaks that the short ones cannot show.
  */
 
-import { HELD_OUT } from './holdout.ts'
 import { FINAL } from './final.ts'
 import { FOURTH } from './fourth.ts'
+import { HELD_OUT } from './holdout.ts'
 import { HOSTILE } from './hostile.ts'
-import { THIRD } from './third.ts'
 import type { Session } from './run.ts'
+import { THIRD } from './third.ts'
 import { UNSEEN } from './unseen.ts'
 
 const DEVELOPMENT: readonly Session[] = [

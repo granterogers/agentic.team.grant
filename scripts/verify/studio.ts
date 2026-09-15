@@ -423,7 +423,7 @@ for (const [size, opts] of SIZES) {
       await page.waitForTimeout(700)
     }
 
-    for (const section of ['tasks', 'contacts', 'sources', 'activity']) {
+    for (const section of ['tasks', 'contacts', 'sources']) {
       await page.locator(`[data-tab="${section}"]`).click()
       await page.waitForTimeout(500)
       await shoot(section)

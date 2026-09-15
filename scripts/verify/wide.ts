@@ -75,7 +75,7 @@ const FIND = `(() => {
 })()`
 
 const browser = await chromium.launch()
-for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']) {
+for (const tab of ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings']) {
   const ctx = await browser.newContext({ ...devices['iPhone 14'] })
   const page = await ctx.newPage()
   await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })

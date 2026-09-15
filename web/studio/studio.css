@@ -139,7 +139,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   sideways — Grant's objection to the old dashboard was scrolling sideways to
   find a page whose name you could not see.
 */
-.wordmark { display: flex; align-items: center; gap: var(--s3); }
+/*
+  The wordmark is a BUTTON now (#216), so it needs the reset every other
+  control in here gets. It is also the largest touch target in the rail and the
+  one a lost person reaches for, so it keeps the 44px floor even though its
+  content is only 30px tall.
+*/
+.wordmark {
+  display: flex; align-items: center; gap: var(--s3);
+  min-height: 44px; padding: 5px 8px; margin: -5px -8px 0;
+  border-radius: 10px; text-align: left; color: inherit;
+  transition: background .16s;
+}
+.wordmark:hover { background: var(--accent-wash); }
+.wordmark:active { background: var(--accent-wash); opacity: .85; }
+.wordmark-name { display: block; font: 600 15px/1.15 var(--text); color: var(--ink); }
 .wordmark .glyph {
   width: 30px; height: 30px; border-radius: 9px; background: var(--accent);
   display: grid; place-items: center; flex: none;
@@ -753,6 +767,28 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: grid; gap: var(--s3); justify-items: start;
   padding: var(--s4); border: 1px dashed var(--edge); border-radius: var(--r-card);
   background: color-mix(in srgb, var(--sunken) 55%, transparent);
+}
+
+/*
+  The studio's failure state (#218).
+
+  A solid border rather than the empty state's dashed one: dashed means
+  "nothing here yet, and that is fine", and this is not that. It sits in the
+  middle of an otherwise bare page because when it is drawn the rail is gone
+  too - the whole shell failed, not a section of it.
+*/
+.broke {
+  max-width: 620px; margin: 12vh auto 0; padding: var(--s5);
+  display: grid; gap: var(--s4); justify-items: start;
+  border: 1px solid var(--edge); border-radius: var(--r-card); background: var(--surface);
+}
+.broke h1 { margin: 0; }
+.broke .t-lead { margin: 0; }
+.brokewhy {
+  margin: 0; width: 100%; padding: var(--s3); border-radius: 10px;
+  background: var(--sunken); color: var(--ink-2);
+  font: 400 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
 }
 
 /* --- the appearance picker -------------------------------------------------
@@ -3901,8 +3937,21 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .wact .btn { flex: 1 1 auto; }
   .wact .addfield { width: 100%; }
   .wact .addfield input { flex: 1 1 auto; min-width: 0; }
-  .waithead { flex-wrap: wrap; }
-  .waithead .t-meta { flex-basis: 100%; white-space: normal; }
+  /*
+     The reassurance line does not appear on a phone (#188).
+
+     It said *"The rest of the project is carrying on"* - true, kind, and worth
+     two of the 844 pixels' worth of rows above the first piece of real content.
+     It wrapped to its own full-width line here, which made the banner 158px:
+     the single largest item in the header stack, spent on a sentence that
+     changes nothing about what you do next. The count and the chevron stay,
+     because those are the two facts, and opening the banner still says
+     everything.
+  */
+  .waithead { flex-wrap: nowrap; }
+  .waithead .t-meta { display: none; }
+  .waithead b { flex: 1 1 auto; min-width: 0; }
+  .waitbar { margin-bottom: var(--s4); }
 }
 
 
@@ -5017,4 +5066,113 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   /* The attached-item chip and the back bar are both context you already have
      when you are mid-sentence. */
   .chatbody .backbar .t-meta { display: none; }
+}
+
+/* --- the phone strip, recomposed (#188, #216) --------------------------------
+
+   MEASURED, not guessed. `PHONE=1 npm run probe -- '.rail >'` on a 390px touch
+   context, inside a project:
+
+       button.wordmark   18x44 at 12    flex:1 1 auto
+       div.switcher       1x48 at 34    flex:1 1 auto     <- one pixel
+       button.callbtn    45x52 at 47
+       button.navitem    47x48 at 104   (message)
+       button.navitem    89x48 at 163   (Tasks, the only one still wearing its label)
+       button.navitem    47x48 at 264   (recent)
+       button.navitem    47x48 at 323   (settings)
+
+   Five fixed controls and six gaps come to 347 of the 350 available, so the two
+   children that were told to flex shared THREE PIXELS. The project switcher -
+   the control that answers "which project am I in", which is the first question
+   anybody has on a phone - was one pixel wide and had been for as long as the
+   strip has had five buttons in it. At HEAD before this change it measured 3x48
+   and the brand glyph measured 0x26, so neither of them was reachable or even
+   visible.
+
+   No amount of min-width fixes that; there is no width at which seven controls
+   fit across 390px. So the composition changes rather than the numbers: the
+   switcher takes a row of its own, where it has the full width it deserves, and
+   the strip above it holds only icons.
+
+   It costs about 50px and pays for far more, because the project name in the
+   switcher is the same name the header was printing underneath in 24px over two
+   lines. Section 23's question - what can disappear - answered by putting the
+   duplicate to work.
+*/
+@media (max-width: 860px) {
+  .rail { flex-wrap: wrap; row-gap: var(--s2); align-items: center; }
+
+  /* Glyph only. There is no width at which a three-word brand belongs here, and
+     a 44px square that always goes home is the clearer affordance anyway. */
+  .rail .wordmark {
+    flex: 0 0 auto; width: 44px; min-width: 44px; justify-content: center;
+    margin: 0; padding: 0;
+  }
+  .rail .wordmark > span:last-child { display: none; }
+
+  /* Its own row, all of it, below the icons. */
+  .rail .switcher { flex: 1 0 100%; order: 9; min-width: 0; }
+  .rail .switcher .switch { width: 100%; min-height: 44px; }
+  .switchmenu { left: 0; right: auto; width: min(340px, calc(100vw - 32px)); }
+
+  /*
+     Tasks was the only entry still carrying its label, which is both 42px the
+     row did not have and an inconsistency you can see in one glance.
+
+     DESCENDANT, not child. `.railfoot` is `display: contents`, so its buttons
+     lay out as children of the rail but they are not children of it in the
+     DOM - and a child combinator is structural, so every rule already written
+     as `.rail > .navitem` in this file has never matched one of them. Measured:
+     the rule below had no effect at all until this selector changed, and the
+     Tasks entry stayed 89px wide while the strip wrapped to three rows.
+  */
+  .rail .navitem { font-size: 0; padding: 0 10px; min-width: 44px; justify-content: center; }
+  .rail .navitem { position: relative; }
+  .rail .navitem svg { font-size: 15px; flex: none; }
+  /* 12px is the floor, and a count nobody can read is furniture. `verify:layouts`
+     caught this at 11px across twenty states within a minute of it being
+     written, which is the audit doing exactly its job. */
+  .rail .navitem .n {
+    font-size: 12px; line-height: 1; position: absolute; top: 3px; right: 0;
+    padding: 2px 5px; border-radius: 999px;
+  }
+  /* The bottom bar keeps its words: that is where the project's sections are
+     named, and an unlabelled row of seven identical glyphs is not navigation. */
+  .navgroup .navitem { font-size: 13.5px; padding: 0 var(--s3); }
+
+  /* Ten pixels of strip padding rather than twenty; it is a toolbar, not a page. */
+  .rail { padding: var(--s2) var(--s4); }
+
+  /* The call button was 45x52 in a row of 44x48s, which is not enough
+     difference to mean anything and enough to look like a mistake. */
+  .rail .callbtn { height: 48px; min-height: 48px; padding: 0 12px; }
+
+  /*
+    The project header's light/dark shortcut does not appear on a phone.
+
+    It was wrapping onto a line of its own - a single 58px button with 330px of
+    nothing beside it, directly under the project's purpose - which read as a
+    control that had come loose. Appearance is in Settings, two taps away, and
+    it is not a thing anybody changes mid-task.
+  */
+  .head .headctl [data-scheme-toggle] { display: none; }
+
+  /*
+    The project header, compact.
+
+    Section 11 of his remediation note: *"The project title/header consumes far
+    too much vertical space. Reduce it substantially. The important project
+    content should begin much higher on the screen."*
+  */
+  /* The head's own bottom margin is a desktop rhythm; on a phone it is a third
+     of the distance to the first real thing. And an empty control group still
+     takes its gap. */
+  .head { margin-bottom: var(--s3); gap: var(--s3); }
+  .headctl:empty { display: none; }
+  .projhead { gap: var(--s3); align-items: flex-start; }
+  .projhead .hero, .projhead .heroslot > .hero { width: 44px; height: 44px; }
+  .projname { font-size: 22px; line-height: 1.15; }
+  /* The purpose is on the portfolio card and in Project Settings. Here it cost
+     two lines above the fold to repeat something you read on the way in. */
+  .projhead .t-lead { display: none; }
 }

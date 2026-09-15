@@ -212,16 +212,35 @@ const SECTIONS = [
   { id: 'tasks', name: 'Tasks' },
   { id: 'contacts', name: 'Contacts' },
   { id: 'sources', name: 'Sources' },
-  { id: 'activity', name: 'Activity' },
+  /*
+    Activity is NOT a section any more (#222).
+
+    Grant: *"The current Activity feature is vague and appears to provide little
+    usable information. It is not clear what it represents, why entries are
+    shown, what users can do with them. If Activity has no meaningful
+    interaction or drill-down, remove it."*
+
+    It had none: `activitySection` rendered a read-only list where every row was
+    a sentence and nothing was a link. So the TAB goes and the PANEL stays -
+    Recent activity is still addable to the Overview board, which is where a
+    glanceable history belongs and where it sits beside the work it describes
+    rather than in a room of its own. That is also the shape he described for
+    its return: *"a better-designed Recent Activity / Recent Actions
+    component."*
+
+    A stored tab preference of 'activity' from before this change falls through
+    the body selector to the board, which is the right landing: the Overview is
+    where the panel lives now.
+  */
   /*
     Project Settings (#36) — the last section of the specification's hierarchy.
 
-    Last in the rail, and in the rail rather than top-right, because #80 moved
-    every project section here and a lone control in the opposite corner would
-    be the only thing in the product that does not follow that. The sketch put
-    it top-right when the sections were a horizontal strip.
+    Named in full (#158). Grant: *"Rename the project-level settings UI
+    explicitly to Project Settings. Do not make users guess which scope they
+    are editing."* One word was ambiguous next to the rail's global Settings,
+    two rows below it, on a product that has both.
   */
-  { id: 'settings', name: 'Settings' },
+  { id: 'settings', name: 'Project Settings' },
 ]
 
 /*
@@ -1202,15 +1221,29 @@ function rail() {
         <path d="M14 6l-6 6 6 6"/></svg>
     </button>
     <aside class="rail">
-    <div class="wordmark">
+    <!--
+      The way home, and the name of the place (#216).
+
+      Grant: *"There is currently no obvious way to return to the homepage after
+      entering a project."* He was right, and it was worse than an omission: the
+      switcher underneath goes BETWEEN projects, so from inside one the only
+      exit was the browser back button on a page that does not change its URL.
+
+      Two changes in one element. It is a button now, not a div, so the logo and
+      the wordmark are one target that always returns to the global home. And it
+      says "My Agentic Team" rather than "Studio" - his words, and the honest
+      ones: Studio named the prototype, not the product.
+    -->
+    <button class="wordmark" data-go="portfolio" aria-label="My Agentic Team, back to the home dashboard"
+            aria-current="${inProject || state.view !== 'portfolio' ? 'false' : 'page'}">
       <span class="glyph"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
         stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
         aria-hidden="true"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 12l7-4M12 12v9M12 12L5 8"/></svg></span>
       <span>
-        <span style="display:block;font:600 15px/1.15 var(--text)">Studio</span>
+        <span class="wordmark-name">My Agentic Team</span>
         <span class="brandline">Eight people, one queue</span>
       </span>
-    </div>
+    </button>
 
     <!--
       The dashboard project selector, top left, always.
@@ -1368,7 +1401,20 @@ function rail() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
-        Lately
+        <!--
+          Recent activity, not Lately (#222).
+
+          Grant: *"Lately is vague and does not communicate what the module
+          contains. Rename it to something clearer. Use the same terminology
+          consistently across the application."* It is the same two words on the
+          Overview panel, so a person who learns one has learnt the other.
+
+          The internal id stays as it was, because it is the payload's name and
+          a stored panel layout refers to it. Renaming a word Grant reads is not
+          a reason to rename a key nothing shows him. No backticks in this
+          comment: template literal.
+        -->
+        Recent activity
       </button>
 
       <button class="navitem settings-open" data-settings>
@@ -1565,7 +1611,7 @@ function lately() {
   return `<main class="main">
     <div class="head">
       <div>
-        <h1 class="t-display">Lately</h1>
+        <h1 class="t-display">Recent activity</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${
           bits.length === 0
             ? 'Nothing in the last day. The office is idle, which is not the same as broken.'
@@ -2059,12 +2105,41 @@ function teamTab(p) {
       ${rows2.map(row).join('')}
     </section>`
 
+  /*
+    Outputs was not dead. It was EMPTY, which looks identical (#217).
+
+    Grant: *"Clicking Outputs currently appears to do nothing."* The sub-tab
+    wiring was fine and the prototype fixture renders eight rows through it -
+    which is exactly why nobody caught this. Each of the three groups returns
+    an empty string when it holds no rows, so against his real office, where
+    the team had been asked for nothing yet, pressing Outputs produced one
+    sentence of lead copy and a blank page below it. A control that changes
+    nothing you can see has, as far as the person pressing it is concerned, done
+    nothing.
+
+    So it says so. His words for the rule: *"Outputs should display the
+    artifacts/results generated by the AI team, or clearly state that none exist
+    yet. A navigation control should never silently do nothing."*
+
+    The action offered is to ask the team for something, because that is the
+    thing that fills this page, and #105's rule is that an empty state whose
+    button does nothing is worse than an empty state with no button.
+  */
+  const nothingBack = waiting.length === 0 && working.length === 0 && settled.length === 0
+
   return `<div class="tabbody">
     <div class="tabhead">
       <p class="t-lead" style="margin:0">What the team was asked, and what came back.
         Nothing they make joins ${esc(p.name)} until you say so.</p>
       <div class="crew" style="margin:0">${crewHere.map((c) => face(c)).join('')}</div>
     </div>
+    ${nothingBack ? emptyState({
+      says: `The team has not been asked for anything on ${esc(p.name)} yet, so there is
+             nothing to review. Whatever they make will wait here for your decision before
+             it joins the project.`,
+      ask: { name: 'Ask the team for something',
+             say: `Look at what ${p.name} already holds and tell me the first thing worth doing.` },
+    }) : ''}
     ${group('Needs you', 'Finished, and waiting on your decision.', waiting)}
     ${group('In hand', 'Being worked on now.', working)}
     ${group('Settled', 'Already decided.', settled)}
@@ -2784,25 +2859,13 @@ function documentsSection(p) {
 }
 
 /** What happened, most recent first. */
-function activitySection(p) {
-  if (p.activity.length === 0) {
-    /*
-      No action offered, deliberately. An empty history is not a thing an agent
-      can fix, and a button that cannot help is worse than no button.
-    */
-    return `<div class="tabbody"><div class="empty">
-      <p class="t-lead" style="margin:0">Nothing has happened on ${esc(p.name)} yet.
-        This fills itself in.</p>
-    </div></div>`
-  }
-  return `<div class="tabbody">
-    <div class="tabhead">
-      <p class="t-lead" style="margin:0">Who did what on ${esc(p.name)}, and what came of it.</p>
-    </div>
-    <div class="tasks">${PANEL.activity(p)}</div>
-  </div>`
-}
+/*
+  Activity's SECTION is gone (#222); its panel is not.
 
+  `PANEL.activity` still renders on the Overview board under the clearer name
+  Recent activity, so the history is one panel away rather than a tab of its
+  own with nothing to press.
+*/
 
 function dashboard() {
   const p = byId(state.project)
@@ -2830,10 +2893,41 @@ function dashboard() {
                     height:${spec.h}px">
       <header data-grip>
         <h3 class="t-label">${esc(kind.name)}</h3>
+        <!--
+          These are WIDTH controls, and two of them used to be a plus and a
+          minus (#217).
+
+          Grant pressed the plus on the Documents panel, which is where a plus
+          means add a document in every application he has ever used, and got a
+          panel that filled the row. His report of it - *"pressing plus
+          currently results in a large/full-screen interface that either does
+          nothing or feels broken"* - is an exact description of what widening
+          a panel to full width looks like when you expected an upload dialog.
+
+          Nothing was broken. The glyph was lying. A plus sitting inside a
+          panel called Documents is a claim about what the press will do, and
+          the title attribute correcting it only helps a person who already
+          suspected. So they are arrows now: the shape says width, and nothing
+          in the product says add with an arrow.
+
+          No backticks in this comment. Template literal.
+        -->
         <span class="pctl">
-          <button data-narrower aria-label="Narrower" title="Narrower">−</button>
-          <button data-wider aria-label="Wider" title="Wider">+</button>
-          <button data-drop-panel aria-label="Remove ${esc(kind.name)}" title="Remove">×</button>
+          <button data-narrower aria-label="Make the ${esc(kind.name)} panel narrower" title="Narrower">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 7l-4 5 4 5M14 7l4 5-4 5"/></svg>
+          </button>
+          <button data-wider aria-label="Make the ${esc(kind.name)} panel wider" title="Wider">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 7l4 5-4 5M19 7l-4 5 4 5"/></svg>
+          </button>
+          <button data-drop-panel aria-label="Remove the ${esc(kind.name)} panel" title="Remove">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.1" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
         </span>
       </header>
       <div class="pbodywrap">${PANEL[spec.id]?.(p) ?? ''}</div>
@@ -2850,9 +2944,24 @@ function dashboard() {
       panels can both be on the grid and still be out of line with each other.
     -->
     <div class="tabbody">
-      <div class="tabhead">
-        <p class="t-lead" style="margin:0">Drag a panel by its title. Add what this
-          project needs, drop what it does not.</p>
+      <!--
+        The tuition is gone from the page (#188, #222's density argument).
+
+        It said *"Drag a panel by its title. Add what this project needs, drop
+        what it does not."* on every visit, for ever, in the highest-value strip
+        of the screen - and on a phone it taught a gesture the phone has
+        switched off, because the panels are static below 860px and the resize
+        controls are not drawn. This file already records that trap once, about
+        the same sentence.
+
+        The Add panel button says the second half, the drag says itself the
+        first time anybody tries it, and neither needs a permanent caption.
+        Measured on a 390px phone: the header stack went from 0.75 screens of
+        furniture before the first content pixel to 0.60.
+
+        No backticks in this comment. Template literal.
+      -->
+      <div class="tabhead tabhead-bare">
         <div class="headctl">
           ${spare.length === 0 ? '' : `<div class="addpanel">
             <button class="btn" data-add-open>+ Add panel</button>
@@ -2911,7 +3020,6 @@ function dashboard() {
     : state.tab === 'tasks' ? named('tasks', tasksSection(p))
     : state.tab === 'contacts' ? named('contacts', peopleTab(p))
     : state.tab === 'sources' ? named('links', sources(p))
-    : state.tab === 'activity' ? named('activity', activitySection(p))
     : state.tab === 'settings' ? named('settings', projectSettings.section(p, state.setpane, people))
     : board
 
@@ -2954,19 +3062,20 @@ function dashboard() {
       </div>
       <div class="headctl">
         <!--
-          Who has touched this project, each of them once.
+          The faces are gone from here (#216).
 
-          It was one disc per activity ROW, which was fine against a mock whose
-          history was five different people and became thirteen identical
-          Claires the moment it saw a real project. A row of the same face is
-          not information, it is a rendering artefact that looks like one.
+          Grant: *"The small Chief of Staff/team-member photographs currently
+          shown in the top-right navigation area do not add sufficient value.
+          Remove them unless they are performing an important interaction that
+          is currently hidden. Simplify the global header."*
 
-          No backticks in this comment: template literal.
+          Nothing was hidden. A face here was a SPAN with a title attribute -
+          not a button, not a filter, not a link to the person - so the only
+          thing it could tell you was that somebody had touched the project,
+          which the Activity and AI Team surfaces both say properly and with a
+          verb attached. They stay where they mean something: the AI Team tab,
+          where the face sits beside what that person is doing now.
         -->
-        <div class="crew" style="margin:0">${[...new Set(p.activity.map((a) => a.who))]
-          .slice(0, 6)
-          .map((who) => face(crewBy(who)))
-          .join('')}</div>
         <!--
           There is no "Talk to the team" button here.
 
@@ -3561,9 +3670,9 @@ const HELP = [
     title: 'Finding your way around',
     steps: [
       'The sidebar is the whole of the navigation. Top left is the dashboard project you are in; press it to switch to another or to see them all.',
-      'Under it are that project\'s sections: Overview, AI Team, Documents, Tasks, Contacts, Sources, Activity. The number beside one is how many things are waiting in it.',
+      'Under it are that project\'s sections: Overview, AI Team, Documents, Tasks, Contacts, Sources and Project Settings. The number beside one is how many things are waiting in it.',
       'The chevron at the very top left collapses the sidebar completely and gives the space to the content. It stays collapsed until you press it again.',
-      'At the bottom: Call the team, Lately, and Settings.',
+      'At the bottom: Call the team, Recent activity, and Settings.',
     ],
     note: 'A dashboard project is the source of truth and it lives here. A Notion database, a notebook or a Drive folder is something a project is ATTACHED TO — never the project itself.',
   },
@@ -3610,7 +3719,7 @@ const HELP = [
   {
     title: 'When something looks wrong',
     steps: [
-      'Lately shows everything the office did and whether it can be undone.',
+      'Recent activity shows everything the office did and whether it can be undone.',
       'Settings then Connections shows what is reachable right now, rather than what was reachable when it was set up.',
       'The Usage tab says, on every card, whether a figure was measured, reported by the service, or estimated by us.',
       'If a number looks wrong, say so. A dashboard that lies once is one you stop believing.',
@@ -5434,7 +5543,108 @@ function tasksView() {
   </main>`
 }
 
+/*
+  The studio cannot be left in a broken state it will not admit to (#218).
+
+  Grant: *"the application appears capable of entering a crashed/broken
+  state... Fix the root cause rather than merely suppressing the visible
+  error."* Three laps of every route, every sub-tab and every way back, with
+  `pageerror` recorded, threw nothing - so the specific crash he hit is not
+  reproducible here and this is NOT presented as its fix. What it fixes is the
+  CLASS, which is the part that was always going to bite again.
+
+  `drawShell` builds the whole shell and then wires about sixty handlers onto
+  it.
+  If anything in that second half throws, the markup is already on screen and
+  the wiring stops where it threw: a page that LOOKS finished and whose
+  controls below that line do nothing. That is what a crashed studio looks like
+  from the outside, and it is indistinguishable from a product that was built
+  badly. There was no boundary anywhere, and no route out of it but a reload
+  the page never suggested.
+
+  So a throw now produces a state that says what happened and offers the way
+  back. It is deliberately NOT a swallow: the error goes to the console with
+  its stack, the message is shown rather than hidden behind a shrug, and the
+  screen it draws is an honest failure state in the sense of section 32 rather
+  than a skeleton that never resolves.
+
+  A second throw while drawing the apology would recurse, so the guard latches.
+*/
+let painting = false
+
 function render() {
+  try {
+    drawShell()
+    painting = false
+  } catch (e) {
+    console.error('The studio could not draw this screen.', e)
+    if (painting) throw e
+    painting = true
+    broke(e)
+  }
+}
+
+/*
+  The failure state itself.
+
+  Built with textContent and createElement rather than a template literal,
+  because the thing that just failed may be the escaper, the data or one of the
+  helpers - and an apology screen that depends on the machinery that broke is
+  an apology screen you will not get to read.
+*/
+function broke(e) {
+  const root = $('#root')
+  if (root === null) return
+  root.textContent = ''
+  root.classList.remove('shut')
+
+  const wrap = document.createElement('div')
+  wrap.className = 'broke'
+  wrap.setAttribute('role', 'alert')
+
+  const h = document.createElement('h1')
+  h.className = 't-display'
+  h.textContent = 'This screen did not draw'
+  wrap.append(h)
+
+  const lead = document.createElement('p')
+  lead.className = 't-lead'
+  lead.textContent =
+    'Something in the studio threw while building this view. Nothing you did is lost — '
+    + 'the office and your projects are untouched, this is the page failing, not the work.'
+  wrap.append(lead)
+
+  const why = document.createElement('p')
+  why.className = 'brokewhy'
+  why.textContent = String(e?.message ?? e ?? 'no message')
+  wrap.append(why)
+
+  const row = document.createElement('div')
+  row.className = 'emptydo'
+
+  const home = document.createElement('button')
+  home.className = 'btn primary'
+  home.textContent = 'Back to the home dashboard'
+  home.addEventListener('click', () => {
+    state.view = 'portfolio'
+    state.project = null
+    state.label = null
+    painting = false
+    render()
+  })
+  row.append(home)
+
+  const again = document.createElement('button')
+  again.className = 'btn'
+  again.textContent = 'Reload the studio'
+  again.addEventListener('click', () => { location.reload() })
+  row.append(again)
+
+  wrap.append(row)
+  root.append(wrap)
+}
+
+function drawShell() {
   const root = $('#root')
   root.classList.toggle('shut', railShut())
   root.innerHTML = commandBar() + rail() + (

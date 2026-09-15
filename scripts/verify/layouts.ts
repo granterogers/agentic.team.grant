@@ -88,7 +88,8 @@ const ROUTES = [
   'tasks',
   'contacts',
   'sources',
-  'activity',
+  // Activity stopped being a section with #222; the panel on Overview is the
+  // surface a person actually reaches now.
   /*
     Project Settings, all four panes (#36).
 

@@ -664,7 +664,7 @@ for (const app of APPS) {
     const routes: [string, () => Promise<void>][] = [
       ['portfolio', home],
       ...(
-        ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity'] as const
+        ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'settings'] as const
       ).map(
         (tab) =>
           [

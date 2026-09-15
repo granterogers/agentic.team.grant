@@ -81,7 +81,7 @@ const ROUTES = [
   { kind: 'tab', at: 'tasks', name: 'project · tasks' },
   { kind: 'tab', at: 'contacts', name: 'project · contacts' },
   { kind: 'tab', at: 'sources', name: 'project · sources' },
-  { kind: 'tab', at: 'activity', name: 'project · activity' },
+  // Activity was removed as a section by #222; its panel lives on Overview.
   { kind: 'pane', at: 'team', name: 'settings · team' },
   { kind: 'pane', at: 'behaviour', name: 'settings · behaviour' },
   { kind: 'pane', at: 'governance', name: 'settings · governance' },

@@ -110,7 +110,7 @@ export const KINDS = [
   { id: 'documents', name: 'Documents', note: 'A shelf of covers', w: 2, h: 380 },
   { id: 'tasks', name: 'Tasks', note: 'What is open', w: 1, h: 340 },
   { id: 'contacts', name: 'People', note: 'Who it is about', w: 1, h: 320 },
-  { id: 'activity', name: 'Lately', note: 'What the team did', w: 1, h: 260 },
+  { id: 'activity', name: 'Recent activity', note: 'What the team did, most recent first', w: 1, h: 260 },
   { id: 'links', name: 'Connections', note: 'What it is joined to', w: 1, h: 180 },
   { id: 'note', name: 'Note', note: 'Somewhere to write', w: 1, h: 220 },
 ]

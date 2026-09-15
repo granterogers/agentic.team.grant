@@ -20,8 +20,9 @@
  *                        "policy", "according to", "parameters" used the way
  *                        an office uses them, none of which may be touched
  */
-import { ManagementApiExecutor } from '../../src/db/executor.ts'
+
 import { claimsToHaveMade, deliberationLeak } from '../../src/agents/quality.ts'
+import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {

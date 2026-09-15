@@ -75,10 +75,10 @@
 import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
 import {
   capabilityBrief,
-  toolNames,
   capabilityNow,
   contradictsReality,
   EMPTY_CAPABILITY,
+  toolNames,
 } from '../agents/capability.ts'
 import { clauses } from '../agents/clauses.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
