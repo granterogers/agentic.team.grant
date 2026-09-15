@@ -282,10 +282,25 @@ const rememberTab = (slug, tab) => {
   time one of them changed. `behind` on the body is the single fact, and the
   CSS reads it.
 */
+/*
+  Open or shut a sheet. Settings is not one of them any more (#158).
+
+  Grant: *"The current settings modal/pop-up is too constrained for the amount
+  of configuration available... Settings has enough complexity to justify being
+  a first-class page."*
+
+  So the settings container carries `page`, which the stylesheet reads to give
+  it the content column instead of a box in the middle of a blurred screen, and
+  it no longer sets `behind` - the shell is not receding behind it, the rail is
+  beside it and still works. That is the whole difference between a page and a
+  dialog: you can leave it by going somewhere else.
+
+  The document viewer stays a dialog, because it IS one.
+*/
 const sheet = (el, open) => {
   el.hidden = !open
-  const anyOpen = !$('#viewer').hidden || !$('#settings').hidden
-  document.body.classList.toggle('behind', anyOpen)
+  if (el.id === 'settings') el.classList.toggle('page', open)
+  document.body.classList.toggle('behind', !$('#viewer').hidden)
 }
 
 /*
@@ -5131,11 +5146,24 @@ function settingsSheet() {
   v.innerHTML = `<div class="sheet wide settings" data-more>
     <div class="chead sheethead">
       <span style="flex:1;min-width:0">
-        <h2 class="t-title" style="margin:0">The office</h2>
-        <p class="t-meta" style="margin:4px 0 0">Everything about how this place
-          runs, and what it is plugged into.</p>
+        <!--
+          Named by scope (#158).
+
+          Grant: *"There are effectively two kinds of settings, but the current
+          interface does not communicate this clearly. Separate them explicitly
+          into Global Settings and Project Settings... Do not make users guess
+          which scope they are editing."*
+
+          It said "The office", which is warm and says nothing about scope. The
+          project's own settings are two rows away in the rail under the other
+          name, so the two now differ by the only word that matters.
+        -->
+        <h1 class="t-display" style="margin:0;font-size:clamp(24px,2vw + 14px,32px)">Global settings</h1>
+        <p class="t-lead" style="margin:6px 0 0">Everything about how this place runs,
+          and what it is plugged into. For one project's own, open the project and
+          choose Project Settings.</p>
       </span>
-      <button class="close inhead" aria-label="Close">
+      <button class="close inhead" aria-label="Close settings and go back">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>

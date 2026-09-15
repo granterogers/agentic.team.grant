@@ -2492,6 +2492,94 @@ kbd {
   .callbtn.ringing .ring, .callbtn.connecting .ring { animation: none; }
 }
 
+/* --- Settings is a page, not a dialog (#158) ---------------------------------
+
+   Grant: *"The current settings modal/pop-up is too constrained for the amount
+   of configuration available. Replace the modal approach with a proper
+   full-page settings interface. Use full available content width, settings
+   navigation/sidebar or tabs, logical categories, clear section headings,
+   responsive mobile layout. Settings has enough complexity to justify being a
+   first-class page."*
+
+   It is the same markup, given the content column instead of a 880px box in
+   the middle of a blurred page. The rail stays reachable beside it, which is
+   the difference between a page and a dialog: you can leave it by going
+   somewhere else rather than only by finding the X.
+
+   `page` is set on the container, so the dialog styling above still applies to
+   the document viewer, which IS a dialog and should stay one. */
+/*
+  The SHEET scrolls, not the container.
+
+  The first draft made the container the scroller, which moved the #108 fade
+  out of the scrolling element - it was the sheet's last child, and a sticky
+  element only sticks inside the box that scrolls. `verify:layouts` reported
+  1,595 pixels hidden with nothing to say so, at three widths, and named the
+  element as the container rather than the sheet, which is what gave it away.
+
+  So the container is the frame and the sheet inside it is the scroller, which
+  is what it was as a dialog. The fade goes on working without being told.
+*/
+#settings.page {
+  position: fixed; inset: 0 0 0 var(--rail); z-index: 30;
+  display: block; padding: 0; overflow: hidden;
+  background: var(--ground);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.shell.shut #settings.page { inset: 0; }
+#settings.page .sheet {
+  width: 100%; max-width: none; max-height: 100%; overflow: auto;
+  overscroll-behavior: contain; border: 0; border-radius: 0;
+  box-shadow: none; background: transparent !important;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  padding: var(--s5) var(--s5) var(--s7);
+  /* The content column, not the whole span. A settings form stretched to
+     1440px is a row of labels a metre from their fields. */
+  margin: 0 auto; max-inline-size: 1040px;
+}
+#settings.page .sheethead { position: static; background: none; }
+/*
+  The fade stays, and the first draft of this rule removed it.
+
+  The comment it removed it with said "the page scrolls with the document's own
+  scrollbar, which is visible" - and that was wrong twice over. This container
+  is `position: fixed` with its own `overflow: auto`, so it is not the
+  document's scroller at all, and Chromium paints an OVERLAY scrollbar on it:
+  zero reserved width, invisible until you are already scrolling. That is #108
+  exactly, and `verify:layouts` reported 1,575 pixels hidden with nothing to say
+  so, at three widths, within a minute of the rule existing.
+
+  `scrollbar-gutter: stable` is not the answer either - it is ignored for
+  overlay scrollbars, which is the half of #108 that fixed the desktop and left
+  the phone broken.
+*/
+#settings.page .sheetfade { bottom: 0; }
+/* The tabs stay with you down a long page. */
+#settings.page .settabs {
+  position: sticky; top: 0; z-index: 2; background: var(--ground);
+  margin: 0 calc(var(--s5) * -1); padding: 0 var(--s5);
+}
+@media (max-width: 860px) {
+  /*
+    Full screen, with the bottom navigation still on top of it.
+
+    A phone has no room for a settings page beside anything, so it takes the
+    screen — but the navigation bar stays above it, which is the page argument
+    in the one place it matters most: you leave Settings by going somewhere,
+    not only by finding the X. The bar is `position: fixed` and was underneath
+    at z-index 20, so it is lifted over this and the content reserves its
+    height.
+
+    The first draft of this rule carried a comment saying both the top strip
+    and the bottom bar remained reachable, and neither did. A comment claiming
+    a property with nothing behind it is the failure this repository has
+    recorded three times; the comment is now what the CSS does.
+  */
+  #settings.page { inset: 0; padding-top: 0; }
+  #settings.page .sheet { padding: var(--s4) var(--s4) 110px; }
+  .navgroup { z-index: 34; }
+}
+
 /* --- panels as real widgets (#220) -------------------------------------------
 
    Collapse, height, and a tone per category. Grant's caution about the last of

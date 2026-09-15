@@ -697,15 +697,34 @@ for (const app of APPS) {
       one that hides the others, and the page will remember.** The sheet had
       no equivalent.
 
-      The signal is `body.behind`, not the presence of `.sheet`: the studio
-      leaves the sheet element in the tree and takes its box away, so
-      querying for the node reports it open while it is shut. That is exactly
-      the confusion that made the toggles look broken in the first place.
+      The signal WAS `body.behind`, and #158 took that away: Settings is a page
+      now, so nothing recedes behind it and `behind` stays false. The check then
+      believed Settings was shut on every press, re-opened it before each one,
+      and the run died in this helper rather than in the product.
+
+      The signal for a page is its container's `hidden` attribute, which is what
+      `sheet()` sets either way. It is NOT the presence of the `.sheet` node:
+      the studio leaves that element in the tree and takes its box away, so
+      querying for the node reports open while it is shut, which is exactly the
+      confusion that made the Behaviour toggles look broken in the first place.
     */
     const reopenSheet = async () => {
       if (settingsTab === null) return
-      const shut = await page.evaluate(`!document.body.classList.contains('behind')`)
+      const shut = await page.evaluate(
+        `(() => { const s = document.querySelector('#settings'); return s === null || s.hidden })()`,
+      )
       if (shut !== true) return
+      /*
+        The rail has to be open before the rail's own button can be pressed.
+
+        #183 again: the sweep presses the chevron that collapses the sidebar and
+        the page remembers, so `main` covers where this button is. The
+        actionability log said so in one line - "<main class='main'> intercepts
+        pointer events" - which is the second time in this session that printing
+        the END of that log turned a thirty-second mystery into a one-line
+        answer.
+      */
+      await openRail()
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(400)
       await page.locator(`[role="tab"][data-setting="${settingsTab}"]`).first().click()
@@ -831,11 +850,26 @@ for (const app of APPS) {
         must scope itself to the thing in front. This is that rule, applied to
         the sweep rather than to a measurement.
       */
-      const front = document.body.classList.contains('behind')
-        ? (['#settings', '#viewer']
-            .map((id) => document.querySelector(id))
-            .find((el) => el !== null && !el.hidden) ?? document)
-        : document
+      /*
+        And #158 moved the goalposts: Settings is a PAGE now, so it does not set
+        the dim class - nothing is receding behind it and the rail beside it
+        still works. It still covers the shell, though, so the scoping rule
+        above still applies to it; only the signal changed.
+
+        No backticks in this comment: it lives inside a template literal, which
+        is the trap CLAUDE.md records for app.js, for a migration heredoc and
+        for verify/import.ts. check:templates covers web/ only, so in here it
+        announces itself as an esbuild parse error a long way from the cause -
+        which is exactly what it did.
+
+        Asking which of the two containers is open, rather than asking whether
+        the body is dimmed, is also the more durable question: it is true of a
+        dialog and of a page, and it cannot go stale the next time one of them
+        changes what it does to the body.
+      */
+      const front = (['#settings', '#viewer']
+        .map((id) => document.querySelector(id))
+        .find((el) => el !== null && !el.hidden) ?? document)
       for (const el of front.querySelectorAll('button, a[href], [role="tab"], [role="option"]')) {
         if (el.closest('[hidden]') !== null) continue
         const r = el.getBoundingClientRect()
@@ -918,7 +952,6 @@ for (const app of APPS) {
         */
         const frontSel = (await page.evaluate(
           `(() => {
-             if (!document.body.classList.contains('behind')) return ''
              for (const id of ['#settings', '#viewer']) {
                const el = document.querySelector(id)
                if (el !== null && !el.hidden) return id
