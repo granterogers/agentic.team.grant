@@ -96,7 +96,21 @@ const persist = (action, args) => {
 
 /** What a project CAN show. Each maps to a renderer in app.js. */
 export const KINDS = [
-  { id: 'modules', name: 'Modules', note: 'The parts of the work', w: 2, h: 300 },
+  /*
+    A tone per category (#220, item 13 of the brief).
+
+    Grant: *"Different modules currently blend together too much. Give module
+    categories subtle visual differentiation... Keep this tasteful. Do not turn
+    the dashboard into a collection of brightly coloured boxes. The objective is
+    faster visual parsing."*
+
+    So it is five CATEGORIES, not eleven colours: things to make, things to do,
+    people, what already happened, and what this is joined to. Two panels can
+    share a tone - Documents and Note are both things you make - which is the
+    point of grouping rather than labelling. It is drawn as a hairline on the
+    header, nothing more.
+  */
+  { id: 'modules', name: 'Modules', note: 'The parts of the work', w: 2, h: 300, tone: 'k-do' },
   /*
     380, not 340.
 
@@ -107,12 +121,12 @@ export const KINDS = [
     reason it was found: the layout looks deliberate right up until you notice
     the word "Notion" has no second half.
   */
-  { id: 'documents', name: 'Documents', note: 'A shelf of covers', w: 2, h: 380 },
-  { id: 'tasks', name: 'Tasks', note: 'What is open', w: 1, h: 340 },
-  { id: 'contacts', name: 'People', note: 'Who it is about', w: 1, h: 320 },
-  { id: 'activity', name: 'Recent activity', note: 'What the team did, most recent first', w: 1, h: 260 },
-  { id: 'links', name: 'Connections', note: 'What it is joined to', w: 1, h: 180 },
-  { id: 'note', name: 'Note', note: 'Somewhere to write', w: 1, h: 220 },
+  { id: 'documents', name: 'Documents', note: 'A shelf of covers', w: 2, h: 380, tone: 'k-make' },
+  { id: 'tasks', name: 'Tasks', note: 'What is open', w: 1, h: 340, tone: 'k-do' },
+  { id: 'contacts', name: 'People', note: 'Who it is about', w: 1, h: 320, tone: 'k-who' },
+  { id: 'activity', name: 'Recent activity', note: 'What the team did, most recent first', w: 1, h: 260, tone: 'k-past' },
+  { id: 'links', name: 'Connections', note: 'What it is joined to', w: 1, h: 180, tone: 'k-join' },
+  { id: 'note', name: 'Note', note: 'Somewhere to write', w: 1, h: 220, tone: 'k-make' },
 ]
 
 /*
@@ -134,11 +148,11 @@ export const KINDS = [
   about two words for one thing, with the sign reversed.
 */
 export const HOME_KINDS = [
-  { id: 'waiting', name: 'Waiting on you', note: 'Decisions the office cannot make', w: 2, h: 220 },
-  { id: 'tasks', name: 'Tasks', note: 'Everything open, across every project', w: 2, h: 420 },
-  { id: 'projects', name: 'Projects', note: 'All of them, and how each is doing', w: 1, h: 420 },
-  { id: 'team', name: 'The team', note: 'Who is working now', w: 1, h: 280 },
-  { id: 'activity', name: 'Recent activity', note: 'What the office did, most recent first', w: 1, h: 320 },
+  { id: 'waiting', name: 'Waiting on you', note: 'Decisions the office cannot make', w: 2, h: 220, tone: 'k-do' },
+  { id: 'tasks', name: 'Tasks', note: 'Everything open, across every project', w: 2, h: 420, tone: 'k-do' },
+  { id: 'projects', name: 'Projects', note: 'All of them, and how each is doing', w: 1, h: 420, tone: 'k-join' },
+  { id: 'team', name: 'The team', note: 'Who is working now', w: 1, h: 280, tone: 'k-who' },
+  { id: 'activity', name: 'Recent activity', note: 'What the office did, most recent first', w: 1, h: 320, tone: 'k-past' },
 ]
 
 /*
@@ -338,9 +352,59 @@ export function wire(host, scope, panels, redraw) {
       `pointerdown` rather than `click`: the drag starts on pointerdown, so
       that is the event that has to be kept away from the grip.
     */
-    for (const b of el.querySelectorAll('.pctl button')) {
+    for (const b of el.querySelectorAll('.pctl button, .pfold')) {
       b.addEventListener('pointerdown', (e) => { e.stopPropagation() })
     }
+
+    /*
+      Open and shut (#220).
+
+      The height is not touched. A panel that came back from collapsed at some
+      default height would have lost the size he chose, and the whole reason
+      the arrangement is saved is that it stays arranged - so `h` is remembered
+      through the fold and `panelChrome` draws a header's worth of height while
+      the flag is set.
+    */
+    el.querySelector('[data-fold]')?.addEventListener('click', () => {
+      panel.c = panel.c !== true
+      put(panels); redraw()
+    })
+
+    /*
+      Height, by dragging the bottom edge (#220).
+
+      Not snapped to the 24px grid the way x and y are. Width snaps because a
+      dashboard of arbitrary widths never lines up in three columns; height has
+      no column of rows to line up with, and the right height for a panel is
+      whatever makes its contents fit. A floor of 120px so a panel cannot be
+      dragged into nothing, which is what Remove is for and is reversible.
+
+      Saved on release rather than on every pointer move: a drag is one change
+      of mind, not two hundred, and the RPC does not need to hear about each
+      pixel of it.
+    */
+    const grow = el.querySelector('[data-taller]')
+    let tall = null
+    grow?.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+      tall = { y: e.clientY, h: panel.h }
+      grow.setPointerCapture(e.pointerId)
+      el.classList.add('growing')
+    })
+    grow?.addEventListener('pointermove', (e) => {
+      if (tall === null) return
+      panel.h = Math.max(120, Math.round(tall.h + (e.clientY - tall.y)))
+      el.style.height = `${panel.h}px`
+    })
+    const settle = () => {
+      if (tall === null) return
+      tall = null
+      el.classList.remove('growing')
+      put(panels)
+      redraw()
+    }
+    grow?.addEventListener('pointerup', settle)
+    grow?.addEventListener('pointercancel', settle)
 
     // Width by column, because a dashboard of arbitrary widths never lines up.
     el.querySelector('[data-wider]')?.addEventListener('click', () => {

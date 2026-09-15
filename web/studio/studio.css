@@ -2492,6 +2492,76 @@ kbd {
   .callbtn.ringing .ring, .callbtn.connecting .ring { animation: none; }
 }
 
+/* --- panels as real widgets (#220) -------------------------------------------
+
+   Collapse, height, and a tone per category. Grant's caution about the last of
+   those is the reason it is a hairline and not a fill: *"Keep this tasteful. Do
+   not turn the dashboard into a collection of brightly coloured boxes. The
+   objective is faster visual parsing."* */
+.pfold {
+  width: 20px; height: 20px; flex: none; margin-left: -2px; border-radius: 5px;
+  display: grid; place-items: center; color: var(--ink-3);
+  transition: transform .18s cubic-bezier(.2,.8,.3,1), color .16s;
+}
+.pfold:hover { color: var(--ink); background: var(--sunken); }
+/*
+  44px of target around a 20px glyph, where a finger is what presses it.
+
+  The negative margins are what keep it from growing the header: the hit area
+  reaches outside the visual control, which is how a small glyph earns a real
+  touch target without a 44px-tall chevron. `verify:ui` found this at 20x20 on
+  both the iPhone and the iPad within a minute of the control existing, on four
+  screens, which is the floor doing its job.
+
+  Collapse is not hidden on a phone the way the width controls are. Width is
+  meaningless on a one-column board; collapse is MORE useful there, because a
+  board that stacks vertically is the one you most want to fold up.
+*/
+@media (pointer: coarse) {
+  .pfold {
+    width: 44px; height: 44px; margin: -12px -12px -12px -14px;
+  }
+}
+.shutpanel .pfold { transform: rotate(-90deg); }
+.shutpanel { overflow: hidden; }
+/* A collapsed panel keeps its shadow and loses its body, so the board reads as
+   a set of closed drawers rather than a set of gaps. */
+.shutpanel header { border-bottom: 0; }
+
+/* The height grip. A 10px strip on the bottom edge, drawn only on hover so an
+   idle board is not a grid of handles. */
+.pgrow {
+  position: absolute; left: 12px; right: 12px; bottom: 0; height: 10px;
+  cursor: ns-resize; touch-action: none;
+}
+.pgrow::after {
+  content: ''; position: absolute; left: 50%; bottom: 3px; width: 34px; height: 3px;
+  transform: translateX(-50%); border-radius: 2px; background: var(--ink-3);
+  opacity: 0; transition: opacity .16s;
+}
+.panel:hover .pgrow::after, .panel.growing .pgrow::after { opacity: .5; }
+.panel.growing { user-select: none; }
+
+/*
+  The category hairline.
+
+  On the header's underside rather than down the left edge: a left border makes
+  every panel look like a callout, and this repository has a rule about a
+  dashboard that becomes a set of coloured boxes.
+*/
+.panel > header { border-bottom: 1px solid var(--edge); }
+.panel.k-do    > header { border-bottom-color: color-mix(in oklch, var(--warn) 45%, var(--edge)); }
+.panel.k-make  > header { border-bottom-color: color-mix(in oklch, var(--accent) 45%, var(--edge)); }
+.panel.k-who   > header { border-bottom-color: color-mix(in oklch, var(--good) 40%, var(--edge)); }
+.panel.k-past  > header { border-bottom-color: var(--edge); }
+.panel.k-join  > header { border-bottom-color: color-mix(in oklch, var(--ink-3) 55%, var(--edge)); }
+
+/* On a phone the board is static, so a resize grip would teach a gesture the
+   layout has switched off — the trap this file records about the drag hint. */
+@media (max-width: 860px) {
+  .pgrow { display: none; }
+}
+
 /* --- the home board (#219) ---------------------------------------------------
    Its panels reuse the project board's chrome, so almost nothing is needed
    here: only the insides, and the one rule that makes the project cards behave

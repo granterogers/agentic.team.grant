@@ -3213,6 +3213,21 @@ function panelChrome(spec, kinds, bodyFor) {
   const kind = kinds.find((k) => k.id === spec.id)
   if (!kind) return ''
   /*
+    Collapsed is a property of the arrangement, not of this render (#220).
+
+    Grant's list for a panel was *"dragging, free rearrangement, resizing
+    horizontally, resizing vertically where appropriate, reordering,
+    collapse/expand, removal, adding again, persistent layout"* - and collapse
+    sits in the middle of it, between two things that persist. A collapsed
+    panel that opens again on the next visit is a toggle, not a layout.
+
+    So it rides on the spec beside x, y, w and h and goes through the same
+    save. The RPC's shape check requires those five keys and forbids nothing
+    else, which is why 0250 modelled a panel as jsonb: *"every new panel
+    property - a colour, a collapsed flag - would then be a migration."*
+  */
+  const shut = spec.c === true
+  /*
     `view-transition-name` pairs this panel with the full section of the same
     subject (#40 idea 6). Pressing Documents on Overview makes the Documents
     PANEL grow into the Documents SECTION rather than the page swapping —
@@ -3222,13 +3237,31 @@ function panelChrome(spec, kinds, bodyFor) {
     The name has to be unique per document, which is why only the panels get
     it and the section claims the same name on the other side of the switch.
   */
-  return `<section class="panel" data-panel="${spec.id}"
+  return `<section class="panel ${shut ? 'shutpanel' : ''} ${esc(kind.tone ?? '')}"
+           data-panel="${spec.id}"
            style="view-transition-name:sec-${spec.id};
                   left:calc((100% - 40px)/3 * ${spec.x} + ${spec.x} * 20px);
                   top:${spec.y}px;
                   width:calc((100% - 40px)/3 * ${spec.w} + ${(spec.w - 1) * 20}px);
-                  height:${spec.h}px">
+                  height:${shut ? 46 : spec.h}px">
     <header data-grip>
+      <!--
+        Open and shut, on the title (#220).
+
+        Before the width controls rather than after, because it is the one a
+        person reaches for most and because a chevron beside a title reads as
+        part of the title. It sits inside the grip like the other three and
+        needs the same pointerdown guard, for the reason #105 records.
+
+        No backticks in this comment. Template literal.
+      -->
+      <button class="pfold" data-fold aria-expanded="${shut ? 'false' : 'true'}"
+              aria-label="${shut ? 'Open' : 'Collapse'} the ${esc(kind.name)} panel"
+              title="${shut ? 'Open' : 'Collapse'}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <h3 class="t-label">${esc(kind.name)}</h3>
       <!--
         These are WIDTH controls, and two of them used to be a plus and a
@@ -3267,7 +3300,22 @@ function panelChrome(spec, kinds, bodyFor) {
         </button>
       </span>
     </header>
-    <div class="pbodywrap">${bodyFor(spec.id)}</div>
+    ${shut ? '' : `<div class="pbodywrap">${bodyFor(spec.id)}</div>`}
+    <!--
+      The bottom edge, for height (#220).
+
+      Grant asked for vertical resize as well as horizontal. Width snaps to
+      columns because a dashboard of arbitrary widths never lines up; height
+      does not, because there is no column of rows to line up WITH and the
+      right height for a panel is however tall its contents are.
+
+      Not on a collapsed panel, where the height IS the header, and not on a
+      phone, where the board is static and a resize grip would be a gesture the
+      layout has switched off.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${shut ? '' : '<span class="pgrow" data-taller aria-hidden="true"></span>'}
   </section>`
 }
 
@@ -3304,18 +3352,6 @@ function dashboard() {
 
         No backticks in this comment. Template literal.
       -->
-      <div class="tabhead tabhead-bare">
-        <div class="headctl">
-          ${spare.length === 0 ? '' : `<div class="addpanel">
-            <button class="btn" data-add-open>+ Add panel</button>
-            <div class="addmenu" data-add-menu hidden>
-              ${spare.map((k) => `<button data-add="${k.id}">
-                <b>${esc(k.name)}</b><span class="t-meta">${esc(k.note)}</span></button>`).join('')}
-            </div>
-          </div>`}
-          <button class="btn" data-reset-panels title="Put the panels back">Reset</button>
-        </div>
-      </div>
       <div class="board" data-board style="height:${Math.max(tallest + 40, 520)}px">
         ${mine.map(chrome).join('')}
       </div>
@@ -3444,6 +3480,25 @@ function dashboard() {
           a moon when pressing it makes things dark. A control labelled with its
           current state reads as a status light and gets pressed by accident.
         -->
+        <!--
+          The board's controls, on the project's own line (#220).
+
+          Same move as the home screen's: they were a row of their own directly
+          under the waiting banner, holding two buttons and three hundred pixels
+          of nothing, immediately above the content. The head has a right-hand
+          slot and this is what it is for. Only drawn on Overview, because that
+          is the only tab with a board on it.
+
+          No backticks in this comment. Template literal.
+        -->
+        ${state.tab !== 'overview' ? '' : `${spare.length === 0 ? '' : `<div class="addpanel">
+          <button class="btn" data-add-open>+ Add panel</button>
+          <div class="addmenu" data-add-menu hidden>
+            ${spare.map((k) => `<button data-add="${k.id}">
+              <b>${esc(k.name)}</b><span class="t-meta">${esc(k.note)}</span></button>`).join('')}
+          </div>
+        </div>`}
+        <button class="btn" data-reset-panels title="Put the panels back">Reset</button>`}
         <button class="btn iconbtn" data-scheme-toggle title="Switch between light and dark"
                 aria-label="Switch between light and dark">
           <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none"

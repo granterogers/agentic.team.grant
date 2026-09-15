@@ -373,6 +373,11 @@ for (const app of APPS) {
     let settingsTab: string | null = null
 
     const home = async () => {
+      /* The home board's own panels are removable, and the way into a project
+         is a card inside one of them. Restore before the page is read. */
+      await page.evaluate(`(() => {
+        try { localStorage.removeItem('studio.panels') } catch (e) {}
+      })()`)
       // Every route starts here, `intoSettings` included — and it records its
       // tab AFTER calling this, so clearing here covers every other route
       // without needing a second call site that somebody will forget.
@@ -570,7 +575,66 @@ for (const app of APPS) {
       })()`)
     }
 
+    /*
+      Put the boards back before reading a route.
+
+      Third instance of the same shape, and the file already carries the other
+      two: #103's dock and #183's rail. The sweep presses every control, and
+      three of the controls on a panel header are Narrower, Wider and REMOVE -
+      which persists, because a person who removes a panel means it.
+
+      So the audit removed the Projects panel on the portfolio route and then
+      spent eleven routes reporting "could not be reached", because the way
+      into a project is a card inside that panel. Ten seconds each, and the
+      message named the selector rather than the reason.
+
+      Cleared through `localStorage` rather than by pressing Reset: Reset is
+      itself one of the controls under test, and a restore that depends on the
+      thing being tested cannot be trusted to have run.
+
+      Called at the TOP of `intoProject`, before anything reads the page -
+      #190's correction, where a restore that ran just before the click was
+      one step too late because the state had already been read.
+    */
+    const BOARD_PANELS = { home: 5, project: 6 }
+
+    const putBoardsBack = async () => {
+      const short = (await page.evaluate(`(() => {
+        const board = document.querySelector('[data-home-board], [data-board]')
+        if (board === null) return 0
+        const want = board.hasAttribute('data-home-board') ? ${BOARD_PANELS.home} : ${BOARD_PANELS.project}
+        return want - board.querySelectorAll('[data-panel]').length
+      })()`)) as number
+      if (short <= 0) return
+      /*
+        Reset is itself one of the controls under test, which is a dependency
+        worth stating rather than hiding: if Reset stops working this restore
+        stops working, and the audit will say so twice - once here as panels
+        that stay missing, and once as Reset reported inert.
+
+        Clearing `localStorage` alone is not enough. `panels.js` keeps a live
+        in-memory map that wins over storage, deliberately, so that a drag feels
+        instant - so the page has to be told, and Reset is the telling.
+      */
+      await page.evaluate(`(() => {
+        try { localStorage.removeItem('studio.panels') } catch (e) {}
+        const r = document.querySelector('[data-home-reset], [data-reset-panels]')
+        if (r !== null) r.click()
+      })()`)
+      /*
+        Nearly a second, not a quarter of one. The studio never stops moving -
+        `breathe` and `scatter` run for as long as the page is open - so a panel
+        that has just been redrawn is still settling, and Playwright's stability
+        check cannot pass against a box that is moving. This file already
+        records that; the first draft waited 260ms and two Remove buttons
+        reported "locator resolved, click timed out", which is what an unstable
+        element looks like from the outside.
+      */
+      await page.waitForTimeout(950)
+    }
+
     const intoProject = async (tab: string) => {
+      await putBoardsBack()
       for (let go = 1; go <= 2; go += 1) {
         try {
           await home()
@@ -883,10 +947,26 @@ for (const app of APPS) {
           itself with `aria-current` / `aria-selected` / `.on`, so the audit can
           simply ask.
         */
+        /*
+          Both spellings of aria-current, which is a lesson this repository has
+          already learned once in CSS and not here.
+
+          `studio.css` carries the note: *"Navigation entries use
+          aria-current='page', which is the correct value for 'this is the page
+          you are on'; the older ones say 'true'. A selector that knows only one
+          of them styles half the rail."* This audit knew only 'true', so a
+          correctly-marked control that is already where it points - #216's home
+          button, pressed from the home screen - was reported as a control that
+          does nothing.
+
+          The spec value is 'page'. Accepting only the older one meant the audit
+          punished the correct markup.
+        */
         const alreadyHere = await use
           .evaluate(
             (el) =>
               el.getAttribute('aria-current') === 'true' ||
+              el.getAttribute('aria-current') === 'page' ||
               el.getAttribute('aria-selected') === 'true' ||
               el.classList.contains('on'),
           )
@@ -1008,6 +1088,46 @@ for (const app of APPS) {
             them. It is the sweep's own press.
           */
           await openRail()
+          /*
+            And shut the dock, which is #183's correction applied to #103's
+            panel.
+
+            `shutDock` was already called at NAVIGATION, and that is one press
+            too early for exactly the reason `openRail` was: the control that
+            opens the dock is pressed during the sweep, not before it. With the
+            dock open it covers the right-hand column, so the two panels in it -
+            Projects and The team on the home board - reported "locator
+            resolved, click timed out".
+
+            The full actionability log named the cause in one run:
+
+                - <div id="dock" class="dock">…</div> intercepts pointer events
+
+            which is why this file now prints the END of that log rather than
+            its first six lines. Two runs were spent on a stability hypothesis
+            before it could say that.
+          */
+          await shutDock()
+          /*
+            And put the board back, which is the same lesson a third time.
+
+            Three of the controls on every panel header are Narrower, Wider and
+            REMOVE, and all three persist. So the sweep spent its way down a
+            board: by the time it reached the fourth panel's Remove, the first
+            three panels were gone and the row had re-laid out underneath the
+            locator - which reads as "locator resolved, click timed out" and is
+            the audit measuring the consequences of its own previous press.
+
+            Restoring before EVERY press rather than only at navigation, for
+            #183's reason: the destructive control is pressed after navigation,
+            so a restore at navigation is one press too early. Each press is
+            then independently answered - does this control respond from a
+            known board - which is the question the audit is actually asking.
+
+            Idempotent and cheap: one `localStorage` write and a re-render only
+            when something had changed.
+          */
+          await putBoardsBack()
           try {
             await use.click({ timeout: 2500 })
             return null
@@ -1022,9 +1142,19 @@ for (const app of APPS) {
             .split('\n')
             .map((x) => x.trim())
             .filter((x) => x !== '' && !x.startsWith('Call log'))
-            .slice(0, 6)
+            /*
+              The whole log, not the first six lines of it.
+
+              CLAUDE.md's rule about this exact output: "element is not stable"
+              and "intercepts pointer events" have completely different causes
+              and completely different fixes, and the discriminating line is the
+              LAST one Playwright wrote, not the first. Six lines stopped at
+              "attempting click action" - which is the log saying nothing at all
+              - and cost two runs of guessing.
+            */
+            .slice(-8)
             .join(' · ')
-            .slice(0, 300)
+            .slice(0, 460)
           unreached.push(`${size}/${name}  ${label}  — ${why}`)
           continue // covered by something else, or moved — not a dead control
         }
