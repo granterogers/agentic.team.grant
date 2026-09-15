@@ -234,6 +234,21 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'a two-subject request reaches a second specialist as real work, and the chain stays bounded (#233)',
   ],
   ['verify:handoff', 'delegation that leaves a trace'],
+  /*
+    What the office does when things go wrong, at the level of the JOB rather
+    than the integration. `verify:chaos` proves the rest of the system stays up
+    and `verify:failures` proves a failure is classified; neither asserts that
+    the person waiting gets a truthful answer.
+
+    Needs no model, which is not a compromise: a recovery property must hold
+    for ANY handler outcome, so a stub that fails on demand is a better
+    instrument than a real one that fails when the weather does — and this runs
+    when the provider is out, which is exactly when somebody wants to know.
+  */
+  [
+    'verify:recovers',
+    'no fabricated success, no duplicate action, no lost mutation, no stranded work (#231)',
+  ],
   [
     'verify:cross-interface',
     'the same instruction through any surface uses the same canonical layer (§22 B)',

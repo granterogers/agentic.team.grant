@@ -215,7 +215,8 @@
     "verify:routing-breadth": "tsx scripts/verify/routing-breadth.ts",
     "verify:routing-heldout": "tsx scripts/verify/routing-breadth.ts --heldout",
     "measure": "tsx scripts/measure.ts",
-    "verify:reach": "tsx scripts/verify/reach.ts"
+    "verify:reach": "tsx scripts/verify/reach.ts",
+    "verify:recovers": "tsx scripts/verify/recovers.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
