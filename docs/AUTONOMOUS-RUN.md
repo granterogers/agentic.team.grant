@@ -58,6 +58,7 @@ cheapest reconstruction of where the run is.
 
 | Issue | What landed | Migrations |
 |---|---|---|
+| **#131** | the plan Grant approved is the import that happens — `office.notion_import` executes the STORED plan instead of a second model call. `PlanStep.payload` makes the plan one artefact rather than two. Six unit tests with a control that must come back one | — |
 | **#127** | a model is chosen on what it has actually done, per kind of work — `public.model_record` derived from inference_usage, quality may only DEMOTE, exploration by staleness, the choice explained in `job_traces`. `npm run verify:routing-quality` 13/13, ADR-0031. **`verify:fallback` caught my first attempt inverting the certified model chain** | 0394–0396 |
 | #268 | filed: ~1,700 of 1,860 inference calls carry no `job_id`, so the per-kind record stays thin | — |
 | **#147** | a correction becomes a standing rule on one press — `src/agents/correction.ts`, the offer on the Governance page, `npm run verify:rules` 24/24, ADR-0030. Four latent defects found by DRIVING the press, none visible from reading | 0390–0393 |
@@ -78,8 +79,9 @@ end: #113, #114, #136, #137 and #138 are proposals awaiting his pick and their
 aesthetic children must not be implemented on a guess. #178 needs a change to
 his own Notion workspace. Candidates identified and not yet started: #123
 (empty sections), #124 (density preference), #126 (drag a file onto a project),
-#156 (project history as a sequence), #131 (see what an agent is about to do),
-#128 (agent hands work to another agent), #187 (a Slack channel per project).
+#156 (project history as a sequence), #128 (agent hands work to another agent),
+#187 (a Slack channel per project), #130 (outputs are prose where they should be
+structured), #37 (fast search across the project graph).
 
 ---
 
