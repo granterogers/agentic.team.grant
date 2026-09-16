@@ -406,6 +406,7 @@ npm run session -- --report        # score every turn recorded
 npm run verify:routing-heldout     # routing against cases it has never seen
 npm run gate             # the checks that must pass, check:icons among them
 npm run check:icons      # every project-mark default names a mark the page can draw (#221)
+npm run check:callers    # no NEW capability ships with nothing that calls it (#72)
 npm run space            # now walks the home board's panels too, and reports spare room (#267)
 npm run verify:rules             # a correction becomes a standing rule, only on a press (#147)
 npm run verify:routing-quality   # a model is chosen on what it has done, per kind (#127)

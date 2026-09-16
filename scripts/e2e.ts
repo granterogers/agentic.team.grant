@@ -273,6 +273,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:icons',
     'every project-mark default names an icon the page can actually draw (#221 shipped twelve that did not)',
   ],
+  [
+    'check:callers',
+    'no NEW capability ships with nothing that calls it — #72 had five in one session, each green in its own suite',
+  ],
 ]
 
 type Result = {
