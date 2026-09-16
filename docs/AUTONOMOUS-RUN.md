@@ -18,6 +18,40 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+## THE MANDATE IN FORCE — second eight-hour run, 16 September 2026
+
+**Grant, 2026-09-16T05:02Z, lifting the hold on #25 himself:**
+
+> *"start working on 25 and you have the next eight hours to implement all open
+> issues in terms of feature requests and everything else um, yeah just
+> implement everything for the next eight hours uninterrupted don't ask for any
+> more prompts just go ahead and do it thank you"*
+
+| | |
+|---|---|
+| **Started** | 2026-09-16T05:02Z |
+| **Minimum duration** | **8 hours**, to 13:02Z — uninterrupted, no further prompting |
+| **First task, named by him** | **#25** — the project dashboard as a living map |
+| **Then** | every open issue that is a feature request or otherwise implementable |
+| **Branch** | `claude/phase-7-communications-kh8ow8` |
+
+**#25 IS NO LONGER HELD.** The earlier instruction — *"dont start implementation
+yet"* — is revoked by the sentence above. `docs/spec/project-dashboard-design-direction-2026-09-15.md`
+is the verbatim brief and the thing to build against.
+
+**125 issues are open and they cannot all be done in eight hours.** Five of them
+(#113, #114, #136, #137, #138) are explicitly proposals *awaiting Grant's pick*
+and must not be implemented on a guess. The order is: #25 and its children
+first, because he named it; then the frontend and UX issues that make the
+product usable; then anything else that can be finished and verified. Say at the
+end what was not reached, rather than leaving it implied.
+
+Everything in the previous run's contract still applies — §1 do not interrupt,
+§2 the only three early-exit conditions, §3 what is not a blocker, and
+**context compaction is expected and is NOT a stopping condition**.
+
+---
+
 ## THE MISSION
 
 **UX BACKLOG IMPLEMENTATION, THEN FULL UX QA (LEVEL 2), AUTONOMOUSLY, FOR A
