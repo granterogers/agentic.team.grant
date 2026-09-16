@@ -34,6 +34,7 @@
     "shots": "npm run smoke && tsx scripts/verify/studio.ts",
     "probe": "tsx scripts/verify/probe.ts",
     "space": "tsx scripts/verify/space.ts",
+    "system": "tsx scripts/verify/system.ts",
     "verify:harness": "tsx scripts/verify/harness.ts",
     "verify:history": "tsx scripts/verify/history.ts",
     "verify:access": "tsx scripts/verify/access.ts",
