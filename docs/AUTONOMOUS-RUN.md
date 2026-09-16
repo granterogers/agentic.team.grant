@@ -569,6 +569,24 @@ Started **12:57Z**. **105 issues were open.**
 2. **Three visual defects, all found by opening the PNG** — category chips that never rendered, a 13.3px search input that would zoom iOS Safari on focus, and 33×23 touch targets against a 44px floor. Every one passed `smoke`, `check:templates` and `verify:wired`.
 3. **A control bound to a node that redraws itself works exactly once**, three times in one file in one afternoon — and `verify:controls` cannot catch it, because the audit presses each control from a fresh render.
 
+## The last hour
+
+- **#39** closed — Settings is a full destination at the visual standard, captured and looked at. One thing Grant asked for is deliberately absent and said so rather than left to be discovered: the connection marks are the product's own stroked set, **not** the eight companies' brand logos, because mixing eight brand marks into one icon language is what makes a set look like clip art. His call, offered, not decided silently.
+- **#38** closed — and the check it asked for found something much larger than the three flat cards it was written to catch. See below.
+- **#17** closed with **ADR-0033**: checks run in the authoring session, the residual risk is stated rather than mitigated away, and the cost if Actions is ever enabled is measured (~4 min a job, 4% of the allowance at twenty PRs a month). Enabling it reverses a standing instruction and needs Grant's word.
+- **`npm run shots` now clears its own captures.** `.out/activity-desktop-dark.png` sat beside today's captures showing a rail labelled "Studio" and an Activity tab — a name #216 changed and a tab #222 removed. Reading it produced a confident finding about a screen that had not existed for two days.
+- **#75 and #223 both hinge on one open item**, #188, and its number was wrong: 44% of the phone's first screen, not 75%, because #25 removed three of the four things it counted. Remeasured, captured, and put to Grant as the composition decision it is.
+
+## THE ONE TO READ
+
+**Every card, control and sheet in the product had square corners for a day, deployed.**
+
+#124's density commit opened `:root[data-density='compact'] {` immediately above the base `:root`'s radius tokens, and the brace swallowed them and everything after — three radii, three glass tiers, both blurs, `--glass-edge`, `--halo` and both type families became compact-only. In the default density, 44 rules reading `var(--r-card)` computed to **0**.
+
+Nothing caught it and nothing could: not overflow, not low contrast, not small type, not a dead control. `verify:layouts` reported 64 states and 0 findings over it. A square card is a design somebody could have chosen, so the captures look plausible.
+
+It surfaced because #38's new flat-card detector reads `--r-card` to find cards, got an empty string, and **its synthetic-failure control did not fire**. The rule that found it is already in `CLAUDE.md` — give every found-nothing check a control — and this is what one is for.
+
 ## NOT REACHED
 
 - **#232, #233, #234, #235** (#231's remaining children) were measured and not closed. `levels` and `breadth` show the work delivered — 37/37 dimensions covered, 0 capabilities granted and never exercised — but **`measure` reports `decisions with depth > 0` as ZERO in real traffic** against `max depth observed 1`. #233's headline claim is about canonical state and real traffic does not yet show it, so closing it would be claiming something the measurement contradicts.
