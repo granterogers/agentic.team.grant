@@ -1966,6 +1966,25 @@ Each of these cost real time. They are here so they cost it once.
   block you open, in the same edit — and give every found-nothing check a
   control, because this is what one is for.
 
+- **An SVG element's `tagName` keeps its own case; an HTML element's is
+  upper-cased.** `verify:controls` names every control by its `textContent`,
+  and every generated page illustration carries an inline `style` element
+  INSIDE an `svg` — so nine document cards were all called
+  `.pg rect { fill: var(--ink-3); opacity: .42 } .pg rect.accen`, the
+  de-duplication collapsed them into ONE entry, and eight of the nine had
+  never been pressed by the audit at all. The route reported 36 controls; it
+  has 43. Filtering them out by comparing `tagName !== 'STYLE'` missed every
+  one, and the finding printed the CSS straight back. Lower-case the tag name
+  before comparing it, and remember that a screen reader does not read a style
+  sheet either.
+- **A control that cannot fail is not a control, and the way to find out is to
+  break the thing on purpose.** The guard added with #121's `j`/`k` was proved
+  by typing `jk journal` into the composer with the guard REMOVED — and it
+  stayed green, because a textarea carries none of the walkable attributes so
+  the walk declines on its own. The letter that actually gets stolen is the
+  slash, which opens the command bar from anywhere. Same shape as #268's
+  substring check satisfied by a superstring: the synthetic failure has to
+  exercise the path the check claims to cover, not a neighbour of it.
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run

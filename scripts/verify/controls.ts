@@ -241,6 +241,56 @@ const browser = await chromium.launch()
   allowed here. `SIZE=desktop` and `SIZE=phone` split it into two runs that each
   finish, and `npm run verify:controls` does both in sequence.
 */
+/*
+  One naming rule, shared by the mouse collector and the keyboard sweep (#121).
+
+  CLAUDE.md: a row list built twice is a list that will disagree. These two
+  passes have to agree on what a control is CALLED or the comparison between
+  them is noise - a control named one way while being pressed and another way
+  while being tabbed onto would be reported as unreachable for ever.
+
+  An image link IS named, by its image's alt text; title is the last resort,
+  as it is for a browser.
+
+  No backticks in this string: it is JS source handed to evaluate.
+*/
+const NAME_OF = `((el) => {
+  /*
+    textContent, minus the style sheets.
+
+    Every generated page illustration carries an inline style element, and
+    textContent takes its RULES - so six document cards were all named
+    ".pg rect { fill: var(--ink-3); opacity: .42 } .pg rect.accen", collapsed
+    into one entry by the de-duplication, and five of the six had never been
+    pressed or tabbed onto by this audit at all. A screen reader does not read
+    a style sheet and neither should this.
+  */
+  const words = (node) => {
+    let out = ''
+    for (const c of node.childNodes) {
+      if (c.nodeType === 3) out += c.nodeValue
+      /*
+        Lower-cased, because an SVG element's tagName keeps its own case while
+        an HTML element's is upper-cased - and the style sheet in question is
+        inside the generated illustration's svg, so a check against 'STYLE'
+        alone misses every one of them. It did, on the first attempt, and the
+        finding printed the CSS back at me unchanged.
+      */
+      else if (c.nodeType === 1 && !['style', 'script'].includes(String(c.tagName).toLowerCase()))
+        out += words(c)
+    }
+    return out
+  }
+  const img = el.querySelector('img[alt]')
+  return (
+    el.getAttribute('aria-label') ||
+    words(el) ||
+    (img === null ? '' : img.getAttribute('alt')) ||
+    el.getAttribute('title') ||
+    ''
+  ).trim().replace(/\\s+/g, ' ')
+})`
+
 const only = process.env.SIZE ?? ''
 /*
   A route filter, for the same reason SIZE exists.
@@ -874,27 +924,76 @@ for (const app of APPS) {
         if (el.closest('[hidden]') !== null) continue
         const r = el.getBoundingClientRect()
         if (r.width === 0 || r.height === 0) continue
-        /*
-          An image link IS named — by the image's alt text.
-
-          The build page's screenshot links hold nothing but an <img alt="...">,
-          and reading only aria-label and textContent reported them as having
-          no accessible name. That is the audit being wrong about accessibility,
-          which is worse than saying nothing: a real unnamed control would be
-          lost in the noise. title is the last resort, as it is for a browser.
-        */
-        const img = el.querySelector('img[alt]')
-        const name = (
-          el.getAttribute('aria-label') ||
-          el.textContent ||
-          (img === null ? '' : img.getAttribute('alt')) ||
-          el.getAttribute('title') ||
-          ''
-        ).trim().replace(/\\s+/g, ' ')
+        // NAME_OF, at the top of this file, and the keyboard sweep uses the
+        // same one so the two passes cannot disagree about what a control is
+        // called.
+        const name = (${NAME_OF})(el)
         out.push(name === '' ? '(unnamed) ' + el.outerHTML.slice(0, 90) : name.slice(0, 60))
       }
       return [...new Set(out)]
     })()`)
+
+      /*
+        REACHABLE BY KEYBOARD, not only by mouse (#121).
+
+        The line from that Issue this closes: *"a check that tabs through each
+        screen and fails on a control that can be reached by mouse and not by
+        keyboard."* Everything else in this file presses with a POINTER, so it
+        is blind to exactly the failure it sounds like it would catch — and
+        #121 already names three real controls that are `opacity: 0` until
+        hover, each with a `:focus-visible` escape that nothing has ever
+        proved.
+
+        Matched by NAME rather than by a tag written onto the element, because
+        the studio re-renders on a timer and a marker attribute would be gone
+        by the time the Tab reached it — the sweep would then report every
+        control on the route, which is an audit lying rather than an audit
+        finding something.
+
+        The budget is two Tabs per control plus thirty, so a tab ring longer
+        than the control list (inputs, the skip link, the address bar handing
+        focus back) still gets all the way round.
+      */
+      const reached = new Set<string>()
+      if (labels.length > 0) {
+        await page.evaluate(
+          `document.activeElement instanceof HTMLElement && document.activeElement.blur()`,
+        )
+        const budget = Math.min(labels.length * 2 + 30, 260)
+        for (let i = 0; i < budget; i += 1) {
+          await page.keyboard.press('Tab')
+          const name = String(
+            await page.evaluate(`(() => {
+              const el = document.activeElement
+              if (!el || el === document.body) return ''
+              return (${NAME_OF})(el).slice(0, 60)
+            })()`),
+          )
+          if (name !== '') reached.add(name)
+        }
+      }
+      /*
+        The marks in the icon grid are the one legitimate exception, and it is
+        named rather than inferred: 451 of them behind ONE tab stop is #83's
+        roving tabindex working as designed, and the arrows that move inside it
+        are proved by `verify:keyboard`. Everything else has to be tabbable.
+      */
+      const rovingGrid = await page.evaluate(
+        `document.querySelectorAll('[data-look-icon]').length > 1`,
+      )
+      const markNames: string[] = rovingGrid
+        ? ((await page.evaluate(`[...document.querySelectorAll('[data-look-icon]')]
+            .map((el) => (${NAME_OF})(el).slice(0, 60))`)) as string[])
+        : []
+      for (const label of labels) {
+        if (reached.has(label)) continue
+        if (markNames.includes(label)) continue
+        findings.push({
+          route: `${size}/${name}`,
+          label,
+          why: 'a mouse can press it and Tab never reaches it',
+        })
+      }
 
       for (const label of labels) {
         /*
