@@ -117,7 +117,7 @@ const KIDS = (sel: string) => `(() => {
 
 for (const sel of selectors) {
   if (sel.endsWith(' >')) {
-    console.log(sel.slice(0, -2) + ' children:')
+    console.log(`${sel.slice(0, -2)} children:`)
     console.log(await page.evaluate(KIDS(sel.slice(0, -2))))
   } else console.log(await page.evaluate(MEASURE(sel)))
 }

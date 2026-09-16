@@ -367,7 +367,7 @@ console.log('\nno refusal repeats any of the value (§35, and CLAUDE.md on redac
   const id = String(r.id ?? '')
   check(
     'nothing this suite typed survived the rollback',
-    `client_id ${id === '' ? '(unset)' : id.slice(0, 12) + '…'}, ${String(r.n)} real secret(s) intact`,
+    `client_id ${id === '' ? '(unset)' : `${id.slice(0, 12)}…`}, ${String(r.n)} real secret(s) intact`,
     !id.includes('qaonly') && !id.startsWith('GOCSPX'),
   )
 }

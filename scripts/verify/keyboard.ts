@@ -192,7 +192,9 @@ console.log('navigation: get to another section without touching the mouse')
   // A rail NAVIGATION item, not the wordmark — the wordmark is also
   // `[data-go]` and also lives in the rail, and it goes to the screen the
   // journey starts on, so pressing it proves nothing.
-  const steps = await tabUntil(`el.matches('.rail [data-go]') && !el.classList.contains('wordmark')`)
+  const steps = await tabUntil(
+    `el.matches('.rail [data-go]') && !el.classList.contains('wordmark')`,
+  )
   check(
     'a navigation item is reachable by Tab from the top of the page',
     steps > 0 ? `${String(steps)} press(es): ${(await focused()).name}` : 'NEVER REACHED',
@@ -270,7 +272,11 @@ console.log('\nthe command bar: open it, find something, go there, get out')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(400)
   const gone = await page.evaluate(`Boolean(document.querySelector('[data-cmd-wrap]'))`)
-  check('and Escape closes it without choosing anything', gone === true ? 'STILL OPEN' : 'closed', gone !== true)
+  check(
+    'and Escape closes it without choosing anything',
+    gone === true ? 'STILL OPEN' : 'closed',
+    gone !== true,
+  )
 }
 
 // --- 3. the project switcher ------------------------------------------------
@@ -306,7 +312,11 @@ console.log('\nSettings: open it, move between its tabs, get out')
 {
   await page.keyboard.press('Escape')
   const steps = await tabUntil(`el.matches('[data-go="settings"], [data-settings]')`)
-  check('Settings is reachable by keyboard', steps > 0 ? `${String(steps)} press(es)` : 'NEVER REACHED', steps > 0)
+  check(
+    'Settings is reachable by keyboard',
+    steps > 0 ? `${String(steps)} press(es)` : 'NEVER REACHED',
+    steps > 0,
+  )
   if (steps > 0) {
     await page.keyboard.press('Enter')
     await page.waitForTimeout(1200)
@@ -315,7 +325,11 @@ console.log('\nSettings: open it, move between its tabs, get out')
        location.hash.includes('settings') ||
        Boolean(document.querySelector('[data-setting][role="tab"]'))`,
     )
-    check('Enter gets there', there === true ? 'settings is on screen' : 'NOT THERE', there === true)
+    check(
+      'Enter gets there',
+      there === true ? 'settings is on screen' : 'NOT THERE',
+      there === true,
+    )
 
     const tab = await tabUntil(`el.matches('[data-setting][role=\\'tab\\']')`, 40)
     check(
@@ -324,10 +338,18 @@ console.log('\nSettings: open it, move between its tabs, get out')
       tab > 0,
     )
     if (tab > 0) {
-      const was = String(await page.evaluate(`document.querySelector('[data-setting][aria-selected="true"]')?.textContent?.trim() || ''`))
+      const was = String(
+        await page.evaluate(
+          `document.querySelector('[data-setting][aria-selected="true"]')?.textContent?.trim() || ''`,
+        ),
+      )
       await page.keyboard.press('Enter')
       await page.waitForTimeout(800)
-      const now = String(await page.evaluate(`document.querySelector('[data-setting][aria-selected="true"]')?.textContent?.trim() || ''`))
+      const now = String(
+        await page.evaluate(
+          `document.querySelector('[data-setting][aria-selected="true"]')?.textContent?.trim() || ''`,
+        ),
+      )
       check('and Enter changes pane', `${was || '(none)'} → ${now || '(none)'}`, now !== '')
     }
   }
@@ -356,7 +378,9 @@ console.log('\nmessaging: write something and send it, with no pointer')
     a hidden menu — Playwright resolves them, reports "element is not visible",
     and the journey silently walks the screen it was already on.
   */
-  const card = page.locator('.homego[data-open], .project[data-open], .navitem.proj[data-open]').first()
+  const card = page
+    .locator('.homego[data-open], .project[data-open], .navitem.proj[data-open]')
+    .first()
   if ((await card.count()) > 0) await card.click({ force: true })
   await page.waitForTimeout(1200)
   const teamTab = page.locator('[data-tab="team"]').first()
@@ -393,8 +417,7 @@ console.log('\nmessaging: write something and send it, with no pointer')
         await page.evaluate(`document.querySelectorAll('.msg, .bubble, .waitrow').length`),
       )
       const sendable =
-        after > before ||
-        (await page.evaluate(`document.activeElement?.value === ''`)) === true
+        after > before || (await page.evaluate(`document.activeElement?.value === ''`)) === true
       check(
         'and a send shortcut posts it rather than needing the mouse',
         `${String(before)} → ${String(after)} row(s)`,
@@ -450,7 +473,8 @@ console.log('\na dialog: focus cannot fall out behind it, and Escape returns it'
     if ((await doc.count()) === 0) continue
     await doc.click({ force: true })
     await page.waitForTimeout(1600)
-    opened = await page.evaluate(`Boolean(document.querySelector('#viewer:not([hidden])'))`) === true
+    opened =
+      (await page.evaluate(`Boolean(document.querySelector('#viewer:not([hidden])'))`)) === true
   }
   const modal = await page.evaluate(`Boolean(document.querySelector('#viewer:not([hidden])'))`)
   if (modal !== true) {
