@@ -1652,6 +1652,48 @@ try {
       'with channels:join.',
   )
 }
+/*
+  What this run LEFT, asserted rather than printed (#186).
+
+  The criterion is "no verification run leaves a channel in Grant's Slack -
+  asserted in the suite, not swept afterwards". Three of the four things that
+  Issue asks for hold; this one cannot, with the scopes this app is installed
+  with: the lockout check must leave the channel, archiving needs membership,
+  and conversations.join needs channels:join. So each full run leaves exactly
+  one channel behind.
+
+  The prose above says so and prose is not a check. A note in a log is how a
+  known cost becomes a forgotten one, and "the teardown printed something"
+  looks identical to "the teardown worked" - which is the trap this repository
+  has already paid for twice. So the count is asserted: exactly one channel
+  may survive a full run, it must be the lobby, and it must already carry a
+  name that says what it is. Two would mean parkAndArchive silently stopped
+  working, and zero would mean channels:join has arrived and this check is
+  what tells somebody to delete the comment above.
+*/
+const survived = (
+  await db.execute(`
+    select channel_id, channel_name from public.slack_channel_map
+     where project_id = ${lit(PROJECT_ID)}::uuid and active
+  `)
+).rows as { channel_id: string; channel_name: string }[]
+record(
+  'the run leaves at most the one channel the lockout check costs, and it is named as a fixture',
+  survived.length === 0
+    ? 'nothing survived — channels:join has arrived; delete the known-cost branch above'
+    : `${String(survived.length)} left: ${survived.map((c) => `#${c.channel_name}`).join(' ')}`,
+  survived.length <= 1 &&
+    /*
+      Three spellings, because the name reaches this row by three routes:
+      `zz test slack <stamp>` is the PROJECT name, Slack slugs it to
+      `zz-test-slack-<stamp>`, and parkAndArchive renames it `zz_test_<stamp>`.
+      Anchoring on `zz_` alone would have failed on the commonest case - the
+      rename succeeding and the archive not - which is a check firing on
+      correct behaviour, and this file already records what that costs.
+    */
+    survived.every((c) => c.channel_id === CHANNEL && /^zz[-_ ]/i.test(c.channel_name)),
+)
+
 try {
   await db.execute(`
     update public.slack_channel_map
