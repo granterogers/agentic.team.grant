@@ -116,6 +116,24 @@ const prose = (s) =>
 const latest = { lately: null, tasks: null }
 
 /*
+  The waiting-time ticker's handle, declared HERE for the reason directly
+  above — the second instance of that trap, found by printing page errors
+  during #221's captures rather than by anything that was watching for it.
+
+  `tickWaiting` is a function DECLARATION, so it hoists and `render()` can
+  reach it during module evaluation. `let ageTimer` three hundred lines further
+  down does not hoist, so the first tick threw "Cannot access 'ageTimer' before
+  initialization" and the page reported "The studio could not draw this
+  screen." Every later render worked, which is exactly why nobody saw it: the
+  studio recovers on the next draw and the only trace is one console line.
+
+  A hoisted `var` would have hidden it rather than fixed it — `ageTimer` would
+  be `undefined`, the `=== null` guard would be false, and the ticker would
+  never start. The declaration belongs where the code that uses it can see it.
+*/
+let ageTimer = null
+
+/*
   The map, per project (#25).
 
   Keyed by slug and kept out of `latest` because those two are portfolio-wide
@@ -9435,8 +9453,105 @@ function taskSheet(t, p) {
   })
 }
 
-function lookSheet(p) {
+/*
+  What the mark picker is currently showing (#221).
+
+  Module-level rather than passed in, because `lookSheet` is re-entered from
+  `set()` after every write — the sheet redraws itself so the preview is the
+  stored value — and a search typed into a sheet that then redraws would be
+  lost on the first press. Reset when the sheet is opened from the outside.
+*/
+let markQuery = ''
+let markDomain = 'all'
+
+/** The domains, from the library, in the order the build wrote them. */
+const markDomains = () =>
+  /*
+    Sorted. The catalogue is ordered by icon id, so first-appearance order gave
+    "people, health, time, travel, ai, creative, documents, business…" — which
+    reads as a bug even though every chip works, because a person looking for
+    "finance" scans for alphabetical order and does not find it.
+  */
+  [...new Set(icons.catalogue().map((i) => i.d))].filter((d) => d !== '').sort()
+
+/*
+  The grid, filtered.
+
+  The thirty hand-drawn marks are shown FIRST and always, under 'all' and
+  under no search that excludes them, because they are what every project that
+  already has a mark is using and losing them behind a search would be a
+  picker that cannot show you what you have.
+*/
+/*
+  The whole picker, so the CATEGORIES redraw with the grid (#221).
+
+  The first version redrew only the grid when the library landed, and the
+  capture showed the consequence immediately: one chip reading "All" and
+  nothing else, for ever, because `markDomains()` reads the catalogue and the
+  catalogue is empty until the import resolves. A search box with no
+  categories beside it looked like a deliberate design rather than a control
+  that never arrived — which is the whole argument for opening the PNG rather
+  than trusting that it compiles.
+*/
+function markPicker(p, hue) {
+  const cats = ['all', ...markDomains()]
+  return `<span class="iconfind">
+      <input class="in" type="search" data-icon-search placeholder="Search 451 marks"
+             aria-label="Search marks" value="${esc(markQuery)}">
+      ${cats.length < 2 ? '' : `<span class="iconcats" role="group" aria-label="Icon categories">
+        ${cats.map((d) => `<button class="seg ${d === markDomain ? 'on' : ''}"
+            data-icon-domain="${esc(d)}" aria-pressed="${d === markDomain ? 'true' : 'false'}"
+          >${esc(d === 'all' ? 'All' : d)}</button>`).join('')}
+      </span>`}
+    </span>
+    <span class="iconpick ${esc(hue)}" data-icon-grid>${markGrid(p)}</span>`
+}
+
+function markGrid(p) {
+  const q = markQuery.trim().toLowerCase()
+  const one = (k, label) => `<button class="iconopt ${k === p.icon ? 'on' : ''}"
+      data-look-icon="${esc(k)}" aria-label="${esc(label)}" title="${esc(label)}"
+      aria-pressed="${k === p.icon ? 'true' : 'false'}">${icons.svg(k, 22)}</button>`
+
+  const classics =
+    markDomain === 'all'
+      ? icons.KEYS.filter((k) => q === '' || k.includes(q)).map((k) => one(k, k))
+      : []
+  const library = icons
+    .catalogue()
+    .filter((i) => markDomain === 'all' || i.d === markDomain)
+    .filter((i) => q === '' || i.id.includes(q) || i.t.some((t) => t.includes(q)))
+    .map((i) => one(i.id, i.id.replace(/-/g, ' ')))
+
+  const all = [...classics, ...library]
+  if (all.length === 0) {
+    return icons.ready()
+      ? `<span class="t-meta">Nothing matches ${esc(markQuery)}.</span>`
+      : '<span class="t-meta">Fetching the rest of the marks…</span>'
+  }
+  return all.join('')
+}
+
+function lookSheet(p, keepSearch = false) {
   const v = $('#viewer')
+  if (!keepSearch) {
+    markQuery = ''
+    markDomain = 'all'
+  }
+  /*
+    Start the import the moment the sheet opens, and redraw the grid when it
+    lands. Nothing else on the page waits for it — the thirty render at once,
+    and the other 451 arrive a beat later.
+  */
+  void icons.load().then(() => {
+    /*
+      The whole picker, not just the grid. Losing focus here is not a cost:
+      this runs once, a beat after the sheet opens, before anybody has typed.
+      Every later redraw is the grid alone, for exactly the opposite reason.
+    */
+    const host = $('[data-icon-picker]', v)
+    if (host !== null) host.innerHTML = markPicker(p, p.iconHue ?? p.hue)
+  })
   const chosenHue = p.iconHue ?? p.hue
   v.innerHTML = `<div class="sheet ${esc(p.hue)}">
       <div class="chead">
@@ -9462,11 +9577,19 @@ function lookSheet(p) {
 
       <div class="field" style="margin-top:var(--s4);align-items:flex-start">
         <span class="t-label">Mark</span>
-        <span class="iconpick ${esc(chosenHue)}">
-          ${icons.KEYS.map((k) => `<button class="iconopt ${
-            k === p.icon ? 'on' : ''
-          }" data-look-icon="${esc(k)}" aria-label="${esc(k)}" title="${esc(k)}"
-             aria-pressed="${k === p.icon ? 'true' : 'false'}">${icons.svg(k, 22)}</button>`).join('')}
+        <span style="display:grid;gap:var(--s3);min-width:0">
+          <!--
+            Search first, then the grid (#221). Four hundred and fifty one
+            marks is more than anybody browses, and it is also more than
+            anybody can find in by scrolling. The domains are lucide's own
+            grouping, carried through the build so they are data rather than a
+            second opinion.
+
+            No backticks in this comment. It lives inside a template literal.
+          -->
+          <span data-icon-picker style="display:grid;gap:var(--s3);min-width:0">${
+            markPicker(p, chosenHue)
+          }</span>
         </span>
       </div>
 
@@ -9521,20 +9644,68 @@ function lookSheet(p) {
     if (ok === null) return
     await refresh()
     const fresh = byId(p.slug)
-    if (fresh) lookSheet(fresh)
+    // `true`: keep whatever was searched for. Pressing a mark must not clear
+    // the search that found it — the commonest next action is picking a
+    // different one from the same results.
+    if (fresh) lookSheet(fresh, true)
   }
 
   for (const b of v.querySelectorAll('[data-look-hue]')) {
     b.addEventListener('click', () => { void set(b, { p_hue: b.dataset.lookHue }) })
   }
-  for (const b of v.querySelectorAll('[data-look-icon]')) {
-    b.addEventListener('click', () => {
-      // Pressing the mark that is already on takes it off. A picker with no way
-      // back to nothing is a picker you can only ever be wrong in.
-      const same = b.dataset.lookIcon === p.icon
-      void set(b, same ? { p_clear: ['icon'] } : { p_icon: b.dataset.lookIcon })
-    })
+  /*
+    Delegated, because the grid redraws itself (#221).
+
+    Binding each of four hundred and fifty one buttons worked while the set was
+    thirty and fixed. Now a search or a category press replaces the grid's
+    innerHTML, and every listener attached to the old nodes goes with it — the
+    picker would work once and then be dead, which is the shape of defect
+    `verify:controls` exists to catch and would not have caught here, because
+    the audit presses each control from a fresh render.
+  */
+  $('[data-icon-picker]', v)?.addEventListener('click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('[data-look-icon]') : null
+    if (b === null) return
+    // Pressing the mark that is already on takes it off. A picker with no way
+    // back to nothing is a picker you can only ever be wrong in.
+    const same = b.dataset.lookIcon === p.icon
+    void set(b, same ? { p_clear: ['icon'] } : { p_icon: b.dataset.lookIcon })
+  })
+
+  /*
+    Search and category redraw the GRID only, never the sheet.
+
+    Redrawing the sheet would take the focus out of the search box on every
+    keystroke — #197's lesson about a redraw replacing the node you are
+    standing on, in its smallest form.
+  */
+  const regrid = () => {
+    const grid = $('[data-icon-grid]', v)
+    if (grid !== null) grid.innerHTML = markGrid(p)
   }
+  /*
+    The search box and the chips are delegated on the PICKER, because the
+    picker replaces its own innerHTML when the library lands — the same reason
+    the grid is. A listener bound to a node that is about to be replaced is a
+    control that works once.
+  */
+  $('[data-icon-picker]', v)?.addEventListener('input', (e) => {
+    const box = e.target instanceof Element ? e.target.closest('[data-icon-search]') : null
+    if (box === null) return
+    markQuery = box.value
+    regrid()
+  })
+  $('[data-icon-picker]', v)?.addEventListener('click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('[data-icon-domain]') : null
+    if (b === null) return
+    markDomain = b.dataset.iconDomain ?? 'all'
+    for (const other of v.querySelectorAll('[data-icon-domain]')) {
+      const on = other === b
+      other.classList.toggle('on', on)
+      other.setAttribute('aria-pressed', on ? 'true' : 'false')
+    }
+    regrid()
+  })
   for (const b of v.querySelectorAll('[data-look-clear]')) {
     b.addEventListener('click', () => {
       void set(b, {
@@ -10527,8 +10698,6 @@ function atNewest(threadEl) {
   "18s" is the difference between a page that is working and a page that is
   stuck.
 */
-let ageTimer = null
-
 function tickWaiting() {
   const marks = document.querySelectorAll('[data-waiting-since]')
   if (marks.length === 0) {

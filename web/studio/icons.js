@@ -85,8 +85,75 @@ export const KEYS = Object.keys(P)
 /** The colours an icon may be. The palette hues, so a project still matches. */
 export const HUES = ['p-rust', 'p-amber', 'p-moss', 'p-slate', 'p-iris', 'p-plum']
 
+/*
+  And 451 more, from lucide (#221).
+
+  Grant: *"The existing generic coloured-square project identifiers are not
+  useful. Replace this with a proper icon system"* — a bundled library of
+  300-500 covering business, finance, health, technology, AI, research,
+  education, travel, property, communications, creative work, documents,
+  people, science and engineering, and *"use a reputable open-source SVG icon
+  library rather than manually creating hundreds of icons"*.
+
+  ## Why the thirty above stay
+
+  They are the FIRST PAINT. The library is 154KB and is imported lazily, the
+  way pdf.js is, because most sessions never open the picker — so something
+  has to be able to draw a mark before it lands, and the thirty already in
+  this file are stored in the database on the projects that have one.
+
+  This is also why the set was not simply replaced: `projects.icon` holds a
+  key, and deleting the key a project is using would blank its mark. The two
+  namespaces do not collide — lucide keys are lucide names, and a lookup tries
+  the local set first.
+
+  ## What happens before it arrives
+
+  `svg()` is called synchronously inside template literals all over app.js, so
+  it cannot wait. An unknown key draws NOTHING and starts the load; when the
+  module lands the page redraws once and the icon appears. That is a flash of
+  no-icon rather than a broken image, and it only ever happens once per
+  session.
+*/
+let LIB = null
+let loading = null
+let onLoaded = null
+
+/** Called by the app so a redraw can happen when the library lands. */
+export function whenLoaded(fn) {
+  onLoaded = fn
+}
+
+/** Start the import. Safe to call repeatedly; only the first one fetches. */
+export function load() {
+  if (LIB !== null) return Promise.resolve(LIB)
+  if (loading !== null) return loading
+  loading = import('./vendor/icons-library.js')
+    .then((m) => {
+      LIB = m
+      if (onLoaded !== null) onLoaded()
+      return m
+    })
+    .catch(() => {
+      /*
+        A library that will not load leaves the thirty working rather than
+        breaking the page. Same rule as the PDF cover: nothing about a failure
+        should be a broken image.
+      */
+      loading = null
+      return null
+    })
+  return loading
+}
+
+/** The picker's catalogue. Empty until `load()` has resolved. */
+export const catalogue = () => LIB?.INDEX ?? []
+
+/** Whether the library is here yet, so a caller can show its own waiting state. */
+export const ready = () => LIB !== null
+
 /** Whether a key is one of ours. Anything else is drawn as nothing. */
-export const known = (key) => Object.hasOwn(P, key ?? '')
+export const known = (key) => Object.hasOwn(P, key ?? '') || Object.hasOwn(LIB?.LUCIDE ?? {}, key ?? '')
 
 /**
  * One icon, as markup.
@@ -96,8 +163,21 @@ export const known = (key) => Object.hasOwn(P, key ?? '')
  * swatch. An icon that carried its own fill could not be recoloured.
  */
 export function svg(key, size = 24) {
-  if (!known(key)) return ''
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+  const k = key ?? ''
+  const open = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-    stroke-linejoin="round" aria-hidden="true">${X[key] ?? ''}<path d="${P[key]}"/></svg>`
+    stroke-linejoin="round" aria-hidden="true">`
+  if (Object.hasOwn(P, k)) {
+    return `${open}${X[k] ?? ''}<path d="${P[k]}"/></svg>`
+  }
+  const lucide = LIB?.LUCIDE?.[k]
+  if (lucide !== undefined) return `${open}${lucide}</svg>`
+  /*
+    Not one of the thirty and the library is not here. Start it and draw
+    nothing for now — a key that is in neither set once the library HAS
+    arrived draws nothing for ever, which is the honest answer for a key
+    nobody recognises.
+  */
+  if (k !== '' && LIB === null) void load()
+  return ''
 }

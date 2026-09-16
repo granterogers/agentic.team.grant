@@ -3889,6 +3889,74 @@ body.docked { padding-right: min(380px, 100vw); }
 }
 .lookrow { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
 
+/* --- finding a mark among 451 (#221) ----------------------------------------
+   The picker grew from thirty hand-drawn marks to 451 from lucide, which is
+   more than anybody browses and more than anybody finds by scrolling. A search
+   box and lucide's own domains above the grid.
+
+   The grid itself is capped and scrolls rather than growing the sheet: 451
+   buttons at 44px is about four thousand pixels, and a sheet that long turns
+   every other control on it into something you have to scroll past. 320px is
+   about seven rows, which reads as a gallery with more in it.
+
+   `scrollbar-gutter` is deliberately absent: it is ignored for the overlay
+   scrollbars a touch device uses, so it fixes the desktop and leaves the
+   phone exactly as it was. The fade below is what works on both. */
+.iconfind { display: grid; gap: var(--s2); min-width: 0; }
+/* 16px, not inherited. Measured at 13.3px on its first capture — the browser
+   default for an input, because `.in` is not what this element had. Anything
+   under 16px makes iOS Safari zoom the page the moment it is focused, and a
+   picker that zooms the viewport on the first keystroke is worse than no
+   search at all. verify:ui enforces the floor; this is the floor. */
+.iconfind input[type='search'] {
+  min-height: 44px; padding: 0 var(--s3); width: 100%;
+  border: 1px solid var(--edge); border-radius: var(--r-control);
+  background: var(--ground); color: var(--ink);
+  font: inherit; font-size: 16px;
+}
+.iconcats { display: flex; gap: 4px; flex-wrap: wrap; }
+/* 12px type is the floor and these sit ON it, so the target has to come from
+   padding rather than from the text. Measured 33x23 on its first capture,
+   which is half the 44px minimum — sixteen chips nobody with a thumb can hit
+   reliably. */
+.iconcats .seg { font-size: 12px; padding: 0 11px; min-height: 44px; min-width: 44px; }
+@media (pointer: fine) {
+  /* A pointer does not need 44px and sixteen chips at that height cost three
+     rows of a desktop sheet. The floor is about thumbs. */
+  .iconcats .seg { min-height: 30px; }
+}
+@media (pointer: coarse) {
+  /* Sixteen chips at the 44px floor wrap to SIX rows on a 390px screen —
+     about 290px of category list above the first icon, which is #188's
+     complaint reproduced inside a picker. One row that scrolls sideways costs
+     44px and shows the same sixteen.
+
+     `flex-wrap: nowrap` and `overflow-x: auto`, with the same sticky-fade
+     affordance the grid uses turned on its side, because an overlay scrollbar
+     is invisible on a touch device until you are already scrolling and
+     `scrollbar-gutter` is ignored for those. */
+  .iconcats {
+    flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity;
+    margin: 0 calc(var(--s3) * -1); padding: 0 var(--s3);
+  }
+  .iconcats .seg { flex: 0 0 auto; scroll-snap-align: start; }
+}
+.iconpick[data-icon-grid] {
+  max-height: 320px; overflow-y: auto; align-content: start;
+  padding-right: 2px;
+}
+/* The #108 affordance: a sticky fade at the end of the scroll container, so
+   there is something to see exactly when there is something below. */
+.iconpick[data-icon-grid]::after {
+  content: ''; position: sticky; bottom: -1px; grid-column: 1 / -1;
+  height: 22px; margin-top: -22px; pointer-events: none;
+  /* `--glass-2`, not `--surface`. The sheet's background is overridden to
+     glass with a backdrop-filter further down this file, so a fade to the
+     solid surface token would be a visible grey band on a translucent panel —
+     the class-defined-twice trap in its gentler form. */
+  background: linear-gradient(180deg, transparent, var(--glass-2, var(--surface)));
+}
+
 /* --- editing a task (#106) --------------------------------------------------
    The pencil sits beside the row's talk button, in the same slot, and appears
    on hover like every other row control. `position: absolute` is not needed
