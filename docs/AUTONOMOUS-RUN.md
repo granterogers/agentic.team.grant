@@ -465,3 +465,66 @@ findings. For each: read the canonical evidence before theorising, classify with
 evidence, fix at the appropriate abstraction, convert into permanent regressions
 with semantic neighbours, and run the affected gates. `CLAUDE.md` carries the
 five steps in full.
+
+---
+
+# CLOSE-OUT — the eight-hour run of 2026-09-16
+
+Started **05:02Z**, closed **~12:40Z**. Branch
+`claude/phase-7-communications-kh8ow8`, clean and fully pushed.
+
+## What the run produced
+
+| | |
+|---|---|
+| Commits | **31**, from `4961c50` to `d7bce28` |
+| Diff | 178 files changed, 11,666 insertions, 158 deletions |
+| Migrations | **402** applied, all recorded (0391–0402 written this run) |
+| Unit tests | **1,465** across **77** files, all passing |
+| New verify suites | `verify:rules` 26/26 · `verify:routing-quality` 13/13 · `verify:extract` 11/11 |
+| ADRs | 0030 (a correction becomes a rule only on a press), 0031 (a model is chosen on what it has done) |
+
+## Issues closed
+
+#147 · #127 · #131 · #37 · #123 · #124 · #156 · #268. **#269 filed**
+(268 of 276 `public.staff` rows are retired harness specialists — verified
+invisible to Grant, so it is hygiene, not a live defect).
+
+## Gates at close
+
+`lint` 0 · `typecheck` 0 · `test` 1465/1465 · `check:migrations` 402/402 ·
+`check:secrets` clean (1,265 files, 97 env values) · `check:templates` clean ·
+`check:leaks` clean (one fixture task swept with `purge:fixtures -- --go`).
+
+Control audit, every leg, **0 findings and 0 unpressable**:
+settings 94 · team 105 · project-a 72 · project-b 201 · project-phone-a 66 ·
+project-phone-b 185 · portfolio 37 desktop / 21 phone — **781 controls pressed**.
+
+Deployed-asset spot-check: `tokens.css` carries `data-density`, `app.js`
+carries `storywhen` and the density switch. The earlier zero was a check
+pointed at `studio.css`, which never held the compact scale.
+
+## NOT REACHED — stated, not implied
+
+- **#130 is NOT closed.** `public.output_shapes` declares all six shapes and
+  `tasks_extracted` and `nothing_happened` are emitted for real. **No handler
+  emits `research_summary` or `draft_document`.** `research_summary` requires
+  `findings: array<string>`, and the only way to produce that from the
+  instruction handler today is to split the prose answer into sentences —
+  which is the exact defect #130 exists to remove. It needs the handler taught
+  to ask the model for the structure, not taught to parse its own output. Left
+  open deliberately rather than half-built.
+- **#187 (a Slack channel per dashboard project) was not started.** It creates
+  permanent channels in Grant's real workspace — `slack:tidy` debris is already
+  in this repository's trap list, and Slack refuses to delete an archived
+  channel. It is ~90 minutes and wants his go-ahead before it touches the
+  workspace.
+- **#128 is half done.** The routing-time half exists; a mid-work hand-off does
+  not.
+- **#126 is blocked on #29** by its own text; nothing to do until #29 lands.
+- **#113, #114, #136, #137, #138 remain proposal parents awaiting Grant's
+  pick.** Their aesthetic children were not implemented, because choosing one
+  on a guess is what those Issues exist to prevent.
+- **Typography was not judged.** Webfonts do not load in the build sandbox, so
+  every capture this run shows the fallback face. Self-hosting the fonts is the
+  fix and is itself unfiled work.
