@@ -969,6 +969,169 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const url = new URL(request.url)
+
+  /*
+    THE DOCUMENT AN AGENT READS TO FIND OUT WHAT IT CAN DO (#13).
+
+    Section 11's requirement is "UI action = API operation = agent-accessible
+    operation", and the third of those was true only for whoever had read this
+    file. There was no description of the surface anywhere: an agent holding
+    the bearer token could call anything on it and had no way to learn what
+    anything was.
+
+    ## Generated, never maintained beside the code
+
+    #13 asks for the document to be generated or maintained beside the routes
+    rather than written by hand in prose, and generated is the only one of
+    those that cannot drift. Every name here comes from the SECTIONS and
+    ACTIONS tables above - the same tables the dispatcher uses - so a section
+    added without a line here is impossible, and one removed disappears from
+    the document in the same commit. A hand-written OpenAPI file would be a
+    second copy of the whitelist, and a list built twice is this repository's
+    most-repeated defect.
+
+    ## It describes what is there, not a REST API somebody would prefer
+
+    #13's own instruction: extend the gateway, do not replace it, because its
+    whitelist is a security property worth keeping. So this is an honest
+    description of an RPC-shaped surface - a named section and a named action -
+    rather than resource routes invented to make the document look
+    conventional. A /projects/{id} forwarding to ?section=project would be a
+    second door onto the same room, and the second door is the one that stops
+    being checked.
+
+    ## Behind the same token as everything else
+
+    The first draft of this said it should be readable without one, on a
+    chicken-and-egg argument. That argument does not apply here: there is
+    exactly ONE token (#13's own constraint — no second auth system), every
+    legitimate reader already holds it, and it is issued out of band through
+    `npm run hq:token`. An unauthenticated endpoint would have been a wider
+    surface bought for nobody. The branch therefore sits after the auth gate,
+    which is where it landed by construction and where it belongs.
+  */
+  if (url.pathname.endsWith('/openapi.json') || url.searchParams.get('section') === 'openapi') {
+    const ids = Object.values(SECTIONS).some((x) => x.arg !== undefined)
+    const texts = [
+      ...new Set(
+        Object.values(SECTIONS).flatMap((x) => (x.textArg === undefined ? [] : [x.textArg.param])),
+      ),
+    ]
+    const doc = {
+      openapi: '3.1.0',
+      info: {
+        title: 'Agentic Team HQ',
+        version: '1.0.0',
+        description:
+          'One bearer token, two operations. GET reads a named projection; POST performs a ' +
+          'named action. Both lists are whitelists: a name not listed does not exist, and ' +
+          'every projection lives in app.hq_* where it can be reviewed.',
+      },
+      servers: [{ url: `${url.origin}/functions/v1/hq-api` }],
+      components: {
+        securitySchemes: {
+          bearer: { type: 'http', scheme: 'bearer', description: 'hq.api_token, from the vault.' },
+        },
+      },
+      security: [{ bearer: [] }],
+      paths: {
+        '/': {
+          get: {
+            summary: 'Read one named projection',
+            parameters: [
+              {
+                name: 'section',
+                in: 'query',
+                required: true,
+                schema: { type: 'string', enum: Object.keys(SECTIONS).sort() },
+              },
+              ...(ids
+                ? [
+                    {
+                      name: 'id',
+                      in: 'query',
+                      required: false,
+                      schema: { type: 'string', format: 'uuid' },
+                      description: 'Required by the sections that name one thing.',
+                    },
+                  ]
+                : []),
+              ...texts.map((n) => ({
+                name: n,
+                in: 'query',
+                required: false,
+                schema: { type: 'string' },
+              })),
+              {
+                name: 'project',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', format: 'uuid' },
+                description: 'Narrows the sections that declare a scope.',
+              },
+            ],
+            responses: {
+              '200': { description: 'The projection, under data.' },
+              '400': { description: 'A section that is not listed, or a malformed id.' },
+              '401': { description: 'No token, or the wrong one. The body says nothing else.' },
+            },
+          },
+          post: {
+            summary: 'Perform one named action',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['action'],
+                    properties: {
+                      action: { type: 'string', enum: Object.keys(ACTIONS).sort() },
+                      args: { type: 'object', additionalProperties: true },
+                    },
+                  },
+                },
+              },
+            },
+            responses: {
+              '200': { description: 'The action ran; result is what the RPC returned.' },
+              '400': { description: 'An action that is not listed, or missing arguments.' },
+              '401': { description: 'No token, or the wrong one.' },
+              '502': { description: 'The action failed upstream.' },
+            },
+          },
+        },
+      },
+      /*
+        The per-operation detail, as data rather than as prose.
+
+        Not a requestBody schema per action: OpenAPI cannot vary a body by the
+        VALUE of a field without oneOf over every action, which would be forty
+        schemas nobody reads. What an agent wants is which arguments are
+        required, and this says so from the same table the dispatcher checks.
+      */
+      'x-actions': Object.fromEntries(
+        Object.entries(ACTIONS)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, a]) => [name, { function: a.fn, required: a.required }]),
+      ),
+      'x-sections': Object.fromEntries(
+        Object.entries(SECTIONS)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, x]) => [
+            name,
+            {
+              function: x.fn,
+              ...(x.arg === undefined ? {} : { takes: 'id' }),
+              ...(x.textArg === undefined ? {} : { takes: x.textArg.param }),
+              ...(x.scoped === true ? { scoped: true } : {}),
+            },
+          ]),
+      ),
+    }
+    return json(doc)
+  }
+
   const name = url.searchParams.get('section') ?? 'overview'
   // `Object.hasOwn`, not a bare lookup. `SECTIONS['constructor']` and
   // `SECTIONS['__proto__']` are both truthy through the prototype chain, so a

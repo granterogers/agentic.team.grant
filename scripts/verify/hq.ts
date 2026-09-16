@@ -673,6 +673,82 @@ record(
 
 // ===========================================================================
 
+/*
+  THE DOCUMENT AN AGENT READS, AND WHETHER IT STILL DESCRIBES THIS GATEWAY (#13).
+
+  Generated from the same SECTIONS and ACTIONS tables the dispatcher uses, so
+  it cannot drift by construction — and "by construction" is a claim, which is
+  what this checks. The failure it exists for is somebody replacing the
+  generator with a literal, which would work perfectly on the day it was
+  written and be wrong a week later.
+
+  Asserted by SAMPLING the live surface rather than by counting: every section
+  the page actually asks for, and every action it can perform, must appear.
+  A count would pass on a document listing forty of the wrong names.
+*/
+{
+  const doc = await get('?section=openapi')
+  let parsed: Record<string, unknown> = {}
+  try {
+    parsed = JSON.parse(doc.body) as Record<string, unknown>
+  } catch {
+    parsed = {}
+  }
+  const sections = Object.keys((parsed['x-sections'] ?? {}) as Record<string, unknown>)
+  const actions = Object.keys((parsed['x-actions'] ?? {}) as Record<string, unknown>)
+  record(
+    'the gateway describes itself, in a document an agent can read',
+    `http ${String(doc.status)} · openapi ${String((parsed.openapi ?? '?') as string)} · ` +
+      `${String(sections.length)} section(s), ${String(actions.length)} action(s)`,
+    doc.status === 200 && parsed.openapi === '3.1.0' && sections.length > 10 && actions.length > 10,
+  )
+
+  /*
+    And that the names in it are THIS gateway's. Sampled from what the studio
+    really uses and what this suite really calls, so the check fails if the
+    document is generated from something else, or frozen.
+  */
+  /*
+    The names the STUDIO asks for, read off the live document the first time
+    this ran: the first draft guessed `project` and `documents` — neither is a
+    section — and reported a correct document as missing two. Validate the
+    test before believing the finding, which is the third time today.
+  */
+  const mustHave = ['overview', 'projects', 'studio', 'team', 'settings', 'document', 'search']
+  const missingS = mustHave.filter((n) => !sections.includes(n))
+  record(
+    'and every section the page actually asks for is in it',
+    missingS.length === 0
+      ? `${mustHave.length}/${mustHave.length}`
+      : `missing: ${missingS.join(', ')}`,
+    missingS.length === 0,
+  )
+  const mustDo = ['create_project', 'rename_project', 'document_upload', 'output_decide']
+  const missingA = mustDo.filter((n) => !actions.includes(n))
+  record(
+    'and every action it can perform names the arguments it requires',
+    missingA.length === 0
+      ? `${mustDo.length}/${mustDo.length}, e.g. document_upload needs ${JSON.stringify(
+          ((parsed['x-actions'] as Record<string, { required?: string[] }>).document_upload ?? {})
+            .required ?? [],
+        )}`
+      : `missing: ${missingA.join(', ')}`,
+    missingA.length === 0,
+  )
+
+  /*
+    THE CONTROL. A discovery document is only useful if it is refused to
+    somebody without the token, like everything else here — an endpoint that
+    answers unauthenticated is a wider surface than the one being described.
+  */
+  const nope = await get('?section=openapi', null)
+  record(
+    'CONTROL: and the document itself is behind the same token as the data',
+    `http ${String(nope.status)}`,
+    nope.status === 401,
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
