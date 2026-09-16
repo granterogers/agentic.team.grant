@@ -4644,10 +4644,13 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 /* --- What it noticed. Margin notes with a tally. ------------------------- */
 
 .govnotes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+/* The face, the border, the radius and the depth come from `data-lift` (#38).
+   They were written out here and the marker was not on the element, so this
+   was a flat card in a product where every other card has a gradient face and
+   a pointer glare — the exact failure that Issue exists for, found by the
+   detector added with it. What stays is what is specific to this card. */
 .govnoted {
   padding: var(--s3) var(--s4);
-  border: 1px solid var(--edge); border-radius: var(--r-card);
-  background: var(--surface);
   display: grid; gap: 4px;
 }
 /*

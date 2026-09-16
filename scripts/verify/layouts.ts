@@ -132,7 +132,7 @@ let checked = 0
   purpose — the section tabs and the phone's bottom bar both scroll.
 */
 const GEOMETRY = `(() => {
-  const out = { wide: [], small: [], tiny: [], input: [], clipped: [] }
+  const out = { wide: [], small: [], tiny: [], input: [], clipped: [], flat: [] }
   const w = document.documentElement.clientWidth
   const sw = document.documentElement.scrollWidth
   if (sw > w + 1) out.wide.push('document is ' + sw + 'px in a ' + w + 'px viewport')
@@ -254,6 +254,52 @@ const GEOMETRY = `(() => {
         const px = Number.parseFloat(cs.fontSize)
         if (px < 16) out.input.push(px.toFixed(1) + 'px "' + named(el) + '"')
       }
+    }
+  }
+
+  /*
+    A card cannot be flat by accident (#38).
+
+    [data-lift] carries the whole treatment - face, border, depth, pointer
+    glare, tilt and the reduced-motion opt-out - so a new card is one
+    attribute and nothing else. The failure this catches is the one that
+    already happened: .member, .job, .source and .wrow shipped with a plain
+    background and no glare, and they LOOKED CONSISTENT BESIDE EACH OTHER, so
+    two rounds of screenshot review passed them. The comparison that finds it
+    is against the rest of the product, and no human review forces that.
+
+    So: anything wearing the card radius and a FLAT fill, that is not marked.
+    A gradient face is what [data-lift] gives you, so background-image is the
+    discriminator rather than the colour - and it is a property rather than a
+    list of class names, which is the whole point of the Issue.
+
+    Deliberately narrow. Only the card radius, only elements big enough to be
+    a card, and only where the fill is a solid surface colour: a chip, a pill,
+    an input and a button all legitimately have a flat fill, and a check that
+    called them cards would be one somebody switches off.
+  */
+  const cardRadius = getComputedStyle(document.documentElement)
+    .getPropertyValue('--r-card').trim()
+  if (cardRadius !== '') {
+    for (const el of document.querySelectorAll('div, section, article, li, aside')) {
+      if (el.closest('[data-lift]') !== null) continue
+      /*
+        A VIEWPORT is not a card. The project map is a 740x666 pannable
+        frame that legitimately wears the card radius: its border goes
+        AROUND its content, where a card's face sits behind it. It declares
+        itself with data-plane already, so the exclusion is a property the
+        page asserts about itself rather than a class name this audit has to
+        keep in step - which is the whole argument of the Issue.
+      */
+      if (el.closest('[data-plane]') !== null) continue
+      const cs = getComputedStyle(el)
+      if (cs.borderTopLeftRadius !== cardRadius) continue
+      const r = el.getBoundingClientRect()
+      if (r.width < 120 || r.height < 60) continue
+      if (cs.backgroundImage !== 'none') continue
+      const bg = cs.backgroundColor
+      if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') continue
+      out.flat.push('"' + named(el) + '" ' + Math.round(r.width) + 'x' + Math.round(r.height))
     }
   }
   return out
@@ -434,6 +480,10 @@ for (const width of WIDTHS) {
         tiny: 'target under 44px',
         input: 'input under 16px',
         clipped: 'content cut with no affordance',
+        // #38: a card that is not marked, so it has no face, no depth, no
+        // glare and no tilt. It looks right beside the other new ones and
+        // flat beside the rest of the product.
+        flat: 'card radius with a flat fill and no data-lift',
       }[kind]
       for (const item of [...new Set(list)].slice(0, 4)) {
         findings.push({ where: `${String(width)}px ${route}`, what: `${String(label)} — ${item}` })

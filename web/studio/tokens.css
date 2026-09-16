@@ -123,7 +123,32 @@
 :root[data-density='compact'] {
   --s2: 6px;  --s3: 9px;  --s4: 14px;
   --s5: 23px; --s6: 37px;
+}
 
+/*
+  Everything below here belongs to EVERY density, and for a day it did not.
+
+  #124 opened the compact block immediately above the radius tokens, which
+  were the next lines of the base `:root`. The brace swallowed them and
+  everything after: the three radii, all three glass tiers, both blurs,
+  `--glass-edge`, `--halo` and the two type families became compact-only. In
+  the default comfortable density they were UNDEFINED, so 44 rules reading
+  `var(--r-card)` computed to 0 and every card, control and sheet in the
+  product had square corners.
+
+  Nothing caught it. It is not overflow, not low contrast, not small type and
+  not a dead control; `verify:layouts` reported 64 states and 0 findings over
+  it, and the captures look plausible because a square card is a design
+  somebody could have chosen. It surfaced only because #38's flat-card
+  detector read `--r-card` to find cards, got an empty string, and its
+  synthetic-failure control did not fire — the found-nothing check that
+  cannot report anything, catching a real defect on its way past.
+
+  The lesson is narrower than "be careful with braces": a token block opened
+  in the middle of another one is invisible in a diff that shows only the
+  lines added. Put a closing brace on the block you open, in the same edit.
+*/
+:root {
   --r-control: 6px; --r-card: 10px; --r-sheet: 14px;
 
   /*

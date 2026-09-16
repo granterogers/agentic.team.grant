@@ -5160,7 +5160,7 @@ function governanceTab() {
     offered four times and dismissed four times is the office failing to take a
     hint, and that is a fact about the office rather than about the suggestion.
   */
-  const noted = (s) => `<li class="govnoted">
+  const noted = (s) => `<li class="govnoted" data-lift data-tilt="1.2">
     <div class="govhead">
       <b>${esc(s.body)}</b>
       <span class="govstate">${esc(STATE_WORD[s.state] ?? s.state)}</span>
