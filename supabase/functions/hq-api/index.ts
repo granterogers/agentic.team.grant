@@ -242,6 +242,22 @@ const SECTIONS: Readonly<
   */
   workspace: { fn: 'hq_workspace_layout' },
   /*
+    Whether the office can think at all (#240, migration 0372).
+
+    `office_health()` has carried `cannot_think` since 0372 - the providers
+    whose breaker is open, since when, when they will next be probed and what
+    the provider said - and nothing has ever rendered it. While it was true,
+    eighteen jobs failed in thirty minutes and the dashboard had nothing to say
+    about why.
+
+    Its own section rather than a field on `studio`, for the reason the
+    workspace layout has one: this is read on a tick and the studio payload is
+    read on a project switch, and folding a fast-moving operational fact into a
+    slow-moving structural one means re-reading every project to find out
+    whether the model provider is answering.
+  */
+  thinking: { fn: 'office_health' },
+  /*
     Project Settings (#36, migrations 0323-26).
 
     Three sections rather than one, and not for tidiness: each is a different

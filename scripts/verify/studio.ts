@@ -416,39 +416,19 @@ for (const [size, opts] of SIZES) {
       await page.locator('#settings .close').click()
       await page.waitForTimeout(400)
     }
-
-    /*
-      Wellness is the project with nothing in it, so it is the only place the
-      empty states can actually be seen. Capturing them on Legacy would capture
-      the sections that are full.
-    */
-    /*
-      In both themes and on the phone, not only on a light desktop (§15).
-
-      The empty states were captured once, at one size, in one scheme — and the
-      cross-screen wall drew eight gaps where they should have been, which is
-      how the gap was found. An empty state on a phone in dark is a real screen
-      a person lands on, and nobody had ever looked at it.
-
-      §33's standard for these is not "does it render": *"Empty states should
-      help the user progress."* That is a judgement, and a judgement needs a
-      picture in the state and on the device the person is actually in.
-    */
-    {
-      await page.locator('[data-switch-open]').click()
-      await page.waitForTimeout(300)
-      await page.locator('[data-switch-menu] [data-open="wellness"]').click()
-      await page.waitForTimeout(700)
-      for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
-        await page.locator(`[data-tab="${s}"]`).click()
-        await page.waitForTimeout(350)
-        await shoot(`empty-${s}`)
-      }
-      await page.locator('[data-switch-open]').click()
-      await page.waitForTimeout(300)
-      await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click()
-      await page.waitForTimeout(700)
+    await page.locator('[data-switch-open]').click()
+    await page.waitForTimeout(300)
+    await page.locator('[data-switch-menu] [data-open="wellness"]').click()
+    await page.waitForTimeout(700)
+    for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
+      await page.locator(`[data-tab="${s}"]`).click()
+      await page.waitForTimeout(350)
+      await shoot(`empty-${s}`)
     }
+    await page.locator('[data-switch-open]').click()
+    await page.waitForTimeout(300)
+    await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click()
+    await page.waitForTimeout(700)
 
     for (const section of ['tasks', 'contacts', 'sources']) {
       await page.locator(`[data-tab="${section}"]`).click()

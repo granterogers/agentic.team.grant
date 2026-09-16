@@ -136,7 +136,8 @@ const audit = async (
   await page.waitForTimeout(600)
 
   const found = new Map<string, Violation>()
-  const trees: [string, { levels: number[]; skips: string[]; first: number; names: string[] }][] = []
+  const trees: [string, { levels: number[]; skips: string[]; first: number; names: string[] }][] =
+    []
   for (const route of ROUTES) {
     const tab = page.locator(`[data-tab="${route}"]`)
     if ((await tab.count()) === 0) continue

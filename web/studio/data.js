@@ -465,6 +465,15 @@ export const health = {
   stalled: 0,
   /** Which kinds, and how long the oldest has waited. Named, not counted. */
   kinds: [],
+  /*
+    Providers whose circuit breaker is open (#240, migration 0372).
+
+    The office being unable to THINK is a different fact from the queue being
+    behind, and it is the more urgent one: a stalled queue is work waiting, and
+    this is work that cannot be done at all. Kept apart rather than folded into
+    `stalled` for that reason.
+  */
+  cannotThink: [],
 }
 
 const replace = (target, rows) => {
@@ -579,6 +588,8 @@ export async function hydrate(endpoint, token) {
     */
     health.stalled = 0
     health.kinds = []
+    // Unknown, not healthy - the same reasoning as the two lines above it.
+    health.cannotThink = []
     /*
       Name the kind of failure, because the answer differs.
 

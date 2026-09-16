@@ -92,6 +92,16 @@ const open = async (
     stalled: number
     kinds: { kind: string; n: number; oldest_minutes: number }[]
   } | null = null,
+  /*
+    What `section=thinking` answers with (#240).
+
+    Its own argument rather than part of the health override, because they
+    arrive from different reads: the stalled queue rides on the studio payload
+    and this is its own section, read again on every tick so an open breaker can
+    close without a reload. Faking them together would test a path the product
+    does not take.
+  */
+  cannotThink: { provider: string; said: string; next_probe_at?: string }[] = [],
 ): Promise<{
   label: string
   say: string
@@ -108,6 +118,7 @@ const open = async (
     window.__HEALTH = ${JSON.stringify(healthOverride)};
     if (window.__HEALTH !== null) window.__S.studio.health = window.__HEALTH;
     window.__MODE = ${JSON.stringify(mode)};
+    window.__S.thinking = { cannot_think: ${JSON.stringify(cannotThink)} };
     try {
       ${hasToken ? "localStorage.setItem('hq.token', 'verify-offline')" : "localStorage.removeItem('hq.token')"};
     } catch (e) {}
@@ -329,7 +340,101 @@ const quiet = (await fine.page.evaluate(
   `document.querySelector('.stalledbar') === null`,
 )) as boolean
 check('CONTROL: a healthy office shows no such strip', quiet ? 'nothing' : 'a strip is up', quiet)
+
+/*
+  And nothing about the model provider either, on the same healthy office.
+
+  The issue is explicit that an empty list must add NOTHING: *"the common case
+  is healthy and an always-present all-good pill is furniture."*
+*/
+const noThink = (await fine.page.evaluate(
+  `document.querySelector('.thinkbar') === null`,
+)) as boolean
+check(
+  'CONTROL: and nothing about the model provider when it is reachable',
+  noThink ? 'nothing' : 'a strip is up',
+  noThink,
+)
 await fine.close()
+
+/* --- #240: the office cannot think --------------------------------------- */
+
+/*
+  The state that was invisible.
+
+  `office_health()` has carried `cannot_think` since migration 0372 and nothing
+  rendered it. While it was true, eighteen jobs failed in thirty minutes and the
+  dashboard looked entirely normal - which is the worst shape a state can take,
+  because a quiet office reads as an idle one. Idle means wait; this means
+  investigate.
+*/
+const mute = await open('live', true, { stalled: 0, kinds: [] }, [
+  {
+    provider: 'openrouter',
+    said: '429 Rate limit exceeded: free-models-per-day-high-balance.',
+    next_probe_at: new Date(Date.now() + 40 * 60_000).toISOString(),
+  },
+])
+await mute.page.waitForTimeout(700)
+const cannot = (await mute.page.evaluate(`(() => {
+  const bar = document.querySelector('.thinkbar')
+  if (bar === null) return { up: false, label: '', say: '', tone: '', why: '', open: false }
+  return {
+    up: true,
+    label: (bar.querySelector('b') || {}).textContent || '',
+    say: (bar.querySelector('span') || {}).textContent || '',
+    tone: bar.className,
+    why: (bar.querySelector('.thinkwhy p') || {}).textContent || '',
+    open: (bar.querySelector('details') || {}).open === true,
+  }
+})()`)) as { up: boolean; label: string; say: string; tone: string; why: string; open: boolean }
+
+check(
+  'a provider the office cannot reach is said so, on the page',
+  cannot.up ? cannot.label : 'NOTHING IS SHOWN',
+  cannot.up && cannot.label.includes('openrouter'),
+)
+check(
+  'and it says what it means for the work, in a sentence',
+  cannot.say.slice(0, 80),
+  cannot.say.includes('Nothing it is asked can be answered'),
+)
+check(
+  'and when it will try again, rather than leaving him to wonder',
+  cannot.say.slice(-40),
+  /tries again/.test(cannot.say),
+)
+/*
+  Grant: *"The reason is operator detail - behind a disclosure, not in the
+  headline."* Present, and shut.
+*/
+check(
+  "and the provider's own words are behind a disclosure, not in the headline",
+  cannot.open ? 'THE DISCLOSURE IS OPEN BY DEFAULT' : `shut, holding: ${cannot.why.slice(0, 44)}`,
+  !cannot.open && cannot.why.includes('429') && !cannot.label.includes('429'),
+)
+check(
+  'and it wears the outage colour, because it IS one',
+  cannot.tone,
+  cannot.tone.includes('badbar'),
+)
+await mute.close()
+
+/*
+  It clears itself. The issue requires this without a reload, and the strip is
+  re-read on the same tick everything else is.
+*/
+const cleared = await open('live', true, { stalled: 0, kinds: [] }, [])
+await cleared.page.waitForTimeout(700)
+const gone = (await cleared.page.evaluate(
+  `document.querySelector('.thinkbar') === null`,
+)) as boolean
+check(
+  'and a provider that comes back takes the strip away with it',
+  gone ? 'gone' : 'THE STRIP IS STUCK ON',
+  gone,
+)
+await cleared.close()
 
 await browser.close()
 server.close()

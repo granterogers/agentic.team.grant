@@ -62,7 +62,10 @@ const shot = (slug: string, size: 'desktop' | 'phone', theme: 'dark' | 'light') 
   `${slug}-${size}-${theme}.png`
 
 const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c)
+  s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
+  )
 
 let missing = 0
 const cell = (slug: string, size: 'desktop' | 'phone', theme: 'dark' | 'light') => {
@@ -75,7 +78,8 @@ const cell = (slug: string, size: 'desktop' | 'phone', theme: 'dark' | 'light') 
     <figcaption>${esc(size)} · ${esc(theme)}</figcaption></figure>`
 }
 
-const rows = WALL.map(([name, slug, why]) => `
+const rows = WALL.map(
+  ([name, slug, why]) => `
   <section class="row">
     <header><h2>${esc(name)}</h2><p>${esc(why)}</p></header>
     <div class="shots">
@@ -84,7 +88,8 @@ const rows = WALL.map(([name, slug, why]) => `
       ${cell(slug, 'phone', 'dark')}
       ${cell(slug, 'phone', 'light')}
     </div>
-  </section>`).join('')
+  </section>`,
+).join('')
 
 /*
   Deliberately plain.
@@ -125,8 +130,11 @@ ${rows}
 </html>`
 
 await writeFile(join(OUT, 'board.html'), page)
-console.log(`  wrote ${join(OUT, 'board.html')} — ${String(WALL.length)} screens, ${String(missing)} capture(s) missing`)
-if (missing > 0) console.log('  (run npm run shots first; a gap is drawn where a capture should be)')
+console.log(
+  `  wrote ${join(OUT, 'board.html')} — ${String(WALL.length)} screens, ${String(missing)} capture(s) missing`,
+)
+if (missing > 0)
+  console.log('  (run npm run shots first; a gap is drawn where a capture should be)')
 
 if (process.argv.includes('--open')) {
   console.log(`  open: file://${resolve(OUT, 'board.html')}`)
@@ -163,7 +171,9 @@ await new Promise<void>((r) => {
 })
 
 const browser = await chromium.launch()
-const page2 = await (await browser.newContext({ viewport: { width: 1640, height: 1200 } })).newPage()
+const page2 = await (
+  await browser.newContext({ viewport: { width: 1640, height: 1200 } })
+).newPage()
 await page2.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
 await page2.waitForTimeout(900)
 await page2.screenshot({ path: join(OUT, 'board.png'), fullPage: true })

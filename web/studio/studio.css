@@ -2546,6 +2546,28 @@ kbd {
   .callbtn.ringing .ring, .callbtn.connecting .ring { animation: none; }
 }
 
+/* --- the office cannot think (#240) ------------------------------------------
+   The same strip as the stalled warning, in the same place, because they are
+   the same kind of fact and two treatments for "something is wrong with the
+   office" would be two things to learn. Red rather than amber: a queue that is
+   behind is work waiting, and this is work that cannot be done at all. */
+.thinkbar.badbar {
+  border-bottom-color: color-mix(in oklch, var(--bad) 48%, var(--edge));
+  background: color-mix(in oklch, var(--bad) 9%, var(--surface));
+}
+.thinkbar b { color: var(--bad); }
+.thinkwhy { margin-left: auto; }
+.thinkwhy summary {
+  cursor: pointer; color: var(--ink-2); font-size: 12.5px; min-height: 24px;
+  display: inline-flex; align-items: center;
+}
+.thinkwhy summary:hover { color: var(--ink); }
+.thinkwhy p { margin: 6px 0 0; max-inline-size: 60ch; }
+@media (pointer: coarse) { .thinkwhy summary { min-height: 44px; } }
+@media (max-width: 860px) {
+  .thinkwhy { margin-left: 0; flex-basis: 100%; }
+}
+
 /* --- Settings is a page, not a dialog (#158) ---------------------------------
 
    Grant: *"The current settings modal/pop-up is too constrained for the amount

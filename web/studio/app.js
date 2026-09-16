@@ -1074,6 +1074,81 @@ function markMock(root) {
   "3x google.write_calendar_tasks, oldest 8h" is the answer. In this case the
   answer was: the deployed worker was built before that handler existed.
 */
+/*
+  The office cannot think, and the dashboard says so (#240).
+
+  Migration 0372 gave `office_health()` a `cannot_think` field - which providers
+  have an open circuit breaker, since when, when they will next be probed, and
+  what the provider said. Nothing rendered it. While it was true, eighteen jobs
+  failed in thirty minutes and the page looked entirely normal.
+
+  That is the worst shape a state can take, and it is what section 32 is about:
+  a quiet office reads as an idle office, and idle means wait while this means
+  investigate. Two opposite instructions, drawn identically.
+
+  Grant's shape for it, from the issue:
+
+    - a plain sentence, not a JSON blob
+    - the provider's own words are operator detail, behind a disclosure
+    - it clears itself the moment the breaker closes, with no reload
+    - an empty list adds NOTHING to the screen, because the common case is
+      healthy and an always-present "all good" pill is furniture
+
+  Drawn as a sibling of the stalled strip, in the same place, because they are
+  the same kind of fact and two different treatments for "something is wrong
+  with the office" would be two things to learn.
+*/
+function markThinking(root) {
+  const existing = $('.thinkbar')
+  if (existing) existing.remove()
+  /*
+    Only when the office is answering. A page that cannot reach the office knows
+    nothing about whether the office can reach its model provider, and saying so
+    anyway would be an alarm sourced from no information - which is the same
+    guard the stalled strip carries, for the same reason.
+  */
+  if (!source.live || health.cannotThink.length === 0) return
+
+  const first = health.cannotThink[0]
+  const more = health.cannotThink.length - 1
+  const back = first?.next_probe_at
+    ? ` It tries again ${when.words(first.next_probe_at)}.`
+    : ' It will try again on its own.'
+
+  const bar = document.createElement('div')
+  bar.className = 'mockbar thinkbar badbar'
+  const head = document.createElement('b')
+  head.textContent = more > 0
+    ? `The office cannot reach ${String(health.cannotThink.length)} of its model providers`
+    : `The office cannot reach ${String(first?.provider ?? 'its model provider')}`
+  const say = document.createElement('span')
+  say.textContent = `Nothing it is asked can be answered until this clears.${back}`
+  bar.append(head, say)
+
+  /*
+    What the provider actually said, behind a disclosure.
+
+    His words: the reason is operator detail and does not belong in the
+    headline. It is also the only thing that makes the difference between a
+    quota, a key and an outage, so it must be reachable in one press rather
+    than absent.
+  */
+  if (first?.said) {
+    const why = document.createElement('details')
+    why.className = 'thinkwhy'
+    const sum = document.createElement('summary')
+    sum.textContent = 'What it said'
+    const pre = document.createElement('p')
+    pre.className = 't-meta'
+    pre.textContent = health.cannotThink
+      .map((c) => `${String(c.provider)}: ${String(c.said ?? 'no reason given')}`)
+      .join(' · ')
+    why.append(sum, pre)
+    bar.append(why)
+  }
+  root.prepend(bar)
+}
+
 function markStalled(root) {
   const existing = $('.stalledbar')
   if (existing) existing.remove()
@@ -6156,6 +6231,7 @@ function drawShell() {
   */
   markMock(root)
   markStalled(root)
+  markThinking(root)
   // The rail is rebuilt on every render, so the call button is a new element
   // each time and knows nothing. A live call must not be represented by a
   // button that looks idle (#101).
@@ -8860,6 +8936,32 @@ async function live() {
     default draws - a home screen that will not appear because its saved
     layout could not be fetched is worse than one that appears unarranged.
   */
+  /*
+    Whether the office can think, read on the way in and on every tick (#240).
+
+    On the tick rather than only at load, because an open breaker closes on its
+    own - the issue requires that the strip clears itself "without a reload if
+    that is cheap", and `pulse.watch` already runs a refresh on a schedule, so
+    it is cheap.
+  */
+  const readThinking = async () => {
+    try {
+      const h = (await read('thinking')) ?? {}
+      const rows = Array.isArray(h.cannot_think) ? h.cannot_think : []
+      const changed = rows.length !== health.cannotThink.length
+      health.cannotThink = rows
+      if (changed) render()
+    } catch {
+      /*
+        Unknown, not healthy. A read that failed says nothing about the
+        provider, and leaving the last answer up would be a stale alarm - which
+        the health hydration guards against for the same reason two lines up.
+      */
+      if (health.cannotThink.length > 0) { health.cannotThink = []; render() }
+    }
+  }
+  void readThinking()
+
   void read('workspace').then((w) => {
     panels.adoptHome(w)
     if (state.view === 'portfolio') render()
@@ -8882,7 +8984,7 @@ async function live() {
     would be a second thing to leak and a second thing to forget to stop when
     the tab is hidden — both of which `pulse` already handles.
   */
-  pulse.watch(API, token, refresh, () => { when.retime(document) })
+  pulse.watch(API, token, refresh, () => { when.retime(document); void readThinking() })
 }
 
 /*
