@@ -1825,6 +1825,19 @@ Each of these cost real time. They are here so they cost it once.
   so everywhere else it announces itself as an esbuild parse error pointing at
   a line some distance from the cause. If a comment sits inside a template
   literal, write plain words and say so in the comment.
+- **An audit told to run in a mode must assert it is IN that mode.**
+  `DENSITY=compact npm run verify:layouts` reported 64 states and 0 findings
+  before the compact scale had ever been applied — the geometry pass never
+  seeded appearance at all, only the contrast pass did. A mode that silently
+  does not apply is indistinguishable from a mode that passes. The control
+  (read the attribute back, compare to what was asked for) caught it on its
+  first run and then the real run found a genuine 40px touch target.
+- **A suite not in the gates for a change is a suite that will be red and
+  unnoticed.** `verify:arrangement` broke the moment #25 turned the project
+  Overview into a map — it asserts on `[data-panel]`, which is now behind a
+  Map/Panels toggle — so ADR-0021's whole guarantee sat unverified for a
+  morning. When a change moves what a screen OPENS ON, grep the suites for the
+  selector that screen used to show.
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run
