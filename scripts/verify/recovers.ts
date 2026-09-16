@@ -135,7 +135,38 @@ const recorder = {
   },
 }
 
-const mine = async (): Promise<Job | null> => await dequeue(db, WORKER, true, true, undefined, MINE)
+/*
+  The suite's own job, and it INSISTS (#244).
+
+  Section 5 failed once in three runs on identical code, both failing lines
+  downstream of one fact: the partial-success job was still `queued` when the
+  section asserted on it. The cause was never established, and the reason it
+  could stay unestablished is right here — every caller wrote
+  `if (job !== null)` and then carried on. A dequeue that returned nothing
+  SILENTLY skipped the work and the checks two lines later reported the office
+  as having failed to do something nothing had asked it to do.
+
+  Three candidate causes were listed at the time — a lease from an earlier
+  section, the deployed worker's drain, a visibility window between enqueue and
+  the scoped dequeue — and this removes all three without needing to know which
+  it was: ask again, five times over five seconds. If it is still nothing, that
+  is now a NAMED failure at the point it happens rather than two misleading
+  ones further down.
+
+  The scope itself is #184's and stays: `MINE` keeps this suite from taking
+  another suite's work. What it cannot do is stop the deployed worker taking
+  this suite's, which is one of the three candidates and is also why insisting
+  beats explaining.
+*/
+const mine = async (why = 'the suite'): Promise<Job | null> => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const job = await dequeue(db, WORKER, true, true, undefined, MINE)
+    if (job !== null) return job
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  console.log(`  --   nothing to dequeue for ${why} after five tries`)
+  return null
+}
 
 const stateOf = async (id: string): Promise<{ state: string; reason: string; attempt: number }> => {
   const r = await one(`
@@ -290,7 +321,14 @@ try {
   // =======================================================================
   console.log('\n5. a partial success keeps what happened and is honest about the rest')
   const partialId = await enqueue(`recovers-${run}-partial`)
-  const partial = await mine()
+  const partial = await mine('the partial-success job')
+  check(
+    'the partial-success job was actually picked up',
+    partial === null
+      ? 'NOTHING DEQUEUED — the two checks below describe a job nothing ran'
+      : 'dequeued',
+    partial !== null,
+  )
   const taskName = `recovers ${run} the half that worked`
   if (partial !== null)
     await runJob(
