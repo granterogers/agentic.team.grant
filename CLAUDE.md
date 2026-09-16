@@ -1716,6 +1716,19 @@ Each of these cost real time. They are here so they cost it once.
   narrow on purpose: it will miss an invented name and an invented percentage,
   and it cannot fire on arithmetic, a quotation or a repetition of something
   Grant said.
+- **A shortcode is a name only one surface can resolve, so sharing the sentence
+  shares the name.** `provenanceLine` is shared between Slack and Telegram on
+  purpose (#186) and ended `:warning: *Nobody has checked this yet.*`. Slack
+  resolves that against its own emoji set; Telegram's HTML parse mode resolves
+  nothing, so eight characters arrived on Grant's phone as eight characters —
+  and the same message said "nobody has checked this" TWICE, because the header
+  line and the provenance clause are pushed under identical conditions. Both
+  compile, both escape correctly, both are well-formed HTML, and the only thing
+  that was ever going to find either was rendering four real shapes and reading
+  them. When one function feeds two channels, ask which of its output is
+  VOCABULARY rather than words — and when two lines are pushed under the same
+  condition, one of them is a repetition.
+
 - **A corpus that finds a defect has, by finding it, stopped being able to find
   the next one.** The bait corpus discovered the provenance defect and then
   influenced every line of the fix, so it is regression material and no longer
