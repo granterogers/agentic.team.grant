@@ -230,10 +230,18 @@ export function draw(graph, saved, view, pick) {
     first paint and the numbers below are only what is painted for the frame
     before that.
   */
-  const fresh = view === undefined || view === null || view.k === undefined
-  const k = fresh ? 1 : view.k
-  const x = fresh ? 0 : (view.x ?? 0)
-  const y = fresh ? 0 : (view.y ?? 0)
+  /*
+    Always fit, every open.
+
+    The pan and the zoom are navigation rather than arrangement, and are stored
+    nowhere — see the note on `remember` in app.js for what persisting them
+    cost. `data-fit` asks the wiring to measure the port and place the field;
+    the numbers here are only what is painted for the frame before that.
+  */
+  void view
+  const k = 1
+  const x = 0
+  const y = 0
 
   if (nodes.length === 0) {
     /*
@@ -251,7 +259,7 @@ export function draw(graph, saved, view, pick) {
     </div>`
   }
 
-  return `<div class="planeport" data-plane tabindex="0"${fresh ? ' data-fit' : ''}
+  return `<div class="planeport" data-plane tabindex="0" data-fit
               aria-label="The project map. Arrow keys pan, plus and minus zoom.">
     <div class="planefield" data-field
          style="--px:${x}px;--py:${y}px;--pk:${k};width:${box.w}px;height:${box.h}px">

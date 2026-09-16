@@ -6530,10 +6530,26 @@ function wirePlane(root) {
   }
 
   let saving = null
+  /*
+    Positions are the arrangement. The pan and the zoom are not.
+
+    Grant asked for *"persistent arrangements so the dashboard stays how I
+    organized it"*, and what he organises is where the cards are. Where the
+    viewport happens to be sitting is navigation — and persisting it was
+    actively wrong twice over. It made every render after the first one
+    non-fresh, because the automatic fit wrote a view into the store, so a
+    window that changed size never fitted again: the phone capture opened
+    halfway across the plane with the left column sliced off. And a pan saved on
+    a 1440px desktop is meaningless on a 390px phone, where the same numbers
+    point at a different part of the map.
+
+    So the view is recomputed on every open and saved nowhere, and the cards
+    stay exactly where he put them. The column survives in `plane_layouts`
+    because dropping it would be a migration for nothing.
+  */
   const remember = () => {
     const at = spots()
-    const v = view()
-    placed[slug] = { at, view: v }
+    placed[slug] = { at, view: {} }
     try {
       localStorage.setItem(`studio.plane.${slug}`, JSON.stringify(at))
     } catch {
@@ -6550,7 +6566,7 @@ function wirePlane(root) {
       void act('plane_layout_set', {
         p_project_id: byId(slug).id,
         p_at: at,
-        p_view: v,
+        p_view: {},
       }).catch(() => undefined)
     }, 700)
   }
@@ -6684,7 +6700,6 @@ function wirePlane(root) {
     */
     const room = (span, size) => (span >= size ? (span - size) / 2 : 0)
     setView({ k, x: room(box.width, w * k), y: room(box.height, h * k) })
-    remember()
   }
 
   for (const b of port.querySelectorAll('[data-zoom]')) {
