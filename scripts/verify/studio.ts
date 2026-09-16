@@ -377,6 +377,21 @@ for (const [size, opts] of SIZES) {
     if (size === 'phone') {
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(500)
+      /*
+        Connections on a phone, which had never been captured (#158, §15, §35).
+
+        The comment above says the rest of the settings sheet is desktop-only
+        and calls it "a gap this Issue does not widen but does prove worth
+        closing". The cross-screen wall closed it by drawing the hole: two
+        missing cells, both of them Connections, which is the surface with the
+        credential forms on it and the one §35 asks to be exercised hardest.
+
+        One tab rather than all seven. The wall wants a representative, not an
+        archive, and Connections is the one whose cards stack worst.
+      */
+      await page.locator('[data-setting="connections"]').click()
+      await page.waitForTimeout(500)
+      await shoot('settings-connections')
       await page.locator('[data-setting="governance"]').click()
       await page.waitForTimeout(500)
       await shoot('settings-governance')
@@ -407,7 +422,19 @@ for (const [size, opts] of SIZES) {
       empty states can actually be seen. Capturing them on Legacy would capture
       the sections that are full.
     */
-    if (size === 'desktop' && scheme === 'light') {
+    /*
+      In both themes and on the phone, not only on a light desktop (§15).
+
+      The empty states were captured once, at one size, in one scheme — and the
+      cross-screen wall drew eight gaps where they should have been, which is
+      how the gap was found. An empty state on a phone in dark is a real screen
+      a person lands on, and nobody had ever looked at it.
+
+      §33's standard for these is not "does it render": *"Empty states should
+      help the user progress."* That is a judgement, and a judgement needs a
+      picture in the state and on the device the person is actually in.
+    */
+    {
       await page.locator('[data-switch-open]').click()
       await page.waitForTimeout(300)
       await page.locator('[data-switch-menu] [data-open="wellness"]').click()

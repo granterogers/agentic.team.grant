@@ -378,6 +378,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* --- tasks ---------------------------------------------------------------- */
 .tasks { display: grid; }
+/*
+  A list has a measure (§24).
+
+  Measured on a 1440px desktop: a task row was 1156px wide for about 250px of
+  content, with the assignee's face pinned to the far right — so linking a task
+  to its owner meant crossing nine hundred pixels of nothing, and the list read
+  as four items adrift on the page rather than as a list.
+
+  820px is about ninety characters at the body size, which is the outer edge of
+  a comfortable measure, and it puts the owner back beside the work. Not a
+  centred column: the list stays left-aligned with everything above it, and the
+  space goes where space should go, which is away.
+*/
+.tasks, .ptasks { max-inline-size: 820px; }
+
 .task { display: flex; align-items: flex-start; gap: var(--s3);
   padding: var(--s3) 0; border-top: 1px solid var(--edge); text-align: left; width: 100%; }
 .task:first-child { border-top: 0; }
@@ -707,6 +722,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; border-radius: 50%;
 }
+/*
+  A portrait that does not arrive falls back to the initial.
+
+  Without this the browser draws its own broken-image glyph OVER the letter, so
+  a face whose photograph failed reads as a rendering fault rather than as a
+  person. The initial is already underneath — that is the whole design of this
+  element — and the img is only ever an improvement on it.
+
+  It happens: Storage hiccups, a portrait is deleted, a network is captive. It
+  happens on every capture taken in the build sandbox, which is how it was
+  noticed, and the cross-screen wall is where a torn-paper icon in forty faces
+  at once becomes impossible to miss.
+*/
+.face img:not([src]), .face img[src=""] { display: none; }
+.face img.gone { display: none; }
 .face { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--hue) 70%, transparent),
                     inset 0 1px 0 rgb(255 255 255 / .25), 0 1px 3px rgb(0 0 0 / .28); }
 .face.idle { opacity: .55; filter: saturate(.55); }

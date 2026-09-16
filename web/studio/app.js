@@ -356,7 +356,22 @@ const face = (c, size = 28) =>
     CREW.findIndex((x) => x.slug === c.slug)
   };width:${size}px;height:${size}px"
          title="${esc(c.name)} — ${esc(c.doing ?? c.role)}">${esc(c.name[0])}${
-    c.face ? `<img src="${esc(c.face)}" alt="" loading="lazy">` : ''
+    /*
+      A portrait that fails hides itself, leaving the initial (#207's neighbour).
+
+      The initial is drawn underneath every face by design; the photograph is an
+      improvement on it, and a photograph that does not arrive should be no
+      worse than none. Without this the browser paints its own torn-paper glyph
+      over the letter and a missing file reads as a broken page.
+
+      Inline rather than a listener, because a face is rebuilt on every render
+      and an image can fail before any wiring pass reaches it - the error has
+      usually already fired by the time a listener would be attached.
+    */
+    c.face
+      ? `<img src="${esc(c.face)}" alt="" loading="lazy"
+             onerror="this.classList.add('gone')">`
+      : ''
   }</span>`
 
 /*

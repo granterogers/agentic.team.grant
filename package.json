@@ -32,6 +32,7 @@
     "verify:controls:team": "ROUTES=team SIZE=desktop tsx scripts/verify/controls.ts && ROUTES=team SIZE=phone tsx scripts/verify/controls.ts",
     "verify:controls:settings": "ROUTES=settings SIZE=desktop tsx scripts/verify/controls.ts && ROUTES=settings SIZE=phone tsx scripts/verify/controls.ts",
     "shots": "npm run smoke && tsx scripts/verify/studio.ts",
+    "board": "tsx scripts/verify/board.ts",
     "probe": "tsx scripts/verify/probe.ts",
     "space": "tsx scripts/verify/space.ts",
     "system": "tsx scripts/verify/system.ts",
