@@ -17,9 +17,17 @@
 >
 > | | |
 > |---|---|
-> | Tests | **1,434 passing across 73 files** · migrations **393** |
+> | Tests | **1,462 passing across 75 files** · migrations **400** |
+> | New suites | `verify:rules` 26/26 · `verify:routing-quality` 13/13 · `verify:extract` 11/11 |
+> | Restored | `verify:arrangement` 22/22 — it had been failing since #25 landed, so ADR-0021's guarantee was unverified for a morning |
 > | **#25** | the project dashboard is a living map — a derived graph, a pannable plane, persisted placement and a side panel. The item Grant named first when he lifted the hold on it |
 > | **#147** | a correction becomes a standing rule on **one press**, and never without one. `readCorrection` is deterministic — no model call decides what a correction is, because the expensive direction is offering to make a rule out of an ordinary instruction. **ADR-0030**; `npm run verify:rules` 24/24 |
+> | **#124** | density is a control, and **appearance moved to the office** (0400). ADR-0021: a preference about how the work is shown is not the browser's. All four values, not just the new one |
+> | **#37** | search can ask the graph — one `related_to` filter that asks `app.relations_of`, so by agent, by contact, by source and by collection are one mechanism |
+> | **#130** (part) | the office can pull the tasks out of a document and create them, with one undo for the batch. `tasks_extracted` had been a declared shape with no rows since 0272 |
+> | **#131** | the plan Grant approved is the import performed — the stored plan is executed rather than a second model call |
+> | **#127** | a model is chosen on what it has actually done, per kind of work. Quality may only DEMOTE, so no demotion can cause a paid call |
+> | **#123** | an empty section says so, and the check that says so can now fail |
 > | what #147 cost to get right | four latent defects in the press path, every one of them invisible from reading the migration and every one found by DRIVING it: a state word the table forbids, a jsonb assigned to a uuid, a scope the offer accepted and the enum does not have, and three targets stored where the constraint permits one |
 >
 > ## State as of 2026-09-13
