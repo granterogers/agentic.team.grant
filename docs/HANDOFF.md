@@ -20,13 +20,34 @@
 >
 > | | |
 > |---|---|
-> | Tests | **1,524 passing across 81 files** · migrations **417** |
-> | Built | #28 Preview · #121 slash and j/k · #14 Recent activity · #21 the build diary's retention · #178 the Notion teardown · #252 unanimity over a coin · #244 the insisting dequeue · #253 due dates and assignees · #126 drop a file · #242 the set-aside gate · #187 a channel per project · #130 structure before prose · #13 the OpenAPI document |
+> | Tests | **1,526 passing across 81 files** · migrations **420** |
+> | Built | #272 (part) the office asks and Grant answers · #28 Preview · #121 slash and j/k · #14 Recent activity · #21 the build diary's retention · #178 the Notion teardown · #252 unanimity over a coin · #244 the insisting dequeue · #253 due dates and assignees · #126 drop a file · #242 the set-aside gate · #187 a channel per project · #130 structure before prose · #13 the OpenAPI document |
 > | Verified and closed | #35 #29 #25 #12 #75 #223 #224 #171 #237 #176 #169 #170 #174 #175 #188 #229 #271 |
 > | Closed at his instruction | the five proposal menus #113 #114 #136 #137 #138, plus #23 #40, and their children #139–#146 and #159–#168 |
 > | New suites | `verify:lately` 8/8 · `verify:upload` 10/10 · `slack:add-scope` |
 > | New checks | `verify:controls` now fails on a control a mouse can press and Tab cannot reach · `verify:hq` reads the OpenAPI document back · `verify:slack` asserts every project has a channel · `verify:import` proves structure beats prose |
 > | New ADR | **0034** — the build diary's bucket stays public, and the four things that make that acceptable. **If the repository is ever made public, that ADR is void.** |
+>
+> ### After the campaign: #272, and the half of ADR-0018 that was never built
+>
+> `check:callers` had put `public.hq_approve_tool`, `public.hq_decline_tool`
+> and `public.hq_revoke_tool` in its baseline. They are not three stray
+> wrappers — they are the human half of ADR-0018, and **an agent could ask
+> Grant for a capability and Grant had nowhere to answer.** All fourteen
+> settled requests on record were settled by a script.
+>
+> Migration **0420** adds `requests` to `app.hq_governance`; `hq-api` gains
+> `approve_tool`, `decline_tool` and `revoke_tool`; the Governance page gains
+> *What it is asking for*, between *What it wants* and *What it noticed*.
+> `app.expire_temporary_staff` and `app.expire_undo_offers` are wired into the
+> worker's boot sweep beside `mcp_expire_codes`. **Baseline 40 → 33.**
+>
+> Four defects came out of DRIVING it, none of them visible from reading:
+> `decline_tool` refuses a decline with no reason; the page rendered "0 open"
+> over a populated database because `settings.js` did not carry the new key;
+> the capability brief prepended to every answer had grown to 5,183 characters
+> against its 4,000 ceiling, 2,027 of them registry essays; and the tool chip
+> vanished on a settled card.
 >
 > ### What tonight found that nobody was looking for
 >
