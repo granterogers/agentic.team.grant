@@ -274,8 +274,21 @@ Read `package.json` for the current truth rather than this list.
 | 6e | #207 heading structure — every screen had one heading; `verify:access` 35/35 and proved able to fail | ✅ |
 | 6f | §31 motion 6/6 · §32 states `verify:offline` 23/23 · §51 CORS 13/13 | ✅ |
 | 6g | #240 the office cannot think — it never reached the page at all | ✅ |
-| 6h | §36 communication UX (#208 Telegram), §35 credential shapes, §74 final report | 🔨 next |
-| 7 | Final report in §74's format, exactly one of PASS / PASS WITH WARNINGS / FAIL | not started |
+| 6h | §36 communication UX — **#208 closed**. Two defects rendering found: a Slack emoji shortcode reaching Telegram as literal text, and the unreviewed warning said twice in one message | ✅ |
+| 6i | §35 credential UX — **`npm run verify:credentials`**, new, 25/25. Migration 0377: the Google form sorts its two values by shape after stripping invisible characters, and NO setting may hold a credential-shaped value. The defect was real: a secret pasted into the plaintext Client ID box was stored in `system_config` and rendered back into the page | ✅ |
+| 6j | §30 keyboard journeys — **`npm run verify:keyboard`**, new, 24/24. Three product defects: a redraw dropped focus onto the body, the document viewer was a dialog with no focus trap, and the command bar's Ask row did nothing at all with no project chosen | ✅ |
+| 6k | §57 command bar — it offered "Desk", a screen #77 removed, and was missing Tasks and Recent activity. `tests/studio/command.test.ts` asserts the property in both directions | ✅ |
+| 6l | §14/§15 captures refreshed, board rebuilt (14 screens, 0 missing), `npm run space` re-measured: phone project Overview 632px → **481px** to first content | ✅ |
+| 7 | Final report in §74's format, exactly one of PASS / PASS WITH WARNINGS / FAIL | 🔨 **last step** |
+
+### Opened rather than done, deliberately
+
+| Issue | Why it was not done in this run |
+|---|---|
+| **#267** | `npm run space` cannot see the home board's panels — a QA-harness gap (§10), found by the half of the standard that audits the harness. A reading off the capture suggests the Tasks panel reserves ~400px for one line of loading text; that is an opinion until the tool can measure it, and CLAUDE.md records what believing a capture costs |
+| **#188** | the phone's furniture, updated with the new measurement rather than duplicated. What is left is spread across four small bands, which is a harder shape to fix than the one tall header it used to be |
+| **#25** | the spatial plane. Grant said *"dont start implementation yet"* and nothing since has revoked it specifically |
+| **#221** | the icon library, in tension with the 15 September restraint direction |
 
 ---
 
