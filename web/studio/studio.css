@@ -5066,6 +5066,171 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   hundred lines up, which is the source-order trap this file has been bitten by
   twice.
 */
+.mapbar { display: flex; justify-content: flex-end; margin-block-end: var(--s3); }
+
+/* --- the project map (#25) -------------------------------------------------
+   Grant's reference is Railway's project canvas: a near-black plane, a fine
+   dotted grid, small dense cards with hairline borders, and a great deal of
+   empty space. What is ours and not theirs is the palette - this product has
+   five schemes and two modes, so the plane takes its ground from the tokens
+   rather than hard-coding a near-black.
+
+   The grid lives on the FIELD, not the port, so it scales with the zoom. A
+   grid that stays the same size while the cards grow reads as the cards
+   floating above a wallpaper; a grid that scales with them reads as a plane
+   you are moving over, which is the whole sensation he asked for.
+*/
+.planeport {
+  position: relative;
+  overflow: hidden;
+  block-size: min(74vh, 780px);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-card);
+  background: var(--sunken);
+  touch-action: none;
+  cursor: grab;
+}
+.planeport.dragging { cursor: grabbing; }
+.planeport:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.planefield {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  transform-origin: 0 0;
+  transform: translate(var(--px), var(--py)) scale(var(--pk));
+  background-image: radial-gradient(circle at 1px 1px,
+    color-mix(in srgb, var(--ink) 16%, transparent) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.plines { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.mapline {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 26%, transparent);
+  stroke-width: 1.25;
+}
+/* A derived edge is dashed, and says why in its title. Grant: drawing a
+   connection must not falsely imply that access has been granted. */
+.mapline.guess { stroke-dasharray: 3 5; stroke: color-mix(in srgb, var(--ink) 18%, transparent); }
+.mapline.lit { stroke: var(--accent); stroke-width: 2; }
+
+.mapcard {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  translate: var(--x) var(--y);
+  inline-size: 208px;
+  min-block-size: 64px;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-content: center;
+  padding: 11px 13px;
+  text-align: start;
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  cursor: grab;
+  transition: box-shadow .16s ease, border-color .16s ease;
+}
+.mapcard:hover, .mapcard:focus-visible { border-color: color-mix(in srgb, var(--ink) 30%, transparent); }
+.mapcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mapcard.moving { cursor: grabbing; box-shadow: var(--lift-2); }
+.mapcard.lit { border-color: var(--accent); }
+
+.mapglyph { grid-row: 1 / span 2; align-self: center; color: var(--ink-3); }
+.mapglyph svg { inline-size: 20px; block-size: 20px; display: block; }
+.mapname {
+  font-size: 14px; font-weight: 550; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mapstate {
+  font-size: 12px; color: var(--ink-2);
+  display: flex; align-items: center; gap: 6px;
+  overflow: hidden; white-space: nowrap;
+}
+.mapdot { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.mapstate.t-go   .mapdot { background: var(--good); }
+.mapstate.t-warn .mapdot { background: var(--warn); }
+.mapsays { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+
+/* Each kind gets a tint on its glyph only. Grant: "tasteful accents to
+   distinguish types" - on the 20px glyph rather than the card, because a card
+   tinted by type competes with the card tinted by state, and state is the one
+   he needs at a glance. */
+.mapcard.k-agent    .mapglyph { color: var(--accent); }
+.mapcard.k-service  .mapglyph { color: var(--good); }
+.mapcard.k-document .mapglyph { color: var(--ink-2); }
+
+.planectl {
+  position: absolute; inset-block-end: 12px; inset-inline-start: 12px;
+  display: grid; gap: 6px;
+}
+.mapbtn {
+  inline-size: 30px; block-size: 30px;
+  display: grid; place-items: center;
+  font-size: 14px; line-height: 1;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  opacity: .72;
+  transition: opacity .16s ease;
+}
+.mapbtn:hover, .mapbtn:focus-visible { opacity: 1; }
+.planehint {
+  position: absolute; inset-block-end: 14px; inset-inline-end: 14px;
+  margin: 0; pointer-events: none; color: var(--ink-3); font-size: 12px;
+}
+.planeempty { display: grid; place-content: center; block-size: 100%; text-align: center; padding: var(--s4); }
+.planeempty p { max-inline-size: 46ch; margin: 0 auto; }
+.planeempty .m { margin-block-start: var(--s2); }
+
+/* The side panel, over the plane rather than instead of it. Grant: "reveal
+   details in context ... so I keep my place in the project." It is 320px, which
+   leaves the cards it is about visible beside it on a desktop; on a phone it
+   takes the bottom of the port, where a thumb is. */
+.mapaside {
+  position: absolute;
+  inset-block: 10px;
+  inset-inline-end: 10px;
+  inline-size: 320px;
+  overflow: auto;
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift-2);
+}
+.mapasidetop { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.mapclose {
+  inline-size: 44px; block-size: 44px; margin: -10px -10px -10px 0;
+  display: grid; place-items: center;
+  font-size: 20px; line-height: 1; color: var(--ink-3);
+  background: none; border: 0;
+}
+.mapclose:hover { color: var(--ink); }
+.mapasidename { font-size: 17px; font-weight: 600; margin: var(--s2) 0 0; color: var(--ink); }
+.mapasidesub { margin: 4px 0 0; }
+.maplinks { list-style: none; margin: var(--s4) 0 0; padding: 0; display: grid; gap: 9px; }
+.maplinks li { font-size: 13px; color: var(--ink); display: grid; gap: 1px; }
+.maplinks li.guess { opacity: .82; }
+.mapverb {
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mapwhy { display: block; }
+.mapnone, .mapnote { margin: var(--s4) 0 0; }
+.mapdo { display: flex; flex-wrap: wrap; gap: var(--s2); margin-block-start: var(--s4); }
+
+/* A map is movement, and movement is the first thing to go. */
+@media (prefers-reduced-motion: reduce) {
+  .mapcard { transition: none; }
+}
+
 @media (max-width: 860px) {
   .chatbody {
     display: grid;
@@ -5525,4 +5690,39 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   /* The purpose is on the portfolio card and in Project Settings. Here it cost
      two lines above the fold to repeat something you read on the way in. */
   .projhead .t-lead { display: none; }
+}
+
+
+/* --- the project map, on a phone (#25) -------------------------------------
+   At the END of the stylesheet, where phone overrides belong.
+
+   The plane survives the small screen rather than being switched off: a map is
+   what he asked to see, and a phone that shows a list instead is a different
+   product. What changes is the budget - a shorter port so the tab strip and
+   the section above it still fit, a bigger touch target on the zoom controls,
+   and the card narrowed so two of them are never side by side at 390px, where
+   a two-column map is unreadable anyway.
+*/
+@media (max-width: 860px) {
+  .planeport { block-size: min(62vh, 520px); }
+  .mapcard { inline-size: 190px; }
+  .mapbtn {
+    inline-size: 44px; block-size: 44px;
+    opacity: .9;
+  }
+  .planectl { gap: 8px; }
+  .planehint { display: none; }
+}
+
+/* The map's side panel on a phone: the bottom of the port, not a column beside
+   it. At 390px a 320px panel is the whole screen, and a panel that covers the
+   thing it describes is a dialog pretending to be a panel. */
+@media (max-width: 860px) {
+  .mapaside {
+    inset-block: auto 0;
+    inset-inline: 0;
+    inline-size: auto;
+    max-block-size: 58%;
+    border-radius: var(--r-card) var(--r-card) 0 0;
+  }
 }

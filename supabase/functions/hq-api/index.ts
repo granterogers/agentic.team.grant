@@ -266,6 +266,16 @@ const SECTIONS: Readonly<
     would make every first paint carry a settings screen nobody has opened, and
     make every project switch carry an export.
   */
+  /*
+    The project as a graph the dashboard can draw (#25, 0378).
+
+    A section of its own rather than a field on the big studio payload: it is
+    four queries and a set of derived edges, and it is wanted only when the map
+    is on screen. Putting it in the payload would make every page load pay for
+    a screen nobody may open.
+  */
+  plane: { fn: 'studio_plane', arg: 'p_project_id' },
+  plane_layout: { fn: 'hq_plane_layout', arg: 'p_project_id' },
   project_team: { fn: 'project_team', arg: 'p_project_id' },
   project_automations: { fn: 'project_automations', arg: 'p_project_id' },
   /*
@@ -452,6 +462,12 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   },
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.
+  // Where he dragged the cards, and how far he zoomed (#25, 0380).
+  plane_layout_set: {
+    fn: 'hq_plane_layout_set',
+    required: ['p_project_id', 'p_at', 'p_view'],
+  },
+  plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
   /*
     Both Google values at once (§35, 0377).

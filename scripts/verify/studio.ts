@@ -203,6 +203,17 @@ for (const [size, opts] of SIZES) {
     await shoot('project')
 
     if (size === 'desktop') {
+      /*
+        The document hover lives on the DOCUMENTS tab now (#25).
+
+        The Overview became the project map, so the board's Documents panel —
+        which is what this used to hover over — is not on that screen any more.
+        The capture went on clicking Overview and then waiting thirty seconds
+        for a card that had moved one tab away, and reported a timeout rather
+        than the change that caused it. Go where the documents are.
+      */
+      await page.locator('[data-tab="documents"]').click()
+      await page.waitForTimeout(600)
       const doc = page.locator('[data-doc="0"] .page')
       // Scroll it into view first: boundingBox() happily returns coordinates
       // for something below the fold, so the capture came back showing the top

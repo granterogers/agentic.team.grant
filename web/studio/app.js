@@ -9,6 +9,7 @@
 
 import { CREW, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
 import { act, attempt, canWrite, onWrite, read, say, sure, token } from './office.js'
+import * as plane from './plane.js'
 import * as undo from './undo.js'
 import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
@@ -114,6 +115,17 @@ const prose = (s) =>
 */
 const latest = { lately: null, tasks: null }
 
+/*
+  The map, per project (#25).
+
+  Keyed by slug and kept out of `latest` because those two are portfolio-wide
+  and these are not: a second project's map must not show the first one's cards
+  for the moment between opening it and the fetch landing. `maps` holds the
+  graph, `placed` holds where he put the cards and how far he zoomed.
+*/
+const maps = {}
+const placed = {}
+
 const state = {
   // Which Settings tab is open (#39).
   setting: 'team',
@@ -129,6 +141,8 @@ const state = {
   sub: 'board',
   // Which pane of the project's own Settings is open (#36).
   setpane: 'people',
+  // Which card on the project map is open in its side panel (#25).
+  mapPick: null,
   /*
     Unsent composer text, per project (#197).
 
@@ -3527,6 +3541,65 @@ function panelChrome(spec, kinds, bodyFor) {
   </section>`
 }
 
+/**
+ * Map or panels, and the studio remembers which (#25, #220).
+ *
+ * A per-viewer preference, so browser storage is the right home for it and
+ * CLAUDE.md's bounds apply: wrapped, and correct when it comes back empty. The
+ * default is the map, because that is what Grant asked to land on.
+ */
+function mapMode() {
+  try {
+    return (localStorage.getItem('studio.overview') ?? 'map') !== 'panels'
+  } catch {
+    return true
+  }
+}
+
+function projectMap(p) {
+  void needMap(p.slug)
+  const graph = maps[p.slug]
+  const put = placed[p.slug] ?? { at: {}, view: {} }
+  return `<div class="tabbody">
+    <div class="mapbar">
+      <!--
+        The existing segmented control, not a new one.
+
+        Section 19's coherence, and the cheapest kind of it: this product
+        already has a "pick one of these" object with a 44px target and an
+        accent fill, drawn for the light and dark switch. A second one invented
+        here would be a second thing to keep in step.
+      -->
+      <!--
+        Adding a source goes to the real setup, not to a gesture on the canvas.
+
+        Grant: *"Let me add services and connect them to agents through an
+        intuitive visual flow"* AND *"Adding a service should lead through its
+        actual setup and authorization process. Drawing a connection must not
+        falsely imply that access has been granted or setup has succeeded."*
+        The second sentence decides what the first one can be. Attaching a Drive
+        folder is an OAuth consent and a picker (#62); there is no version of
+        dragging a line that performs it, and a line drawn before it would be a
+        drawing of access nobody has.
+
+        So the flow starts here and finishes where it really finishes, and the
+        new source appears on the map on the next read - which is the same
+        moment it becomes true.
+      -->
+      <button class="btn small quiet" data-overview-add>+ Add a source</button>
+      <div class="segmented" role="group" aria-label="How to show this project">
+        <button class="seg on" data-overview="map" aria-pressed="true">Map</button>
+        <button class="seg" data-overview="panels" aria-pressed="false">Panels</button>
+      </div>
+    </div>
+    ${
+      graph === null
+        ? `<div class="planeport"><div class="planeempty"><p class="m">Drawing the map…</p></div></div>`
+        : plane.draw(graph, put.at, put.view, state.mapPick)
+    }
+  </div>`
+}
+
 function dashboard() {
   const p = byId(state.project)
   const mine = panels.layout(p)
@@ -3623,7 +3696,24 @@ function dashboard() {
     : state.tab === 'contacts' ? named('contacts', peopleTab(p))
     : state.tab === 'sources' ? named('links', sources(p))
     : state.tab === 'settings' ? named('settings', projectSettings.section(p, state.setpane, people))
-    : board
+    /*
+      The Overview IS the map (#25).
+
+      Grant: *"This describes how the project dashboard itself should look and
+      behave. It is not a request for a separate Canvas tab, additional view, or
+      disconnected feature."* So opening a project opens the map, and it is not
+      somewhere else you can go.
+
+      The panel board is still here, behind one switch, because #220 is three
+      days old and Grant asked for it in his own words — *"this draggable area
+      should be present within the project itself"* — and his integration
+      instruction on this very issue says to extend working functionality rather
+      than rebuild it. Deleting a feature he asked for on Friday to satisfy a
+      brief he sent on Monday is not what either sentence asks for. The map is
+      what he lands on; the panels are one press away and remember which he
+      chose. ADR-0020.
+    */
+    : mapMode() ? named('overview', projectMap(p)) : board
 
   return `<main class="main">
     <div class="head">
@@ -3710,11 +3800,15 @@ function dashboard() {
           under the waiting banner, holding two buttons and three hundred pixels
           of nothing, immediately above the content. The head has a right-hand
           slot and this is what it is for. Only drawn on Overview, because that
-          is the only tab with a board on it.
+          is the only tab with a board on it - and only in PANELS mode, because
+          the map has neither panels to add nor panels to reset, and its own
+          Reset is in the corner controls where the reference puts it (#25).
+          Two buttons named Reset on one screen, doing different things, is
+          worse than either of them missing.
 
           No backticks in this comment. Template literal.
         -->
-        ${state.tab !== 'overview' ? '' : `${spare.length === 0 ? '' : `<div class="addpanel">
+        ${state.tab !== 'overview' || mapMode() ? '' : `${spare.length === 0 ? '' : `<div class="addpanel">
           <button class="btn" data-add-open>+ Add panel</button>
           <div class="addmenu" data-add-menu hidden>
             ${spare.map((k) => `<button data-add="${k.id}">
@@ -6350,6 +6444,360 @@ function broke(e) {
   root.append(wrap)
 }
 
+/**
+ * The map's interactions (#25).
+ *
+ * Drag a card, drag the plane, zoom, select, and save where things ended up.
+ *
+ * ## Why this moves the DOM rather than re-rendering
+ *
+ * `render()` replaces every node in the shell. Doing that on pointermove would
+ * be sixty rebuilds a second, and it would also destroy the node the pointer is
+ * captured on — which is the same defect #197 spent four attempts on, in a
+ * different costume. So a drag writes CSS custom properties straight onto the
+ * card and recomputes only the lines attached to it; the state and the office
+ * are told once, when the gesture ends.
+ *
+ * ## The grab that is not a click
+ *
+ * A card is both a button and a draggable object, and the browser will report
+ * a click at the end of every drag. Four pixels of movement is the line: below
+ * it the gesture opens the side panel, above it the gesture moved the card and
+ * the click is swallowed. Without that, every rearrangement would also open a
+ * panel over the thing just moved.
+ */
+function wirePlane(root) {
+  $('[data-overview-add]', root)?.addEventListener('click', () => {
+    state.tab = 'sources'
+    state.mapPick = null
+    rememberTab(state.project, state.tab)
+    render()
+  })
+
+  for (const b of root.querySelectorAll('[data-overview]')) {
+    b.addEventListener('click', () => {
+      try {
+        localStorage.setItem('studio.overview', b.dataset.overview)
+      } catch {
+        /* A private window cannot remember the choice. It can still make it. */
+      }
+      state.mapPick = null
+      render()
+    })
+  }
+
+  const port = $('[data-plane]', root)
+  if (port === null) return
+  const field = $('[data-field]', port)
+  const slug = state.project
+  if (field === null) return
+
+  /** Field coordinates for every card, read from where they actually are. */
+  const spots = () => {
+    const at = {}
+    for (const c of field.querySelectorAll('.mapcard')) {
+      at[c.dataset.node] = {
+        x: Number.parseFloat(c.style.getPropertyValue('--x')) || 0,
+        y: Number.parseFloat(c.style.getPropertyValue('--y')) || 0,
+      }
+    }
+    return at
+  }
+
+  const view = () => ({
+    x: Number.parseFloat(field.style.getPropertyValue('--px')) || 0,
+    y: Number.parseFloat(field.style.getPropertyValue('--py')) || 0,
+    k: Number.parseFloat(field.style.getPropertyValue('--pk')) || 1,
+  })
+
+  const setView = (v) => {
+    field.style.setProperty('--px', `${v.x}px`)
+    field.style.setProperty('--py', `${v.y}px`)
+    field.style.setProperty('--pk', String(v.k))
+  }
+
+  /** Redraw the lines touching one node, from where the cards are now. */
+  const relines = (id) => {
+    const at = spots()
+    for (const path of field.querySelectorAll('.mapline')) {
+      const [from, to] = (path.dataset.edge ?? '').split('|')
+      if (id !== undefined && from !== id && to !== id) continue
+      const a = at[from]
+      const b = at[to]
+      if (!a || !b) continue
+      path.setAttribute('d', plane.pathFor(a, b))
+    }
+  }
+
+  let saving = null
+  const remember = () => {
+    const at = spots()
+    const v = view()
+    placed[slug] = { at, view: v }
+    try {
+      localStorage.setItem(`studio.plane.${slug}`, JSON.stringify(at))
+    } catch {
+      /* Per-viewer convenience only. The office holds the real copy. */
+    }
+    if (saving !== null) clearTimeout(saving)
+    /*
+      One write per gesture, not one per pixel. Seven hundred milliseconds is
+      long enough that dragging three cards in a row is a single save and short
+      enough that closing the tab straight after a move keeps it.
+    */
+    saving = setTimeout(() => {
+      if (!canWrite()) return
+      void act('plane_layout_set', {
+        p_project_id: byId(slug).id,
+        p_at: at,
+        p_view: v,
+      }).catch(() => undefined)
+    }, 700)
+  }
+
+  // --- moving one card ------------------------------------------------------
+  for (const c of field.querySelectorAll('.mapcard')) {
+    c.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      const k = view().k
+      const from = { x: e.clientX, y: e.clientY }
+      const was = {
+        x: Number.parseFloat(c.style.getPropertyValue('--x')) || 0,
+        y: Number.parseFloat(c.style.getPropertyValue('--y')) || 0,
+      }
+      let moved = false
+      c.setPointerCapture(e.pointerId)
+      c.classList.add('moving')
+
+      const move = (m) => {
+        const dx = (m.clientX - from.x) / k
+        const dy = (m.clientY - from.y) / k
+        if (!moved && Math.hypot(m.clientX - from.x, m.clientY - from.y) > 4) moved = true
+        if (!moved) return
+        c.style.setProperty('--x', `${Math.round(was.x + dx)}px`)
+        c.style.setProperty('--y', `${Math.round(was.y + dy)}px`)
+        relines(c.dataset.node)
+      }
+      const up = () => {
+        c.removeEventListener('pointermove', move)
+        c.removeEventListener('pointerup', up)
+        c.removeEventListener('pointercancel', up)
+        c.classList.remove('moving')
+        if (moved) {
+          remember()
+          // Swallow the click the browser is about to report, once.
+          c.addEventListener('click', (x) => { x.stopPropagation(); x.preventDefault() }, {
+            capture: true, once: true,
+          })
+        }
+      }
+      c.addEventListener('pointermove', move)
+      c.addEventListener('pointerup', up)
+      c.addEventListener('pointercancel', up)
+    })
+
+    c.addEventListener('click', () => {
+      state.mapPick = state.mapPick === c.dataset.node ? null : c.dataset.node
+      render()
+    })
+  }
+
+  // --- moving the plane -----------------------------------------------------
+  port.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
+    if (e.target.closest('.mapcard, .planectl, .mapaside')) return
+    const from = { x: e.clientX, y: e.clientY }
+    const was = view()
+    port.setPointerCapture(e.pointerId)
+    port.classList.add('dragging')
+    const move = (m) => {
+      setView({ ...was, x: was.x + (m.clientX - from.x), y: was.y + (m.clientY - from.y) })
+    }
+    const up = () => {
+      port.removeEventListener('pointermove', move)
+      port.removeEventListener('pointerup', up)
+      port.removeEventListener('pointercancel', up)
+      port.classList.remove('dragging')
+      remember()
+    }
+    port.addEventListener('pointermove', move)
+    port.addEventListener('pointerup', up)
+    port.addEventListener('pointercancel', up)
+  })
+
+  // --- zoom -----------------------------------------------------------------
+  const zoomTo = (k, about) => {
+    const v = view()
+    const next = Math.min(1.8, Math.max(0.35, k))
+    const box = port.getBoundingClientRect()
+    const cx = (about?.x ?? box.width / 2)
+    const cy = (about?.y ?? box.height / 2)
+    // Keep whatever is under the pointer under the pointer. Without this the
+    // plane appears to slide away from you every time you zoom.
+    setView({
+      k: next,
+      x: cx - ((cx - v.x) / v.k) * next,
+      y: cy - ((cy - v.y) / v.k) * next,
+    })
+    remember()
+  }
+
+  /*
+    `floor` is the whole difference between the fit he ASKS for and the fit he
+    is GIVEN.
+
+    Zoom multiplies every font size on the plane. The automatic first view is a
+    choice the product makes on his behalf, so it may not put text under the
+    12px floor — the state line is 12px, and 0.85 renders it at 10.2, which
+    `verify:map` measures and refuses. Pressing the fit button is a choice HE
+    makes, and then showing everything is the point of the press.
+  */
+  const fit = (floor = 0.35) => {
+    const box = port.getBoundingClientRect()
+    const w = field.offsetWidth
+    const h = field.offsetHeight
+    if (w === 0 || h === 0) return
+    /*
+      Floored at 0.85 on purpose.
+
+      Zoom is a multiplier on every font size on the plane, so a fit that goes
+      low enough to show everything can take the 14px card name under the 12px
+      floor the visual standard sets — and an unreadable overview is not an
+      overview. Below that floor the map shows less and stays legible, and the
+      plane is pannable, which is the affordance for the rest.
+    */
+    const k = Math.min(1.2, Math.max(floor, Math.min(box.width / w, box.height / h) * 0.96))
+    /*
+      Centred only on the axis where it actually fits.
+
+      Centring a field TALLER than the port gives a negative offset, which puts
+      the first row of cards above the top edge where they are clipped out of
+      existence — the automatic view opening on a map whose first row is off
+      screen. It was found by a drag test reporting that a card could not be
+      moved: Playwright had its geometry, pressed the middle of it, and the
+      pointer landed on the panel behind, because a clipped element keeps its
+      rect and loses its pixels. CLAUDE.md already records that shape twice.
+
+      So each axis is centred if there is room and pinned to the start if there
+      is not, and what is off screen is below and to the right, where panning
+      is the obvious thing to do.
+    */
+    const room = (span, size) => (span >= size ? (span - size) / 2 : 0)
+    setView({ k, x: room(box.width, w * k), y: room(box.height, h * k) })
+    remember()
+  }
+
+  for (const b of port.querySelectorAll('[data-zoom]')) {
+    b.addEventListener('click', async () => {
+      const how = b.dataset.zoom
+      if (how === 'in') zoomTo(view().k * 1.25)
+      else if (how === 'out') zoomTo(view().k / 1.25)
+      else if (how === 'fit') fit()
+      else if (how === 'reset') {
+        /*
+          Back to the computed arrangement, which is a destructive-ish act on
+          something he arranged deliberately — so it asks, the way every other
+          irreversible control in this product does.
+        */
+        const yes = await sure('Put every card back where the studio would have put it?', 'Reset the map')
+        if (!yes) return
+        placed[slug] = { at: {}, view: {} }
+        try {
+          localStorage.removeItem(`studio.plane.${slug}`)
+        } catch {
+          /* fine */
+        }
+        if (canWrite()) {
+          await act('plane_layout_reset', { p_project_id: byId(slug).id }).catch(() => undefined)
+        }
+        render()
+      }
+    })
+  }
+
+  port.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return
+    e.preventDefault()
+    const box = port.getBoundingClientRect()
+    zoomTo(view().k * (e.deltaY < 0 ? 1.1 : 1 / 1.1), {
+      x: e.clientX - box.left,
+      y: e.clientY - box.top,
+    })
+  }, { passive: false })
+
+  /*
+    And from the keyboard, because a plane you can only reach with a pointer is
+    a screen a keyboard user cannot use at all — section 30, and the port says
+    so in its own label.
+  */
+  port.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 160 : 48
+    const v = view()
+    const go = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key]
+    if (go !== undefined) {
+      e.preventDefault()
+      setView({ ...v, x: v.x + go[0], y: v.y + go[1] })
+      remember()
+      return
+    }
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomTo(v.k * 1.25) }
+    else if (e.key === '-') { e.preventDefault(); zoomTo(v.k / 1.25) }
+    else if (e.key === '0') { e.preventDefault(); fit() }
+    else if (e.key === 'Escape' && state.mapPick !== null) { state.mapPick = null; render() }
+  })
+
+  /*
+    Fit on the first paint, once, before anybody has moved anything.
+
+    Done here rather than in the renderer because it needs the port's measured
+    width, which does not exist until the html is in the document. `data-fit` is
+    the renderer saying "nothing is saved for this project"; the attribute is
+    removed immediately so a later render — a selection, a state change — never
+    yanks the view back from wherever he has panned to.
+  */
+  if (port.hasAttribute('data-fit')) {
+    port.removeAttribute('data-fit')
+    // Never below 1.0 unasked. See `fit`.
+    fit(1)
+  }
+
+  $('[data-aside-close]', port)?.addEventListener('click', () => {
+    state.mapPick = null
+    render()
+  })
+
+  for (const b of port.querySelectorAll('[data-map-go]')) {
+    b.addEventListener('click', () => {
+      const what = String(b.dataset.mapGo)
+      const name = b.dataset.mapName ?? ''
+      state.mapPick = null
+      if (what === 'team') { state.tab = 'team'; state.sub = 'board' }
+      else if (what === 'ask') { state.tab = 'team'; state.sub = 'chat' }
+      else if (what === 'sources') state.tab = 'sources'
+      else if (what === 'task') state.tab = 'tasks'
+      else if (what === 'doc') {
+        /*
+          Open it if the title finds it, and land on the list if it does not.
+
+          The map's documents come from the database and the page's list is
+          positional with no id, so the title is the only field both shapes
+          have. A miss is not a failure worth a message — the list is where you
+          were going anyway — but it must not be silent about having tried,
+          which is why the tab changes either way.
+        */
+        state.tab = 'documents'
+        const doc = (byId(state.project).documents ?? []).find((d) => d.title === name)
+        rememberTab(state.project, state.tab)
+        render()
+        if (doc !== undefined) openDoc(doc, $('.gallery') ?? document.body)
+        return
+      }
+      rememberTab(state.project, state.tab)
+      render()
+    })
+  }
+}
+
 function drawShell() {
   const root = $('#root')
   root.classList.toggle('shut', railShut())
@@ -6863,6 +7311,8 @@ function drawShell() {
       if (e.key === 'Escape') { swMenu.hidden = true; swBtn.setAttribute('aria-expanded', 'false') }
     })
   }
+
+  wirePlane(root)
 
   $('[data-rail]', root)?.addEventListener('click', () => {
     try { localStorage.setItem('studio.rail', railShut() ? 'open' : 'shut') } catch { /* fine */ }
@@ -8720,6 +9170,59 @@ const settles = (p2, ms = 12_000) => Promise.race([
   p2,
   new Promise((_, no) => setTimeout(() => { no(new Error('the office did not answer in time')) }, ms)),
 ])
+
+/**
+ * The project's map, fetched once per project (#25).
+ *
+ * Two calls rather than one, because they answer different questions and fail
+ * differently: the GRAPH is what the office knows about the project and a
+ * failure there means there is nothing to draw, while the ARRANGEMENT is where
+ * he put the cards and a failure there means draw them in the computed
+ * positions. Folding them into one call would make a lost preference look like
+ * a lost project.
+ */
+async function needMap(slug) {
+  if (maps[slug] !== undefined) return
+  const p = byId(slug)
+  maps[slug] = null
+  try {
+    const graph = await settles(read('plane', p.id))
+    maps[slug] = graph && Array.isArray(graph.nodes) ? graph : plane.mock(p, CREW)
+  } catch {
+    /*
+      The prototype's own shapes, not an error state.
+
+      This screen is the one Grant judges the direction from, and a map that
+      says "could not load" teaches nothing about whether the direction is
+      right. #119's strip is what says the office is unreachable; saying it
+      twice is noise, and here it would cost the whole screen.
+    */
+    maps[slug] = plane.mock(p, CREW)
+  }
+  try {
+    const saved = await settles(read('plane_layout', p.id))
+    placed[slug] = { at: saved?.at ?? {}, view: saved?.view ?? {} }
+  } catch {
+    placed[slug] = { at: readLocalPlacement(slug), view: {} }
+  }
+  render()
+}
+
+/*
+  Where he put the cards, when the office cannot be reached.
+
+  A per-viewer convenience in browser storage, exactly as CLAUDE.md permits and
+  bounds: it survives a republish, it never reaches another device, and every
+  read is wrapped because a private window throws rather than returning null.
+  The office's copy is the real one and wins whenever it answers.
+*/
+function readLocalPlacement(slug) {
+  try {
+    return JSON.parse(localStorage.getItem(`studio.plane.${slug}`) ?? '{}')
+  } catch {
+    return {}
+  }
+}
 
 async function needTasks() {
   if (latest.tasks !== null) return
