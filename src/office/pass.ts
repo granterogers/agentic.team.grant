@@ -50,6 +50,7 @@ import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
+import { extractTasksHandler } from '../handlers/extract-tasks.ts'
 import { googleRevokeHandler } from '../handlers/google-revoke.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { jobTracesHandler } from '../handlers/job-traces.ts'
@@ -358,6 +359,14 @@ export const buildPass = async (
     // in Notion as pages. Every capability existed and nothing put them
     // together, which is why the teamspace stayed empty (0166).
     notionImportHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Finding the tasks inside something we have read (#130).
+
+      `tasks_extracted` has been a declared and validated shape since 0272 and
+      had never held a row — a contract nothing produces, which is the same
+      family as a column nothing writes.
+    */
+    extractTasksHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is

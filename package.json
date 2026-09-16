@@ -81,6 +81,7 @@
     "verify:lessons": "tsx scripts/verify/lessons.ts",
     "verify:rules": "tsx scripts/verify/rules.ts",
     "verify:routing-quality": "tsx scripts/verify/routing-quality.ts",
+    "verify:extract": "tsx scripts/verify/extract.ts",
     "verify:trace": "tsx scripts/verify/trace.ts",
     "verify:tasks": "tsx scripts/verify/tasks.ts",
     "verify:answers": "tsx scripts/verify/answers.ts",

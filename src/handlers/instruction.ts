@@ -83,6 +83,7 @@ import {
 import { clauses } from '../agents/clauses.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
+import { extractionRequest } from '../agents/extract.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
@@ -1969,7 +1970,60 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         holds: a thought, a question and an explicit hold all wrote nothing.
         Only a confident command or assignment reaches the writer.
       */
-      const asked = taskRequest(instruction, classifyIntent(instruction))
+      /*
+        "Pull the tasks out of the pricing brief" — many tasks, none of them
+        stated, inside something the office has to go and read (#130).
+
+        Checked BEFORE `taskRequest`, and the order is the whole point: "make
+        tasks from the workshop notes" satisfies both readings and only one of
+        them is what he meant. Reading it as a single task would file one
+        called "tasks from the workshop notes" and read nothing.
+
+        A CHILD JOB rather than work done here, for the same reason the
+        hand-off is: this turn is a conversation and that one is a model call
+        over up to fourteen thousand characters. It appears in Active Jobs, is
+        cancellable, and is traced like everything else.
+      */
+      const pullOut = job.projectId === null ? null : extractionRequest(instruction)
+      const extracting =
+        pullOut === null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.enqueue_child(
+                  ${lit(job.jobId)}::uuid, 'office.extract_tasks',
+                  jsonb_build_object(
+                    'from', ${lit(pullOut.from ?? '')},
+                    'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                    'command_id', ${lit(String(payload.command_id ?? ''))}
+                  ),
+                  interval '0', true
+                )::text as id`)
+              .then(() =>
+                pullOut.from === null
+                  ? 'Reading what this project holds and pulling out what needs doing — back shortly.'
+                  : `Reading ${pullOut.from} and pulling out what needs doing — back shortly.`,
+              )
+              /*
+                A refusal is recorded and the turn still answers. Same rule as
+                the hand-off: bookkeeping may never fail Grant's actual work,
+                and a swallowed error on a write nobody reads back is
+                indistinguishable from a feature that was never built.
+              */
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'extract-tasks', ${lit(who.slug)},
+                      ${lit(`could not start the extraction: ${String((error as Error).message).slice(0, 140)}`)},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
+      // A plural extraction is not a single task. `pullOut` having claimed the
+      // sentence, `taskRequest` must not also file one from the same words.
+      const asked = pullOut !== null ? null : taskRequest(instruction, classifyIntent(instruction))
 
       /*
         And the ANSWER to "what should it be called?", which is the other half.
@@ -2023,7 +2077,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 matched: 'answered the title question',
               })
 
-      const confirmation = [linked, made, filed].filter((x) => x !== null).join('\n\n') || null
+      const confirmation =
+        [linked, made, filed, extracting].filter((x) => x !== null).join('\n\n') || null
 
       /*
         How many things this turn actually DID (#248).
@@ -2045,7 +2100,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         accuses anybody, and a wrong-but-present count would be worse than
         none.
       */
-      const acted = (made === null ? 0 : 1) + (filed === null ? 0 : 1) + who.alsoConvened.length
+      const acted =
+        (made === null ? 0 : 1) +
+        (filed === null ? 0 : 1) +
+        (extracting === null ? 0 : 1) +
+        who.alsoConvened.length
 
       // The same retrieval the office uses, so an instruction answered in
       // Telegram cites the same corpus as one answered in Slack. §22's rule

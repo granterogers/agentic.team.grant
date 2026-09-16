@@ -358,6 +358,17 @@ const tools = (
 const VERDICT: Readonly<Record<string, string>> = {
   'task.create':
     'PROVEN — natural forms, arguments, canonical mutation, truthful confirmation (#248)',
+  /*
+    #130's headline unlock. Proven by its own suite rather than here, because
+    what matters about it is not the recognition — that is nine unit tests in
+    `tests/agents/extract.test.ts` — but that the tasks really land and the
+    undo really takes them back, which needs a transaction this audit does not
+    open.
+  */
+  'task.extract':
+    'PROVEN ELSEWHERE — npm run verify:extract 11/11: the shape is accepted and a ' +
+    'malformed one refused, three tasks really created, the undo pressed through ' +
+    'app.hq_undo for real, and a task Grant had started left alone',
   'draft.create':
     'PROVEN implicitly — every turn writes public.outputs and #246/#248 gate what it says',
   'db.read': 'READ-ONLY — not a user-invokable mutation; every handler reads its own database',
