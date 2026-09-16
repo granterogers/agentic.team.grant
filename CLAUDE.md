@@ -392,7 +392,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **368 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **399 applied.**
 
 ## Asking the office about itself
 
@@ -405,6 +405,9 @@ npm run session -- --only <name>   # run one, resumable; --reset starts it again
 npm run session -- --report        # score every turn recorded
 npm run verify:routing-heldout     # routing against cases it has never seen
 npm run gate             # the fifteen checks that must pass
+npm run verify:rules             # a correction becomes a standing rule, only on a press (#147)
+npm run verify:routing-quality   # a model is chosen on what it has done, per kind (#127)
+npm run verify:extract           # tasks pulled out of a document, and taken back (#130)
 npm run tier1            # the intelligence corpus (tier1:fast omits the 30-minute judge)
 npm run mutate -- "…" --wants <slug>   # semantic variants of a request, printed not appended
 npm run q  -- "select …" # a query as a table
@@ -1760,6 +1763,68 @@ Each of these cost real time. They are here so they cost it once.
   somewhere else. It was also MISSING two views the rail has. Assert the
   property in both directions, in a unit test, reading the drawable views out
   of the source rather than listing them.
+- **A migration that applies cleanly is not a function that works, and four
+  defects in one feature proved it in an afternoon.** 0390 declared
+  `decide_suggestion`; the press could not work for four independent reasons,
+  none visible from reading: it wrote a state the CHECK constraint forbids
+  (`accepted` where the table allows `open | acted | dismissed | stale`); it
+  assigned `app.learn`'s JSONB to a `uuid`; it accepted a scope of `agent`
+  where `lesson_scope` has `staff`; and it stored three targets where
+  `lessons_scope_matches_target` permits exactly one. Every one would have
+  surfaced weeks later as a press that did nothing. **Drive the function.**
+  Reading a migration proves it parses.
+- **An offer may only promise what the press can perform.** The rule the four
+  above all violate, and the reason `verify:rules` drives the offer AND the
+  press for every scope the offer will accept. Two lists in two functions
+  compared by eye is how they came to differ.
+- **Re-read your own evidence through the filter you just built.** 0394's
+  header argued from raw `inference_usage`: 211 calls at 17% on
+  `office.instruction`. The view it created excludes harness traffic, and the
+  same row is 9 calls at 78% — 204 of them were the certification runs. Fifth
+  instance of harness traffic about to be reported as the office failing, and
+  the first INSIDE a feature built to measure the office, which is the worst
+  place for it: a measurement that cries wolf is one Grant learns to ignore.
+  The query was run before the filter existed and never re-run against the
+  thing that shipped.
+- **A check whose floor is measured on the wrong element can never fire.**
+  `verify:ui` had `if (chars < 40) 'rendered almost nothing'` for months,
+  measuring `document.body.innerText` — which always holds the rail, the
+  header and the switcher. The smallest screen reported 361. Pointed at the
+  SECTION it became a real floor, and the same run then found that every
+  settings pane reported an identical 476 (the project section behind the open
+  Settings page) and that the "the call" route measured the help pane and
+  pressed the microphone to get there, because #214 removed the call SCREEN
+  and `drawShell` has no such view. Three defects, all in the audit, all
+  surfaced by making the measure NAME what it looked at.
+- **`Date.parse('2026-02-31')` is a perfectly good number.** JavaScript rolls
+  the extra days into March. A guard whose comment claimed it rejected
+  impossible days did not; a unit test found it in one run. Check a date by
+  ROUND TRIP — the day that comes back must be the day that went in.
+- **A function with eight arguments will be called with seven.**
+  `app.task_add(p_project, p_title, p_detail, p_due_on, p_assignee,
+  p_milestone, p_added_by, p_job)` — passing the job seventh sets
+  `p_added_by` to a uuid, and the reversal keyed on `job_id` then matches
+  nothing and reports "all of them" removed. Use NAMED arguments in SQL the
+  moment a signature passes about four.
+- **`app.task_add` returns `id`, not `task_id`.** Checking the wrong key made
+  every successfully created task report to Grant as refused. The companion of
+  guessing a column name, one level up: read the function's RESULT too.
+- **`app.hq_undo` performs from a CLOSED case and raises on a verb it does not
+  know.** So `app.undo_offer` naming a reversal nobody taught it is a control
+  claiming something nothing performs — 0298's defect. Teach `hq_undo` the
+  verb in the same migration that starts offering it, and drive the press.
+- **An undo must not take back what the person did in between.** A reversal
+  scoped to "the rows this job created" is right; scoped to a list of TITLES it
+  is wrong, because titles normalise, collide, and a title he has since edited
+  is missed while an identical one he wrote himself is caught. And it must
+  leave anything he has started or changed, and COUNT what it left rather than
+  implying it took everything.
+- **Backticks inside a comment inside a template literal — five times in one
+  session**, in `app.js`, in two verify suites, in a handler's SQL and in
+  `verify/ui.ts`'s injected `MEASURE`. `check:templates` covers `web/**` only,
+  so everywhere else it announces itself as an esbuild parse error pointing at
+  a line some distance from the cause. If a comment sits inside a template
+  literal, write plain words and say so in the comment.
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run

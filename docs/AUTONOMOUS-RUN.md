@@ -58,6 +58,8 @@ cheapest reconstruction of where the run is.
 
 | Issue | What landed | Migrations |
 |---|---|---|
+| **#123** | an empty section says so — and the check that says so can now FAIL. The floor measured the whole page (always 361+ characters) so it never could. Found two more defects in the audit itself: every settings pane measured the section behind it, and "the call" was a route to a screen #214 removed | — |
+| #124 | **looked at, not started.** It is not a token swap: appearance is `localStorage`-only and ADR-0021 says a preference like this belongs in the office. The scope question — whether scheme/palette/texture move too — is Grant's. Recorded on the issue | — |
 | **#130** (part) | the office can pull the tasks out of a document and create them — `office.extract_tasks`, a deterministic recogniser, the `tasks_extracted` shape's first rows, and one undo for the batch. `npm run verify:extract` 11/11. **Still open** for `research_summary` and `draft_document` | 0398, 0399 |
 | **#37** | search can ask the graph — filters by kind, tag, date and one `related_to` that asks `app.relations_of`, so agent/contact/source/collection are one mechanism. `verify:search` 12/12 → 26/26 | 0397 |
 | #269 | filed: 268 of 276 `public.staff` rows are retired harness specialists (invisible to Grant — checked) | — |
