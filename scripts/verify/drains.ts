@@ -107,11 +107,31 @@ const WAITING = `
    where state in ('queued', 'retrying')
      and not app.harness_job(job_id)`
 
+/*
+  The VERDICT, written once, for the same reason the query is (#236).
+
+  The controls below used to assert what the query SAW — "it returned a row
+  with oldest_min 600" — which is one step short of what this Issue asks for.
+  A query that sees a stuck job and a suite that fails because of one are
+  different claims, and only the second is the guard. So the predicate that
+  decides the live check is a named function, and the controls run the
+  injected reading through THAT and require it to come back false.
+
+  Proving it end to end by leaving a stuck job behind and re-running the
+  command was the obvious alternative and is not available: a job cannot be
+  deleted — `job_state_transitions` holds it by foreign key — so the proof
+  would leave a permanent fifteen-hour-old stuck job in Grant's queue,
+  injected by the suite written to prove his queue is not stuck. Wrong at
+  every level.
+*/
+const drained = (reading: Record<string, unknown>): boolean =>
+  Number(reading.oldest_min) <= WAITING_TOO_LONG_MIN
+
 const waiting = await one(WAITING)
 
 ok(
   `no real job has been waiting longer than ${String(WAITING_TOO_LONG_MIN)} minutes`,
-  Number(waiting.oldest_min) <= WAITING_TOO_LONG_MIN,
+  drained(waiting),
   Number(waiting.n) === 0
     ? 'the queue is empty'
     : `${String(waiting.n)} waiting, oldest ${String(waiting.oldest_min)}m${String(waiting.kinds) === '' ? '' : ` (${String(waiting.kinds)})`}`,
@@ -220,10 +240,98 @@ const proof = (
 )[0]
 ok(
   'CONTROL: a real job stuck past the threshold makes this suite go red',
-  Number(proof?.oldest_min) > WAITING_TOO_LONG_MIN && Number(proof?.n) > 0,
+  // `!drained(...)` is the point: the live check above would have FAILED on
+  // this reading, which is the verdict rather than the row count.
+  Number(proof?.n) > 0 && !drained(proof ?? {}),
   Number(proof?.n) === 0
     ? 'the manufactured job was NOT SEEN by the query — this check cannot fail'
-    : `saw ${String(proof?.n)} waiting, oldest ${String(proof?.oldest_min)}m`,
+    : `saw ${String(proof?.n)} waiting, oldest ${String(proof?.oldest_min)}m, and the live predicate returns false on it`,
+)
+
+/*
+  CONTROL: a green heartbeat cannot mask a queue that is not moving (#236).
+
+  This is the incident itself, reproduced rather than described. On 13-14
+  September `pg_cron` logged 1,440 consecutive SUCCEEDED heartbeats while
+  eleven of Grant's messages sat queued for about fifteen hours, and nothing
+  noticed — because a cron row proves a request was MADE, not that the worker
+  did anything with it.
+
+  So the property worth asserting is not "the heartbeat fired" (the check
+  above already asks that, and asks it the useful way round, as "did it run at
+  all recently"). It is that the heartbeat's own health is NOT an input to the
+  waiting reading. Manufacture a stuck job with the heartbeat untouched and
+  perfectly green: the waiting query must still see it.
+
+  A separate control from the one above even though both inject the same job,
+  because they assert different things and folding them together would let one
+  carry the other. That one proves the query can see a stuck job at all; this
+  one proves a healthy cron does not exempt it.
+*/
+const masked = (
+  (
+    await db.execute(`
+      begin;
+      insert into public.jobs
+        (kind, state, requested_by, correlation_id, created_at, idempotency_key, announce)
+      values ('office.instruction', 'queued', 'telegram:grant', gen_random_uuid(),
+              app.now_utc() - interval '${String(WAITING_TOO_LONG_MIN * 40)} minutes',
+              'drains-masked-' || gen_random_uuid(), false);
+      ${WAITING};
+      rollback;`)
+  ).rows as Record<string, unknown>[]
+)[0]
+ok(
+  'CONTROL: a heartbeat that is firing does not exempt a queue that is not moving',
+  Number(beat.last_hour) > 0 && !drained(masked ?? {}),
+  Number(beat.last_hour) === 0
+    ? 'the heartbeat is not firing, so this control could not be run — it proves nothing today'
+    : `heartbeat fired ${String(beat.last_hour)}x in the last hour and the query still saw ${String(masked?.oldest_min)}m of waiting`,
+)
+
+/*
+  CONTROL: the rollback put it back (#236).
+
+  Both controls above write a real job inside `begin ... rollback`, and a
+  rollback that did not take would leave a permanent stuck job in Grant's
+  queue — injected by the suite written to prove the queue is not stuck, which
+  is the worst possible way to fail. Asked AFTER them, and asked of the live
+  query rather than by counting rows, so it is the same question the check
+  itself asks.
+*/
+const after = await one(WAITING)
+ok(
+  'CONTROL: and the injected jobs are gone — the rollback took',
+  Number(after.n) === Number(waiting.n) && drained(after),
+  `${String(after.n)} waiting now, ${String(waiting.n)} before the controls ran`,
+)
+
+/*
+  CONTROL: the operational half (#236).
+
+  The gate catching an outage the DASHBOARD cannot show is only half a fix —
+  0406 gave `app.office_health()` a `waiting` reading because failed, stalled,
+  in_flight and finished are every one of them about a job that STARTED, and a
+  job nobody picked up is none of them.
+
+  Asserted as agreement rather than as a number: the screen Grant reads and
+  the gate that fails the build must say the same thing about the same queue,
+  or a red gate and a calm dashboard will be resolved in favour of the
+  dashboard.
+*/
+const health = (
+  (await db.execute(`select app.office_health() -> 'waiting' as w`)).rows as {
+    w: { jobs: number; oldest_minutes: number; threshold_minutes: number }
+  }[]
+)[0]
+ok(
+  'the dashboard has a word for waiting, and it agrees with this gate',
+  health?.w !== undefined &&
+    Number(health.w.threshold_minutes) === WAITING_TOO_LONG_MIN &&
+    Number(health.w.oldest_minutes) <= WAITING_TOO_LONG_MIN,
+  health?.w === undefined
+    ? 'app.office_health() has no waiting reading'
+    : `${String(health.w.jobs)} waiting past ${String(health.w.threshold_minutes)}m, oldest ${String(health.w.oldest_minutes)}m`,
 )
 
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)

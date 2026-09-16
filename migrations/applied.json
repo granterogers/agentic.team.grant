@@ -403,5 +403,6 @@
   "0402_a_story_with_the_probe_runs_left_in_is_not_the_story.sql": "bf518351f66b163c222fd02fcf52cecedd55e69cc1085850b5b0ba6873c87f9b",
   "0403_a_fixture_specialist_nobody_worked_through_can_go.sql": "857045384e6626b1d515e20581cd6f9b69bd7c3d859eb834049f0293e9d54f67",
   "0404_assignee_staff_is_a_uuid_however_it_is_named.sql": "d7c71de33b088d9eb097977533dc55e8240818fba221e0f5a433ccc06364cd14",
-  "0405_a_prompt_written_for_a_harness_specialist_is_derived_data.sql": "60fda0a4ab676385925d3e0dcb9a9eb2e685ae73811db977693b7088556845ca"
+  "0405_a_prompt_written_for_a_harness_specialist_is_derived_data.sql": "60fda0a4ab676385925d3e0dcb9a9eb2e685ae73811db977693b7088556845ca",
+  "0406_the_office_gains_a_word_for_waiting.sql": "7c3d876cb5b517a2c1aeb9355af1bfe4a8f6ab4b631fd6c3cfffb4d35e92596d"
 }
