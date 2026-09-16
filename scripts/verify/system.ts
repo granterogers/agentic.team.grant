@@ -226,7 +226,21 @@ const HARVEST = `(() => {
         cs.fontFamily.split(',')[0].replace(/["']/g, '').trim(),
         Math.round(parseFloat(cs.fontSize) * 10) / 10,
         cs.fontWeight,
-        cs.lineHeight === 'normal' ? 'normal' : String(Math.round(parseFloat(cs.lineHeight) * 10) / 10),
+        /*
+          The RATIO, not the pixels.
+
+          The first draft recorded computed line-height in px and reported 28
+          distinct values across 15 sizes, which reads as chaos and is
+          arithmetic: one ratio of 1.35 produces 17.6px at 13px and 18.9px at
+          14px. A type system is a set of ratios; measuring the product of a
+          ratio and a size and then counting the products is measuring the wrong
+          thing, and I would have gone and "fixed" a scale that was already
+          coherent.
+
+          No backticks in this comment: template literal.
+        */
+        cs.lineHeight === 'normal' ? 'normal'
+          : (parseFloat(cs.lineHeight) / parseFloat(cs.fontSize)).toFixed(2),
         cs.letterSpacing === 'normal' ? '0' : cs.letterSpacing,
         el.tagName.toLowerCase(),
       ].join('|'))
@@ -300,6 +314,44 @@ const HARVEST = `(() => {
   return out
 })()`
 
+/*
+  Does the same role render at the same size on every screen? (#160)
+
+  Grant: *"The typography appears to change when moving from the global homepage
+  into a project. This should not happen unless there is a deliberate design
+  reason."*
+
+  The commonest size per screen cannot answer that, and the first draft used it:
+  a screen made of task rows has a different mode than one made of caption
+  lines, and reporting that as drift would be reporting composition. The
+  falsifiable question is whether a NAMED ROLE - the body, a lead paragraph, a
+  caption, a heading - is the same size wherever it appears. If it is not, the
+  scale is being re-decided per screen, which is what he is seeing.
+
+  No backticks in this comment: template literal.
+*/
+const ROLES = `(() => {
+  const out = {}
+  const roles = {
+    'body': 'body',
+    'lead': '.t-lead',
+    'meta': '.t-meta',
+    'label': '.t-label',
+    'title': '.t-title',
+    'button': '.btn',
+    'nav item': '.navitem',
+  }
+  for (const [name, sel] of Object.entries(roles)) {
+    const el = document.querySelector(sel)
+    if (el === null) continue
+    const cs = getComputedStyle(el)
+    out[name] = Math.round(parseFloat(cs.fontSize) * 10) / 10 + '/'
+      + (parseFloat(cs.lineHeight) / parseFloat(cs.fontSize)).toFixed(2)
+      + ' ' + cs.fontWeight
+  }
+  return out
+})()`
+
 /** Did the intended faces actually arrive? Section 56, and it is pass/fail. */
 const FONTS = `(() => {
   const want = new Set()
@@ -329,6 +381,7 @@ const colour: Bag = new Map()
 const colourLight: Bag = new Map()
 const small: Bag = new Map()
 const drawn: Bag = new Map()
+const roleDrift = new Map<string, Map<string, string[]>>()
 const box: Bag = new Map()
 const parts: Bag = new Map()
 const perScreen: string[] = []
@@ -379,8 +432,38 @@ for (const theme of ['dark', 'light'] as const) {
     for (const d of got.drawn) bump(drawn, d)
     for (const b of got.box) bump(box, b)
     for (const p of got.parts) bump(parts, p)
+    /*
+      Per screen as well as pooled, which is the only way to answer #160.
+
+      Grant: *"The typography appears to change when moving from the global
+      homepage into a project. This should not happen unless there is a
+      deliberate design reason."* A pooled histogram cannot answer that - it
+      says the product uses fifteen sizes, not which screen introduced which
+      one. The commonest face-and-size per screen is the comparison he is
+      describing, and if two screens disagree about it, he is right.
+    */
+    const bodyOf = (rows: string[]) => {
+      const tally = new Map<string, number>()
+      for (const r of rows) {
+        const bits = r.split('|')
+        const key = `${String(bits[0])} ${String(bits[1])}px`
+        tally.set(key, (tally.get(key) ?? 0) + 1)
+      }
+      return [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-'
+    }
+    const seenRoles = (await page.evaluate(ROLES)) as Record<string, string>
+    for (const [role, said] of Object.entries(seenRoles)) {
+      const bag = roleDrift.get(role) ?? new Map<string, string[]>()
+      const where = bag.get(said) ?? []
+      where.push(`${theme}/${name}`)
+      bag.set(said, where)
+      roleDrift.set(role, bag)
+    }
+    const fams = new Set(got.type.map((r) => r.split('|')[0]))
     perScreen.push(
-      `  ${theme}/${name.padEnd(22)} ${String(got.type.length).padStart(4)} text · ${String(got.parts.length).padStart(3)} boxed`,
+      `  ${theme}/${name.padEnd(22)} ${String(got.type.length).padStart(4)} text · ` +
+        `${String(got.parts.length).padStart(3)} boxed · body ${bodyOf(got.type).padEnd(26)}` +
+        `${String(fams.size)} famil${fams.size === 1 ? 'y' : 'ies'}`,
     )
   }
   await ctx.close()
@@ -526,6 +609,49 @@ if (wanted('geometry')) {
   console.log(`  shadows: ${shadows.length} distinct`)
   for (const [k, n] of shadows.slice(0, 10))
     console.log(`     ${String(n).padStart(5)}  ${k.replace('shadow ', '').slice(0, 70)}`)
+}
+
+console.log(rule('does a role keep its size between screens? (#160)'))
+{
+  /*
+    SIZE drift is the finding. Weight drift usually is not.
+
+    The current navigation entry is heavier than the others, at the same size,
+    which is the "you are here" distinction and is deliberate. Counting that as
+    drift makes this check fire on correct behaviour, and a check that fires on
+    correct behaviour is one nobody reads - which this repository has recorded
+    about a routing control and about a security pattern.
+
+    So the two are reported apart: a role whose SIZE changes between screens is
+    a scale being re-decided, and a role whose weight changes at one size is
+    emphasis.
+  */
+  let drift = 0
+  for (const [role, bag] of roleDrift) {
+    const sizes = new Set([...bag.keys()].map((k) => k.split(' ')[0]))
+    if (sizes.size === 1) {
+      const weights = new Set([...bag.keys()].map((k) => k.split(' ')[1]))
+      console.log(
+        `  ${role.padEnd(10)} ${[...sizes][0]}  — the same size everywhere` +
+          (weights.size > 1 ? `, ${String(weights.size)} weights (emphasis)` : ''),
+      )
+      continue
+    }
+    drift += 1
+    console.log(`  ${role.padEnd(10)} ${String(sizes.size)} DIFFERENT SIZES:`)
+    for (const [said, where] of bag) {
+      console.log(
+        `     ${said.padEnd(16)} ${where.slice(0, 4).join(', ')}${where.length > 4 ? ` +${String(where.length - 4)}` : ''}`,
+      )
+    }
+  }
+  console.log(
+    `\n  ${
+      drift === 0
+        ? 'No role changes size between screens, and the family never changes.'
+        : `${String(drift)} role(s) have their size re-decided per screen.`
+    }`,
+  )
 }
 
 console.log(rule('below the 12px floor (§17, and the visual standard)'))

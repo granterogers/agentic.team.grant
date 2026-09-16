@@ -159,10 +159,34 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: grid; place-items: center; flex: none;
 }
 .navgroup { display: flex; flex-direction: column; gap: 2px; }
+/*
+  One size for a navigation entry, everywhere (#160).
+
+  Grant: *"The typography appears to change when moving from the global
+  homepage into a project. This should not happen unless there is a deliberate
+  design reason."*
+
+  He was right, and `npm run system` says exactly where. Six of the seven named
+  roles render identically on every screen - body, lead, meta, label, title,
+  button. The seventh is this one, and it had THREE renderings:
+
+      14/1.55 400      home and global settings
+      15.5/1.55 550    the section you are in, inside a project
+      15.5/1.55 400    every other section, inside a project
+
+  The rail is one component. Walking into a project made its entries 19% larger,
+  which is the change he noticed; nothing about being inside a project is a
+  deliberate reason for the navigation to grow.
+
+  So the size is stated here, once, and the entry you are on is distinguished by
+  weight and by its wash - which it already was. That also retires the 550,
+  a weight used twice in the whole product where 600 was available.
+*/
 .navitem {
   display: flex; align-items: center; gap: var(--s3); width: 100%;
   padding: 9px 10px; border-radius: 8px; text-align: left;
   min-height: 44px; color: var(--ink-2);
+  font-size: 14px;
 }
 /* Both spellings. Navigation entries use `aria-current="page"`, which is the
    correct value for "this is the page you are on"; the older ones say "true".
@@ -1094,7 +1118,7 @@ body:has(.mockbar) .railtoggle { top: calc(var(--s3) + 40px); }
   font: 500 12px/1 var(--text); color: var(--ink-2);
   background: var(--sunken); border-radius: 999px; padding: 3px 7px; flex: none;
 }
-.navitem.sect.on { background: var(--sunken); color: var(--ink); font-weight: 550; }
+.navitem.sect.on { background: var(--sunken); color: var(--ink); font-weight: 600; }
 .navitem.sect.on .n { background: var(--accent); color: var(--on-accent); }
 
 /* --- a real rendered page --------------------------------------------------
@@ -3555,7 +3579,9 @@ kbd {
 .chset { max-width: 62ch; }
 .chset { display: grid; gap: var(--s3); }
 .chrow { display: grid; gap: 2px; }
-.chname { font: 550 13px/1.3 var(--text); color: var(--ink); }
+/* 600, not 550. The inventory found 550 on exactly two rules in the whole
+   product, and a weight used twice is not a step on a scale. */
+.chname { font: 600 13px/1.3 var(--text); color: var(--ink); }
 .chval { font: 600 13px/1.3 var(--text); color: var(--accent); }
 .chwho { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: var(--s2); }
 .chbot { display: grid; gap: 1px; padding: 6px 10px; border-radius: 8px;
