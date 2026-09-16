@@ -597,7 +597,18 @@ const HOLDS: Readonly<Record<Domain | 'unreachable', readonly string[]>> = {
     day one of them gets a reader, it moves up into a domain and the check
     relaxes on its own.
   */
-  unreachable: ['decision', 'deadline', 'invoice', 'ticket'],
+  unreachable: [
+    'decision',
+    'deadline',
+    'invoice',
+    'ticket',
+    'account',
+    'renewal',
+    'customer',
+    'client',
+    'supplier',
+    'subscriber',
+  ],
 }
 
 /** Both numbers, because a model writes either. */
