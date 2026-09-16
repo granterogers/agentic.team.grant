@@ -5755,25 +5755,41 @@ function settingsSheet() {
         say(b, 'Nothing to save.', 'warn')
         return
       }
+      /*
+        One call, not two (§35, 0377).
+
+        These were two writes — the ID through set_setting, the secret through
+        set_google_secret — so nothing could tell that they had been typed into
+        each other's boxes. The ID is stored in plain text and rendered back
+        into the field above, so a secret pasted there was printed on this
+        page. The RPC sorts the two by shape, the way the Slack form already
+        does, and refuses a credential in the ID box outright.
+      */
       const done = await attempt(
         b,
         'Saving…',
-        async () => {
-          if (id !== '') await act('set_setting', { p_key: 'google.client_id', p_value: id })
-          if (secret !== '') await act('set_google_secret', { p_secret: secret })
-          return { ok: true }
-        },
+        async () => await act('set_google_credentials', { p_client_id: id, p_secret: secret }),
         'Saved. Now press Connect Google.',
       )
       /*
-        Cleared whatever happened.
+        Both boxes cleared whatever happened.
 
-        On success it is in the vault and this copy is redundant; on failure the
-        commonest cause is pasting the client ID into the secret box, and
-        leaving a wrong credential sitting in a password field is how it gets
-        submitted again. Either way it does not stay on the page.
+        The secret, because on success it is in the vault and this copy is
+        redundant, and on failure leaving a wrong credential sitting in a
+        password field is how it gets submitted again.
+
+        And the ID box for a sharper reason (§35): it is plain text and the
+        page renders what is stored in it, so if the refusal was "that is a
+        credential, not a client ID" then the credential is currently on
+        screen. Clearing only on that one refusal would need this file to keep
+        its own copy of the server's list of credential shapes, and two lists
+        that must agree are how 0282 and 0293 happened. Clearing always needs
+        no list, and a client ID is one paste away on the console page it came
+        from.
       */
       if (secretBox) secretBox.value = ''
+      const idBox = wrap?.querySelector('[data-g-id]')
+      if (idBox) idBox.value = ''
       if (done) await afterWrite()
     })
   }

@@ -388,7 +388,7 @@ describe('Slack vocabulary does not reach the phone (#208)', () => {
     const shapes = [
       pagerText(message({ metadata: unreviewed })),
       pagerText(message({ metadata: unreviewed, projectName: 'Wellness' })),
-      pagerText(message({ metadata: { ...unreviewed, reviewed: true }, sources: [] })),
+      pagerText(message({ metadata: { ...unreviewed, reviewed: true, sources: [] } })),
       pagerText(message({ metadata: { ...unreviewed, evidence: 'verified' as const } })),
     ]
     for (const text of shapes) expect(text).not.toMatch(SHORTCODE)

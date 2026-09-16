@@ -453,6 +453,20 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // Write-only by construction: there is no matching section that reads it
   // back, and `hq_google` reports only whether one exists.
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
+  /*
+    Both Google values at once (§35, 0377).
+
+    The page used to send the ID through `set_setting` and the secret through
+    `set_google_secret`, which meant nothing could tell that the two had been
+    typed into each other's boxes — and the ID is stored in plain text and
+    rendered back into the form, so that mistake printed a live secret on the
+    Settings page. One call sorts them by shape, the way 0359 already does for
+    Slack. Both are required by name and either may be empty.
+  */
+  set_google_credentials: {
+    fn: 'hq_set_google_credentials',
+    required: ['p_client_id', 'p_secret'],
+  },
   // #210. Both halves together: a bot token without a signing secret can post
   // and cannot verify anything inbound, which reads as connected and is half a
   // connection. Reinstalling produces both at the same moment.
