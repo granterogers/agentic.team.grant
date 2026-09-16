@@ -392,7 +392,7 @@ Deploys probe themselves and fail when the probe fails:
 `npm run deploy:hq` (page + hq-api) · `deploy:worker` · `deploy:voice` ·
 `deploy:telegram` · `deploy:slack` · `deploy:mcp`.
 
-`npm run migrate` applies plain SQL from `migrations/`. **399 applied.**
+`npm run migrate` applies plain SQL from `migrations/`. **409 applied.**
 
 ## Asking the office about itself
 
@@ -404,7 +404,9 @@ npm run session -- --list          # the #237 conversation sessions
 npm run session -- --only <name>   # run one, resumable; --reset starts it again
 npm run session -- --report        # score every turn recorded
 npm run verify:routing-heldout     # routing against cases it has never seen
-npm run gate             # the fifteen checks that must pass
+npm run gate             # the checks that must pass, check:icons among them
+npm run check:icons      # every project-mark default names a mark the page can draw (#221)
+npm run space            # now walks the home board's panels too, and reports spare room (#267)
 npm run verify:rules             # a correction becomes a standing rule, only on a press (#147)
 npm run verify:routing-quality   # a model is chosen on what it has done, per kind (#127)
 npm run verify:extract           # tasks pulled out of a document, and taken back (#130)
@@ -1861,6 +1863,93 @@ Each of these cost real time. They are here so they cost it once.
   property, because the property is that the option is PASSED. §10's harness
   audit is not ceremony: break it, watch it go red, restore it, watch it go
   green — and the first version failed that on its first try.
+- **A control bound to a node that redraws itself works exactly once — three
+  times in one file in one afternoon.** The icon picker's grid replaces its own
+  `innerHTML` on every search, every category press and when the lazy library
+  lands. A listener on each of 451 buttons, on the search box, and on the
+  arrow-key handler all died at the first redraw. Only the third one announced
+  itself honestly ("the arrows do not move focus"); the other two looked like
+  features that had never been wired. **Delegate on the container that does NOT
+  get replaced**, and note that `verify:controls` cannot catch this class — the
+  audit presses each control from a fresh render, so a control that works once
+  passes.
+- **A roving tabindex decided per element cannot answer the question it needs
+  to.** The chosen mark is the tab stop; if the filter excludes it, something
+  else has to be — and you only know that after looking at every candidate.
+  Deciding inside the render loop left every button at `-1`, so filtering the
+  gallery removed it from the tab order entirely. Gather as data, decide once,
+  then render. And a roving index with no arrow keys is WORSE than one stop per
+  item: a gallery you can reach and cannot move inside.
+- **A generated library needs a check that its CONSUMERS name things it
+  contains, and the database cannot be that check.** `icon_defaults` maps a
+  name term to an icon key; `app.icon_key_ok` validates the SHAPE, which is
+  right for a free-text field and cannot answer "does this exist". Twelve
+  defaults named real lucide icons absent from the 451 this office selected —
+  and the migration's own header had already called that "the registry-row
+  defect with a friendlier face", in the same file, in the same hour. A copy of
+  451 keys in SQL would be a second place for them to rot (0310), so the check
+  lives where both halves are visible: `npm run check:icons`, in the gate.
+- **`let` three hundred lines below a hoisted function that uses it is the same
+  trap as the one at the top of `app.js`, and it recovers so it is invisible.**
+  `tickWaiting` is a function declaration, so `render()` reached it during
+  module evaluation and threw "Cannot access 'ageTimer' before initialization";
+  the studio printed "could not draw this screen" and the NEXT draw worked. One
+  console line, no failing check, months old. A hoisted `var` would have hidden
+  it rather than fixed it — the `=== null` guard would never fire and the ticker
+  would never start. **Print page errors during every capture run**
+  (`page.on('pageerror')`); it is how this one and #197's were found.
+- **Filling a curated set to a quota from a loose signal fills it with
+  puzzles.** lucide's tags exist to make a SEARCH find things, so they are
+  generous by design; taking thirty per domain from them put `chess-king` under
+  engineering and `mouth` under people. A name match is precise and a tag match
+  is a top-up, capped — a domain with eleven good icons is a better page than
+  eleven plus nineteen riddles. The same rule made a variant filter necessary:
+  lucide ships `-off`, `-x`, `-plus`, `-check` and numbered siblings of nearly
+  everything, and a project is not "briefcase, but crossed out". Reject the
+  CLASS by suffix, never the names, or the next state it invents is back.
+- **A "stalled" threshold taken from a duty's period says nothing about a
+  person.** `app.jobs_stuck_queued` falls back to sixty minutes for a kind no
+  duty creates, and `office.instruction` — how Grant's own messages arrive — is
+  exactly such a kind, so his question was not "stuck" until it had been
+  ignored for an hour. `waiting` (0406) reports the fifteen minutes the gate
+  uses, BESIDE `stalled` rather than instead of it: "a duty is behind its own
+  schedule" and "a person has not been answered" are different questions and
+  the office needs words for both.
+- **A gate catching an outage the dashboard cannot show is half a fix.**
+  `verify:drains` would have caught the fifteen-hour outage; `app.office_health()`
+  still had no representation for never-started work, so the screen would have
+  said the office was fine. The suite now asserts the two AGREE about the same
+  queue, because a red gate beside a calm dashboard gets resolved in favour of
+  the dashboard.
+- **A control that asserts what a QUERY saw is one step short of a guard.**
+  `verify:drains` proved its `WAITING` query returned a row for an injected
+  stuck job. A query seeing a stuck job and a suite FAILING because of one are
+  different claims. The predicate that decides the live check is a named
+  function now and the controls run their injected reading through it. Proving
+  it end to end by leaving the job behind was not available: a job cannot be
+  deleted (`job_state_transitions` holds it), so the proof would have left a
+  permanent fifteen-hour-old stuck job in Grant's queue, injected by the suite
+  written to prove his queue is not stuck.
+- **A harness turn that has not answered YET is not a turn that answered
+  nothing.** The session runner scored "the office actually answered (running)"
+  on a job that took three attempts and outlived the wait loop — and it had
+  answered well. Worse, every expectation below still ran, and
+  `recipient_agent` is written BEFORE the answer, so "answered by the finance
+  director" held for a job that had not finished: a harness reporting a turn it
+  never saw, in green. There is a third verdict now, counted separately in
+  both directions, because folding it into either is a lie about the product or
+  about the run.
+- **`purge:fixtures` RETIRED staff and never removed them, so the roster became
+  97% debris.** Withdraw-never-delete is right for anybody who has done work
+  and was being applied to rows that had done nothing. The safety is not a list
+  the sweep maintains: 16 of the 19 foreign keys on `public.staff` RESTRICT, so
+  a specialist who consulted, delivered, produced an output, learned a lesson or
+  asked for a tool cannot be deleted and the history keeps its author. 276 rows
+  became 8. Two corrections on the way: `tasks.assignee_staff` is a **uuid**
+  however its name reads, and the only thing holding the last 55 was
+  `staff_prompts` — a prompt written FOR a specialist before they did anything,
+  which is derived data like the briefs the sweep already deletes.
+
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run

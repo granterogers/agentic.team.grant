@@ -528,3 +528,52 @@ pointed at `studio.css`, which never held the compact scale.
 - **Typography was not judged.** Webfonts do not load in the build sandbox, so
   every capture this run shows the fallback face. Self-hosting the fonts is the
   fix and is itself unfiled work.
+
+---
+
+# THE ISSUE-CLOSING STINT — 2026-09-16, after the eight hours
+
+Grant, immediately after the run closed:
+
+> *"continue for another 4 hours.. closing all open issues that you can"*
+
+Started **12:57Z**. **105 issues were open.**
+
+## Closed — twenty-two
+
+| | |
+|---|---|
+| **Verified and closed** | #180 (control audit red on a clean tree — 781 pressed, 0 findings) · #96 (PDF viewer and a real Open-in-new-tab) · #36 (Project Settings, four panes, `verify:settings` 37/37) · #45 (project debris — ADR-0022 settled the policy, 0 sweepable remain) |
+| **The certification set** | #246 #247 #248 #249 #254 #255, each with its live regression named, and **#256** the verdict record itself |
+| **Fixed this stint** | #267 · #269 · #251 · #250 · #245 · #236 · #10 · #186 · #221 |
+| **Advanced, left open** | **#121** — one of its five bullets, and it became urgent because #221 took the icon grid from 36 marks to 451 |
+
+## Filed — two
+
+- **#270** — the `channels:join` Slack scope. One action only Grant can take, with the full steps; it is the last thing leaving a channel behind per run, and `verify:slack` now **asserts** that cost rather than logging it.
+- **#271** — a project's picture is a 256px data URL in a column, not a cover image. Not urgent; filed so the reason it will look soft is written down rather than rediscovered.
+
+## What was built
+
+| | |
+|---|---|
+| Migrations | **403–409** (seven) |
+| New check | `npm run check:icons`, in the gate |
+| Suites grown | `verify:keyboard` 24 → **28** · `verify:drains` 4 → **8** · `npm run space` walks the home board and reports spare room |
+| ADR | **0032** — a PDF cover is rendered where it is looked at, and never stored |
+| Tests | **1,478** across 78 files |
+
+## The three things worth remembering
+
+1. **Twelve icon defaults named marks the page cannot draw** — and 0408's own header had already called that "the registry-row defect with a friendlier face", in the same file, in the same hour. A comment claiming a property is worth nothing without a check; the check is `check:icons`.
+2. **Three visual defects, all found by opening the PNG** — category chips that never rendered, a 13.3px search input that would zoom iOS Safari on focus, and 33×23 touch targets against a 44px floor. Every one passed `smoke`, `check:templates` and `verify:wired`.
+3. **A control bound to a node that redraws itself works exactly once**, three times in one file in one afternoon — and `verify:controls` cannot catch it, because the audit presses each control from a fresh render.
+
+## NOT REACHED
+
+- **#232, #233, #234, #235** (#231's remaining children) were measured and not closed. `levels` and `breadth` show the work delivered — 37/37 dimensions covered, 0 capabilities granted and never exercised — but **`measure` reports `decisions with depth > 0` as ZERO in real traffic** against `max depth observed 1`. #233's headline claim is about canonical state and real traffic does not yet show it, so closing it would be claiming something the measurement contradicts.
+- **#178** still needs Grant: archiving three pages in his own Notion workspace.
+- **#213** and **#18** are credential rotations only he can perform.
+- **#113, #114, #136, #137, #138** remain proposal parents awaiting his pick.
+- **#130** unchanged from the run's close: `research_summary` and `draft_document` still have no emitter, for the reason recorded there.
+- **#187** unchanged: it writes permanent channels into his real Slack.
