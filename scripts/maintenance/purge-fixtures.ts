@@ -75,6 +75,55 @@ const db = new ManagementApiExecutor(
 )
 
 const go = process.argv.includes('--go')
+
+/*
+  Remove the harness specialists nobody ever worked through (#269).
+
+  The retirement above is right about a real person and was being applied to a
+  row that had never done anything. Retiring and never removing made a fixture
+  specialist permanent by construction, and the roster reached 276 rows of
+  which 268 were harness debris, growing by three a run. Grant's Team page was
+  never wrong - hq_team filters active - but the readers that forget the filter
+  are the ones this repository has been caught by five times.
+
+  The safety is not a list this script maintains. 16 of the 19 foreign keys
+  pointing at public.staff RESTRICT, so a specialist who consulted, delivered,
+  produced an output, learned a lesson, held a skill, owned a duty or asked for
+  a tool cannot be deleted and the history keeps its author.
+  app.purge_fixture_staff pre-checks the three that do not refuse and reports
+  what held every row it could not take, rather than stopping at the first.
+
+  Declared as a function because it has to be reachable from BOTH the report
+  path and the --go path, and the report path exits early.
+*/
+async function reportOrSweepStaff(going: boolean): Promise<void> {
+  const swept = (
+    await db.execute(`select app.purge_fixture_staff(${going ? 'true' : 'false'}) as r`)
+  ).rows[0] as {
+    r: {
+      removed: number
+      could_not_remove: number
+      still_fixture: number
+      held: { slug: string; held_by: string }[]
+    }
+  }
+  if (swept.r.removed === 0 && swept.r.could_not_remove === 0) return
+  console.log(
+    going
+      ? `\nremoved ${String(swept.r.removed)} harness specialist(s) nobody worked through; ` +
+          `${String(swept.r.still_fixture)} fixture row(s) remain`
+      : `\n${String(swept.r.removed)} harness specialist(s) could be removed. Pass --go.`,
+  )
+  // Named, not counted. A sweep that says "12 could not be removed" and does
+  // not say what holds them is a sweep nobody can act on.
+  for (const h of swept.r.held.slice(0, 8)) {
+    console.log(`  kept ${h.slug} — ${h.held_by} names it`)
+  }
+  if (swept.r.held.length > 8) {
+    console.log(`  … and ${String(swept.r.held.length - 8)} more`)
+  }
+}
+
 const predicate = FIXTURE_PREFIXES.map((p) => `slug like '${p}%'`).join(' or ')
 
 const found = await db.execute(`
@@ -107,6 +156,16 @@ if (found.rows.length === 0) {
 // a collision unlikely rather than impossible.
 if (!go) {
   if (found.rows.length > 0) console.log('\nreport only. Pass --go to retire them.')
+  /*
+    Report the staff sweep before leaving (#269).
+
+    The first wiring of it sat below this exit, so a dry run with no active
+    fixture PROJECTS printed "no active fixture projects" and stopped - and
+    said nothing about 268 removable specialists. A report mode that is silent
+    about the thing you ran it to see is worse than no report, because it
+    reads as nothing to do.
+  */
+  await reportOrSweepStaff(false)
   process.exit(0)
 }
 
@@ -190,6 +249,8 @@ if (staffLeft.rows.length > 0) {
       staffLeft.rows.map((r) => String(r.slug)).join(', '),
   )
 }
+
+await reportOrSweepStaff(true)
 
 // Blockers on a project that is no longer active.
 //

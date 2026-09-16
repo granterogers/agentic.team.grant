@@ -640,7 +640,24 @@ const POLICY_BASELINE: Readonly<Record<string, boolean>> = {
   'db.delete': false,
   'production.write': false,
   'spend.money': false,
-  'gmail.draft': true,
+  /*
+    Disabled by 0370, deliberately: src/google/mail.ts exports parseFrom and
+    refreshMail and nothing that drafts a mail, so the row was advertising a
+    capability to all eight agents with nothing behind it - 0298's defect,
+    which is worse than being told no, because Grant finds out when nothing
+    arrives.
+
+    The baseline said true and had said it since 0018. So this check went red
+    on a CORRECT change and reported `DRIFTED: gmail.draft=false` about the
+    fix. Fourth instance in this repository of a control going stale when the
+    thing it controls for changes - web.search is the same story, one table
+    over - and it is the reason the value is written here with its migration
+    named rather than simply flipped: the next person to see this red should
+    be able to tell "somebody disabled a capability on purpose" from "somebody
+    disabled a capability by accident", which is the whole point of a drift
+    check.
+  */
+  'gmail.draft': false,
   'notebook.read': true,
 }
 const live = await db.execute(`

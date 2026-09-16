@@ -235,7 +235,24 @@ const piles = await db.execute(`
     (select count(*) from jsonb_array_elements((app.hq_governance(400))->'lessons') x
       where coalesce(x->>'by', '') like 'verify%'
          or coalesce(x->>'learned_by', '') like 'verify%') as harness_lessons,
-    (select count(*) from public.provider_health where provider like 'probe\\_%') as probe_providers
+    (select count(*) from public.provider_health where provider like 'probe\\_%') as probe_providers,
+    /*
+      The roster Grant looks at, asked the way he sees it (#269).
+
+      Counted on hq_team's OUTPUT rather than on public.staff, for the same
+      reason the lessons count is taken from the page: the property that
+      matters is that a harness specialist does not reach the screen, not that
+      no such row exists. A suite convening a temporary specialist mid-run is
+      correct and must not turn this red.
+
+      And counted as a PROPERTY - no name on the team page matching a harness
+      prefix - rather than as "the roster is eight". Eight is true today and
+      goes stale the first time Grant hires somebody, which is the assertion
+      that came back three times in this repository already.
+    */
+    (select count(*) from jsonb_array_elements((app.hq_team())->'staff') x
+      where coalesce(x->>'slug', '') ~ '^(fixture|verify|probe)-') as harness_on_team,
+    (select count(*) from public.staff where is_fixture and not active) as retired_fixture_staff
 `)
 const pile = (piles.rows[0] ?? {}) as Record<string, number>
 const noisy: string[] = []
@@ -248,6 +265,18 @@ if (Number(pile.harness_lessons ?? 0) > 0) {
       'generated is_fixture on public.lessons is not catching a new writer name',
   )
 }
+if (Number(pile.harness_on_team ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.harness_on_team)} harness specialist(s) on Grant's Team page — ` +
+      'hq_team has stopped filtering them',
+  )
+}
+if (Number(pile.retired_fixture_staff ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.retired_fixture_staff)} retired harness specialist(s) in public.staff — ` +
+      'npm run purge:fixtures -- --go',
+  )
+}
 if (Number(pile.probe_providers ?? 0) > 0) {
   noisy.push(
     `${String(pile.probe_providers)} probe provider(s) in provider_health — a circuit ` +
@@ -257,7 +286,8 @@ if (Number(pile.probe_providers ?? 0) > 0) {
 console.log(
   `\n  lessons on the Governance page: ${String(pile.live_lessons)} · ` +
     `fixture tasks: ${String(pile.fixture_tasks)} · ` +
-    `probe providers: ${String(pile.probe_providers)}`,
+    `probe providers: ${String(pile.probe_providers)} · ` +
+    `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
 if (noisy.length > 0) {
   console.error(`\ncheck:leaks FAILED — harness traffic on a table Grant reads:`)
