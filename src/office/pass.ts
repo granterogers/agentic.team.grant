@@ -48,6 +48,7 @@ import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
+import { channelsHandler } from '../handlers/channels.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
@@ -214,6 +215,7 @@ export const buildPass = async (
   const vaultKey = String(setup?.vault_key ?? '')
   const cannotThink = orKey === '' && vaultKey === ''
 
+  let slackTeamId = ''
   const botToken = String(
     (
       await db.execute(
@@ -231,6 +233,7 @@ export const buildPass = async (
         )
       ).rows[0]?.team_id,
     )
+    slackTeamId = teamId
     const office = await SlackOffice.configured(db, slack)
     channels.push(slackChannel(db, office, { teamId }))
 
@@ -339,6 +342,24 @@ export const buildPass = async (
       the same duty wearing a different table.
     */
     buildShotsHandler({ db, projectRef, serviceKey }),
+    /*
+      Every dashboard project gets a channel, without anybody remembering (#187).
+
+      TWO KINDS, ONE HANDLER. `office.provision_channels` is enqueued when a
+      project is created; `office.rename_channels` has been enqueued by
+      `app.hq_rename_project` since 0073 with NOTHING implementing it — eleven
+      such jobs exist and every one of them is cancelled, so renaming a project
+      has never renamed its channel. `ensureChannel` is idempotent and a rename
+      is the case where the mapping exists and the name has moved, so one
+      handler answers both honestly.
+
+      Registered unconditionally, the way googleRevokeHandler is: an office
+      with no Slack answers "Slack is not connected" from inside the handler,
+      which is an outcome, rather than dying as NoHandlerError, which is not.
+    */
+    ...['office.provision_channels', 'office.rename_channels'].map((kind) =>
+      channelsHandler({ db, botToken, teamId: slackTeamId }, kind),
+    ),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
     // "no storage key" as an outcome rather than failing, because a backup

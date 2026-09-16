@@ -1570,6 +1570,47 @@ for (const row of health.rows) console.log(`  ${JSON.stringify(row)}`)
   )
 }
 
+/*
+  EVERY dashboard project has a room of its own (#187).
+
+  Grant asked for this in one sentence — *"all projects have a dedicated
+  channel name in Slack"* — and before 0416 four of the five active projects
+  had none, because the provisioner's only callers were this suite and a
+  script an agent runs.
+
+  Asserted on the real projects rather than on the fixture, because the fixture
+  proves the mechanism and this proves the OUTCOME: a mechanism that works and
+  is never called is the defect that was filed.
+
+  Named rather than counted, so the failure says which project is missing one.
+*/
+{
+  const without = (
+    await db.execute(`
+      select p.name
+        from public.projects p
+       where p.status = 'active' and not p.is_fixture
+         and not exists (select 1 from public.slack_channel_map m
+                          where m.project_id = p.project_id and m.active)
+       order by p.name`)
+  ).rows as { name: string }[]
+  const total = Number(
+    (
+      await db.execute(
+        `select count(*)::int as n from public.projects
+          where status = 'active' and not is_fixture`,
+      )
+    ).rows[0]?.n ?? 0,
+  )
+  record(
+    'every active dashboard project has a Slack channel of its own',
+    without.length === 0
+      ? `${String(total)}/${String(total)}`
+      : `${String(total - without.length)}/${String(total)} — missing: ${without.map((w) => w.name).join(', ')}`,
+    without.length === 0,
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) {
