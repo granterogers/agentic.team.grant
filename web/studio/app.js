@@ -297,10 +297,80 @@ const rememberTab = (slug, tab) => {
 
   The document viewer stays a dialog, because it IS one.
 */
+/*
+  Who to give the keyboard back to when a dialog closes.
+
+  Remembered here rather than worked out on the way out, because by then the
+  thing that opened it may not be on screen any more.
+*/
+let cameFrom = null
+
 const sheet = (el, open) => {
+  const wasOpen = !el.hidden
   el.hidden = !open
   if (el.id === 'settings') el.classList.toggle('page', open)
   document.body.classList.toggle('behind', !$('#viewer').hidden)
+
+  /*
+    The viewer is a DIALOG, and a dialog owns the keyboard while it is up
+    (§30).
+
+    It did not. Twenty-five Tabs with a document open put focus on the shell
+    behind it twenty-three times — the rail, the tabs, the composer, every one
+    of them underneath a full-screen overlay and none of them announced as
+    unreachable. A sighted mouse user never meets this; somebody working by
+    keyboard loses the dialog on the second Tab and cannot tell where they are.
+
+    Settings is deliberately NOT treated this way. #158 made it a page on
+    purpose, and a page you can leave by going somewhere else is the whole
+    difference.
+  */
+  if (el.id !== 'viewer') return
+  if (open && !wasOpen) {
+    cameFrom = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const first = el.querySelector(FOCUSABLE)
+    if (first instanceof HTMLElement) first.focus()
+  } else if (!open && wasOpen) {
+    if (cameFrom !== null && cameFrom.isConnected) cameFrom.focus()
+    cameFrom = null
+  }
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+
+/*
+  And Tab stays inside it.
+
+  Wrapped rather than blocked: reaching the end and starting again is what a
+  dialog does everywhere else, and a Tab that simply does nothing reads as a
+  frozen page.
+*/
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return
+    const dialog = $('#viewer')
+    if (dialog === null || dialog.hidden) return
+    const inside = [...dialog.querySelectorAll(FOCUSABLE)].filter(
+      (n) => n.offsetParent !== null || n === document.activeElement,
+    )
+    if (inside.length === 0) return
+    const first = inside[0]
+    const last = inside[inside.length - 1]
+    const here = document.activeElement
+    if (!dialog.contains(here)) {
+      e.preventDefault()
+      ;(e.shiftKey ? last : first).focus()
+      return
+    }
+    if (e.shiftKey && here === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && here === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  })
 }
 
 /*
@@ -714,7 +784,7 @@ function commandRows() {
     ...inside,
     ...(typed === '' ? [] : [{
       kind: 'ask', id: 'ask', title: typed,
-      hint: p === null ? 'Ask the team — pick a project first' : `Ask the team about ${p.name}`,
+      hint: p === null ? 'Ask the team — choose a project first' : `Ask the team about ${p.name}`,
     }]),
   ]
 }
@@ -757,7 +827,24 @@ function commandBar() {
 function runCommand(row) {
   if (row === undefined) return
   if (row.kind === 'ask') {
-    if (state.view !== 'project') return
+    /*
+      No project chosen yet, so this cannot ask anybody — and it used to end
+      there: a highlighted row, a return key, and NOTHING, with the bar still
+      open (§30, §59).
+
+      The row's own hint already says a project is needed. So say it and then
+      do the next step rather than refusing: shut the bar and open the project
+      switcher, which is where the missing piece is. A dead end becomes a path,
+      and the typed words are not lost — the bar reopens with them if he asks
+      for it again.
+    */
+    if (state.view !== 'project') {
+      closeCmd()
+      render()
+      const open = document.querySelector('[data-switch-open]')
+      if (open instanceof HTMLElement) open.click()
+      return
+    }
     chat.send(state.project, row.title, null)
     state.tab = 'team'
     state.sub = 'chat'
@@ -6144,9 +6231,56 @@ function tasksView() {
 */
 let painting = false
 
+/*
+  Where the keyboard was, so a redraw can put it back (§30).
+
+  `drawShell` replaces every node in the shell, which destroys whatever had
+  focus — so pressing Return on Tasks in the left rail navigated correctly AND
+  dropped focus onto the body. A keyboard user was returned to the top of the
+  document after every single action, and had to Tab back down to where they
+  already were. Nothing was broken enough for an audit to see: the control
+  worked, the section changed, the focus ring simply went out.
+
+  Remembered as a SELECTOR built from the element's own identifying attribute
+  rather than as a node reference, because the node is precisely what will not
+  survive. One attribute, not a fingerprint of several: the aim is to land on
+  the element that does the same job on the new screen, and a rail item keeps
+  its `data-go` while everything else about it changes.
+
+  A composer or an input is deliberately not restored here — they manage their
+  own focus and their own caret, and #197 is a long record of what happens when
+  something outside them tries to help.
+*/
+const KEYED_BY = ['data-go', 'data-tab', 'data-sub', 'data-setting', 'data-open', 'data-switch-open']
+
+function focusKey() {
+  const el = document.activeElement
+  if (!(el instanceof HTMLElement)) return null
+  if (el === document.body) return null
+  if (el.matches('input, textarea, select, [contenteditable]')) return null
+  for (const name of KEYED_BY) {
+    const value = el.getAttribute(name)
+    if (value !== null) {
+      return value === '' ? `[${name}]` : `[${name}="${CSS.escape(value)}"]`
+    }
+  }
+  return null
+}
+
+function restoreFocus(key) {
+  if (key === null) return
+  // Only when the redraw actually took focus away. A render triggered while
+  // the person is somewhere else entirely must not yank them back.
+  if (document.activeElement !== null && document.activeElement !== document.body) return
+  const again = document.querySelector(key)
+  if (again instanceof HTMLElement) again.focus()
+}
+
 function render() {
+  const key = focusKey()
   try {
     drawShell()
+    restoreFocus(key)
     painting = false
   } catch (e) {
     console.error('The studio could not draw this screen.', e)
