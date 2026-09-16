@@ -405,6 +405,10 @@ npm run session -- --only <name>   # run one, resumable; --reset starts it again
 npm run session -- --report        # score every turn recorded
 npm run verify:routing-heldout     # routing against cases it has never seen
 npm run gate             # the checks that must pass, check:icons among them
+npm run verify:lately    # Recent activity: the fold, the counts, no harness rows (#14)
+npm run verify:upload    # a dropped file, through the DEPLOYED gateway (#126)
+npm run slack:add-scope -- channels:join   # a Slack scope by manifest, not by browser
+GO=lately npm run probe -- '.main'         # measure a rail destination, not a project tab
 npm run check:icons      # every project-mark default names a mark the page can draw (#221)
 npm run check:callers    # no NEW capability ships with nothing that calls it (#72)
 npm run space            # now walks the home board's panels too, and reports spare room (#267)
@@ -1966,6 +1970,40 @@ Each of these cost real time. They are here so they cost it once.
   block you open, in the same edit — and give every found-nothing check a
   control, because this is what one is for.
 
+- **A measure that matches nothing reports a perfect score.** `npm run space`
+  answers "how far down is the first real content on a phone" and printed
+  **0px — 0 screens of furniture above it**, which reads as an immaculate
+  page. Its selector knew about panels and cards; #25 had turned the project
+  Overview into a map, so on the one surface the measure exists for it found
+  nothing and said so as a zero. Third instance of the found-nothing shape and
+  the worst of the three, because this failure looks like success. A measure
+  now NAMES what it measured to (`measured to .planeport`) and says
+  `NO CONTENT FOUND` rather than printing a number.
+- **A measurement of the harness is not a measurement of the product.** The
+  same measure counted the 81px prototype strip — the one saying "showing
+  invented projects", which only appears WITHOUT a token — as furniture on
+  Grant's phone. 75% became 54% became **45%** as each wrong thing came out.
+  Discount by height rather than by moving the measure, so a run with a token
+  gives the same number.
+- **Guessing a FUNCTION name costs what guessing a column name costs.**
+  Rewriting the second half of `app.import_output` from memory invented
+  `app.file_in_collection`, `app.tag_document(uuid, text)` and an `app.relate`
+  signature nothing has; all three failed on the first real run. The real
+  second half is one call to `app.approve_document`. Read the definition
+  (`npm run qq`) before rewriting a function you are only patching.
+- **An applied migration is immutable and `check:migrations` enforces it —
+  including against you, ten minutes later.** Editing 0417 to fix the defect
+  above failed with `[checksum/modified]`, correctly. The honest recovery when
+  the file is minutes old, never committed, and its applied version is broken:
+  delete the `app.schema_migrations` row, apply the corrected file, and SAY SO
+  in the commit. The dishonest one is leaving a migration in the repository
+  whose applied content nobody has.
+- **The section reader nests its answer under `data`.** A check that read the
+  top level reported "NO URL" about a URL that was there, and would have sent
+  somebody hunting a signing defect that did not exist. Three times in one
+  night the first draft of a CHECK was wrong rather than the product: this, the
+  `mon` inside `month`, and two section names that do not exist. **Validate the
+  test before believing the finding** is now the most-used rule in this file.
 - **An SVG element's `tagName` keeps its own case; an HTML element's is
   upper-cased.** `verify:controls` names every control by its `textContent`,
   and every generated page illustration carries an inline `style` element

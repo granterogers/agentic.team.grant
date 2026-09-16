@@ -9,6 +9,61 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## State as of 2026-09-17 — the twelve-hour backlog campaign
+>
+> Grant: *"please continue until all open issues are closed .. to my count
+> there are around 71 left"*, and *"remove these issues — #113/#114/#136/#137/
+> #138 as closed .. we can come back to this kind of things"*.
+>
+> **71 open at the start. 21 at the end.** Fifty closed: half by building the
+> thing, half by verifying it was already built and saying so with evidence.
+>
+> | | |
+> |---|---|
+> | Tests | **1,524 passing across 81 files** · migrations **417** |
+> | Built | #28 Preview · #121 slash and j/k · #14 Recent activity · #21 the build diary's retention · #178 the Notion teardown · #252 unanimity over a coin · #244 the insisting dequeue · #253 due dates and assignees · #126 drop a file · #242 the set-aside gate · #187 a channel per project · #130 structure before prose · #13 the OpenAPI document |
+> | Verified and closed | #35 #29 #25 #12 #75 #223 #224 #171 #237 #176 #169 #170 #174 #175 #188 #229 #271 |
+> | Closed at his instruction | the five proposal menus #113 #114 #136 #137 #138, plus #23 #40, and their children #139–#146 and #159–#168 |
+> | New suites | `verify:lately` 8/8 · `verify:upload` 10/10 · `slack:add-scope` |
+> | New checks | `verify:controls` now fails on a control a mouse can press and Tab cannot reach · `verify:hq` reads the OpenAPI document back · `verify:slack` asserts every project has a channel · `verify:import` proves structure beats prose |
+> | New ADR | **0034** — the build diary's bucket stays public, and the four things that make that acceptable. **If the repository is ever made public, that ADR is void.** |
+>
+> ### What tonight found that nobody was looking for
+>
+> - **Grant's Recent activity page was forty identical rows.** 285 of one day's
+>   372 events were the noticing pass. Everything else the office did was below
+>   a fold nobody reaches (#14).
+> - **Nine document cards shared one name** — the audit read a page
+>   illustration's inline stylesheet as the control's label, de-duplicated them
+>   into one, and had never pressed eight of the nine (#121).
+> - **`office.rename_channels` has had no handler since 0073.** Eleven jobs,
+>   all cancelled. Renaming a project has never renamed its channel (#187).
+> - **The Slack app-configuration token died on 10 September** and its
+>   single-use refresh token with it, so the app's scopes and events cannot be
+>   changed from here at all (#270).
+> - **123 jobs in a week are real by `jobs.is_fixture` and harness by
+>   `app.harness_job`**, and the day's counts on his dashboard were reading the
+>   flag (#14).
+> - **`npm run space` reported 0px of phone furniture** — a perfect score from
+>   a measure that had matched nothing since #25 turned the Overview into a map
+>   (#188).
+>
+> ### What is left, and why
+>
+> **Twenty-one issues.** Four need Grant's hands and cannot be closed from
+> here: **#18** and **#213** (rotate two credentials), **#270** (re-issue the
+> Slack configuration token, then two clicks to reinstall), and the human half
+> of the browser work. The rest are either large new capability asks he filed
+> on 15–16 September (**#257–#265**) or substantial single features
+> (**#128** handoff, **#129** cross-project memory, **#133** replay, **#41**
+> the deep systems test, **#172** Gmail, **#15** approval policy, **#16**/
+> **#135** browser agents, **#272** the caller baseline).
+>
+> **#16, #135 and #261 share one blocker that is Grant's to decide**: a browser
+> session needs a long-lived container, and nothing in a £0/month architecture
+> of edge functions and Postgres can host one. That is a cost decision, not an
+> engineering one.
+
 > ## State as of 2026-09-16 — the issue-closing stint
 >
 > Grant, after the eight-hour run closed: *"continue for another 4 hours..

@@ -18,6 +18,58 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+## THE MANDATE IN FORCE — the backlog campaign, 16–17 September 2026
+
+**Grant, 2026-09-16, mid-run:**
+
+> *"remove these issues — #113/#114/#136/#137/#138 as closed .. we can come
+> back to this kind of things"*
+>
+> *"please continue until all open issues are closed .. to my count there are
+> around 71 left"* · *"you have 12 more hours.. close them all please"*
+
+| | |
+|---|---|
+| **Open at the start** | **71** |
+| **Open now** | **21** |
+| **Branch** | `claude/phase-7-communications-kh8ow8` |
+| **Migrations** | **417** · tests **1,524** across 81 files |
+
+### The standing reading of "close them all"
+
+Fifty closed. Roughly half by **building the thing**, half by **verifying it
+was already built** and saying so with the evidence rather than the assertion.
+Three rules held throughout and are the reason the number is trustworthy:
+
+1. **An Issue closes on evidence, not on a memory.** Every closing comment
+   names the suite and its score, or the measurement, or the live run.
+2. **Where the work was not done, it is not closed.** Twenty-one remain and
+   each one's comment says what is missing and what it is waiting on.
+3. **Where Grant's hands are needed, it stays open and says exactly what he
+   has to do**, with URLs and steps: #18, #213, #270.
+
+### What remains, grouped by what it is waiting on
+
+| Waiting on | Issues |
+|---|---|
+| **Grant, a few minutes each** | **#18** rotate the GitHub PAT · **#213** rotate the Slack bot token and signing secret · **#270** re-issue the Slack app-configuration token, then Reinstall to Workspace |
+| **Grant, a cost decision** | **#16**, **#135**, **#261** — a browser session needs a long-lived container and nothing in a £0/month architecture of edge functions and Postgres can host one |
+| **Substantial single features** | **#128** an agent hands work to another · **#129** cross-project memory · **#133** replay real history · **#41** the deep systems test · **#172** Gmail · **#15** approval policy · **#272** the caller baseline |
+| **His new capability asks, 15–16 September** | **#257**–**#265** |
+
+### Where to restart
+
+Take #128 or #129 first. Both are single features with clear boundaries, both
+are named by #174 as what breadth actually depends on, and both are cheaper
+than they look because the schema already carries most of what they need —
+`jobs.parent_job_id` and `correlation_id` for the chain, `relations` and
+`documents` for the memory.
+
+Do NOT start #16/#135/#261 without asking him about the container first. The
+engineering is straightforward and the cost is the whole question.
+
+---
+
 ## THE MANDATE IN FORCE — second eight-hour run, 16 September 2026
 
 **Grant, 2026-09-16T05:02Z, lifting the hold on #25 himself:**
