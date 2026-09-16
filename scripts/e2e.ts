@@ -269,6 +269,10 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'the queue is actually moving — a dead worker once left Grant waiting fifteen hours while the heartbeat logged 1,440 successes',
   ],
   ['check:leaks', "no suite left a project, job or channel in Grant's real views"],
+  [
+    'check:icons',
+    'every project-mark default names an icon the page can actually draw (#221 shipped twelve that did not)',
+  ],
 ]
 
 type Result = {

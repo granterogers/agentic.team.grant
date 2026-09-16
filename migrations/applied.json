@@ -405,5 +405,7 @@
   "0404_assignee_staff_is_a_uuid_however_it_is_named.sql": "d7c71de33b088d9eb097977533dc55e8240818fba221e0f5a433ccc06364cd14",
   "0405_a_prompt_written_for_a_harness_specialist_is_derived_data.sql": "60fda0a4ab676385925d3e0dcb9a9eb2e685ae73811db977693b7088556845ca",
   "0406_the_office_gains_a_word_for_waiting.sql": "7c3d876cb5b517a2c1aeb9355af1bfe4a8f6ab4b631fd6c3cfffb4d35e92596d",
-  "0407_an_icon_key_has_a_shape.sql": "e51046601e5b245d46781f9e0e56183431ea6e407adafa8f2968a3feafc166c0"
+  "0407_an_icon_key_has_a_shape.sql": "e51046601e5b245d46781f9e0e56183431ea6e407adafa8f2968a3feafc166c0",
+  "0408_a_new_project_gets_a_mark_that_fits_it.sql": "1c716a7a7bd8080f3ae979aa3185a45656123fcc134bb5c6372d63acd3c59b45",
+  "0409_a_default_that_names_a_mark_nobody_can_draw.sql": "b471579d6626ffa8a139834afebcafe1a3b7abd19f98976251499690fcd7deb4"
 }
