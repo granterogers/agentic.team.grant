@@ -159,6 +159,33 @@ export async function signedUrl(
   return body.signedURL === undefined ? null : `${base(projectRef)}${body.signedURL}`
 }
 
+/**
+ * Take an object out of a NAMED bucket (#21).
+ *
+ * `removeFile` below is this with `files` filled in, and it stays as the name
+ * every caller already uses. The build diary's screenshots live in a different
+ * bucket and needed deleting from a duty, and the alternative to a parameter
+ * was a second copy of four lines that would eventually disagree with this one
+ * about what a 404 means.
+ *
+ * A missing object counts as gone, in both. A retention pass that fails
+ * because something was already deleted is a retention pass that stops.
+ */
+export async function removeFrom(
+  bucket: string,
+  projectRef: string,
+  serviceKey: string,
+  path: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  if (serviceKey === '' || path === '' || bucket === '') return false
+  const r = await fetchImpl(`${base(projectRef)}/object/${bucket}/${encodeURI(path)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${serviceKey}` },
+  })
+  return r.ok || r.status === 404
+}
+
 /** Take an object away. Used by teardown; a missing object counts as gone. */
 export async function removeFile(
   projectRef: string,
@@ -166,10 +193,5 @@ export async function removeFile(
   path: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<boolean> {
-  if (serviceKey === '' || path === '') return false
-  const r = await fetchImpl(`${base(projectRef)}/object/${BUCKET}/${path}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${serviceKey}` },
-  })
-  return r.ok || r.status === 404
+  return await removeFrom(BUCKET, projectRef, serviceKey, path, fetchImpl)
 }

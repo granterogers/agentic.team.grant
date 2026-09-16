@@ -44,6 +44,7 @@ import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { backupHandler } from '../handlers/backup.ts'
 import { briefingHandler } from '../handlers/briefing.ts'
+import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
@@ -332,6 +333,12 @@ export const buildPass = async (
     // until `calendar.sync_tasks` is turned on.
     calendarTasksHandler(db),
     jobTracesHandler(db),
+    /*
+      #21. The build diary pruned its rows and kept its pictures — 38 orphans
+      against a 1 GB allowance. Registered beside the trace prune because it is
+      the same duty wearing a different table.
+    */
+    buildShotsHandler({ db, projectRef, serviceKey }),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
     // "no storage key" as an outcome rather than failing, because a backup
