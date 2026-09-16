@@ -233,7 +233,8 @@
     "verify:map": "tsx scripts/verify/map.ts",
     "verify:routes": "tsx scripts/verify/routes.ts",
     "verify:documents": "tsx scripts/verify/documents.ts",
-    "verify:print": "tsx scripts/verify/print.ts"
+    "verify:print": "tsx scripts/verify/print.ts",
+    "verify:budget": "tsx scripts/verify/budget.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

@@ -264,6 +264,26 @@ export { DAY as CAPACITY_WINDOW_SQL }
  * work Grant actually asked for and the duties are work nobody is waiting on.
  */
 export async function fireDueDuties(db: SqlExecutor): Promise<readonly string[]> {
+  /*
+    The budget, before the duties (#134).
+
+    Held back here rather than in the dequeue predicate, and the difference is
+    the whole feature: a predicate that skips leaves a job looking queued, which
+    is #112 — nine jobs sitting for eight hours with nothing red. This writes the
+    reason onto the job and moves `not_before` to tomorrow, so the office says
+    "waiting for tomorrow's budget" instead of saying nothing.
+
+    Before the duties on purpose: firing more work while over the limit is the
+    one thing a budget exists to stop. Not fatal for the same reason the
+    dispatcher is not — a budget that throws must not stop the queue from
+    draining work Grant is waiting on.
+  */
+  try {
+    await db.execute('select app.defer_over_budget()')
+  } catch {
+    // Left unreported. The next tick tries again, and a budget that cannot be
+    // applied is a worse reason to stop the office than the spend it prevents.
+  }
   try {
     const { rows } = await db.execute('select * from app.dispatch_due_responsibilities()')
     // `duty_slug`, not `slug`: inside plpgsql an OUT column named `job_id`

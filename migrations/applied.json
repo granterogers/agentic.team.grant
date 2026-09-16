@@ -383,5 +383,7 @@
   "0382_rename_move_supersede_and_pin_a_document.sql": "734f3eb29f7f18f7902ac354fcf1731edce8be52c9c66c962f3d711976f77b40",
   "0383_one_function_renames_a_document.sql": "5ab11ba7c48f79b5ba6f313863e9d076db8e22faf7fe2068d677099f44fea2aa",
   "0384_superseded_is_archived_with_a_pointer.sql": "6282020a6ee735cd9d3430ac7d3ba6da7143c31ca3e886a6427102d3300bafa3",
-  "0385_a_team_page_not_an_org_chart.sql": "cc32f02d3db3257fbcf1813d79c2b8a8131f0da1d3ed5a430ad364e2bed638a2"
+  "0385_a_team_page_not_an_org_chart.sql": "cc32f02d3db3257fbcf1813d79c2b8a8131f0da1d3ed5a430ad364e2bed638a2",
+  "0386_a_budget_that_says_no.sql": "daf2f011b3e3b8ee75a1975b0bab8d8e3f8a867facd38115d00592895a1ee351",
+  "0387_office_health_says_when_it_is_the_budget.sql": "987071d4ee3b6c99a57aea5ab02373fd6cc5e941fa967a0a9280d2a0bb034db2"
 }
