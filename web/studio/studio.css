@@ -5074,6 +5074,10 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 */
 .mapbar { display: flex; justify-content: flex-end; margin-block-end: var(--s3); }
 
+/* Only on paper (#125). Hidden on screen by default; the print block at the
+   end of this file is what reveals it. */
+.printonly { display: none; }
+
 /* Choosing several tasks, and the bar that acts on them (#150).
 
    The picker is a full-height 44px target with a small mark inside it, not a
@@ -5805,4 +5809,87 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
     max-block-size: 58%;
     border-radius: var(--r-card) var(--r-card) 0 0;
   }
+}
+
+/* --- paper (#125) ----------------------------------------------------------
+   Grant: "there is no way to get anything out... Cmd-P to PDF from the
+   browser." His long-range goal is the reason it earns a place above flashier
+   things: getting your own information out, without asking anybody, is part of
+   reducing his dependence on a coding interface.
+
+   A real layout, not a hidden-nav hack — which is why there is a capture of it
+   in `verify:print` and why it was looked at before this was committed.
+
+   At the END of the stylesheet with the phone rules, and for the same reason:
+   a media query adds no specificity, and half of what this switches off is
+   declared several thousand lines above.
+*/
+@media print {
+  /* Ink on white. The ambient colour, the texture and the five schemes are a
+     screen idea; on paper they are toner and a worse contrast ratio. */
+  :root, :root[data-scheme="dark"], :root:not([data-scheme="light"]) {
+    --ground: #fff; --surface: #fff; --sunken: #fff;
+    --ink: #000; --ink-2: #333; --ink-3: #555; --edge: #bbb;
+    --accent: #000; --accent-wash: transparent; --wash: transparent;
+  }
+  body { background: #fff !important; }
+  body::before, body::after, .main::before, .main::after { display: none !important; }
+
+  /* Everything that is a way to do something rather than a thing to read. */
+  .rail, .dock, #dock, .undobar, .cmdwrap, .planeport, .mapbar, .tabhead .btn,
+  .btn, .segmented, .filters, .pickbar, .rowpick, .rowedit, .addpanel,
+  .subnav, .tabs, .composer, .callbtn, .talkabout, .docacts, .headctl,
+  .mockbar, .thinkbar, .stallbar, .head, .projhead, .tabhead, .waitbar,
+  [data-rail], [data-go], .face, .cover,
+  .viewer, #viewer, #settings { display: none !important; }
+
+  /* The shell stops being a shell. */
+  .studio, .main, .tabbody, #root {
+    display: block !important;
+    margin: 0 !important; padding: 0 !important;
+    max-inline-size: none !important; inline-size: auto !important;
+    block-size: auto !important; overflow: visible !important;
+  }
+
+  /*
+    Ink stated directly, not through the tokens.
+
+    The first capture had every task title and document name in a pale grey
+    while the trailing "— Claire" was dark: the token override lost to a
+    palette selector more specific than `:root`, and `.printwho` won because
+    it names its own colour. Rather than chase whichever selector that is —
+    there are five palettes and two modes, so there are ten of them — the
+    sheet says what colour its own text is. Paper has one palette.
+  */
+  .printonly { display: block !important; }
+  .printonly, .printonly * {
+    color: #000 !important;
+    opacity: 1 !important;
+    filter: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  .printonly .printwho, .printonly .printsub, .printonly .printwhen,
+  .printonly .printpart h3 { color: #444 !important; }
+  .printhead { border-block-end: 2px solid #000; padding-block-end: 10pt; margin-block-end: 14pt; }
+  .printhead h2 { font-size: 22pt; margin: 0; }
+  .printsub { font-size: 11pt; margin: 4pt 0 0; color: #333; }
+  .printwhen { font-size: 9pt; margin: 6pt 0 0; color: #555; }
+  .printpart { margin-block-end: 14pt; break-inside: avoid; }
+  .printpart h3 {
+    font-size: 10pt; text-transform: uppercase; letter-spacing: .08em;
+    margin: 0 0 6pt; color: #333;
+  }
+  .printpart ul { margin: 0; padding-inline-start: 14pt; }
+  .printpart li { font-size: 10.5pt; line-height: 1.45; margin-block-end: 3pt; }
+  .printwho { color: #555; font-size: 9.5pt; }
+  .printwho::before { content: " — "; }
+
+  /* A link on paper is a dead end unless it says where it goes. */
+  .printonly a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; }
+
+  /* A heading orphaned on page two is the failure this issue names. */
+  h1, h2, h3 { break-after: avoid; }
+
+  @page { margin: 16mm; }
 }

@@ -3780,6 +3780,74 @@ function mapMode() {
   }
 }
 
+/**
+ * The project on one page, for paper (#125).
+ *
+ * Grant: *"Everything the office knows about a dashboard project is on screen
+ * and none of it can leave. To tell somebody where a project stands you read
+ * the screen and retype it."* And the shape he asked for: *"A print
+ * stylesheet, and nothing else... Brief, open tasks with dates, key contacts,
+ * what the team produced recently, what is waiting on a decision — on one
+ * page, Cmd-P to PDF from the browser."*
+ *
+ * Almost nothing else. The Overview is a MAP now, and a pan-and-zoom plane of
+ * absolutely positioned cards is the one layout a print stylesheet cannot
+ * rescue — so the briefing is markup that exists only on paper, assembled from
+ * the payload the page already holds.
+ *
+ * ## What it must not carry
+ *
+ * The issue is explicit: *"anything the screen deliberately withholds. The MCP
+ * tab does not render a token and neither does this."* Every field below is one
+ * the studio already draws somewhere, and the assembly is from `p`, the same
+ * object the tabs render — so there is no path by which this could reach
+ * something the screen does not.
+ */
+function briefing(p) {
+  const open = (p.tasks ?? []).filter((t) => t.state !== 'done').slice(0, 14)
+  const recent = (p.documents ?? []).slice(0, 8)
+  const people = (p.contacts ?? []).slice(0, 8)
+  const waiting = p.waiting ?? []
+  const when = new Date().toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+  const part = (name, rows) =>
+    rows.length === 0 ? '' : `<section class="printpart">
+      <h3>${esc(name)}</h3>
+      <ul>${rows.join('')}</ul>
+    </section>`
+
+  return `<div class="printonly" aria-hidden="true">
+    <header class="printhead">
+      <h2>${esc(p.name)}</h2>
+      ${p.purpose ? `<p class="printsub">${esc(p.purpose)}</p>` : ''}
+      <p class="printwhen">Where it stands on ${esc(when)}</p>
+    </header>
+    ${part('Waiting on you', waiting.map((w) => `<li>${esc(w.title ?? w.what ?? '')}
+        ${w.who ? `<span class="printwho">${esc(crewBy(w.who)?.name ?? w.who)}</span>` : ''}</li>`))}
+    ${part('Open tasks', open.map((t) => `<li>${esc(t.title)}
+        ${
+          t.due
+            ? /*
+                 "due Due 16 September" on the first capture.
+
+                 The mock's own due strings already begin with the word, so the
+                 sheet adding it produced a doubled one. The value says it or
+                 the sheet says it; never both.
+              */
+              `<span class="printwho">${/^due\b/i.test(String(t.due)) ? '' : 'due '}${esc(t.due)}</span>`
+            : ''
+        }
+        ${t.who ? `<span class="printwho">${esc(crewBy(t.who)?.name ?? t.who)}</span>` : ''}</li>`))}
+    ${part('Recent documents', recent.map((d) => `<li>${esc(d.title)}
+        ${d.origin ? `<span class="printwho">${esc(d.origin)}</span>` : ''}</li>`))}
+    ${part('People', people.map((c) => `<li>${esc(c.name)}
+        ${c.role ? `<span class="printwho">${esc(c.role)}</span>` : ''}</li>`))}
+    ${part('What it reads from', (p.sources ?? []).map((x) => `<li>${esc(x.name)}
+        ${x.what ? `<span class="printwho">${esc(x.what)}</span>` : ''}</li>`))}
+  </div>`
+}
+
 function projectMap(p) {
   void needMap(p.slug)
   const graph = maps[p.slug]
@@ -3821,6 +3889,7 @@ function projectMap(p) {
         ? `<div class="planeport"><div class="planeempty"><p class="m">Drawing the map…</p></div></div>`
         : plane.draw(graph, put.at, put.view, state.mapPick)
     }
+    ${briefing(p)}
   </div>`
 }
 
