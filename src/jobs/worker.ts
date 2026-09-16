@@ -1261,6 +1261,27 @@ export const drain = async (
     } catch {
       // Reported by the next pass if it persists. The queue matters more.
     }
+    /*
+      And every project has a room of its own (#187, and #72 again).
+
+      `app.provision_missing_channels` enqueues one job per active,
+      non-fixture project that has no channel, and returns "queued 0" the rest
+      of the time — which is every pass after the first. One cheap query, and
+      the difference between a capability and a script somebody has to
+      remember to run.
+
+      `check:callers` caught this function with no mouth within minutes of it
+      being written, which is what that check is for and the reason it is
+      answered here rather than added to a baseline.
+
+      Never fatal, for the same reason as the line above it.
+    */
+    try {
+      await db.execute('select app.provision_missing_channels()')
+    } catch {
+      // A project without a channel is a smaller problem than a queue that
+      // did not drain.
+    }
   }
 
   // Then finish anything the sweep found already committed. Before new work,

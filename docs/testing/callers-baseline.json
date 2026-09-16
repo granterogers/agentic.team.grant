@@ -20,7 +20,6 @@
     "app.telegram_bot_created",
     "public.add_task",
     "public.awaiting_review",
-    "public.build_step_finish",
     "public.connector_sheet",
     "public.containers_stored_as_documents",
     "public.delegation_health",
