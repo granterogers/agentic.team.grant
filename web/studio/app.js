@@ -144,6 +144,14 @@ const state = {
   // Which card on the project map is open in its side panel (#25).
   mapPick: null,
   /*
+    Which facet each long list is filtered to (#154).
+
+    Per list and per project, and cleared whenever the project changes: a
+    filter you forgot you set is how a list appears empty, and the list that
+    looks empty is the one you conclude the office never filled.
+  */
+  facet: {},
+  /*
     Unsent composer text, per project (#197).
 
     On `state` rather than in localStorage: an unsent message is this session's
@@ -3173,7 +3181,9 @@ function sources(p) {
     </div>`
         : ''
     }
-    <div class="sourcegrid">${list.map((x) => `
+    ${facetBar('sources', list, (x) => (x.kind === 'reference' ? 'reference' : 'connector'),
+               (f) => (f === 'reference' ? 'References' : 'Connected'))}
+    <div class="sourcegrid">${facetKeep('sources', list, (x) => (x.kind === 'reference' ? 'reference' : 'connector')).map((x) => `
       <article class="source ${x.kind === 'connector' ? 'live' : ''}" data-saidwrap>
         <span class="t-label">${x.kind === 'connector' ? 'Connector' : 'Reference'}</span>
         <b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`
@@ -3346,7 +3356,21 @@ function tasksSection(p) {
   const at = (t, i) => t.state === 'done' || state.done.has(i) ? 'done'
     : t.blocked !== undefined ? 'blocked'
     : t.state === 'doing' ? 'doing' : 'todo'
-  const rows = p.tasks.map((t, i) => ({ t, i, at: at(t, i) }))
+  /*
+    Filtered by OWNER, not by state (#154).
+
+    The tasks screen already groups by state — Doing, To do, Blocked, Done —
+    so a state filter would be a second control answering a question the page
+    has already answered in a better way. Who it belongs to is the facet the
+    grouping hides, and it is the one Grant asks about when the list is long.
+
+    The index has to survive the filter: `taskRow(t, i)` writes `i` into every
+    control on the row and the handlers look the task up by it, so filtering a
+    mapped list keeps the ORIGINAL index rather than renumbering.
+  */
+  const all = p.tasks.map((t, i) => ({ t, i, at: at(t, i) }))
+  const owner = (r) => r.t.who ?? null
+  const rows = facetKeep('tasks', all, owner)
   const group = (name, key, note) => {
     const list = rows.filter((r) => r.at === key)
     return list.length === 0 ? '' : `
@@ -3356,12 +3380,14 @@ function tasksSection(p) {
         <div class="tasks">${list.map((r) => taskRow(r.t, r.i)).join('')}</div>
       </section>`
   }
+  const owners = facetBar('tasks', all, owner, (f) => crewBy(f)?.name ?? f)
   return `<div class="tabbody">
     <div class="tabhead">
       <p class="t-lead" style="margin:0">Everything open on ${esc(p.name)}, and who has it.</p>
       ${canWrite() ? '<button class="btn primary" data-empty-do="task">Add a task</button>' : ''}
     </div>
     ${addTaskForm(p)}
+    ${owners}
     ${group('Waiting or blocked', 'blocked', 'Cannot move until something else does.')}
     ${group('In progress', 'doing', '')}
     ${group('To do', 'todo', '')}
@@ -3370,6 +3396,58 @@ function tasksSection(p) {
 }
 
 /** The full document gallery, rather than a panel's worth of it. */
+/*
+  One filter idiom, several lists (#154).
+
+  Grant: *"One filter idiom reused across all four lists, not four designs."*
+  So this is the renderer and the applier, and a caller supplies only the
+  question — which facet a row belongs to, and what to call it.
+
+  Two rules the helper enforces so no caller has to remember them:
+
+  * A facet nobody has is never offered. Drawing "Audio 0" teaches that the
+    filter is broken rather than that the project has no audio, and this
+    repository has a whole trap list about controls that cannot do anything.
+  * "All" is always first and always clearable in one press.
+
+  It filters the rows the page already holds. No endpoint, per the issue: a
+  project with 41 documents is not a paging problem, and inventing one would
+  make the filter slower than the list.
+*/
+function facetsIn(rows, facetOf) {
+  const seen = new Map()
+  for (const r of rows) {
+    const f = facetOf(r)
+    if (f === null || f === undefined || f === '') continue
+    seen.set(f, (seen.get(f) ?? 0) + 1)
+  }
+  return [...seen.entries()].sort((a, b) => b[1] - a[1])
+}
+
+function facetBar(list, rows, facetOf, label) {
+  const facets = facetsIn(rows, facetOf)
+  // One facet is not a choice. Two identical pills is furniture (section 23).
+  if (facets.length < 2) return ''
+  const chosen = state.facet[list] ?? null
+  return `<div class="filters" role="group" aria-label="Filter this list">
+    <button class="pill ${chosen === null ? 'on' : ''}" data-facet="${esc(list)}"
+            data-facet-value="" aria-pressed="${chosen === null}">All
+      <span class="n">${rows.length}</span></button>
+    ${facets
+      .map(
+        ([f, n]) => `<button class="pill ${chosen === f ? 'on' : ''}" data-facet="${esc(list)}"
+          data-facet-value="${esc(f)}" aria-pressed="${chosen === f}">${esc(label(f))}
+        <span class="n">${n}</span></button>`,
+      )
+      .join('')}
+  </div>`
+}
+
+function facetKeep(list, rows, facetOf) {
+  const chosen = state.facet[list] ?? null
+  return chosen === null ? rows : rows.filter((r) => facetOf(r) === chosen)
+}
+
 function documentsSection(p) {
   const docs = allDocs(p)
   if (docs.length === 0) {
@@ -3397,8 +3475,36 @@ function documentsSection(p) {
       -->
       <button class="btn" data-empty-do="sources">Bring documents in</button>
     </div>
-    <div class="gallery">${docs.map(docCard).join('')}</div>
+    ${facetBar('documents', docs, (d) => docKind(d), (f) => DOC_FACET[f] ?? f)}
+    <div class="gallery">${facetKeep('documents', docs, (d) => docKind(d)).map(docCard).join('')}</div>
   </div>`
+}
+
+/*
+  Which facet a document belongs to (#154).
+
+  `mirrors_document_id` is why this is a function rather than `d.kind`: 0169
+  records that a document the office WROTE INTO a connector is not new material,
+  and the issue names the same trap — without it, half the list is counted twice
+  and "what the team made" is wrong in the direction that flatters us.
+
+  The page's own shape carries that fact as `origin`, which is the word a person
+  reads on the card, so the two agree by construction rather than by a second
+  rule that has to be kept in step.
+*/
+const DOC_FACET = {
+  made: 'Made by the team',
+  mirror: 'Written out to a connector',
+  pdf: 'PDF',
+  doc: 'Document',
+  audio: 'Audio',
+  source: 'Source material',
+}
+
+function docKind(d) {
+  if (d.mirror === true || d.mirrors === true) return 'mirror'
+  if (d.kind === 'made' || String(d.origin ?? '').includes('·')) return 'made'
+  return d.kind ?? 'doc'
 }
 
 /** What happened, most recent first. */
@@ -6429,6 +6535,10 @@ function broke(e) {
     state.view = 'portfolio'
     state.project = null
     state.label = null
+    // Never sticky across projects (#154). A filter you forgot you set is how
+    // a list appears empty, and an empty list reads as an office that did
+    // nothing.
+    state.facet = {}
     painting = false
     render()
   })
@@ -6864,6 +6974,10 @@ function drawShell() {
       carry(null, null, () => {
         state.view = b.dataset.go
         state.label = null
+    // Never sticky across projects (#154). A filter you forgot you set is how
+    // a list appears empty, and an empty list reads as an office that did
+    // nothing.
+    state.facet = {}
         render()
       })
       // After the transition, not inside it: a fetch in the middle of a view
@@ -7293,6 +7407,10 @@ function drawShell() {
         state.view = 'project'
         state.tab = 'contacts'
         state.label = null
+    // Never sticky across projects (#154). A filter you forgot you set is how
+    // a list appears empty, and an empty list reads as an office that did
+    // nothing.
+    state.facet = {}
         state.attach = null
         rememberTab(state.project, 'contacts')
         render()
@@ -7444,6 +7562,12 @@ function drawShell() {
 
   for (const b of root.querySelectorAll('[data-filter]')) {
     b.addEventListener('click', () => { state.label = b.dataset.filter || null; render() })
+  }
+  for (const b of root.querySelectorAll('[data-facet]')) {
+    b.addEventListener('click', () => {
+      state.facet[b.dataset.facet] = b.dataset.facetValue || null
+      render()
+    })
   }
   for (const b of root.querySelectorAll('[data-label-edit]')) {
     b.addEventListener('click', () => { labelEditor() })

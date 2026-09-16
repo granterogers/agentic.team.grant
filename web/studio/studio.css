@@ -970,8 +970,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* --- People ---------------------------------------------------------------- */
 .filters { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s5); }
+/* 44, not 40 (#179).
+
+   The filter pills were the one control in this product under the touch floor,
+   and `verify:ui` passed them for months because it measured the SECTIONS it
+   knew about and the contacts filter was not one of them. A four-pixel miss is
+   the kind that survives every audit and fails every thumb. */
 .pill {
-  display: inline-flex; align-items: center; gap: 7px; min-height: 40px;
+  display: inline-flex; align-items: center; gap: 7px; min-height: 44px;
   padding: 0 var(--s3); border-radius: 999px; font: 500 13.5px/1 var(--text);
   border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--lift-1);
 }
@@ -5155,7 +5161,14 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 .mapdot { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
 .mapstate.t-go   .mapdot { background: var(--good); }
 .mapstate.t-warn .mapdot { background: var(--warn); }
-.mapsays { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+/* --ink-2, not --ink-3 (found by verify:layouts, 100 findings in one run).
+
+   The count after the state word was the map's quietest text and the palette's
+   quietest ink, and 2.92:1 in light is below AA. The hierarchy it was buying —
+   name, then state, then count — is already carried by order and by weight;
+   the third shade was spending legibility on a distinction the eye gets for
+   free. */
+.mapsays { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
 
 /* Each kind gets a tint on its glyph only. Grant: "tasteful accents to
    distinguish types" - on the 20px glyph rather than the card, because a card
@@ -5181,9 +5194,11 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   transition: opacity .16s ease;
 }
 .mapbtn:hover, .mapbtn:focus-visible { opacity: 1; }
+/* The count in the corner. --ink-2 for the same reason as the card's, and it
+   is the last of the map's text to have been at the palette's quietest ink. */
 .planehint {
   position: absolute; inset-block-end: 14px; inset-inline-end: 14px;
-  margin: 0; pointer-events: none; color: var(--ink-3); font-size: 12px;
+  margin: 0; pointer-events: none; color: var(--ink-2); font-size: 12px;
 }
 .planeempty { display: grid; place-content: center; block-size: 100%; text-align: center; padding: var(--s4); }
 .planeempty p { max-inline-size: 46ch; margin: 0 auto; }
