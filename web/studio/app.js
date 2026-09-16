@@ -2795,7 +2795,10 @@ function teamTab(p) {
         <span class="stage s-${esc(r.state)}">${esc(st.name)}</span>
         ${r.output === null || r.output === undefined
           ? `<p class="t-meta">${esc(c.name)} is on it. Nothing to look at yet.</p>`
-          : `<div class="woutfile" style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
+          : `<${r.output.id ? 'button type="button"' : 'div'} class="woutfile"
+              ${r.output.id ? `data-out-open="${esc(r.output.id)}" data-out-row="${esc(r.id)}"
+                aria-label="Open ${esc(r.output.title)}"` : ''}
+              style="--hue:oklch(0.62 0.14 ${c.tone ?? 150})">
               <span class="wpage">${pageSvg(r.output.title, r.output.kind)}</span>
               <span>
                 <b>${esc(r.output.title)}</b>
@@ -2803,7 +2806,7 @@ function teamTab(p) {
                 ${r.derived.length === 0 ? '' :
                   `<span class="t-meta from">From ${esc(r.derived.join(', '))}</span>`}
               </span>
-            </div>`}
+            </${r.output.id ? 'button' : 'div'}>`}
         <div class="wctl">
           <!--
             IMPORT TO PROJECT is a STEP, not a button (#28).
@@ -9231,6 +9234,28 @@ function drawShell() {
     thing #28 calls "what moves an artifact into the project" moved nothing.
     Import creates the document; Drop and Undo set `reviewer_status`.
   */
+  /*
+    Preview before the decision (#28).
+
+    The specification draws Preview / Discuss ABOVE the import gate, and the
+    reason is the obvious one: approving something you have not opened is not a
+    review gate. Discuss was already here as the named-action menu on the
+    request (#27); Preview was not, so the only way to read an output before
+    deciding on it was to import it first, which is the decision.
+
+    The document is built the way `allDocs` builds an approved one, because an
+    output awaiting review is not in the gallery yet - that is what it is
+    waiting for - so there is nothing to look up. `fillDoc` fetches the body by
+    id over the same API the gallery uses.
+  */
+  for (const b of root.querySelectorAll('[data-out-open]')) {
+    b.addEventListener('click', () => {
+      const r = workspace.rows(byId(state.project)).find((x) => x.id === b.dataset.outRow)
+      if (!r?.output) return
+      openDoc({ ...r.output, origin: `${crewBy(r.who).name} · ${r.delivered}` }, b)
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-import]')) {
     b.addEventListener('click', () => {
       state.importing = { output: b.dataset.import, title: b.dataset.importTitle }
@@ -10224,7 +10249,9 @@ function openDoc(doc, from) {
       </div>
     </div>`
   if (doc.file) paint($('[data-bigpage]', v), doc.file, 760)
-  const page = $('.page', from)
+  // `.wpage` as well as `.page`: the in-tray draws the same generated sheet
+  // under a different class, and Preview opens from there too (#28).
+  const page = $('.page, .wpage', from)
   const shut = () => carry('doc-open', page, () => { sheet(v, false) })
   carry('doc-open', page, () => { sheet(v, true) })
   $('.close', v).addEventListener('click', shut)

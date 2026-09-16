@@ -447,6 +447,24 @@ for (const [size, opts] of SIZES) {
       await outputsTab.click()
       await page.waitForTimeout(400)
     }
+    /*
+      PREVIEW, before the decision (#28).
+
+      Captured first and closed again, because the specification draws
+      Preview / Discuss ABOVE the import gate and a still of the gate says
+      nothing about whether an output can be read before it is approved. The
+      tile is a button now; this is the picture that proves the viewer opens
+      on something that is not in the gallery yet.
+    */
+    const previewBtn = page.locator('[data-out-open]').first()
+    if ((await previewBtn.count()) > 0) {
+      await previewBtn.click()
+      await page.waitForTimeout(900)
+      await shoot('preview-an-output')
+      await page.locator('#viewer .close').first().click()
+      await page.waitForTimeout(500)
+    }
+
     const importBtn = page.locator('[data-import]').first()
     if ((await importBtn.count()) > 0) {
       await importBtn.click()
