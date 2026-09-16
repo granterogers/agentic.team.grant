@@ -2221,6 +2221,10 @@ function portfolio() {
 
       No backticks in this comment. Template literal.
     -->
+    <!-- Same tree as a project's: h1 the greeting, h2 the section, h3 each
+         panel. Hidden, because the page is the dashboard and saying so twice
+         is furniture. -->
+    <h2 class="aonly">Your dashboard</h2>
     <div class="tabbody">
       <div class="board" data-home-board style="height:${Math.max(tallest + 40, 520)}px">
         ${mine.map((spec) => panelChrome(spec, panels.HOME_KINDS,
@@ -3277,6 +3281,18 @@ function panelChrome(spec, kinds, bodyFor) {
           stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 9l6 6 6-6"/></svg>
       </button>
+      <!--
+        h3, under the section's h2 (#207).
+
+        The tree is: h1 the project or the greeting, h2 the section you are in,
+        h3 each panel inside it. That last one was already h3 and was skipping a
+        level, because the h2 did not exist anywhere in the document - the
+        section's name was carried entirely by the rail, where a screen reader
+        moving by heading never goes.
+
+        The class is what makes it look like a label; the tag is what heading
+        navigation reads. Those are two decisions and they had been made as one.
+      -->
       <h3 class="t-label">${esc(kind.name)}</h3>
       <!--
         These are WIDTH controls, and two of them used to be a plus and a
@@ -3407,6 +3423,21 @@ function dashboard() {
     Overview and the whole gallery in Documents; the browser does the rest.
   */
   const named = (id, html) => `<div style="view-transition-name:sec-${id}">${html}</div>`
+
+  /*
+    The section you are in, as a heading (#207).
+
+    Visually hidden, because the rail already names it in the navigation and a
+    second copy on the page is the duplication section 23 asks about. Hidden
+    from the eye is not hidden from the document: it is in the accessibility
+    tree, it is what heading navigation lands on, and it is what makes the
+    panels beneath it h3 rather than an orphan level.
+
+    Before #207 a project's Documents screen had exactly ONE heading - the
+    project's name - over a gallery of twelve documents. Moving by heading
+    reached nothing.
+  */
+  const sectionName = SECTIONS.find((x) => x.id === state.tab)?.name ?? 'Overview'
 
   const body =
     state.tab === 'team' ? team
@@ -3540,6 +3571,15 @@ function dashboard() {
 
     ${waitingHere(p)}
 
+    <!--
+      AFTER the h1, not before it (#207).
+
+      The first draft put this at the top of main, so the document opened with
+      an h2 and reached its h1 second - a heading order that is wrong in a way
+      an axe run does not catch, because nothing SKIPS. Order is not only about
+      levels; it is about which heading you meet first.
+    -->
+    <h2 class="aonly">${esc(sectionName)}</h2>
     ${body}
   </main>`
 }

@@ -136,6 +136,7 @@ const audit = async (
   await page.waitForTimeout(600)
 
   const found = new Map<string, Violation>()
+  const trees: [string, { levels: number[]; skips: string[]; first: number; names: string[] }][] = []
   for (const route of ROUTES) {
     const tab = page.locator(`[data-tab="${route}"]`)
     if ((await tab.count()) === 0) continue
@@ -150,6 +151,38 @@ const audit = async (
         await page.waitForTimeout(450)
       }
     }
+    /*
+      The heading tree, PER ROUTE, and judged for usefulness (#207, §28).
+
+      It used to be sampled once per device after the whole walk, on whichever
+      screen happened to be left open, and asserted only that nothing skipped a
+      level. A screen with one heading can never skip one, so the check passed
+      for the wrong reason on every content screen in the product - the comment
+      beside it said as much and filed the finding rather than asserting it.
+
+      §28 is explicit that this is not enough: *"A screen with one h1 and no
+      semantic section headings can technically pass heading-order checks while
+      being poor for heading navigation. Accessibility tests must evaluate
+      usefulness."*
+
+      Three properties, all of them things a person navigating by heading would
+      notice: nothing skips a level going down; the first heading is the h1, so
+      the document does not open in the middle of itself; and a content screen
+      offers somewhere to jump TO, which one heading does not.
+    */
+    const tree = (await page.evaluate(`(() => {
+      const hs = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+        .filter((h) => h.getBoundingClientRect().height > 0)
+      const levels = hs.map((h) => Number(h.tagName.slice(1)))
+      const skips = []
+      for (let i = 1; i < levels.length; i += 1) {
+        if (levels[i] - levels[i - 1] > 1) skips.push(levels[i - 1] + '->' + levels[i])
+      }
+      return { levels, skips, first: levels[0] ?? 0,
+               names: hs.slice(0, 6).map((h) => 'h' + h.tagName.slice(1) + ' ' + (h.textContent || '').trim().slice(0, 18)) }
+    })()`)) as { levels: number[]; skips: string[]; first: number; names: string[] }
+    trees.push([route, tree])
+
     await page.evaluate(AXE)
     const result = (await page.evaluate(
       `axe.run(document, ${OPTIONS}).then(r => r.violations)`,
@@ -276,6 +309,38 @@ const audit = async (
       : `skips ${structure.skips.join(', ')}`,
     structure.skips.length === 0,
   )
+  /*
+    Per route, and about usefulness rather than only about order.
+
+    Reported as one line naming every route that fails, rather than one check
+    per route: seven green lines saying the same thing is a report people skim,
+    which this repository has already paid for twice.
+  */
+  const jumbled = trees.filter(([, t]) => t.skips.length > 0)
+  const upside = trees.filter(([, t]) => t.levels.length > 0 && t.first !== 1)
+  const barren = trees.filter(([, t]) => t.levels.length < 2)
+  check(
+    `${label} — no screen's headings skip a level`,
+    jumbled.length === 0
+      ? `${String(trees.length)} screens checked`
+      : jumbled.map(([r, t]) => `${r} ${t.skips.join(',')}`).join(' · '),
+    jumbled.length === 0,
+  )
+  check(
+    `${label} — every screen opens on its own h1`,
+    upside.length === 0
+      ? 'the title is the first heading everywhere'
+      : upside.map(([r, t]) => `${r} starts at h${String(t.first)}`).join(' · '),
+    upside.length === 0,
+  )
+  check(
+    `${label} — and every screen has somewhere to jump to`,
+    barren.length === 0
+      ? `fewest headings on a screen: ${String(Math.min(...trees.map(([, t]) => t.levels.length)))}`
+      : `${barren.map(([r]) => r).join(', ')} — one heading, so moving by heading reaches nothing`,
+    barren.length === 0,
+  )
+
   check(
     `${label} — and there is exactly one main landmark to jump to`,
     `${String(structure.main)} main, ${String(structure.nav)} nav`,
