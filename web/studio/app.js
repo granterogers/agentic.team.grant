@@ -2078,6 +2078,18 @@ function lately() {
               <span class="label t-meta" style="color:var(--ink)">
                 <b style="font-weight:600">${esc(crewBy(e.who).name ?? e.who)}</b>
                 ${esc(e.verb)} ${esc(e.what)}${e.project ? ` on ${esc(e.project)}` : ''}
+                <!--
+                  A folded row (#14). The two newest of any repeated thing are
+                  shown as themselves and the rest arrive as one line saying how
+                  many, because 285 of one day's 372 events were the noticing
+                  pass and they were the entire page. It carries no undo: a
+                  reversal belongs to one event, and offering it for a hundred
+                  would be a control claiming something nothing performs.
+
+                  No backticks in this comment: template literal.
+                -->
+                ${e.times ? `<span style="color:var(--ink-3)"> · ${
+                  esc(String(e.times))} more like this</span>` : ''}
                 <span style="color:var(--ink-3)"> · ${when.stamp(e.at, e.when)}</span>
                 ${e.why ? `<span class="latewhy">${esc(e.why)}</span>` : ''}
               </span>
@@ -2877,7 +2889,22 @@ function teamTab(p) {
       ask: { name: 'Ask the team for something',
              say: `Look at what ${p.name} already holds and tell me the first thing worth doing.` },
     }) : ''}
-    ${group('Needs you', 'Finished, and waiting on your decision.', waiting)}
+    <!--
+      What happens if it is ignored, said out loud (#14).
+
+      "Finished, and waiting on your decision" describes the state and leaves
+      the consequence to be guessed at, and the consequence is the whole reason
+      the group is first: an output nobody decides on is an output the project
+      does not have. It is not lost and it is not filed - saying which is the
+      difference between a queue Grant works through and a queue he learns to
+      scroll past.
+
+      No backticks in this comment: template literal.
+    -->
+    ${group('Needs you',
+      'Finished, and waiting on your decision. Nothing here is in the project yet — ' +
+      'an output left undecided stays out of Documents, and stays on the record either way.',
+      waiting)}
     ${group('In hand', 'Being worked on now.', working)}
     ${group('Settled', 'Already decided.', settled)}
   </div>`

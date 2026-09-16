@@ -409,5 +409,6 @@
   "0408_a_new_project_gets_a_mark_that_fits_it.sql": "1c716a7a7bd8080f3ae979aa3185a45656123fcc134bb5c6372d63acd3c59b45",
   "0409_a_default_that_names_a_mark_nobody_can_draw.sql": "b471579d6626ffa8a139834afebcafe1a3b7abd19f98976251499690fcd7deb4",
   "0410_grant_can_ask_two_people.sql": "9584a705cc2b9cde9b98f44163dd6535f775a56483c97a55abb098f2d14403bd",
-  "0411_say_in_project_takes_a_selection.sql": "08203203023f2c75c77c15e82731c1cdf0576d0722e5fe95dc7cc9b1ba378a7e"
+  "0411_say_in_project_takes_a_selection.sql": "08203203023f2c75c77c15e82731c1cdf0576d0722e5fe95dc7cc9b1ba378a7e",
+  "0412_recent_activity_says_what_happened_not_how_often.sql": "0757ff5f1b581ae81572205cdd8152229208569301815c9dc0c73a8a5f85072c"
 }

@@ -474,6 +474,35 @@ for (const [size, opts] of SIZES) {
       await page.waitForTimeout(400)
     }
 
+    /*
+      RECENT ACTIVITY (#14).
+
+      It had no capture at all, which CLAUDE.md names as its own class of
+      defect: a screen nothing photographs is a screen nobody has judged. It is
+      also the screen #14 was filed about — on the live office it was forty
+      identical rows of the noticing pass, and 0412 folds those.
+
+      What a SANDBOX capture can show is the layout and the empty state: the
+      prototype has no lately payload behind it, so the folded row with its
+      count is not visible here and is proved by `npm run verify:lately`
+      against the real database instead.
+    */
+    const latelyBtn = page.locator('[data-go="lately"]').first()
+    if ((await latelyBtn.count()) > 0) {
+      await latelyBtn.click({ force: true })
+      await page.waitForTimeout(900)
+      await shoot('recent-activity')
+      /*
+        And back into the project, because everything after this expects to be
+        on one. The first version of this capture left the run on the activity
+        screen and the next line waited thirty seconds for a tab that no longer
+        existed — a capture that moves the page has to put it back.
+      */
+      const backIn = page.locator('.navitem.proj[data-open], .project[data-open]').first()
+      if ((await backIn.count()) > 0) await backIn.click({ force: true })
+      await page.waitForTimeout(1200)
+    }
+
     await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
 

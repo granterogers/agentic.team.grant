@@ -78,10 +78,25 @@ page.on('pageerror', (e) => {
 })
 await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(700)
-await page.locator('.project[data-open="legacy-coaching-course"]').click()
-await page.waitForTimeout(700)
-await page.locator(`[data-tab="${tab}"]`).click()
-await page.waitForTimeout(700)
+/*
+  GO=lately measures a rail destination instead of a project tab.
+
+  Everything this tool could reach was inside a project, so the four screens
+  the rail goes to - the portfolio, Tasks, Recent activity, Settings - could
+  not be measured at all. Recent activity is the one that needed it: its
+  capture showed a hard seam across the full width of the page and there was
+  no way to ask which box ended there.
+*/
+const go = process.env.GO ?? ''
+if (go === '') {
+  await page.locator('.project[data-open="legacy-coaching-course"]').click()
+  await page.waitForTimeout(700)
+  await page.locator(`[data-tab="${tab}"]`).click()
+  await page.waitForTimeout(700)
+} else {
+  await page.locator(`[data-go="${go}"]`).first().click({ force: true })
+  await page.waitForTimeout(900)
+}
 
 /*
   The measuring function is passed as a STRING, not a closure.
