@@ -182,6 +182,14 @@ interface Payload {
   readonly voice_file_id?: string | null
   readonly voice_seconds?: number | null
   readonly addressed_to?: string | null
+  /**
+   * Who ELSE Grant picked (#26).
+   *
+   * `addressed_to` answers; each of these answers in their own name, through
+   * the same `alsoConvened` path a routed roster uses. Optional and empty by
+   * default, so every adapter that addresses nobody is unchanged.
+   */
+  readonly addressed_also?: readonly string[]
   readonly origin_channel?: string
   readonly origin_ref?: string
   readonly command_id?: string
@@ -240,7 +248,16 @@ const howComposed = async (
     )
     .catch(() => 'inference' as const)
 
-async function speaker(
+/*
+  Exported for #26's tests.
+
+  A decision function this small should be testable without a model and
+  without a queue, and the alternative — asserting who answered by running a
+  job end to end — is slow, stochastic, and would have told me nothing about
+  the case that matters here: a CHILD job carrying an addressee and no
+  selection must convene nobody, which is what stops delegation recursing.
+*/
+export async function speaker(
   db: SqlExecutor,
   addressedTo: string | null,
   instruction: string,
@@ -260,6 +277,21 @@ async function speaker(
    * fourth argument and migration 0323.
    */
   projectId: string | null = null,
+  /**
+   * The rest of a selection Grant made himself (#26).
+   *
+   * The specification asks for three ways to address the team - one, selected,
+   * everyone - and two already worked. Naming nobody IS "ask the team": the
+   * roster reads the subject and convenes whoever knows about it, which is
+   * also why asking the whole team does not produce eight near-identical
+   * replies. The middle one, picking two or three yourself, is this.
+   *
+   * It joins the SAME path a routed roster takes rather than a second one:
+   * these become `alsoConvened`, one child job each, each answering in their
+   * own name. A parallel mechanism for "he chose them" would be two ways to
+   * convene somebody and the handler would have to know which.
+   */
+  alsoAddressed: readonly string[] = [],
 ): Promise<Speaker> {
   const byName = addressedTo === null || addressedTo === '' ? null : addressedTo
   if (byName !== null) {
@@ -277,13 +309,28 @@ async function speaker(
         depth trigger caps it at three anyway; this makes the natural fixed
         point one, which is what §9 wants.
       */
+      /*
+        A selection he made himself keeps its companions; a bot he opened has
+        none (#26).
+
+        The comment below is still true of the single case and would have been
+        wrong for the new one: `alsoConvened` is empty when Grant addressed one
+        person, and holds the rest when he picked several. The CHILD jobs that
+        result carry `addressed_to` and no selection, so they arrive here with
+        an empty list and convene nobody further — the chain still terminates
+        at one by construction rather than by the depth cap.
+      */
+      const also = alsoAddressed.filter((x) => x !== '' && x !== s.slug)
       return {
         ...s,
-        reason: 'addressed directly — Grant opened this person’s bot',
-        alsoConvened: [],
+        reason:
+          also.length === 0
+            ? 'addressed directly — Grant opened this person’s bot'
+            : `Grant picked ${String(also.length + 1)} people himself`,
+        alsoConvened: also,
         // Addressing somebody IS convening them, so this one is not empty:
         // Grant picked the specialist himself.
-        convened: [s.slug],
+        convened: [s.slug, ...also],
       }
     }
   }
@@ -1529,6 +1576,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         instruction,
         deps.router,
         job.projectId ?? null,
+        payload.addressed_also ?? [],
       )
 
       /*

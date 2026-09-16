@@ -376,6 +376,126 @@ try {
   )
 }
 
+// --- a selection, not one person and not nobody (#26) ------------------------
+console.log('\nasking two people, which is the middle of the specification')
+{
+  /*
+    Everything here runs inside one `begin ... rollback`.
+
+    `say_in_project` enqueues a real job on a real project, and the CALL is
+    what is wrapped rather than the assertion — `verify:disconnect` deleted
+    Slack's credentials for a day by getting that the other way round, and a
+    wrapper cannot know a call was destructive until it already has been.
+  */
+  const sel = (
+    await db.execute(`
+    begin;
+    create temp table _say as
+      select app.say_in_project(
+        (select project_id from public.projects where status = 'active' order by created_at limit 1),
+        ${lit(`verify:addressing ${run} — who should look at this?`)},
+        null,
+        array['finance-director', 'communications-director', 'nobody-at-all']
+      ) as r;
+    select (r->>'addressed_to') as answers,
+           (r->'addressed_also')::text as also,
+           (r->'addressee_dropped')::text as dropped,
+           (select (c.addressed_also)::text from public.inbound_commands c
+             where c.command_id = (select (r->>'command')::uuid from _say)) as stored,
+           (select (j.pinned_config->'addressed_also')::text from public.jobs j
+             where j.job_id = (select (r->>'job')::uuid from _say)) as pinned
+      from _say;
+    rollback;`)
+  ).rows[0] as Record<string, string>
+
+  /*
+    Somebody has to SPEAK. Grant named nobody as the answerer and picked two,
+    so the first becomes the voice of the reply and the other is convened —
+    choosing here is better than an answer attributed to nobody.
+  */
+  check(
+    'picking several with no answerer makes the first of them answer',
+    `answers=${String(sel.answers)} also=${String(sel.also)}`,
+    sel.answers === 'communications-director' && String(sel.also).includes('finance-director'),
+  )
+
+  /*
+    And the one that is not a person is NAMED, not silently dropped. A
+    composer that quietly ignores who you picked is worse than one that says
+    it could not find them, which is the rule the single-addressee path
+    already followed and this had to keep with a list.
+  */
+  check(
+    'a name that is nobody is reported rather than swallowed',
+    String(sel.dropped),
+    String(sel.dropped).includes('nobody-at-all') &&
+      !String(sel.dropped).includes('finance-director'),
+  )
+
+  // 0410's trigger, asserted on the STORED row rather than on the return
+  // value: the return value is what the function decided, and the column is
+  // what survives.
+  check(
+    'the selection is stored on the command, minus whoever answers',
+    String(sel.stored),
+    String(sel.stored).includes('finance-director') &&
+      !String(sel.stored).includes('communications-director') &&
+      !String(sel.stored).includes('nobody-at-all'),
+  )
+
+  /*
+    And reaches the JOB, which is the layer the handler reads. 0411 patched
+    enqueue_inbound from its live definition, and a patch that matched nothing
+    would leave the function correct and the selection unreachable — which
+    reads exactly like the feature working for one person and not for two.
+  */
+  check(
+    'and it reaches the job, where speaker() reads it',
+    String(sel.pinned),
+    String(sel.pinned).includes('finance-director'),
+  )
+
+  /*
+    The CONTROL. A trigger that cleaned nothing would pass every check above
+    by accident, because the function already removes the answerer before the
+    insert. This writes a row DIRECTLY, with a retired name and the answerer
+    repeated, and asserts the trigger removed both.
+  */
+  const raw = (
+    await db.execute(`
+    begin;
+    -- A temp table cannot be created directly from an INSERT; a CTE can feed
+    -- one. The alternative would be a plain insert and a second select, which
+    -- is two statements and two chances for the rollback to land between them.
+    -- No backticks in this comment: it lives inside a template literal.
+    create temp table _raw as
+    with put as (
+      insert into public.inbound_commands
+        (origin_channel, origin_ref, actor, instruction, addressed_to, addressed_also, dedupe_key)
+      -- Shaped as <surface>:<kind>:<id> by inbound_dedupe_key_shaped. The
+      -- first draft used a readable key and was refused by that constraint —
+      -- which would have read as this control failing, when the trigger had
+      -- already done its job and the row the error printed said so.
+      values ('teamhq', ${lit(`teamhq:message:raw${run}`)}, 'grant',
+              ${lit(`verify:addressing ${run} raw`)}, 'chief-of-staff',
+              array['chief-of-staff', 'research-director', 'fixture-nobody-' || ${lit(run)}],
+              ${lit(`teamhq:message:raw${run}`)})
+      returning (addressed_also)::text as also
+    )
+    select also from put;
+    select also from _raw;
+    rollback;`)
+  ).rows[0] as Record<string, string>
+
+  check(
+    'CONTROL: the trigger drops a repeat of the answerer and anybody unreal',
+    String(raw.also),
+    String(raw.also).includes('research-director') &&
+      !String(raw.also).includes('chief-of-staff') &&
+      !String(raw.also).includes('fixture-nobody'),
+  )
+}
+
 const failed = checks.filter((c) => !c).length
 console.log(`\n${String(checks.length - failed)}/${String(checks.length)} checks passed`)
 process.exit(failed === 0 ? 0 : 1)

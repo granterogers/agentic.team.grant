@@ -131,6 +131,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const body = (await request.json().catch(() => ({}))) as {
     said?: unknown
+    also?: unknown
     session?: unknown
     to?: unknown
   }
@@ -161,6 +162,34 @@ Deno.serve(async (request: Request): Promise<Response> => {
   */
   const to = typeof body.to === 'string' ? body.to.trim() : ''
   const addressedTo = /^[a-z][a-z0-9-]{1,40}$/.test(to) ? to : null
+  /*
+    And who ELSE he picked (#26).
+
+    The specification asks for one, selected, or the entire team. Naming
+    nobody already IS "the entire team" — the roster reads the subject and
+    convenes whoever knows about it — so this is the middle one, and it takes
+    the same path: `addressed_to` answers and each of these answers in their
+    own name.
+
+    Shape-checked here and nowhere else translated. §5 says an adapter may
+    only translate: it must not look anybody up, decide who is real, or drop
+    somebody for a reason of its own. 0410's trigger removes an unknown or
+    retired name, which is the office's job, and the studio shows what was
+    dropped.
+
+    Capped at seven, which is the roster minus the answerer — not as a policy
+    but because a longer array is somebody sending a list, not a selection.
+  */
+  const alsoAddressed = Array.isArray(body.also)
+    ? [
+        ...new Set(
+          body.also
+            .filter((x): x is string => typeof x === 'string')
+            .map((x) => x.trim())
+            .filter((x) => /^[a-z][a-z0-9-]{1,40}$/.test(x) && x !== addressedTo),
+        ),
+      ].slice(0, 7)
+    : []
 
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(session)) {
     return json({ error: 'a session id is required' }, 400)
@@ -190,6 +219,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // that differed (0104).
       instruction: said,
       addressed_to: addressedTo,
+      addressed_also: alsoAddressed,
       dedupe_key: `voice:turn:${session}.${turn}`,
     }),
   })
@@ -227,6 +257,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
         actor: SUBJECT,
         instruction: said,
         addressed_to: null,
+        // The selection goes too. The retry exists because a NAME could not be
+        // translated, and 0410's trigger already drops the ones that are not
+        // real — so keeping the rest is the difference between "I could not
+        // find one of them" and "I ignored everybody you picked".
+        addressed_also: alsoAddressed,
         dedupe_key: `voice:turn:${session}.${turn}`,
       }),
     })

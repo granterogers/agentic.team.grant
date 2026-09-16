@@ -3078,6 +3078,28 @@ const bubble = (m) => {
     </div>`
   }
 
+
+/*
+  What the addressee line says, in one place (#26).
+
+  Three sentences for three states, and the third is the one worth getting
+  right: when Grant has picked companions the line has to NAME them, because
+  the Issue asks for the choice to be legible before the message is sent and
+  a count would not be.
+*/
+function askWhoSays() {
+  const who = state.askWho
+  if (who === undefined || who === 'everyone') return 'Claire will bring in whoever it needs.'
+  const also = (state.askAlso ?? []).filter((x) => x !== who)
+  if (also.length === 0) return `Goes straight to ${crewBy(who).name}.`
+  const names = also.map((x) => crewBy(x).name)
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `${crewBy(who).name} answers, with ${list} — each in their own name.`
+}
+
 function chatTab(p) {
   const messages = chat.thread(p.slug)
   const a = state.attach
@@ -3183,24 +3205,26 @@ function chatTab(p) {
         </span>
       </div>`}
       <!--
-        Who it is for (#26).
+        Who it is for (#26). All three of them, now.
 
-        The specification asks for three: ask one agent, ask selected agents,
-        ask the entire team. Two of them are here and are honest end to end —
-        one named person, or the whole team — and "selected" is not, because
-        several people answering one message is several jobs sharing a thread
-        and this would be a control that looks like it does that and does not.
+        The specification asks for one agent, selected agents, or the entire
+        team. This used to carry two and say so: "selected" was missing
+        because several people answering one message is several jobs sharing a
+        thread, and a control that looks like it does that and does not is
+        worse than no control. 0410 and 0411 made it real — the selection
+        joins the same alsoConvened path a routed roster takes, one child job
+        each, each answering in their own name — so the control can exist.
 
-        Everyone is the DEFAULT and is not a broadcast: with nobody named the
-        Chief of Staff takes it, and since #65 she can really bring people in.
-        So the whole team is one answer from Claire saying who she asked,
-        rather than eight near-identical replies — which is the outcome the
-        Issue asks for rather than a shortcut around it.
+        Everyone is still the DEFAULT and is still not a broadcast: with
+        nobody named the Chief of Staff takes it, and since #65 she can really
+        bring people in. So the whole team is one answer from Claire saying
+        who she asked, rather than eight near-identical replies — the outcome
+        the Issue asks for rather than a shortcut around it.
 
-        A select, not a row of chips: eight faces on a phone composer is most
-        of the composer, and this is a thing you set occasionally and then
-        forget. It carries a visible label so the choice is legible before you
-        send, which the Issue asks for by name.
+        A select for the first choice, because eight faces on a phone composer
+        is most of the composer and this is a thing you set occasionally. The
+        others are behind a disclosure, so the common case — ask the team, say
+        nothing about who — is exactly as short as it was.
 
         No backticks in this comment: template literal.
       -->
@@ -3211,10 +3235,23 @@ function chatTab(p) {
           ${CREW.map((c) => `<option value="${esc(c.slug)}"${
             state.askWho === c.slug ? ' selected' : ''}>${esc(c.name)} — ${esc(c.role)}</option>`).join('')}
         </select>
-        <span class="t-meta">${state.askWho === 'everyone' || state.askWho === undefined
-          ? 'Claire will bring in whoever it needs.'
-          : `Goes straight to ${esc(crewBy(state.askWho).name)}.`}</span>
+        <span class="t-meta">${askWhoSays()}</span>
       </label>
+      ${state.askWho === 'everyone' || state.askWho === undefined ? '' : `
+      <div class="askalso">
+        <button type="button" class="btn quiet small" data-askalso-open
+                aria-expanded="${state.askAlsoOpen === true ? 'true' : 'false'}">
+          ${state.askAlsoOpen === true ? 'Just them' : 'Ask somebody else too'}
+        </button>
+        ${state.askAlsoOpen !== true ? '' : `<span class="alsochips" role="group"
+            aria-label="Who else should answer">
+          ${CREW.filter((c) => c.slug !== state.askWho).map((c) => `<button type="button"
+              class="alsochip ${(state.askAlso ?? []).includes(c.slug) ? 'on' : ''} ${esc(c.hue ?? '')}"
+              data-askalso="${esc(c.slug)}"
+              aria-pressed="${(state.askAlso ?? []).includes(c.slug) ? 'true' : 'false'}"
+              title="${esc(c.name)} — ${esc(c.role)}">${esc(c.name)}</button>`).join('')}
+        </span>`}
+      </div>`}
       <!--
         Dictation (#196). Speaking a message, not placing a call — the call
         button is elsewhere and answers in two seconds; this one puts words in
@@ -8986,16 +9023,24 @@ function drawShell() {
       */
       const about = state.attach
       const to = state.askWho ?? 'everyone'
-      chat.send(state.project, text, about, to)
+      // Only when somebody is named. With "the whole team" there is nobody for
+      // a companion to be a companion OF, and the control is not drawn.
+      const also = to === 'everyone' ? [] : (state.askAlso ?? [])
+      chat.send(state.project, text, about, to, also)
       // It has been said, so it is no longer a draft — without this it would
       // be restored into the empty composer on the very next render (#197).
       state.drafts[state.project] = ''
       state.attach = null
+      // The selection is per MESSAGE, not a preference — the same reasoning
+      // the comment above gives for not persisting the addressee. Two people
+      // asked about one thing is not a standing instruction to ask them again.
+      state.askAlso = []
+      state.askAlsoOpen = false
       render()
       const t = $('[data-thread]')
       if (t) t.scrollTop = t.scrollHeight
       $('[data-say]')?.focus()
-      void chat.ask(state.project, text, about, token.get(), to, () => {
+      void chat.ask(state.project, text, about, token.get(), to, also, () => {
         // Sending -> waiting -> no answer yet. Each of those is a repaint, and
         // without this the row would say "Sending" until the answer landed.
         keepingPlace(() => { render() })
@@ -9034,13 +9079,58 @@ function drawShell() {
       opening the studio tomorrow and silently addressing Emma because of
       something asked last night.
     */
-    $('[data-askwho]', composer)?.addEventListener('change', (e) => {
-      state.askWho = e.currentTarget.value
+    /*
+      Redrawing the composer loses what is in the box, so it is carried across
+      by hand here and in both handlers below — the draft store only saves on
+      input, and a person who has typed a sentence and then picks an addressee
+      must not watch it vanish.
+    */
+    const keepingText = (change) => {
       const keep = $('[data-say]')?.value ?? ''
+      change()
       render()
       const box = $('[data-say]')
-      if (box) { box.value = keep; box.focus() }
+      if (box) {
+        box.value = keep
+        box.focus()
+      }
+    }
+
+    $('[data-askwho]', composer)?.addEventListener('change', (e) => {
+      const chosen = e.currentTarget.value
+      keepingText(() => {
+        state.askWho = chosen
+        /*
+          Changing WHO answers clears who else was asked (#26).
+
+          The companions were picked relative to a person — "Emma, and Daniel
+          too" — so keeping them after switching to Oliver would send a
+          selection Grant never made. Clearing is the only reading that cannot
+          be wrong, and reopening the row costs one press.
+        */
+        state.askAlso = []
+      })
     })
+
+    // The disclosure. Shut by default, so the common case — ask the team, say
+    // nothing about who — is exactly as short as it was before #26's middle
+    // option existed.
+    $('[data-askalso-open]', composer)?.addEventListener('click', () => {
+      keepingText(() => {
+        state.askAlsoOpen = state.askAlsoOpen !== true
+        if (state.askAlsoOpen !== true) state.askAlso = []
+      })
+    })
+
+    for (const b of composer.querySelectorAll('[data-askalso]')) {
+      b.addEventListener('click', () => {
+        const slug = b.dataset.askalso
+        keepingText(() => {
+          const now = state.askAlso ?? []
+          state.askAlso = now.includes(slug) ? now.filter((x) => x !== slug) : [...now, slug]
+        })
+      })
+    }
 
     /*
       Dictation (#196).

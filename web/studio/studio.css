@@ -3889,6 +3889,37 @@ body.docked { padding-right: min(380px, 100vw); }
 }
 .lookrow { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
 
+/* --- asking two people (#26) ------------------------------------------------
+   Behind a disclosure, so the common case — ask the team, say nothing about
+   who — is exactly as short as it was. The chips carry names rather than
+   initials: seven initials in a row is a puzzle, and the composer is not the
+   place to make somebody work out that D is Daniel. */
+/* `justify-items: start` so the disclosure is the width of its words. In a
+   grid it stretched full-width and read as an empty text field sitting above
+   the chips — which is what the capture showed, and a button that looks like
+   an input is a button nobody presses. */
+.askalso { display: grid; gap: var(--s2); justify-items: start; margin-top: calc(var(--s2) * -1); }
+.askalso > [data-askalso-open] { justify-self: start; }
+.askalso .alsochips { justify-self: stretch; }
+.alsochips { display: flex; gap: 6px; flex-wrap: wrap; }
+.alsochip {
+  min-height: 44px; padding: 0 12px; border-radius: var(--r-control);
+  border: 1px solid var(--edge); background: var(--ground);
+  color: var(--ink-2); font-size: 13px;
+  transition: background .14s, box-shadow .14s, color .14s;
+}
+.alsochip:hover { background: color-mix(in srgb, var(--hue, var(--accent)) 12%, var(--ground)); }
+.alsochip.on {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--hue, var(--accent)) 22%, var(--ground));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--hue, var(--accent)) 60%, transparent);
+}
+@media (pointer: fine) {
+  /* A pointer does not need the 44px floor, and seven chips at that height
+     take a third of the composer on a desktop. */
+  .alsochip { min-height: 30px; }
+}
+
 /* --- finding a mark among 451 (#221) ----------------------------------------
    The picker grew from thirty hand-drawn marks to 451 from lucide, which is
    more than anybody browses and more than anybody finds by scrolling. A search

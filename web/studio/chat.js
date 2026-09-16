@@ -231,7 +231,7 @@ const TURN = () => API().replace(/\/hq-api$/, '/voice')
 /** One session per visit, so the office can group the turns of a conversation. */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
 
-export function send(slug, text, context, to) {
+export function send(slug, text, context, to, also = []) {
   const now = new Date().toISOString()
   const mine = {
     id: `m${Date.now()}`, from: 'grant', text, at: now,
@@ -239,6 +239,10 @@ export function send(slug, text, context, to) {
     // Recorded on the message, not only on the composer, so the thread shows
     // who each thing was asked of after the composer has moved on (#26).
     to: to ?? null,
+    // And who else was asked (#26). On the message, so the thread can say
+    // "Emma, with Daniel" after the composer has moved on — the Issue asks
+    // for the choice to be visible before sending AND to travel with it.
+    also: Array.isArray(also) ? also : [],
     // Cleared the moment the office's own copy arrives (#192).
     inflight: true,
   }
@@ -300,7 +304,7 @@ function mark(slug, id, patch) {
   return next
 }
 
-export async function ask(slug, text, context, token, to, onState) {
+export async function ask(slug, text, context, token, to, also, onState) {
   const pendingId = thread(slug).at(-1)?.id
   /*
     Sending, then waiting.
@@ -353,7 +357,20 @@ export async function ask(slug, text, context, token, to, onState) {
         team is one answer from Claire naming who she brought in, rather than
         eight near-identical replies, which is #26's fourth criterion.
       */
-      body: JSON.stringify({ said: text, session: SESSION, to: staffSlug(to) }),
+      /*
+        `also` goes as slugs, translated the same way `to` is, and an
+        unrecognised name is simply not sent — §5 again: an adapter may
+        translate and may not decide. 0410's trigger is what drops a name that
+        is real here and retired in the office, and the office says so.
+      */
+      body: JSON.stringify({
+        said: text,
+        session: SESSION,
+        to: staffSlug(to),
+        also: (Array.isArray(also) ? also : [])
+          .map((x) => staffSlug(x))
+          .filter((x) => x !== null && x !== undefined && x !== ''),
+      }),
     })
     const body = await r.json()
     if (!r.ok) throw new Error(body.error ?? `the office returned ${r.status}`)
