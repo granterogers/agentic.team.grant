@@ -126,6 +126,18 @@ export const KINDS = [
   { id: 'contacts', name: 'People', note: 'Who it is about', w: 1, h: 320, tone: 'k-who' },
   { id: 'activity', name: 'Recent activity', note: 'What the team did, most recent first', w: 1, h: 260, tone: 'k-past' },
   { id: 'links', name: 'Connections', note: 'What it is joined to', w: 1, h: 180, tone: 'k-join' },
+  /*
+    How it got here (#156).
+
+    `k-past` with Recent activity, and deliberately NOT the same panel. Grant:
+    "a feed of every job is noise at month three; a sequence of 'the project
+    changed in this way' is a story." One is what the team did this week, the
+    other is how the thing came to be shaped the way it is.
+
+    Two columns and 320px because it is read top to bottom as prose, not
+    scanned like a list, and a narrow column turns every line into three.
+  */
+  { id: 'history', name: 'How it got here', note: 'Oldest first', w: 2, h: 320, tone: 'k-past' },
   { id: 'note', name: 'Note', note: 'Somewhere to write', w: 1, h: 220, tone: 'k-make' },
 ]
 
@@ -233,6 +245,21 @@ const defaultFor = (project) => {
   if (has.tasks) { out.push({ id: 'tasks', x: 2, y: ry, w: 1, h: 340 }); ry += 364 }
   if (has.contacts) { out.push({ id: 'contacts', x: 2, y: ry, w: 1, h: 320 }); ry += 344 }
   if (has.activity) { out.push({ id: 'activity', x: 2, y: ry, w: 1, h: 260 }) }
+  /*
+    How it got here, on every board (#156).
+
+    Unconditional, unlike the five above, and for a reason rather than an
+    oversight: those are gated on the project HAVING some — a panel showing
+    nothing is what #220 removed — and every project has a history, because
+    every project has the moment it was started. The one-entry version reads
+    "this began on the 3rd of September" and that is a true and useful thing
+    for a board to say about a project a week old.
+
+    Below the documents shelf: it is the thing you read after you have seen
+    what is here, not before.
+  */
+  out.push({ id: 'history', x: 0, y, w: 2, h: 320 })
+  y += 344
   out.push({ id: 'links', x: 0, y: Math.max(y, ry), w: 1, h: 180 })
   return out
 }

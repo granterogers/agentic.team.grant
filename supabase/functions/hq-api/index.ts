@@ -241,6 +241,15 @@ const SECTIONS: Readonly<
     rather than a second copy of the list here.
   */
   relations: { fn: 'relations_of', arg: 'p_id', textArg: { param: 'kind', arg: 'p_kind' } },
+  /*
+    HOW A PROJECT GOT HERE (#156, migrations 0401-0402).
+
+    Its own section rather than another array on the studio payload: a project
+    built over months has hundreds of entries and every project would carry
+    its whole history on every page load, for a panel most visits never open.
+    `documents` and `plane` are lazy for the same reason.
+  */
+  history: { fn: 'project_history', arg: 'p_project' },
   /** The named actions, so no page hard-codes them (#27). */
   actions: { fn: 'asset_actions' },
   /*

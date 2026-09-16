@@ -123,6 +123,16 @@ const latest = { lately: null, tasks: null }
   for the moment between opening it and the fetch landing. `maps` holds the
   graph, `placed` holds where he put the cards and how far he zoomed.
 */
+/*
+  A project's story, fetched once per project (#156).
+
+  Same shape as `maps` and for the same reason: undefined means nobody has
+  asked, null means the ask is in flight, an array means it answered. Three
+  states rather than two, because "loading" and "empty" are different things
+  to show and collapsing them is how a panel says "nothing here" about a
+  project with ten years in it.
+*/
+const stories = {}
 const maps = {}
 const placed = {}
 
@@ -2645,6 +2655,65 @@ const PANEL = {
         <span style="color:var(--ink-3)"> · ${when.stamp(a.at, a.when)}</span></span></div>`
   }).join('')}</div>`,
 
+  /*
+    How it got here (#156).
+
+    Oldest first, which is the opposite of every other list in the product and
+    is the point: a story is read forwards. Grant's own distinction — "a feed
+    of every job is noise at month three; a sequence of the project changed in
+    this way is a story."
+
+    The words come from `app.project_history`, which derives them from the
+    timestamps the rows already carry. Nothing is composed here beyond the
+    verb, so the page and an agent asking the same question get the same
+    answer.
+  */
+  history: (p) => {
+    const story = stories[p.slug]
+    if (story === undefined || story === null) {
+      needHistory(p.slug)
+      return `<p class="t-meta">Reading how this project got here…</p>`
+    }
+    if (story.length === 0) {
+      return `<p class="t-meta">Nothing has happened to ${esc(p.name)} yet — it was only just
+        started, and the first source you attach will be the first line of this.</p>`
+    }
+    const WORD = {
+      created: 'started',
+      attached: 'attached',
+      detached: 'detached',
+      source: 'came in',
+      made: 'written',
+      finished: 'finished',
+      milestone: 'milestone',
+      standing: 'where it stands',
+    }
+    return `<ol class="story">${story
+      .map(
+        (e) => `<li class="storyat t-meta">
+          <!--
+            One format down the column, and it is absolute (#156).
+
+            when.stamp switches to "26 days ago" past a threshold, which is
+            right everywhere else in the product and wrong here: the capture
+            showed "16 Aug" followed by "26 days ago", and in a column read
+            top to bottom that looks like the sequence going backwards. A
+            story needs one scale or it stops being one.
+
+            The exact instant is still on the title, so hovering gives the
+            time of day this deliberately leaves out.
+
+            No backticks in this comment. Template literal.
+          -->
+          <span class="storywhen" title="${esc(when.exact(e.at))}">${esc(shortDay(e.at))}</span>
+          <span class="storykind k-${esc(e.kind)}">${esc(WORD[e.kind] ?? e.kind)}</span>
+          <span class="storywhat">${esc(e.what)}</span>
+          ${e.detail ? `<span class="storywhy">${esc(e.detail)}</span>` : ''}
+        </li>`,
+      )
+      .join('')}</ol>`
+  },
+
   links: (p) => `<div class="links" style="margin:0">
       ${p.connectors.length === 0
         ? '<span class="t-meta">Nothing yet — this project stands on its own.</span>'
@@ -4040,6 +4109,27 @@ function dashboard() {
 
         No backticks in this comment. Template literal.
       -->
+      <!--
+        The way back to the map (#156, fixing #25).
+
+        The Map / Panels toggle was drawn in the MAP branch only, so choosing
+        Panels removed the control that had just been pressed and there was no
+        way back short of reloading. A one-way door, shipped this morning, and
+        found by trying to CAPTURE the board rather than by reading the code -
+        the capture run failed waiting for a button that no longer existed.
+
+        Drawn from the same two-button shape on both sides now, with the
+        pressed state following the view, because a segmented control whose
+        other half vanishes when you use it is not a segmented control.
+
+        No backticks in this comment. Template literal.
+      -->
+      <div class="tabhead">
+        <div class="segmented" role="group" aria-label="How to show this project">
+          <button class="seg" data-overview="map" aria-pressed="false">Map</button>
+          <button class="seg on" data-overview="panels" aria-pressed="true">Panels</button>
+        </div>
+      </div>
       <div class="board" data-board style="height:${Math.max(tallest + 40, 520)}px">
         ${mine.map(chrome).join('')}
       </div>
@@ -10138,6 +10228,107 @@ const settles = (p2, ms = 12_000) => Promise.race([
  * positions. Folding them into one call would make a lost preference look like
  * a lost project.
  */
+/**
+ * Fetch a project's story once, then redraw (#156).
+ *
+ * Mirrors `needMap`, including the guard that makes it safe to call from a
+ * renderer: the null is written BEFORE the await, so a second render while the
+ * first request is in flight does not start a second request. A renderer that
+ * fetches is only tolerable because of that line.
+ */
+async function needHistory(slug) {
+  if (stories[slug] !== undefined) return
+  const p = byId(slug)
+  stories[slug] = null
+  try {
+    const rows = await settles(read('history', p.id))
+    stories[slug] = Array.isArray(rows) ? rows : []
+  } catch {
+    /*
+      The prototype's own shapes, not an error state — exactly as `needMap`
+      does, and for the reason written there: this screen is one Grant judges
+      the direction from, and a panel saying "could not load" teaches nothing
+      about whether the direction is right. #119's strip is what says the
+      office is unreachable; saying it twice is noise.
+    */
+    stories[slug] = mockStory(p)
+  }
+  render()
+}
+
+/**
+ * A plausible story from what the prototype already holds.
+ *
+ * NOT a second implementation of `app.project_history`: it derives nothing the
+ * office derives, it invents a shape for invented projects so the design can
+ * be seen and captured. `plane.mock` is the same thing for the map and set the
+ * precedent.
+ *
+ * Ordered oldest first like the real one, so what a capture shows is what the
+ * office would show.
+ */
+/**
+ * A day, the same way for every line of a story (#156).
+ *
+ * The year only when it is not this one — a coaching course built over months
+ * needs "3 Sep" for most of it and "3 Sep 2025" for the beginning, and putting
+ * the year on every line to cover that makes forty lines wider for four.
+ */
+function shortDay(iso) {
+  const at = Date.parse(iso)
+  if (Number.isNaN(at)) return ''
+  const d = new Date(at)
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
+  })
+}
+
+function mockStory(p) {
+  /*
+    Dated, spread backwards from today.
+
+    The first version left `at` null and the capture showed a 74px empty
+    gutter down the left of every line — the column the whole layout is built
+    around, blank, in the one image anybody judges the design from. A story
+    without dates is a list, and the dates are the thing that makes it read as
+    a sequence, so a mock without them is a mock of a different component.
+  */
+  const day = 86_400_000
+  let ago = 0
+  const when = () => new Date(Date.now() - (ago += 3 + Math.floor(ago / 9)) * day).toISOString()
+  const out = [{ at: null, kind: 'created', what: `${p.name} started`, detail: p.purpose ?? null }]
+  for (const s of (p.sources ?? []).slice(0, 3)) {
+    out.push({
+      at: null,
+      kind: 'attached',
+      what: `${s.name ?? s.title ?? 'A source'} attached`,
+      detail: s.connector ?? null,
+    })
+  }
+  for (const d of (p.documents ?? []).slice(0, 3)) {
+    out.push({
+      at: d.at ?? null,
+      kind: d.origin === 'made' ? 'made' : 'source',
+      what: d.title,
+      detail: d.origin === 'made' ? 'written by the team' : null,
+    })
+  }
+  for (const t of (p.tasks ?? []).filter((x) => x.state === 'done').slice(0, 2)) {
+    out.push({ at: null, kind: 'finished', what: t.title, detail: null })
+  }
+  /*
+    Oldest first, and dated in that order: the entries are assembled by TYPE
+    above, which is not the order they happened in, so dating them as they
+    come out would put the project's start after its documents.
+  */
+  return out
+    .reverse()
+    .map((e) => ({ ...e, at: e.at ?? when() }))
+    .reverse()
+}
+
 async function needMap(slug) {
   if (maps[slug] !== undefined) return
   const p = byId(slug)

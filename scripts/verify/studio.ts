@@ -213,6 +213,32 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(500)
     await shoot('project')
 
+    /*
+      And the panels board, which has had no capture since #25 (#156).
+
+      The Overview is the map now and the board is behind a toggle, so the
+      design record lost the screen entirely — which is how `verify:arrangement`
+      came to be failing against it for a morning without anybody seeing.
+      It also carries the new How it got here panel, and a panel nobody has
+      looked at is a panel nobody has judged.
+    */
+    await page.locator('[data-overview="panels"]').click()
+    await page.waitForTimeout(900)
+    await shoot('project-panels')
+    /*
+      And the lower half, where How it got here sits (#156).
+
+      A panel below the fold in every capture is a panel nobody has looked at,
+      which is how the settings sheet went months with three defects on it.
+    */
+    await page.evaluate(`window.scrollTo(0, document.body.scrollHeight)`)
+    await page.waitForTimeout(600)
+    await shoot('project-panels-lower')
+    await page.evaluate(`window.scrollTo(0, 0)`)
+    await page.waitForTimeout(300)
+    await page.locator('[data-overview="map"]').click()
+    await page.waitForTimeout(500)
+
     if (size === 'desktop') {
       /*
         The document hover lives on the DOCUMENTS tab now (#25).
