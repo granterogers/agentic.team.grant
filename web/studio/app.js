@@ -751,6 +751,30 @@ const taskRow = (t, i) => {
   cannot help is worse than offering none.
 */
 function emptyState({ says, mine, mineDo, ask }) {
+  /*
+    A reader is told the truth instead of being offered a refusal (#123).
+
+    Grant's words on the issue: "Where there is genuinely nothing to offer - a
+    reader with no token - say that instead, rather than showing an action that
+    will be refused."
+
+    Every other write control on these screens already guards on canWrite --
+    the tasks header three hundred lines below does exactly that -- and the
+    empty state was the one place that did not, so the surface most likely to
+    be seen by somebody who has just arrived was the surface offering them two
+    buttons that cannot work.
+
+    The sentence matches the banner's wording rather than inventing a second
+    way of saying the same thing.
+
+    No backticks in this comment. Template literal.
+  */
+  if (!canWrite()) {
+    return `<div class="empty">
+      <p class="t-lead" style="margin:0">${says}</p>
+      <p class="t-meta" style="margin:0">Sign in to change anything here.</p>
+    </div>`
+  }
   return `<div class="empty">
     <p class="t-lead" style="margin:0">${says}</p>
     <div class="emptydo">

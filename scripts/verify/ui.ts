@@ -91,10 +91,36 @@ const ROUTES = [
   { kind: 'pane', at: 'appearance', name: 'settings · appearance' },
   { kind: 'pane', at: 'setup', name: 'settings · setting up' },
   { kind: 'pane', at: 'help', name: 'settings · help' },
-  { kind: 'call', at: 'call', name: 'the call' },
+  /*
+    THE CALL IS NOT A SCREEN, so it is not a route here.
+
+    There was a `{ kind: 'call', name: 'the call' }` row until #123's panel
+    measure started naming what it had looked at, and it turned out to be
+    looking at the settings help pane — then, once Settings was shut first, at
+    whatever section happened to be open. Never at a call.
+
+    It could not have been: #214 turned Call the Team into an INLINE TOGGLE in
+    the rail, `drawShell` has no `call` view, and pressing `[data-call]` starts
+    a call rather than navigating anywhere. So the row was green about nothing,
+    and pressed the microphone on every run of this suite to get there.
+
+    The same defect as the command bar offering "Desk" after #77 removed it,
+    in the audit rather than in the product. The voice call has its own suite —
+    `npm run verify:talk`, which drives a real call — and the toggle is a
+    control, which is `verify:controls`'s job.
+  */
 ] as const
 
 /** The floors. Each one is a defect this check was written to catch. */
+/*
+  The least a section may say and still be an empty STATE rather than a hole.
+
+  "Nothing to do on Wellness yet." plus its one action is about eighty
+  characters, so forty is a floor that a real empty state clears comfortably
+  and a section rendering nothing cannot (#123).
+*/
+const EMPTY_STATE_FLOOR = 40
+
 const MIN_FONT_PX = 12
 const MIN_TAP_PX = 44
 
@@ -334,6 +360,52 @@ const MEASURE = `() => {
     tiny: [...new Set(tiny)].slice(0, 5),
     small: [...new Set(small)].slice(0, 5),
     chars: (document.body.innerText || '').length,
+    /*
+      The SECTION's own words, which is what #123 is actually about.
+
+      The chars measure above takes the whole document, and the whole document
+      always has the rail, the header, the project switcher and Call the team
+      in it - the smallest screen in a passing run reported 361 characters
+      against a floor of 40, so that floor could not fire for the case it was
+      written for: a section that renders nothing.
+
+      No backticks in this comment: it lives inside a template literal.
+
+      An empty state is the difference between "nothing here yet, add someone"
+      and a blank rectangle that looks exactly like a broken one. Measured on
+      the panel, an empty section with an empty state is ~80 characters and one
+      without is ~0.
+
+      The container is NAMED in the result rather than assumed, because a
+      missing selector measures zero and zero fails — which is the right
+      direction to fail in, and unreadable unless the report says the panel was
+      not found rather than that the page was blank.
+    */
+    panel: (() => {
+      /*
+        The FRONT-MOST surface, not whatever main happens to hold.
+
+        The first version took main unconditionally and every settings pane
+        reported the same 476 characters - the project section still sitting
+        behind the Settings page. Ten of seventeen rows were passing for the
+        wrong reason, measuring a screen nobody was looking at. That is the
+        trap this repository records most often: verify:ui once fed the staff
+        tab hq_staff while the page asked for hq_team, and verify:controls
+        pressed the rail behind an open sheet for weeks.
+
+        So the same rule verify:controls arrived at in #190: find what is in
+        front, and measure that.
+      */
+      const order = ['#settings .setbody', '#viewer .docbody', '#viewer', 'main', '.main']
+      for (const sel of order) {
+        const box = document.querySelector(sel)
+        if (box === null) continue
+        const r = box.getBoundingClientRect()
+        if (r.width < 2 || r.height < 2) continue
+        return { found: true, where: sel, chars: (box.innerText || '').length }
+      }
+      return { found: false, where: 'none', chars: 0 }
+    })(),
   }
 }`
 
@@ -397,6 +469,24 @@ for (const [label, device, touch] of VIEWPORTS) {
       const at = ${JSON.stringify(route.at)};
       const press = (el) => { if (!el) return false; el.click(); return true; };
 
+      /*
+        Shut Settings before going anywhere that is not Settings.
+
+        #158 made Settings a PAGE, and this loop walks its seven panes before
+        reaching the call - so the call was being measured with the help pane
+        still in front of it, and reported the help pane's 4416 characters as
+        its own. The row was green and about the wrong screen.
+
+        shutDock in #103 and openRail in #183 exist for exactly this, and #190
+        is the note about doing it BEFORE anything reads the page rather than
+        just before the press. Third instance; the only new thing is that the
+        measure now names what it looked at, which is how this one showed up.
+      */
+      if (kind !== 'pane') {
+        const shut = document.querySelector('#settings .close');
+        if (shut && shut.getBoundingClientRect().width > 1) shut.click();
+      }
+
       if (kind === 'view') {
         return press(document.querySelector('[data-go="' + at + '"]'));
       }
@@ -415,9 +505,6 @@ for (const [label, device, touch] of VIEWPORTS) {
           card.click();
         }
         return press(document.querySelector('[data-tab="' + at + '"]'));
-      }
-      if (kind === 'call') {
-        return press(document.querySelector('[data-call]'));
       }
       // A settings pane: open the sheet, then the pane.
       const opener = document.querySelector('[data-settings]');
@@ -440,6 +527,7 @@ for (const [label, device, touch] of VIEWPORTS) {
       tiny: string[]
       small: string[]
       chars: number
+      panel: { found: boolean; where: string; chars: number }
     }
 
     const faults: string[] = []
@@ -453,10 +541,37 @@ for (const [label, device, touch] of VIEWPORTS) {
       faults.push(`targets under ${String(MIN_TAP_PX)}px — ${m.small.join(', ')}`)
     }
     if (m.chars < 40) faults.push(`rendered almost nothing (${String(m.chars)} characters)`)
+    /*
+      #123: a section that is empty because it is new must not look identical
+      to one that is empty because it is broken. The floor is on the panel
+      rather than on the page, and it is the empty STATE that clears it.
+    */
+    if (!m.panel.found) faults.push('no main panel on this screen to measure')
+    else if (m.panel.chars < EMPTY_STATE_FLOOR) {
+      faults.push(
+        `the section itself says almost nothing (${String(m.panel.chars)} characters) — ` +
+          'an empty section needs an empty state, or it reads as a broken one',
+      )
+    }
+    /*
+      CONTROL: the panel is a strict SUBSET of the page.
+
+      Without this, someone pointing the panel measure back at `document.body`
+      would restore the old inert floor and every row would still read clean —
+      which is precisely how the floor came to be inert in the first place.
+    */
+    if (m.panel.found && m.panel.chars >= m.chars) {
+      faults.push(
+        `the panel measure is not measuring the panel (${String(m.panel.chars)} of ` +
+          `${String(m.chars)} page characters)`,
+      )
+    }
 
     record(
       `${label} · ${tab}`,
-      faults.length === 0 ? `clean (${String(m.chars)} chars)` : faults.join(' ;; '),
+      faults.length === 0
+        ? `clean (${String(m.panel.chars)} in ${m.panel.where}, ${String(m.chars)} on the page)`
+        : faults.join(' ;; '),
       faults.length === 0,
     )
   }
