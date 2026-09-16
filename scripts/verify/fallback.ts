@@ -76,18 +76,32 @@ const budget = {
   maxCostPerCallUsd: perCall,
 }
 
-// The router's own ordering, restated once here and nowhere else in this file.
+/*
+  The router's own ordering, asked for rather than restated.
+
+  This was an independent restatement of `usable_models order by priority,
+  model_priority, model_id` — deliberately, as a cross-check. #127 (0394, 0396)
+  made that stale: the router now asks `app.model_order`, which applies the
+  same registry order and then sends a model with a poor record FOR THIS KIND
+  to the back. The two agree exactly while nothing is demoted, and would
+  disagree the first time anything is — so the restatement would have gone red
+  on correct behaviour, which is the failure this repository has recorded five
+  times under "assert the property, not the artefact".
+
+  Restating the demotion rule here would be a second copy of something with
+  real logic in it, which is worse than no cross-check. So this asks the one
+  assembler. The kind is `(unattributed)` because that is what a call with no
+  job gets, and every call this suite makes has no job.
+*/
 const usable = (
   await db.execute(`
-    select model_id, pricing_prompt, pricing_completion, model_priority
-      from public.usable_models
-     order by priority, model_priority, model_id
+    select model_id, pricing_prompt, pricing_completion
+      from app.model_order('(unattributed)')
   `)
 ).rows as {
   model_id: string
   pricing_prompt: string
   pricing_completion: string
-  model_priority: number
 }[]
 
 const order = usable.map((m) => m.model_id)

@@ -20,7 +20,14 @@ class FakeDb implements SqlExecutor {
 
   async execute(sql: string): Promise<SqlResult> {
     this.statements.push(sql)
-    if (sql.includes('from public.usable_models')) return { rows: this.models }
+    /*
+      #127 (0394) moved the allow-list behind `app.model_order`, which returns
+      it already ordered and carrying the reason for each row. Matched on the
+      function name rather than on `usable_models`, which the router no longer
+      mentions — a double that keys on text the code has stopped saying returns
+      an empty list and every test fails as "no usable model".
+    */
+    if (sql.includes('app.model_order(')) return { rows: this.models }
     if (sql.includes('provider_available')) return { rows: [{ ok: this.available }] }
     return { rows: [] }
   }
@@ -38,6 +45,11 @@ const model = (id: string, prompt = '0', completion = '0'): Record<string, unkno
   base_url: 'https://openrouter.ai/api/v1',
   free_only: true,
   secret_ref: null,
+  // What `app.model_order` says about this row. The router carries `why` into
+  // the trace, so a double that omitted it would exercise the ordering and
+  // never the explaining.
+  standing: 'unproven',
+  why: `no record yet for (unattributed) (0 of 20 calls needed)`,
 })
 
 const ok = (cost: number | null = 0, content = 'hello'): typeof fetch =>
@@ -313,35 +325,42 @@ describe('an empty completion is an explicit failure, not an empty string', () =
   })
 })
 
-describe('failover — a rate-limited free model is normal, not fatal', () => {
-  /** A fetch that answers each call from a queue of scripted responses. */
-  const scripted = (
-    responses: readonly (() => Response)[],
-  ): { impl: typeof fetch; bodies: () => Record<string, unknown>[] } => {
-    const seen: Record<string, unknown>[] = []
-    let i = 0
-    const impl = vi.fn(async (_url: string, init: { body: string }) => {
-      seen.push(JSON.parse(init.body) as Record<string, unknown>)
-      const make = responses[Math.min(i, responses.length - 1)]
-      i += 1
-      return (make as () => Response)()
-    }) as unknown as typeof fetch
-    return { impl, bodies: () => seen }
-  }
+/**
+ * A fetch that answers each call from a queue of scripted responses.
+ *
+ * At module scope rather than inside one describe: #127's ordering tests need
+ * the same two helpers, and a second copy of a test double is a second thing
+ * to keep in step.
+ */
+const scripted = (
+  responses: readonly (() => Response)[],
+): { impl: typeof fetch; bodies: () => Record<string, unknown>[] } => {
+  const seen: Record<string, unknown>[] = []
+  let i = 0
+  const impl = vi.fn(async (_url: string, init: { body: string }) => {
+    seen.push(JSON.parse(init.body) as Record<string, unknown>)
+    const make = responses[Math.min(i, responses.length - 1)]
+    i += 1
+    return (make as () => Response)()
+  }) as unknown as typeof fetch
+  return { impl, bodies: () => seen }
+}
 
+const answered = (model: string): Response =>
+  new Response(
+    JSON.stringify({
+      model,
+      choices: [{ message: { content: 'the answer' } }],
+      usage: { cost: 0, prompt_tokens: 3, completion_tokens: 2 },
+    }),
+    { status: 200 },
+  )
+
+describe('failover — a rate-limited free model is normal, not fatal', () => {
   const rateLimited = (): Response =>
     new Response(JSON.stringify({ error: { code: 429, message: 'rate-limited upstream' } }), {
       status: 200,
     })
-  const answered = (model: string): Response =>
-    new Response(
-      JSON.stringify({
-        model,
-        choices: [{ message: { content: 'the answer' } }],
-        usage: { cost: 0, prompt_tokens: 3, completion_tokens: 2 },
-      }),
-      { status: 200 },
-    )
   const emptyReply = (model: string): Response =>
     new Response(
       JSON.stringify({
@@ -500,5 +519,88 @@ describe('failover — a rate-limited free model is normal, not fatal', () => {
       new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES }),
     ).rejects.toBeInstanceOf(ProviderUnavailableError)
     expect(bodies()).toHaveLength(0)
+  })
+})
+
+describe('#127 — the order is measured, taken as given, and explained', () => {
+  /*
+    The failure this guards against is specific and has happened here before:
+    a list assembled twice, disagreeing. `loadAllowList` used to restate the
+    view's ORDER BY because a view's ordering does not survive being selected
+    from — and when `model_priority` was added to one copy and not the other,
+    the first real paid request went to three free models instead.
+
+    `app.model_order` now returns the list already ordered, so the router must
+    take that order and must not re-derive it. Asserted by handing it an order
+    that no sort the router could invent would produce: reverse-alphabetical,
+    with the alphabetically-first model last.
+  */
+  it('tries models in the order the database returned, not one of its own', async () => {
+    const db = new FakeDb([
+      model('zebra/last:free'),
+      model('alpha/first:free'),
+      model('middle/one:free'),
+    ])
+    const { impl, bodies } = scripted([
+      () => new Response(JSON.stringify({ error: { message: 'rate limited' } }), { status: 429 }),
+      () => answered('alpha/first:free'),
+    ])
+    const result = await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES })
+    expect(result.model).toBe('alpha/first:free')
+    expect(bodies().map((b) => (b as { model: string }).model)).toEqual([
+      'zebra/last:free',
+      'alpha/first:free',
+    ])
+  })
+
+  /*
+    #127's last acceptance criterion: the router explains its choice in the
+    trace. Written from the same row the order came from, so the explanation
+    cannot drift from the decision it explains.
+  */
+  it('records which model answered and on what evidence', async () => {
+    const db = new FakeDb([model('first/one:free')])
+    const { impl } = scripted([() => answered('first/one:free')])
+    await new ProviderRouter(db, 'k', impl).complete({
+      messages: MESSAGES,
+      jobId: '11111111-1111-1111-1111-111111111111',
+    })
+    const traced = db.calls('job_trace_add')
+    expect(traced).toHaveLength(1)
+    expect(traced[0]).toContain('decision')
+    expect(traced[0]).toContain('first/one:free')
+    expect(traced[0]).toContain('no record yet')
+  })
+
+  /*
+    And a call with no job writes nothing. `job_traces.job_id` is a foreign key
+    to `jobs`, so a trace for a call that belongs to no job could not be stored
+    even if it were wanted — and a write that always fails is the shape of a
+    feature nobody notices is broken.
+  */
+  it('writes no trace for a call that belongs to no job', async () => {
+    const db = new FakeDb([model('first/one:free')])
+    const { impl } = scripted([() => answered('first/one:free')])
+    await new ProviderRouter(db, 'k', impl).complete({ messages: MESSAGES })
+    expect(db.calls('job_trace_add')).toHaveLength(0)
+  })
+
+  /*
+    The kind is read from the job inside the query rather than passed in, so
+    nobody can pass the wrong one. Asserted on the statement itself because the
+    alternative — a second round trip to look the kind up — is the thing being
+    avoided, and it would be invisible from the result.
+  */
+  it('asks for the record of the job kind, in one statement', async () => {
+    const db = new FakeDb([model('first/one:free')])
+    const { impl } = scripted([() => answered('first/one:free')])
+    await new ProviderRouter(db, 'k', impl).complete({
+      messages: MESSAGES,
+      jobId: '11111111-1111-1111-1111-111111111111',
+    })
+    const asked = db.calls('app.model_order(')
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toContain('select j.kind from public.jobs j')
+    expect(asked[0]).toContain("'(unattributed)'")
   })
 })

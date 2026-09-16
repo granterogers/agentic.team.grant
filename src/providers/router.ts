@@ -198,22 +198,37 @@ export class ProviderRouter {
     this.maxAttempts = Math.max(1, maxAttempts)
   }
 
-  /** Layer 3's data, read fresh: availability is a measured, expiring fact. */
-  private async loadAllowList(): Promise<{ provider: ProviderRow; models: AllowedModel[] }> {
+  /**
+   * Layer 3's data, read fresh: availability is a measured, expiring fact —
+   * and, since #127, so is competence.
+   *
+   * `app.model_order` (0394) returns the allow-list already in the order to
+   * try it, each row carrying the reason. The order is NOT restated here, and
+   * that is the point: the previous version of this method restated the view's
+   * `ORDER BY` because a view's ordering does not survive being selected from,
+   * and the two copies then disagreed — `model_priority` was added to one and
+   * not the other, which sent the first real paid request to three free models
+   * instead. One list assembled once, by the thing that knows why.
+   *
+   * The kind is read from the job rather than passed in, so it cannot be
+   * passed WRONGLY and no caller has to be changed to get it right. A call
+   * with no job is not given a false kind: `(unattributed)` is what the record
+   * itself calls those rows, and it is a real record of real calls.
+   */
+  private async loadAllowList(
+    jobId?: string,
+  ): Promise<{ provider: ProviderRow; models: AllowedModel[]; why: Map<string, string> }> {
+    const forJob =
+      jobId === undefined || jobId === ''
+        ? `'(unattributed)'`
+        : `coalesce((select j.kind from public.jobs j where j.job_id = '${jobId.replace(/'/g, "''")}'::uuid), '(unattributed)')`
     const { rows } = await this.db.execute(`
-      select m.provider, m.model_id, m.pricing_prompt, m.pricing_completion,
-             p.base_url, p.free_only, p.secret_ref::text as secret_ref,
+      select o.provider, o.model_id, o.pricing_prompt, o.pricing_completion,
+             o.base_url, o.secret_ref::text as secret_ref, o.standing, o.why,
+             p.free_only,
              p.max_price_prompt, p.max_price_completion, p.max_cost_per_call_usd
-      from public.usable_models m
-      join public.providers p on p.provider = m.provider
-      -- The view carries this same ORDER BY, and a view's ordering is not
-      -- guaranteed to survive being selected from, so it is restated here
-      -- rather than assumed. Restated, not re-decided: model_priority is the
-      -- column 0373 added precisely so that which model is tried first stops
-      -- being alphabetical. Leaving this line ordering by model_id alone
-      -- while the view said otherwise is what sent the first real paid request
-      -- to three free models instead — one list assembled twice, disagreeing.
-      order by p.priority, m.model_priority, m.model_id
+      from app.model_order(${forJob}) o
+      join public.providers p on p.provider = o.provider
     `)
     if (rows.length === 0) throw new NoUsableModelError()
 
@@ -235,7 +250,39 @@ export class ProviderRouter {
         pricing_prompt: r.pricing_prompt === null ? null : String(r.pricing_prompt),
         pricing_completion: r.pricing_completion === null ? null : String(r.pricing_completion),
       })),
+      why: new Map(rows.map((r) => [String(r.model_id), String(r.why ?? '')])),
     }
+  }
+
+  /**
+   * Say, in the job's own trace, which model was chosen and on what evidence.
+   *
+   * #127's last acceptance criterion — *"the router explains its choice in the
+   * trace"* — and it is written from the SAME row the order came from, so the
+   * explanation cannot drift from the decision it explains.
+   *
+   * Never allowed to fail the call. A trace is bookkeeping and the work is the
+   * work; but it is not swallowed silently either, because a write nobody
+   * reads back is indistinguishable from a feature that was never built. It
+   * fails into the console, which is where a worker's faults are read.
+   */
+  private async explainChoice(
+    jobId: string | undefined,
+    model: string,
+    why: string,
+  ): Promise<void> {
+    if (jobId === undefined || jobId === '' || why === '') return
+    const detail = JSON.stringify({ chose: model, because: why }).replace(/'/g, "''")
+    await this.db
+      .execute(
+        `select app.job_trace_add('${jobId.replace(/'/g, "''")}'::uuid, 'decision',
+           '${detail}'::jsonb, null, null, null, null)`,
+      )
+      .catch((error: unknown) => {
+        console.error(
+          `router: could not trace the model choice — ${String((error as Error).message)}`,
+        )
+      })
   }
 
   /**
@@ -289,7 +336,7 @@ export class ProviderRouter {
    *   provenance a lie.
    */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const { provider, models } = await this.loadAllowList()
+    const { provider, models, why } = await this.loadAllowList(request.jobId)
 
     // A named model is honoured exactly, or it fails. See above.
     if (request.model !== undefined) {
@@ -301,7 +348,12 @@ export class ProviderRouter {
 
     for (const [index, model] of candidates.entries()) {
       try {
-        return await this.attempt(provider, models, request, model)
+        const result = await this.attempt(provider, models, request, model)
+        // Traced after it worked, not before it was tried: the interesting
+        // fact is which model ANSWERED, and a model that threw and was failed
+        // over from is already recorded in `inference_usage` with its outcome.
+        await this.explainChoice(request.jobId, model, why.get(model) ?? '')
+        return result
       } catch (error) {
         // Non-negotiable: these end the call rather than advancing it.
         // `PaidCallPreventedError` covers both "this model is not on the

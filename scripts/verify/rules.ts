@@ -311,6 +311,69 @@ for (const scope of ['global', 'project', 'staff', 'agent', 'kind'] as const) {
 }
 
 /* ------------------------------------------------------------------ *
+ * The press, over HTTP, which is the layer the page actually uses.
+ * ------------------------------------------------------------------ */
+console.log('\nthe press is reachable from a browser')
+
+/*
+  Every check above went through `app.` directly. PostgREST exposes only
+  `public`, and `verify:search` is this repository's warning about what that
+  costs: `app.search_documents` worked perfectly, had no public wrapper, and
+  nothing with a browser could call it. The suite that should have caught it
+  skipped the HTTP layer.
+
+  Nothing is written here. A suggestion id that cannot exist proves the whole
+  path — the action is registered, its required arguments are enforced, the
+  public wrapper resolves and the function runs — by coming back with the
+  function's OWN refusal rather than with "unknown action" or a 502. A check
+  whose happy path is a refusal has to assert on the words, or it passes for
+  the wrong reason.
+*/
+const ENDPOINT = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/hq-api`
+const apiToken = String(
+  (
+    await db.execute(
+      `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
+    )
+  ).rows[0]?.v ?? '',
+)
+if (apiToken === '') {
+  check('the hq.api_token is in the vault', 'it is not — run npm run deploy:hq', false)
+} else {
+  const post = async (args: Record<string, unknown>): Promise<{ status: number; body: string }> => {
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'suggestion_decide', args }),
+    })
+    return { status: response.status, body: await response.text() }
+  }
+
+  const absent = await post({
+    p_suggestion_id: '00000000-0000-0000-0000-000000000000',
+    p_accept: true,
+  })
+  check(
+    'the action exists and reaches the function',
+    `http ${String(absent.status)} ${absent.body.slice(0, 80)}`,
+    absent.status === 200 && absent.body.includes('there is no such suggestion'),
+  )
+
+  /*
+    And a missing verdict is refused rather than defaulted.
+
+    A boolean that defaults to false would turn a dropped field into a silent
+    DECLINE, and a decline cannot be undone here: the offer never comes back.
+  */
+  const noVerdict = await post({ p_suggestion_id: '00000000-0000-0000-0000-000000000000' })
+  check(
+    'a press with no verdict is refused, not read as a decline',
+    `http ${String(noVerdict.status)} ${noVerdict.body.slice(0, 80)}`,
+    noVerdict.status === 400 && noVerdict.body.includes('p_accept'),
+  )
+}
+
+/* ------------------------------------------------------------------ *
  * Nothing this suite did survives it.
  * ------------------------------------------------------------------ */
 console.log('\nteardown')
