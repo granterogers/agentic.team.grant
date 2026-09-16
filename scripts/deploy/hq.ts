@@ -350,6 +350,31 @@ if (!looksRight) {
   console.error('the page URL did not serve the page')
   process.exit(1)
 }
+
+/*
+  And a DEEP LINK, which is the half no test on this machine can cover (#157).
+
+  `verify:routes` runs against a server that performs the same rewrite by hand,
+  so it proves the studio reads and writes its address correctly and proves
+  nothing whatever about `vercel.json`. A rewrite that stops matching is
+  invisible in every local check and turns every link Grant has saved into a
+  404 — which is the one failure mode of this feature that matters, because the
+  whole point of it is links that outlive the session.
+
+  A project slug is not needed: an unknown one is a legitimate route and lands
+  on the portfolio, so the assertion is that the HOST served the application
+  rather than looked for a file.
+*/
+const deep = await fetch(`https://${String(page.url)}/p/any-project/tasks`)
+const deepBody = await deep.text()
+const deepOk = deep.status === 200 && deepBody.includes('Team HQ')
+console.log(
+  `  deep link: http ${String(deep.status)} — ${deepOk ? 'the rewrite is live' : 'THE REWRITE IS NOT WORKING'}`,
+)
+if (!deepOk) {
+  console.error('a saved link to a project would 404 — check the rewrite in vercel.json')
+  process.exit(1)
+}
 // --- and prove the reader reads --------------------------------------------
 //
 // By behaviour, not by status. A Python function that failed to install its

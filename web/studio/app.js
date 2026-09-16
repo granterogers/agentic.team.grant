@@ -6476,10 +6476,96 @@ function restoreFocus(key) {
   if (again instanceof HTMLElement) again.focus()
 }
 
+/*
+  The studio can be linked to (#157).
+
+  Grant's third pick, and his reason for it: *"the one people notice ten times a
+  day without ever reporting it."* One URL and all state in memory means you
+  cannot send yourself a project, cannot bookmark the Tasks tab, and pressing
+  Back — which people press anyway — LEAVES THE STUDIO.
+
+  No router library and no build step (ADR-0002, ADR-0011). This is `pushState`,
+  one `popstate` listener and two pure functions, and the two are written next
+  to each other on purpose: a parser and a printer that disagree is a URL that
+  changes every time you copy it.
+
+  The host needs one line for this to survive a reload, and it is in
+  `vercel.json` as a rewrite rather than as something anybody has to configure —
+  §31A calls an avoidable manual step a design failure. `index.html` asks for
+  its assets by absolute path for the same reason: from `/p/a-project` a
+  relative `./app.js` is a different file as far as a static host is concerned.
+*/
+function pathNow() {
+  if (state.view === 'project' && state.project !== null) {
+    return state.tab === 'overview'
+      ? `/p/${state.project}`
+      : `/p/${state.project}/${state.tab}`
+  }
+  if (state.view === 'tasks') return '/tasks'
+  if (state.view === 'lately') return '/activity'
+  return '/'
+}
+
+/**
+ * Read a path into the state, and say whether it meant anything.
+ *
+ * An unknown route lands on the portfolio rather than on a blank page, which is
+ * the issue's own requirement and the only sensible answer for a link that has
+ * outlived the thing it pointed at — a project can be archived, and a bookmark
+ * to it should not look like a broken product.
+ */
+function goToPath(path) {
+  const bits = String(path ?? '/').split('/').filter((x) => x !== '')
+  if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
+  if (bits[0] === 'tasks') { state.view = 'tasks'; return true }
+  if (bits[0] === 'activity') { state.view = 'lately'; return true }
+  if (bits[0] === 'p' && bits[1] !== undefined) {
+    const p = PROJECTS.find((x) => x.slug === decodeURIComponent(bits[1]))
+    if (p === undefined) { state.view = 'portfolio'; state.project = null; return false }
+    state.view = 'project'
+    state.project = p.slug
+    const tab = bits[2] === undefined ? 'overview' : decodeURIComponent(bits[2])
+    state.tab = SECTIONS.some((x) => x.id === tab) ? tab : 'overview'
+    return true
+  }
+  state.view = 'portfolio'
+  state.project = null
+  return false
+}
+
+/*
+  Written on every paint, from the state, rather than at each of the forty
+  places that change it.
+
+  Forty callers each remembering to push is forty chances to forget, and the
+  one that forgets is the screen whose URL silently describes the previous
+  screen. `render()` already runs after every one of them, so the address bar
+  is a function of the state by construction.
+
+  `replaceState` when the path has not changed, so a redraw — a selection, a
+  fetch landing — does not add an entry to the history that Back has to walk
+  through.
+*/
+let shownPath = null
+function keepUrl() {
+  if (typeof history === 'undefined') return
+  const path = pathNow()
+  if (path === shownPath) return
+  const first = shownPath === null
+  shownPath = path
+  try {
+    if (first) history.replaceState({ path }, '', path)
+    else history.pushState({ path }, '', path)
+  } catch {
+    /* A page opened from a file has no history to write to. It still works. */
+  }
+}
+
 function render() {
   const key = focusKey()
   try {
     drawShell()
+    keepUrl()
     restoreFocus(key)
     painting = false
   } catch (e) {
@@ -9240,6 +9326,37 @@ document.addEventListener('keydown', (e) => {
 
 apply()
 clock()
+
+/*
+  The route the browser arrived with (#157).
+
+  Read BEFORE the first paint, so a bookmarked project opens on that project
+  rather than opening the portfolio and jumping. Tried twice: the first attempt
+  is against the prototype's projects, which is all the page holds before the
+  office answers, and `wantedPath` keeps the address so the second attempt can
+  be made against the real list the moment it lands. Without that, every deep
+  link to a real project would land on the portfolio, because at the moment it
+  is read the real project does not exist yet.
+*/
+let wantedPath = typeof location === 'undefined' ? '/' : location.pathname
+if (goToPath(wantedPath)) wantedPath = null
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', (e) => {
+    /*
+      Back and Forward move WITHIN the studio.
+
+      `shownPath` is set from the event rather than left alone, so the paint
+      that follows does not immediately push the entry we have just walked back
+      out of — which would make Back appear not to work at all.
+    */
+    const path = e.state?.path ?? location.pathname
+    shownPath = path
+    goToPath(path)
+    render()
+  })
+}
+
 render()
 
 /*
@@ -9712,6 +9829,18 @@ async function live() {
     and if they never do the page is still there and still honest.
   */
   await hydrate(API, token)
+  /*
+    Second attempt at the address the browser arrived with (#157).
+
+    The first was made against the prototype's projects, before the office had
+    answered, so a link to a real project could not resolve. Now it can — and
+    only now, which is why this is here rather than at startup.
+  */
+  if (wantedPath !== null) {
+    goToPath(wantedPath)
+    wantedPath = null
+    shownPath = null
+  }
   render()
   /*
     The home board reads what is open and what just happened (#219), and both
