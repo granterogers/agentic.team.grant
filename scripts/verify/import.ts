@@ -311,6 +311,79 @@ try {
     JSON.stringify(badSource).slice(0, 100),
     badSource.ok === false && String(badSource.error).includes('does not belong'),
   )
+  // =========================================================================
+  console.log('\nthe structure is read before the prose (#130)')
+  // =========================================================================
+
+  /*
+    #130's title, in one sentence: *the import step is parsing English*. It
+    was, in the one place that mattered — the document's title came from
+    `split_part(body, E'\n', 1)`, the first line, which works until an answer
+    opens with "Here is the summary you asked for:".
+
+    `public.output_shapes` has declared `draft_document` with a required
+    `title` since 0272 and nothing read it. 0417 does. Both directions are
+    checked here, because a reader that ALWAYS prefers the structure would
+    lose the title on the 3,240 outputs that declare none.
+  */
+  const declaredId = String(
+    (
+      await one(`
+        insert into public.outputs (job_id, staff_id, body, confidence, evidence, sources,
+                                    shape, facts)
+        values (${lit(jobId)}::uuid,
+                (select staff_id from public.staff where slug = 'research-director'),
+                ${lit(`Here is the summary you asked for:\n\nIt is all fine ${run}.`)},
+                'medium', 'inferred', '[]'::jsonb,
+                'draft_document',
+                ${lit(JSON.stringify({ title: `The pricing note ${run}`, markdown: '#' }))}::jsonb)
+        returning output_id::text as id
+      `)
+    ).id,
+  )
+  const declared = (await one(`select public.import_output(${lit(declaredId)}::uuid) as r`)).r as {
+    ok?: boolean
+    title?: string
+    title_from_structure?: boolean
+  }
+  check(
+    'a title the output DECLARED beats the first line of its prose',
+    `${String(declared.title)} (from structure: ${String(declared.title_from_structure)})`,
+    declared.ok === true &&
+      declared.title === `The pricing note ${run}` &&
+      declared.title_from_structure === true,
+  )
+
+  /*
+    THE CONTROL, and it is the half that stops this being a regression. Most
+    outputs declare nothing, and for those the first line is still the best
+    guess available — removing the fallback would trade a sometimes-wrong
+    title for no title at all.
+  */
+  const plainId = String(
+    (
+      await one(`
+        insert into public.outputs (job_id, staff_id, body, confidence, evidence, sources)
+        values (${lit(jobId)}::uuid,
+                (select staff_id from public.staff where slug = 'research-director'),
+                ${lit(`A plain first line ${run}\nand more below it.`)},
+                'medium', 'inferred', '[]'::jsonb)
+        returning output_id::text as id
+      `)
+    ).id,
+  )
+  const plain = (await one(`select public.import_output(${lit(plainId)}::uuid) as r`)).r as {
+    ok?: boolean
+    title?: string
+    title_from_structure?: boolean
+  }
+  check(
+    'CONTROL: an output that declares nothing still takes its first line',
+    `${String(plain.title)} (from structure: ${String(plain.title_from_structure)})`,
+    plain.ok === true &&
+      plain.title === `A plain first line ${run}` &&
+      plain.title_from_structure === false,
+  )
 } finally {
   console.log('\nteardown')
   if (projectId !== '') {
