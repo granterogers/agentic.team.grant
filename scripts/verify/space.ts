@@ -261,8 +261,41 @@ const FURNITURE = `(() => {
   const doc = document.scrollingElement
   const top = doc.scrollTop
   const vh = window.innerHeight
-  const first = document.querySelector('.panel > .pbodywrap > *, .tabbody .card, .tabbody li')
-  const y = first === null ? null : Math.round(first.getBoundingClientRect().top + top)
+  /*
+    Content, whatever the Overview happens to BE (#188).
+
+    This selector knew about panels and cards, and #25 turned the project
+    Overview into a map — so on the surface this measure exists for it matched
+    nothing, reported 0px, and read as "no furniture at all". A found-nothing
+    result that looks like a perfect score is the worst answer a measure can
+    give, and this repository has recorded that shape twice.
+
+    The map's own surface is planeport. The list is ordered from most to least
+    specific and the FIRST match wins, so a panel board still measures the way
+    it did.
+
+    No backticks in this comment: it lives inside a template literal, and that
+    is the eighth time in this repository.
+  */
+  const first = document.querySelector(
+    '.panel > .pbodywrap > *, .tabbody .card, .tabbody li, .planeport, .tabbody .plane')
+  let y = first === null ? null : Math.round(first.getBoundingClientRect().top + top)
+  /*
+    Discount the prototype strip, because Grant never sees it (#188).
+
+    The audit runs without a token, so the page correctly says it is showing
+    invented projects — 81px of it, at the very top, above everything. Counting
+    that as furniture measures the HARNESS rather than the product, which is
+    this repository's most-recorded class of wrong answer.
+
+    The strip's own height is subtracted rather than the measure being moved
+    below it, so a run WITH a token gives the same number.
+
+    No backticks in this comment: template literal.
+  */
+  const strip = document.querySelector('.mockbar')
+  const stripH = strip === null ? 0 : Math.round(strip.getBoundingClientRect().height)
+  if (y !== null) y = Math.max(0, y - stripH)
   const above = []
   for (const sel of ['.phero', '.projhead', '.pbanner', '.tabhead', '.tabhead .t-lead',
                      '.headctl', '.tabs', '.topbar', '.phonebar', '.panel > header']) {
@@ -272,7 +305,8 @@ const FURNITURE = `(() => {
     if (r.height === 0) continue
     above.push({ sel, height: Math.round(r.height), y: Math.round(r.top + top) })
   }
-  return { viewport: vh, firstContentAt: y,
+  return { viewport: vh, firstContentAt: y, found: first === null ? null : first.className,
+           stripDiscounted: stripH,
            screensOfFurniture: y === null ? null : Math.round((y / vh) * 100) / 100,
            above: above.filter((a) => y === null || a.y < y) }
 })()`
@@ -293,12 +327,21 @@ const f = (await pp.evaluate(FURNITURE)) as {
   viewport: number
   firstContentAt: number | null
   screensOfFurniture: number | null
+  found: string | null
+  stripDiscounted: number
   above: { sel: string; height: number; y: number }[]
 }
 console.log('\n─── phone, project overview ───')
 console.log(`  viewport ${String(f.viewport)}px`)
 console.log(
-  `  first content pixel at ${String(f.firstContentAt)}px — ${String(f.screensOfFurniture)} screens of furniture above it`,
+  f.found === null
+    ? '  NO CONTENT FOUND — this measure matched nothing, so the number below would be a lie'
+    : `  first content pixel at ${String(f.firstContentAt)}px — ${String(f.screensOfFurniture)} screens of furniture above it` +
+        ` (measured to .${String(f.found).split(' ')[0]}${
+          f.stripDiscounted === 0
+            ? ''
+            : `, less ${String(f.stripDiscounted)}px of prototype strip Grant never sees`
+        })`,
 )
 for (const a of f.above) {
   console.log(`    ${a.sel.padEnd(22)} ${String(a.height).padStart(4)}px at y=${String(a.y)}`)
