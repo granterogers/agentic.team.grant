@@ -10454,11 +10454,79 @@ async function fillDoc(doc, host) {
   is added again on every paint — by the tenth navigation one keypress would
   open the bar ten times. Anything global belongs here, outside the render.
 */
+/*
+  Lists that j and k walk (#121).
+
+  Named by the attribute their rows already carry, so a list gains this the
+  moment its rows carry one of them and nothing else on the page can be walked
+  into by accident. The rail has its own arrow navigation and is deliberately
+  not here: two mechanisms on one element is how a focus fight starts.
+*/
+const WALKABLE = ['doc', 'task', 'person']
+
+/** Whether a keystroke belongs to whatever the person is typing into. */
+const typingIn = (el) =>
+  el instanceof HTMLElement &&
+  (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT')
+
 document.addEventListener('keydown', (e) => {
   const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
   if (cmdK) { e.preventDefault(); state.cmd.open ? (closeCmd(), render()) : openCmd(); return }
   // Escape closes whatever is open, outermost first.
   if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
+
+  /*
+    Everything below is a BARE letter, so it must never fire while somebody is
+    writing. A composer that swallows the j out of "project" is worse than no
+    shortcut at all, and modifiers are excluded for the same reason: Control-J
+    belongs to the browser.
+  */
+  if (typingIn(document.activeElement) || e.metaKey || e.ctrlKey || e.altKey) return
+
+  /*
+    Slash focuses the search on this screen (#121).
+
+    Most screens have no search field of their own - the command bar IS the
+    product's search (#37) - so slash opens that rather than doing nothing,
+    which is what a person who pressed it is asking for either way. Not while
+    a sheet is open: `body.behind` is the signal for that, never the presence
+    of a `.sheet` element, which the studio leaves in the tree with its box
+    taken away.
+  */
+  if (e.key === '/') {
+    const box = [...document.querySelectorAll('input[type="search"]')].find(
+      (el) => el.getClientRects().length > 0,
+    )
+    if (box) { e.preventDefault(); box.focus(); return }
+    if (!state.cmd.open && !document.body.classList.contains('behind')) {
+      e.preventDefault()
+      openCmd()
+    }
+    return
+  }
+
+  /*
+    j and k walk the list the focused row belongs to.
+
+    Arrows are left to the browser here on purpose: inside a scrolling gallery
+    they scroll, and taking that away to move focus instead is a change a
+    keyboard user did not ask for. j and k mean nothing else.
+  */
+  if (e.key === 'j' || e.key === 'k') {
+    const from = document.activeElement
+    if (!(from instanceof HTMLElement)) return
+    const kind = WALKABLE.find((k) => from.dataset[k] !== undefined)
+    if (kind === undefined) return
+    const all = [...document.querySelectorAll(`[data-${kind}]`)].filter(
+      (el) => el instanceof HTMLElement && el.getClientRects().length > 0,
+    )
+    const at = all.indexOf(from)
+    const next = at === -1 ? undefined : all[at + (e.key === 'j' ? 1 : -1)]
+    if (!(next instanceof HTMLElement)) return
+    e.preventDefault()
+    next.focus()
+  }
 })
 
 apply()

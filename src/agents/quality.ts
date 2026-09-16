@@ -440,6 +440,15 @@ export const claimsToHaveMade = (body: string): string | null => {
 export const promisesToReachOut = (body: string): string | null => {
   const text = String(body ?? '')
   if (text.trim() === '') return null
+  /*
+    Raw although it currently needs nothing escaping, because it is a REGEX
+    FRAGMENT interpolated into the raw patterns below. The day somebody adds a
+    word boundary to it, a plain template literal would turn that into a
+    backspace character that renders as nothing, prints as nothing in a diff,
+    and matches nothing for ever — which CLAUDE.md records costing four
+    hypotheses to find once already.
+  */
+  // biome-ignore lint/complexity/noUselessStringRaw: it is a raw regex fragment; see above
   const CHANNEL = String.raw`(?:slack|telegram|e-?mail|whatsapp|teams|#[a-z0-9_-]+)`
   const claims: RegExp[] = [
     // "I'll post a question on #team-slack", "I will send them an email"

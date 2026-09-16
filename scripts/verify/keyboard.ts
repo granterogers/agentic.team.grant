@@ -595,6 +595,107 @@ console.log('\nthe mark picker: 451 marks behind one tab stop')
   await page.waitForTimeout(400)
 }
 
+// --- 6c. slash, and j/k down a list -----------------------------------------
+console.log('\nslash and j/k: the two shortcuts a keyboard user reaches for first')
+{
+  /*
+    #121's remaining two lines. Both are BARE letters, which is what makes the
+    third check the important one: a shortcut that fires while somebody is
+    writing is worse than no shortcut, because it eats their text.
+
+    Slash where a search field exists focuses it; where none does, the command
+    bar IS the product's search (#37), so slash opens that rather than doing
+    nothing.
+  */
+  await page.evaluate(`document.querySelector('[data-look]')?.click()`)
+  await page.waitForTimeout(1200)
+  await page.keyboard.press('/')
+  await page.waitForTimeout(250)
+  const onSearch = await page.evaluate(
+    `document.activeElement?.hasAttribute('data-icon-search') === true`,
+  )
+  check(
+    'slash focuses the search on a screen that has one',
+    onSearch === true ? 'the mark search has focus' : String((await focused()).where),
+    onSearch === true,
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(500)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(600)
+
+  const docsTab = page.locator('[data-tab="documents"]').first()
+  if ((await docsTab.count()) > 0) {
+    await docsTab.click({ force: true })
+    await page.waitForTimeout(1200)
+  }
+  await page.keyboard.press('/')
+  await page.waitForTimeout(400)
+  const barOpen = await page.evaluate(
+    `document.activeElement?.hasAttribute('data-cmd-input') === true`,
+  )
+  check(
+    'and where a screen has none it opens the command bar, with focus in it',
+    barOpen === true ? 'the command bar has focus' : String((await focused()).where),
+    barOpen === true,
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(500)
+
+  /*
+    j and k down the gallery. Asserted as MOVEMENT and as return, never against
+    a named document: the gallery is real data and a check naming a title goes
+    red the day Grant renames it.
+  */
+  await page.evaluate(`document.querySelector('[data-doc]')?.focus()`)
+  const at = async (): Promise<string> =>
+    String(await page.evaluate(`document.activeElement?.getAttribute('data-doc') ?? 'NONE'`))
+  const first = await at()
+  await page.keyboard.press('j')
+  const down = await at()
+  await page.keyboard.press('k')
+  const back = await at()
+  check(
+    'j moves down the gallery and k comes back',
+    `${first} → j ${down} → k ${back}`,
+    first !== 'NONE' && down !== first && back === first,
+  )
+
+  /*
+    THE CONTROL, and its first draft was INERT.
+
+    Typing only j and k proved nothing: a textarea carries none of the
+    walkable attributes, so the walk declines on its own and the check was
+    green with the typing guard deliberately removed. The slash is the letter
+    that actually gets stolen - it opens the command bar from anywhere - so
+    the control types slashes, and it goes red the moment the guard goes.
+  */
+  const teamAgain = page.locator('[data-tab="team"]').first()
+  if ((await teamAgain.count()) > 0) await teamAgain.click({ force: true })
+  await page.waitForTimeout(800)
+  const chatAgain = page.locator('[data-sub="chat"]').first()
+  if ((await chatAgain.count()) > 0) await chatAgain.click({ force: true })
+  await page.waitForTimeout(1200)
+
+  const say = page.locator('textarea').first()
+  if ((await say.count()) > 0) {
+    await say.click({ force: true })
+    await page.evaluate(`(() => { const t = document.activeElement; if (t) t.value = '' })()`)
+    await page.keyboard.type('jk/journal — 1/2 done')
+    await page.waitForTimeout(250)
+    const stillThere = await page.evaluate(`document.activeElement?.tagName === 'TEXTAREA'`)
+    const wrote = String(await page.evaluate(`document.activeElement?.value ?? ''`))
+    check(
+      'CONTROL: typing those letters into the composer moves nothing and loses nothing',
+      `${stillThere ? 'still in the composer' : 'FOCUS LEFT'}, wrote "${wrote}"`,
+      stillThere === true && wrote.endsWith('jk/journal — 1/2 done'),
+    )
+    await page.evaluate(`(() => { const t = document.activeElement; if (t) t.value = '' })()`)
+  } else {
+    check('CONTROL: the composer is on screen to type into', 'NO COMPOSER FOUND', false)
+  }
+}
+
 // --- 7. nothing threw on the way through ------------------------------------
 check(
   'no page error during any journey',
