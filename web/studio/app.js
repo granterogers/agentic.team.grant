@@ -9994,15 +9994,23 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
 })
 
+apply()
 /*
   Where a change to the look is sent (#124, ADR-0021).
 
-  Installed BEFORE the first `apply()`, and the order matters in the harmless
-  direction: `apply()` at boot is putting the cached choice back on the
-  document, and it would send it out again. That is one wasted write of a value
-  the office already has, and the alternative — installing it afterwards —
-  would miss a change made in the first few milliseconds. Neither is a problem,
-  and this way there is no window in which a press is silently not saved.
+  Installed AFTER the first `apply()`, and that order is load-bearing rather
+  than tidy. `apply()` at boot is putting this browser's cached choice back on
+  the document — it is not a change, and sending it would be a POST on every
+  single page load of a value the office already has.
+
+  The first draft installed it before, reasoning that one wasted write was
+  cheaper than a window in which a press is not saved. Both halves were wrong:
+  the window is empty because nothing can be pressed before the first frame,
+  and the write was not merely wasted. `verify:offline` went from 23/23 to
+  22/23 — "a first failure shows the outage strip" — because the boot write
+  was now the first failure, so the one the suite triggered was the second.
+  An unconditional side effect at boot perturbs anything that counts from the
+  first one.
 
   `canWrite()` is asked at SEND time rather than here, because a token can
   arrive after boot: a reader who signs in should start saving without a
@@ -10018,7 +10026,6 @@ saveWith((next) => {
   })
 })
 
-apply()
 clock()
 
 /*
