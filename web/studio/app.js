@@ -126,6 +126,17 @@ const latest = { lately: null, tasks: null }
 const maps = {}
 const placed = {}
 
+/*
+  How much has arrived on each project since he last opened it (#122).
+
+  A plain object rather than part of `latest`, for the same reason `maps` is:
+  it is keyed by project and the two things in `latest` are portfolio-wide.
+  Empty until the office answers, which is correct — no marks is the right
+  first frame, and a mark that appears a moment later is better than one that
+  is wrong for a moment.
+*/
+const unseen = {}
+
 const state = {
   // Which Settings tab is open (#39).
   setting: 'team',
@@ -1784,6 +1795,54 @@ function look(p, opts = {}) {
   return coverSvg(p.slug, opts)
 }
 
+/*
+  What has arrived since he last looked (#122, migration 0381).
+
+  One mark, and it says WHAT as well as how many, because "3 new" on a project
+  card raises the question it was supposed to answer. The count is capped at
+  nine: the mark's job is "look here", and a project reading 75 is a statistic
+  rather than a signal — and on a first run, before anything has ever been
+  opened, 75 is exactly what the honest number is.
+
+  Nothing is drawn when nothing has arrived. A mark that is always on is a mark
+  nobody reads, which is the failure the issue names and the one this product
+  has already shipped once.
+*/
+/*
+  Opening a project is what clears its mark (#122).
+
+  Cleared LOCALLY first and told to the office second, because the mark is
+  gone from the screen he is looking at either way and a round trip he can see
+  is worse than one he cannot. If the write fails the count comes back on the
+  next load, which is the honest outcome — it was not recorded, so it did not
+  happen.
+
+  "on every device", which is why this is a write at all and not a line in
+  browser storage: he reads on a laptop and a phone, and a mark that clears on
+  one of them is a mark that lies on the other.
+*/
+function markSeen(slug) {
+  if (unseen[slug] === undefined) return
+  delete unseen[slug]
+  if (!canWrite()) return
+  const p = byId(slug)
+  if (p?.id === undefined) return
+  void act('project_seen', { p_project_id: p.id }).catch(() => undefined)
+}
+
+function newsFor(slug) {
+  const seen = unseen[slug]
+  if (seen === undefined || seen.n === undefined || seen.n < 1) return ''
+  const bits = []
+  if (seen.walls > 0) bits.push(`${seen.walls} needs you`)
+  if (seen.answers > 0) bits.push(`${seen.answers} answered`)
+  if (seen.docs > 0) bits.push(`${seen.docs} new`)
+  if (seen.tasks > 0) bits.push(`${seen.tasks} tasks`)
+  const many = seen.n > 9 ? '9+' : String(seen.n)
+  return `<span class="news" title="${esc(bits.join(', '))}">
+    <span class="newsdot" aria-hidden="true"></span>${many} since you looked</span>`
+}
+
 function card(p, lead) {
   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0
   return `<button class="project ${p.hue} ${lead ? 'lead' : ''}" data-open="${p.slug}">
@@ -1804,6 +1863,7 @@ function card(p, lead) {
         <span class="t-meta" style="font-size:12px">${p.done}/${p.total}</span>
       </span>` : ''}
       <span class="facts t-meta" style="font-size:12.5px">
+        ${newsFor(p.slug)}
         <span>${p.docs} ${p.docs === 1 ? 'doc' : 'docs'}</span>
         ${p.total > 0 ? `<span>${p.total} tasks</span>` : ''}
         ${p.next ? `<span style="color:var(--warn);font-weight:500">${esc(p.next)}</span>` : ''}
@@ -7298,6 +7358,7 @@ function drawShell() {
         // An attachment belongs to the project you were in. Carrying it across
         // would put a Legacy document on a Wellness message.
         state.attach = null
+        markSeen(state.project)
         render()
       })
     })
@@ -9849,6 +9910,22 @@ async function live() {
   */
   void needTasks()
   void needLately()
+  /*
+    And what has arrived since he last looked (#122). One query, on arrival,
+    because the marks belong on the first screen he sees rather than on the
+    second.
+  */
+  void (async () => {
+    try {
+      const got = await settles(read('unseen'))
+      Object.assign(unseen, got ?? {})
+      render()
+    } catch {
+      // No marks rather than a wrong mark. #119's strip already says when the
+      // office cannot be reached, and a project wrongly flagged as having news
+      // is worse than one not flagged at all.
+    }
+  })()
   /*
     And how he arranged it (#219, migration 0376).
 

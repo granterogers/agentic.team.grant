@@ -5074,6 +5074,18 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 */
 .mapbar { display: flex; justify-content: flex-end; margin-block-end: var(--s3); }
 
+/* What arrived since you last looked (#122). It is a fact on the card's fact
+   row rather than a badge in a corner: a badge says "something", and the row
+   already has room for the one thing that answers "what". */
+.news {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--ink); font-weight: 500;
+}
+.newsdot {
+  inline-size: 7px; block-size: 7px; border-radius: 50%;
+  background: var(--accent); flex: none;
+}
+
 /* --- the project map (#25) -------------------------------------------------
    Grant's reference is Railway's project canvas: a near-black plane, a fine
    dotted grid, small dense cards with hairline borders, and a great deal of

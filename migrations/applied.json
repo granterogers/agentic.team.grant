@@ -378,5 +378,6 @@
   "0377_the_google_form_cannot_be_filled_in_wrongly_either.sql": "341fbb48bc369982cd071d28e76ff273d6a24df8158ffb2139d41ac168f1a3b5",
   "0378_the_project_as_a_map.sql": "515a61c124aa9f1be916aea2dfd23410a11646f9d95210497a7be1029214c6bd",
   "0379_an_agent_who_answered_has_not_done_nothing.sql": "74d2c9681f5e42f8c8f0d679e2d8a2ee62fa5f04cf18ca432c428d90f0689754",
-  "0380_where_he_put_the_cards.sql": "e885bca927fd431a9f38a41e0b4f884e69905a98c0207a8e22405e9ea029f659"
+  "0380_where_he_put_the_cards.sql": "e885bca927fd431a9f38a41e0b4f884e69905a98c0207a8e22405e9ea029f659",
+  "0381_what_changed_since_you_last_looked.sql": "8cfb3265ca49789a9d9a9cb3c602ac03362c3135a88b398525d22abe23cc89c0"
 }

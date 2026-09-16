@@ -274,6 +274,8 @@ const SECTIONS: Readonly<
     is on screen. Putting it in the payload would make every page load pay for
     a screen nobody may open.
   */
+  // What has arrived on each project since he last opened it (#122, 0381).
+  unseen: { fn: 'studio_unseen' },
   plane: { fn: 'studio_plane', arg: 'p_project_id' },
   plane_layout: { fn: 'hq_plane_layout', arg: 'p_project_id' },
   project_team: { fn: 'project_team', arg: 'p_project_id' },
@@ -468,6 +470,7 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     required: ['p_project_id', 'p_at', 'p_view'],
   },
   plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
+  project_seen: { fn: 'hq_project_seen', required: ['p_project_id'] },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
   /*
     Both Google values at once (§35, 0377).
