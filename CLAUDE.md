@@ -1950,6 +1950,21 @@ Each of these cost real time. They are here so they cost it once.
   `staff_prompts` — a prompt written FOR a specialist before they did anything,
   which is derived data like the briefs the sweep already deletes.
 
+- **A token block opened in the middle of another one is invisible in a diff.**
+  #124's density commit wrote `:root[data-density='compact'] {` immediately
+  above the base `:root`'s radius tokens, and the brace swallowed them and
+  everything after: three radii, three glass tiers, both blurs, `--glass-edge`,
+  `--halo` and the two type families became compact-only. **In the default
+  density 44 rules reading `var(--r-card)` computed to 0** — every card,
+  control and sheet had square corners, deployed, for a day. Not overflow, not
+  low contrast, not small type, not a dead control; `verify:layouts` reported
+  64 states and 0 findings over it, and a square card is a design somebody
+  could have chosen, so the captures look plausible. Found only because #38's
+  flat-card detector reads `--r-card` to find cards, got an empty string, and
+  its **synthetic-failure control did not fire**. Put the closing brace on the
+  block you open, in the same edit — and give every found-nothing check a
+  control, because this is what one is for.
+
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run
