@@ -194,6 +194,16 @@ export interface OutputMetadata {
    * call syntax and token bleed are still caught without it.
    */
   readonly toolNames?: readonly string[]
+  /**
+   * The standing rules put in front of THIS job, in Grant's own words.
+   *
+   * Supplied by the handler, because the handler is the only thing that knows
+   * what `guidanceFor` returned and therefore which rules were actually in
+   * force. Absent disables `setAsideUnsaid` entirely — a rule nobody showed
+   * the model is not a rule the answer can be judged against, and refusing on
+   * one would be the gate inventing the constraint it is enforcing.
+   */
+  readonly standingRules?: readonly string[]
 }
 
 export interface MetadataProblem {
@@ -1441,6 +1451,32 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
   }
 
   /*
+    A standing rule broken without a word about it (#242).
+
+    Measured: the same conversation, the same code, twice — the office said
+    which constraint it had set aside once and said nothing the next time.
+    Both answers were defensible; the pair is the defect, because Grant cannot
+    rely on being told. Every other invariant here has a mechanism and held on
+    every run; this one had only a sentence in a prompt.
+
+    Only when the caller supplies the rules, and only for rules about SHAPE.
+    See `setAsideUnsaid` for why that narrowness is the design rather than a
+    limitation.
+  */
+  if (m.standingRules !== undefined) {
+    const dropped = setAsideUnsaid(m.body ?? '', m.standingRules)
+    if (dropped !== null) {
+      problems.push({
+        field: 'body',
+        problem:
+          `a standing rule was in force — "${dropped}" — and this answer does not keep it ` +
+          'and does not mention it. Do the most useful thing, and say in one clause which ' +
+          'constraint you set aside (#242).',
+      })
+    }
+  }
+
+  /*
     A claim about what the office HOLDS, made having looked at nothing (#231).
 
     Only when the caller says whether anything was consulted. Undefined means
@@ -1646,5 +1682,144 @@ export const refuseToSend = (m: OutputMetadata): SendRefusal | null => {
     }
   }
 
+  return null
+}
+
+/**
+ * A standing rule the answer broke without saying so (#242).
+ *
+ * ## The behaviour this exists for
+ *
+ * Two consecutive runs of the same conversation on identical code: asked for a
+ * numbered list against a standing single-paragraph rule, the office produced
+ * the list and said nothing about the rule once, and said
+ * *"I can't give a numbered list because you asked that every answer stay in a
+ * single short paragraph"* the next time. Both are defensible answers. Neither
+ * is reliable, and Grant cannot learn that the office tells him when it drops
+ * something if it does so half the time.
+ *
+ * #229's measurement wearing behaviour rather than scores: a property enforced
+ * only by a sentence in a prompt inherits the model's nondeterminism. Every
+ * other invariant this campaign fixed has a mechanism behind it —
+ * `fabricatedWhen`, `claimsToHaveSent`, `rejectsWithoutSaying`,
+ * `promisesToReachOut` — and they held on every run. This one had nothing.
+ *
+ * ## Deliberately narrow: FORM rules only
+ *
+ * A standing rule can be about anything, and most of them cannot be checked
+ * without a model — "always consider the margin" has no detector. Rules about
+ * the SHAPE of an answer do: one paragraph, no lists, keep it short. Those are
+ * also the ones a model silently disobeys, because obeying them costs it the
+ * structure it wants to use.
+ *
+ * So this misses every rule about content, and says so rather than pretending
+ * to a generality it does not have. `fabricatedWhen` is the precedent: what is
+ * checkable without a model is not truth but derivability, and a narrow gate
+ * that never cries wolf is worth more than a broad one that does.
+ *
+ * ## It fires only when all three hold
+ *
+ *   1. a form rule was IN FORCE — it was put in front of this job;
+ *   2. the answer plainly BREAKS it;
+ *   3. the answer does not MENTION it.
+ *
+ * Three rather than two because the expensive direction is a false refusal. A
+ * gate that fires on a good answer is one somebody switches off, and this
+ * repository has the receipts: a credential check that matched its own
+ * placeholder, and a clock-time check that read £63.50 as twenty-three minutes
+ * past something.
+ */
+export interface FormRule {
+  /** What to look for in the answer to decide the rule was broken. */
+  readonly kind: 'one-paragraph' | 'no-lists' | 'short'
+  /** The rule in Grant's own words, for the sentence the office owes him. */
+  readonly said: string
+  /** For `short`, the ceiling in words. */
+  readonly words?: number
+}
+
+/** Roughly how many words, counted the way a person would skim it. */
+const wordsIn = (body: string): number => body.trim().split(/\s+/).filter(Boolean).length
+
+/** A line that is a list item, by any of the three markers people use. */
+const LIST_LINE = /^\s*(?:[-*•]\s+|\d+[.)]\s+)/m
+
+/**
+ * Read the form rules out of standing guidance.
+ *
+ * Matched on the rule's own words rather than on a stored type, because
+ * lessons and skills are free text that Grant typed — there is no column that
+ * says "this one is about shape", and inventing one would mean he has to
+ * classify a preference while stating it.
+ */
+export const formRules = (rules: readonly string[]): readonly FormRule[] => {
+  const found: FormRule[] = []
+  for (const said of rules) {
+    const r = String(said ?? '')
+    if (r.trim() === '') continue
+    if (/\b(?:one|a\s+single|single)\s+(?:short\s+)?paragraph\b/i.test(r)) {
+      found.push({ kind: 'one-paragraph', said: r })
+    }
+    if (/\bno\s+(?:bullet(?:\s*points?)?|lists?|numbered\s+lists?)\b|\bprose\s+only\b/i.test(r)) {
+      found.push({ kind: 'no-lists', said: r })
+    }
+    const capped =
+      /\b(?:under|no\s+more\s+than|at\s+most|fewer\s+than)\s+(\d{2,4})\s+words\b/i.exec(r)
+    if (capped !== null) {
+      found.push({ kind: 'short', said: r, words: Number(capped[1]) })
+    } else if (/\bkeep\s+it\s+(?:short|brief)\b|\balways\s+be\s+brief\b/i.test(r)) {
+      /*
+        A vague "keep it short" gets a generous ceiling, not a strict one. The
+        rule is real and the number is invented, so the number has to be large
+        enough that only an answer nobody would call short can trip it.
+      */
+      found.push({ kind: 'short', said: r, words: 220 })
+    }
+  }
+  return found
+}
+
+/**
+ * The rule the answer broke in silence, or null.
+ *
+ * Returns the rule in Grant's words, so the caller can put them in the retry
+ * rather than paraphrasing a preference back at him.
+ */
+export const setAsideUnsaid = (body: string, rules: readonly string[]): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+
+  for (const rule of formRules(rules)) {
+    const broke =
+      rule.kind === 'one-paragraph'
+        ? /\n\s*\n/.test(text.trim()) || LIST_LINE.test(text)
+        : rule.kind === 'no-lists'
+          ? LIST_LINE.test(text)
+          : wordsIn(text) > (rule.words ?? 220)
+    if (!broke) continue
+
+    /*
+      Did it SAY so? Any acknowledgement counts — the office is not being
+      marked on phrasing, and a wording lock is the single most repeated
+      mistake in this repository's history of assertions.
+
+      The shape is: a first-person admission near the thing the rule is about.
+      "I can't keep this to one paragraph", "you asked for a single paragraph",
+      "normally I'd keep this shorter", "setting aside the no-lists rule".
+    */
+    const noun =
+      rule.kind === 'one-paragraph'
+        ? /paragraph/i
+        : rule.kind === 'no-lists'
+          ? /list|bullet/i
+          : /short|brief|long|length|words/i
+    const admits =
+      /\b(?:you\s+(?:asked|said|wanted|told\s+me)|normally|usually|i\s+(?:know|cannot|can't|could\s*n[o']t|am\s+setting|have\s+set)|against\s+your|breaking\s+your|aside)\b/i
+    const sentences = text.split(/(?<=[.!?])\s+/)
+    const said = sentences.some((s) => noun.test(s) && admits.test(s))
+    if (said) continue
+
+    return rule.said
+  }
   return null
 }

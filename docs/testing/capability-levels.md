@@ -18,17 +18,17 @@ from a suite's existence.
 
 | tool | level | granted to | real uses | worked | last 30d | evidence |
 |---|---|---|---|---|---|---|
-| `calendar.read` | **L6** | 8 | 202 | 202 | 202 | real jobs of kind google.read_calendar |
-| `calendar.write` | **L6** | 8 | 112 | 112 | 112 | real jobs of kind google.write_calendar_tasks |
-| `db.read` | **L6** | 8 | 1896 | 1896 | 1896 | every handler reads its own database; a completed real job IS the evidence |
-| `draft.create` | **L6** | 8 | 1916 | 1916 | 1916 | a draft is a row in public.outputs |
-| `gmail.read` | **L6** | 8 | 188 | 188 | 188 | real jobs of kind google.read_mail |
-| `gmail.search` | **L6** | 8 | 188 | 188 | 188 | real jobs of kind google.read_mail |
+| `calendar.read` | **L6** | 8 | 208 | 208 | 208 | real jobs of kind google.read_calendar |
+| `calendar.write` | **L6** | 8 | 118 | 118 | 118 | real jobs of kind google.write_calendar_tasks |
+| `db.read` | **L6** | 8 | 1958 | 1958 | 1958 | every handler reads its own database; a completed real job IS the evidence |
+| `draft.create` | **L6** | 8 | 1978 | 1978 | 1978 | a draft is a row in public.outputs |
+| `gmail.read` | **L6** | 8 | 193 | 193 | 193 | real jobs of kind google.read_mail |
+| `gmail.search` | **L6** | 8 | 193 | 193 | 193 | real jobs of kind google.read_mail |
 | `notebook.read` | **L6** | 8 | 31 | 31 | 31 | real jobs of kind notebook.ask, notebook.collect |
 | `notebook.write` | **L6** | 8 | 21 | 17 | 17 | real jobs of kind notebook.add_source, notebook.generate |
-| `notion.write` | **L6** | 8 | 92 | 91 | 91 | real jobs of kind office.notion_import, office.notion_sync |
+| `notion.write` | **L6** | 8 | 95 | 91 | 91 | real jobs of kind office.notion_import, office.notion_sync |
 | `preference.update` | **L6** | 8 | 24 | 24 | 24 | a changed preference is a row in public.preference_instructions |
-| `slack.post` | **L6** | 8 | 266 | 266 | 266 | a post is a delivery on the slack channel |
+| `slack.post` | **L6** | 8 | 279 | 279 | 279 | a post is a delivery on the slack channel |
 | `task.create` | **L6** | 8 | 1 | 1 | 1 | app.task_add writes public.tasks |
 | `task.extract` | **L2** | 0 | — | — | — | office.extract_tasks — no canonical trace is counted for it |
 | `db.delete` | **L0** | 0 | — | — | — | nothing in the registry says what delivers this |

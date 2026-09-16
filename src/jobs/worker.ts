@@ -166,6 +166,15 @@ export interface HandlerOutput {
    */
   readonly toolNames?: readonly string[]
   /**
+   * The standing rules put in front of this job, in Grant's own words — #242.
+   *
+   * Handed to the coherence gate and never stored. Only the handler knows what
+   * `guidanceFor` returned, so only the handler can say which rules the answer
+   * was actually subject to; absent disables the check rather than inventing
+   * a constraint to enforce.
+   */
+  readonly standingRules?: readonly string[]
+  /**
    * How many things this turn actually did — #248.
    *
    * Absent means not counted and never accuses anybody; an explicit zero is
@@ -758,6 +767,7 @@ export const runJob = async (
     ...(output.grounding === undefined ? {} : { grounding: output.grounding }),
     ...(output.consulted === undefined ? {} : { consulted: output.consulted }),
     ...(output.toolNames === undefined ? {} : { toolNames: output.toolNames }),
+    ...(output.standingRules === undefined ? {} : { standingRules: output.standingRules }),
     ...(output.acted === undefined ? {} : { acted: output.acted }),
     // The text as well as the labels, so a body claiming a database read from
     // an output whose evidence says nothing was read is caught here rather

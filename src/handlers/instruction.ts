@@ -2941,6 +2941,20 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // The machinery half of #246's co-occurrence rule, from the same rows
         // the capability brief is built from.
         toolNames: toolNames(cap),
+        /*
+          What this job was TOLD to do, so #242's gate can ask whether the
+          answer kept it. Lessons and skills both, because a standing
+          preference can arrive either way: Grant correcting the office once
+          becomes a lesson, and him teaching it a procedure becomes a skill.
+
+          The rules as WRITTEN, never a summary of them — the gate hands the
+          words back in the retry, and a paraphrase of somebody's own
+          preference read back at them is worse than nothing.
+        */
+        standingRules: [
+          ...guidance.lessons.map((l) => l.body),
+          ...guidance.skills.map((sk) => sk.procedure),
+        ],
         // What this turn actually did, so #248's check has a number to compare
         // the answer against.
         acted,
