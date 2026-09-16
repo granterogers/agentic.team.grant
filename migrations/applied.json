@@ -415,5 +415,7 @@
   "0414_a_file_grant_dropped_is_his_not_ours.sql": "658f4f8e3260358ec5d04a218e802b92771cb9af350b0365522de590ca4b7e5d",
   "0415_produced_by_is_null_for_a_file_nobody_made.sql": "a0384a5acc7b1b73b7658db3ce0f24b1677c101c64800128a02e7b1d6250cfd1",
   "0416_a_new_project_gets_a_room_of_its_own.sql": "b99d27a9386040e4316b1db84e88717de250578d6a8e17091222101e491ecdb7",
-  "0417_the_import_step_reads_the_structure_before_the_prose.sql": "2681823ca3d16c3f1c7730deb335c2eabac1605526c58775e9108a7b60592035"
+  "0417_the_import_step_reads_the_structure_before_the_prose.sql": "2681823ca3d16c3f1c7730deb335c2eabac1605526c58775e9108a7b60592035",
+  "0418_a_comment_may_not_name_a_function_that_does_not_exist.sql": "4909a259817e18fb67206f7e2c40123cc0976349f0a72645732d6816778916e9",
+  "0419_a_channel_is_for_a_project_that_stayed.sql": "4eafeedf3b8041c90d2ff9879071d592990bddd8074d0f82d3f226f12603f191"
 }

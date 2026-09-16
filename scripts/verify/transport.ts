@@ -472,22 +472,38 @@ try {
     the words did, and the writer said which.
   */
   const said = (kept.v ?? {}) as {
-    addressee_dropped?: string | null
+    addressee_dropped?: string | readonly string[] | null
     addressed_to?: string | null
     command?: string
     job?: string
   }
+  /*
+    A LIST since 0411, because #26 let Grant address two people and one of
+    them can be unroutable while the other is not. This check asserted
+    `typeof === 'string'` and went red on a correct change — the fifth
+    instance in this repository of an assertion locked to a SHAPE rather than
+    to the property, and the second time this very check has done it: the
+    first draft asserted `=== true` against a slug.
+
+    The property has not moved: the addressee did not survive, the words did,
+    and the writer said which. Read as a list of whatever arrived, so neither
+    shape can break it again.
+  */
+  const droppedNames = (
+    Array.isArray(said.addressee_dropped)
+      ? said.addressee_dropped
+      : typeof said.addressee_dropped === 'string'
+        ? [said.addressee_dropped]
+        : []
+  ).filter((n) => String(n).trim() !== '')
   saidJob = typeof said.job === 'string' ? said.job : ''
   saidCommand = typeof said.command === 'string' ? said.command : ''
   check(
     'an unroutable addressee costs the addressee, never the message',
-    said.addressee_dropped
-      ? `dropped "${String(said.addressee_dropped)}" and kept the words`
+    droppedNames.length > 0
+      ? `dropped ${droppedNames.map((n) => `"${String(n)}"`).join(', ')} and kept the words`
       : `THE MESSAGE MAY HAVE BEEN LOST — ${JSON.stringify(said).slice(0, 90)}`,
-    typeof said.addressee_dropped === 'string' &&
-      said.addressee_dropped !== '' &&
-      said.addressed_to === null &&
-      saidCommand !== '',
+    droppedNames.length > 0 && said.addressed_to === null && saidCommand !== '',
   )
   if (saidCommand !== '') {
     const stored = await one(`

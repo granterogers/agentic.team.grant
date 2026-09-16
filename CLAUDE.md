@@ -1970,6 +1970,23 @@ Each of these cost real time. They are here so they cost it once.
   block you open, in the same edit — and give every found-nothing check a
   control, because this is what one is for.
 
+- **A suite's project is not named like a fixture, on purpose — so anything
+  that fires on project creation fires for it.** 0416 enqueued a Slack channel
+  when a dashboard project was created, guarded against `fixture-%`,
+  `verify-%` and `ledger-proof-%`. `verify:identity` builds its subjects
+  through `app.hq_create_project` as `identity-proof-<run>`, deliberately NOT a
+  fixture name, because #45 says a suite testing a feature that FILTERS
+  fixtures must use real subjects. **Six real channels appeared in Grant's
+  workspace in two runs, and Slack cannot delete a channel.** The second
+  failure was worse than the first: a project that has gathered a job can never
+  be deleted, so the suite's own teardown started failing on
+  `jobs_project_id_fkey`.
+  The fix is TIME, not a longer list of names — enumerating the shapes a
+  suite's project can take is the same mistake with more words, and the next
+  suite picks a name nobody listed. What separates a test subject from a
+  dashboard project is that one of them is gone in seconds: 0419 provisions
+  only a project that is active, attached and **fifteen minutes old**, and
+  nothing fires at creation at all.
 - **A measure that matches nothing reports a perfect score.** `npm run space`
   answers "how far down is the first real content on a phone" and printed
   **0px — 0 screens of furniture above it**, which reads as an immaculate

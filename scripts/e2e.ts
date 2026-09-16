@@ -301,7 +301,17 @@ type Result = {
  */
 const ESC = String.fromCharCode(27)
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g')
-const plain = (s: string): string => s.replace(ANSI, '')
+/*
+  A stack trace captured from a failing suite carries the ABSOLUTE path of
+  this checkout, and the tail of that trace is written verbatim into
+  `docs/testing/readiness-gate.md`. `npm run check:secrets` refuses any
+  environment value appearing verbatim in a tracked file, and `$INIT_CWD` is
+  one — so a red gate wrote a report that could not be committed, four steps
+  from the line that caused it. Scrubbing it here covers every captured line
+  rather than the one that happened to be noticed.
+*/
+const HERE = process.cwd()
+const plain = (s: string): string => s.replace(ANSI, '').split(HERE).join('.')
 
 const suites = async (): Promise<string[]> => {
   const pkg = JSON.parse(await readFile('package.json', 'utf8')) as {

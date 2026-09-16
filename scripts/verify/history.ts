@@ -588,7 +588,26 @@ try {
     await one(
       `select app.say_in_project(${lit(mine)}::uuid, ${lit(`Addressed to nobody ${run}`)}, 'nobody-at-all') as v`,
     )
-  ).v as { ok?: boolean; addressed_to?: string | null; addressee_dropped?: string }
+  ).v as {
+    ok?: boolean
+    addressed_to?: string | null
+    addressee_dropped?: string | readonly string[] | null
+  }
+  /*
+    A LIST since 0411, because #26 let Grant address two people and one of them
+    can be unroutable while the other is not. Read as a list of whatever
+    arrived: the property is that the composer is TOLD which name was dropped,
+    and it does not depend on whether one name comes back as a string or in an
+    array of one — the fifth instance in this repository of an assertion locked
+    to a shape rather than to the property it stands for.
+  */
+  const droppedHere = (
+    Array.isArray(badName?.addressee_dropped)
+      ? badName.addressee_dropped
+      : typeof badName?.addressee_dropped === 'string'
+        ? [badName.addressee_dropped]
+        : []
+  ).map((n) => String(n))
   check(
     'an addressee naming nobody does NOT lose the message',
     `ok=${String(badName?.ok)}, addressed_to=${String(badName?.addressed_to)}`,
@@ -596,8 +615,8 @@ try {
   )
   check(
     'and the composer is told the name was dropped rather than it happening silently',
-    String(badName?.addressee_dropped),
-    badName?.addressee_dropped === 'nobody-at-all',
+    droppedHere.join(', ') || '(nothing reported)',
+    droppedHere.includes('nobody-at-all'),
   )
   check(
     'the words still reach the conversation',
