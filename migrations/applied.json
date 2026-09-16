@@ -387,5 +387,9 @@
   "0386_a_budget_that_says_no.sql": "daf2f011b3e3b8ee75a1975b0bab8d8e3f8a867facd38115d00592895a1ee351",
   "0387_office_health_says_when_it_is_the_budget.sql": "987071d4ee3b6c99a57aea5ab02373fd6cc5e941fa967a0a9280d2a0bb034db2",
   "0388_harness_traffic_on_two_more_ledgers.sql": "4388a97cc5b1da12e7b96b15970c7290662d5f65607d706bd83835561edddcc0",
-  "0389_the_filter_belongs_at_the_page_not_at_retrieval.sql": "72223eefa6cafed8ccee5fda9212a4ab0122e2df5461a6d2a01d2de608835d4e"
+  "0389_the_filter_belongs_at_the_page_not_at_retrieval.sql": "72223eefa6cafed8ccee5fda9212a4ab0122e2df5461a6d2a01d2de608835d4e",
+  "0390_a_correction_can_become_a_standing_rule.sql": "c4c24878d5eee540a618310bb54556f2028821df82af1d787fb70dbdfa3a3c52",
+  "0391_a_decision_has_to_use_a_word_the_table_allows.sql": "5d6b8b1447b5df2303a9fdc84feeb45f78ea8a82d6de4b0b4e55034adbcf16a7",
+  "0392_an_offer_may_only_promise_a_scope_the_press_can_perform.sql": "37110d63004058e721856ea3b9fac159b8a83c16f7a531725e877d22adfd6238",
+  "0393_a_rule_has_exactly_one_target_and_the_scope_names_it.sql": "bc56abf39ee074a9782385996bb75140ec104aedee2a9bd8add55ebc9e934dd3"
 }

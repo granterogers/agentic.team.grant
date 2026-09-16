@@ -661,6 +661,28 @@ const FALLBACK_GOVERNANCE = {
       because: { fridays_you_asked: 4, weeks_running: 6 },
       at: '2026-09-05T16:00:00Z',
     },
+    /*
+      A drafted standing rule, which is the one kind of suggestion that carries
+      a DECISION rather than a note (#147).
+
+      Here, in the prototype data, because a control that only appears when the
+      live office happens to hold the right row is a control no audit in this
+      repository can see. The command bar cost a screen naming a view that had
+      been deleted for exactly this reason, and the fix there was the same
+      thing: make the data the audits run against contain the case.
+
+      The body is the drafted rule verbatim — what Grant reads is what gets
+      stored — and `offer` is what tells the page to draw Accept and Decline at
+      all. `because` holds the cheap signals that recognised the correction,
+      which is the honest answer to "why are you asking me this".
+    */
+    {
+      id: 'f-s3', kind: 'standing_rule', state: 'open', weight: 3, dismissed: 0,
+      project: null, offer: 'learn',
+      body: 'From now on, put the summary at the end of the message, not after every bullet.',
+      because: { followed_an_answer: true, words: 9, opened_with_a_rejection: true },
+      at: '2026-09-16T06:40:00Z',
+    },
   ],
   agents: [
     {

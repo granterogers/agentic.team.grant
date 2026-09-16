@@ -50,6 +50,35 @@ Everything in the previous run's contract still applies — §1 do not interrupt
 §2 the only three early-exit conditions, §3 what is not a blocker, and
 **context compaction is expected and is NOT a stopping condition**.
 
+### What this run has delivered so far
+
+Newest first. Each row is committed, gated and pushed unless the last column
+says otherwise. **After a compaction, read this table first** — it is the
+cheapest reconstruction of where the run is.
+
+| Issue | What landed | Migrations |
+|---|---|---|
+| **#147** | a correction becomes a standing rule on one press — `src/agents/correction.ts`, the offer on the Governance page, `npm run verify:rules` 24/24, ADR-0030. Four latent defects found by DRIVING the press, none visible from reading | 0390–0393 |
+| #266, #181, #241 | harness traffic on three tables Grant reads | 0388, 0389 |
+| #134 | a budget that says no | 0386, 0387 |
+| #149 | ask the office from the portfolio, and see where the question went | 0385 |
+| #155 | a team page, not an org chart | — |
+| #125 | a project as one page you can hand to someone | — |
+| #150, #189 | act on several tasks at once; a deploy that waits for its own function | — |
+| #152 | a document is a row you can edit | 0382, 0383, 0384 |
+| #122 | what changed since you last looked | 0381 |
+| #157 | the studio can be linked to | — |
+| #154, #179 | one filter idiom; the pills reach 44px | — |
+| **#25** | **the project dashboard is a living map** — the item he named first | 0378, 0379, 0380 |
+
+**Not reached, and why**, to be kept current rather than reconstructed at the
+end: #113, #114, #136, #137 and #138 are proposals awaiting his pick and their
+aesthetic children must not be implemented on a guess. #178 needs a change to
+his own Notion workspace. Candidates identified and not yet started: #123
+(empty sections), #124 (density preference), #126 (drag a file onto a project),
+#156 (project history as a sequence), #131 (see what an agent is about to do),
+#128 (agent hands work to another agent), #187 (a Slack channel per project).
+
 ---
 
 ## THE MISSION

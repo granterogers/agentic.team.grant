@@ -82,6 +82,7 @@ import {
 } from '../agents/capability.ts'
 import { clauses } from '../agents/clauses.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
+import { type Correction, readCorrection } from '../agents/correction.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
@@ -1194,6 +1195,66 @@ async function conversationBefore(
 }
 
 /**
+ * Put a drafted standing rule to Grant, and return the sentence that shows it
+ * to him — or null if there is nothing to show (#147).
+ *
+ * Returns null on three quite different outcomes, deliberately collapsed
+ * because the answer looks identical from here: the class was already offered
+ * once, the rule was refused as empty, or the write failed. Only the last is a
+ * fault, and only the last records one — a write allowed to fail without
+ * failing the job has to say so somewhere, which this repository has already
+ * paid for once in a `consultations` table that never held a row.
+ */
+async function offerRule(
+  db: SqlExecutor,
+  correction: Correction,
+  job: Job,
+): Promise<string | null> {
+  /*
+    The signals, in the shape the page can render.
+
+    `suggestions.because` is read by the Governance page as a row of chips: a
+    number in ink beside a label, or a bare label for a signal that simply
+    fired. An array or a sentence in here is dropped by that renderer or
+    stretches the row, so the reason gets recorded and then cannot be seen —
+    which is the whole complaint about a column nothing reads, one layer along.
+  */
+  const signals: Record<string, boolean | number> = {
+    words: correction.fragment.split(/\s+/).filter((w) => w !== '').length,
+  }
+  for (const signal of correction.because) {
+    signals[signal.replace(/^it /, '').replace(/\s+/g, '_')] = true
+  }
+  const because = JSON.stringify(signals)
+  let row: { offered?: boolean; rule?: string; error?: string } | undefined
+  try {
+    const { rows } = await db.execute(`
+      select app.propose_standing_rule(
+        ${lit(correction.rule)}, 'global', null, null,
+        ${lit(job.jobId)}::uuid, ${lit(because)}::jsonb) as r`)
+    row = (rows[0] as { r?: { offered?: boolean; rule?: string; error?: string } } | undefined)?.r
+  } catch (error) {
+    await db
+      .execute(`
+        select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+          'standing-rule', 'chief-of-staff',
+          ${lit(`could not offer a standing rule: ${String((error as Error)?.message ?? error).slice(0, 160)}`)},
+          ${lit(correction.rule.slice(0, 280))})
+      `)
+      .catch(() => undefined)
+    return null
+  }
+  if (row?.offered !== true) return null
+  /*
+    The drafted text verbatim, on its own line, because he is approving the
+    sentence and not a summary of it. No claim is made here — nothing has been
+    stored, and saying otherwise would be the shape of lie every coherence gate
+    in this office exists to catch.
+  */
+  return `I have not changed anything, but I could make that a standing rule:\n\n  "${correction.rule}"\n\nAccept or decline it on the Governance page.`
+}
+
+/**
  * Decide, against reality, whether each named project already exists.
  *
  * Grant: *"please don't assume I wish to create a new project. This is a large
@@ -1438,6 +1499,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           model: null,
         } satisfies HandlerOutput
       }
+
+      /*
+        His words, before the resolver rewrites them (#147).
+
+        `resolveAgainstThread` expands a fragment into the instruction it
+        refers to, which is exactly what the answering path needs and exactly
+        what a correction reader must not see: "no, at the end" resolves into
+        the whole of the previous request, and a standing rule drafted from
+        THAT would be a rule saying what he was already asking for rather than
+        what he wanted changed. Same reason `rejectsWithoutSaying` is checked
+        above the resolver and not below it.
+      */
+      const asSaid = instruction
 
       const resolved = await resolveAgainstThread(
         deps.db,
@@ -1995,6 +2069,27 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const turnsBefore = await conversationBefore(deps.db, String(payload.command_id ?? ''))
       const turns = turnsBefore
+
+      /*
+        Is he correcting the last answer, and is there a standing rule in it?
+        (#147)
+
+        Below the teaching branch on purpose, and the division between the two
+        is the whole point of this feature. `readTeaching` handles a rule he
+        states AS a rule — "from now on, always put the summary last" — and
+        stores it outright, because he has already said it is standing. What
+        falls through to here is the other 90%: a correction that fixes THIS
+        answer and says nothing about the next one. Grant's words for the gap
+        are *"when a reply is wrong Grant says so and the next reply is better.
+        NOTHING GENERALISES."*
+
+        Nothing is stored here. An offer is written, he reads the drafted text,
+        and `app.decide_suggestion` is the only path by which it becomes a
+        rule — because a correction inferred from a short message is exactly
+        the kind of thing that must not silently change how the office behaves
+        for ever.
+      */
+      const correction = readCorrection(asSaid, (turnsBefore.at(-1)?.answered ?? null) !== null)
 
       /*
         What this chat holds beyond the working window, and what of it matters
@@ -2572,13 +2667,34 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const said = scrub(completion.content)
 
       const denied = contradictsReality(said, reach)
-      const answer =
+      const answer0 =
         denied === null
           ? said
           : `${said}\n\n(Correction, from the system rather than from me: ` +
             `${denied} IS connected and reachable right now. If I said otherwise above, ` +
             `ignore it — the honest version is that I could not find what you asked about, ` +
             `not that I cannot get in.)`
+
+      /*
+        And the offer, appended to the answer he is already reading (#147).
+
+        An offer he never sees is not an offer, and the Governance page is
+        somewhere he goes rather than somewhere he is. So the drafted rule is
+        shown here, verbatim — the issue's *"visible verbatim before
+        acceptance"* — and the press happens on the page, which is where every
+        other accept-or-decline in this office lives.
+
+        `offered` is false when this class of rule has already been put to him
+        once, accepted OR declined, so a correction he has already answered
+        about does not ask again on every repetition. That dedupe is in the
+        migration rather than here, because it has to hold across jobs.
+
+        Appended AFTER the answer is composed, so a failure to write the offer
+        costs the offer and never the answer — and never swallowed silently:
+        `app.cannot` is where a write allowed to fail records that it did.
+      */
+      const offered = correction === null ? null : await offerRule(deps.db, correction, job)
+      const answer = offered === null ? answer0 : `${answer0}\n\n${offered}`
 
       /*
         The context, tagged. Assembled from the same values that went into the

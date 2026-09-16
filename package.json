@@ -79,6 +79,7 @@
     "verify:dryrun": "tsx scripts/verify/dryrun.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",
+    "verify:rules": "tsx scripts/verify/rules.ts",
     "verify:trace": "tsx scripts/verify/trace.ts",
     "verify:tasks": "tsx scripts/verify/tasks.ts",
     "verify:answers": "tsx scripts/verify/answers.ts",

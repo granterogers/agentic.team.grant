@@ -9,6 +9,19 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## State as of 2026-09-16 — the second eight-hour run
+>
+> `docs/AUTONOMOUS-RUN.md` carries the live table of what this run has
+> delivered and what it has not reached. **Read that before this section**, and
+> read this one for what changed about the PRODUCT rather than about the run.
+>
+> | | |
+> |---|---|
+> | Tests | **1,434 passing across 73 files** · migrations **393** |
+> | **#25** | the project dashboard is a living map — a derived graph, a pannable plane, persisted placement and a side panel. The item Grant named first when he lifted the hold on it |
+> | **#147** | a correction becomes a standing rule on **one press**, and never without one. `readCorrection` is deterministic — no model call decides what a correction is, because the expensive direction is offering to make a rule out of an ordinary instruction. **ADR-0030**; `npm run verify:rules` 24/24 |
+> | what #147 cost to get right | four latent defects in the press path, every one of them invisible from reading the migration and every one found by DRIVING it: a state word the table forbids, a jsonb assigned to a uuid, a scope the offer accepted and the enum does not have, and three targets stored where the constraint permits one |
+>
 > ## State as of 2026-09-13
 >
 > | | |

@@ -4539,6 +4539,24 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   it. A row of these says "eleven documents, no notebook" faster than a clause
   can.
 */
+/*
+  The decision on a suggestion that carries an offer (#147).
+
+  A separate row from `.govfrom` rather than two more chips in it, because the
+  metadata line is things that are TRUE about the suggestion and this is a
+  thing to DO about it. Ruled off at the top for the same reason.
+
+  The sentence takes the room and the buttons stay their natural width, so
+  Accept and Decline sit together at the end and read as one decision rather
+  than as two independent controls at opposite sides of the card.
+*/
+.govdecide {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s2); padding-top: var(--s2);
+  border-top: 1px solid var(--edge);
+}
+.govdecide > .t-meta { flex: 1 1 200px; min-width: 0; }
+
 .govwhy { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: 2px; }
 .govbit {
   display: inline-flex; align-items: baseline; gap: 5px;
@@ -4648,6 +4666,14 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .govact { flex-wrap: wrap; }
   .govact [data-said] { flex: 1 1 100%; order: -1; }
   .govact .gobtn { flex: 1 1 auto; }
+  /*
+    Same treatment for the rule decision: the sentence takes its own line and
+    the pair splits the row beneath it. At 390px a 200px minimum on the
+    sentence would leave the two buttons about 80px each, which is a 44px
+    target with no room for its own label.
+  */
+  .govdecide > .t-meta { flex: 1 1 100%; }
+  .govdecide > .gobtn { flex: 1 1 0; min-width: 0; }
   /*
     The footer wraps rather than stacking. Two full-width buttons one above the
     other is a column of slabs — Decline and Approve are a pair and should

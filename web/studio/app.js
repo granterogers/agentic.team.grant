@@ -5046,12 +5046,38 @@ function governanceTab() {
     ${evidence(s.because)}
     <div class="govfrom">
       ${s.project ? `<span class="t-meta">${esc(s.project)}</span>` : ''}
-      <span class="t-meta">${esc(s.kind)}</span>
+      <span class="t-meta">${esc(KIND_WORD[s.kind] ?? String(s.kind).replace(/_/g, ' '))}</span>
       ${s.dismissed > 0
         ? `<span class="govdismiss">dismissed ${esc(String(s.dismissed))}×</span>`
         : ''}
       <span class="t-meta">${when.stamp(s.at)}</span>
     </div>
+    <!--
+      A decision, where there is one to make (#147).
+
+      Most suggestions are a NOTE: the noticing pass counted something and is
+      telling him. A few carry an offer the office can perform on a press, and
+      only those get buttons - drawing Accept on a note would put a control in
+      front of him that performs nothing, which this repository has a whole
+      audit for.
+
+      offer is app.hq_governance's name for suggestions.offer_kind, added in
+      0391. A missing one is a note, which is the common case and the safe
+      default.
+
+      The body above IS the drafted rule, verbatim, which is what makes these
+      buttons honest: he is approving the sentence he can read, not a summary
+      of one. No backticks in this comment: template literal.
+    -->
+    ${s.offer && s.state === 'open'
+      ? `<div class="govdecide">
+          <span class="t-meta">${esc(OFFER_WORD[s.offer] ?? 'The office can act on this.')}</span>
+          <button class="gobtn" data-suggest="${esc(s.id)}:yes"
+                  ${canWrite() ? '' : 'disabled'}>Accept</button>
+          <button class="gobtn danger" data-suggest="${esc(s.id)}:no"
+                  ${canWrite() ? '' : 'disabled'}>Decline</button>
+        </div>`
+      : ''}
   </li>`
 
   /*
@@ -5089,12 +5115,28 @@ function governanceTab() {
   */
   const evidence = (because) => {
     const rows = Object.entries(because ?? {}).filter(
-      ([, v]) => v === null || ['string', 'number', 'boolean'].includes(typeof v),
+      ([, v]) =>
+        typeof v === 'number' ||
+        v === true ||
+        (typeof v === 'string' && v.trim() !== '' && v.length <= 32),
     )
     if (rows.length === 0) return ''
+    /*
+      A counted fact and a signal that simply FIRED are not the same chip.
+
+      The noticing pass counts things — eleven documents, four Fridays — and the
+      number in ink is the whole point. A correction's evidence is boolean: it
+      followed an answer, it opened with a rejection. Rendering those through
+      the same path put a bold 1 in front of every one of them, which reads as a
+      count of something and is a count of nothing.
+
+      Long strings are dropped rather than truncated. This row is a set of
+      chips; a sentence in it is not a chip, and suggestions.because is JSONB
+      that nothing constrains, so the guard belongs here.
+    */
     return `<div class="govwhy">${rows
       .slice(0, 6)
-      .map(([k, v]) => `<span class="govbit"><b>${esc(String(v))}</b>
+      .map(([k, v]) => `<span class="govbit">${v === true ? '' : `<b>${esc(String(v))}</b>`}
         ${esc(k.replace(/_/g, ' '))}</span>`)
       .join('')}</div>`
   }
@@ -5155,6 +5197,36 @@ const WALL_WORD = {
   needs_permission: 'they are not granted it',
   ambiguous: 'could not tell what was meant',
   not_capable: 'beyond what they can do',
+}
+
+/*
+  What accepting a suggestion would actually DO (#147).
+
+  Said in the office's words rather than the column's, and said at all because
+  "Accept" on its own does not tell him whether he is agreeing with an
+  observation or changing how the team behaves for ever. Keyed on
+  suggestions.offer_kind; an offer kind with no sentence here still gets its
+  buttons and a general one, because a missing label must not silence a
+  control.
+*/
+const OFFER_WORD = {
+  learn: 'Accepting makes this a standing rule the team is shown.',
+}
+
+/*
+  What kind of thing the office noticed, in words rather than in the column's.
+
+  `suggestions.kind` is a slug and `standing_rule` was printing on Grant's
+  screen with its underscore in it — a database value shown as prose, which is
+  the same defect as the one that put "object Object" on the first draft of
+  this page. Anything not named here falls back to its own words with the
+  underscores taken out, so a kind added later reads badly rather than not at
+  all.
+*/
+const KIND_WORD = {
+  standing_rule: 'a rule it drafted',
+  attach: 'attach',
+  routine: 'routine',
 }
 
 /** A state, in words, for both proposals and suggestions. */
@@ -6271,6 +6343,50 @@ function settingsSheet() {
       const done = await attempt(b, 'Saving…', () =>
         act('proposal_decide', { p_proposal_id: id, p_state: verdict }),
         verdict === 'open' ? 'Reopened.' : `${verdict[0].toUpperCase()}${verdict.slice(1)}.`)
+      if (done) await afterGovernance()
+    })
+  }
+
+  /*
+    Accepting or declining a drafted standing rule (#147).
+
+    Accepting asks first and declining does not, which is the opposite way
+    round from the proposal control above it — and deliberately, because the
+    two decisions are asymmetric in opposite directions. Approving a proposal
+    only lets an agent ASK for something; accepting a rule changes how the
+    office behaves on every job from now on, which is the heavier of the two.
+
+    Declining is the reversible-looking one and is not: propose_standing_rule
+    matches on the normalised rule text whatever its state, so a declined rule
+    never comes back. The confirmation says so rather than implying otherwise.
+  */
+  for (const b of v.querySelectorAll('[data-suggest]')) {
+    b.addEventListener('click', async () => {
+      const [id, verdict] = String(b.dataset.suggest).split(':')
+      const yes = verdict === 'yes'
+      if (
+        yes &&
+        !sure(
+          'Make this a standing rule? The team is shown it on every job from ' +
+            'now on. You can retract it at any time under What it learned, ' +
+            'and the retraction is recorded beside it.',
+        )
+      ) {
+        return
+      }
+      if (
+        !yes &&
+        !sure(
+          'Decline this rule? It is not stored, and the office will not offer ' +
+            'this one again — correct it differently and it can propose a new ' +
+            'one.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(b, yes ? 'Saving…' : 'Declining…', () =>
+        act('suggestion_decide', { p_suggestion_id: id, p_accept: yes }),
+        yes ? 'The team will be shown this.' : 'Declined.')
       if (done) await afterGovernance()
     })
   }

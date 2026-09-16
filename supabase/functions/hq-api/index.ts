@@ -670,6 +670,19 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   reference_add: { fn: 'add_project_reference', required: ['p_slug', 'p_url'] },
   reference_remove: { fn: 'remove_project_reference', required: ['p_reference_id'] },
   lesson_retract: { fn: 'retract_lesson', required: ['p_lesson_id'] },
+  /*
+    ACCEPT OR DECLINE A DRAFTED STANDING RULE (#147).
+
+    `p_accept` is required rather than defaulted, because a missing boolean
+    that defaults to false would turn a dropped field into a silent decline —
+    and a decline is not reversible here: `propose_standing_rule` refuses to
+    offer a class that has already been answered, so the rule would never be
+    put to him again.
+
+    Accepting is the ONLY path by which a correction becomes a rule. Nothing in
+    the answering handler stores one.
+  */
+  suggestion_decide: { fn: 'decide_suggestion', required: ['p_suggestion_id', 'p_accept'] },
   proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
   /*
     Project Settings (#36, migrations 0323-26).
