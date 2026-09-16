@@ -508,6 +508,93 @@ console.log('\na dialog: focus cannot fall out behind it, and Escape returns it'
   }
 }
 
+// --- 6b. the mark picker: one tab stop, and arrows inside it -----------------
+console.log('\nthe mark picker: 451 marks behind one tab stop')
+{
+  /*
+    #221 took the icon grid from thirty-six marks to 451, and #121 already
+    named thirty-six as an example of why the studio is a mouse-only product.
+    451 stops between the search box and the picture controls is not a slow
+    keyboard path, it is a wall: nobody Tabs past it, so everything below it
+    becomes unreachable without a pointer.
+
+    Three properties, and the second is the one worth having — a roving
+    tabindex with no arrows is WORSE than 451 stops, because the grid becomes
+    a gallery you can reach and cannot move inside.
+  */
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(400)
+  await page.evaluate(
+    `document.querySelector('.project[data-open="legacy-coaching-course"]')?.click()`,
+  )
+  await page.waitForTimeout(700)
+  await page.evaluate(`document.querySelector('[data-look]')?.click()`)
+  // The library is imported lazily, so the grid is the thirty for a moment.
+  await page.waitForTimeout(1600)
+
+  const marks = Number(await page.evaluate(`document.querySelectorAll('[data-look-icon]').length`))
+  const stops = Number(
+    await page.evaluate(`document.querySelectorAll('[data-look-icon][tabindex="0"]').length`),
+  )
+  check(
+    'the whole gallery is one tab stop, however many marks are in it',
+    `${String(marks)} mark(s), ${String(stops)} tabbable`,
+    marks > 100 && stops === 1,
+  )
+
+  await page.evaluate(`document.querySelector('[data-look-icon][tabindex="0"]')?.focus()`)
+  const on = async (): Promise<string> =>
+    String(await page.evaluate(`document.activeElement?.getAttribute('data-look-icon') ?? 'NONE'`))
+  const start = await on()
+  await page.keyboard.press('ArrowRight')
+  const right = await on()
+  await page.keyboard.press('ArrowDown')
+  const down = await on()
+  await page.keyboard.press('End')
+  const last = await on()
+  await page.keyboard.press('Home')
+  const home = await on()
+  /*
+    Asserted as movement and as DISTINCTNESS, never against named icons: the
+    selection is generated from a DOMAINS table Grant can change, so a check
+    naming `course` would go red on a correct edit. Fifth instance of that
+    correction in this repository.
+  */
+  check(
+    'and the arrows move inside it — right, down, End and Home all land somewhere else',
+    `${start} → ${right} → ${down} → End ${last} → Home ${home}`,
+    right !== start && down !== right && last !== down && home === start,
+  )
+  check(
+    'and it is still exactly one tab stop afterwards',
+    `${String(await page.evaluate(`document.querySelectorAll('[data-look-icon][tabindex="0"]').length`))} tabbable`,
+    Number(
+      await page.evaluate(`document.querySelectorAll('[data-look-icon][tabindex="0"]').length`),
+    ) === 1,
+  )
+
+  /*
+    And the case that has no tab stop at all if the roving index is decided
+    per button rather than against the whole view: filter to something the
+    chosen mark is not in. A keyboard user searches, and the gallery leaves
+    the tab order.
+  */
+  await page.evaluate(
+    `(() => { const b = document.querySelector('[data-icon-search]'); if (b) { b.value = 'plane'; b.dispatchEvent(new Event('input', { bubbles: true })) } })()`,
+  )
+  await page.waitForTimeout(350)
+  const after = Number(
+    await page.evaluate(`document.querySelectorAll('[data-look-icon][tabindex="0"]').length`),
+  )
+  check(
+    'a filter that excludes the chosen mark still leaves the grid reachable',
+    `${String(await page.evaluate(`document.querySelectorAll('[data-look-icon]').length`))} shown, ${String(after)} tabbable`,
+    after === 1,
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(400)
+}
+
 // --- 7. nothing threw on the way through ------------------------------------
 check(
   'no page error during any journey',

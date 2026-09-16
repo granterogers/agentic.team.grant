@@ -9509,27 +9509,60 @@ function markPicker(p, hue) {
 
 function markGrid(p) {
   const q = markQuery.trim().toLowerCase()
-  const one = (k, label) => `<button class="iconopt ${k === p.icon ? 'on' : ''}"
-      data-look-icon="${esc(k)}" aria-label="${esc(label)}" title="${esc(label)}"
-      aria-pressed="${k === p.icon ? 'true' : 'false'}">${icons.svg(k, 22)}</button>`
 
-  const classics =
-    markDomain === 'all'
-      ? icons.KEYS.filter((k) => q === '' || k.includes(q)).map((k) => one(k, k))
-      : []
-  const library = icons
-    .catalogue()
-    .filter((i) => markDomain === 'all' || i.d === markDomain)
-    .filter((i) => q === '' || i.id.includes(q) || i.t.some((t) => t.includes(q)))
-    .map((i) => one(i.id, i.id.replace(/-/g, ' ')))
+  /*
+    Gathered as data first, then rendered, so the roving tabindex can be
+    decided once against the WHOLE filtered view (#121).
 
-  const all = [...classics, ...library]
-  if (all.length === 0) {
+    The first draft decided it inside the map, which cannot answer the
+    question it needs to: if the chosen mark is not in this filtered view,
+    something else has to be the tab stop, and you only know that after you
+    have looked at all of them. A grid where every button is -1 has no tab
+    stop at all — filter the gallery and it leaves the tab order entirely.
+  */
+  const rows = []
+  if (markDomain === 'all') {
+    for (const k of icons.KEYS) {
+      if (q === '' || k.includes(q)) rows.push({ k, label: k })
+    }
+  }
+  for (const i of icons.catalogue()) {
+    if (markDomain !== 'all' && i.d !== markDomain) continue
+    if (q !== '' && !i.id.includes(q) && !i.t.some((t) => t.includes(q))) continue
+    rows.push({ k: i.id, label: i.id.replace(/-/g, ' ') })
+  }
+
+  if (rows.length === 0) {
     return icons.ready()
       ? `<span class="t-meta">Nothing matches ${esc(markQuery)}.</span>`
       : '<span class="t-meta">Fetching the rest of the marks…</span>'
   }
-  return all.join('')
+
+  /*
+    A ROVING tabindex, so the grid is one tab stop rather than 451.
+
+    #221 took this grid from thirty-six marks to 451, and thirty-six was
+    already the example #121 uses for why the studio is a mouse-only product.
+    Four hundred and fifty one stops between the search box and the picture
+    controls is not a slow keyboard path, it is a wall: nobody Tabs past it,
+    so everything below it becomes unreachable without a pointer.
+
+    The chosen mark is the stop when it is on screen, so Tab lands where the
+    eye already is; otherwise the first one is. Arrows move it from there.
+  */
+  const at = Math.max(
+    0,
+    rows.findIndex((r) => r.k === p.icon),
+  )
+  return rows
+    .map((r, n) => {
+      const chosen = r.k === p.icon
+      return `<button class="iconopt ${chosen ? 'on' : ''}"
+        data-look-icon="${esc(r.k)}" aria-label="${esc(r.label)}" title="${esc(r.label)}"
+        tabindex="${n === at ? '0' : '-1'}"
+        aria-pressed="${chosen ? 'true' : 'false'}">${icons.svg(r.k, 22)}</button>`
+    })
+    .join('')
 }
 
 function lookSheet(p, keepSearch = false) {
@@ -9683,6 +9716,62 @@ function lookSheet(p, keepSearch = false) {
     const grid = $('[data-icon-grid]', v)
     if (grid !== null) grid.innerHTML = markGrid(p)
   }
+
+  /*
+    The arrows, which are what makes one tab stop honest (#121).
+
+    A roving tabindex without them is worse than 451 stops: the grid becomes a
+    gallery you can reach and cannot move inside. Left and Right walk the
+    list; Up and Down move by a ROW, measured from the live layout rather
+    than assumed, because the grid is `auto-fill` and the column count is five
+    on a phone and eleven on a desktop — a hardcoded stride would be wrong on
+    one of them and the wrong one would depend on who was looking.
+
+    Home and End go to the ends. Enter and Space are not handled: these are
+    real buttons, so the browser already presses them, and intercepting keys
+    a native control handles is how a picker stops working for somebody using
+    a switch or a screen reader.
+
+    Bound on the PICKER, not on the grid — third time in this file today. The
+    grid replaces its own innerHTML on every search, category press and when
+    the library lands, so a listener on it survives until the first of those
+    and then silently does nothing. It measured as "the arrows do not move
+    focus", which reads like the handler being wrong rather than absent.
+  */
+  $('[data-icon-picker]', v)?.addEventListener('keydown', (e) => {
+    const from = e.target instanceof Element ? e.target.closest('[data-look-icon]') : null
+    if (from === null) return
+    const all = [...v.querySelectorAll('[data-look-icon]')]
+    const here = all.indexOf(from)
+    if (here < 0) return
+
+    // The real column count, from the rendered geometry. Two buttons on the
+    // same row share a `top`, so the first one below it starts row two.
+    const top = from.getBoundingClientRect().top
+    const perRow = Math.max(
+      1,
+      all.findIndex((b) => b.getBoundingClientRect().top > top + 1) - all.findIndex(
+        (b) => Math.abs(b.getBoundingClientRect().top - top) < 1,
+      ),
+    )
+
+    const to = {
+      ArrowRight: here + 1,
+      ArrowLeft: here - 1,
+      ArrowDown: here + perRow,
+      ArrowUp: here - perRow,
+      Home: 0,
+      End: all.length - 1,
+    }[e.key]
+    if (to === undefined) return
+    const next = all[Math.min(all.length - 1, Math.max(0, to))]
+    if (next === undefined) return
+    e.preventDefault()
+    // Move the stop with the focus, or Tab would come back to where it was.
+    from.setAttribute('tabindex', '-1')
+    next.setAttribute('tabindex', '0')
+    next.focus()
+  })
   /*
     The search box and the chips are delegated on the PICKER, because the
     picker replaces its own innerHTML when the library lands — the same reason
