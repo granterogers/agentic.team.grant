@@ -471,6 +471,29 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   },
   plane_layout_reset: { fn: 'hq_plane_layout_reset', required: ['p_project_id'] },
   project_seen: { fn: 'hq_project_seen', required: ['p_project_id'] },
+  /*
+    A document is a row you can edit, not only one you can read (#152).
+
+    The same idiom as the task writes: the previous value is captured in the
+    function, the reversal is registered with `undo_offer`, and the undo id
+    comes back in the result — so `act`'s one chokepoint offers the strip and no
+    button here has to know that undo exists.
+  */
+  /*
+    Rename is NOT here: `document_rename` already existed, below, calling
+    `rename_document`. 0383 gave that one the undo the issue asks for rather
+    than adding a second function that writes the same column — which is the
+    trap this repository has recorded twice.
+  */
+  document_move: { fn: 'hq_document_move', required: ['p_document_id', 'p_project_id'] },
+  document_supersede: {
+    fn: 'hq_document_supersede',
+    required: ['p_document_id', 'p_by_document_id'],
+  },
+  // `p_state` optional: an undo carries the state the document was in, and a
+  // press of "this one is current again" carries nothing and means approved.
+  document_restore: { fn: 'hq_document_restore', required: ['p_document_id'] },
+  document_pin: { fn: 'hq_document_pin', required: ['p_document_id', 'p_pinned'] },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
   /*
     Both Google values at once (§35, 0377).

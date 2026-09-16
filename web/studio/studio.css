@@ -5074,6 +5074,24 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 */
 .mapbar { display: flex; justify-content: flex-end; margin-block-end: var(--s3); }
 
+/* What you can do to a document, in the sheet that opens it (#152). One row,
+   wrapping, above the page itself — below the title so the title is still the
+   first thing, above the body so it is not something you scroll to find. */
+.docacts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
+  padding: var(--s3) 0 var(--s4);
+  border-block-end: 1px solid var(--edge);
+  margin-block-end: var(--s4);
+}
+.docact { display: inline-flex; align-items: center; gap: 6px; }
+.docacts input, .docacts select {
+  min-block-size: 44px; font-size: 16px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: 9px;
+  background: var(--surface); color: var(--ink);
+  max-inline-size: 240px;
+}
+
 /* What arrived since you last looked (#122). It is a fact on the card's fact
    row rather than a badge in a corner: a badge says "something", and the row
    already has room for the one thing that answers "what". */

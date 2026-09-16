@@ -231,7 +231,8 @@
     "verify:controls:project-phone-b": "ROUTES=project/tasks,project/contacts,project/sources,project/settings SIZE=phone tsx scripts/verify/controls.ts",
     "verify:keyboard": "tsx scripts/verify/keyboard.ts",
     "verify:map": "tsx scripts/verify/map.ts",
-    "verify:routes": "tsx scripts/verify/routes.ts"
+    "verify:routes": "tsx scripts/verify/routes.ts",
+    "verify:documents": "tsx scripts/verify/documents.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

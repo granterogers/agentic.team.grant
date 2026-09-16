@@ -379,5 +379,8 @@
   "0378_the_project_as_a_map.sql": "515a61c124aa9f1be916aea2dfd23410a11646f9d95210497a7be1029214c6bd",
   "0379_an_agent_who_answered_has_not_done_nothing.sql": "74d2c9681f5e42f8c8f0d679e2d8a2ee62fa5f04cf18ca432c428d90f0689754",
   "0380_where_he_put_the_cards.sql": "e885bca927fd431a9f38a41e0b4f884e69905a98c0207a8e22405e9ea029f659",
-  "0381_what_changed_since_you_last_looked.sql": "8cfb3265ca49789a9d9a9cb3c602ac03362c3135a88b398525d22abe23cc89c0"
+  "0381_what_changed_since_you_last_looked.sql": "8cfb3265ca49789a9d9a9cb3c602ac03362c3135a88b398525d22abe23cc89c0",
+  "0382_rename_move_supersede_and_pin_a_document.sql": "734f3eb29f7f18f7902ac354fcf1731edce8be52c9c66c962f3d711976f77b40",
+  "0383_one_function_renames_a_document.sql": "5ab11ba7c48f79b5ba6f313863e9d076db8e22faf7fe2068d677099f44fea2aa",
+  "0384_superseded_is_archived_with_a_pointer.sql": "6282020a6ee735cd9d3430ac7d3ba6da7143c31ca3e886a6427102d3300bafa3"
 }

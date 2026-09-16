@@ -9240,6 +9240,64 @@ function labelEditor(after) {
   the office is 180,000 characters. Metadata in the grid, content on open, the
   same shape `needLately()` uses.
 */
+/**
+ * What you can do to a document, in the sheet that opens it (#152).
+ *
+ * Grant: *"A document opens, and that is all it does. You can read it and talk
+ * about it."* Four things reach `documents` now — rename, move, supersede and
+ * pin — and they are here rather than on the card because a card with four
+ * buttons on it is the opposite of what #25 just spent a morning establishing.
+ *
+ * Drawn only for a REAL document and only for a writer. The prototype's
+ * documents are invented and have no id, so offering to rename one would be a
+ * control that resolves, looks right and cannot work — the shape this
+ * repository keeps finding. A reader sees the document and no controls, which
+ * is the truth about what a reader can do.
+ */
+function docActions(doc) {
+  if (doc.id === undefined || doc.id === null || !canWrite()) return ''
+  const here = byId(state.project)
+  const elsewhere = PROJECTS.filter((x) => x.slug !== state.project)
+  const others = (here.documents ?? []).filter((d) => d.id !== undefined && d.id !== doc.id)
+  const gone = doc.state === 'superseded'
+  return `<div class="docacts" data-saidwrap>
+    <button class="btn small ${doc.pinned === true ? 'primary' : 'quiet'}"
+            data-doc-pin="${esc(doc.id)}" data-doc-pinned="${doc.pinned === true}"
+            aria-pressed="${doc.pinned === true}">
+      ${doc.pinned === true ? 'Pinned' : 'Pin this one'}</button>
+
+    <span class="docact">
+      <input data-doc-title value="${esc(doc.title)}" aria-label="The document's title">
+      <button class="btn small" data-doc-rename="${esc(doc.id)}">Rename</button>
+    </span>
+
+    ${
+      elsewhere.length === 0
+        ? ''
+        : `<span class="docact">
+      <select data-doc-to aria-label="Move this document to another project">
+        ${elsewhere.map((x) => `<option value="${esc(x.id ?? '')}">${esc(x.name)}</option>`).join('')}
+      </select>
+      <button class="btn small" data-doc-move="${esc(doc.id)}">Move</button>
+    </span>`
+    }
+
+    ${
+      gone
+        ? `<button class="btn small" data-doc-restore="${esc(doc.id)}">This one is current again</button>`
+        : others.length === 0
+          ? ''
+          : `<span class="docact">
+      <select data-doc-by aria-label="The document that replaced this one">
+        ${others.map((d) => `<option value="${esc(d.id)}">${esc(d.title)}</option>`).join('')}
+      </select>
+      <button class="btn small" data-doc-supersede="${esc(doc.id)}">Replaced by</button>
+    </span>`
+    }
+    <span class="t-meta" data-said></span>
+  </div>`
+}
+
 function openDoc(doc, from) {
   const v = $('#viewer')
   const head = `<div class="t-label">${esc(doc.origin)}</div>
@@ -9253,6 +9311,7 @@ function openDoc(doc, from) {
             stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
+      ${docActions(doc)}
       <div class="docbody" data-docbody>
         <div class="bigpage" data-bigpage>${pageSvg(doc.title, doc.kind)}</div>
       </div>
@@ -9263,7 +9322,90 @@ function openDoc(doc, from) {
   carry('doc-open', page, () => { sheet(v, true) })
   $('.close', v).addEventListener('click', shut)
   v.addEventListener('click', (e) => { if (e.target === v) shut() })
+  wireDocActions(v, doc, shut)
   if (doc.id) void fillDoc(doc, $('[data-docbody]', v))
+}
+
+/*
+  The four document writes (#152).
+
+  Wired here rather than in `drawShell` because the sheet is built outside the
+  render tree and `render()` never touches it — the same reason `openDoc`
+  wires its own close button.
+
+  Every one goes through `attempt`, which disables the control, says the
+  office's own sentence on a refusal and re-enables on failure; and through
+  `act`, whose one chokepoint offers #118's undo strip. So a move that is
+  refused because a collection holds the document says exactly that, and a move
+  that works can be taken back, without either behaviour being written here.
+*/
+function wireDocActions(v, doc, shut) {
+  const box = $('[data-doc-title]', v)
+
+  $('[data-doc-rename]', v)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const title = String(box?.value ?? '').trim()
+    if (title === '') { say(b, 'A document needs a title.', 'warn'); return }
+    const done = await attempt(b, 'Renaming…',
+      // `p_document`, not `p_document_id`: this is the argument the function
+      // that already existed takes (0383).
+      async () => await act('document_rename', { p_document: doc.id, p_title: title }),
+      'Renamed.')
+    if (done) { doc.title = title; await refresh() }
+  })
+
+  $('[data-doc-move]', v)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const to = $('[data-doc-to]', v)?.value
+    const name = PROJECTS.find((x) => x.id === to)?.name ?? 'the other project'
+    /*
+      Confirmed, and the sentence says which project it is LEAVING.
+
+      The issue asks for that specifically, and Grant's standing rule is that
+      anything destructive asks first. A move is not destruction, but it is a
+      document disappearing from the list he is looking at, which is
+      indistinguishable from one at the moment it happens.
+    */
+    const yes = await sure(`Move "${doc.title}" out of ${byId(state.project).name} and into ${name}?`, 'Move it')
+    if (!yes) return
+    const done = await attempt(b, 'Moving…',
+      async () => await act('document_move', { p_document_id: doc.id, p_project_id: to }),
+      (r) => `Moved to ${r?.to ?? name}.`)
+    if (done) { shut(); await refresh() }
+  })
+
+  $('[data-doc-supersede]', v)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const by = $('[data-doc-by]', v)?.value
+    const done = await attempt(b, 'Marking…',
+      async () => await act('document_supersede', { p_document_id: doc.id, p_by_document_id: by }),
+      (r) => `Superseded by ${r?.by ?? 'the newer one'}.`)
+    if (done) await refresh()
+  })
+
+  $('[data-doc-restore]', v)?.addEventListener('click', async (e) => {
+    const done = await attempt(e.currentTarget, 'Restoring…',
+      async () => await act('document_restore', { p_document_id: doc.id }),
+      'This one is current again.')
+    if (done) await refresh()
+  })
+
+  $('[data-doc-pin]', v)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const now = b.dataset.docPinned !== 'true'
+    const done = await attempt(b, now ? 'Pinning…' : 'Unpinning…',
+      async () => await act('document_pin', { p_document_id: doc.id, p_pinned: now }),
+      now ? 'Pinned.' : 'Unpinned.')
+    if (done) {
+      doc.pinned = now
+      b.dataset.docPinned = String(now)
+      b.textContent = now ? 'Pinned' : 'Pin this one'
+      b.setAttribute('aria-pressed', String(now))
+      b.classList.toggle('primary', now)
+      b.classList.toggle('quiet', !now)
+      await refresh()
+    }
+  })
 }
 
 /*
