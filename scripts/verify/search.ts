@@ -264,6 +264,200 @@ try {
       false,
     )
   }
+  // =========================================================================
+  /*
+    #37's last two acceptance criteria (0397).
+
+    Every check below drives the real function against rows this run made, and
+    every one has its OPPOSITE asserted beside it — a filter that returns
+    nothing looks exactly like a filter that excluded everything, and half of
+    the filters here would "pass" if they simply never matched. So each is a
+    pair: the thing is found when the filter should admit it, and not found
+    when it should not.
+  */
+  console.log('\nnarrowed by the graph, not only by the words')
+
+  const tagged = String(
+    (
+      await one(`
+        insert into public.documents
+          (project_id, connector, external_ref, title, doc_type, content,
+           content_fingerprint, content_chars, fetched_at, origin, tags, produced_by)
+        values (${lit(projectId)}::uuid, 'upload', ${lit(`probe-search-tag-${run}`)},
+                ${lit(`Probe tagged subject ${run}`)}, 'note',
+                ${lit(`Another paragraph mentioning ${BURIED} once, tagged and attributed.`)},
+                encode(extensions.digest(${lit(`${BURIED}tag`)}, 'sha256'), 'hex'),
+                100, app.now_utc(), 'made',
+                array[${lit(`probe-tag-${run}`)}], 'research-director')
+        returning document_id::text as id
+      `)
+    ).id,
+  )
+  alsoMade.push(tagged)
+
+  const found = async (filters: string): Promise<string[]> =>
+    (
+      await all(
+        `select * from public.studio_search(${lit(BURIED)}, null, 20, ${lit(filters)}::jsonb)`,
+      )
+    ).map((h) => String(h.title))
+
+  const tagName = `probe-tag-${run}`
+  check(
+    'a tag filter keeps the tagged document and drops the untagged one',
+    `tagged=${JSON.stringify(await found(JSON.stringify({ tag: tagName })))}`,
+    (await found(JSON.stringify({ tag: tagName }))).includes(`Probe tagged subject ${run}`) &&
+      !(await found(JSON.stringify({ tag: tagName }))).includes(TITLE),
+  )
+  check(
+    'and a tag nothing carries returns nothing rather than everything',
+    'tag=probe-tag-nobody',
+    (await found(JSON.stringify({ tag: `probe-tag-nobody-${run}` }))).length === 0,
+  )
+
+  /*
+    The kind filter, in both directions. `kinds: ['answer']` must exclude a
+    document that plainly matches — which is the direction that catches a
+    filter wired to nothing.
+  */
+  check(
+    'asking only for documents finds them',
+    'kinds=[document]',
+    (await found(JSON.stringify({ kinds: ['document'] }))).includes(TITLE),
+  )
+  check(
+    'and asking only for answers excludes every document',
+    'kinds=[answer]',
+    (await found(JSON.stringify({ kinds: ['answer'] }))).length === 0,
+  )
+
+  /*
+    Dates. The probe was written seconds ago, so "since tomorrow" must be empty
+    and "since last week" must contain it.
+  */
+  check(
+    'a date window that has not started yet finds nothing',
+    'since = tomorrow',
+    (await found(JSON.stringify({ since: new Date(Date.now() + 86_400_000).toISOString() })))
+      .length === 0,
+  )
+  check(
+    'and one that has finds it',
+    'since = a week ago',
+    (
+      await found(JSON.stringify({ since: new Date(Date.now() - 7 * 86_400_000).toISOString() }))
+    ).includes(TITLE),
+  )
+
+  /*
+    The relation filter, which is the criterion this issue was actually held
+    open for: *"Relation queries: by producing agent, by related contact, by
+    source"*.
+
+    Asked through `app.relations_of`, so this is also the check that the search
+    and the graph agree. The tagged document above was written with
+    `produced_by = 'research-director'`, which `relations_of` derives as an edge
+    from that agent — no `relations` row was inserted, deliberately, because a
+    derived edge is the half a second copy of the graph would have missed.
+  */
+  const emma = String(
+    (await one(`select staff_id::text as id from public.staff where slug = 'research-director'`))
+      .id ?? '',
+  )
+  if (emma === '') {
+    check('the research lead is on the roster', 'not found', false)
+  } else {
+    const byAgent = await found(JSON.stringify({ related_to: { kind: 'agent', id: emma } }))
+    check(
+      'everything the research lead produced, found through the graph',
+      `by agent=${JSON.stringify(byAgent)}`,
+      byAgent.includes(`Probe tagged subject ${run}`),
+    )
+    check(
+      'and a document nobody attributed to her is not in it',
+      `${String(byAgent.length)} row(s), none of them the unattributed probe`,
+      !byAgent.includes(TITLE),
+    )
+    /*
+      CONTROL. A relation filter naming something with no edges at all must
+      return nothing — otherwise every check above would pass just as well if
+      the filter were being ignored, which is exactly how an unknown key
+      behaves by design.
+    */
+    check(
+      'CONTROL: a relation filter naming nothing connected returns nothing',
+      'related_to a random uuid',
+      (
+        await found(
+          JSON.stringify({
+            related_to: { kind: 'agent', id: '00000000-0000-0000-0000-000000000000' },
+          }),
+        )
+      ).length === 0,
+    )
+  }
+
+  /*
+    And an unknown key is ignored rather than refused. Stated in the migration
+    and worth a check, because the alternative — refusing it — turns a typo in
+    a caller into a search that reads as "there is nothing there".
+  */
+  check(
+    'an unknown filter key is ignored, not treated as matching nothing',
+    'filters={"nonsense": "x"}',
+    (await found(JSON.stringify({ nonsense: 'x' }))).includes(TITLE),
+  )
+
+  /*
+    And the filters over HTTP, which is the layer this Issue has already been
+    caught skipping once.
+
+    `app.search_documents` worked perfectly and had no public wrapper, so
+    nothing with a browser could call it, and the suite that should have found
+    that read a token from the environment and reported "NOT CHECKED". The
+    adapter is also the only place that can get the translation wrong — the SQL
+    above proves the filters WORK and says nothing about whether a query string
+    reaches them.
+  */
+  if (hqToken !== '') {
+    const ask = async (extra: string): Promise<{ status: number; rows: number }> => {
+      const r = await fetch(`${base}?section=search&q=${encodeURIComponent(BURIED)}${extra}`, {
+        headers: { Authorization: `Bearer ${hqToken}` },
+      })
+      const body = (await r.json().catch(() => ({}))) as { data?: unknown[] }
+      return { status: r.status, rows: (body.data ?? []).length }
+    }
+
+    const all = await ask('')
+    const tagged2 = await ask(`&tag=${encodeURIComponent(tagName)}`)
+    check(
+      'a tag filter reaches the function through the query string',
+      `no filter ${String(all.rows)} row(s), tagged ${String(tagged2.rows)}`,
+      tagged2.status === 200 && tagged2.rows > 0 && tagged2.rows < all.rows,
+    )
+    check(
+      'the relation filter reaches it too',
+      `related=agent:<research director> → ${String((await ask(`&related=agent:${emma}`)).rows)} row(s)`,
+      emma !== '' && (await ask(`&related=agent:${emma}`)).rows > 0,
+    )
+    /*
+      A malformed value is refused with a sentence rather than passed through
+      to become a 502 the caller cannot act on. The opposite of how the RPC
+      treats an unknown KEY, and the migration says why.
+    */
+    check(
+      'a malformed relation is refused by the adapter, not by Postgres',
+      `http ${String((await ask('&related=agent:not-a-uuid')).status)}`,
+      (await ask('&related=agent:not-a-uuid')).status === 400,
+    )
+    check(
+      'and a date that is not a date is refused the same way',
+      `http ${String((await ask('&since=the%20other%20day')).status)}`,
+      (await ask('&since=the other day')).status === 400,
+    )
+  } else {
+    check('the filters can be reached over HTTP', 'NOT CHECKED — no hq.api_token', false)
+  }
 } finally {
   console.log('\nteardown')
   for (const id of [docId, ...alsoMade].filter((x) => x !== '')) {

@@ -62,6 +62,14 @@ const SECTIONS: Readonly<
       textArg?: { param: string; arg: string }
       /** Whether `?project=<uuid>` narrows this section. Search only. */
       scoped?: boolean
+      /**
+       * Whether the named filter parameters compose into `p_filters` (#37).
+       *
+       * A flag on the SECTION rather than a check for the parameters being
+       * present, for the same reason `scoped` is: passing `p_filters` to an
+       * RPC with no such argument is an error, not a no-op.
+       */
+      filtered?: boolean
     }
   >
 > = {
@@ -220,6 +228,9 @@ const SECTIONS: Readonly<
     args: { p_limit: 12 },
     textArg: { param: 'q', arg: 'p_query' },
     scoped: true,
+    // #37's filters (0397). Composed from named query parameters into the one
+    // jsonb the RPC takes — translation, which is all §5 permits an adapter.
+    filtered: true,
   },
   /*
     Everything an object relates to, both directions (#29, migrations 0310-11).
@@ -876,6 +887,71 @@ Deno.serve(async (request: Request): Promise<Response> => {
       if (!UUID.test(within)) return json({ error: 'project must be an id' }, 400)
       args = { ...args, p_project: within }
     }
+  }
+
+  /*
+    Narrowing a search by the graph (#37, migration 0397).
+
+    Named parameters in, one jsonb out. The adapter TRANSLATES and decides
+    nothing: which edges exist is `app.relations_of`'s business and which keys
+    mean anything is the RPC's, so there is no second copy of either here.
+
+    Values are shape-checked and a bad one is REFUSED, which is the opposite of
+    how the RPC treats an unknown KEY — and deliberately. An unrecognised key
+    is a caller asking for something this version does not have, and ignoring
+    it leaves every other filter working. A malformed uuid or date is a caller
+    getting it wrong, and passing it through would surface as a 502 with no
+    explanation, which is a worse answer than saying which parameter is bad.
+
+    `kinds` is passed through without an allow-list. Enumerating them here
+    would be a list that goes stale the day the search learns a third kind,
+    and this repository has paid for that four times.
+  */
+  if (section.filtered === true) {
+    const filters: Record<string, unknown> = {}
+
+    const kinds = (url.searchParams.get('kinds') ?? '')
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k) => k !== '')
+    if (kinds.length > 0) {
+      if (kinds.some((k) => !/^[a-z_]{1,24}$/.test(k))) {
+        return json({ error: 'kinds must be short lowercase words, comma separated' }, 400)
+      }
+      filters.kinds = kinds
+    }
+
+    const tag = (url.searchParams.get('tag') ?? '').trim()
+    if (tag !== '') {
+      if (tag.length > 80) return json({ error: 'tag is too long' }, 400)
+      filters.tag = tag
+    }
+
+    for (const bound of ['since', 'until'] as const) {
+      const raw = (url.searchParams.get(bound) ?? '').trim()
+      if (raw === '') continue
+      if (Number.isNaN(Date.parse(raw))) {
+        return json({ error: `${bound} must be a date` }, 400)
+      }
+      filters[bound] = new Date(raw).toISOString()
+    }
+
+    /*
+      One parameter for every relation query the issue names — by producing
+      agent, by related contact, by source, by collection — because they are
+      one traversal with a different starting point.
+    */
+    const related = (url.searchParams.get('related') ?? '').trim()
+    if (related !== '') {
+      const [kind, ...rest] = related.split(':')
+      const id = rest.join(':')
+      if (!/^[a-z_]{1,24}$/.test(kind ?? '') || !UUID.test(id)) {
+        return json({ error: 'related must be kind:uuid, for example agent:<id>' }, 400)
+      }
+      filters.related_to = { kind, id }
+    }
+
+    if (Object.keys(filters).length > 0) args = { ...args, p_filters: filters }
   }
 
   const response = await fetch(`${DB_URL}/rest/v1/rpc/${section.fn}`, {
