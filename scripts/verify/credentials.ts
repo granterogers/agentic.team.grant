@@ -392,13 +392,12 @@ console.log('\nthe form itself (structural — the page cannot be driven while G
 
 {
   const page = await readFile(new URL('../../web/studio/app.js', import.meta.url), 'utf8')
-  const handler = page.slice(
-    page.indexOf('data-save-google]'),
-    page.indexOf('data-save-slack]'),
-  )
+  const handler = page.slice(page.indexOf('data-save-google]'), page.indexOf('data-save-slack]'))
   check(
     'the button sends both values through the one door that sorts them',
-    handler.includes("act('set_google_credentials'") ? 'set_google_credentials' : 'NOT the sorting call',
+    handler.includes("act('set_google_credentials'")
+      ? 'set_google_credentials'
+      : 'NOT the sorting call',
     handler.includes("act('set_google_credentials'") &&
       !handler.includes("act('set_google_secret'") &&
       !handler.includes("p_key: 'google.client_id'"),
