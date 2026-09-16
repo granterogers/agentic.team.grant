@@ -166,7 +166,7 @@ try {
     (
       await one(`
         insert into public.lessons (scope, project_id, body, learned_by, from_job, observations)
-        values ('project', ${lit(projectId)}::uuid, ${lit(BODY)}, 'verify:governs',
+        values ('project', ${lit(projectId)}::uuid, ${lit(BODY)}, 'quality-director',
                 ${lit(jobId)}::uuid, 3)
         returning lesson_id::text as id
       `)
@@ -189,8 +189,41 @@ try {
       typeof mine.where === 'string' &&
       mine.where !== '' &&
       mine.where !== 'everywhere' &&
-      mine.who === 'verify:governs' &&
+      mine.who === 'quality-director' &&
       mine.job === jobId,
+  )
+
+  /*
+    And the other half, which is #181 (migrations 0388, 0389).
+
+    The lesson above is attributed to an AGENT rather than to `verify:governs`,
+    because the Governance page now filters harness traffic and a suite
+    asserting its own fixture reaches that page would be asserting the defect.
+    155 of 195 rows in `public.lessons` were written by verification suites, on
+    the ledger Grant reads to find out what the office learned.
+
+    So the suite writes one of each and checks both directions. A filter proved
+    only by the thing it lets through is a filter that could be letting
+    everything through.
+  */
+  const harnessLesson = String(
+    (
+      await one(`
+        insert into public.lessons (scope, project_id, body, learned_by, from_job, observations)
+        values ('project', ${lit(projectId)}::uuid, ${lit(`${BODY} (harness)`)}, 'verify:governs',
+                ${lit(jobId)}::uuid, 1)
+        returning lesson_id::text as id
+      `)
+    ).id,
+  )
+  const afterHarness = await governance()
+  check(
+    'and a lesson a verification suite wrote does NOT reach it',
+    (afterHarness.lessons ?? []).some((l) => l.id === harnessLesson)
+      ? 'THE HARNESS LESSON IS ON THE PAGE'
+      : 'filtered, while the real one above is still there',
+    !(afterHarness.lessons ?? []).some((l) => l.id === harnessLesson) &&
+      (afterHarness.lessons ?? []).some((l) => l.id === lessonId),
   )
 
   // =========================================================================
@@ -451,13 +484,30 @@ try {
 
     So: every row the real tally returns must be denied by BOTH.
   */
+  /*
+    Asked as "is any tally row backed ONLY by harness traffic", not as "does any
+    fixture row share its text".
+
+    The first form counted 21 and reported a leak that is not there. The tally
+    groups by (kind, needed, staff_slug) and that triple is not unique in
+    `job_impediments` — a real impediment and a fixture one can say the same
+    sentence, which is exactly what happens when a suite reproduces a real
+    failure on purpose. Joining back on the triple fans a single real tally row
+    out across every row that matches it, fixtures included, and then counts the
+    fixtures.
+
+    Three tally rows, and every one of them has a genuinely real impediment
+    behind it. The property that actually matters — a row Grant is shown was put
+    there by the office and not by a suite — is what this asks now.
+  */
   const witnesses = await one(`
     select count(*)::int as n
       from app.impediments_tally(3650, 1, false) t
-      join public.job_impediments i
-        on i.kind = t.kind and i.needed = t.needed and i.staff_slug = t.staff_slug
-      left join public.jobs j on j.job_id = i.job_id
-     where i.is_fixture or coalesce(j.is_fixture, false)
+     where not exists (
+       select 1 from public.job_impediments i
+         left join public.jobs j on j.job_id = i.job_id
+        where i.kind = t.kind and i.needed = t.needed and i.staff_slug = t.staff_slug
+          and not i.is_fixture and not coalesce(j.is_fixture, false))
   `)
   check(
     'a row either witness calls a fixture never reaches the real tally',

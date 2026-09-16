@@ -385,5 +385,7 @@
   "0384_superseded_is_archived_with_a_pointer.sql": "6282020a6ee735cd9d3430ac7d3ba6da7143c31ca3e886a6427102d3300bafa3",
   "0385_a_team_page_not_an_org_chart.sql": "cc32f02d3db3257fbcf1813d79c2b8a8131f0da1d3ed5a430ad364e2bed638a2",
   "0386_a_budget_that_says_no.sql": "daf2f011b3e3b8ee75a1975b0bab8d8e3f8a867facd38115d00592895a1ee351",
-  "0387_office_health_says_when_it_is_the_budget.sql": "987071d4ee3b6c99a57aea5ab02373fd6cc5e941fa967a0a9280d2a0bb034db2"
+  "0387_office_health_says_when_it_is_the_budget.sql": "987071d4ee3b6c99a57aea5ab02373fd6cc5e941fa967a0a9280d2a0bb034db2",
+  "0388_harness_traffic_on_two_more_ledgers.sql": "4388a97cc5b1da12e7b96b15970c7290662d5f65607d706bd83835561edddcc0",
+  "0389_the_filter_belongs_at_the_page_not_at_retrieval.sql": "72223eefa6cafed8ccee5fda9212a4ab0122e2df5461a6d2a01d2de608835d4e"
 }

@@ -203,6 +203,68 @@ if (corpus.length > 0) {
   )
 }
 
+/*
+  The three other piles, counted so none of them can rebuild silently
+  (#181, #241, #266).
+
+  Four times now this repository has found harness traffic sitting on a table
+  Grant reads, and each time it was harmless until a new reader looked without
+  the filter. The fix each time was correct and local; what was missing was
+  anything that would notice the pile forming again.
+
+  Reported as a COUNT with a name, not swept here: two of the three are swept
+  by `purge:fixtures` and the third is the office's memory, which must not be
+  deleted. And the assertion is a PROPERTY — nothing harness-shaped reaches a
+  reader Grant looks at — because a number goes stale the next time a suite
+  runs and a property does not.
+*/
+const piles = await db.execute(`
+  select
+    (select count(*) from public.tasks where is_fixture) as fixture_tasks,
+    (select jsonb_array_length((app.hq_governance(400))->'lessons')) as live_lessons,
+    /*
+      Counted on the PAGE, not in the view (0389).
+
+      A first draft asked the lessons_live view, which is also what lessons_for
+      hands to an agent about to work. No backticks in this comment: it lives
+      inside a template literal, and one here ends the string. A suite writing a lesson under a verify
+      name and asserting it is retrieved is testing the right thing. The
+      property that matters is that harness traffic does not reach the screen
+      Grant reads, not that it does not exist.
+    */
+    (select count(*) from jsonb_array_elements((app.hq_governance(400))->'lessons') x
+      where coalesce(x->>'by', '') like 'verify%'
+         or coalesce(x->>'learned_by', '') like 'verify%') as harness_lessons,
+    (select count(*) from public.provider_health where provider like 'probe\\_%') as probe_providers
+`)
+const pile = (piles.rows[0] ?? {}) as Record<string, number>
+const noisy: string[] = []
+if (Number(pile.fixture_tasks ?? 0) > 0) {
+  noisy.push(`${String(pile.fixture_tasks)} fixture task(s) — npm run purge:fixtures -- --go`)
+}
+if (Number(pile.harness_lessons ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.harness_lessons)} harness lesson(s) on the Governance page — the ` +
+      'generated is_fixture on public.lessons is not catching a new writer name',
+  )
+}
+if (Number(pile.probe_providers ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.probe_providers)} probe provider(s) in provider_health — a circuit ` +
+      'breaker suite is not clearing up after itself',
+  )
+}
+console.log(
+  `\n  lessons on the Governance page: ${String(pile.live_lessons)} · ` +
+    `fixture tasks: ${String(pile.fixture_tasks)} · ` +
+    `probe providers: ${String(pile.probe_providers)}`,
+)
+if (noisy.length > 0) {
+  console.error(`\ncheck:leaks FAILED — harness traffic on a table Grant reads:`)
+  for (const n of noisy) console.error(`  ${n}`)
+  process.exit(1)
+}
+
 if (sweepable.length > 0 || live.length > 0) {
   console.error(
     `\ncheck:leaks FAILED — ${String(sweepable.length + live.length)} project(s) a suite should have removed.\n` +

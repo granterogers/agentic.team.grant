@@ -124,6 +124,33 @@ if (found.rows.length > 0) {
       select project_id from public.projects where (${predicate})
     )
   `)
+  /*
+    And the tasks (#266).
+
+    Thirty-one of the thirty-two rows in `public.tasks` were debris on fixture
+    projects, and the sweep had never collected them. They are all correctly
+    labelled — `tasks.is_fixture` is GENERATED from `added_by` and every one of
+    them was added by a `verify:` name — so nothing reported them to Grant
+    wrongly. That is the reason to sweep them rather than the reason not to:
+    the pile was harmless until a new reader looked without the filter, and this
+    repository has rebuilt that pile four times (jobs, lessons, provider_health,
+    impediments).
+
+    BOTH conditions, not either. A fixture project's tasks go because the
+    project is going; a fixture task on a REAL project goes because it is
+    fixture traffic — and that second one is the shape the jobs sweep missed by
+    construction, because #45 sends any suite testing something that filters
+    fixtures to use a real project.
+
+    `public.tasks` has no append-only trigger (`tasks_touch` only sets
+    `updated_at`), so unlike `skills` and `job_impediments` these can actually
+    be removed.
+  */
+  await db.execute(`
+    delete from public.tasks
+     where project_id in (select project_id from public.projects where (${predicate}))
+        or is_fixture
+  `)
   // Jobs first, and this was missing until it mattered. Archiving a project
   // left its jobs LIVE, so every verification run added a few more to a set
   // that only ever grew: by the time the briefing generator ran for real it
