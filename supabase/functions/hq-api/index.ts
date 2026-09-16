@@ -371,6 +371,30 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // can override the global — and every change is a new row so "when did it
   // start acting on its own" stays answerable.
   autonomy_set: { fn: 'hq_autonomy_set', required: ['p_level'] },
+  /*
+    Answering the office when it asks for a capability (ADR-0018, #272).
+
+    `tool_requests` is where an agent that hit the same wall three times asks
+    for reach, and `public.hq_approve_tool` / `public.hq_decline_tool` are the
+    wrappers written for this page. Neither had a caller anywhere outside
+    `scripts/` until now, so every approval on record was made by a script
+    rather than by the person the request was addressed to -- which is
+    CLAUDE.md's standing complaint about a capability that exists only as a
+    script.
+
+    `p_limits` and `p_reason` are both optional and deliberately so: an
+    unconditional yes is a complete answer, and so is a no with nothing to add.
+    Neither wrapper takes a `p_by` -- the function hardcodes 'grant', because
+    this endpoint is behind the bearer token and there is exactly one person
+    holding it.
+
+    Revoking is the same governance ledger read backwards, and is NOT the same
+    as `staff_tool_set(granted=false)`: that sets a per-person grant, this
+    records a withdrawal against the request that earned it.
+  */
+  approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'] },
+  decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'] },
+  revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'] },
   // Per-person tool grants. Never a way past tool_permissions: the RPC ANDs
   // the two, and refuses a grant for a globally disabled tool (§11).
   staff_tool_set: { fn: 'hq_staff_tool_set', required: ['p_slug', 'p_tool', 'p_granted'] },

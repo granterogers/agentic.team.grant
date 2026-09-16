@@ -2068,6 +2068,56 @@ Each of these cost real time. They are here so they cost it once.
   it runs, is the only thing that can answer "is there another one". The freeze
   is a commit hash, not an intention.
 
+- **A payload gains a key and THREE places have to learn it.** 0420 taught
+  `app.hq_governance` to return `requests`, the Governance page grew a section
+  for it, and it rendered "0 open" over a database holding fourteen rows —
+  because `GOVERNANCE` in `settings.js` did not carry the key and
+  `hydrateGovernance` did not copy it. The renderer, the store and the
+  hydrator each have to know, and the two that are not the renderer fail
+  SILENTLY: `d.requests ?? []` is indistinguishable from an office with
+  nothing to ask for. Nothing caught it — `smoke`, `check:templates`,
+  `verify:wired` and `verify:layouts` were all green, and 64 layout states
+  reported 0 findings over an empty section. Found by opening the PNG, which
+  is the entire argument of §14A.
+
+- **A control that is only drawn when a ROW exists is invisible to
+  `verify:wired`.** Already recorded for a popover; this is the data-conditional
+  variant and it is commoner. Approve and Decline are drawn per open request,
+  the table had none, and the audit walked twenty-one screens and reported
+  "no dead controls" without ever seeing either. Seed a row before believing
+  a control audit has covered a feature.
+
+- **An offer may only promise what the press can perform — and the comment
+  claiming otherwise was written in the same hour.** The Governance page's
+  Decline button sent no reason; `app.decline_tool` refuses one without
+  (*"it is what makes it worth revisiting in three months"*), so the press
+  returned an error and did nothing. The handler's own comment said "the RPC
+  supplies an honest default", which was invention. Driving it over HTTP found
+  it in one run. Fourth instance of a comment asserting a property with no
+  check behind it.
+
+- **A DURABLE decline means a suite cannot reuse its subject.** `decline_tool`
+  silences a tool for three months (#49's whole argument), so the same fixture
+  tool cannot be declined and then approved in one run — `request_tool` raised
+  nothing the second time and the suite died on casting `''` to uuid. That is
+  the product working, and a test written to need otherwise would have been a
+  test arguing with a safety rule. Two fixture tools, one per verdict.
+
+- **A registry reason is written for a person and lands in every prompt.**
+  `tool_permissions.disabled_reason` for `web.search` is 398 characters and
+  recites 0298's argument; nine of them were 2,027 characters of a capability
+  brief that had reached 5,183 against a ceiling of 4,000 the suite had
+  asserted all along — so `verify:capability` was red, and it is not in the
+  gate, so nobody knew. The brief takes the first clause now. **A column
+  serving both a page and a prompt needs the prompt's budget taken from it,
+  not the page's.**
+
+- **A fill alone is only a chip where the parent is a different colour.**
+  `.govreqtool` was `background: var(--sunken)` and `.govcase.g-declined` is
+  also `--sunken`, so on a settled card the tool name lost its shape entirely.
+  Visible in one dark phone capture and in nothing else — no contrast failure,
+  no overflow, no dead control. A border as well as a fill.
+
 ---
 
 ## Visual standard

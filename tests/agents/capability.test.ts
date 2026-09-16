@@ -180,7 +180,7 @@ describe('the brief and the boundary', () => {
     expect(brief).toContain('slack.post')
   })
 
-  it('says what is off for everyone, with the reason, so a proposal can be specific', () => {
+  it('says what is off for everyone, and the first clause of why', () => {
     const brief = capabilityBrief(
       able({
         cannot: [
@@ -189,7 +189,48 @@ describe('the brief and the boundary', () => {
       }),
     )
     expect(brief).toContain('gmail.send')
-    expect(brief).toContain('Destructive. Level 3.')
+    expect(brief).toContain('Destructive')
+  })
+
+  /*
+    And not the whole registry entry.
+
+    `tool_permissions.disabled_reason` is written for a person reading the
+    registry -- `web.search`'s is 398 characters and recites migration 0298's
+    argument. Nine of them were 2,027 characters of a brief that goes in front
+    of every answer, which had reached 5,183 against the 4,000 ceiling
+    `verify:capability` has asserted all along.
+
+    Asserted as a PROPERTY rather than as the exact truncation: a clause
+    survives, the essay does not, and the sentence still names the tool. A test
+    that pinned the cut at 56 characters would be the wording lock this
+    repository has now recorded six times.
+  */
+  it('does not put the whole registry reason in front of every answer', () => {
+    const essay =
+      'Nothing implements this. The row claimed reach the office does not have, ' +
+      'and every agent was told it could search the web on the strength of it.'
+    const brief = capabilityBrief(
+      able({ cannot: [{ tool: 'web.search', what: 'Search', verbs: [], why: essay }] }),
+    )
+    expect(brief).toContain('web.search')
+    expect(brief).toContain('Nothing implements this')
+    expect(brief).not.toContain('every agent was told')
+    expect(brief.length).toBeLessThan(essay.length + 1_800)
+  })
+
+  /*
+    CONTROL. A reason with no sentence end still has to be cut, or the cap is
+    doing nothing for the two registry entries that have no full stop until
+    well past two hundred characters.
+  */
+  it('CONTROL: cuts a reason that never ends a sentence', () => {
+    const runOn = `${'a'.repeat(300)}`
+    const brief = capabilityBrief(
+      able({ cannot: [{ tool: 'db.delete', what: 'Delete', verbs: [], why: runOn }] }),
+    )
+    expect(brief).not.toContain(runOn)
+    expect(brief).toContain('…')
   })
 
   it('says what was already refused, so it is not asked for twice', () => {

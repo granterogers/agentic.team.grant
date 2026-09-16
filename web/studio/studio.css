@@ -4734,6 +4734,29 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   take a hint, so the tally is loud. This is the one place on the page where a
   number is allowed to shout.
 */
+/*
+  The tool a request is asking for, set in the mono face so a dotted name
+  reads as an identifier rather than as a sentence that lost its spaces.
+  #272; the card around it is .govcase, shared with proposals. Named
+  .govreqtool rather than .govtool because .govtools already exists three
+  hundred lines below and a near-collision is how .stage cost a day.
+*/
+.govreqtool {
+  font: 500 13px/1.5 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--sunken);
+  /*
+    A border as well as a fill. `.govcase.g-declined` is itself `--sunken`, so
+    on a settled card the chip had the same background as the card behind it
+    and the tool name lost its shape entirely -- visible in the dark phone
+    capture and in nothing else. A fill alone is only a chip where the parent
+    is a different colour.
+  */
+  border: 1px solid var(--edge);
+  color: var(--ink);
+}
+
 .govdismiss {
   padding: 2px 8px; border-radius: 999px;
   font-size: 12px; font-weight: 600;

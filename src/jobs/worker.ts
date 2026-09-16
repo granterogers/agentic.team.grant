@@ -1276,6 +1276,34 @@ export const drain = async (
 
       Never fatal, for the same reason as the line above it.
     */
+    /*
+      And two more expiries with nothing behind them (#272, #72 again).
+
+      `app.expire_temporary_staff` switches off a specialist whose window has
+      closed; `app.expire_undo_offers` moves a lapsed offer from `available` to
+      `expired`. Both were written, both were correct, and neither had a caller
+      anywhere outside `scripts/` -- so `undoable_actions` held four rows
+      saying `available` about windows that shut days ago.
+
+      Neither is a hole, and the report should not pretend otherwise: the
+      `undo_offers` view recomputes the deadline rather than trusting the
+      column, and `app.request_undo` refuses a lapsed offer at the press. What
+      they leave behind is a status column that disagrees with the truth, which
+      is 0303 and 0304's whole lesson about a denormalised fact.
+
+      Beside the two above because it is the same cheap, frequent moment, and
+      because CLAUDE.md's rule about new clocks holds: a second schedule is a
+      second thing that can silently stop.
+
+      Never fatal.
+    */
+    try {
+      await db.execute('select app.expire_temporary_staff()')
+      await db.execute('select app.expire_undo_offers()')
+    } catch {
+      // A stale flag is a smaller problem than a queue that did not drain.
+    }
+
     try {
       await db.execute('select app.provision_missing_channels()')
     } catch {

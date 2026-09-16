@@ -8,7 +8,7 @@
 */
 
 import { CREW, FROM_OFFICE, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
-import { act, attempt, canWrite, onWrite, read, say, sure, token } from './office.js'
+import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './office.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
 import { DENSITIES, PALETTES, TEXTURES, SCHEMES, appearance, apply, hydrate as hydrateAppearance, readTexture, saveWith, toggleScheme, activeScheme } from './appearance.js'
@@ -5340,6 +5340,45 @@ function governanceTab() {
       .join('')}</div>`
   }
 
+  /*
+    A request for reach, as a thing to answer (ADR-0018, #272).
+
+    The difference from a proposal one section above: a proposal asks for a
+    CHANGE and this asks for a KEY. Approving it grants the tool there and
+    then, so the confirmation is on the approve side here and on the decline
+    side there -- the heavier press gets the question, whichever it is.
+
+    because is JSONB holding counts, not a sentence, so it goes through
+    evidence() like a suggestion does. Rendered with esc it reads object
+    Object, which is a defect this page has already shipped once.
+
+    No backticks in this comment: template literal.
+  */
+  const request = (r) => `<article class="govcase g-${esc(r.state)}" data-lift data-tilt="1.4" data-saidwrap>
+    <div class="govhead">
+      <b>${esc(r.who_name)} is asking for <code class="govreqtool">${esc(r.tool)}</code></b>
+      <span class="govstate">${esc(STATE_WORD[r.state] ?? r.state)}</span>
+    </div>
+    <p class="govarg">${esc(r.what_for)}</p>
+    ${r.reason ? `<p class="govnote">Your reason: ${esc(r.reason)}</p>` : ''}
+    ${evidence(r.because)}
+    <div class="govfoot">
+      <div class="govfrom">
+        ${r.declines > 0
+          ? `<span class="govdismiss">asked again after ${esc(String(r.declines))} no${r.declines === 1 ? '' : 'es'}</span>`
+          : ''}
+        <span class="t-meta">${when.stamp(r.at)}</span>
+      </div>
+      <span class="t-meta" data-said></span>
+      ${r.state === 'open'
+        ? `<button class="gobtn" data-tool="${esc(r.id)}:decline"
+                   ${canWrite() ? '' : 'disabled'}>Decline</button>
+           <button class="gobtn go" data-tool="${esc(r.id)}:approve"
+                   ${canWrite() ? '' : 'disabled'}>Approve</button>`
+        : ''}
+    </div>
+  </article>`
+
   const empty = (what) => `<p class="t-meta govempty">${esc(what)}</p>`
 
   return `<div class="setbody">
@@ -5359,6 +5398,13 @@ function governanceTab() {
       ${g.proposals.length === 0
         ? empty('Nothing outstanding. A proposal appears when an agent hits the same wall three times.')
         : `<div class="govcases">${g.proposals.map(proposal).join('')}</div>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">What it is asking for<span class="t-meta">${esc(String((g.requests ?? []).filter((r) => r.state === 'open').length))} open</span></h3>
+      ${(g.requests ?? []).length === 0
+        ? empty('Nothing outstanding. A request appears when an agent needs reach it does not have.')
+        : `<div class="govcases">${g.requests.map(request).join('')}</div>`}
     </section>
 
     <section class="govsec">
@@ -5436,6 +5482,7 @@ const STATE_WORD = {
   done: 'Done',
   dismissed: 'Dismissed',
   superseded: 'Superseded',
+  withdrawn: 'Withdrawn',
 }
 
 /*
@@ -6572,6 +6619,54 @@ function settingsSheet() {
       const done = await attempt(b, 'Saving…', () =>
         act('proposal_decide', { p_proposal_id: id, p_state: verdict }),
         verdict === 'open' ? 'Reopened.' : `${verdict[0].toUpperCase()}${verdict.slice(1)}.`)
+      if (done) await afterGovernance()
+    })
+  }
+
+  /*
+    Answering a request for reach (ADR-0018, #272).
+
+    Approving asks first and declining does not, which is the opposite way
+    round from the proposal control above -- and deliberately. Approving GRANTS
+    the tool: the agent can use it on the next job, and whatever that tool
+    reaches it now reaches on Grant's behalf. Declining only says not now; the
+    row stays, the count goes up, and the office may ask again.
+
+    No p_reason is sent. A decline with nothing to add is a complete answer and
+    the RPC supplies an honest default rather than storing an empty string,
+    which is 0177's argument about sentinels.
+  */
+  for (const b of v.querySelectorAll('[data-tool]')) {
+    b.addEventListener('click', async () => {
+      const [id, verdict] = String(b.dataset.tool).split(':')
+      const yes = verdict === 'approve'
+      if (
+        yes &&
+        !sure(
+          'Grant this? The agent gets the tool from its next job onwards, and ' +
+            'whatever it reaches, it reaches as you. You can take it back under ' +
+            'What each of them can do.',
+        )
+      ) {
+        return
+      }
+      /*
+        A decline needs a reason, because app.decline_tool refuses one without.
+        Asked for here rather than defaulted, so what is stored is a sentence
+        Grant wrote: the reason is shown back on the card and is the whole
+        point of a durable decline.
+      */
+      let reason = null
+      if (!yes) {
+        reason = why('Why not? The team is shown this, and so are you when it asks again.')
+        if (reason === null) return
+      }
+      const done = await attempt(b, 'Saving…', () =>
+        act(
+          yes ? 'approve_tool' : 'decline_tool',
+          yes ? { p_request_id: id } : { p_request_id: id, p_reason: reason },
+        ),
+        yes ? 'Granted.' : 'Declined.')
       if (done) await afterGovernance()
     })
   }

@@ -177,6 +177,21 @@ export function toolNames(cap: Capability): readonly string[] {
   return [...cap.can, ...cap.mustAsk, ...cap.cannot].map((a) => a.tool)
 }
 
+/**
+ * The first clause of a registry reason, for the prompt.
+ *
+ * Cut at the first sentence end and then hard-capped, because two of the nine
+ * disabled reasons have no full stop until well past two hundred characters.
+ * An ellipsis rather than a clean cut, so nobody reads a truncated clause as
+ * the whole rule.
+ */
+function firstClause(why: string | null, cap = 56): string {
+  const text = (why ?? 'off').trim()
+  const stop = text.search(/[.;]\s/)
+  const head = stop === -1 ? text : text.slice(0, stop)
+  return head.length <= cap ? head : `${head.slice(0, cap - 1).trimEnd()}…`
+}
+
 export function capabilityBrief(cap: Capability): string {
   if (cap.reach.length === 0 && cap.can.length === 0) return ''
   const can = cap.reach.filter((r) => r.reachable).map((r) => r.service)
@@ -215,9 +230,26 @@ export function capabilityBrief(cap: Capability): string {
       ? ''
       : `The office can ${cap.mustAsk.map((a) => a.tool).join(', ')} but you do not hold ` +
         'those — ask for one rather than saying it is impossible. ') +
+    /*
+      Switched off for everyone — the NAMES, and a clause, never the essay.
+
+      `tool_permissions.disabled_reason` is written for a person reading the
+      registry: `web.search`'s runs to 398 characters and recites 0298's whole
+      argument. Nine of them came to 2,027 characters, which was 39% of a brief
+      that goes in front of EVERY answer and had grown to 5,183 against a
+      ceiling of 4,000 this suite has asserted all along.
+
+      What the agent needs from this sentence is that the tool is off and
+      roughly why, so that it does not claim the capability (#64) and does not
+      ask for something nobody may have. The full reason is Grant's, on the
+      Governance page, and is still returned by `capabilityNow` for anything
+      that wants it.
+    */
     (cap.cannot.length === 0
       ? ''
-      : `Switched off for everyone: ${cap.cannot.map((a) => `${a.tool} (${a.why})`).join('; ')}. `) +
+      : `Switched off for everyone: ${cap.cannot
+          .map((a) => `${a.tool} (${firstClause(a.why)})`)
+          .join('; ')}. `) +
     (cap.declined.length === 0
       ? ''
       : `Already asked for and refused, so do not ask again: ${cap.declined

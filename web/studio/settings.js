@@ -646,6 +646,31 @@ const FALLBACK_GOVERNANCE = {
       note: 'Not yet — I want to see a month of dated tasks land correctly first.',
     },
   ],
+  /*
+    Two requests for reach, one open and one already answered (#272).
+
+    The prototype needs both states or the design cannot be judged: an open
+    request is the pair of buttons, and a declined one is the durable verdict
+    with Grant's own reason under it, which is #49's whole argument.
+
+    `because` is JSONB holding counts, not prose -- the card renders it as
+    chips through the same evidence() the noticing pass uses.
+  */
+  requests: [
+    {
+      id: 'f-r1', tool: 'calendar.write', who: 'growth-director', who_name: 'Ruby',
+      what_for: 'Booking the follow-ups a campaign needs. Doing it by hand is the whole delay.',
+      because: { times: 3, jobs_stalled: 3 }, state: 'open', declines: 0,
+      at: '2026-09-15T08:30:00Z', settled: null, reason: null,
+    },
+    {
+      id: 'f-r2', tool: 'github.write', who: 'operations-director', who_name: 'Marcus',
+      what_for: 'Pushing the change once the diff is agreed, instead of stopping at the diff.',
+      because: { times: 3 }, state: 'declined', declines: 1,
+      at: '2026-09-12T16:05:00Z', settled: '2026-09-12T18:40:00Z',
+      reason: 'Not while it can push to main. Ask again when there is a branch rule.',
+    },
+  ],
   noticed: [
     {
       id: 'f-s1', kind: 'attach', state: 'open', weight: 0.82, dismissed: 0,
@@ -713,6 +738,7 @@ export const GOVERNANCE = {
   proposals: [...FALLBACK_GOVERNANCE.proposals],
   noticed: [...FALLBACK_GOVERNANCE.noticed],
   agents: [...FALLBACK_GOVERNANCE.agents],
+  requests: [...FALLBACK_GOVERNANCE.requests],
 }
 
 export async function hydrateGovernance(read) {
@@ -725,6 +751,13 @@ export async function hydrateGovernance(read) {
       proposals: d.proposals ?? [],
       noticed: d.noticed ?? [],
       agents: d.agents ?? [],
+      /*
+        `requests` is newer than the rest of this payload (#272), so an
+        `hq-api` deployed before migration 0420 returns four keys and not five.
+        Defaulted here rather than guarded at the renderer, so there is one
+        place that knows the shape.
+      */
+      requests: d.requests ?? [],
       loaded: true,
     })
   } catch {

@@ -329,6 +329,240 @@ check(
 )
 
 // ===========================================================================
+// 4b. And Grant can answer, from the page, over HTTP (#272, ADR-0018)
+// ===========================================================================
+
+/*
+  The layer this section exists for.
+
+  `public.hq_approve_tool` and `public.hq_decline_tool` were written for the
+  Governance page and had no caller outside `scripts/` for weeks --
+  `check:callers` put both in its baseline the day it was built. So the office
+  could ask Grant for reach and Grant had nowhere to answer: every one of the
+  fourteen settled requests on record was settled by a script.
+
+  Asserting the RPCs here would pass for the wrong reason, because the RPCs
+  always worked. What was missing was a `requests` key on the governance
+  payload and two actions on `hq-api`, so that is what is driven: the real
+  endpoint, the real bearer token, the same POST the button makes.
+*/
+
+console.log('\nand Grant can answer a request for reach, from the page')
+
+const ENDPOINT = `https://${process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'}.supabase.co/functions/v1/hq-api`
+const apiToken = String(
+  (
+    await db.execute(
+      `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
+    )
+  ).rows[0]?.v ?? '',
+)
+
+const post = async (
+  action: string,
+  args: Record<string, unknown>,
+): Promise<{ status: number; body: string }> => {
+  const response = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ action, args }),
+  })
+  return { status: response.status, body: await response.text() }
+}
+
+/*
+  Its OWN fixture tool, not the one above.
+
+  By the time this section runs, `TOOL` has been switched off AND declined by
+  section 3 -- `request_tool` answers a declined tool with "not in V1, ask
+  again after launch" and raises nothing, so `askFor` came back empty and the
+  next line asked Postgres to cast an empty string to a uuid. The suite was
+  wrong, not the product, which is the direction this repository keeps having
+  to relearn.
+*/
+/*
+  TWO fixture tools of its own, one per verdict.
+
+  Not one, and not the `TOOL` above. Two separate reasons, both found by
+  running it:
+
+    * by the time this section runs, `TOOL` has been switched off AND declined
+      by section 3, and `request_tool` answers a declined tool with "not in V1,
+      ask again after launch" rather than raising anything;
+    * a decline is DURABLE, which is the whole of #49 — `decline_tool` sets a
+      silence until three months out, so the same tool cannot be asked for
+      again inside one run. Reusing it for the Approve check meant the second
+      `request_tool` raised nothing and the suite died.
+
+  The second is the product working. A test that needed it not to would have
+  been a test arguing with a safety rule.
+*/
+const REACH = 'verification.reach'
+const GRANT = 'verification.grant'
+const REACH_TOOLS = [REACH, GRANT]
+const cleanReach = async (): Promise<void> => {
+  for (const t of REACH_TOOLS) {
+    await db.execute(`delete from public.tool_requests where tool = ${lit(t)}`)
+    await db.execute(`delete from public.staff_tools where tool = ${lit(t)}`)
+    await db.execute(`delete from public.tool_permissions where tool = ${lit(t)}`)
+  }
+}
+await cleanReach()
+for (const t of REACH_TOOLS) {
+  await db.execute(`
+    insert into public.tool_permissions (tool, level, description, enabled, verbs, delivered_by)
+    values (${lit(t)}, 1,
+            'A fixture tool for the Approve and Decline buttons on the Governance page.',
+            true, array['answer a request for reach'],
+            'scripts/verify/capability.ts')
+  `)
+}
+
+const askFor = async (tool: string): Promise<string> => {
+  const said = String(
+    (
+      await db.execute(`
+        select app.request_tool(${lit(tool)}, ${lit(WHO)},
+          'Driving the page''s Approve button, in verify:capability.',
+          '{"times": 3}'::jsonb, null)::text as v`)
+    ).rows[0]?.v ?? '{}',
+  )
+  const parsed = JSON.parse(said) as { request_id?: string }
+  if (parsed.request_id === undefined) {
+    throw new Error(`request_tool raised nothing: ${said}`)
+  }
+  return parsed.request_id
+}
+
+if (apiToken === '') {
+  check(
+    'the page can answer a request for reach',
+    'no hq.api_token in the vault — run `npm run deploy:hq` first',
+    false,
+  )
+} else {
+  // The read half: the payload the page renders has to carry the row.
+  const open1 = await askFor(REACH)
+  const seen = (
+    await db.execute(`
+      select coalesce((
+        select jsonb_agg(r) from jsonb_array_elements(app.hq_governance(40) -> 'requests') r
+         where r ->> 'id' = ${lit(open1)}
+      ), '[]'::jsonb) ->> 0 as v`)
+  ).rows[0] as { v: string | null }
+  const row = seen.v === null ? null : (JSON.parse(seen.v) as Record<string, unknown>)
+  check(
+    'the governance payload carries the open request, with who asked and why',
+    row === null
+      ? 'the requests key did not contain it'
+      : `${String(row.who_name)} wants ${String(row.tool)}, because ${JSON.stringify(row.because)}`,
+    row !== null &&
+      row.state === 'open' &&
+      String(row.who_name ?? '') !== '' &&
+      String(row.what_for ?? '') !== '',
+  )
+
+  // Declining, over HTTP, exactly as the button does.
+  /*
+    With a reason. `app.decline_tool` refuses one without -- "it is what makes
+    it worth revisiting in three months" -- and the first draft of both this
+    check and the page's button sent none. The page asks for the sentence now;
+    this sends one the same way.
+  */
+  const declined = await post('decline_tool', {
+    p_request_id: open1,
+    p_reason: 'Not while it is a fixture — verify:capability.',
+  })
+  const afterDecline = (
+    await db.execute(
+      `select state, declines from public.tool_requests where request_id = ${lit(open1)}::uuid`,
+    )
+  ).rows[0] as { state?: string; declines?: number } | undefined
+  check(
+    'Decline, over HTTP with the page bearer token, settles the request',
+    `http ${String(declined.status)} — state ${String(afterDecline?.state)} — ${declined.body.slice(0, 160)}`,
+    declined.status === 200 && afterDecline?.state === 'declined',
+  )
+  check(
+    'and the tool is NOT granted by a decline',
+    String(
+      (
+        await db.execute(
+          `select count(*)::int as n from public.staff_tools
+            where staff_slug = ${lit(WHO)} and tool = ${lit(REACH)}`,
+        )
+      ).rows[0]?.n,
+    ),
+    Number(
+      (
+        (
+          await db.execute(
+            `select count(*)::int as n from public.staff_tools
+              where staff_slug = ${lit(WHO)} and tool = ${lit(REACH)}`,
+          )
+        ).rows[0] as { n: number }
+      ).n,
+    ) === 0,
+  )
+
+  // Approving, over HTTP. The press that actually hands out a key.
+  const open2 = await askFor(GRANT)
+  const approved = await post('approve_tool', { p_request_id: open2 })
+  const held = Number(
+    (
+      (
+        await db.execute(
+          `select count(*)::int as n from public.staff_tools
+            where staff_slug = ${lit(WHO)} and tool = ${lit(GRANT)}`,
+        )
+      ).rows[0] as { n: number }
+    ).n,
+  )
+  check(
+    'Approve, over HTTP, grants the tool to the person who asked',
+    `http ${String(approved.status)} — ${String(held)} grant(s)`,
+    approved.status === 200 && held === 1,
+  )
+
+  // And taking it back, which is the third wrapper in the same baseline.
+  // REACH, not TOOL. The first draft passed TOOL here and cheerfully revoked
+  // a grant on the other fixture tool while reporting this one unchanged --
+  // which is why the assertion counts the grant rather than trusting http 200.
+  const revoked = await post('revoke_tool', { p_slug: WHO, p_tool: GRANT })
+  const stillHeld = Number(
+    (
+      (
+        await db.execute(
+          `select count(*)::int as n from public.staff_tools
+            where staff_slug = ${lit(WHO)} and tool = ${lit(GRANT)}`,
+        )
+      ).rows[0] as { n: number }
+    ).n,
+  )
+  check(
+    'and Revoke takes it back',
+    `http ${String(revoked.status)} — ${String(stillHeld)} grant(s) — ${revoked.body.slice(0, 160)}`,
+    revoked.status === 200 && stillHeld === 0,
+  )
+
+  /*
+    CONTROL. The three actions must be behind the token like every other write,
+    and a suite that only ever sends a valid one cannot tell an endpoint that
+    checks from an endpoint that does not.
+  */
+  const naked = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'approve_tool', args: { p_request_id: open2 } }),
+  })
+  check(
+    'CONTROL: and an unauthenticated Approve is refused',
+    `http ${String(naked.status)}`,
+    naked.status === 401,
+  )
+}
+
+// ===========================================================================
 // 5. Put it back
 // ===========================================================================
 
@@ -338,11 +572,15 @@ let sweptSaid = ''
 let sweptClean = false
 try {
   await clean()
+  await cleanReach()
   const left = (
     await db.execute(`
       select (select count(*) from public.tool_permissions where tool = ${lit(TOOL)})
            + (select count(*) from public.staff_tools where tool = ${lit(TOOL)})
-           + (select count(*) from public.tool_requests where tool = ${lit(TOOL)}) as n
+           + (select count(*) from public.tool_requests where tool = ${lit(TOOL)})
+           + (select count(*) from public.tool_permissions where tool in (${lit(REACH)}, ${lit(GRANT)}))
+           + (select count(*) from public.staff_tools where tool in (${lit(REACH)}, ${lit(GRANT)}))
+           + (select count(*) from public.tool_requests where tool in (${lit(REACH)}, ${lit(GRANT)})) as n
     `)
   ).rows[0] as { n: number }
   sweptClean = Number(left.n) === 0
