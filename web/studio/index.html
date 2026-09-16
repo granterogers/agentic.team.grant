@@ -34,6 +34,17 @@
 <div class="undobar" id="undobar" role="status" hidden></div>
 <div class="viewer" id="settings" hidden></div>
 <div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-label="Document" hidden></div>
+<!--
+  Drop a file onto a project (#126). OUTSIDE #root, like everything else that
+  must survive a render: a drag that begins before a repaint and ends after it
+  would otherwise land on a node that no longer exists.
+-->
+<div class="droplayer" id="droplayer" aria-hidden="true" hidden>
+  <div class="dropcard">
+    <b>Drop it here</b>
+    <span class="t-meta">It joins this project's documents, and the team can read it.</span>
+  </div>
+</div>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

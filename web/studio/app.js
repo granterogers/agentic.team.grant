@@ -10497,6 +10497,98 @@ const typingIn = (el) =>
   (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||
     el.tagName === 'SELECT')
 
+/*
+  Drop a file onto a project (#126).
+
+  Registered ONCE, outside the render, for the reason the global shortcut is:
+  render() replaces every node in the shell, and a listener added inside it
+  would be added again on every paint.
+
+  ## Why the counter
+
+  dragenter and dragleave fire for every element the pointer crosses, so a drag
+  moving across the page fires leave and enter continuously and a naive handler
+  flickers the overlay off and on the whole way. Counting depth and hiding only
+  at zero is the answer that works with nested elements.
+
+  ## What it refuses, and how it says so
+
+  A reader has no token, so it says that rather than failing at the gateway. A
+  drop with no project open has nowhere to go. The gateway handles the rest -
+  8 MB, empty files, unreadable ones - and its refusals are sentences, shown as
+  they are rather than re-worded here.
+
+  No backticks in this comment.
+*/
+const droplayer = () => document.getElementById('droplayer')
+let dragDepth = 0
+
+const acceptDrop = async (files) => {
+  const p = byId(state.project)
+  if (p === undefined || p === null || !p.id) {
+    say(document.body, 'Open a project first — a file has to land somewhere.', 'warn')
+    return
+  }
+  if (!canWrite()) {
+    say(document.body, 'Reading only. Add the team token in Settings to put files in.', 'warn')
+    return
+  }
+  for (const file of files) {
+    /*
+      One at a time, deliberately. Each is its own row and its own refusal, and
+      a batch that fails halfway with one message is a batch nobody can act on.
+    */
+    const base64 = await new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => { resolve(String(reader.result ?? '')) }
+      reader.onerror = () => { resolve('') }
+      reader.readAsDataURL(file)
+    })
+    if (base64 === '') {
+      say(document.body, `${file.name} could not be read.`, 'warn')
+      continue
+    }
+    const out = await act('document_upload', {
+      p_project_id: p.id,
+      p_name: file.name,
+      p_mime: file.type || 'application/octet-stream',
+      p_base64: base64,
+    }).catch((e) => ({ error: String(e?.message ?? e) }))
+    say(
+      document.body,
+      out?.error ? `${file.name}: ${out.error}` : `${file.name} is in ${p.name}.`,
+      out?.error ? 'warn' : 'good',
+    )
+  }
+  await refresh()
+}
+
+/*
+  dragover must be prevented or the browser opens the file, which is the
+  default and is the one behaviour a drop target must not have.
+*/
+document.addEventListener('dragover', (e) => {
+  if (![...(e.dataTransfer?.types ?? [])].includes('Files')) return
+  e.preventDefault()
+})
+document.addEventListener('dragenter', (e) => {
+  if (![...(e.dataTransfer?.types ?? [])].includes('Files')) return
+  dragDepth += 1
+  droplayer()?.removeAttribute('hidden')
+})
+document.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) droplayer()?.setAttribute('hidden', '')
+})
+document.addEventListener('drop', (e) => {
+  const files = [...(e.dataTransfer?.files ?? [])]
+  dragDepth = 0
+  droplayer()?.setAttribute('hidden', '')
+  if (files.length === 0) return
+  e.preventDefault()
+  void acceptDrop(files)
+})
+
 document.addEventListener('keydown', (e) => {
   const cmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
   if (cmdK) { e.preventDefault(); state.cmd.open ? (closeCmd(), render()) : openCmd(); return }

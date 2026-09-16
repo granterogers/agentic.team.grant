@@ -516,6 +516,12 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   // press of "this one is current again" carries nothing and means approved.
   document_restore: { fn: 'hq_document_restore', required: ['p_document_id'] },
   document_pin: { fn: 'hq_document_pin', required: ['p_document_id', 'p_pinned'] },
+  /*
+    Handled above rather than dispatched, because it carries bytes (#126). It
+    is listed here so the whitelist is still the one place that says which
+    actions exist, and so an unknown-action error names it.
+  */
+  document_upload: { fn: 'record_file_document', required: ['p_project_id', 'p_name', 'p_base64'] },
   set_google_secret: { fn: 'hq_set_google_secret', required: ['p_secret'] },
   /*
     Both Google values at once (§35, 0377).
@@ -819,6 +825,131 @@ Deno.serve(async (request: Request): Promise<Response> => {
     )
     if (missing.length > 0) {
       return json({ error: `missing: ${missing.join(', ')}` }, 400)
+    }
+
+    /*
+      DROP A FILE ON A PROJECT (#126).
+
+      Special-cased before the generic dispatch, because this is the one action
+      that carries BYTES. Everything else is arguments to an RPC; this has to
+      put an object in storage first and then record the row that points at it,
+      and the service key that can do the first half must never leave here.
+
+      #126 waited for #29's asset model and no longer has to: `documents` holds
+      `storage_path`, `mime_type`, `byte_size` and `duration_s`, and
+      `app.record_file_document` is the writer `collect.ts` already uses for a
+      PDF read out of Drive. A dropped file is the same thing arriving by a
+      different door — which is exactly why it does not need a fourth shape.
+
+      §31: *"upload this somewhere else, then paste the link"* is an avoidable
+      request for manual configuration, which is a design failure.
+    */
+    if (actionName === 'document_upload') {
+      const projectId = String(args.p_project_id ?? '')
+      const name = String(args.p_name ?? '').trim()
+      const mime = String(args.p_mime ?? '').trim() || 'application/octet-stream'
+      const b64 = String(args.p_base64 ?? '')
+      if (!/^[0-9a-f-]{36}$/i.test(projectId)) return json({ error: 'which project?' }, 400)
+      if (name === '') return json({ error: 'the file needs a name' }, 400)
+
+      /*
+        Decoded here so the SIZE is the real one. A base64 string is a third
+        larger than what it stands for, and refusing on the encoded length
+        would refuse files that fit.
+
+        `atob` and `Uint8Array`, never `Buffer`: edge functions run in Deno and
+        CLAUDE.md records being bitten by that three times.
+      */
+      let bytes: Uint8Array
+      try {
+        const raw = atob(b64.includes(',') ? (b64.split(',')[1] ?? '') : b64)
+        bytes = new Uint8Array(raw.length)
+        for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i)
+      } catch {
+        return json({ error: 'that file could not be read' }, 400)
+      }
+      if (bytes.byteLength === 0) return json({ error: 'that file is empty' }, 400)
+      const LIMIT = 8 * 1024 * 1024
+      if (bytes.byteLength > LIMIT) {
+        return json(
+          {
+            error:
+              `that file is ${String(Math.round(bytes.byteLength / 1024 / 1024))} MB and the limit ` +
+              'here is 8 MB. Attach it to a source the office can read instead — Drive or Notion.',
+          },
+          400,
+        )
+      }
+
+      /*
+        `<project>/upload/<uuid>.<ext>`, the convention `filePath` uses: the
+        project first so a project's files are one prefix and removing a
+        project is one delete, the connector second so two systems cannot
+        collide, and a fresh uuid as the name because a dropped file has no
+        remote id to be stable against. Every segment is scrubbed — a filename
+        arrives from a desktop and `..` reaching the storage API is a traversal.
+      */
+      const dot = name.lastIndexOf('.')
+      const ext = (dot > 0 ? name.slice(dot + 1) : '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '')
+        .slice(0, 8)
+      const path = `${projectId}/upload/${crypto.randomUUID()}${ext === '' ? '' : `.${ext}`}`
+
+      const put = await fetch(`${DB_URL}/storage/v1/object/files/${path}`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': mime,
+          'x-upsert': 'true',
+        },
+        body: bytes,
+      })
+      if (!put.ok) {
+        console.error(`hq-api document_upload: storage ${String(put.status)}`)
+        return json({ error: 'the file could not be stored' }, 502)
+      }
+
+      const recorded = await fetch(`${DB_URL}/rest/v1/rpc/record_file_document`, {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_project_id: projectId,
+          p_title: name.slice(0, 200),
+          p_storage_path: path,
+          p_mime_type: mime,
+          p_byte_size: bytes.byteLength,
+          p_added_by: 'grant',
+          /*
+            HIS, not ours (0414). `record_file_document` was written for a PDF
+            the office read out of Drive and hardcoded `origin = 'made'`, so a
+            file he dropped announced itself on his own dashboard as having
+            been produced by "grant". The column exists to separate material
+            the office was GIVEN from material it MADE, and 0169's point is
+            that confusing the two lets an agent cite its own output as a
+            source.
+          */
+          p_origin: 'yours',
+        }),
+      })
+      if (!recorded.ok) {
+        /*
+          The object is stored and the row is not, which is the one state worth
+          naming rather than hiding: the bytes are paid for and nothing points
+          at them. The retention pass cannot see it either, because that one is
+          about the build bucket. Logged with the path so it can be found.
+        */
+        console.error(
+          `hq-api document_upload: stored ${path} but the row failed (${String(recorded.status)})`,
+        )
+        return json({ error: 'the file was stored but could not be filed' }, 502)
+      }
+      return json({ action: actionName, result: await recorded.json() })
     }
 
     const done = await fetch(`${DB_URL}/rest/v1/rpc/${action.fn}`, {

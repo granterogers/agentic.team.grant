@@ -456,6 +456,25 @@ for (const [size, opts] of SIZES) {
       tile is a button now; this is the picture that proves the viewer opens
       on something that is not in the gallery yet.
     */
+    /*
+      THE DROP TARGET (#126).
+
+      Triggered with a synthetic `dragenter` carrying a DataTransfer whose
+      types include Files, because Playwright cannot drag from the desktop and
+      the overlay is the half of this feature a person sees. A capture of it is
+      the only way to find out whether "Drop it here" reads as an invitation or
+      as an error.
+    */
+    await page.evaluate(`(() => {
+      const dt = new DataTransfer()
+      dt.items.add(new File(['x'], 'a.pdf', { type: 'application/pdf' }))
+      document.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt, bubbles: true }))
+    })()`)
+    await page.waitForTimeout(400)
+    await shoot('drop-a-file')
+    await page.evaluate(`document.dispatchEvent(new DragEvent('dragleave', { bubbles: true }))`)
+    await page.waitForTimeout(300)
+
     const previewBtn = page.locator('[data-out-open]').first()
     if ((await previewBtn.count()) > 0) {
       await previewBtn.click()

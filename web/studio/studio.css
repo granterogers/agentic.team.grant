@@ -6098,3 +6098,36 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 
   @page { margin: 16mm; }
 }
+
+/*
+  Drop a file onto a project (#126).
+
+  Fixed and full-screen, and deliberately NOT inside a backdrop-filtered
+  element: `backdrop-filter` establishes a containing block, so a fixed child
+  anchors to that element instead of the viewport — which is how a bottom
+  navigation bar once rendered across the top of the page.
+
+  `pointer-events: none` on the card so the drop lands on the layer rather than
+  on its own text, which fires dragleave and cancels the whole thing.
+*/
+.droplayer {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ground) 72%, transparent);
+}
+.droplayer .dropcard {
+  /*
+    A gutter, because the first capture had the dashed border running off both
+    edges of a 390px screen — the card was wider than the phone and the
+    invitation read as a broken box. 16px each side is the standard side gutter
+    for this product.
+  */
+  max-width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+  display: grid; gap: 6px; justify-items: center; text-align: center;
+  padding: var(--s5) var(--s6);
+  border: 2px dashed var(--accent); border-radius: var(--r-card);
+  background: var(--surface, var(--ground));
+  box-shadow: var(--lift-2, 0 20px 60px rgba(0,0,0,.25));
+}
+.droplayer .dropcard b { font: 600 19px/1.2 var(--display, var(--text)); }

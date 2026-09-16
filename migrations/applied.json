@@ -411,5 +411,7 @@
   "0410_grant_can_ask_two_people.sql": "9584a705cc2b9cde9b98f44163dd6535f775a56483c97a55abb098f2d14403bd",
   "0411_say_in_project_takes_a_selection.sql": "08203203023f2c75c77c15e82731c1cdf0576d0722e5fe95dc7cc9b1ba378a7e",
   "0412_recent_activity_says_what_happened_not_how_often.sql": "0757ff5f1b581ae81572205cdd8152229208569301815c9dc0c73a8a5f85072c",
-  "0413_the_build_diary_keeps_its_pictures_inside_its_window.sql": "b8200802fc800ae03aa163e37e86094c467a89171f680270ce0c45192ef335bc"
+  "0413_the_build_diary_keeps_its_pictures_inside_its_window.sql": "b8200802fc800ae03aa163e37e86094c467a89171f680270ce0c45192ef335bc",
+  "0414_a_file_grant_dropped_is_his_not_ours.sql": "658f4f8e3260358ec5d04a218e802b92771cb9af350b0365522de590ca4b7e5d",
+  "0415_produced_by_is_null_for_a_file_nobody_made.sql": "a0384a5acc7b1b73b7658db3ce0f24b1677c101c64800128a02e7b1d6250cfd1"
 }

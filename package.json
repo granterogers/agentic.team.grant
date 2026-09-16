@@ -241,7 +241,8 @@
     "check:icons": "tsx scripts/check-icons.ts",
     "check:callers": "tsx scripts/check-callers.ts",
     "verify:lately": "tsx scripts/verify/lately.ts",
-    "slack:add-scope": "tsx scripts/slack/add-scope.ts"
+    "slack:add-scope": "tsx scripts/slack/add-scope.ts",
+    "verify:upload": "tsx scripts/verify/upload.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
