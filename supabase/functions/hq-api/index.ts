@@ -276,6 +276,8 @@ const SECTIONS: Readonly<
   */
   // What has arrived on each project since he last opened it (#122, 0381).
   unseen: { fn: 'studio_unseen' },
+  // What each agent has actually done lately (#155, 0385).
+  team_work: { fn: 'studio_team_work' },
   plane: { fn: 'studio_plane', arg: 'p_project_id' },
   plane_layout: { fn: 'hq_plane_layout', arg: 'p_project_id' },
   project_team: { fn: 'project_team', arg: 'p_project_id' },

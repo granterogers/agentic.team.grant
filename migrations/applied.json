@@ -382,5 +382,6 @@
   "0381_what_changed_since_you_last_looked.sql": "8cfb3265ca49789a9d9a9cb3c602ac03362c3135a88b398525d22abe23cc89c0",
   "0382_rename_move_supersede_and_pin_a_document.sql": "734f3eb29f7f18f7902ac354fcf1731edce8be52c9c66c962f3d711976f77b40",
   "0383_one_function_renames_a_document.sql": "5ab11ba7c48f79b5ba6f313863e9d076db8e22faf7fe2068d677099f44fea2aa",
-  "0384_superseded_is_archived_with_a_pointer.sql": "6282020a6ee735cd9d3430ac7d3ba6da7143c31ca3e886a6427102d3300bafa3"
+  "0384_superseded_is_archived_with_a_pointer.sql": "6282020a6ee735cd9d3430ac7d3ba6da7143c31ca3e886a6427102d3300bafa3",
+  "0385_a_team_page_not_an_org_chart.sql": "cc32f02d3db3257fbcf1813d79c2b8a8131f0da1d3ed5a430ad364e2bed638a2"
 }

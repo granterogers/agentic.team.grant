@@ -137,6 +137,14 @@ const placed = {}
 */
 const unseen = {}
 
+/*
+  What each agent has done lately (#155, 0385).
+
+  One call for the whole roster: eight round trips to draw one screen is eight
+  chances for a slow one to make the page look broken.
+*/
+const teamWork = {}
+
 const state = {
   // Which Settings tab is open (#39).
   setting: 'team',
@@ -3104,6 +3112,47 @@ function teamBoard(p) {
 
   const jobsFor = (slug) => (p.requests ?? []).filter((r) => r.who === slug)
 
+  /*
+    What they have actually done, across the office (#155).
+
+    Grant: *"Eight cards saying Available... It is an org chart where a team
+    page should be."* The line above is about THIS project; this is about the
+    person, over the last fortnight, everywhere.
+
+    The failures are on the card and not behind it, which is the issue's own
+    instruction and the one worth defending: *"what they failed at — visible,
+    not hidden, because a team page that only shows wins is decoration."* An
+    office that reports only its successes trains the reader to stop reading,
+    which is the same defect as a health line that always says fine.
+
+    Nothing is drawn when the office has not answered yet or when the person has
+    not been asked for anything. An agent with nothing to show says nothing
+    rather than saying zero four times.
+  */
+  const workOf = (slug) => {
+    const w = teamWork[slug]
+    if (w === undefined || (w.asked ?? 0) === 0) return ''
+    const bits = []
+    if (w.in_hand > 0) bits.push(`${w.in_hand} in hand`)
+    if (w.answered > 0) bits.push(`${w.answered} answered`)
+    if (w.could_not > 0) bits.push(`${w.could_not} could not`)
+    if (bits.length === 0) return ''
+    const wall = (w.walls ?? [])[0]
+    return `<span class="mwork">
+      <span class="mcounts">${esc(bits.join(' · '))}</span>
+      ${
+        wall === undefined
+          ? ''
+          : `<span class="mwall" title="What stopped it">${esc(String(wall.needed ?? '').slice(0, 72))}</span>`
+      }
+      ${
+        (w.made ?? []).length === 0
+          ? ''
+          : `<span class="mmade">${esc(String(w.made[0].title ?? '').slice(0, 54))}</span>`
+      }
+    </span>`
+  }
+
   const memberCard = (c, active) => {
     const mine = jobsFor(c.slug)
     const open = mine.filter((r) => r.state === 'working' || r.state === 'review')
@@ -3120,6 +3169,7 @@ function teamBoard(p) {
               : `${mine.length} finished here`
             : 'Not working on this project'
         }</span>
+        ${workOf(c.slug)}
       </div>
       ${talkBtn('agent', c.slug, c.name)}
     </article>`
@@ -10252,8 +10302,9 @@ async function live() {
   */
   void (async () => {
     try {
-      const got = await settles(read('unseen'))
+      const [got, work] = await Promise.all([settles(read('unseen')), settles(read('team_work'))])
       Object.assign(unseen, got ?? {})
+      Object.assign(teamWork, work ?? {})
       render()
     } catch {
       // No marks rather than a wrong mark. #119's strip already says when the

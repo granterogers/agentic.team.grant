@@ -5074,6 +5074,21 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 */
 .mapbar { display: flex; justify-content: flex-end; margin-block-end: var(--s3); }
 
+/* What an agent has actually done (#155). Three short lines under the role,
+   and the failures are one of them — a team page that only shows wins is
+   decoration, which is the issue's own phrase and the reason this is not
+   behind a disclosure. */
+.mwork { display: grid; gap: 2px; margin-block-start: 4px; }
+.mcounts { font-size: 12px; color: var(--ink-2); }
+.mwall {
+  font-size: 11.5px; color: var(--warn);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mmade {
+  font-size: 11.5px; color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* Only on paper (#125). Hidden on screen by default; the print block at the
    end of this file is what reveals it. */
 .printonly { display: none; }
