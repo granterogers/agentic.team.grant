@@ -46,6 +46,8 @@ import { appendBlocks, createPageIfAbsent, relate, toBlocks } from '../notion/wr
 import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
 import { scrub } from '../text/scrub.ts'
+import type { Plan, PlanStep } from '../tools/plan.ts'
+import { nothingToDo } from '../tools/plan.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -67,7 +69,7 @@ const relationTo = (schema: Schema, target: string | undefined): string | null =
   return relations[0]?.name ?? null
 }
 
-interface Module {
+export interface Module {
   readonly name: string
   readonly summary: string
   readonly tasks: readonly string[]
@@ -85,10 +87,208 @@ export interface NotionImportDeps {
   readonly router: ProviderRouter | null
 }
 
+/**
+ * Everything that can be worked out without reaching Notion, and without a
+ * model (#131).
+ *
+ * Extracted rather than duplicated. Both `plan` and `handle` need the token,
+ * the target databases and the source material, and the day a second copy of
+ * this drifts is the day the plan describes one import and the handler
+ * performs another — which is the failure #131 is named for.
+ *
+ * `stop` carries the reason there is nothing to do, phrased for a person. Every
+ * one of them is a legitimate answer rather than an error: no project, no
+ * token, nothing attached, nothing read in.
+ */
+export interface Prepared {
+  readonly stop: string | null
+  /**
+   * The project, already narrowed.
+   *
+   * Carried rather than re-read from the job: `prepare` is the one place that
+   * refuses a job without one, and taking it from here means the writes below
+   * cannot be reached with a null that TypeScript has stopped tracking.
+   */
+  readonly projectId: string
+  readonly projectName: string
+  readonly token: string
+  readonly docsDb: string | undefined
+  readonly projectsDb: string | undefined
+  readonly tasksDb: string | undefined
+  readonly sources: readonly SourceDoc[]
+}
+
+async function prepare(db: SqlExecutor, job: Job): Promise<Prepared> {
+  const none: Omit<Prepared, 'stop'> = {
+    projectId: '',
+    projectName: 'this project',
+    token: '',
+    docsDb: undefined,
+    projectsDb: undefined,
+    tasksDb: undefined,
+    sources: [],
+  }
+  if (job.projectId === null || job.projectId === undefined) {
+    return { ...none, stop: 'I do not know which project to import. Say which one.' }
+  }
+
+  const setup = (
+    await db.execute(`
+          select
+            (select decrypted_secret from vault.decrypted_secrets
+              where name = 'notion.integration_token') as token,
+            (select name from public.projects
+              where project_id = ${lit(job.projectId)}::uuid) as project_name,
+            (select jsonb_object_agg(a.artifact_kind, a.external_ref)
+               from public.project_attachments a
+              where a.project_id = ${lit(job.projectId)}::uuid
+                and a.connector = 'notion' and a.enabled and a.role = 'home') as targets
+        `)
+  ).rows[0] as {
+    token?: string | null
+    project_name?: string | null
+    targets?: Record<string, string> | null
+  }
+
+  const token = String(setup.token ?? '')
+  const targets = setup.targets ?? {}
+  const projectName = String(setup.project_name ?? 'this project')
+  if (token === '') return { ...none, projectName, stop: 'There is no Notion token in the vault.' }
+
+  const docsDb = targets.document
+  const projectsDb = targets.artifact
+  const tasksDb = targets.task
+  if (docsDb === undefined && projectsDb === undefined) {
+    return {
+      ...none,
+      projectName,
+      token,
+      stop:
+        `${projectName} has no Notion databases attached, so there is nowhere to put ` +
+        'this. Say "wire this up to Notion" and I will attach what is shared.',
+    }
+  }
+
+  const sources = (
+    await db.execute(`
+      select title, coalesce(content, '') as content
+        from public.documents
+       where project_id = ${lit(job.projectId)}::uuid
+         and coalesce(content, '') <> ''
+       order by content_chars desc
+    `)
+  ).rows.map((r) => ({ title: String(r.title), content: String(r.content) }))
+
+  if (sources.length === 0) {
+    return {
+      ...none,
+      projectName,
+      token,
+      docsDb,
+      projectsDb,
+      tasksDb,
+      stop: `${projectName} has no source material read in yet, so there is nothing to import.`,
+    }
+  }
+
+  return {
+    stop: null,
+    projectId: job.projectId,
+    projectName,
+    token,
+    docsDb,
+    projectsDb,
+    tasksDb,
+    sources,
+  }
+}
+
+/**
+ * The plan, as steps a person can read and the handler can carry out.
+ *
+ * The module steps carry their `payload` — summary, tasks, sources — because
+ * the curriculum comes from a MODEL and cannot be recomputed to the same
+ * answer. See `PlanStep.payload`.
+ */
+export function planFrom(ready: Prepared, modules: readonly Module[]): Plan {
+  const where = `Notion · ${ready.projectName}`
+  const steps: PlanStep[] = []
+  if (ready.projectsDb !== undefined) {
+    for (const module of modules) {
+      steps.push({
+        verb: 'create',
+        what: module.name,
+        where,
+        writes: 1,
+        payload: { summary: module.summary, tasks: module.tasks, sources: module.sources },
+      })
+    }
+  }
+  if (ready.docsDb !== undefined) {
+    for (const source of ready.sources) {
+      // One page, plus an append for anything past the first chunk, plus the
+      // relation to its module. A step is one EFFECT; `writes` is the calls.
+      steps.push({
+        verb: 'create',
+        what: source.title,
+        where,
+        writes: 1 + (source.content.length > 12_000 ? 1 : 0) + 1,
+      })
+    }
+  }
+  if (ready.tasksDb !== undefined) {
+    for (const module of modules) {
+      for (const task of module.tasks) {
+        steps.push({ verb: 'create', what: task, where, writes: 2 })
+      }
+    }
+  }
+  return { tool: 'notion.write', reaches: ['notion'], steps }
+}
+
+/**
+ * The modules a stored plan is carrying, or null if it has none.
+ *
+ * This is the whole point of #131's remaining half: the curriculum Grant
+ * APPROVED is executed, rather than a second one derived from a second model
+ * call that would legitimately differ. A module step is the one that carries a
+ * payload, so it is also how a module step is recognised.
+ */
+export function modulesFromPlan(plan: unknown): Module[] | null {
+  const steps = (plan as { steps?: unknown })?.steps
+  if (!Array.isArray(steps)) return null
+  const modules = steps
+    .map((raw) => raw as { what?: unknown; payload?: Record<string, unknown> })
+    .filter((step) => step.payload !== undefined && step.payload !== null)
+    .map((step) => ({
+      name: String(step.what ?? ''),
+      summary: String(step.payload?.summary ?? ''),
+      tasks: (Array.isArray(step.payload?.tasks) ? step.payload.tasks : []).map((t) => String(t)),
+      sources: (Array.isArray(step.payload?.sources) ? step.payload.sources : []).map((x) =>
+        String(x),
+      ),
+    }))
+    .filter((m) => m.name !== '')
+  return modules.length === 0 ? null : modules
+}
+
 export function notionImportHandler(deps: NotionImportDeps): Handler {
   const { db, router } = deps
   return {
     kind: 'office.notion_import',
+    /*
+      What this would write into Notion, without writing it.
+
+      The model call happens HERE, and its answer is stored on the steps, so
+      `handle` carries out the curriculum this plan describes rather than
+      asking for a second one.
+    */
+    plan: async (job: Job, planDb: SqlExecutor): Promise<Plan> => {
+      const ready = await prepare(planDb, job)
+      if (ready.stop !== null) return nothingToDo('notion.write', ready.stop)
+      const modules = await curriculum(router, ready.projectName, ready.sources)
+      return planFrom(ready, modules)
+    },
     handle: async (job: Job): Promise<HandlerOutput> => {
       const base = {
         confidence: 'high' as const,
@@ -101,63 +301,29 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
       const say = (body: string, announce = true): HandlerOutput =>
         ({ ...base, body, announce }) satisfies HandlerOutput
 
-      if (job.projectId === null || job.projectId === undefined) {
-        return say('I do not know which project to import. Say which one.')
-      }
+      const ready = await prepare(db, job)
+      if (ready.stop !== null) return say(ready.stop)
+      const { projectId, projectName, token, docsDb, projectsDb, tasksDb, sources } = ready
 
-      // --- where it goes ----------------------------------------------------
-      const setup = (
-        await db.execute(`
-          select
-            (select decrypted_secret from vault.decrypted_secrets
-              where name = 'notion.integration_token') as token,
-            (select name from public.projects
-              where project_id = ${lit(job.projectId)}::uuid) as project_name,
-            (select jsonb_object_agg(a.artifact_kind, a.external_ref)
-               from public.project_attachments a
-              where a.project_id = ${lit(job.projectId)}::uuid
-                and a.connector = 'notion' and a.enabled and a.role = 'home') as targets
-        `)
-      ).rows[0] as {
-        token?: string | null
-        project_name?: string | null
-        targets?: Record<string, string> | null
-      }
+      /*
+        The approved curriculum, or a fresh one only if no plan was stored.
 
-      const token = String(setup.token ?? '')
-      const targets = setup.targets ?? {}
-      const projectName = String(setup.project_name ?? 'this project')
-      if (token === '') return say('There is no Notion token in the vault.')
+        `recordPlan` is deliberately silent on failure — a plan is a description
+        of the work and must never be a way for the work to fail — so a job can
+        legitimately arrive here with nothing stored. Falling back to a fresh
+        curriculum is then no worse than the behaviour before #131, and it goes
+        through the SAME function the planner used rather than a second copy.
 
-      const docsDb = targets.document
-      const projectsDb = targets.artifact
-      const tasksDb = targets.task
-      if (docsDb === undefined && projectsDb === undefined) {
-        return say(
-          `${projectName} has no Notion databases attached, so there is nowhere to put ` +
-            'this. Say "wire this up to Notion" and I will attach what is shared.',
-        )
-      }
-
-      // --- what there is to import -----------------------------------------
-      const sources = (
-        await db.execute(`
-          select title, coalesce(content, '') as content
-            from public.documents
-           where project_id = ${lit(job.projectId)}::uuid
-             and coalesce(content, '') <> ''
-           order by content_chars desc
-        `)
-      ).rows.map((r) => ({ title: String(r.title), content: String(r.content) }))
-
-      if (sources.length === 0) {
-        return say(
-          `${projectName} has no source material read in yet, so there is nothing to import.`,
-        )
-      }
+        But when a plan IS stored it wins, always. That is the difference
+        between Grant approving six pages and getting six pages, and Grant
+        approving six pages and getting whatever the model says the second time.
+      */
+      const stored = (await db.execute(`select app.job_plan(${lit(job.jobId)}::uuid) as p`))
+        .rows[0] as { p?: unknown }
+      const approved = modulesFromPlan(stored.p)
+      const modules = approved ?? (await curriculum(router, projectName, sources))
 
       const client = new NotionClient(token)
-      const modules = await curriculum(router, projectName, sources)
 
       const made = { projects: 0, tasks: 0, docs: 0 }
       const existed = { projects: 0, tasks: 0, docs: 0 }
@@ -192,7 +358,7 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
           */
           await registerAuthored(
             db,
-            job.projectId,
+            projectId,
             { id: page.id, title: module.name },
             body,
             'office.notion_import',

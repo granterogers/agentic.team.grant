@@ -60,6 +60,25 @@ export interface PlanStep {
    * describing the work.
    */
   readonly writes: number
+  /**
+   * What carrying this step out needs, when the plan is the thing EXECUTED.
+   *
+   * #131's harder half. Most plans are re-derivable: the calendar planner asks
+   * one SQL query and gets the same answer a minute later, so executing may
+   * safely recompute. A plan that depends on a MODEL call is not — planning and
+   * then executing would run it twice and get different modules, so the plan
+   * Grant approved would not be the work performed. That is the exact failure
+   * this issue is about, reached by obeying it naively.
+   *
+   * So the non-derivable part of a step rides WITH the step. One artefact is
+   * both the sentence Grant reads and the instruction the handler carries out,
+   * which is the only arrangement in which the two cannot disagree — a second
+   * payload stored beside the plan would be the second description this file
+   * exists to avoid.
+   *
+   * Absent on every step that can be recomputed, which is most of them.
+   */
+  readonly payload?: Record<string, unknown>
 }
 
 export interface Plan {
