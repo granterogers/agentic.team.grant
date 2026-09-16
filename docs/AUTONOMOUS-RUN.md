@@ -268,7 +268,13 @@ Read `package.json` for the current truth rather than this list.
 | 5c | **#25's spatial plane deliberately NOT built** — Grant said *"dont start implementation yet"* about that direction and nothing since has revoked it specifically. A major redesign is the one thing not to do autonomously. | ⏸ held, on purpose |
 | 5d | P2 remaining: #221 icon library (in tension with the 15 Sept restraint direction), #160 typography — folded into Phase 2's typography inventory | ⏳ |
 | 6 | **PHASE 2 — FULL UX QA, Level 2** | 🔨 **IN PROGRESS** |
-| 6b | §70's fifty-three-step order: design board, typography/colour/component/geometry inventories, density, accessibility structure, keyboard, motion, states, credential UX, communication UX, CORS, detector proofs | 🔨 |
+| 6b | §§17–20 design-system inventory — **`npm run system`**, new | ✅ |
+| 6c | §15 cross-screen design board — **`npm run board`**, new; found 10 missing captures and 2 defects | ✅ |
+| 6d | #160 typography drift — the rail was the one role that changed size | ✅ |
+| 6e | #207 heading structure — every screen had one heading; `verify:access` 35/35 and proved able to fail | ✅ |
+| 6f | §31 motion 6/6 · §32 states `verify:offline` 23/23 · §51 CORS 13/13 | ✅ |
+| 6g | #240 the office cannot think — it never reached the page at all | ✅ |
+| 6h | §36 communication UX (#208 Telegram), §35 credential shapes, §74 final report | 🔨 next |
 | 7 | Final report in §74's format, exactly one of PASS / PASS WITH WARNINGS / FAIL | not started |
 
 ---
