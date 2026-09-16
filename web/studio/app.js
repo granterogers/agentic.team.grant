@@ -906,10 +906,27 @@ function runCommand(row) {
       for it again.
     */
     if (state.view !== 'project') {
+      /*
+        Asked from the portfolio, and filed where loose questions belong (#149).
+
+        This opened the project switcher an hour ago, which was the honest
+        answer while there was nowhere to put the question. There is: `Unnamed`,
+        the reserved project 0334 made for exactly this. The dock says where it
+        went, so nothing is filed silently.
+      */
+      const loose = PROJECTS.find((x) => x.slug === 'unnamed')
+      if (loose === undefined) {
+        closeCmd()
+        render()
+        const open = document.querySelector('[data-switch-open]')
+        if (open instanceof HTMLElement) open.click()
+        return
+      }
+      chat.send(loose.slug, row.title, null)
       closeCmd()
+      rememberDock(true)
       render()
-      const open = document.querySelector('[data-switch-open]')
-      if (open instanceof HTMLElement) open.click()
+      paintDock()
       return
     }
     chat.send(state.project, row.title, null)
@@ -1369,8 +1386,25 @@ function paintDock() {
   document.body.classList.toggle('docked', open)
   if (!open) { el.innerHTML = ''; return }
 
-  const slug = state.project ?? PROJECTS[0]?.slug
+  /*
+    Asking from the portfolio, without a project (#149).
+
+    This was `PROJECTS[0]?.slug` — so a question asked from the home screen was
+    silently attached to whichever project happened to be first, and Grant's
+    "what is going on this week" landed on Legacy Coaching Course. That is worse
+    than refusing: a dashboard project is the source of truth, and a message
+    filed under the wrong one is a message he will not find again.
+
+    `Unnamed` is the reserved project 0334 made for exactly this — his own
+    words: *"you can just create an untitled or undefined project. Stuff that's
+    not a bit specific project."* Telegram already renames it to Conversation
+    for a reader (#208), and the dock says which project it is using whenever it
+    is not the one you are in, so the choice is visible rather than silent.
+  */
+  const loose = PROJECTS.find((x) => x.slug === 'unnamed')
+  const slug = state.project ?? loose?.slug ?? PROJECTS[0]?.slug
   const p = slug ? byId(slug) : null
+  const filed = p !== null && p.slug !== state.project
   const messages = p ? chat.thread(p.slug) : []
   const draft = $('[data-docksay]')?.value ?? ''
   const at = $('[data-dockthread]')?.scrollTop
@@ -1378,7 +1412,13 @@ function paintDock() {
   el.innerHTML = `<div class="dockhead">
       <span style="flex:1;min-width:0">
         <b>The team</b>
-        <span class="t-meta">${p ? esc(p.name) : 'No project yet'}</span>
+        <span class="t-meta">${
+          p === null
+            ? 'No project yet'
+            : filed
+              ? `Filed under ${esc(p.slug === 'unnamed' ? 'Conversation' : p.name)}`
+              : esc(p.name)
+        }</span>
       </span>
       <button class="closeconv" data-dock-close aria-label="Close the conversation">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
