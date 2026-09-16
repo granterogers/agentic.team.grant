@@ -1853,6 +1853,14 @@ Each of these cost real time. They are here so they cost it once.
   above "26 days ago", because `when.stamp` switches scale past a threshold.
   Right everywhere else in the product; in a column read top to bottom it
   looks like the sequence running backwards. Scroll the capture.
+- **A substring check is satisfied by a superstring, so prove the detector
+  can fail.** #268's check asserted `text.includes('jobId')`; the synthetic
+  failure — rename every `jobId` to `jobIdX` in one caller — left it GREEN,
+  because `jobIdX` contains `jobId`. It would also have passed on a file that
+  merely mentions the word in a comment. `\bjobId:` with the colon is the
+  property, because the property is that the option is PASSED. §10's harness
+  audit is not ceremony: break it, watch it go red, restore it, watch it go
+  green — and the first version failed that on its first try.
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run

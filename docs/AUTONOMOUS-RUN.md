@@ -58,6 +58,7 @@ cheapest reconstruction of where the run is.
 
 | Issue | What landed | Migrations |
 |---|---|---|
+| **#268** | filed and fixed in the same run — every model call in `src/` now names the job it was for, or states why it cannot. A source check with a proven synthetic failure | — |
 | **#156** | a project's history as a sequence — `app.project_history` derives it from the timestamps the rows carry, because `public.events` holds agent actions and no lifecycle. Found and fixed a ONE-WAY DOOR #25 shipped this morning: choosing Panels removed the toggle that switched back | 0401, 0402 |
 | **#124** | density is a control — and appearance moved to the OFFICE (0400), because ADR-0021 says a preference about how the work is shown is not the browser's. Found that `verify:arrangement` had been failing since #25 landed this morning, so ADR-0021's guarantee was unverified | 0400 |
 | **#123** | an empty section says so — and the check that says so can now FAIL. The floor measured the whole page (always 361+ characters) so it never could. Found two more defects in the audit itself: every settings pane measured the section behind it, and "the call" was a route to a screen #214 removed | — |
@@ -67,7 +68,6 @@ cheapest reconstruction of where the run is.
 | #269 | filed: 268 of 276 `public.staff` rows are retired harness specialists (invisible to Grant — checked) | — |
 | **#131** | the plan Grant approved is the import that happens — `office.notion_import` executes the STORED plan instead of a second model call. `PlanStep.payload` makes the plan one artefact rather than two. Six unit tests with a control that must come back one | — |
 | **#127** | a model is chosen on what it has actually done, per kind of work — `public.model_record` derived from inference_usage, quality may only DEMOTE, exploration by staleness, the choice explained in `job_traces`. `npm run verify:routing-quality` 13/13, ADR-0031. **`verify:fallback` caught my first attempt inverting the certified model chain** | 0394–0396 |
-| #268 | filed: ~1,700 of 1,860 inference calls carry no `job_id`, so the per-kind record stays thin | — |
 | **#147** | a correction becomes a standing rule on one press — `src/agents/correction.ts`, the offer on the Governance page, `npm run verify:rules` 24/24, ADR-0030. Four latent defects found by DRIVING the press, none visible from reading | 0390–0393 |
 | #266, #181, #241 | harness traffic on three tables Grant reads | 0388, 0389 |
 | #134 | a budget that says no | 0386, 0387 |
