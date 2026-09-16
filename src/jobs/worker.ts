@@ -1227,6 +1227,32 @@ export const drain = async (
     }
   }
 
+  /*
+    And expire the MCP authorisation codes (#72, found by check:callers).
+
+    `app.mcp_expire_codes` deletes a code an hour past its expiry and had NO
+    CALLER — not a schedule, not a handler, not even a suite. Twenty codes
+    were in the table and all twenty had expired. Nothing could be redeemed
+    with them, because the redeem path checks `expires_at`, so this is hygiene
+    rather than a hole; it is also the exact defect #72 is about, found by the
+    check built for #72, on the day it was built.
+
+    Here rather than on a cron for the same reason the stall sweep is: a
+    worker boot is a cheap, frequent moment, and a second schedule is a second
+    thing that can silently stop — which is how 1,800 GitHub Actions minutes
+    went, and why `CLAUDE.md` says no new clocks without a reason.
+
+    Never fatal. An OAuth code that lives an hour too long must not stop the
+    queue draining.
+  */
+  if (options.recover !== false) {
+    try {
+      await db.execute('select app.mcp_expire_codes()')
+    } catch {
+      // Reported by the next pass if it persists. The queue matters more.
+    }
+  }
+
   // Then finish anything the sweep found already committed. Before new work,
   // because a job whose output exists and whose owner never heard about it is
   // the most overdue thing in the system.

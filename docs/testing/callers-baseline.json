@@ -1,5 +1,5 @@
 {
-  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed.",
+  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day.",
   "recorded": "2026-09-16",
   "unreached": [
     "app.autonomy_for",
@@ -9,7 +9,6 @@
     "app.eval_set",
     "app.expire_temporary_staff",
     "app.expire_undo_offers",
-    "app.mcp_expire_codes",
     "app.needs_me_pressure",
     "app.notification_patterns",
     "app.project_debris",
