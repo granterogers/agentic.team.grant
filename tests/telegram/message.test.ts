@@ -359,3 +359,85 @@ describe('the approval pair', () => {
     expect(rows[0]?.[1]?.callback_data).toBe(`decline:${CORR}`)
   })
 })
+
+describe('Slack vocabulary does not reach the phone (#208)', () => {
+  /*
+    Found by rendering four real message shapes and reading them, which is the
+    only way either of these was ever going to show up: both compile, both
+    escape correctly, and both are perfectly well-formed HTML.
+  */
+  const unreviewed = {
+    confidence: 'medium' as const,
+    evidence: 'inferred' as const,
+    reviewed: false,
+    sources: ['the pricing page'] as readonly string[],
+    contradictions: null,
+  }
+
+  const SHORTCODE = /(?<![A-Za-z0-9_]):[a-z][a-z0-9_+-]+:(?![A-Za-z0-9_])/
+
+  it('leaves no emoji shortcode in anything the office itself composed', () => {
+    /*
+      The property, not the one shortcode that was found. `:warning:` came
+      from `provenanceLine`; the staff emoji in `slack/identity.ts` are eight
+      more, and the next one added is not going to remember this test exists.
+
+      Scoped to the furniture, because the body is the model's words and the
+      rule there is different — see the two cases below it.
+    */
+    const shapes = [
+      pagerText(message({ metadata: unreviewed })),
+      pagerText(message({ metadata: unreviewed, projectName: 'Wellness' })),
+      pagerText(message({ metadata: { ...unreviewed, reviewed: true }, sources: [] })),
+      pagerText(message({ metadata: { ...unreviewed, evidence: 'verified' as const } })),
+    ]
+    for (const text of shapes) expect(text).not.toMatch(SHORTCODE)
+  })
+
+  it('translates a shortcode it knows, in the body as well', () => {
+    const text = pagerText(message({ body: 'Shipped :white_check_mark: today' }))
+    expect(text).toContain('Shipped ✅ today')
+  })
+
+  it('keeps an unknown shortcode in the body rather than putting a hole in it', () => {
+    // The asymmetry, asserted on purpose: furniture is ours to fix, the body
+    // is what the message actually said.
+    const text = pagerText(message({ body: 'Shipped :no_such_emoji: today' }))
+    expect(text).toContain('Shipped :no_such_emoji: today')
+  })
+
+  it('leaves a ratio and a clock time alone, which are not shortcodes', () => {
+    // The regression the shortcode rule could most easily cause: a colon
+    // between two things is ordinary punctuation far more often than it is
+    // Slack.
+    const text = pagerText(message({ body: 'Split 3:2:1, reviewed at 12:30.' }))
+    expect(text).toContain('Split 3:2:1, reviewed at 12:30.')
+  })
+
+  it('warns once that nobody has checked this, not twice', () => {
+    const body = 'The pricing page says forty pounds a month.'
+    const text = pagerText(message({ body, metadata: unreviewed, projectName: 'Wellness' }))
+    const warnings = text.toLowerCase().match(/not reviewed|nobody has checked/g) ?? []
+    expect(warnings).toHaveLength(1)
+    // And the one that survives is the prominent one, above the body, because
+    // on a phone the first line is often the only line read.
+    expect(text.indexOf('Not reviewed')).toBeLessThan(text.indexOf(body))
+  })
+
+  it('still shows confidence with evidence on that same message', () => {
+    // §12 is what the de-duplication must not cost. The review warning is a
+    // third thing, said elsewhere; the pair is untouched.
+    const text = pagerText(message({ metadata: unreviewed })).toLowerCase()
+    expect(text).toContain('confident')
+    expect(text).toContain('worked out')
+    expect(text).toContain('1 source')
+  })
+
+  it('keeps the warning in Slack, where nothing else has said it', () => {
+    // The option exists to stop a repetition, never to lose a warning. Slack
+    // has no header line, so the clause is the only place it is said.
+    expect(provenanceLine(unreviewed)).toContain('Nobody has checked this yet')
+    expect(provenanceLine(unreviewed, {})).toContain('Nobody has checked this yet')
+    expect(provenanceLine(unreviewed, { unreviewed: true })).not.toContain('Nobody has checked')
+  })
+})

@@ -266,7 +266,19 @@ export function attestsSomething(m: Provenance, body?: string): boolean {
   return claimsToHaveRead(body ?? '') !== null
 }
 
-export function provenanceLine(m: Provenance): string {
+/**
+ * Whether the caller has already said something this line would otherwise say.
+ *
+ * Only ever used to avoid saying the SAME thing twice in one message, never to
+ * suppress a warning outright. Telegram puts the unreviewed warning above the
+ * body, in bold, before anything else — so repeating it inside the provenance
+ * line made a short message carry "nobody has checked this" twice, which is
+ * the furniture #208 is about. §12 is untouched: the pair this option can
+ * never affect is confidence and evidence.
+ */
+export type AlreadySaid = { readonly unreviewed?: boolean }
+
+export function provenanceLine(m: Provenance, already: AlreadySaid = {}): string {
   const sure = HOW_SURE[m.confidence]
   const n = m.sources.length
   const sources = `${String(n)} source${n === 1 ? '' : 's'}`
@@ -298,7 +310,9 @@ export function provenanceLine(m: Provenance): string {
   }
 
   const parts = [`${sure} — ${basis}.`]
-  if (!m.reviewed) parts.push(':warning: *Nobody has checked this yet.*')
+  if (!m.reviewed && already.unreviewed !== true) {
+    parts.push(':warning: *Nobody has checked this yet.*')
+  }
   return parts.join(' ')
 }
 

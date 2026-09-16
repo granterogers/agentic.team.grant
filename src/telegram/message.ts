@@ -215,8 +215,91 @@ export function inlineKeyboard(
  * still safe and a pair of asterisks still becomes bold. The other way round —
  * convert then escape — turns the tags this just added into visible text.
  */
+/**
+ * Slack's emoji shortcodes, which Telegram has never heard of.
+ *
+ * `:warning:` is a name Slack resolves against its own emoji set. Telegram's
+ * HTML parse mode resolves nothing, so the eight characters arrive on Grant's
+ * phone as eight characters — Slack vocabulary leaking into a surface that
+ * does not speak it, which is #208's whole complaint wearing a different hat.
+ *
+ * Translated generally rather than one shortcode at a time, and anything not
+ * on the list is REMOVED rather than passed through: an unknown shortcode is a
+ * name only Slack can resolve, so its literal text is never the right answer.
+ * Losing a decoration is cheap; showing him a colon-wrapped word is not.
+ */
+const SLACK_EMOJI: Readonly<Record<string, string>> = {
+  warning: '\u26a0\ufe0f',
+  white_check_mark: '\u2705',
+  heavy_check_mark: '\u2714\ufe0f',
+  rotating_light: '\ud83d\udea8',
+  bulb: '\ud83d\udca1',
+  memo: '\ud83d\udcdd',
+  pencil: '\u270f\ufe0f',
+  calendar: '\ud83d\udcc5',
+  file_folder: '\ud83d\udcc1',
+  speech_balloon: '\ud83d\udcac',
+  mag: '\ud83d\udd0d',
+  microscope: '\ud83d\udd2c',
+  books: '\ud83d\udcda',
+  compass: '\ud83e\udded',
+  gear: '\u2699\ufe0f',
+  shield: '\ud83d\udee1\ufe0f',
+  abacus: '\ud83e\uddee',
+  chart_with_upwards_trend: '\ud83d\udcc8',
+  chess_pawn: '\u265f\ufe0f',
+  hourglass: '\u23f3',
+  information_source: '\u2139\ufe0f',
+}
+
+/*
+  A shortcode must START with a letter and be at least two characters, and may
+  not sit against a word character on either side. That is what keeps "3:2:1"
+  and "12:30" out of it — neither has a letter between the colons — while
+  still catching a shortcode at the start of a line or in the middle of a
+  sentence.
+*/
+const SHORTCODE = /(?<![A-Za-z0-9_]):([a-z][a-z0-9_+-]+):(?![A-Za-z0-9_])/g
+
+/**
+ * What to do with a shortcode nobody has a character for.
+ *
+ * `strip` for text the OFFICE composes — the provenance line, a header, any
+ * furniture. There, an unresolvable name is our own mistake and showing it to
+ * Grant is never the right answer.
+ *
+ * `keep` for the model's own body. Deleting words a message actually said is
+ * worse than a stray colon-wrapped one: the reader can see past punctuation,
+ * and cannot see past a sentence with a hole in it. A KNOWN shortcode is still
+ * translated there, because the emoji is unambiguously what was meant.
+ */
+export function slackEmojiToUnicode(line: string, unknown: 'strip' | 'keep'): string {
+  const out = line.replace(SHORTCODE, (whole, name: string) => {
+    const known = SLACK_EMOJI[name]
+    if (known !== undefined) return known
+    return unknown === 'strip' ? '' : whole
+  })
+  return unknown === 'strip'
+    ? out
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/(^|\n) +/g, '$1')
+        .replace(/ +(\n|$)/g, '$1')
+    : out
+}
+
+/**
+ * Slack's bold into Telegram's tags, and everything else escaped.
+ *
+ * Escaping FIRST and converting after, so a body containing a literal less-than
+ * is still safe and a pair of asterisks still becomes bold. The other way round
+ * — convert then escape — turns the tags this just added into visible text.
+ *
+ * Emoji shortcodes go last, on text that is already escaped: every character a
+ * shortcode is made of survives escaping unchanged, so the order costs nothing
+ * and the unicode it emits is not something to escape.
+ */
 function slackEmphasisToHtml(line: string): string {
-  return escapeHtml(line).replace(/\*([^*]+)\*/g, '<b>$1</b>')
+  return slackEmojiToUnicode(escapeHtml(line).replace(/\*([^*]+)\*/g, '<b>$1</b>'), 'strip')
 }
 
 export function pagerText(message: PagerMessage): string {
@@ -266,7 +349,8 @@ export function pagerText(message: PagerMessage): string {
   // see it twice." (#208)
   if (project !== null) parts.push(`${project.mark} <b>${escapeHtml(project.label)}</b>`)
 
-  if (message.metadata !== null && !message.metadata.reviewed) {
+  const warnedUnreviewed = message.metadata !== null && !message.metadata.reviewed
+  if (warnedUnreviewed) {
     parts.push('⚠️ <b>Not reviewed</b> — do not rely on this yet')
   }
 
@@ -287,7 +371,14 @@ export function pagerText(message: PagerMessage): string {
     it should, because several people post there.
   */
 
-  parts.push(escapeHtml(trimForPager(message.body)))
+  /*
+    The body goes through the emoji translation too, and keeps what the
+    translation does not know (#208). A model that writes a check-mark
+    shortcode meant the check mark; a model that writes something only Slack
+    could resolve still wrote a word, and removing words from an answer is a
+    worse failure than leaving one oddly punctuated.
+  */
+  parts.push(slackEmojiToUnicode(escapeHtml(trimForPager(message.body)), 'keep'))
 
   if (message.metadata !== null) {
     /*
@@ -324,7 +415,17 @@ export function pagerText(message: PagerMessage): string {
       keeps its provenance beside it.
     */
     if (message.metadata.routine !== true && attestsSomething(message.metadata, message.body)) {
-      parts.push(`<i>${slackEmphasisToHtml(provenanceLine(message.metadata))}</i>`)
+      /*
+        Without the unreviewed clause when the header already carried it (#208).
+
+        Those two lines are pushed under exactly the same condition, so the
+        warning was reaching Grant twice in every unreviewed message — once in
+        bold above the body and once in grey italics below it. The prominent
+        one is the one worth keeping: on a phone the first line is often the
+        only line read, which is why it is first.
+      */
+      const line = provenanceLine(message.metadata, { unreviewed: warnedUnreviewed })
+      parts.push(`<i>${slackEmphasisToHtml(line)}</i>`)
     }
   }
 
