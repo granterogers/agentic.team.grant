@@ -58,6 +58,7 @@ cheapest reconstruction of where the run is.
 
 | Issue | What landed | Migrations |
 |---|---|---|
+| **#156** | a project's history as a sequence — `app.project_history` derives it from the timestamps the rows carry, because `public.events` holds agent actions and no lifecycle. Found and fixed a ONE-WAY DOOR #25 shipped this morning: choosing Panels removed the toggle that switched back | 0401, 0402 |
 | **#124** | density is a control — and appearance moved to the OFFICE (0400), because ADR-0021 says a preference about how the work is shown is not the browser's. Found that `verify:arrangement` had been failing since #25 landed this morning, so ADR-0021's guarantee was unverified | 0400 |
 | **#123** | an empty section says so — and the check that says so can now FAIL. The floor measured the whole page (always 361+ characters) so it never could. Found two more defects in the audit itself: every settings pane measured the section behind it, and "the call" was a route to a screen #214 removed | — |
 | ~~#124~~ | ~~looked at, not started~~ — done later the same morning, see above. The note below was written before I re-read ADR-0021, which answers the scope question itself. It is not a token swap: appearance is `localStorage`-only and ADR-0021 says a preference like this belongs in the office. The scope question — whether scheme/palette/texture move too — is Grant's. Recorded on the issue | — |

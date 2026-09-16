@@ -1838,6 +1838,21 @@ Each of these cost real time. They are here so they cost it once.
   Map/Panels toggle — so ADR-0021's whole guarantee sat unverified for a
   morning. When a change moves what a screen OPENS ON, grep the suites for the
   selector that screen used to show.
+- **A screen with no capture is a screen nothing is watching.** #25 made the
+  project map the default and put the panels board behind a toggle, and the
+  board immediately lost its entry in `npm run shots`. Within the same morning
+  it had a ONE-WAY DOOR — the Map/Panels control was drawn in the map branch
+  only, so choosing Panels removed the control that had just been pressed —
+  and `verify:arrangement` had been failing against it unnoticed. Neither was
+  found by reading; the door was found because a capture run FAILED waiting
+  for a button that no longer existed. When a change moves what a screen opens
+  on, give the displaced screen a capture in the same commit.
+- **A panel below the fold in every capture is a panel nobody has judged.**
+  The new history panel's date column rendered EMPTY in its first capture —
+  the column the whole layout is built around — and then rendered "16 Aug"
+  above "26 days ago", because `when.stamp` switches scale past a threshold.
+  Right everywhere else in the product; in a column read top to bottom it
+  looks like the sequence running backwards. Scroll the capture.
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run
