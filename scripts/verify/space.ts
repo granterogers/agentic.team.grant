@@ -74,6 +74,35 @@ const PANELS = `(() => {
       header: Math.round(hr.height),
       share: Math.round((hr.height / Math.max(1, pr.height)) * 100),
       below: Math.round(wrap.scrollHeight - wrap.clientHeight - wrap.scrollTop),
+      /*
+        The OTHER direction, added with #267. A panel is a resizable widget
+        whose height is a stored spec, not its content - so it can be short of
+        room (below, above) or holding a great deal of nothing, and only the
+        second explains a board that reads as sparse. The home board's Tasks
+        panel is 381px of body around 54px of "Reading what is open..." with
+        no token, which is the question #267 was filed to answer in pixels
+        rather than off a PNG.
+      */
+      spare: (() => {
+        /*
+          scrollHeight is never LESS than clientHeight, so it cannot answer
+          this: a 381px box holding 54px of content reports scrollHeight 381
+          and the subtraction is always zero. The first draft of this line did
+          exactly that and printed nothing on every panel in the product,
+          which is the found-nothing check that cannot report anything.
+          Measure the deepest painted child instead, as EMPTY does one level
+          up, and the Tasks panel came back 327.
+        */
+        let low = wrap.getBoundingClientRect().top
+        for (const el of wrap.querySelectorAll('*')) {
+          const r = el.getBoundingClientRect()
+          if (r.height === 0 || r.width === 0) continue
+          const cs = getComputedStyle(el)
+          if (cs.visibility === 'hidden' || cs.opacity === '0') continue
+          if (r.bottom > low) low = r.bottom
+        }
+        return Math.max(0, Math.round(wrap.getBoundingClientRect().bottom - low))
+      })(),
       clipped: wrap.scrollHeight - wrap.clientHeight > 4,
       more: panel.classList.contains('more'),
       above: panel.classList.contains('above'),
@@ -108,6 +137,57 @@ const EMPTY = `(() => {
   return [measure('.rail'), measure('.main'), measure('.tabbody')].filter((x) => x !== null)
 })()`
 
+/*
+  Report every panel on whatever board is currently on screen.
+
+  Factored out for #267. The home board has panels too - #219 made it a board
+  and #220 made those panels collapsible, resizable widgets - and this walked
+  none of them, so the one screen that opens every session was the one screen
+  the space audit was silent about.
+
+  Running it found a second, larger silence in the same run: the project
+  Overview reported no panels either, because #25 made that tab a MAP with the
+  board behind a Map/Panels toggle. So the audit had quietly stopped seeing
+  every panel in the product while continuing to print three container rows
+  and look healthy. Same shape as verify:arrangement breaking on the same
+  change - when a change moves what a screen opens on, the audits pointed at
+  the displaced screen go silent rather than red.
+*/
+const reportPanels = async (page: import('playwright').Page): Promise<number> => {
+  const panels = (await page.evaluate(PANELS)) as {
+    name: string
+    panel: number
+    header: number
+    share: number
+    below: number
+    spare: number
+    clipped: boolean
+    more: boolean
+    above: boolean
+    fade: string
+  }[]
+  for (const p of panels) {
+    const says = p.clipped ? (p.more ? `fade on (opacity ${p.fade})` : 'CLIPPED, NO FADE') : '—'
+    const room = p.spare > 40 ? ` · ${String(p.spare)}px spare` : ''
+    console.log(
+      `  panel ${p.name.padEnd(28)} ${String(p.panel).padStart(4)}px · header ${String(p.header).padStart(3)}px (${String(p.share).padStart(2)}%) · ${String(p.below).padStart(4)}px below${room} · ${says}`,
+    )
+  }
+  return panels.length
+}
+
+/*
+  A board with no panels on it is the shape of both silences above, so say so
+  rather than printing nothing. Reporting only, like the rest of this file -
+  a board can legitimately be empty if Grant has removed every panel - but a
+  line naming the screen is what turns "the audit found nothing" into "the
+  audit looked and there was nothing", which #267 exists because nobody could
+  tell apart.
+*/
+const sawNoPanels = (where: string): void => {
+  console.log(`  (no panels on ${where} — the board is empty, or the audit cannot reach it)`)
+}
+
 const browser = await chromium.launch()
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const page = await ctx.newPage()
@@ -129,6 +209,9 @@ for (const row of (await page.evaluate(EMPTY)) as {
   )
 }
 
+// #267: the home board's panels, which this never walked.
+if ((await reportPanels(page)) === 0) sawNoPanels('the home board')
+
 await page.locator('.project[data-open="legacy-coaching-course"]').click()
 await page.waitForTimeout(700)
 
@@ -148,23 +231,17 @@ for (const tab of ['overview', 'work', 'sources', 'team']) {
       `  ${row.sel.padEnd(10)} ${String(row.height).padStart(5)}px tall · ${String(row.used).padStart(5)}px used · ${String(row.empty).padStart(5)}px empty`,
     )
   }
-  const panels = (await page.evaluate(PANELS)) as {
-    name: string
-    panel: number
-    header: number
-    share: number
-    below: number
-    clipped: boolean
-    more: boolean
-    above: boolean
-    fade: string
-  }[]
-  for (const p of panels) {
-    const says = p.clipped ? (p.more ? `fade on (opacity ${p.fade})` : 'CLIPPED, NO FADE') : '—'
-    console.log(
-      `  panel ${p.name.padEnd(28)} ${String(p.panel).padStart(4)}px · header ${String(p.header).padStart(3)}px (${String(p.share).padStart(2)}%) · ${String(p.below).padStart(4)}px below · ${says}`,
-    )
+  /*
+    Overview opens on the MAP since #25, so the panels board is one press
+    away and this audit had stopped seeing it. Press Panels when the toggle
+    is there; every other tab has no toggle and reports its panels directly.
+  */
+  const toPanels = page.locator('[data-overview="panels"]')
+  if ((await toPanels.count()) > 0) {
+    await toPanels.first().click({ force: true })
+    await page.waitForTimeout(600)
   }
+  if ((await reportPanels(page)) === 0) sawNoPanels(tab)
 }
 
 /*
