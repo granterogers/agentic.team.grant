@@ -58,6 +58,9 @@ cheapest reconstruction of where the run is.
 
 | Issue | What landed | Migrations |
 |---|---|---|
+| **#130** (part) | the office can pull the tasks out of a document and create them — `office.extract_tasks`, a deterministic recogniser, the `tasks_extracted` shape's first rows, and one undo for the batch. `npm run verify:extract` 11/11. **Still open** for `research_summary` and `draft_document` | 0398, 0399 |
+| **#37** | search can ask the graph — filters by kind, tag, date and one `related_to` that asks `app.relations_of`, so agent/contact/source/collection are one mechanism. `verify:search` 12/12 → 26/26 | 0397 |
+| #269 | filed: 268 of 276 `public.staff` rows are retired harness specialists (invisible to Grant — checked) | — |
 | **#131** | the plan Grant approved is the import that happens — `office.notion_import` executes the STORED plan instead of a second model call. `PlanStep.payload` makes the plan one artefact rather than two. Six unit tests with a control that must come back one | — |
 | **#127** | a model is chosen on what it has actually done, per kind of work — `public.model_record` derived from inference_usage, quality may only DEMOTE, exploration by staleness, the choice explained in `job_traces`. `npm run verify:routing-quality` 13/13, ADR-0031. **`verify:fallback` caught my first attempt inverting the certified model chain** | 0394–0396 |
 | #268 | filed: ~1,700 of 1,860 inference calls carry no `job_id`, so the per-kind record stays thin | — |
@@ -80,8 +83,8 @@ aesthetic children must not be implemented on a guess. #178 needs a change to
 his own Notion workspace. Candidates identified and not yet started: #123
 (empty sections), #124 (density preference), #126 (drag a file onto a project),
 #156 (project history as a sequence), #128 (agent hands work to another agent),
-#187 (a Slack channel per project), #130 (outputs are prose where they should be
-structured), #37 (fast search across the project graph).
+#187 (a Slack channel per project), #123 (empty sections), #124 (density
+preference), #126 (drag a file onto a project).
 
 ---
 
