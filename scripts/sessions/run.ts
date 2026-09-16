@@ -301,6 +301,15 @@ export interface TurnResult {
   fixture: boolean
   passes: string[]
   fails: string[]
+  /*
+    Turns that never settled inside the wait (#250).
+
+    Separate from `fails` on purpose. A turn the office answered badly and a
+    turn nobody has finished answering are different facts, and folding the
+    second into the first reports the product for a deadline the harness set.
+    Optional so the records already in .out/sessions.jsonl still parse.
+  */
+  inconclusive?: string[]
 }
 
 const recorded = async (): Promise<TurnResult[]> => {
@@ -404,6 +413,53 @@ export const askOnce = async (
   }
 
   /*
+  One last look after the deadline, and a word for what the deadline means
+  (#250).
+
+  A turn whose job took three attempts outlived the wait loop, and the harness
+  scored it "the office actually answered (running)" — which reads as the
+  product answering nothing. It had answered, and well: a calculated figure
+  labelled as calculated, an explicit "I have no internal benchmark", and
+  market knowledge offered as market knowledge. Exactly what this campaign was
+  buying, recorded as a failure.
+
+  Two things are wrong with the old shape and only one of them is the timing.
+  A wait loop that expires knows something a failed job does not: NOTHING HAS
+  DECIDED YET. Scoring that as a product failure is the wrong layer, the same
+  mistake as asserting a routing decision before anything has routed — and it
+  is the expensive direction, because a harness that reports good answers as
+  failures is one whose failures stop being read.
+
+  So: re-read once after a grace pause, which recovers the ordinary case of a
+  job that finished a moment after the loop gave up; and if it is STILL live,
+  say `unfinished` rather than judging it. `unfinished` is not a pass — it is
+  counted and printed separately, because a session where half the turns never
+  settled has told you nothing and must not read as green.
+*/
+  const LIVE = ['queued', 'running', 'retrying', 'leased']
+  let unfinished = false
+  if (!['complete', 'failed', 'cancelled'].includes(String(row.state))) {
+    await new Promise((r) => setTimeout(r, 20_000))
+    row = await patiently(
+      async () =>
+        await one(`
+        select j.state::text as state, j.announce, app.harness_job(j.job_id) as fixture,
+               coalesce(j.recipient_agent, '') as agent,
+               coalesce(p.slug, '') as project_slug,
+               coalesce(r.intent_class, '') as intent,
+               coalesce(array_to_string(r.roster, ','), '') as roster,
+               coalesce((select left(o.body, 4000) from public.outputs o
+                          where o.job_id = j.job_id order by o.created_at desc limit 1), '')
+                 as answered
+          from public.jobs j
+          left join public.projects p on p.project_id = j.project_id
+          left join public.routing_decisions r on r.job_id = j.job_id
+         where j.job_id = ${lit(jobId)}::uuid`),
+    )
+    unfinished = LIVE.includes(String(row.state))
+  }
+
+  /*
     Tasks are counted for the SESSION, not globally.
 
     `public.tasks` is shared, and a count that included Grant's own would make
@@ -461,6 +517,9 @@ export const askOnce = async (
   const searchable = plain(answered)
   const passes: string[] = []
   const fails: string[] = []
+  // #250: a third verdict, because "did not answer" and "has not answered yet"
+  // are different facts and only one of them is about the product.
+  const inconclusive: string[] = []
   const judge = (what: string, good: boolean, note = ''): void => {
     ;(good ? passes : fails).push(`${what}${note === '' ? '' : ` (${note})`}`)
   }
@@ -479,10 +538,27 @@ export const askOnce = async (
     answered nothing. A suite that can report a green turn for a job Grant
     received nothing from is measuring the wrong thing.
   */
-  judge('the office actually answered', String(row.state) === 'complete', String(row.state))
+  if (unfinished) {
+    /*
+      Not judged either way. The turn is reported as unfinished and every
+      expectation below it is skipped, because an expectation about an answer
+      that does not exist yet is an assertion about nothing — and a green one
+      would be worse than a red one.
+    */
+    inconclusive.push(`still ${String(row.state)} when the wait expired`)
+  } else {
+    judge('the office actually answered', String(row.state) === 'complete', String(row.state))
+  }
 
   const e = turn.expect
-  if (e !== undefined) {
+  /*
+    `!unfinished`, because an expectation about an answer that does not exist
+    yet is an assertion about nothing - and a GREEN one would be worse than a
+    red one. #250's own turn is the case: `recipient_agent` is written before
+    the answer, so "answered by the finance director" held for a job that had
+    not finished, which is how a harness reports a turn it never saw.
+  */
+  if (e !== undefined && !unfinished) {
     if (e.agent !== undefined)
       judge(`answered by ${e.agent}`, row.agent === e.agent, String(row.agent) || 'nobody')
     if (e.notAgent !== undefined)
@@ -588,6 +664,7 @@ export const askOnce = async (
     fixture: row.fixture === true,
     passes,
     fails,
+    inconclusive,
   }
 }
 

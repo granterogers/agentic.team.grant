@@ -45,6 +45,7 @@ if (argv.includes('--report')) {
   let session = ''
   let pass = 0
   let fail = 0
+  let unsettled = 0
   for (const r of rows) {
     if (r.session !== session) {
       session = r.session
@@ -52,17 +53,38 @@ if (argv.includes('--report')) {
     }
     pass += r.passes.length
     fail += r.fails.length
-    const mark = r.fails.length === 0 ? 'ok  ' : 'FAIL'
+    /*
+      A turn that never settled is neither (#250).
+
+      Scored as a failure it reports the product for a deadline the harness
+      set - #250's turn had answered, well, and was recorded as "the office
+      actually answered (running)". Scored as a pass it would hide a session
+      where nothing finished. So it is its own mark, its own count, and it
+      does not move the ratio in either direction.
+    */
+    const stalled = r.inconclusive ?? []
+    if (stalled.length > 0) unsettled += 1
+    const mark = stalled.length > 0 ? '····' : r.fails.length === 0 ? 'ok  ' : 'FAIL'
     console.log(
       `    ${mark} ${String(r.index).padStart(2)}. ${r.why}` +
         `\n         ${r.state}, ${r.agent === '' ? 'nobody' : r.agent}` +
         `${r.projectSlug === '' ? '' : `, ${r.projectSlug}`}` +
+        `${stalled.length === 0 ? '' : `\n         UNSETTLED: ${stalled.join(' | ')}`}` +
         `${r.fails.length === 0 ? '' : `\n         FAILED: ${r.fails.join(' | ')}`}`,
     )
   }
   console.log(
-    `\n${String(pass)}/${String(pass + fail)} expectations held across ${String(rows.length)} turns`,
+    `\n${String(pass)}/${String(pass + fail)} expectations held across ${String(rows.length)} turns` +
+      (unsettled === 0
+        ? ''
+        : `\n${String(unsettled)} turn(s) never settled inside the wait and were not scored — ` +
+          'a session with many of these has told you nothing'),
   )
+  /*
+    An unsettled turn does not fail the run, and it does not silently pass it
+    either: the line above says how many there were, so a run that scored
+    almost nothing cannot read as a clean one.
+  */
   process.exit(fail > 0 ? 1 : 0)
 }
 
@@ -190,7 +212,13 @@ for (let i = existing.length; i < session.turns.length; i++) {
     `\n     ${result.state}, ${result.agent === '' ? 'nobody' : result.agent}` +
       `${result.projectSlug === '' ? '' : `, ${result.projectSlug}`}` +
       `, ${String(result.taskCount)} task(s)` +
-      `\n     ${result.fails.length === 0 ? 'ok' : `FAILED: ${result.fails.join(' | ')}`}`,
+      `\n     ${
+        (result.inconclusive ?? []).length > 0
+          ? `UNSETTLED: ${(result.inconclusive ?? []).join(' | ')}`
+          : result.fails.length === 0
+            ? 'ok'
+            : `FAILED: ${result.fails.join(' | ')}`
+      }`,
   )
 }
 
