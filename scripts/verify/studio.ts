@@ -16,6 +16,17 @@ import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 import { seedAppearance } from './seed-appearance.ts'
 
+/*
+  Which density to capture (#124).
+
+  `DENSITY=compact npm run shots` writes a parallel set named `-compact` rather
+  than overwriting the comfortable one, because the pair is the point: the
+  question compact has to answer is "is this better", and that cannot be
+  answered from one image.
+*/
+const DENSITY = process.env.DENSITY === 'compact' ? 'compact' : 'comfortable'
+const SUFFIX = DENSITY === 'compact' ? '-compact' : ''
+
 const ROOT = 'web/studio'
 const OUT = '.out'
 const PORT = 4610
@@ -59,7 +70,7 @@ const SIZES = [
 for (const [size, opts] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
     const ctx = await browser.newContext({ ...opts, colorScheme: scheme })
-    await ctx.addInitScript(seedAppearance(scheme))
+    await ctx.addInitScript(seedAppearance(scheme, { density: DENSITY }))
     const page = await ctx.newPage()
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
@@ -70,7 +81,7 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(900)
 
     const shoot = async (name: string) => {
-      const file = `${OUT}/${name}-${size}-${scheme}.png`
+      const file = `${OUT}/${name}-${size}-${scheme}${SUFFIX}.png`
       await page.screenshot({ path: file, fullPage: false })
       shots.push(file)
     }

@@ -92,6 +92,37 @@
      as generated. */
   --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 20px;
   --s5: 32px; --s6: 52px; --s7: 84px;
+}
+
+/*
+  Compact, which is Grant's "improve space usage throughout" as a CONTROL
+  rather than as a guess (#124).
+
+  Picking a tighter rhythm and hoping is how that request gets answered once
+  and re-litigated a month later. Two densities, one scale swapped, and the
+  argument is over.
+
+  The SPACE changes and nothing else does. No per-component overrides — that
+  is the version of this that rots, because the day a component is added
+  nobody remembers it has two spacings. And deliberately not a `calc()` ratio:
+  these are whole pixels chosen against the non-linear scale above, so compact
+  keeps the same shape rather than becoming an even ramp, which is the thing
+  the comment above says makes a layout read as generated.
+
+  Roughly 0.72, and the two floors it may not cross are enforced elsewhere and
+  were checked: `verify:layouts` holds type at 12px and touch targets at 44px
+  under a coarse pointer. Compact tightens the space BETWEEN controls; it does
+  not shrink the controls. If it could not reach a meaningfully tighter layout
+  without crossing those, the honest answer would be a smaller ratio and not a
+  smaller floor.
+
+  `--s1` and `--s7` are left alone: 4px is already the smallest useful gap and
+  halving it reads as a mistake, and `--s7` is used for the few deliberate
+  full-stops in the layout, which compact is not trying to remove.
+*/
+:root[data-density='compact'] {
+  --s2: 6px;  --s3: 9px;  --s4: 14px;
+  --s5: 23px; --s6: 37px;
 
   --r-control: 6px; --r-card: 10px; --r-sheet: 14px;
 

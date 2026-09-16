@@ -7,11 +7,11 @@
   is not, that is evidence for React and this file becomes the specification.
 */
 
-import { CREW, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
+import { CREW, FROM_OFFICE, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
 import { act, attempt, canWrite, onWrite, read, say, sure, token } from './office.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
-import { PALETTES, TEXTURES, SCHEMES, appearance, apply, readTexture, toggleScheme, activeScheme } from './appearance.js'
+import { DENSITIES, PALETTES, TEXTURES, SCHEMES, appearance, apply, hydrate as hydrateAppearance, readTexture, saveWith, toggleScheme, activeScheme } from './appearance.js'
 import * as canvasView from './canvas.js'
 import * as chat from './chat.js'
 import * as dictate from './dictate.js'
@@ -5669,6 +5669,36 @@ function appearanceTab() {
         </div>
       </div>
 
+      <!--
+        Density (#124).
+
+        Grant, in the review: "Improve space usage throughout - less
+        decoration, less clutter." A control rather than a guess, because
+        picking a tighter rhythm and hoping is how that request gets answered
+        once and re-litigated a month later.
+
+        Beside Light and dark because it is the same kind of choice about the
+        same thing, and in the same segmented shape #87 established, so there
+        is one way to pick between a small number of options rather than two.
+
+        The note under each is what it DOES, not what it is called. "Compact"
+        alone asks him to press it to find out.
+
+        No backticks in this comment: template literal.
+      -->
+      <div class="setgroup">
+        <span class="t-label">Density</span>
+        <div class="segmented" role="group" aria-label="Density">
+          ${DENSITIES.map((d) => `
+            <button class="seg ${now.density === d.id ? 'on' : ''}" data-density-pick="${d.id}"
+                    aria-pressed="${now.density === d.id}"
+                    title="${esc(d.note)}">${esc(d.name)}</button>`).join('')}
+        </div>
+        <p class="t-meta" style="margin:0">${esc(
+          (DENSITIES.find((d) => d.id === now.density) ?? DENSITIES[0]).note,
+        )}</p>
+      </div>
+
       <div class="setgroup">
         <span class="t-label">Palette</span>
         <div class="swatches">
@@ -6646,6 +6676,20 @@ function wireAppearance(v) {
   }
   for (const b of v.querySelectorAll('[data-palette-pick]')) {
     b.addEventListener('click', () => pick('palette', b.dataset.palettePick))
+  }
+  /*
+    Density redraws the pane, unlike palette.
+
+    The note under the control says what the chosen one does, so it has to be
+    rewritten — and the pane is the surface whose spacing just changed, which
+    makes it the one worth seeing change.
+  */
+  for (const b of v.querySelectorAll('[data-density-pick]')) {
+    b.addEventListener('click', () => {
+      pick('density', b.dataset.densityPick)
+      settingsSheet()
+      sheet(v, true)
+    })
   }
   for (const b of v.querySelectorAll('[data-texture-pick]')) {
     b.addEventListener('click', () => pick('texture', b.dataset.texturePick))
@@ -9950,6 +9994,30 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.cmd.open) { closeCmd(); render() }
 })
 
+/*
+  Where a change to the look is sent (#124, ADR-0021).
+
+  Installed BEFORE the first `apply()`, and the order matters in the harmless
+  direction: `apply()` at boot is putting the cached choice back on the
+  document, and it would send it out again. That is one wasted write of a value
+  the office already has, and the alternative — installing it afterwards —
+  would miss a change made in the first few milliseconds. Neither is a problem,
+  and this way there is no window in which a press is silently not saved.
+
+  `canWrite()` is asked at SEND time rather than here, because a token can
+  arrive after boot: a reader who signs in should start saving without a
+  reload. A reader who does not has nothing to save, which is the correct
+  state and not a degraded one.
+*/
+saveWith((next) => {
+  if (!canWrite()) return
+  act('appearance_set', { p_settings: next }).catch(() => {
+    // Fire and forget, per ADR-0021: the failure mode is "the other device is
+    // behind", never "your choice vanished" — it is on screen and in this
+    // browser either way.
+  })
+})
+
 apply()
 clock()
 
@@ -10455,6 +10523,20 @@ async function live() {
     and if they never do the page is still there and still honest.
   */
   await hydrate(API, token)
+  /*
+    How he chose to have it look, from the office (#124, ADR-0021).
+
+    After the payload and before the redraw: the page has already applied this
+    browser's cached copy at boot so there is no flash, and this is the record
+    catching up with it. On the machine he last changed it on the two agree and
+    nothing moves; on the other one the theme changes once, which is the whole
+    point.
+
+    It does NOT write back. `hydrateAppearance` suspends the sender for exactly
+    that reason — applying what was just read would send it straight out again
+    on every single page load.
+  */
+  hydrateAppearance(FROM_OFFICE.appearance)
   /*
     Second attempt at the address the browser arrived with (#157).
 

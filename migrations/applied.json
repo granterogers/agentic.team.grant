@@ -397,5 +397,6 @@
   "0396_quality_may_only_demote_and_must_not_reorder_the_certified_chain.sql": "538e39864beac24f3fcde3cc4e30d35bb8c22a2ab0f7eff1b3e003065aca76ab",
   "0397_search_can_ask_the_graph_not_only_the_words.sql": "31cb051726df7bb81917bb666100de08f1d8afe5c0e7f96bbaba31d57f682e5a",
   "0398_undoing_a_batch_of_extracted_tasks.sql": "ced9f8bc8a6fde75e169f9aba9dcbb24107653dfc6c71d1434c58d5db099e45c",
-  "0399_the_office_knows_it_can_pull_tasks_out_of_a_document.sql": "307c6e023b0d2bff8c934c5b22871888bfe94aa3ae30b2bd8c6174405c1d64e6"
+  "0399_the_office_knows_it_can_pull_tasks_out_of_a_document.sql": "307c6e023b0d2bff8c934c5b22871888bfe94aa3ae30b2bd8c6174405c1d64e6",
+  "0400_appearance_belongs_to_the_person_not_to_the_browser.sql": "d9f86a9c48a491b270353a7dc5ff2472ebd55e4b7f7e8c20f7c4f67b6c181a24"
 }

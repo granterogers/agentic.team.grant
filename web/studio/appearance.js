@@ -76,7 +76,30 @@ export const SCHEMES = [
   sets it back. That is what he asked for and it is the first control in the
   panel.
 */
-const DEFAULTS = { palette: 'slate', texture: 'concrete', own: null, ownName: '', scheme: 'dark' }
+/*
+  How much room the layout takes (#124).
+
+  Grant, in the review: "Improve space usage throughout — less decoration,
+  less clutter." Answered as a control rather than as a guess, because picking
+  a tighter rhythm and hoping is how that request gets re-litigated a month
+  later.
+
+  Two, not three. A middle setting would need a third scale nobody has a
+  reason for, and the honest question is only "is there too much air".
+*/
+export const DENSITIES = [
+  { id: 'comfortable', name: 'Comfortable', note: 'Room to breathe.' },
+  { id: 'compact', name: 'Compact', note: 'More on the screen at once.' },
+]
+
+const DEFAULTS = {
+  palette: 'slate',
+  texture: 'concrete',
+  own: null,
+  ownName: '',
+  scheme: 'dark',
+  density: 'comfortable',
+}
 
 /*
   Grant's own texture.
@@ -137,6 +160,7 @@ export function appearance() {
       own: typeof saved.own === 'string' ? saved.own : null,
       ownName: saved.ownName ?? '',
       scheme: SCHEMES.some((x) => x.id === saved.scheme) ? saved.scheme : DEFAULTS.scheme,
+      density: DENSITIES.some((d) => d.id === saved.density) ? saved.density : DEFAULTS.density,
     }
   } catch {
     // A private window, or storage blocked. A default is a fine answer.
@@ -148,6 +172,18 @@ export function appearance() {
 export function apply(next = appearance()) {
   document.documentElement.dataset.palette = next.palette
   document.documentElement.dataset.texture = next.texture
+  /*
+    Density is written even when it is the default, unlike `scheme`.
+
+    `scheme` deletes the attribute for 'system' because every dark block in
+    skins.css is guarded `:not([data-scheme="light"])` and a third value would
+    read as neither. Density has no such guard — one block keys on
+    `[data-density="compact"]` and everything else is the base scale — so
+    writing 'comfortable' is simply true, and an attribute that is always
+    present is one an audit can read to find out which density it is looking
+    at.
+  */
+  document.documentElement.dataset.density = next.density
   /*
     Absent means "follow the system", and absent has to mean literally absent:
     every dark block in skins.css is guarded `:not([data-scheme="light"])`, so
@@ -179,7 +215,58 @@ export function apply(next = appearance()) {
     root.style.removeProperty('--tex-size')
   }
   try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* not fatal */ }
+  /*
+    And out to the office, which is where it actually lives (ADR-0021).
+
+    localStorage is the CACHE — it is what makes the interface instant and
+    what keeps the choice when the page is opened signed-out — and the row is
+    the record. Without this the setting is right on this laptop and absent on
+    the phone, which ADR-0021 calls out as invisible to every other suite: a
+    page that saves only locally captures perfectly and is wrong only on a
+    second device, which no capture run has.
+
+    Fire and forget, and injected rather than imported: this module is loaded
+    by the settings pane, by the boot path and by the audits, and only the
+    app knows whether there is a token to write with. A failure leaves the
+    change on screen and in this browser, so the failure mode is "the other
+    device is behind" rather than "your choice vanished".
+  */
+  if (send !== null) send(next)
   return next
+}
+
+/**
+ * Where a change should be sent, set once by the app at boot.
+ *
+ * Null until then, and null for ever in a page with no token — which is not a
+ * degraded state but the correct one: a reader has nothing to save.
+ */
+let send = null
+export function saveWith(fn) {
+  send = typeof fn === 'function' ? fn : null
+}
+
+/**
+ * What the office says, merged over what this browser remembered.
+ *
+ * The office wins on the keys it carries, because it is the record. Keys it
+ * does not carry keep their local value, so a browser that has chosen a
+ * texture does not lose it to an office row written before textures existed —
+ * the merge is how a cache in front of a record behaves, rather than a
+ * replacement that would make every new key a data loss.
+ *
+ * Applied WITHOUT sending, or hydrating would write back what it just read on
+ * every page load.
+ */
+export function hydrate(fromOffice) {
+  if (fromOffice === null || typeof fromOffice !== 'object') return appearance()
+  const was = send
+  send = null
+  try {
+    return apply({ ...appearance(), ...fromOffice })
+  } finally {
+    send = was
+  }
 }
 
 

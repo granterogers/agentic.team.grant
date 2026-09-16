@@ -42,6 +42,16 @@ import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { seedAppearance } from './seed-appearance.ts'
 
+/*
+  Which density to audit (#124).
+
+  Both must be green and the two floors are why: compact tightens the space
+  BETWEEN controls and may not shrink the controls, so a scale that went too
+  far shows up here as a touch target under 44px or type under 12px rather
+  than as somebody's opinion. `DENSITY=compact npm run verify:layouts`.
+*/
+const DENSITY = process.env.DENSITY === 'compact' ? 'compact' : 'comfortable'
+
 const ROOT = 'web/studio'
 const PORT = 4615
 const TYPES: Record<string, string> = {
@@ -401,6 +411,17 @@ for (const width of WIDTHS) {
       : void r.abort(),
   )
   await ctx.addInitScript(AS_WRITER)
+  /*
+    The geometry pass seeds appearance too (#124).
+
+    It did not before — only the contrast pass did — so the first
+    `DENSITY=compact` run measured the comfortable layout at all four widths
+    and reported 64 states and 0 findings. The control added beside it caught
+    that on its first run, which is the whole argument for having one: a
+    density that silently did not apply is indistinguishable from a density
+    that passes.
+  */
+  await ctx.addInitScript(seedAppearance('dark', { density: DENSITY }))
   const page = await ctx.newPage()
   for (const route of ROUTES) {
     await open(page, route)
@@ -419,7 +440,24 @@ for (const width of WIDTHS) {
       }
     }
   }
-  console.log(`  geometry ${String(width)}px — done`)
+  /*
+    CONTROL: the page really is in the density this run asked for (#124).
+
+    Without it, `DENSITY=compact` that failed to take effect would audit the
+    comfortable layout, report 64 states and 0 findings, and read exactly like
+    a compact scale that passes. That is the shape of defect this repository
+    records most: a verification that looks somewhere other than where it says
+    it is looking. The attribute is always written, precisely so it can be
+    read back.
+  */
+  const inForce = await page.evaluate(`document.documentElement.dataset.density || ''`)
+  if (inForce !== DENSITY) {
+    findings.push({
+      where: `${String(width)}px`,
+      what: `asked for the ${DENSITY} density and the page is in "${String(inForce)}"`,
+    })
+  }
+  console.log(`  geometry ${String(width)}px — done, in the ${DENSITY} density`)
   await ctx.close()
 }
 
@@ -439,7 +477,9 @@ for (const scheme of ['light', 'dark'] as const) {
         : void r.abort(),
     )
     await ctx.addInitScript(AS_WRITER)
-    await ctx.addInitScript(seedAppearance(scheme, { palette, texture: 'plaster' }))
+    await ctx.addInitScript(
+      seedAppearance(scheme, { palette, texture: 'plaster', density: DENSITY }),
+    )
     const page = await ctx.newPage()
     /*
       Two surfaces, not one. The overview is the page you land on; governance

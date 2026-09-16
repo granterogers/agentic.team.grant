@@ -488,6 +488,16 @@ const replace = (target, rows) => {
  * A studio that shows a stack trace instead of a design is a studio nobody can
  * judge, and the fallback is already realistic data at realistic lengths.
  */
+/**
+ * The parts of the payload that are not lists of things.
+ *
+ * A module-level holder rather than a return value, because `hydrate` is
+ * awaited for its EFFECT — every other thing it loads is written into an
+ * exported array — and making one key travel differently would be two ways of
+ * getting at one payload.
+ */
+export const FROM_OFFICE = { appearance: null }
+
 export async function hydrate(endpoint, token) {
   try {
     /*
@@ -509,6 +519,18 @@ export async function hydrate(endpoint, token) {
     if (!r.ok) throw new Error(`http ${r.status}`)
     const { data } = await r.json()
     if (!data || !Array.isArray(data.projects)) throw new Error('unexpected shape')
+
+    /*
+      How he chose to have it look, from the office rather than this browser
+      (#124, ADR-0021).
+
+      Held rather than applied here: `data.js` knows about data and the theme
+      is the app's to put on the document. An absent key means nothing has
+      been chosen, which is different from an empty object and is why the
+      default is null.
+    */
+    FROM_OFFICE.appearance =
+      data.appearance !== null && typeof data.appearance === 'object' ? data.appearance : null
 
     const base = data.avatar_base ?? FACES
     replace(

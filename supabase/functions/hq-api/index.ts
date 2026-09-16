@@ -694,6 +694,16 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     the answering handler stores one.
   */
   suggestion_decide: { fn: 'decide_suggestion', required: ['p_suggestion_id', 'p_accept'] },
+  /*
+    HOW THE STUDIO LOOKS (#124, migration 0400).
+
+    The whole object at once, because that is how the page holds it and a
+    partial write would need this adapter to know which keys exist — which is
+    the adapter deciding, and §5 permits it only to translate.
+
+    ADR-0021: localStorage is the cache in front of this and never the record.
+  */
+  appearance_set: { fn: 'hq_appearance_set', required: ['p_settings'] },
   proposal_decide: { fn: 'decide_proposal', required: ['p_proposal_id', 'p_state'] },
   /*
     Project Settings (#36, migrations 0323-26).

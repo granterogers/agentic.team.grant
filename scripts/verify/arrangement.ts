@@ -213,6 +213,22 @@ const sent = async () =>
   type-checked as Node, where `HTMLElement` does not exist, and adding the DOM
   lib for one cast would change what every other Node script is allowed to say.
 */
+/*
+  Show the panels, because #25 stopped them being what a project opens on.
+
+  The project Overview is a MAP now, with a Map / Panels toggle above it, and
+  Map is the default. This suite kept asserting against whatever the Overview
+  drew and reported "no panels at all" — an arrangement guarantee reading as
+  broken because the audit was on a different screen, which is the third time
+  in this repository an audit has needed a shell state set before it looks
+  (`openRail` in #183, `shutDock` in #103, the settings restore in #190).
+
+  Pressed rather than assumed: if the toggle is ever removed the click is a
+  no-op and the check below fails honestly, which is the right direction.
+*/
+await page.evaluate(`document.querySelector('[data-overview="panels"]')?.click()`)
+await page.waitForTimeout(700)
+
 const drawn = (await page.evaluate(
   `[...document.querySelectorAll('[data-panel]')].map((e) => e.dataset.panel)`,
 )) as string[]
@@ -474,6 +490,67 @@ check(
   'and nothing went to localStorage',
   stored === null ? 'the key is not there' : String(stored),
   stored === null,
+)
+
+/* -------------------------------------------------------------------------- *
+ * 6. How it LOOKS belongs to the person too (#124, migration 0400).
+ * -------------------------------------------------------------------------- */
+/*
+  ADR-0021's own instruction, rather than a parallel check:
+
+    "Any new customisable surface should add a column or a table, not a key in
+     localStorage, and should EXTEND verify:arrangement rather than inventing a
+     parallel check."
+
+  And its reason, which is exactly why appearance went unnoticed until #124
+  asked for a density: a page that saves only to localStorage "drags, snaps,
+  survives a reload and captures perfectly, and is wrong only on a second
+  device, which no capture run has."
+
+  So the question here is the same one the rest of this file asks — did it
+  LEAVE the browser — and the answer has to be yes for a value that until now
+  never did.
+*/
+await page.evaluate(`document.querySelector('[data-settings]')?.click()`)
+await page.waitForTimeout(700)
+await page.evaluate(`document.querySelector('[data-setting="appearance"]')?.click()`)
+await page.waitForTimeout(700)
+
+const beforeDensity = (await sent()).length
+await page.evaluate(`document.querySelector('[data-density-pick="compact"]')?.click()`)
+await page.waitForTimeout(700)
+const densitySent = (await sent()).slice(beforeDensity).find((x) => x.action === 'appearance_set')
+
+check(
+  'choosing a density goes out to the office',
+  densitySent === undefined
+    ? 'nothing was sent'
+    : `${densitySent.action} ${JSON.stringify((densitySent.args.p_settings as Record<string, unknown>)?.density)}`,
+  densitySent !== undefined &&
+    (densitySent.args.p_settings as Record<string, unknown>)?.density === 'compact',
+)
+/*
+  The WHOLE object, not just the key that changed.
+
+  `hq_appearance_set` stores one jsonb, so a partial write would drop the
+  palette the moment the density changed. Asserted because the shape of the
+  payload is the thing a caller gets wrong, and it would look fine on this
+  device — where localStorage still has everything — and wrong on the next.
+*/
+check(
+  'and it carries the whole appearance, not only what changed',
+  densitySent === undefined
+    ? 'nothing was sent'
+    : Object.keys((densitySent.args.p_settings as Record<string, unknown>) ?? {}).join(', '),
+  densitySent !== undefined &&
+    ['palette', 'scheme', 'texture', 'density'].every(
+      (k) => (densitySent.args.p_settings as Record<string, unknown>)?.[k] !== undefined,
+    ),
+)
+check(
+  'and the page is actually in it',
+  String(await page.evaluate(`document.documentElement.dataset.density || ''`)),
+  (await page.evaluate(`document.documentElement.dataset.density`)) === 'compact',
 )
 
 // --- and nothing threw ------------------------------------------------------

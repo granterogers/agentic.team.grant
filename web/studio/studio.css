@@ -395,6 +395,25 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .task { display: flex; align-items: flex-start; gap: var(--s3);
   padding: var(--s3) 0; border-top: 1px solid var(--edge); text-align: left; width: 100%; }
+/*
+  A task row is a CONTROL, so it keeps its 44px whatever the density (#124).
+
+  Compact tightens the space between things; it may not shrink the things you
+  press. The row's height came entirely from `--s3` padding, so compact took it
+  to 40px and `DENSITY=compact npm run verify:layouts` reported it at 390px and
+  768px — which is the issue's own prediction:
+
+    "Compact may tighten the space between controls; it may not shrink the
+     controls... the honest answer is a smaller ratio, not a smaller floor."
+
+  A floor on the ROW is better than a smaller ratio: it costs compact nothing
+  anywhere else, and it keeps holding if the scale is ever tightened further.
+  Under a coarse pointer only, because 44px is a finger and a mouse does not
+  need it — and because at the desktop widths the padding already clears it.
+*/
+@media (pointer: coarse) {
+  .task { min-height: 44px; align-items: center; }
+}
 .task:first-child { border-top: 0; }
 .box { width: 18px; height: 18px; border-radius: 5px; border: 1.6px solid var(--ink-3);
   flex: none; margin-top: 2px; display: grid; place-items: center; }
