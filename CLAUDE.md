@@ -1716,6 +1716,56 @@ Each of these cost real time. They are here so they cost it once.
   narrow on purpose: it will miss an invented name and an invented percentage,
   and it cannot fire on arithmetic, a quotation or a repetition of something
   Grant said.
+- **A plaintext SETTING beside a password box will eventually hold a
+  credential.** The Google form's Client ID goes to `system_config`, which the
+  page renders straight back into the input's value attribute; the Client secret
+  goes to the vault. Two adjacent boxes, and 0359 already records that Grant
+  pastes into the wrong one — so the wrong paste stored a live secret in a
+  plaintext table and printed it on the Settings page, in the DOM, and in every
+  screenshot the harness takes. The fix is the class, not the field: sort the
+  two values BY SHAPE so the form cannot be filled in wrongly (0359's own
+  argument), and refuse a credential-shaped value in ANY setting, because the
+  next plaintext setting added beside a password box is the one nobody
+  remembers to check. And a refusal names the CLASS it recognised, never the
+  characters: a prefix is public knowledge and what follows it is the
+  credential.
+- **A valid credential refused for an invisible reason is a UX defect, and
+  `trim` does not remove what is invisible.** A zero-width space at the front of
+  a pasted secret breaks a prefix match and there is nothing on screen to see.
+  0359 learned this the expensive way — three refusals of a correct token — and
+  `hq_set_google_secret` had been refusing valid credentials the same way ever
+  since, because 0359's cure was never carried across. When a fix removes a
+  whole class for one form, grep for the other forms.
+- **A redraw that replaces every node takes the keyboard with it.**
+  `drawShell()` rebuilds the shell, so pressing Return on a rail item navigated
+  correctly AND dropped focus onto `body` — a keyboard user returned to the top
+  of the document after every action, with nothing anywhere reporting a fault.
+  `render()` remembers the focused element by its own identifying attribute and
+  restores it, and only when the redraw is what took focus away. This is
+  invisible to every audit that presses controls, because a pointer sets focus
+  itself.
+- **A dialog that does not own the keyboard is not a dialog.** Twenty-five Tabs
+  with the document viewer open put focus on the shell behind it twenty-three
+  times. Settings is deliberately NOT the same case — #158 made it a page, and a
+  page you can leave by going somewhere else is the whole difference — so an
+  audit asserting a focus trap has to know which of the two it is looking at.
+  The first draft asserted it on Settings and reported correct behaviour as a
+  defect.
+- **The command bar is built from DATA, so every audit in this repository is
+  blind to it.** `verify:wired` walks twenty-one screens collecting `data-*`
+  attributes off rendered controls; the bar's rows are objects. It offered
+  *"Desk — projects where you left them"* long after #77 removed the desk, and
+  `view: 'desk'` matches no branch in `drawShell`, so it fell through to the
+  home board: a row naming a screen that was gone and quietly taking you
+  somewhere else. It was also MISSING two views the rail has. Assert the
+  property in both directions, in a unit test, reading the drawable views out
+  of the source rather than listing them.
+- **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
+  failure prints as one unattributed "Some errors were emitted" a long way below
+  the diagnostics, while every named finding above it is a warning — so the run
+  reads as warnings plus an exit code nobody can account for. Two commits went
+  out that way in one evening. Read the exit code, not the findings.
+
 - **A shortcode is a name only one surface can resolve, so sharing the sentence
   shares the name.** `provenanceLine` is shared between Slack and Telegram on
   purpose (#186) and ended `:warning: *Nobody has checked this yet.*`. Slack
