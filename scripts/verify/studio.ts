@@ -10,7 +10,7 @@
  * render→capture→critique loop, and the critique is done by looking.
  */
 
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
@@ -58,6 +58,52 @@ await new Promise<void>((r) =>
   }),
 )
 await mkdir(OUT, { recursive: true })
+
+/*
+  Clear the captures before writing, so `.out` is exactly what THIS run
+  rendered.
+
+  It was not. `.out/activity-desktop-dark.png` sat beside today's captures
+  showing the rail labelled "Studio" and an Activity tab — a name #216 changed
+  and a tab #222 removed — because the route was retired and nothing ever
+  deleted the PNG it had left behind. Reading it today produced a confident
+  finding about a screen that has not existed for two days, and there is
+  nothing in a directory listing that distinguishes a fresh capture from a
+  stale one: same folder, same naming, and a timestamp nobody checks before
+  opening an image.
+
+  This is the wrong-payload trap wearing a different coat. `CLAUDE.md` already
+  records three ways an audit can look somewhere other than where the user
+  looks; this is the fourth, and the cheapest to close.
+
+  Scoped to the `.png` files in `.out` and nothing else: the directory also
+  holds `measurements.jsonl`, `sessions.jsonl` and the e2e records, which are
+  append-only history and must survive. A capture that a run does not produce
+  is a capture that should not be there afterwards — which is the property
+  this buys, and it is why the delete is unconditional rather than a
+  best-effort tidy at the end.
+*/
+{
+  /*
+    Only the files THIS script names, matched by its own suffix grammar.
+
+    The first draft deleted every `.png` in `.out`, which is wrong in the
+    expensive direction: the folder also holds captures from `verify:print`,
+    from the space and control audits, and from ad-hoc runs, and a tool that
+    deletes another tool's evidence is worse than the stale file it was
+    written to remove. The grammar below is exactly what line 84 composes -
+    name, size, scheme, optional density suffix - so anything shots can write,
+    shots can clear, and nothing else is touched.
+  */
+  const MINE = /-(?:desktop|phone)-(?:light|dark)(?:-compact)?\.png$/
+  let cleared = 0
+  for (const name of await readdir(OUT)) {
+    if (!MINE.test(name)) continue
+    await unlink(join(OUT, name))
+    cleared += 1
+  }
+  console.log(`cleared ${String(cleared)} previous capture(s) from ${OUT}`)
+}
 
 const browser = await chromium.launch()
 const shots: string[] = []
