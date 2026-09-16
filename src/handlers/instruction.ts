@@ -83,6 +83,7 @@ import {
 import { clauses } from '../agents/clauses.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
+import { assignedTo, dueOn } from '../agents/due.ts'
 import { extractionRequest } from '../agents/extract.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { classifyIntent } from '../agents/intent.ts'
@@ -540,15 +541,50 @@ export async function speaker(
  * project — both right for something a person types and wrong for a job that
  * resolved its project several hundred lines ago.
  */
-async function addTask(db: SqlExecutor, job: Job, asked: TaskRequest): Promise<string> {
+async function addTask(
+  db: SqlExecutor,
+  job: Job,
+  asked: TaskRequest,
+  said_by = '',
+): Promise<string> {
   if (asked.title === null) return NEEDS_A_TITLE
 
+  /*
+    The deadline and the owner, where they are DERIVABLE (#253).
+
+    `app.task_add` has taken `p_due_on` and `p_assignee` since it existed and
+    nothing filled either, so "chase the roofing quote by Friday" produced a
+    task called "chase the roofing quote by Friday" with a null date: the
+    deadline was in front of Grant and was not data.
+
+    Both resolvers are deterministic and both refuse rather than guess, which
+    is #249's invariant — the semantic layer may infer and may not invent a
+    consequential parameter. A task dated the wrong Friday is worse than a task
+    with no date, because the wrong date looks correct.
+
+    The words stay in the TITLE either way. An earlier draft subtracted "by
+    Friday" from the name, which looked tidier and would have been a loss on
+    every phrase the resolver declines — this repository filed that as the
+    reason the subtraction was removed, and it is still the reason.
+  */
+  const when = dueOn(said_by === '' ? asked.title : said_by, new Date())
+  const owner = assignedTo(said_by === '' ? asked.title : said_by)
+
+  /*
+    NAMED arguments, because this signature has eight and CLAUDE.md records
+    what positional ones cost here: passing the job seventh set `p_added_by` to
+    a uuid, and the reversal keyed on `job_id` then matched nothing and
+    reported "all of them" removed.
+  */
   const said = await db
     .execute(`
       select app.task_add(
-        ${job.projectId === null ? 'null' : `${lit(String(job.projectId))}::uuid`},
-        ${lit(asked.title)}, null, null, null, false, 'the office',
-        ${lit(job.jobId)}::uuid) as r`)
+        p_project => ${job.projectId === null ? 'null' : `${lit(String(job.projectId))}::uuid`},
+        p_title => ${lit(asked.title)},
+        p_due_on => ${when === null ? 'null' : `${lit(when.on)}::date`},
+        p_assignee => ${owner === null ? 'null' : lit(owner)},
+        p_added_by => 'the office',
+        p_job => ${lit(job.jobId)}::uuid) as r`)
     .catch((error: unknown) => ({
       rows: [{ r: { error: (error as Error).message.slice(0, 200) } }],
     }))
@@ -565,7 +601,22 @@ async function addTask(db: SqlExecutor, job: Job, asked: TaskRequest): Promise<s
   if (answer?.error !== undefined) {
     return `I could not add that one: ${answer.error}.`
   }
-  return `Added it: **${answer?.title ?? asked.title}**.`
+  /*
+    Say what was stored, in his own words for the date.
+
+    `when.from` is the phrase he typed rather than a paraphrase of it, so a
+    wrong reading is visible to him at the moment it happens — which is the
+    only defence a deterministic resolver has against the one case it gets
+    wrong.
+  */
+  const extra = [
+    when === null ? null : `due ${when.on} (from “${when.from}”)`,
+    owner === null ? null : `for ${owner.replace('-director', '').replace('-', ' ')}`,
+  ].filter((x) => x !== null)
+  return (
+    `Added it: **${answer?.title ?? asked.title}**` +
+    (extra.length === 0 ? '.' : ` — ${extra.join(', ')}.`)
+  )
 }
 
 /**
@@ -2117,13 +2168,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const filed =
         asked !== null
-          ? await addTask(deps.db, job, asked)
+          ? await addTask(deps.db, job, asked, instruction)
           : namedLater === null
             ? null
-            : await addTask(deps.db, job, {
-                title: namedLater,
-                matched: 'answered the title question',
-              })
+            : await addTask(
+                deps.db,
+                job,
+                { title: namedLater, matched: 'answered the title question' },
+                /*
+                  The TITLE only, not the instruction. This branch is Grant
+                  answering "what should I call it?", so the sentence in front
+                  of us is a name — a date in the earlier turn belonged to the
+                  earlier turn and reading it here would date a task from a
+                  different question.
+                */
+                namedLater,
+              )
 
       const confirmation =
         [linked, made, filed, extracting].filter((x) => x !== null).join('\n\n') || null

@@ -34,6 +34,7 @@
  * complete is worth less than one that says where the evidence stops.
  */
 
+import { readFile } from 'node:fs/promises'
 import { notebookRequest } from '../../src/agents/actions.ts'
 import { clauses } from '../../src/agents/clauses.ts'
 import { classifyIntent } from '../../src/agents/intent.ts'
@@ -454,7 +455,21 @@ const supported = String(taskParams?.args ?? '')
   .split(',')
   .map((a) => a.trim().split(/\s+/)[0] ?? '')
   .filter((a) => a.startsWith('p_'))
-const EXTRACTED = new Set(['p_project', 'p_title', 'p_added_by', 'p_job'])
+/*
+  DERIVED from the caller, not listed here (#253).
+
+  This was `new Set(['p_project', 'p_title', 'p_added_by', 'p_job'])`, and the
+  day the interpreter learned to fill `p_due_on` and `p_assignee` the audit
+  went on printing them as never extracted — a control that goes stale the
+  moment the thing it describes gets better, which is a correction this
+  repository has now made five times.
+
+  `addTask` passes its arguments by NAME, so the source says which ones it
+  fills and cannot disagree with itself. A positional call would defeat this,
+  which is a second reason to keep it named beyond the eight-argument rule.
+*/
+const handler = await readFile('src/handlers/instruction.ts', 'utf8')
+const EXTRACTED = new Set([...handler.matchAll(/\b(p_[a-z_]+)\s*=>/g)].map((m) => m[1] ?? ''))
 const unextracted = supported.filter((a) => !EXTRACTED.has(a))
 
 console.log('\nstructured parameters the writer accepts and the interpreter does not fill\n')
