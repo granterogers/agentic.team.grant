@@ -291,6 +291,55 @@ if (createdPageId !== null) {
   await notion.call(`/pages/${createdPageId}`, { method: 'PATCH', body: { in_trash: true } })
   console.log('verification page archived in Notion.')
 }
+
+/*
+  And every OLDER one that is still shared (#178).
+
+  Three pages from runs on 11 September were still live in the workspace, and
+  they were not merely litter: `upsertDocument`'s conflict clause sets
+  `project_id = excluded.project_id`, so every nightly `duty:notion-sync`
+  picked them up and MOVED them onto Legacy Coaching Course — a real dashboard
+  project. The suite tore down its own project and the documents walked out of
+  it first. Deleting the rows fixes nothing while the pages are still shared;
+  they come back the next night.
+
+  So the teardown stopped being about this run. A suite that cleans up only
+  what it made this time leaves a pile that grows by one every run and never
+  shrinks — CLAUDE.md records that shape three times over, in archived
+  projects, in Slack channels and in queued jobs.
+
+  Searched by title rather than by a list of ids, because the ids of the runs
+  that already leaked are not written down anywhere. `search` only returns
+  pages the integration can see, which is exactly the set that can be synced.
+*/
+const strays = (await notion.call('/search', {
+  method: 'POST',
+  body: {
+    query: 'Verification page',
+    filter: { property: 'object', value: 'page' },
+    page_size: 50,
+  },
+})) as { results?: { id: string; in_trash?: boolean; properties?: unknown }[] }
+
+let archived = 0
+for (const page of strays.results ?? []) {
+  if (page.id === createdPageId || page.in_trash === true) continue
+  const title = JSON.stringify(page.properties ?? {})
+  // The search is a fuzzy one, so the title is checked before anything is
+  // archived: a page of Grant's that merely mentions the phrase must not be
+  // touched by a test suite's teardown.
+  if (!/Verification page [a-z0-9]{6,}/.test(title)) continue
+  const done = await notion
+    .call(`/pages/${page.id}`, { method: 'PATCH', body: { in_trash: true } })
+    .then(() => true)
+    .catch(() => false)
+  if (done) archived += 1
+}
+console.log(
+  archived === 0
+    ? 'no older verification pages were still shared.'
+    : `${String(archived)} older verification page(s) archived — they were syncing into a real project (#178).`,
+)
 await db.execute(`
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.projects where project_id = ${lit(projectId)}::uuid;
