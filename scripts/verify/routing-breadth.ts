@@ -343,12 +343,74 @@ ok(
     : `${String(named)}/${String(asked)} named somebody`,
 )
 
+/*
+  BEST OF THREE, and the margin printed beside it (#252).
+
+  Measured on identical code, three runs: FAIL, PASS, FAIL — naming a
+  different case each time, and FAIL on the pre-#249 baseline too, on a fourth
+  case. This check consults the model-backed semantic layer, so it inherits
+  #229's finding: `temperature: 0` does not make a free model deterministic,
+  and a check comparing a stochastic outcome against a fixed expectation will
+  flip.
+
+  A gate that fails one run in three is worse than no gate: it trains the
+  reader to skim it, and this repository has already recorded what a
+  cry-wolf check costs.
+
+  So the controls are asked THREE TIMES and a case counts against the gate only
+  if it named a specialist EVERY time.
+
+  Unanimity rather than a majority, and the arithmetic is the reason. On a true
+  coin a majority of three lands half the time — a gate that fires on half of
+  all coins is the gate this Issue was filed about, wearing more rounds. All
+  three lands one time in eight. A systematic precision regression, which is
+  what this check exists to catch, moves every run and is unanimous by
+  construction.
+
+  The first version of this fix used a majority and reported "What is on my
+  plate this week?" at 2/3 on its first run, which is exactly what a coin does
+  and exactly what would have been tuned against.
+
+  #229's other half matters as much: print the margin, so nobody tunes a
+  prompt against a coin. A case that flipped once is named in the outcome even
+  when it does not fail the gate, because that is the information a reader
+  needs and a bare verdict destroys it.
+*/
+const ROUNDS = 3
+const flips = new Map<string, number>()
+for (const r of falsePositives) flips.set(r.ask, 1)
+for (let round = 2; round <= ROUNDS; round += 1) {
+  const again = await Promise.all(
+    controls.map((c) => decide(CORPUS.find((x) => x.ask === c.ask) as (typeof CORPUS)[number])),
+  )
+  for (const r of again) {
+    const defensibleHere = CORPUS.find((c) => c.ask === r.ask)?.defensible === true
+    if (r.verdict === 'wrong' && !defensibleHere) flips.set(r.ask, (flips.get(r.ask) ?? 0) + 1)
+  }
+  process.stdout.write('.')
+  // A breath between rounds. These extra rounds are ten more Management API
+  // calls each, and the section after this one is what tipped the throttle.
+  await new Promise((r) => setTimeout(r, 1500))
+}
+console.log('')
+
+const persistent = [...flips.entries()].filter(([, n]) => n >= ROUNDS)
+const wobbled = [...flips.entries()].filter(([, n]) => n < ROUNDS)
+
 ok(
-  'trivial work still goes to Claire alone — no false-positive specialists',
-  falsePositives.length === 0,
-  falsePositives.length === 0
-    ? `all ${String(controls.length)} controls held`
-    : falsePositives.map((r) => `"${r.ask.slice(0, 40)}" -> ${r.chosen.join(',')}`).join(' | '),
+  `trivial work still goes to Claire alone — no false-positive specialists (best of ${String(ROUNDS)})`,
+  persistent.length === 0,
+  (persistent.length === 0
+    ? `all ${String(controls.length)} controls held in at least one of ${String(ROUNDS)} runs`
+    : persistent
+        .map(
+          ([ask, n]) =>
+            `"${ask.slice(0, 40)}" named a specialist every time, ${String(n)}/${String(ROUNDS)}`,
+        )
+        .join(' | ')) +
+    (wobbled.length === 0
+      ? ''
+      : ` · wobbled without failing: ${wobbled.map(([ask, n]) => `"${ask.slice(0, 28)}" ${String(n)}/${String(ROUNDS)}`).join(', ')}`),
 )
 
 // ---------------------------------------------------------------------------

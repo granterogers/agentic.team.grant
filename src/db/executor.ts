@@ -77,15 +77,44 @@ export class ManagementApiExecutor implements SqlExecutor {
     this.endpoint = `${baseUrl}/v1/projects/${projectRef}/database/query`
   }
 
+  /*
+    A throttle is not an answer (#252).
+
+    The Management API rate-limits, and CLAUDE.md already records what that
+    costs: six concurrent lookups earned a `ThrottlerException`, and a throttle
+    falling through as "nobody knows about this" turned a correct routing
+    decision into a miss and moved a headline accuracy figure for reasons that
+    have nothing to do with the office. An infra failure must never enter a
+    measurement as data.
+
+    Five attempts, doubling from two seconds — about half a minute in total,
+    which is what the Management API's window actually needed; four attempts
+    from one second gave up after seven and the throttle was still on. Only on
+    the two statuses that
+    mean "ask again later". Everything else — a 400 carrying a Postgres error,
+    a 401, a 404 — is an answer and is raised immediately, because retrying a
+    syntax error four times is four times the wait for the same message.
+
+    Here rather than in each caller: 82 call sites cannot each remember it, and
+    the ones that measure something are exactly the ones where forgetting is
+    invisible.
+  */
+  private static readonly RETRY_ON = new Set([429, 503])
+
   async execute(sql: string): Promise<SqlResult> {
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: sql }),
-    })
+    let response!: Response
+    for (let attempt = 0; ; attempt += 1) {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: sql }),
+      })
+      if (!ManagementApiExecutor.RETRY_ON.has(response.status) || attempt >= 4) break
+      await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
+    }
 
     const text = await response.text()
 
