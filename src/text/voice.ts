@@ -83,6 +83,20 @@ export interface SayOptions {
   readonly words?: number
   /** Which model writes it. Undefined uses the ordinary failover order. */
   readonly model?: string | undefined
+  /**
+   * The job this is being written for, so the call is attributed (#268).
+   *
+   * Every caller of `sayAs` is a handler and every handler has one, so this
+   * is very nearly required — it is optional because `say` is also reachable
+   * from a script, where there genuinely is no job and inventing one would put
+   * harness traffic into a measurement (0395).
+   *
+   * Without it the model call lands under the kind `(unattributed)` in
+   * `public.model_record`, so a model that writes a bad morning note cannot be
+   * told apart from one that answers a question badly — which is the whole
+   * point of #127 keeping the record per KIND.
+   */
+  readonly job?: { readonly jobId: string; readonly correlationId: string }
 }
 
 /**
@@ -141,6 +155,9 @@ export async function say(
       // produces an empty completion rather than a short message.
       maxTokens: 1_500,
       ...(options.model === undefined ? {} : { model: options.model }),
+      ...(options.job === undefined
+        ? {}
+        : { jobId: options.job.jobId, correlationId: options.job.correlationId }),
     })
     // Scaffolding out before the numeric guard: a control token is not a
     // number, and a reply that is nothing but one should fall back.

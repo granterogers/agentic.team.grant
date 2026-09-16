@@ -157,6 +157,8 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
                   'the pair at https://api.slack.com/apps → Your App Configuration Tokens.'
                 : 'The token we hold still works until it expires, and this will be ' +
                   'tried again shortly.'),
+            // #268: attributed, so the call lands under this job KIND.
+            job: { jobId: job.jobId, correlationId: job.correlationId },
             words: 60,
           }),
           confidence: 'high',

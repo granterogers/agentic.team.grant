@@ -357,6 +357,8 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
             'turns a guess into a fact.',
           facts: lines,
           fallback: assembled,
+          // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
+          job: { jobId: job.jobId, correlationId: job.correlationId },
           words: 130,
         }),
         announce: true,

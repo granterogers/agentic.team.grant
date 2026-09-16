@@ -237,6 +237,8 @@ export function capacityHandler(
             'there is not. Lead with whatever actually matters today.',
           facts: lines,
           fallback: assembled,
+          // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
+          job: { jobId: job.jobId, correlationId: job.correlationId },
           words: 90,
         }),
         confidence: 'high',

@@ -286,7 +286,7 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
     plan: async (job: Job, planDb: SqlExecutor): Promise<Plan> => {
       const ready = await prepare(planDb, job)
       if (ready.stop !== null) return nothingToDo('notion.write', ready.stop)
-      const modules = await curriculum(router, ready.projectName, ready.sources)
+      const modules = await curriculum(router, ready.projectName, ready.sources, job)
       return planFrom(ready, modules)
     },
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -321,7 +321,7 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
       const stored = (await db.execute(`select app.job_plan(${lit(job.jobId)}::uuid) as p`))
         .rows[0] as { p?: unknown }
       const approved = modulesFromPlan(stored.p)
-      const modules = approved ?? (await curriculum(router, projectName, sources))
+      const modules = approved ?? (await curriculum(router, projectName, sources, job))
 
       const client = new NotionClient(token)
 
@@ -462,6 +462,16 @@ async function curriculum(
   router: ProviderRouter | null,
   projectName: string,
   sources: readonly SourceDoc[],
+  /*
+    The job this is for, so the call is attributed (#268).
+
+    Both callers — `plan` and `handle` — hold one, and without it the
+    curriculum's model call lands under `(unattributed)` in
+    `public.model_record`. #127 keeps the record per KIND precisely so a model
+    that is good at answering and poor at structuring can be told apart, and a
+    call with no kind cannot contribute to either.
+  */
+  job?: Job,
 ): Promise<Module[]> {
   const fallback = (): Module[] =>
     // Source documents in a course are usually modules already — WS01 and WS02
@@ -500,6 +510,7 @@ async function curriculum(
         },
       ],
       maxTokens: 2_000,
+      ...(job === undefined ? {} : { jobId: job.jobId, correlationId: job.correlationId }),
     })
 
     const text = scrub(completion.content)
