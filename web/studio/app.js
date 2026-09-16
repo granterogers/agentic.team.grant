@@ -155,6 +155,15 @@ const state = {
   // Which card on the project map is open in its side panel (#25).
   mapPick: null,
   /*
+    Which tasks are chosen, for acting on several at once (#150).
+
+    A Set of task ids rather than of indexes: the list is filtered (#154) and
+    re-ordered by grouping, so an index means a different task the moment
+    anything changes, and a stale selection acting on the wrong row is the one
+    failure a bulk action must never have.
+  */
+  picked: new Set(),
+  /*
     Which facet each long list is filtered to (#154).
 
     Per list and per project, and cleared whenever the project changes: a
@@ -647,6 +656,23 @@ const taskRow = (t, i) => {
 
     No backticks in this comment. Template literal.
   -->
+  <!--
+    Choosing several, to act on them once (#150).
+
+    A SIBLING for the same reason the edit pencil is one: the row is a button
+    and a button inside a button is invalid markup that browsers rearrange
+    silently.
+
+    44px, and that is the constraint the issue names: a selection column is
+    exactly where touch targets get squeezed, so this one is a full-height
+    target with a small mark inside it rather than a small control.
+
+    No backticks in this comment. Template literal.
+  -->
+  ${t.id && canWrite() ? `<button class="rowpick ${state.picked.has(t.id) ? 'on' : ''}"
+    data-task-pick="${esc(t.id)}" role="checkbox"
+    aria-checked="${state.picked.has(t.id)}"
+    aria-label="Choose ${esc(t.title)}"><span class="pickbox"></span></button>` : ''}
   ${t.id && canWrite() ? `<button class="rowedit" data-task-edit="${esc(t.id)}"
     aria-label="Edit ${esc(t.title)}" title="Edit this task">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -3403,6 +3429,37 @@ function addTaskForm(p) {
   </div>`
 }
 
+/**
+ * The bar that appears only when something is chosen (#150).
+ *
+ * Grant: *"A bar that appears only when something is selected, naming the count
+ * and the actions that apply to all of them."* And the actions are the ones
+ * that genuinely apply to all of them: marking done and handing over. Anything
+ * that needs a different value per row is not a bulk action and is not offered.
+ *
+ * The batching is HERE and not in an RPC, which is the issue's own instruction
+ * and the right one: *"one write per row keeps every action auditable, undoable
+ * and independently failable."* So a half-succeeding batch says which rows
+ * moved and which did not, rather than one yes or no.
+ */
+function pickedBar(p) {
+  const mine = (p.tasks ?? []).filter((t) => t.id !== undefined && state.picked.has(t.id))
+  if (mine.length === 0) return ''
+  const n = mine.length
+  return `<div class="pickbar" role="group" aria-label="What to do with the chosen tasks">
+    <span class="pickn">${n} chosen</span>
+    <button class="btn small" data-picked-done>Mark ${n === 1 ? 'it' : 'them all'} done</button>
+    <span class="docact">
+      <select data-picked-who aria-label="Who to give them to">
+        ${CREW.map((c) => `<option value="${esc(c.slug)}">${esc(c.name)}</option>`).join('')}
+      </select>
+      <button class="btn small" data-picked-give>Give ${n === 1 ? 'it' : 'them'} over</button>
+    </span>
+    <button class="btn small quiet" data-picked-clear>Clear</button>
+    <span class="t-meta" data-picked-said></span>
+  </div>`
+}
+
 function tasksSection(p) {
   if (p.tasks.length === 0) {
     return `<div class="tabbody">${emptyState({
@@ -3448,6 +3505,7 @@ function tasksSection(p) {
     </div>
     ${addTaskForm(p)}
     ${owners}
+    ${pickedBar(p)}
     ${group('Waiting or blocked', 'blocked', 'Cannot move until something else does.')}
     ${group('In progress', 'doing', '')}
     ${group('To do', 'todo', '')}
@@ -7646,6 +7704,72 @@ function drawShell() {
     position and the list reorders as tasks change state, so an index is the
     wrong task the moment anything moves.
   */
+  for (const b of root.querySelectorAll('[data-task-pick]')) {
+    b.addEventListener('click', () => {
+      const id = b.dataset.taskPick
+      if (state.picked.has(id)) state.picked.delete(id)
+      else state.picked.add(id)
+      render()
+    })
+  }
+
+  $('[data-picked-clear]', root)?.addEventListener('click', () => {
+    state.picked.clear()
+    render()
+  })
+
+  /*
+    One write per row, reported honestly (#150).
+
+    `Promise.all` would be faster and would throw away which row failed — and
+    the issue is explicit that a half-succeeding batch must say which moved and
+    which did not. So they go one at a time, each failure is caught and counted,
+    and the sentence at the end is the truth rather than a yes or a no.
+
+    Sequential also keeps the office's own rate limits out of this: six writes
+    at once against a free tier is how a batch half-fails for a reason that has
+    nothing to do with the rows.
+  */
+  const bulk = async (button, verb, run) => {
+    const ids = [...state.picked]
+    if (ids.length === 0) return
+    const yes = await sure(`${verb} ${String(ids.length)} task${ids.length === 1 ? '' : 's'}?`, verb)
+    if (!yes) return
+    const said = $('[data-picked-said]', root)
+    button.disabled = true
+    let moved = 0
+    const stuck = []
+    for (const id of ids) {
+      try {
+        await run(id)
+        moved += 1
+        state.picked.delete(id)
+        if (said !== null) said.textContent = `${moved} of ${ids.length}…`
+      } catch (error) {
+        stuck.push(error instanceof Error ? error.message : String(error))
+      }
+    }
+    button.disabled = false
+    await refresh()
+    if (stuck.length > 0) {
+      window.alert(
+        `${moved} of ${ids.length} done. ${stuck.length} could not be: ${stuck[0]}`,
+      )
+    }
+  }
+
+  $('[data-picked-done]', root)?.addEventListener('click', async (e) => {
+    await bulk(e.currentTarget, 'Mark done', async (id) =>
+      await act('task_state', { p_task_id: id, p_state: 'done' }))
+  })
+
+  $('[data-picked-give]', root)?.addEventListener('click', async (e) => {
+    const who = $('[data-picked-who]', root)?.value
+    const name = crewBy(who)?.name ?? who
+    await bulk(e.currentTarget, `Give to ${name}`, async (id) =>
+      await act('task_update', { p_task_id: id, p_assignee: who }))
+  })
+
   for (const b of root.querySelectorAll('[data-task-edit]')) {
     b.addEventListener('click', (e) => {
       e.stopPropagation()

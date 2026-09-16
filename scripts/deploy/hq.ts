@@ -82,11 +82,42 @@ console.log(`endpoint v${String(result.version)} ${String(result.status)} — ${
 // --- verify the endpoint, by its answers rather than its status ------------
 // A Vercel deploy in this project once returned 200 with 339,010 bytes of auth
 // wall; the rule since then is that a status code is not a verification.
-const unauthorized = await fetch(`${endpoint}?section=overview`)
-const authorized = await fetch(`${endpoint}?section=overview`, {
+/*
+  Given time to wake up before being believed (#189).
+
+  A Supabase edge function is cold the instant it is deployed, and the first
+  request to it can time out or come back without a body — so a good deploy
+  failed its own probe and printed "the endpoint did not behave as required"
+  about an endpoint that was fine two seconds later. A deploy that fails
+  intermittently is worse than one that is slow: it teaches whoever is running
+  it to re-run without reading, which is how a real failure gets through.
+
+  Three attempts, a second apart, and the LAST answer is the one reported — so
+  a genuine misbehaviour still fails, and only the cold start is forgiven. The
+  unauthenticated probe is retried with it because a 401 that has not woken up
+  yet is not a 401.
+*/
+const wait = async (ms: number) => {
+  await new Promise((r) => setTimeout(r, ms))
+}
+let unauthorized = await fetch(`${endpoint}?section=overview`)
+let authorized = await fetch(`${endpoint}?section=overview`, {
   headers: { Authorization: `Bearer ${token}` },
 })
-const body = (await authorized.json()) as { data?: { counts?: unknown } }
+let body = (await authorized.json().catch(() => ({}))) as { data?: { counts?: unknown } }
+for (
+  let go = 0;
+  go < 2 && (unauthorized.status !== 401 || body.data?.counts === undefined);
+  go += 1
+) {
+  console.log('  (cold — waiting a second and asking again)')
+  await wait(1200)
+  unauthorized = await fetch(`${endpoint}?section=overview`)
+  authorized = await fetch(`${endpoint}?section=overview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  body = (await authorized.json().catch(() => ({}))) as { data?: { counts?: unknown } }
+}
 console.log(`  unauthenticated: http ${String(unauthorized.status)} (must be 401)`)
 console.log(
   `  authenticated:   http ${String(authorized.status)} counts=${body.data?.counts !== undefined ? 'present' : 'MISSING'}`,

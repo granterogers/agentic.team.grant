@@ -5074,6 +5074,41 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 */
 .mapbar { display: flex; justify-content: flex-end; margin-block-end: var(--s3); }
 
+/* Choosing several tasks, and the bar that acts on them (#150).
+
+   The picker is a full-height 44px target with a small mark inside it, not a
+   small control: the issue names a selection column as exactly where touch
+   targets get squeezed, and verify:ui enforces the floor. */
+.rowpick {
+  inline-size: 44px; min-block-size: 44px;
+  display: grid; place-items: center;
+  background: none; border: 0; color: var(--ink-3);
+}
+.pickbox {
+  inline-size: 17px; block-size: 17px; border-radius: 5px;
+  border: 1.5px solid var(--edge); background: var(--surface);
+}
+.rowpick:hover .pickbox { border-color: var(--ink-3); }
+.rowpick.on .pickbox {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+.rowpick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.pickbar {
+  position: sticky; inset-block-start: var(--s3); z-index: 3;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
+  padding: var(--s3);
+  margin-block-end: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-card);
+  box-shadow: var(--lift-2);
+}
+.pickn { font-weight: 600; font-size: 14px; margin-inline-end: var(--s2); }
+.pickbar select { min-block-size: 44px; font-size: 16px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: 9px; background: var(--surface); color: var(--ink); }
+
 /* What you can do to a document, in the sheet that opens it (#152). One row,
    wrapping, above the page itself — below the title so the title is still the
    first thing, above the body so it is not something you scroll to find. */
