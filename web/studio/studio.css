@@ -6249,3 +6249,11 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 @media (max-width: 860px) {
   .bsites .nbrow, .bsites .brow { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/*
+  Stranded work and the score (#272). Both sit inside .govsec, so they inherit
+  its rhythm; what they add is the explanatory line under the stranded list,
+  which is a paragraph rather than a row and needs its own measure.
+*/
+.govwhy { margin: 6px 0 0; max-width: 62ch; }
+.govstranded { display: grid; gap: 4px; }

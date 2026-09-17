@@ -158,10 +158,46 @@ const recorder = {
   this suite's, which is one of the three candidates and is also why insisting
   beats explaining.
 */
-const mine = async (why = 'the suite'): Promise<Job | null> => {
+const mine = async (expect: string, why = 'the suite'): Promise<Job | null> => {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const job = await dequeue(db, WORKER, true, true, undefined, MINE)
-    if (job !== null) return job
+    if (job !== null && job.jobId === expect) return job
+    if (job !== null) {
+      /*
+        #273. The scope keeps OTHER suites out; it cannot stop this one taking
+        its OWN earlier work, and that is what went wrong. Section 2 parks a
+        job in `retrying` on purpose, `recoverStalled` calls
+        `requeue_retrying` on every deployed worker tick, and the parked job
+        comes back as `queued` — so a later section dequeued it instead of the
+        job it had just made. The stub ran against the wrong job, the output
+        landed on the wrong job, and TWO checks then described a job nothing
+        had run, while the dequeue check two lines above said "dequeued".
+
+        Asking for a specific job is the property every one of these sections
+        actually wants. When something else arrives it is put back rather than
+        run, because running it would corrupt whatever section owns it.
+      */
+      /*
+        Ended, not returned. `running -> retrying` is legal and would put it
+        back in the pool, which is an infinite shuffle: the next call takes it
+        again. Anything arriving here is this suite's own earlier work that a
+        deployed worker requeued, it has already been asserted, and the
+        teardown would cancel it anyway — this only happens sooner.
+
+        Scoped to `requested_by` in the SQL, not in the comment. That is what
+        makes it impossible for this line to touch another suite's job or a
+        real one, whatever a future change to the dequeue does.
+      */
+      await db.execute(`
+        update public.jobs
+           set state = 'cancelled', finished_at = app.now_utc(),
+               state_reason = 'verify:recovers — already asserted; settled so it '
+                              'cannot be dequeued by a later section (#273)'
+         where job_id = ${lit(job.jobId)}::uuid
+           and requested_by = ${lit(MINE)}
+           and state = 'running'`)
+      console.log(`  --   settled ${job.jobId.slice(0, 8)}, which is not the job ${why} made`)
+    }
     await new Promise((r) => setTimeout(r, 1000))
   }
   console.log(`  --   nothing to dequeue for ${why} after five tries`)
@@ -198,7 +234,7 @@ try {
   // =======================================================================
   console.log('\n1. a handler that throws never reports success')
   const threwId = await enqueue(`recovers-${run}-threw`)
-  const threw = await mine()
+  const threw = await mine(threwId, 'the throwing job')
   const threwResult =
     threw === null
       ? null
@@ -244,10 +280,28 @@ try {
     ['retrying', 'failed'].includes(afterThrew.state),
   )
 
+  /*
+    Settled here, the moment it has been asserted — #273's other half.
+
+    A job parked in `retrying` is what every later section was racing: the
+    deployed worker requeues it on each tick and it becomes eligible for a
+    dequeue that belongs to somebody else. `mine()` now refuses to run the
+    wrong job, which turns the race into a named failure; this removes the
+    race itself, which is better. The property section 2 exists for has
+    already been read out of the row above, so keeping the job live buys
+    nothing and costs the isolation of every section after it.
+  */
+  if (afterThrew.state === 'retrying') {
+    await db.execute(`
+      update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+             state_reason = 'verify:recovers — asserted, then settled so it cannot be re-dequeued'
+       where job_id = ${lit(threwId)}::uuid and state = 'retrying'`)
+  }
+
   // =======================================================================
   console.log('\n3. a semantically invalid answer is refused, and SAYS it was')
   const liarId = await enqueue(`recovers-${run}-liar`)
-  const liar = await mine()
+  const liar = await mine(liarId, 'the refused-answer job')
   if (liar !== null)
     await runJob(
       db,
@@ -321,7 +375,7 @@ try {
   // =======================================================================
   console.log('\n5. a partial success keeps what happened and is honest about the rest')
   const partialId = await enqueue(`recovers-${run}-partial`)
-  const partial = await mine('the partial-success job')
+  const partial = await mine(partialId, 'the partial-success job')
   check(
     'the partial-success job was actually picked up',
     partial === null

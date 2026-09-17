@@ -448,5 +448,6 @@
   "0447_a_session_is_established_in_one_place.sql": "efeb3c67f6643f86814039629ff8fd1acebec056b4bfd47c3c8a831bd2f6fb91",
   "0448_one_door_to_forgetting_a_session.sql": "f4fd3252cc7ada9cad0fcca3ba6bef0e6adcc86e711e28e975cb43f98a81e76d",
   "0449_a_minute_ceiling_the_database_enforces.sql": "d9e89321794833f9efea7370bc9672f0b1980c50c3bdd70aa299d906c12a5faa",
-  "0450_the_office_may_run_ci_and_nothing_else_yet.sql": "17b3c8de284041ca6493a75989c849f8b7ff07c4778a1550198e7ea6e32bcad7"
+  "0450_the_office_may_run_ci_and_nothing_else_yet.sql": "17b3c8de284041ca6493a75989c849f8b7ff07c4778a1550198e7ea6e32bcad7",
+  "0451_the_governance_page_shows_stranded_work_and_the_score.sql": "c0c11d9264bbf5a6710d4da02ce4ed30e966aaf071530ad6cf5c238f2ac22a22"
 }

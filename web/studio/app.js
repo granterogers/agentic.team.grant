@@ -5588,6 +5588,44 @@ function governanceTab() {
         : `<div class="govcases">${g.requests.map(request).join('')}</div>`}
     </section>
 
+    <!--
+      What it cannot finish, and how well it is doing (#272).
+
+      Both were in the database with a mouth and no caller: nothing anywhere
+      read app.hq_stranded_work or app.eval_latest, so the one number that
+      says whether the office is getting better or worse was visible only to
+      a script. Folded into this payload rather than given their own sections,
+      because this is the same screen and the same question.
+
+      No backticks in this comment: template literal.
+    -->
+    <section class="govsec">
+      <h3 class="govtitle">What it cannot finish<span class="t-meta">${esc(String((g.stranded ?? {}).total ?? 0))}</span></h3>
+      ${Number((g.stranded ?? {}).total ?? 0) === 0
+        ? empty('Nothing is stuck. Work that needs something the office has not got would appear here.')
+        : `<div class="govstranded">
+            <ul class="govnotes">${((g.stranded ?? {}).kinds ?? []).map((k) => `<li class="govnote">
+              <b>${esc(k.kind ?? '')}</b>
+              <span class="t-meta">${esc(String(k.waiting ?? 0))} waiting</span>
+            </li>`).join('')}</ul>
+            ${(g.stranded ?? {}).why ? `<p class="t-meta govwhy">${esc(g.stranded.why)}</p>` : ''}
+          </div>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">How it is scoring<span class="t-meta">${
+        (g.scoring ?? []).length === 0 ? 'not measured' : `${esc(String((g.scoring ?? [])[0]?.agreed ?? 0))} of ${esc(String((g.scoring ?? [])[0]?.cases ?? 0))}`
+      }</span></h3>
+      ${(g.scoring ?? []).length === 0
+        ? empty('No evaluation has been run. npm run eval grades the office against Grant\'s own judgement.')
+        : `<ul class="govnotes">${(g.scoring ?? []).slice(0, 4).map((e) => `<li class="govnote">
+            <b>${esc(String(e.agreed ?? 0))} of ${esc(String(e.cases ?? 0))} agreed</b>
+            <span class="t-meta">mean ${esc(String(e.mean_score ?? '—'))} · ${esc(when.words(e.at))}${
+              e.note ? ` · ${esc(e.note)}` : ''
+            }</span>
+          </li>`).join('')}</ul>`}
+    </section>
+
     <section class="govsec">
       <h3 class="govtitle">What it noticed<span class="t-meta">${esc(String(g.noticed.length))}</span></h3>
       ${g.noticed.length === 0

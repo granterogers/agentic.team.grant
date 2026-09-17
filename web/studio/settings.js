@@ -827,6 +827,23 @@ const FALLBACK_GOVERNANCE = {
       tried_and_could_not: [{ kind: 'missing_tool', needed: 'calendar.write', times: 4 }],
     },
   ],
+  /*
+    Invented, and only ever drawn behind the no-token banner. Both of these
+    are usually EMPTY in a healthy office, and a design that can only be seen
+    when something is wrong is a design nobody has judged.
+  */
+  stranded: {
+    total: 2,
+    oldest: '2026-09-16T22:10:00Z',
+    why: 'These need a runtime that can run a local process. The only worker is a Supabase Edge Function, and Deno has none. They wait rather than fail, so they run the moment one exists.',
+    kinds: [
+      { kind: 'notebook.read', waiting: 2 },
+    ],
+  },
+  scoring: [
+    { at: '2026-09-14T16:58:22Z', cases: 18, agreed: 16, mean_score: 2.78, judge_model: 'a free model', note: '2 case(s) unreadable' },
+    { at: '2026-09-14T16:46:54Z', cases: 19, agreed: 16, mean_score: 2.95, judge_model: 'a free model', note: '1 case(s) unreadable' },
+  ],
 }
 
 export const GOVERNANCE = {
@@ -837,6 +854,8 @@ export const GOVERNANCE = {
   noticed: [...FALLBACK_GOVERNANCE.noticed],
   agents: [...FALLBACK_GOVERNANCE.agents],
   requests: [...FALLBACK_GOVERNANCE.requests],
+  stranded: { ...FALLBACK_GOVERNANCE.stranded },
+  scoring: [...FALLBACK_GOVERNANCE.scoring],
 }
 
 export async function hydrateGovernance(read) {
@@ -856,6 +875,16 @@ export async function hydrateGovernance(read) {
         place that knows the shape.
       */
       requests: d.requests ?? [],
+      /*
+        Same rule, two keys later (#272). `stranded` and `scoring` arrive from
+        migration 0451, so an hq-api deployed before it returns neither — and
+        this is the ONE place that knows the shape, because CLAUDE.md records
+        exactly this defect: a payload gained `requests`, the store and the
+        hydrator did not learn it, and the page rendered "0 open" over
+        fourteen rows without anything going red.
+      */
+      stranded: d.stranded ?? { total: 0, kinds: [], oldest: null, why: '' },
+      scoring: Array.isArray(d.scoring) ? d.scoring : [],
       loaded: true,
     })
   } catch {
