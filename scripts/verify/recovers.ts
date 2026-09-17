@@ -416,6 +416,33 @@ try {
     `${String(taskLanded)} task(s)`,
     taskLanded === 1,
   )
+  /*
+    And then remove it, because the task it proves is one Grant can see.
+
+    `check:leaks` counts fixture tasks on purpose — harness rows on a table he
+    reads are how the office once reported itself as collapsing — and this
+    suite left exactly one behind on every run, which is why the gate's last
+    red was this file rather than anything in the product. The assertion above
+    has already happened by this point, so removing the row costs the check
+    nothing; asserting the removal is what stops a teardown that matches
+    nothing looking exactly like one that worked.
+  */
+  await db.execute(`
+    delete from public.tasks
+     where project_id = ${lit(projectId)}::uuid and title = ${lit(taskName)}`)
+  const taskSwept = Number(
+    (
+      await one(`
+        select count(*)::int as n from public.tasks
+         where project_id = ${lit(projectId)}::uuid and title = ${lit(taskName)}`)
+    ).n,
+  )
+  check(
+    'and the suite takes it back off the table Grant reads',
+    `${String(taskSwept)} left`,
+    taskSwept === 0,
+  )
+
   const partialState = await stateOf(partialId)
   check(
     'and the job is honestly complete rather than failed',
