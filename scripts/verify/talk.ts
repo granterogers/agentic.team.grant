@@ -42,8 +42,9 @@
  * one surface Grant named.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
 
 const CHROMIUM = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
@@ -56,13 +57,42 @@ const record = (what: string, outcome: string, passed: boolean): void => {
   console.log(`${passed ? '✅' : '❌'} ${what} — ${outcome}`)
 }
 
-const html = readFileSync('web/hq/index.html')
-const server = createServer((_request, response) => {
+/*
+  The studio, whole (#68, ADR-0019).
+
+  The call moved out of `web/hq/index.html` into `web/studio/call.js` and the
+  studio is what is served at the root now. A check still pointed at the old
+  file would be testing a page nobody can open — the pattern CLAUDE.md names
+  after three instances of it in one day.
+
+  A directory rather than a string, because the studio is a page plus thirty
+  files. The ids it drives by — call, talkstate, askform, asktext, asksend,
+  turns, typeinstead — were kept on the new markup deliberately, so what this
+  suite asserts did not have to be rewritten alongside what it tests. A retarget
+  that rewrites its own assertions is a retarget that quietly loses one.
+*/
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.pdf': 'application/pdf',
+}
+const server = createServer((request, response) => {
+  let file = join('web/studio', decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/'))
+  if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
+  if (!existsSync(file)) {
+    response.writeHead(404)
+    response.end('not here')
+    return
+  }
+  const body = readFileSync(file)
   response.writeHead(200, {
-    'content-type': 'text/html; charset=utf-8',
-    'content-length': html.length,
+    'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
+    'content-length': body.length,
   })
-  response.end(html)
+  response.end(body)
 })
 await new Promise<void>((resolve) => server.listen(PORT, resolve))
 
@@ -115,6 +145,20 @@ const openTalk = async (device: Record<string, unknown>) => {
       const ctx = new AudioContext();
       const dest = ctx.createMediaStreamDestination();
       const osc = ctx.createOscillator(); osc.connect(dest); osc.start();
+      /*
+        Every stream this stub ever handed out, kept (#102).
+
+        The check that matters is not "did the page call stop on the stream it
+        is holding" — it is "is ANY microphone this page opened still live".
+        Those are different questions, and the bug was precisely the gap
+        between them: closing the call sheet dropped the reference, so the page
+        held nothing, stopped nothing, and the device kept recording.
+
+        A page that has lost track of a stream cannot be asked about it. The
+        stub can.
+      */
+      window.__MICS = window.__MICS || [];
+      window.__MICS.push(dest.stream);
       return dest.stream;
     };
   `)
@@ -126,14 +170,37 @@ const openTalk = async (device: Record<string, unknown>) => {
   // Reached the way a person reaches it — via the menu — and matched the same
   // three ways `verify:ui` matches, because the label a person reads ("Talk to
   // the team") is not the section name the code uses ("talk").
-  const reached = (await page.evaluate(`(() => {
-    const el = [...document.querySelectorAll('a,button,[data-tab],[data-section]')]
-      .find((e) => e.getAttribute('data-tab') === 'talk' || e.getAttribute('data-section') === 'talk'
-        || (e.textContent ?? '').trim().toLowerCase() === 'talk');
-    if (!el) return false;
-    el.click();
-    return true;
-  })()`)) as boolean
+  /*
+    The call is a sheet now, not a tab.
+
+    Reached through the command bar, which is where the call PANEL lives since
+    #214.
+
+    The microphone in the rail no longer opens anything. Grant: *"When Call the
+    Team is pressed: do not open a modal/dialog. Start the team voice/audio
+    session directly."* So a test that drives this suite by clicking it would
+    place a real call and then measure a dialog that is deliberately not there.
+
+    The panel is still the surface these checks are about - the transcript and
+    the typed fallback - and it opens from the command bar, ranked like every
+    other row. Driving it this way also means the command bar's own routing is
+    exercised on every talk run, which nothing else did.
+  */
+  await page.keyboard.press('Control+k')
+  await page.waitForTimeout(300)
+  await page.locator('[data-cmd-input]').fill('call panel')
+  await page.waitForTimeout(300)
+  /*
+    A REAL press, not `element.click()`.
+
+    The command bar's rows are wired on `mousedown`, deliberately - it preserves
+    focus in the input so a mouse press behaves exactly like Enter. A synthetic
+    `click()` dispatches no mousedown, so it silently does nothing and the check
+    below reports a missing panel about a row that works perfectly.
+  */
+  const row = page.locator('[data-cmd-row]').filter({ hasText: 'The call panel' }).first()
+  const reached = (await row.count()) > 0
+  if (reached) await row.click({ force: true })
   await page.waitForTimeout(800)
   return { context, page, reached }
 }
@@ -388,11 +455,30 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
   await page.evaluate(`window.__MINT = 'down'`)
   await page.locator('#call').tap()
   await page.waitForTimeout(1_200)
+  /*
+    Asserted on the STATE, not on an emoji.
+
+    The old page's button was the character 📞 and hanging up rewrote its text,
+    so "did it reset" could be read off `textContent`. The studio's is an SVG
+    microphone — setting text on it would delete the icon — and the reset is a
+    class coming off plus the label going back.
+
+    That is the better assertion anyway: it was always the state that mattered,
+    and the emoji was how the state happened to be drawn. A check written
+    against a rendering detail fails when the rendering improves.
+  */
+  const callReset = async () =>
+    (await page.evaluate(
+      `(() => {
+        const b = document.getElementById('call');
+        return (b.classList.contains('ringing') ? 'ringing' : 'idle')
+          + '/' + (b.getAttribute('aria-label') || '');
+      })()`,
+    )) as string
   record(
     'call · when the office will not start a call, the button resets',
-    `${String(await stateOn(page))} / button="${String(await page.evaluate(`document.getElementById('call').textContent`))}"`,
-    !(await stateOn(page)).includes('Connecting') &&
-      String(await page.evaluate(`document.getElementById('call').textContent`)).includes('📞'),
+    `${String(await stateOn(page))} / button=${await callReset()}`,
+    !(await stateOn(page)).includes('Connecting') && (await callReset()).startsWith('idle/'),
   )
 
   await page.evaluate(`window.__MINT = 'ok'; window.__MIC = 'refused'`)
@@ -588,6 +674,107 @@ const stateOn = async (page: Awaited<ReturnType<typeof openTalk>>['page']): Prom
     'call · and the button offers to call again',
     after.slice(0, 60),
     after.toLowerCase().includes('call again') || after.toLowerCase().includes('press the phone'),
+  )
+
+  /*
+    The one that would have caught #102.
+
+    Grant: *"Turning voice off must stop microphone capture and ongoing voice
+    playback."* Every check above this line passed while the microphone stayed
+    open, because they all ask what the page SENT or what the page SHOWS, and a
+    leaked audio track is neither. It is a device that is still recording after
+    the interface says it is not, and the only external sign is the browser's
+    own indicator.
+
+    `live` counts tracks that are not 'ended' across every stream the stub ever
+    handed out — including any the page has forgotten about, which is the whole
+    point.
+  */
+  const liveTracks = (await page.evaluate(
+    `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
+  )) as number
+  record(
+    'call · and the microphone is actually released, not merely forgotten',
+    liveTracks === 0
+      ? 'no live track remains'
+      : `${String(liveTracks)} track(s) STILL RECORDING after stop`,
+    liveTracks === 0,
+  )
+
+  /*
+    And again from the state that used to leak, through the control Grant
+    actually uses (#101, then #214).
+
+    Closing the panel is not hanging up - the call is meant to survive it, and
+    that is what stranded a microphone before #101. What changed with #214 is
+    what happens next: the rail's button no longer REOPENS the panel, it ends
+    the call, because Grant asked for a toggle and not a door.
+
+    So the sequence is the one a person performs: place a call, close the panel,
+    press the microphone in the rail. That must end the call and release the
+    device, with no panel involved at any point in the stop.
+  */
+  await page.locator('#call').tap()
+  await page.waitForTimeout(400)
+  await page.locator('#viewer .close').tap()
+  await page.waitForTimeout(300)
+  const railLive = await page.evaluate(
+    `document.querySelectorAll('[data-call].ringing, [data-call].connecting').length > 0`,
+  )
+  record(
+    'call · the rail keeps showing a live call after the panel is closed',
+    railLive === true ? 'still shown as live' : 'THE RAIL FORGOT THE CALL',
+    railLive === true,
+  )
+  await page.locator('[data-call]').first().tap()
+  await page.waitForTimeout(500)
+  const afterRoundTrip = (await page.evaluate(
+    `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
+  )) as number
+  record(
+    'call · pressing the rail microphone ends the call and releases the device',
+    afterRoundTrip === 0
+      ? 'no live track remains'
+      : `${String(afterRoundTrip)} track(s) STILL RECORDING`,
+    afterRoundTrip === 0,
+  )
+  const railIdle = await page.evaluate(
+    `document.querySelectorAll('[data-call].ringing, [data-call].connecting').length === 0`,
+  )
+  record(
+    'call · and the rail says so, without a panel being open',
+    railIdle === true ? 'back to idle' : 'THE RAIL STILL SAYS LIVE',
+    railIdle === true,
+  )
+
+  /*
+    The toggle, from a cold start and with no panel at all.
+
+    This is #214's actual claim: the most prominent control in the product
+    places a call on the first press and ends it on the second, and nothing
+    opens. Everything above reached the microphone through the panel, so without
+    this the one interaction Grant asked for would be the one nothing tests.
+  */
+  await page.locator('[data-call]').first().tap()
+  await page.waitForTimeout(600)
+  const startedBare = await page.evaluate(
+    `document.querySelectorAll('[data-call].ringing, [data-call].connecting').length > 0
+       && !document.body.classList.contains('behind')`,
+  )
+  record(
+    'call · the rail microphone places a call on its own, opening nothing',
+    startedBare === true ? 'live, and no sheet opened' : 'IT DID NOT START, OR IT OPENED A DIALOG',
+    startedBare === true,
+  )
+  await page.locator('[data-call]').first().tap()
+  await page.waitForTimeout(500)
+  const stoppedBare = (await page.evaluate(
+    `(window.__MICS || []).flatMap((s) => s.getTracks()).filter((t) => t.readyState !== 'ended').length`,
+  )) as number
+  record(
+    'call · and the second press genuinely stops it',
+    stoppedBare === 0 ? 'device released' : `${String(stoppedBare)} track(s) STILL RECORDING`,
+    stoppedBare === 0,
   )
 
   await context.close()

@@ -19,6 +19,26 @@
   paint itself from the palette it offers. With only the `:root` form the picker
   showed five identical chips, all in whichever theme was already on.
 
+  ## Light and dark, and the three states of it (#87)
+
+  There was no manual override at all: every dark block lived only inside
+  `@media (prefers-color-scheme: dark)`, so the theme followed the operating
+  system and nothing else. Grant asked for the dark-mode shortcut to work, and
+  the shortcut could not have worked, because there was nothing for it to set.
+
+  Three states now, which is the standard shape:
+
+    - no `data-scheme` — follow the system, via the media query
+    - `data-scheme="light"` — stay light even if the system is dark, which is
+      why every media query is guarded `:not([data-scheme="light"])`
+    - `data-scheme="dark"` — go dark even if the system is light
+
+  Each palette's dark tokens are therefore written twice, once under the guarded
+  media query and once under the explicit attribute. Generated from one source
+  rather than typed twice: a palette whose two copies drift is a palette that is
+  subtly wrong in exactly one of the three states, which nobody would ever
+  notice.
+
   ## Why the textures are drawn rather than downloaded
 
   Every one is SVG turbulence as a data URI: no requests, nothing to 404,
@@ -42,7 +62,8 @@
   --tex-ink: 25 24 19;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="paper"], [data-palette="paper"] {
+  :root:not([data-scheme="light"])[data-palette="paper"],
+  :root:not([data-scheme="light"]) [data-palette="paper"] {
     --ground: #14140F; --surface: #1D1D17; --sunken: #100F0B;
     --ink: #F0EDE4; --ink-2: #A5A091; --ink-3: #726D5F; --edge: #2C2B23;
     --accent: #5FBF96; --accent-wash: rgb(95 191 150 / .14); --on-accent: #0F1A15;
@@ -50,6 +71,15 @@
     --field-a: oklch(0.34 0.035 215 / .30); --field-b: oklch(0.32 0.030 55 / .26);
     --tex-ink: 255 250 240;
   }
+}
+:root[data-scheme="dark"][data-palette="paper"],
+:root[data-scheme="dark"] [data-palette="paper"] {
+    --ground: #14140F; --surface: #1D1D17; --sunken: #100F0B;
+    --ink: #F0EDE4; --ink-2: #A5A091; --ink-3: #726D5F; --edge: #2C2B23;
+    --accent: #5FBF96; --accent-wash: rgb(95 191 150 / .14); --on-accent: #0F1A15;
+    --wash: rgb(150 190 170 / .05);
+    --field-a: oklch(0.34 0.035 215 / .30); --field-b: oklch(0.32 0.030 55 / .26);
+    --tex-ink: 255 250 240;
 }
 
 /* --- Slate: cool grey, deep blue. Quiet and technical. ------------------- */
@@ -62,7 +92,8 @@
   --tex-ink: 20 23 28;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="slate"], [data-palette="slate"] {
+  :root:not([data-scheme="light"])[data-palette="slate"],
+  :root:not([data-scheme="light"]) [data-palette="slate"] {
     --ground: #0F1216; --surface: #171B21; --sunken: #0B0E11;
     --ink: #ECEFF3; --ink-2: #9BA3B0; --ink-3: #69717D; --edge: #262C34;
     --accent: #7FAEE0; --accent-wash: rgb(127 174 224 / .14); --on-accent: #0B141D;
@@ -70,6 +101,15 @@
     --field-a: oklch(0.33 0.035 255 / .32); --field-b: oklch(0.31 0.028 205 / .26);
     --tex-ink: 235 242 250;
   }
+}
+:root[data-scheme="dark"][data-palette="slate"],
+:root[data-scheme="dark"] [data-palette="slate"] {
+    --ground: #0F1216; --surface: #171B21; --sunken: #0B0E11;
+    --ink: #ECEFF3; --ink-2: #9BA3B0; --ink-3: #69717D; --edge: #262C34;
+    --accent: #7FAEE0; --accent-wash: rgb(127 174 224 / .14); --on-accent: #0B141D;
+    --wash: rgb(150 180 220 / .05);
+    --field-a: oklch(0.33 0.035 255 / .32); --field-b: oklch(0.31 0.028 205 / .26);
+    --tex-ink: 235 242 250;
 }
 
 /* --- Clay: terracotta and sand. Warm, hand-made. ------------------------- */
@@ -82,7 +122,8 @@
   --tex-ink: 36 26 20;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="clay"], [data-palette="clay"] {
+  :root:not([data-scheme="light"])[data-palette="clay"],
+  :root:not([data-scheme="light"]) [data-palette="clay"] {
     --ground: #17110D; --surface: #201812; --sunken: #120C08;
     --ink: #F5EAE0; --ink-2: #AD9B8C; --ink-3: #7A6A5D; --edge: #302419;
     --accent: #E08A5C; --accent-wash: rgb(224 138 92 / .15); --on-accent: #1A0F08;
@@ -90,6 +131,15 @@
     --field-a: oklch(0.33 0.045 45 / .3); --field-b: oklch(0.31 0.032 90 / .26);
     --tex-ink: 252 240 228;
   }
+}
+:root[data-scheme="dark"][data-palette="clay"],
+:root[data-scheme="dark"] [data-palette="clay"] {
+    --ground: #17110D; --surface: #201812; --sunken: #120C08;
+    --ink: #F5EAE0; --ink-2: #AD9B8C; --ink-3: #7A6A5D; --edge: #302419;
+    --accent: #E08A5C; --accent-wash: rgb(224 138 92 / .15); --on-accent: #1A0F08;
+    --wash: rgb(220 170 130 / .05);
+    --field-a: oklch(0.33 0.045 45 / .3); --field-b: oklch(0.31 0.032 90 / .26);
+    --tex-ink: 252 240 228;
 }
 
 /* --- Ink: near-black on cream. High contrast, editorial. ----------------- */
@@ -102,7 +152,8 @@
   --tex-ink: 16 16 16;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="ink"], [data-palette="ink"] {
+  :root:not([data-scheme="light"])[data-palette="ink"],
+  :root:not([data-scheme="light"]) [data-palette="ink"] {
     --ground: #0C0C0C; --surface: #161616; --sunken: #070707;
     --ink: #F3F1EA; --ink-2: #A09D94; --ink-3: #6B6862; --edge: #262523;
     --accent: #A9A2F0; --accent-wash: rgb(169 162 240 / .14); --on-accent: #0D0B1C;
@@ -110,6 +161,15 @@
     --field-a: oklch(0.32 0.04 285 / .3); --field-b: oklch(0.30 0.025 70 / .24);
     --tex-ink: 250 248 242;
   }
+}
+:root[data-scheme="dark"][data-palette="ink"],
+:root[data-scheme="dark"] [data-palette="ink"] {
+    --ground: #0C0C0C; --surface: #161616; --sunken: #070707;
+    --ink: #F3F1EA; --ink-2: #A09D94; --ink-3: #6B6862; --edge: #262523;
+    --accent: #A9A2F0; --accent-wash: rgb(169 162 240 / .14); --on-accent: #0D0B1C;
+    --wash: rgb(200 195 230 / .04);
+    --field-a: oklch(0.32 0.04 285 / .3); --field-b: oklch(0.30 0.025 70 / .24);
+    --tex-ink: 250 248 242;
 }
 
 /* --- Moss: deep green and stone. ----------------------------------------- */
@@ -122,7 +182,8 @@
   --tex-ink: 20 26 19;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="moss"], [data-palette="moss"] {
+  :root:not([data-scheme="light"])[data-palette="moss"],
+  :root:not([data-scheme="light"]) [data-palette="moss"] {
     --ground: #101410; --surface: #181D17; --sunken: #0A0D0A;
     --ink: #EDF2EA; --ink-2: #9AA697; --ink-3: #687264; --edge: #242B23;
     --accent: #8CC96F; --accent-wash: rgb(140 201 111 / .14); --on-accent: #0E1509;
@@ -131,48 +192,198 @@
     --tex-ink: 240 248 236;
   }
 }
+:root[data-scheme="dark"][data-palette="moss"],
+:root[data-scheme="dark"] [data-palette="moss"] {
+    --ground: #101410; --surface: #181D17; --sunken: #0A0D0A;
+    --ink: #EDF2EA; --ink-2: #9AA697; --ink-3: #687264; --edge: #242B23;
+    --accent: #8CC96F; --accent-wash: rgb(140 201 111 / .14); --on-accent: #0E1509;
+    --wash: rgb(160 200 150 / .05);
+    --field-a: oklch(0.33 0.04 145 / .3); --field-b: oklch(0.31 0.026 195 / .26);
+    --tex-ink: 240 248 236;
+}
 
 /* ==========================================================================
-   TEXTURES
-   `--tex` is the layer painted over the ground. `--tex-ink` is the palette's
-   own dark, so a texture is never a grey film over a warm page.
+   TEXTURES — real materials, photographed and generated (#206)
+
+   Grant, twice: *"forget the SVG and AI generate some really beautiful
+   textures, like stone or wood or whatever ... not just for the background,
+   for the buttons, for everything. Subtle, but beautiful."*
+
+   What was here was five `feTurbulence` filters. The file's own header
+   explained the choice — no requests, no assets — and that reasoning produced
+   the problem. **Perlin noise is not a material.** It has no structure: no
+   grain direction, no fracture, no fibre, no tool marks. `stone` and `plaster`
+   were the same function with different numbers, which is why neither looked
+   like anything.
+
+   These are generated by `npm run textures -- --go`, made seamless and
+   compressed by `scripts/staff/tile-textures.py`, and committed. About 31 KB
+   for the one material in use.
+
+   ## Three variables, and why there are three
+
+   `--tex-src`   the image. One file, used at three scales.
+   `--tex-size`  the GROUND's scale — low frequency, slow variation.
+   `--tex-fine`  the scale for buttons, chips and small controls.
+
+   The third exists because a button is 120x44 and shows one two-hundredth of
+   a wall. At that crop a stone texture is a flat smear, or one conspicuous
+   pebble. A small control needs several repeats inside it or the material
+   reads as a stain — which is the single thing that makes textured interfaces
+   look cheap, and the reason this is a system rather than a picture.
+
+   ## Two files per material
+
+   A texture is INK, and `--tex-ink` already says what colour ink is in each
+   palette: near-black on the pale ones, near-white on the dark. So each
+   material ships as the material's SHADOWS in black for a light scheme, and
+   its HIGHLIGHTS in white for a dark one — which is how a real surface reads
+   in each case, a lit one showing its pits and a dark one its raised grain.
+
+   The dark file is chosen by `prefers-color-scheme` and by the explicit
+   `data-scheme` attribute, in that order, matching every other token here.
    ========================================================================== */
 
 /* --- None: the fields only. ---------------------------------------------- */
-:root[data-texture="none"], [data-texture="none"] { --tex: none; --tex-size: auto; }
-
-/* --- Grain: fine paper fibre. The old default. --------------------------- */
-:root[data-texture="grain"], [data-texture="grain"] {
-  --tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23t)' opacity='0.05'/%3E%3C/svg%3E");
-  --tex-size: 140px 140px;
+:root[data-texture="none"], [data-texture="none"] {
+  --tex: none; --tex-src: none; --tex-size: auto; --tex-fine: auto;
 }
 
-/* --- Plaster: mottled, soft-edged, uneven. The reference board's look. ----
-   Low-frequency turbulence at high octaves gives clouded patches rather than
-   even noise, which is what makes plaster read as a surface someone applied. */
 :root[data-texture="plaster"], [data-texture="plaster"] {
-  --tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.018' numOctaves='5' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='gamma' exponent='1.6' amplitude='1.4'/%3E%3C/feFuncA%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='420' height='420' filter='url(%23t)' opacity='0.16'/%3E%3C/svg%3E");
-  --tex-size: 420px 420px;
+  --tex-src: url("textures/plaster.webp");
+  --tex-size: 170px; --tex-fine: 78px;
 }
-
-/* --- Canvas: a woven grid, warp over weft. ------------------------------- */
-:root[data-texture="canvas"], [data-texture="canvas"] {
-  --tex:
-    repeating-linear-gradient(90deg, rgb(var(--tex-ink) / .035) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(0deg, rgb(var(--tex-ink) / .028) 0 1px, transparent 1px 3px);
-  --tex-size: 3px 3px, 3px 3px;
+:root[data-texture="paper"], [data-texture="paper"] {
+  --tex-src: url("textures/paper.webp");
+  --tex-size: 150px; --tex-fine: 66px;
 }
-
-/* --- Stone: coarse, directional, with fracture. -------------------------- */
-:root[data-texture="stone"], [data-texture="stone"] {
-  --tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.04 0.09' numOctaves='4' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.5'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23t)' opacity='0.14'/%3E%3C/svg%3E");
-  --tex-size: 300px 300px;
+:root[data-texture="travertine"], [data-texture="travertine"] {
+  --tex-src: url("textures/travertine.webp");
+  --tex-size: 175px; --tex-fine: 80px;
 }
-
-/* --- Linen: soft irregular weave, warmer than canvas. -------------------- */
+:root[data-texture="oak"], [data-texture="oak"] {
+  --tex-src: url("textures/oak.webp");
+  --tex-size: 165px; --tex-fine: 74px;
+}
 :root[data-texture="linen"], [data-texture="linen"] {
-  --tex:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5 0.02' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23t)' opacity='0.09'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23t)' opacity='0.07'/%3E%3C/svg%3E");
-  --tex-size: 200px 200px, 200px 200px;
+  --tex-src: url("textures/linen.webp");
+  --tex-size: 135px; --tex-fine: 60px;
+}
+:root[data-texture="concrete"], [data-texture="concrete"] {
+  --tex-src: url("textures/concrete.webp");
+  --tex-size: 180px; --tex-fine: 82px;
+}
+
+/*
+  The stone family (#206, second pass). Grant: "Stone is a good one."
+
+  Scales differ by how big the material's own features are. Granite's crystals
+  are millimetres and terrazzo's chips are centimetres, so painting them at the
+  same size would make one invisible and the other a pattern of blobs.
+*/
+:root[data-texture="granite"], [data-texture="granite"] {
+  --tex-src: url("textures/granite.webp");
+  --tex-size: 150px; --tex-fine: 68px;
+}
+:root[data-texture="basalt"], [data-texture="basalt"] {
+  --tex-src: url("textures/basalt.webp");
+  --tex-size: 190px; --tex-fine: 86px;
+}
+:root[data-texture="sandstone"], [data-texture="sandstone"] {
+  --tex-src: url("textures/sandstone.webp");
+  --tex-size: 155px; --tex-fine: 70px;
+}
+/* The largest features of any material here, so the largest tile — at 180px a
+   terrazzo chip is a smudge and the floor is a rash. */
+:root[data-texture="terrazzo"], [data-texture="terrazzo"] {
+  --tex-src: url("textures/terrazzo.webp");
+  --tex-size: 260px; --tex-fine: 120px;
+}
+/* Directional, and the one material where the FINE scale is the point: brushed
+   lines across a 120px button read as a machined surface. */
+:root[data-texture="steel"], [data-texture="steel"] {
+  --tex-src: url("textures/steel.webp");
+  --tex-size: 165px; --tex-fine: 58px;
+}
+
+/*
+  The dark scheme takes the highlight cut of the same material.
+
+  Both selectors, and in this order, because the studio has three states: an
+  explicit light choice, an explicit dark one, and system. The unprefixed
+  blocks above are light; this handles system-dark, and the `data-scheme`
+  block below handles a person who has chosen dark on a light system.
+*/
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme="light"])[data-texture="plaster"] { --tex-src: url("textures/plaster-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="paper"] { --tex-src: url("textures/paper-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="travertine"] { --tex-src: url("textures/travertine-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="oak"] { --tex-src: url("textures/oak-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="linen"] { --tex-src: url("textures/linen-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="concrete"] { --tex-src: url("textures/concrete-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="granite"] { --tex-src: url("textures/granite-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="basalt"] { --tex-src: url("textures/basalt-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="sandstone"] { --tex-src: url("textures/sandstone-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="terrazzo"] { --tex-src: url("textures/terrazzo-light.webp"); }
+  :root:not([data-scheme="light"])[data-texture="steel"] { --tex-src: url("textures/steel-light.webp"); }
+}
+:root[data-scheme="dark"][data-texture="plaster"] { --tex-src: url("textures/plaster-light.webp"); }
+:root[data-scheme="dark"][data-texture="paper"] { --tex-src: url("textures/paper-light.webp"); }
+:root[data-scheme="dark"][data-texture="travertine"] { --tex-src: url("textures/travertine-light.webp"); }
+:root[data-scheme="dark"][data-texture="oak"] { --tex-src: url("textures/oak-light.webp"); }
+:root[data-scheme="dark"][data-texture="linen"] { --tex-src: url("textures/linen-light.webp"); }
+:root[data-scheme="dark"][data-texture="concrete"] { --tex-src: url("textures/concrete-light.webp"); }
+:root[data-scheme="dark"][data-texture="granite"] { --tex-src: url("textures/granite-light.webp"); }
+:root[data-scheme="dark"][data-texture="basalt"] { --tex-src: url("textures/basalt-light.webp"); }
+:root[data-scheme="dark"][data-texture="sandstone"] { --tex-src: url("textures/sandstone-light.webp"); }
+:root[data-scheme="dark"][data-texture="terrazzo"] { --tex-src: url("textures/terrazzo-light.webp"); }
+:root[data-scheme="dark"][data-texture="steel"] { --tex-src: url("textures/steel-light.webp"); }
+
+/*
+  `--tex` is what `body` paints, and it stays for compatibility: the ground's
+  layer is still one entry in a four-layer background stack there.
+*/
+:root[data-texture="plaster"], [data-texture="plaster"],
+:root[data-texture="paper"], [data-texture="paper"],
+:root[data-texture="travertine"], [data-texture="travertine"],
+:root[data-texture="oak"], [data-texture="oak"],
+:root[data-texture="linen"], [data-texture="linen"],
+:root[data-texture="concrete"], [data-texture="concrete"],
+:root[data-texture="granite"], [data-texture="granite"],
+:root[data-texture="basalt"], [data-texture="basalt"],
+:root[data-texture="sandstone"], [data-texture="sandstone"],
+:root[data-texture="terrazzo"], [data-texture="terrazzo"],
+:root[data-texture="steel"], [data-texture="steel"] {
+  --tex: var(--tex-src);
+}
+
+/* ==========================================================================
+   AND ON EVERYTHING ELSE
+
+   Grant asked for it on the buttons and "for everything", and that is the
+   half that was missing entirely — `--tex` was only ever on `body`.
+
+   `background-image` layered UNDER nothing: each of these already has a
+   background colour, and an alpha-carrying overlay composites straight over
+   it. No blend mode, no extra element, no stacking context — the last of
+   which matters, because `mix-blend-mode` would create one and this file has
+   already lost a day to a `position: fixed` child inside a `backdrop-filter`.
+
+   Every one of them is at `--tex-fine`, the small scale. That is the whole
+   point of the second variable.
+   ========================================================================== */
+.btn, .pcard, .panel, .msg.theirs, .composer, .thread, .setcard, .doc, .modcard {
+  background-image: var(--tex-src, none);
+  background-size: var(--tex-fine, auto);
+  background-repeat: repeat;
+  background-blend-mode: normal;
+}
+/*
+  The rail and the panels take the ground's scale rather than the fine one:
+  they are large fields, and a fine weave over 220px of sidebar reads as a
+  screen door.
+*/
+.rail, .board .panel {
+  background-image: var(--tex-src, none);
+  background-size: var(--tex-size, auto);
 }

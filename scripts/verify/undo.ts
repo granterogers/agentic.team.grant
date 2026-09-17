@@ -251,6 +251,46 @@ record(
 // ===========================================================================
 // Report, then clean up
 // ===========================================================================
+/*
+  Teardown, keyed on the ACTIONS rather than on who asked.
+
+  It used to delete `undo_requests where requested_by = 'verify:undo'` and then
+  the actions, and it failed on the foreign key every single run: a fixture
+  action can carry a claim this suite did not write - `app.request_undo` is
+  called with 'grant' by `hq_undo` (0263) and with whatever a racer passes - so
+  the first delete left claims behind and the second hit
+  `undo_requests_action_id_fkey`.
+
+  Deleting the claims OF THE FIXTURE ACTIONS is exact and cannot miss one.
+
+  And the result is asserted, because a teardown that matches nothing looks
+  exactly like a teardown that worked, and this one had been failing in plain
+  sight under a line of prose nobody had cause to read.
+*/
+let sweptClean = false
+let sweptSaid = ''
+try {
+  await db.execute(`
+    delete from public.undo_requests
+     where action_id in (select action_id from public.undoable_actions
+                          where description like 'A fixture action%')
+  `)
+  await db.execute(`
+    delete from public.undoable_actions where description like 'A fixture action%'
+  `)
+  const left = (
+    await db.execute(`
+    select count(*)::int as n from public.undoable_actions
+     where description like 'A fixture action%'
+  `)
+  ).rows[0] as { n: number }
+  sweptClean = Number(left.n) === 0
+  sweptSaid = `${String(left.n)} fixture action(s) left behind`
+} catch (error) {
+  sweptSaid = (error as Error).message.replace(/\s+/g, ' ').slice(0, 140)
+}
+record('the suite leaves nothing behind', sweptSaid, sweptClean)
+
 console.log('| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) {
@@ -258,17 +298,5 @@ for (const c of checks) {
 }
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`)
-
-try {
-  await db.execute(`
-    delete from public.undo_requests where requested_by = 'verify:undo'
-  `)
-  await db.execute(`
-    delete from public.undoable_actions where description like 'A fixture action%'
-  `)
-  console.log('\nfixtures retired.')
-} catch (error) {
-  console.log(`\ncleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
-}
 
 if (failed.length > 0) process.exit(1)

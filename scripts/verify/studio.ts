@@ -10,10 +10,22 @@
  * render→capture→critique loop, and the critique is done by looking.
  */
 
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, unlink } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium, devices } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
+
+/*
+  Which density to capture (#124).
+
+  `DENSITY=compact npm run shots` writes a parallel set named `-compact` rather
+  than overwriting the comfortable one, because the pair is the point: the
+  question compact has to answer is "is this better", and that cannot be
+  answered from one image.
+*/
+const DENSITY = process.env.DENSITY === 'compact' ? 'compact' : 'comfortable'
+const SUFFIX = DENSITY === 'compact' ? '-compact' : ''
 
 const ROOT = 'web/studio'
 const OUT = '.out'
@@ -47,6 +59,52 @@ await new Promise<void>((r) =>
 )
 await mkdir(OUT, { recursive: true })
 
+/*
+  Clear the captures before writing, so `.out` is exactly what THIS run
+  rendered.
+
+  It was not. `.out/activity-desktop-dark.png` sat beside today's captures
+  showing the rail labelled "Studio" and an Activity tab — a name #216 changed
+  and a tab #222 removed — because the route was retired and nothing ever
+  deleted the PNG it had left behind. Reading it today produced a confident
+  finding about a screen that has not existed for two days, and there is
+  nothing in a directory listing that distinguishes a fresh capture from a
+  stale one: same folder, same naming, and a timestamp nobody checks before
+  opening an image.
+
+  This is the wrong-payload trap wearing a different coat. `CLAUDE.md` already
+  records three ways an audit can look somewhere other than where the user
+  looks; this is the fourth, and the cheapest to close.
+
+  Scoped to the `.png` files in `.out` and nothing else: the directory also
+  holds `measurements.jsonl`, `sessions.jsonl` and the e2e records, which are
+  append-only history and must survive. A capture that a run does not produce
+  is a capture that should not be there afterwards — which is the property
+  this buys, and it is why the delete is unconditional rather than a
+  best-effort tidy at the end.
+*/
+{
+  /*
+    Only the files THIS script names, matched by its own suffix grammar.
+
+    The first draft deleted every `.png` in `.out`, which is wrong in the
+    expensive direction: the folder also holds captures from `verify:print`,
+    from the space and control audits, and from ad-hoc runs, and a tool that
+    deletes another tool's evidence is worse than the stale file it was
+    written to remove. The grammar below is exactly what line 84 composes -
+    name, size, scheme, optional density suffix - so anything shots can write,
+    shots can clear, and nothing else is touched.
+  */
+  const MINE = /-(?:desktop|phone)-(?:light|dark)(?:-compact)?\.png$/
+  let cleared = 0
+  for (const name of await readdir(OUT)) {
+    if (!MINE.test(name)) continue
+    await unlink(join(OUT, name))
+    cleared += 1
+  }
+  console.log(`cleared ${String(cleared)} previous capture(s) from ${OUT}`)
+}
+
 const browser = await chromium.launch()
 const shots: string[] = []
 
@@ -58,6 +116,7 @@ const SIZES = [
 for (const [size, opts] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
     const ctx = await browser.newContext({ ...opts, colorScheme: scheme })
+    await ctx.addInitScript(seedAppearance(scheme, { density: DENSITY }))
     const page = await ctx.newPage()
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
@@ -68,7 +127,7 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(900)
 
     const shoot = async (name: string) => {
-      const file = `${OUT}/${name}-${size}-${scheme}.png`
+      const file = `${OUT}/${name}-${size}-${scheme}${SUFFIX}.png`
       await page.screenshot({ path: file, fullPage: false })
       shots.push(file)
     }
@@ -98,6 +157,67 @@ for (const [size, opts] of SIZES) {
     }
 
     /*
+      The settings tabs, including the long one.
+
+      `.setbody` scrolls INSIDE the sheet — the sheet is capped at 86vh — so a
+      page screenshot at 900px tall can never show the bottom of a long tab
+      however `fullPage` is set. Usage is the first tab long enough for that to
+      matter: its chart and its "what is being used the most" ranking are both
+      below the fold, so the only capture of them was no capture at all, and a
+      visual standard that says "run it and look at it" cannot be met by
+      looking at the top third.
+
+      So the scroll container is scrolled and shot again. Two honest images
+      rather than one CSS-mutated one: overriding max-height to fit everything
+      would photograph a layout that does not exist.
+    */
+    if (size === 'desktop') {
+      await page.locator('[data-settings]').click()
+      await page.waitForTimeout(400)
+      for (const tab of ['models', 'behaviour', 'governance'] as const) {
+        await page.locator(`[data-setting="${tab}"]`).click()
+        await page.waitForTimeout(450)
+        await shoot(`settings-${tab}`)
+        // A string, not a closure: this file has no DOM lib and `document` is
+        // not in scope at compile time. Playwright evaluates either.
+        const scrolled = await page.evaluate(`(() => {
+          const el = document.querySelector('#settings .setbody')
+          if (el === null) return false
+          const box = el.closest('.sheet, .settings') || el
+          const target = box.scrollHeight > box.clientHeight ? box : el
+          if (target.scrollHeight <= target.clientHeight + 40) return false
+          target.scrollTop = target.scrollHeight
+          return true
+        })()`)
+        if (scrolled) {
+          await page.waitForTimeout(400)
+          await shoot(`settings-${tab}-lower`)
+        }
+        /*
+          The middle, for a tab that is four sections long (#54).
+
+          Top and bottom photograph the lessons and the agents and skip the two
+          in between entirely — and "what it wants" is the section with the
+          only irreversible controls on the page. A capture set that cannot see
+          the buttons cannot judge them.
+        */
+        if (tab === 'governance' && scrolled) {
+          await page.evaluate(`(() => {
+            const el = document.querySelector('#settings .setbody')
+            if (el === null) return
+            const box = el.closest('.sheet, .settings') || el
+            const target = box.scrollHeight > box.clientHeight ? box : el
+            target.scrollTop = Math.round(target.scrollHeight * 0.38)
+          })()`)
+          await page.waitForTimeout(400)
+          await shoot(`settings-${tab}-middle`)
+        }
+      }
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(300)
+    }
+
+    /*
       Hover states, captured deliberately.
 
       Iteration 4 added pointer-tracked tilt and a specular highlight, and a
@@ -117,14 +237,14 @@ for (const [size, opts] of SIZES) {
       }
     }
 
-    // The desk: a whole mode, and one a portfolio capture cannot show.
-    if (size === 'desktop') {
-      await page.locator('[data-go="desk"]').click()
-      await page.waitForTimeout(700)
-      await shoot('desk')
-      await page.locator('[data-go="portfolio"]').first().click()
-      await page.waitForTimeout(500)
-    }
+    /*
+      The desk was captured here. It is gone (#77) — Grant called it redundant
+      and everything on it now has a home in a project section.
+
+      The collapsed rail takes its place, because #76 changed what collapsing
+      means: it used to leave a 74px icon strip and now it leaves nothing, and
+      that is a state worth having a picture of.
+    */
 
     // Into a project, which is the shared-element transition. Everything after
     // this — People, contacts, documents — only exists inside one.
@@ -135,11 +255,48 @@ for (const [size, opts] of SIZES) {
       the next one there. Board is what the "project" capture is of, so say so
       rather than depending on whatever the last run happened to leave behind.
     */
-    await page.locator('[role="tab"][data-tab="overview"]').click()
+    await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
     await shoot('project')
 
+    /*
+      And the panels board, which has had no capture since #25 (#156).
+
+      The Overview is the map now and the board is behind a toggle, so the
+      design record lost the screen entirely — which is how `verify:arrangement`
+      came to be failing against it for a morning without anybody seeing.
+      It also carries the new How it got here panel, and a panel nobody has
+      looked at is a panel nobody has judged.
+    */
+    await page.locator('[data-overview="panels"]').click()
+    await page.waitForTimeout(900)
+    await shoot('project-panels')
+    /*
+      And the lower half, where How it got here sits (#156).
+
+      A panel below the fold in every capture is a panel nobody has looked at,
+      which is how the settings sheet went months with three defects on it.
+    */
+    await page.evaluate(`window.scrollTo(0, document.body.scrollHeight)`)
+    await page.waitForTimeout(600)
+    await shoot('project-panels-lower')
+    await page.evaluate(`window.scrollTo(0, 0)`)
+    await page.waitForTimeout(300)
+    await page.locator('[data-overview="map"]').click()
+    await page.waitForTimeout(500)
+
     if (size === 'desktop') {
+      /*
+        The document hover lives on the DOCUMENTS tab now (#25).
+
+        The Overview became the project map, so the board's Documents panel —
+        which is what this used to hover over — is not on that screen any more.
+        The capture went on clicking Overview and then waiting thirty seconds
+        for a card that had moved one tab away, and reported a timeout rather
+        than the change that caused it. Go where the documents are.
+      */
+      await page.locator('[data-tab="documents"]').click()
+      await page.waitForTimeout(600)
       const doc = page.locator('[data-doc="0"] .page')
       // Scroll it into view first: boundingBox() happily returns coordinates
       // for something below the fold, so the capture came back showing the top
@@ -168,7 +325,7 @@ for (const [size, opts] of SIZES) {
         tab, so Grant asked for it gone — "obviously, they don't duplicate
         things". A capture script is where a removed selector announces itself.
       */
-      await page.locator('[role="tab"][data-tab="contacts"]').click()
+      await page.locator('[data-tab="contacts"]').click()
       await page.waitForTimeout(500)
       await shoot('contacts-section')
       /*
@@ -189,7 +346,15 @@ for (const [size, opts] of SIZES) {
       */
       await page.locator('[data-settings]').first().click()
       await page.waitForTimeout(500)
-      for (const tab of ['team', 'behaviour', 'connections', 'channels', 'models', 'appearance']) {
+      for (const tab of [
+        'team',
+        'behaviour',
+        'governance',
+        'connections',
+        'channels',
+        'models',
+        'appearance',
+      ]) {
         await page.locator(`[data-setting="${tab}"]`).click()
         await page.waitForTimeout(400)
         await shoot(`settings-${tab}`)
@@ -225,7 +390,7 @@ for (const [size, opts] of SIZES) {
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
 
-    await page.locator('[role="tab"][data-tab="team"]').click()
+    await page.locator('[data-tab="team"]').click()
     await page.waitForTimeout(600)
     await shoot('team-board')
 
@@ -254,7 +419,7 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('chat')
 
-    await page.locator('[role="tab"][data-tab="documents"]').click()
+    await page.locator('[data-tab="documents"]').click()
     await page.waitForTimeout(500)
     await shoot('documents')
     // The talk action on a document, and where it lands.
@@ -264,37 +429,246 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(600)
     await shoot('talk-about-a-document')
 
-    await page.locator('[role="tab"][data-tab="overview"]').click()
+    /*
+      IMPORT TO PROJECT, open (#28).
+
+      Captured because the sheet is the whole of that Issue's user-facing half,
+      and §14A's loop is render, capture, LOOK. A form nobody has looked at is a
+      form with a 12px label and a select that zooms the page on focus, and
+      neither of those shows up in any check.
+
+      Guarded: the mock has one output with an id, and a data shape that grows
+      an unimportable row later should not fail the capture run.
+    */
+    await page.locator('[data-tab="team"]').click()
+    await page.waitForTimeout(400)
+    const outputsTab = page.locator('[data-sub="outputs"]').first()
+    if ((await outputsTab.count()) > 0) {
+      await outputsTab.click()
+      await page.waitForTimeout(400)
+    }
+    /*
+      PREVIEW, before the decision (#28).
+
+      Captured first and closed again, because the specification draws
+      Preview / Discuss ABOVE the import gate and a still of the gate says
+      nothing about whether an output can be read before it is approved. The
+      tile is a button now; this is the picture that proves the viewer opens
+      on something that is not in the gallery yet.
+    */
+    /*
+      THE DROP TARGET (#126).
+
+      Triggered with a synthetic `dragenter` carrying a DataTransfer whose
+      types include Files, because Playwright cannot drag from the desktop and
+      the overlay is the half of this feature a person sees. A capture of it is
+      the only way to find out whether "Drop it here" reads as an invitation or
+      as an error.
+    */
+    await page.evaluate(`(() => {
+      const dt = new DataTransfer()
+      dt.items.add(new File(['x'], 'a.pdf', { type: 'application/pdf' }))
+      document.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt, bubbles: true }))
+    })()`)
+    await page.waitForTimeout(400)
+    await shoot('drop-a-file')
+    await page.evaluate(`document.dispatchEvent(new DragEvent('dragleave', { bubbles: true }))`)
+    await page.waitForTimeout(300)
+
+    const previewBtn = page.locator('[data-out-open]').first()
+    if ((await previewBtn.count()) > 0) {
+      await previewBtn.click()
+      await page.waitForTimeout(900)
+      await shoot('preview-an-output')
+      await page.locator('#viewer .close').first().click()
+      await page.waitForTimeout(500)
+    }
+
+    const importBtn = page.locator('[data-import]').first()
+    if ((await importBtn.count()) > 0) {
+      await importBtn.click()
+      await page.waitForTimeout(700)
+      await shoot('import-to-project')
+      await page.locator('[data-import-close]').first().click()
+      await page.waitForTimeout(400)
+    }
+
+    /*
+      RECENT ACTIVITY (#14).
+
+      It had no capture at all, which CLAUDE.md names as its own class of
+      defect: a screen nothing photographs is a screen nobody has judged. It is
+      also the screen #14 was filed about — on the live office it was forty
+      identical rows of the noticing pass, and 0412 folds those.
+
+      What a SANDBOX capture can show is the layout and the empty state: the
+      prototype has no lately payload behind it, so the folded row with its
+      count is not visible here and is proved by `npm run verify:lately`
+      against the real database instead.
+    */
+    const latelyBtn = page.locator('[data-go="lately"]').first()
+    if ((await latelyBtn.count()) > 0) {
+      await latelyBtn.click({ force: true })
+      await page.waitForTimeout(900)
+      await shoot('recent-activity')
+      /*
+        And back into the project, because everything after this expects to be
+        on one. The first version of this capture left the run on the activity
+        screen and the next line waited thirty seconds for a tab that no longer
+        existed — a capture that moves the page has to put it back.
+      */
+      const backIn = page.locator('.navitem.proj[data-open], .project[data-open]').first()
+      if ((await backIn.count()) > 0) await backIn.click({ force: true })
+      await page.waitForTimeout(1200)
+    }
+
+    await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
 
     /*
-      Wellness is the project with nothing in it, so it is the only place the
-      empty states can actually be seen. Capturing them on Legacy would capture
-      the sections that are full.
-    */
-    if (size === 'desktop' && scheme === 'light') {
-      await page.locator('[data-switch-open]').click()
-      await page.waitForTimeout(300)
-      await page.locator('[data-switch-menu] [data-open="wellness"]').click()
-      await page.waitForTimeout(700)
-      for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
-        await page.locator(`[role="tab"][data-tab="${s}"]`).click()
-        await page.waitForTimeout(350)
-        await shoot(`empty-${s}`)
-      }
-      await page.locator('[data-switch-open]').click()
-      await page.waitForTimeout(300)
-      await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click()
-      await page.waitForTimeout(700)
-    }
+      Governance on a phone (#54).
 
-    for (const section of ['tasks', 'contacts', 'sources', 'activity']) {
-      await page.locator(`[role="tab"][data-tab="${section}"]`).click()
+      The only settings capture taken at 390px, and it is here because it is
+      the settings tab with the most stacking to get wrong: four sections, a
+      three-column agent grid, and every row ending in buttons. The rest of the
+      settings sheet is captured at desktop only, which is a gap this Issue
+      does not widen but does prove worth closing.
+    */
+    if (size === 'phone') {
+      await page.locator('[data-settings]').first().click()
+      await page.waitForTimeout(500)
+      /*
+        Connections on a phone, which had never been captured (#158, §15, §35).
+
+        The comment above says the rest of the settings sheet is desktop-only
+        and calls it "a gap this Issue does not widen but does prove worth
+        closing". The cross-screen wall closed it by drawing the hole: two
+        missing cells, both of them Connections, which is the surface with the
+        credential forms on it and the one §35 asks to be exercised hardest.
+
+        One tab rather than all seven. The wall wants a representative, not an
+        archive, and Connections is the one whose cards stack worst.
+      */
+      await page.locator('[data-setting="connections"]').click()
+      await page.waitForTimeout(500)
+      await shoot('settings-connections')
+      await page.locator('[data-setting="governance"]').click()
+      await page.waitForTimeout(500)
+      await shoot('settings-governance')
+      await page.evaluate(`(() => {
+        const el = document.querySelector('#settings .setbody')
+        if (el === null) return
+        const box = el.closest('.sheet, .settings') || el
+        const target = box.scrollHeight > box.clientHeight ? box : el
+        target.scrollTop = Math.round(target.scrollHeight * 0.45)
+      })()`)
+      await page.waitForTimeout(400)
+      await shoot('settings-governance-middle')
+      await page.evaluate(`(() => {
+        const el = document.querySelector('#settings .setbody')
+        if (el === null) return
+        const box = el.closest('.sheet, .settings') || el
+        const target = box.scrollHeight > box.clientHeight ? box : el
+        target.scrollTop = target.scrollHeight
+      })()`)
+      await page.waitForTimeout(400)
+      await shoot('settings-governance-lower')
+      await page.locator('#settings .close').click()
+      await page.waitForTimeout(400)
+    }
+    await page.locator('[data-switch-open]').click()
+    await page.waitForTimeout(300)
+    await page.locator('[data-switch-menu] [data-open="wellness"]').click()
+    await page.waitForTimeout(700)
+    for (const s of ['documents', 'tasks', 'contacts', 'sources']) {
+      await page.locator(`[data-tab="${s}"]`).click()
+      await page.waitForTimeout(350)
+      await shoot(`empty-${s}`)
+    }
+    await page.locator('[data-switch-open]').click()
+    await page.waitForTimeout(300)
+    await page.locator('[data-switch-menu] [data-open="legacy-coaching-course"]').click()
+    await page.waitForTimeout(700)
+
+    for (const section of ['tasks', 'contacts', 'sources']) {
+      await page.locator(`[data-tab="${section}"]`).click()
       await page.waitForTimeout(500)
       await shoot(section)
     }
 
-    await page.locator('[role="tab"][data-tab="documents"]').click()
+    /*
+      Signed-in sites (#135), which nothing else can photograph.
+
+      The block draws only when the project HAS a session, and the page will
+      never invent one: an invented signed-in session is a claim that the
+      office holds a credential for a site, and a screenshot of that would be
+      believed. So the demonstration rows are injected HERE, in the capture
+      harness, where they cannot reach a person -- and a screen with no capture
+      is a screen nobody is watching, which this repository has paid for once
+      already in the same week.
+    */
+    // Strings, not closures: this file has no DOM lib, so `window` and
+    // `document` are not names at compile time. Playwright evaluates either.
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      if (w === undefined) throw new Error('the capture door is not open')
+      const slug = 'legacy-coaching-course'
+      const hour = 3600000
+      w.browserSites[slug] = [
+        { site: 'suppliers.example.com',
+          purpose: 'Read the trade price list every Monday morning.',
+          state: 'live', has_credential: true,
+          last_alive_at: new Date(Date.now() - 2 * hour).toISOString() },
+        { site: 'portal.example.org',
+          purpose: 'Check the accreditation renewal dates each quarter.',
+          state: 'needs_sign_in', has_credential: false, last_alive_at: null },
+      ]
+      w.browserSeen[slug] = [
+        { at: new Date(Date.now() - 2 * hour).toISOString(), verb: 'read',
+          url: 'https://suppliers.example.com/prices', ok: true, detail: 'read', ms: 4200 },
+        { at: new Date(Date.now() - 26 * hour).toISOString(), verb: 'shot',
+          url: 'https://suppliers.example.com/prices', ok: false,
+          detail: 'the screenshot came back 500', ms: 900 },
+      ]
+      w.render()
+    })()`)
+    await page.waitForTimeout(400)
+    /*
+      Scrolled to, not merely drawn.
+
+      The first capture put this block a long way below a 900px fold, which is
+      the same as no capture at all -- CLAUDE.md's own rule, learned on the
+      history panel two days ago.
+    */
+    await page.evaluate(
+      `(() => { const el = document.querySelector('.bsites');
+                if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
+    )
+    await page.waitForTimeout(400)
+    await shoot('sources-signed-in')
+
+    /*
+      Project Settings, all four panes (#36).
+
+      Every one, not a representative one. `verify:layouts` walked seven
+      project tabs for weeks and had never opened the office settings sheet;
+      pointed at one tab of it, it found three defects in the first run. An
+      audit that has never opened a surface says nothing about it, and four
+      panes is four surfaces.
+
+      The pane fetches its own payload, so the wait is longer than a tab
+      switch: the page draws "Reading the office…" first and capturing that
+      would be capturing a spinner.
+    */
+    await page.locator('[data-tab="settings"]').click()
+    await page.waitForTimeout(900)
+    for (const pane of ['people', 'automations', 'labels', 'project']) {
+      await page.locator(`[data-setpane="${pane}"]`).click()
+      await page.waitForTimeout(450)
+      await shoot(`settings-project-${pane}`)
+    }
+
+    await page.locator('[data-tab="documents"]').click()
     await page.waitForTimeout(500)
 
     // And a document, which is the second one.

@@ -193,6 +193,8 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
                   : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
               ],
               fallback: plain,
+              // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
+              job: { jobId: job.jobId, correlationId: job.correlationId },
               words: 50,
             })
           : plain,

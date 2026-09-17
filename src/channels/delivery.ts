@@ -69,6 +69,17 @@ export interface SendRequest {
   readonly targetRef: string
   readonly threadRef: string | null
   readonly dedupeKey: string
+  /**
+   * What this message is about, so a transport can offer feedback on it.
+   *
+   * Passed through rather than left to the caller because of #59. Grant asked
+   * for thumbs up and down on his Telegram messages; the reply path was fixed
+   * and four other senders still had none, and patching each is how the next
+   * sender ships without them too. A transport that can default the buttons
+   * needs the correlation, and this is the only place that already has it.
+   */
+  readonly correlationId: string | null
+  readonly purpose: DeliveryPurpose
   readonly body: unknown
 }
 
@@ -173,6 +184,8 @@ export class DeliveryService {
         targetRef: request.targetRef,
         threadRef: request.threadRef ?? null,
         dedupeKey: request.dedupeKey,
+        correlationId: request.correlationId ?? null,
+        purpose: request.purpose,
         body: request.body,
       })
     } catch (error) {

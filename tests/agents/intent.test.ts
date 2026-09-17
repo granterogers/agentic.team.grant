@@ -232,3 +232,56 @@ describe('the productive imperatives', () => {
     expect(classifyIntent('Research the coaching market').intent).toBe('light_investigation')
   })
 })
+
+describe('a delegation governs its own span (#231)', () => {
+  /*
+    The defect: three rules fired on one sentence, two of them on words inside
+    the delegated content, and the reading came back contested —
+    `routing_decisions_unconfident_stays_small` then capped the roster at one
+    person, so a request that plainly needed two specialists reached one.
+  */
+  it('is a confident assignment when the mood words are inside the delegation', () => {
+    const c = classifyIntent(
+      'I need you to find out what the three big competitors charge and then tell me what that means for where we position ourselves.',
+    )
+    expect(c.intent).toBe('assignment')
+    expect(c.confident).toBe(true)
+    expect(c.considered).toEqual(['assignment'])
+  })
+
+  it('is not made a suggestion by a modal inside the delegated content', () => {
+    const c = classifyIntent(
+      'I need you to find what the market charges, work out what that does to our margin, and say how we should announce whatever we decide.',
+    )
+    expect(c.intent).toBe('assignment')
+    expect(c.confident).toBe(true)
+  })
+
+  it('keeps the rule that fired in the audit trail rather than dropping it', () => {
+    const c = classifyIntent('I need you to tell me our gross margin on the middle tier.')
+    expect(c.matched).toContain('i-need-you-to')
+    expect(c.matched.some((m) => m.startsWith('tell-me'))).toBe(true)
+    expect(c.considered).toEqual(['assignment'])
+  })
+
+  it('does not cap how urgent the delegated thing is', () => {
+    // Anything at or above `assignment` survives the span. A delegation says
+    // the message is not a question; it says nothing about the deadline.
+    const c = classifyIntent('I need you to send the deck right now')
+    expect(c.intent).toBe('assignment')
+    expect(c.considered).toContain('direct_command')
+  })
+
+  it('CONTROL: a question BEFORE the delegation is still the message own', () => {
+    // Position decides, not presence. This one is legitimately contested and
+    // must stay that way, or the fix has simply silenced the question rule.
+    const c = classifyIntent('What is our margin on the middle tier? I need you to check.')
+    expect(c.confident).toBe(false)
+    expect(c.considered).toContain('question')
+  })
+
+  it('CONTROL: a plain question with no delegation is untouched', () => {
+    const c = classifyIntent('Tell me our gross margin on the middle tier.')
+    expect(c.intent).toBe('question')
+  })
+})

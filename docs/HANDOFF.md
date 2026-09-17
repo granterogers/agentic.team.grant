@@ -9,18 +9,783 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
-> ## State as of 2026-09-10
+> ## State as of 2026-09-17 — the twelve-hour backlog campaign
+>
+> Grant: *"please continue until all open issues are closed .. to my count
+> there are around 71 left"*, and *"remove these issues — #113/#114/#136/#137/
+> #138 as closed .. we can come back to this kind of things"*.
+>
+> **71 open at the start. 21 at the end.** Fifty closed: half by building the
+> thing, half by verifying it was already built and saying so with evidence.
 >
 > | | |
 > |---|---|
-> | Tests | 859 passing · `verify:hq` 40/40 · `verify:ui` 36/36 · `verify:talk` 34/34 |
+> | Tests | **1,526 passing across 81 files** · migrations **420** |
+> | Built | #272 (part) the office asks and Grant answers · #28 Preview · #121 slash and j/k · #14 Recent activity · #21 the build diary's retention · #178 the Notion teardown · #252 unanimity over a coin · #244 the insisting dequeue · #253 due dates and assignees · #126 drop a file · #242 the set-aside gate · #187 a channel per project · #130 structure before prose · #13 the OpenAPI document |
+> | Verified and closed | #35 #29 #25 #12 #75 #223 #224 #171 #237 #176 #169 #170 #174 #175 #188 #229 #271 |
+> | Closed at his instruction | the five proposal menus #113 #114 #136 #137 #138, plus #23 #40, and their children #139–#146 and #159–#168 |
+> | New suites | `verify:lately` 8/8 · `verify:upload` 10/10 · `slack:add-scope` |
+> | New checks | `verify:controls` now fails on a control a mouse can press and Tab cannot reach · `verify:hq` reads the OpenAPI document back · `verify:slack` asserts every project has a channel · `verify:import` proves structure beats prose |
+> | New ADR | **0034** — the build diary's bucket stays public, and the four things that make that acceptable. **If the repository is ever made public, that ADR is void.** |
+>
+> ### After the campaign: #272, and the half of ADR-0018 that was never built
+>
+> `check:callers` had put `public.hq_approve_tool`, `public.hq_decline_tool`
+> and `public.hq_revoke_tool` in its baseline. They are not three stray
+> wrappers — they are the human half of ADR-0018, and **an agent could ask
+> Grant for a capability and Grant had nowhere to answer.** All fourteen
+> settled requests on record were settled by a script.
+>
+> Migration **0420** adds `requests` to `app.hq_governance`; `hq-api` gains
+> `approve_tool`, `decline_tool` and `revoke_tool`; the Governance page gains
+> *What it is asking for*, between *What it wants* and *What it noticed*.
+> `app.expire_temporary_staff` and `app.expire_undo_offers` are wired into the
+> worker's boot sweep beside `mcp_expire_codes`. **Baseline 40 → 33.**
+>
+> Four defects came out of DRIVING it, none of them visible from reading:
+> `decline_tool` refuses a decline with no reason; the page rendered "0 open"
+> over a populated database because `settings.js` did not carry the new key;
+> the capability brief prepended to every answer had grown to 5,183 characters
+> against its 4,000 ceiling, 2,027 of them registry essays; and the tool chip
+> vanished on a settled card.
+>
+> ### What tonight found that nobody was looking for
+>
+> - **Grant's Recent activity page was forty identical rows.** 285 of one day's
+>   372 events were the noticing pass. Everything else the office did was below
+>   a fold nobody reaches (#14).
+> - **Nine document cards shared one name** — the audit read a page
+>   illustration's inline stylesheet as the control's label, de-duplicated them
+>   into one, and had never pressed eight of the nine (#121).
+> - **`office.rename_channels` has had no handler since 0073.** Eleven jobs,
+>   all cancelled. Renaming a project has never renamed its channel (#187).
+> - **The Slack app-configuration token died on 10 September** and its
+>   single-use refresh token with it, so the app's scopes and events cannot be
+>   changed from here at all (#270).
+> - **123 jobs in a week are real by `jobs.is_fixture` and harness by
+>   `app.harness_job`**, and the day's counts on his dashboard were reading the
+>   flag (#14).
+> - **`npm run space` reported 0px of phone furniture** — a perfect score from
+>   a measure that had matched nothing since #25 turned the Overview into a map
+>   (#188).
+>
+> ### What is left, and why
+>
+> **Twenty-one issues.** Four need Grant's hands and cannot be closed from
+> here: **#18** and **#213** (rotate two credentials), **#270** (re-issue the
+> Slack configuration token, then two clicks to reinstall), and the human half
+> of the browser work. The rest are either large new capability asks he filed
+> on 15–16 September (**#257–#265**) or substantial single features
+> (**#128** handoff, **#129** cross-project memory, **#133** replay, **#41**
+> the deep systems test, **#172** Gmail, **#15** approval policy, **#16**/
+> **#135** browser agents, **#272** the caller baseline).
+>
+> **#16, #135 and #261 share one blocker that is Grant's to decide**: a browser
+> session needs a long-lived container, and nothing in a £0/month architecture
+> of edge functions and Postgres can host one. That is a cost decision, not an
+> engineering one.
+
+> ## State as of 2026-09-16 — the issue-closing stint
+>
+> Grant, after the eight-hour run closed: *"continue for another 4 hours..
+> closing all open issues that you can"*. **Twenty-two closed, two filed.**
+>
+> | | |
+> |---|---|
+> | Tests | **1,478 passing across 78 files** · migrations **409** |
+> | Closed | #180 #267 #246 #247 #248 #249 #254 #255 #256 #96 #36 #186 #269 #45 #251 #250 #245 #236 #10 #221 (and #121 advanced) |
+> | Filed | **#270** (the `channels:join` scope, one action only Grant can take) · **#271** (a project's picture is a thumbnail, not a cover) |
+> | **#221** | **451 project marks from lucide**, ISC, selected by domain and generated by `scripts/build-icons.ts` so the selection is data Grant can change. Searchable, browsable by sixteen categories, auto-assigned on create from a name match, and one tab stop with arrow keys inside it |
+> | **#269** | the roster went from **276 rows to 8** — 268 were retired harness specialists and the table grew by three a run. 16 of 19 foreign keys restrict, so only a specialist who did nothing comes out |
+> | **#236** | `verify:drains` proves it fires, and **0406 gave the office a word for `waiting`** — failed, stalled, in_flight and finished are all about a job that STARTED |
+> | **#10** | **ADR-0032**: a PDF cover is a view, not an artefact. None of the three candidate places was right, because storing one was the wrong question |
+> | New checks | `npm run check:icons` (in the gate) · `verify:keyboard` 24 → **28** · `verify:drains` 4 → **8** · `npm run space` walks the home board |
+> | Three visual defects | all found by **opening the PNG**: chips that never rendered, a 13.3px search input that would zoom iOS Safari, and 33×23 touch targets against a 44px floor |
+> | One pre-existing bug | `let ageTimer` below the hoisted function using it — the studio printed *"could not draw this screen"* at every boot and recovered on the next draw, so nothing had ever seen it |
+>
+> ## State as of 2026-09-16 — the second eight-hour run
+>
+> `docs/AUTONOMOUS-RUN.md` carries the live table of what this run has
+> delivered and what it has not reached. **Read that before this section**, and
+> read this one for what changed about the PRODUCT rather than about the run.
+>
+> | | |
+> |---|---|
+> | Tests | **1,462 passing across 75 files** · migrations **400** |
+> | New suites | `verify:rules` 26/26 · `verify:routing-quality` 13/13 · `verify:extract` 11/11 |
+> | Restored | `verify:arrangement` 22/22 — it had been failing since #25 landed, so ADR-0021's guarantee was unverified for a morning |
+> | **#25** | the project dashboard is a living map — a derived graph, a pannable plane, persisted placement and a side panel. The item Grant named first when he lifted the hold on it |
+> | **#147** | a correction becomes a standing rule on **one press**, and never without one. `readCorrection` is deterministic — no model call decides what a correction is, because the expensive direction is offering to make a rule out of an ordinary instruction. **ADR-0030**; `npm run verify:rules` 24/24 |
+> | **#124** | density is a control, and **appearance moved to the office** (0400). ADR-0021: a preference about how the work is shown is not the browser's. All four values, not just the new one |
+> | **#37** | search can ask the graph — one `related_to` filter that asks `app.relations_of`, so by agent, by contact, by source and by collection are one mechanism |
+> | **#130** (part) | the office can pull the tasks out of a document and create them, with one undo for the batch. `tasks_extracted` had been a declared shape with no rows since 0272 |
+> | **#131** | the plan Grant approved is the import performed — the stored plan is executed rather than a second model call |
+> | **#127** | a model is chosen on what it has actually done, per kind of work. Quality may only DEMOTE, so no demotion can cause a paid call |
+> | **#123** | an empty section says so, and the check that says so can now fail |
+> | what #147 cost to get right | four latent defects in the press path, every one of them invisible from reading the migration and every one found by DRIVING it: a state word the table forbids, a jsonb assigned to a uuid, a scope the offer accepted and the enum does not have, and three targets stored where the constraint permits one |
+>
+> ## State as of 2026-09-13
+>
+> | | |
+> |---|---|
+> | Tests | **1,007 passing across 61 files** · `verify:ui` **60/60** · `verify:design` 21/21 · `verify:slack` **70/70** · `verify:settings` **37/37** · `verify:layouts` **68 states, 0 findings** · `verify:wired` **64 controls across 21 screens, none dead** · `verify:controls` **289 desktop / 307 phone / 100 team, 0 findings** |
+> | The conversation | `npm run verify:conversation-all` — **218 checks in 4m19s**: history 50, echo 13, equivalence 16, transport 19, chat 37, dictation 38, channels 22, access 23 |
+> | End-to-end sweep | **570 checks, 431 controls pressed** — `docs/testing/e2e-2026-09-11.md` (#41) |
+> | Identity | `verify:identity` **29/29** — project name resolution works, aliases seeded (0179) |
+> | Restore | `backup:rehearse` **9/9**; a fresh archive at 0180, 24,822 rows, 71 tables |
+> | Free tier | measured, not guessed: **48 MB of 500 MB** database, **41 MB of 1 GB** storage (`public.free_tier_headroom()`) |
+> | The conversation's growth | **25.8 messages a day** across four surfaces at ~495 bytes each — about **fifty years** of room at that rate (`public.conversation_growth()`, on the Usage page). ADR-0026 |
 > | Office health | 0 real failures in 24h of 121 jobs (`app.office_health`) |
-> | Migrations | 170 applied |
+> | Migrations | **353 applied** |
 > | Trunk | `main` exists and carries everything — **but the repository default is still `claude/new-session-o2oklu`** (#7, one click, needs Grant) |
 > | Current milestone | **M0 — visual prototype.** Not started; assessment and GitHub scaffolding done |
 >
 > **Waiting on Grant:** the default-branch click (#7) and rotating a leaked
 > GitHub PAT (#18). Neither blocks development.
+>
+> ## VERDICT: GREEN — 2026-09-15. The backend campaign is over.
+>
+> | | |
+> |---|---|
+> | **Candidate** | commit `63c5a26`, worker **v391**, **375** migrations |
+> | **Model** | `openai/gpt-oss-120b`, with two paid fallbacks and the free tier behind them |
+> | **Verdict** | `docs/testing/backend-acceptance-verdict-2026-09-15.md` |
+> | **Next phase** | **Grant human beta.** Real usage is now the primary source of findings. |
+>
+> Four final examinations, each committed unrun against its own freeze, none
+> recycled. Three found real systemic defects; the fourth found none and scored
+> **17/18**, its one failure an expectation the session itself wrote. Gate
+> **19/20**, the single red being #252, a filed stochastic check that fails on
+> the pre-#249 baseline too.
+>
+> **What GREEN does not claim**, all recorded in the verdict and the ledger:
+> #242 is open as a caveat rather than a bar; four advertised mutations are
+> recognised and argument-extracted but never canonically executed by a suite,
+> because executing them would break the standing test rules; a task's due date
+> is representable and unextracted (#253); #250 and #252 are harness items.
+>
+> **Every genuine failure found in beta becomes a permanent regression.** That
+> is the whole mechanism now — no further autonomous testing campaign.
+>
+> ## The office runs on a paid model as of 2026-09-15 (ADR-0029)
+>
+> Grant funded the OpenRouter account and asked the office off the free tier.
+>
+> | | |
+> |---|---|
+> | Model | **`openai/gpt-oss-120b`**, $0.037 / $0.170 per million tokens |
+> | Fallbacks | `qwen/qwen3.7-flash` (20), `mistralai/mistral-small-3.2-24b-instruct` (30), free models (100) |
+> | Cost | **$0.0082 a day** at the busiest measured real day — about **$0.25/month**. $10 on the account is ~1,200 days |
+> | Guards | none removed. §11's four layers now compare against `providers.max_price_prompt`, `max_price_completion` and `max_cost_per_call_usd`, all defaulting to **0** |
+> | Verified | one real router request: gpt-oss-120b, $0.00010472, correct on a two-part instruction · one full office turn, 5 calls, $0.000573 · `verify:router` **14/14** |
+> | Back to free | `update public.providers set free_only = true, max_price_prompt = 0, max_price_completion = 0, max_cost_per_call_usd = 0 where provider = 'openrouter'` |
+>
+> **Which model is tried first is now a decision, not alphabetical order** —
+> `provider_models.priority`, 0373. That ORDER BY lived in three places and
+> changing one of them sent the first real paid request to three free models.
+>
+> ## Campaign Three — candidate frozen, and now historical
+>
+> **State: ORANGE, procedurally.** No known backend or intelligence defect
+> stands between Grant and daily use. GREEN is withheld only because the final
+> unseen corpus has not run.
+>
+> | | |
+> |---|---|
+> | **Candidate build** | commit `6de6dfc`, worker **v364**, **372** migrations — `docs/testing/candidate-green-build.md`. **Preserved as the tag `candidate-green-free-v364`; no longer what the office runs** (see above) |
+> | **Freeze check** | `git diff 6de6dfc HEAD -- src/ supabase/ migrations/` must be empty |
+> | **Final corpus** | `scripts/sessions/hostile.ts`, 18 turns, committed unrun at `4743021` |
+> | **Blocked by** | #239 — the day's free model quota; every job fails at the breaker |
+>
+> The provenance work took two passes and the second is the one to read. There
+> are **three** values, not two:
+>
+> | | needs | example |
+> |---|---|---|
+> | supported POSITIVE fact | the source read, and the answer in it | "the review is Thursday" |
+> | supported ABSENCE | the source read, and nothing in it | "there are no meetings Thursday" |
+> | NOT CHECKED | nothing at all | "I have no record of one" |
+>
+> Collapsing the last two was wrong in both directions at once — *"the diary is
+> empty"* passed while the office had never opened it, and *"there is nothing
+> in our documents"* was forbidden after a search that ran and found nothing.
+> A third permission fell out of the fix: a search is not a census, so a COUNT
+> needs a complete source while an absence needs only a consulted one.
+>
+> New since: `verify:recovers` (17/17, in the gate, needs no model) for the six
+> properties that matter to whoever is waiting — no fabricated success, no
+> duplicate action, no lost mutation, no stranded work, truthful status,
+> coherent state.
+>
+> **Open and deliberate:** #242 (the constraint acknowledgement is a coin flip
+> — the last invariant with only a prompt behind it, and its fix needs live
+> validation that was not available before the freeze) and the "suppose" gap (a
+> figure Grant floats is his words, so only the prompt separates a supposition
+> from a price). Both are probed by the hostile corpus.
+>
+> ## Campaign Three — the first revocation, kept for the record
+>
+> **Read this before the numbers below.** A GREEN verdict was posted on #231
+> and then **withdrawn the same day**. What had been logged as "an invented
+> calendar" turned out, on a proper re-read, to be a systemic provenance defect
+> (#243): the office could not distinguish something that had APPEARED in a
+> conversation from something it had reason to believe was true. Its own honest
+> *"I have nothing on Priya"* became, four turns later, evidence that Priya
+> existed.
+>
+> The architecture is fixed — `src/agents/provenance.ts`, 51 adversarial
+> regressions — but under this campaign's standard a fix is not a verdict. A
+> completely new corpus, unseen and uninfluential, must be committed BEFORE
+> running and run against a frozen implementation. That corpus is
+> `scripts/sessions/unseen.ts`, fourteen turns, committed unrun at `0848ddd`,
+> which is also the freeze. **It has not been run**, because the day's free
+> model quota is gone (#239).
+>
+> So the verdict is ORANGE on procedure rather than on product, and the
+> practical advice is unchanged: beginning human use and UX testing is
+> reasonable. Full reasoning in
+> `docs/testing/backend-acceptance-verdict-2026-09-15.md`.
+>
+> **The three things the fix changed**, each independently broken before:
+>
+> 1. the office's own prose counted as provenance, so a fabrication laundered
+>    every repetition of itself;
+> 2. a claim about what the records CONTAIN was unrefusable — now checked per
+>    SOURCE, so retrieving a document licenses a claim about documents and says
+>    nothing about the diary or the inbox;
+> 3. the handler had no canonical state at all, so *"what projects do we have
+>    open?"* could only be answered from memory. It now gets the live list.
+>
+> **Two gaps deliberately left, and probed by the unseen corpus:** a figure
+> Grant floats in a *"suppose"* is his words and therefore grounded by
+> construction, so only the prompt separates a supposition from a price; and
+> the record check switches off for a domain that WAS consulted, so one
+> retrieved document licenses a total a handful of matches cannot support.
+>
+> ## Campaign Three — the evidence, 15 September
+>
+> **Not finished. This is the state mid-campaign, written so it survives a
+> compaction.** The tracking issue is #231; the standard it is being measured
+> against is `docs/spec/backend-acceptance-2026-09-14.md`.
+>
+> | | |
+> |---|---|
+> | Unit tests | **1,190 passing** |
+> | Migrations | **372 applied** |
+> | Agent x Capability matrix | **96/96 applicable cells proven**, negative control clean (`npm run matrix`) |
+> | Coverage dimensions | **37/37 have at least one case** (`npm run breadth`) — `monetisation` was the last empty one |
+> | Sessions | **250/250 expectations across 59 turns** on the development corpus |
+> | Held-out behavioural corpus | 18 turns in `scripts/sessions/holdout.ts`, committed BEFORE being run. baits 6/6 (3/6 on first contact, under a wording lock), monetisation 3/3, roster 7/9 on first contact |
+> | Routing, held out | `verify:routing-heldout` **21/28**, 11/11 checks, unchanged across the campaign's routing changes |
+>
+> **Product defects found and fixed.** Every one of these reached Grant, or
+> would have:
+>
+> - The office **replaced five facts he had just stated** with figures from an
+>   unrelated document. The prompt said "prefer" the documents and ranked
+>   nothing above them.
+> - Asked about a meeting that never happened it **invented two calendar
+>   entries with clock times**, absorbing three earlier honest "I have nothing
+>   on that" answers as evidence those things existed. Every coherence gate
+>   keys on a claim; this claimed nothing. `fabricatedWhen` now checks times and
+>   dates against what the office was actually given.
+> - **Teaching it a preference failed silently** — stored correctly, then the
+>   confirmation claimed a determinism exemption the record could not support.
+>   Fixed at one site by #237 and left at four others.
+> - *"That is not what I meant at all"* **replayed the instruction being
+>   rejected**, because resolving a contentless message against the thread
+>   reconstructs the last one.
+> - A **delegation's own content was being read as the message's mood**, which
+>   made the reading contested, which capped the roster at one person.
+> - The **subject is a property of the clause**, not the message — one answered
+>   clause was silencing the semantic reader on every other clause.
+> - The **ceiling list was deciding who answers** rather than gating who may be
+>   reached, so the announcement copy went to growth and the compliance audit
+>   went to research.
+> - **Claire was recorded as a convened specialist** on every question that
+>   convened nobody, in the column `npm run measure` counts from.
+> - A **job that ran out of attempts told Grant nothing** — now an impediment,
+>   at all three gates that could swallow an answer.
+>
+> **Open risks, stated rather than closed:**
+>
+> - **#239 — one inference provider on a free daily quota.** It ran out
+>   mid-campaign; eighteen jobs failed in thirty minutes. `app.office_health()`
+>   now reports `cannot_think` (0372) so the outage is visible, but a second
+>   provider is a paid dependency and therefore Grant's decision.
+> - **#240** — the studio does not yet draw `cannot_think`.
+> - **#242** — saying which constraint was set aside is a coin flip: the same
+>   build does it on one run and not the next. Every invariant with a
+>   MECHANISM behind it held on every run; this one has only a prompt.
+> - **#241** — `provider_health` is 40 rows of probe debris and 6 real ones.
+>
+> `npm run gate` cannot be read while the provider is out or the Supabase
+> Management API is throttling: a run during both reported 4/18 in 139 seconds,
+> which is fourteen suites failing fast rather than failing. Re-run it clean
+> before believing any number from it.
+>
+> **Sixteen of the nineteen gate checks were run individually after the
+> provenance fix and all pass** — schema, wrappers, transitions, attests 11/11,
+> knows, reach 9/9, delegation, handoff, cross-interface, identity, tasks,
+> history 50/50, transport, security, dryrun, drains. Plus `verify:failures`
+> 16/16 and `verify:chaos` 29/29. Only `verify:routing-breadth` and
+> `verify:collaborates` need a model and could not run.
+>
+> **Failure recovery has six distinct modes, each with a passing suite:** a
+> provider outage (breaker, `cannot_think`, impediment), a coherence-gate
+> refusal (impediment plus retry with the refusal in hand), an output insert
+> refusal (impediment), a stalled job (`recover_stalled_jobs` to `retrying`,
+> attempts still counting), a delivery failure (bounded retry, Try again,
+> `app.undelivered`), and integration isolation (one down, the others working).
+> The terminal-failure impediment added today is not theoretical: it **fired
+> four times during the real quota outage**.
+>
+> ## Phase 7 — Communications, finished overnight 13–14 September
+
+**#191's eight children are all closed.** One conversation, every surface.
+
+| | |
+|---|---|
+| **#196** dictation | A microphone beside Send. Browser transcription (free); the button says *before* you press it that Chrome sends the audio to Google. One dictation is one message (0089's precedent). No addressing by voice — §5 forbids an adapter deciding. The microphone release is **asserted**, not assumed: `verify:dictation`, 38 checks, counts microphones opened against closed. |
+| **#205 / #200** arrivals and accessibility | "Emma replied" pinned inside the thread, plus one polite live region — deliberately not `role="log"`, which would announce the "Asking the office" placeholder as an answer. Every message carries author, time, addressee and surface as visually-hidden text. `verify:access` grew to 23 checks: every visible control has a name, one `main` landmark, heading order. |
+| **#204** retention | Measured rather than guessed, which is the point. **Nothing needs deleting and most of it could not be** — a job is permanent, so an answer is. The real unboundedness was in the READER: a `coalesce` around a column made `jobs_project_state_idx` unusable and every conversation load read every job in the table. 116ms → 32ms. **ADR-0026.** |
+| **#202** transport failures | Bounded retry (five attempts, 30s doubling to fifteen minutes, in `system_config`), a **Try again** in the thread, and `app.undelivered` with a sentence a person can act on. Nothing ever claims a revoke or a delivery it cannot prove. |
+| **#198** connection controls | Five honest states per surface — never / quiet / carrying / degraded / **unchecked**. Slack and Telegram can now be disconnected, and the answer names what was **not** revoked as clearly as what stopped. |
+| **#197** mobile | The keyboard case, which is where this screen actually failed: composer 208px of 336, thread 51px, newest message hidden. Now 156/168, nav out of the way, thread follows. |
+| **#201** proving it | `verify:equivalence` — the same sentence through four surfaces, asserted as **agreement between them** rather than against an expected value. |
+
+**The two problems it appeared to surface were the harness, not the office —
+corrected the next morning by 0351.** "Telegram is degraded, 21 undelivered"
+was `scripts/poc/gate-3.ts` impersonating Grant as Telegram user 4242 (the
+`gate-%` fixture branch never fires, because `enqueue_inbound` puts the channel
+prefix in front) plus eight orphaned fault injections that both readers counted
+as real because `coalesce(is_fixture, false) = false` over a LEFT join treats
+an unattributable row as a genuine one. **Telegram reads `carrying`; there are
+zero real failed deliveries.** `verify:transport` now asserts the whole reading
+carries no harness traffic, not merely that its own rows are hidden.
+
+**Grant's decision on 13 September, recorded as #70:** Telegram is one bot, the
+chief of staff. The other seven are to be retired; individuals are reached in
+Slack and in the studio. **Done** — 0352 disables the seven with a stated
+reason, points the pager at `chief-of-staff`, and derives `hq_team`'s Telegram
+username from the registry rather than a column.
+
+**Also filed:** #207 — a project screen has one heading, so heading navigation
+reaches nothing. Found by the new check, filed rather than asserted because the
+fix is a design change.
+
+> ## What changed on 2026-09-14 (night)
+>
+> **Disconnecting Google now revokes the grant AT Google (#109, migration
+> 0354).** 0350 did the forget half honestly and could not do more, because
+> Postgres makes no HTTP calls. A `google.revoke` job finishes it: 200 means
+> revoked, 400 `invalid_token` also means revoked (already dead is still dead),
+> anything else is reported as NOT revoked with Google's own words and the
+> Connections panel says to do it by hand.
+>
+> The Issue asked for the local copy to be deleted before the revoke is
+> enqueued. That ordering cannot exist — the endpoint takes the token as its
+> argument — so the token is **parked** under a name nothing reads.
+> `app.vault_secret` gates every read and `googleAccess` asks for
+> `google.refresh_token`, which is gone the moment Disconnect is pressed.
+>
+> ### 🔴 Slack is disconnected and needs Grant — Issue #210
+>
+> **`verify:disconnect` really disconnected Slack**, deleting the bot token and
+> signing secret. The suite called `app.hq_disconnect` outside a transaction
+> for six services that were all refusals when the loop was written; 0350 made
+> Slack and Telegram real, and the loop kept asserting the old refusal.
+>
+> Worse than losing Slack: the dangling vault references made
+> `app.resolve_secret` raise, so **the worker returned http 500 and no duty
+> ran** until the refs were nulled. Slack now degrades alone.
+>
+> Telegram survived by accident — 0350 deletes `telegram.chief_bot_token` and
+> the stored name is `telegram.chief.bot_token`, so that branch has never
+> matched a row and reports success anyway. Filed in #210 as a follow-up.
+>
+> **Grant must reinstall the Slack app** — full steps in #210.
+>
+> Every `hq_disconnect` call in the suite is wrapped now, refusal or not.
+> `verify:disconnect` 30/30, 1,017 tests, worker deployed and draining.
+
+> ## What changed on 2026-09-14 (evening)
+>
+> **The three Behaviour toggles were never broken (#111).** Including *"Only
+> the Chief of Staff messages me"*, the switch behind
+> `telegram.only_chief_speaks`. The audit was pressing the settings sheet's own
+> **Close** button — it sits in `.chead`, so the collector gathers it first —
+> and every control gathered after it still resolved with no box, which
+> Playwright reports as `element is not visible`.
+>
+> Third instance of one shape: `shutDock` (#103) for the dock, `openRail`
+> (#183) for the rail, and now `reopenSheet` for the sheet. *A sweep that
+> presses every control will press the one that hides the others.*
+>
+> A second half was missed by #190: it scoped the COLLECTOR to whatever is in
+> front and left the LOCATOR searching the whole document by label, so "Team"
+> matched the rail's *Call the team* button behind the sheet on six routes.
+>
+> | | before | after #190 | now |
+> |---|---|---|---|
+> | settings, desktop | 12 pressed / 93 unpressable | 12 / 3 | **92 / 0** |
+> | settings, phone | 12 / 75 | 12 / 3 | **92 / 0** |
+>
+> **0 findings on every leg**, and the other routes are unchanged: desktop
+> studio 289/1, team 101/0 and 97/0, phone project 292/3, phone portfolio 13/1.
+>
+> No product change was needed. Two false findings were caught before reaching
+> Grant: the toggles measure 58x52 in a real touch context (not the 50x29 a
+> bare viewport reports), and the report's *"6 inert (12 of those are known
+> stubs)"* was printing the allow-list's size rather than the run's.
+
+> ## What changed on 2026-09-14 (later)
+>
+> **A message that is a list arrives as a list (#209, ADR-0028).** Grant:
+> *"if our paragraph should be separated by bullet points, enumerated bullet
+> points. So a numbered list, just to keep things easy to read and easy to
+> refer to."* The word that matters is **should** — prose stays the default and
+> #186 is narrowed, not reversed. Numbered rather than dashes, because
+> *"easy to refer to"* means replying "do 2 and 4".
+>
+> Three system prompts carried the literal instruction `no bullet points` and
+> now agree with each other. `src/projects/brief.ts` keeps its ban on purpose:
+> a project brief is a document, not a message.
+>
+> **The larger find: #186's paragraph structure had never rendered on the
+> dashboard.** `<p>${esc(m.text)}</p>` puts a whole body in one tag and HTML
+> collapses whitespace, so the model was producing paragraphs, Telegram and
+> Slack were showing them, and the studio ran every reply together into one
+> block for as long as the studio has existed. Three green suites over it.
+>
+> An all-numbered block is now a real `<ol>` — line breaks alone were tried
+> first and the phone capture refuted them, because at 390px the continuation
+> of item 1 wrapped into the column item 2 began in.
+>
+> `verify:chat` **45/45**, up from 37, and the control was run: three of the
+> four new checks go red on **both** device legs with the old rendering back.
+> Two earlier versions of the fourth check were discarded for passing on the
+> phone while the defect was live.
+
+> ## What changed on 2026-09-14
+>
+> **An agent may not say it looked when it did not (#185, ADR-0027).** The P0.
+> Claire told Grant at 03:45 that she had pulled the project records and that
+> the database read showed five active projects; none of the five existed, and
+> the output row said `evidence: inferred` — the office knew nothing had been
+> read and rendered that knowledge as grey caption text underneath the claim.
+>
+> Two gates now, and they are not the same check. `metadataProblems` refuses
+> the combination when the output is CREATED, which is the better place — the
+> job fails while somebody can still act on it. `refuseToSend` refuses it again
+> inside `combinedNotifier`, because `resumeNotifications` rebuilds an output
+> from its stored row and sends it **without passing through creation at all**.
+>
+> The sending gate is deliberately narrower: it refuses the two things that are
+> lies to the reader, and not the judgement pairings, because a guard that
+> silences a usable answer at the last moment gets switched off. A refusal
+> writes a `job_impediments` row through `app.cannot` rather than dropping the
+> output silently — an output that vanishes between `committed` and a channel
+> is indistinguishable from a job that had nothing to say.
+>
+> `evidence: verified` now also needs citations that are ADDRESSES. The first
+> implementation was a whitelist of schemes and it refused `db:projects`; a
+> whitelist fails whenever the office grows a source it did not have, and it
+> fails by refusing to speak. It checks the shape now.
+>
+> `npm run verify:attests` — **10/10**, with the 03:45 message in it verbatim,
+> and two CONTROLs at the end: the identical sentence IS sent when the read
+> actually happened. A gate that refused everything would pass the first eight
+> checks and look exactly like the rule working.
+>
+> **`verify:worker` had three unscoped dequeues left after #184.** Reached only
+> when the office happens to have work queued, and today it did: the
+> concurrency pair claimed a real `drive.watch` job, `runJob` threw
+> `NoHandlerError`, and the suite died four sections early with a duty's work
+> leased to a fixture worker. *A scope that covers most of a file is not a
+> scope.* Now **28/28** on a clean queue.
+>
+> **The Telegram message stopped introducing itself (#208).** Grant, on a
+> screenshot: *"I don't need to see the contact's name and the message. I
+> already have it... just see conversation rather than unnamed."* The sender
+> line and the trailing project footer are gone, `Unnamed` reads as
+> *Conversation*, and the provenance line only appears when it attests
+> something — which keeps #185's protection rather than deleting it.
+>
+> **Telegram is one bot (#70).** Seven staff bots disabled with a stated
+> reason; the pager is Claire's.
+
+> ## What changed on 2026-09-13
+>
+> **Slack stopped sounding like a database (#186).** Grant sent three
+> screenshots of his own workspace: *"how much space is being taken up... It's
+> really not intuitive or acting like it's a human... you'd really need to work
+> on it looking a lot better, making it obvious what things are related."* Four
+> defects, all found by reading his real traffic rather than the source:
+>
+> - a routine read wore a finding's clothes — *"Looked at 1 Drive folder.
+>   Nothing new."* carried a confidence caption and a row of feedback buttons,
+>   270 times in ten days. A deterministic output now carries neither, and the
+>   rule is about honesty rather than space: a message says how much to trust it
+>   exactly when there is something to decide;
+> - nothing was related to anything — thirty-one real questions in
+>   `#ai_team_hq_test` with not one reply attached. An answer now threads under
+>   the message that asked, and is broadcast so threading does not take it off
+>   the channel;
+> - harness traffic was on the floor channel (*"Filed under zz test slack
+>   80106050"*);
+> - and the floor said *"the a question is about evidence"*, because the
+>   vocabulary substitution was translating four §6 class names that are already
+>   English words.
+>
+> **Project Settings exists (#36, ADR-0023).** The last unbuilt child of #25,
+> four panes at `Settings` in every project's rail:
+>
+> - **Team** — who works here, and what each is told here. Absence means
+>   everyone; the table records departures from that default, and the Chief of
+>   Staff cannot be taken off. It takes effect in `pickRoster`.
+> - **Automations** — a standing instruction, addressed to one of the team, on a
+>   schedule, created and paused and removed entirely in the UI. No new table:
+>   `responsibilities` is the automation table and had never had a writer.
+> - **Labels** — the contact labels, editable in the same place as in Contacts.
+> - **Project** — export the whole project as §13's neutral package, and archive
+>   it reversibly.
+>
+> Migrations 0323–0328. Everything is reachable over HTTP and
+> `verify:settings` drives that chain including the browser layer.
+>
+> **Phase 7 has started: #192 is built (0334–0337, ADR-0025).**
+> `app.conversation_history(project_id, limit, before)` returns one project's
+> conversation, both sides, in order, whatever surface each message arrived on,
+> at `hq-api?section=conversation&id=<project>`. `verify:history` drives the
+> whole chain including HTTP, 24/24.
+>
+> **There is no conversations table**, and that is the decision to argue with
+> rather than discover. `public.relations` is six migrations back in CLAUDE.md's
+> trap list — the edge table that never held a row while six columns held the
+> same facts — so the history is DERIVED from `inbound_commands` and `outputs`.
+> The one fact no column expressed was `inbound_commands.project_id`: 57 of 251
+> commands have no job at all, so a fifth of everything Grant has said could not
+> be attributed anywhere. ADR-0025 names the signal that would make a
+> conversations table earn its place: a requirement for more than one thread per
+> project, not a feeling that the model looks thin.
+>
+> Adding one fact took three migrations and two of them were defects caught by
+> the suite. 0336: `enqueue_inbound` resolves the job's project separately, so
+> one exchange could split across two conversations. 0337: it then had to READ
+> the column, which 0335 and 0336 had left write-only — 0298's `web.search` with
+> the sign flipped, and the studio sending from a project page would have been
+> misfiled from the day it shipped. Found by printing where the job actually
+> landed; the earlier check asserted only that command and job AGREED and passed
+> while both pointed at the wrong project. **Agreement is not correctness.**
+>
+> 0334 also creates the reserved **Unnamed** project (ADR-0024) and the
+> protection it needed: `projects.reserved_reason`, and `project_delete` refuses
+> a row carrying one. It is not `is_fixture` and is deliberately not named
+> anything beginning `untitled`, because `check:leaks` sweeps
+> `untitled-notebook-%`.
+>
+> **Also found, and corrected in the plan:** most of #195 already exists.
+> `inbound_commands.dedupe_key` is NOT NULL, UNIQUE and shaped
+> `<surface>:<kind>:<id>`; `deliveries.dedupe_key` is unique too and
+> `deliveries.message_ref` already holds the external id of everything the
+> office has sent. What is genuinely left there is loop prevention, not identity
+> or dedup.
+>
+> **Phase 7 — the rest is planned, not started (#191).** Grant's
+> 13 September brief said GitHub is the durable memory and nothing important
+> may live only in a conversation. The brief is stored verbatim at
+> `docs/spec/github-persistence-brief-2026-09-13.md` and its twenty-six
+> requirement topics are now eleven Issues under **#191**, with a Prompt
+> Persistence Audit mapping every topic to its home.
+>
+> The inspection pass found more substrate than the topic list implies —
+> `inbound_commands` (0011) has every message he has ever sent, `slack_channel_map`
+> (0014) holds project-to-channel in Postgres rather than a channel topic, 0198
+> already reads both sides back for recall, and 0102 puts voice through the same
+> canonical layer. **The gap that decides everything else: there is no
+> `conversations` table and no `messages` table.** His side is in
+> `inbound_commands`, the office's in `outputs`/`deliveries`, and nothing joins
+> them into one ordered history. #192 is that model, and #195 (message identity,
+> deduplication, loop prevention) has to be right before any second surface is
+> connected — otherwise the office echoes itself.
+>
+> **Three decisions answered on the day, in ADR-0024.** Only the Chief of Staff
+> posts unprompted in a project's Slack channel, but Grant may address any
+> individual and gets that person's reply — a stored preference, not a
+> constant, because *"for now"* is load-bearing in how he said it. A Telegram
+> message naming no project lands in a reserved catch-all dashboard project
+> rather than a nullable `project_id`. And Slack sync is convergent: two
+> windows onto one history, never a mirror.
+>
+> Two of those have traps written into the ADR because they will otherwise be
+> got wrong. Applying the Slack voice rule uniformly suppresses the reply Grant
+> asked for **and looks exactly like the rule working**. And the catch-all
+> project will be swept — `check:leaks` already matches `untitled-notebook-%`,
+> so despite his phrasing it must not be named anything beginning `untitled`,
+> and there is no protection column on `projects` today.
+>
+> Two things worth knowing before picking this up. First, **the brief contains
+> the topic list and not the specification behind it** — no acceptance criteria,
+> no wireframes. Each Issue states what it inferred and where a different
+> reading would build differently; several would go materially wrong on a
+> plausible alternative. Second, accessibility (#200) is a genuine hole: ninety-four
+> open Issues and not one about it, beyond the contrast and type-size checks in
+> `verify:layouts`.
+>
+> **The space-usage critique pass, and a tool that answers its question
+> (#85).** The Issue asks for measurement rather than squinting, and it was
+> right to: three of four findings read off the capture were **wrong** — the
+> rail is 880 of 900px used, the #108 fade is on at `opacity: 1` on every
+> clipped panel, and the phone's "clipped" title has 20px of clearance at
+> `scrollTop: 0` (it is the capture's own scroll). Two survived.
+>
+> A panel header was **53px of a 300px panel for a 16px label**, because 28px
+> of it was the resize controls — which are `opacity: 0` until hover. #67's
+> trap in a second place. Absolutely positioned now: **53px → 33px**, 120px of
+> content back on one Overview screen, and Documents and Lately stopped
+> clipping at all.
+>
+> On a 390×844 phone the first pixel of project content was **703px down —
+> 83% of the first screen furniture**, and 51px of that was a sentence telling
+> you to drag panels on a viewport where `.panel { position: static }` and the
+> drag is deliberately switched off. Hidden there: **703px → 632px**.
+>
+> `npm run space` is the new tool. It reports only — no thresholds — and prints
+> each panel's header share, whether the fade is actually on per panel, how
+> much of each container is empty, and how far down the first content pixel is
+> with everything above it named. `probe` answers "how big is this box";
+> `space` answers "which of forty boxes is spending the room".
+>
+> Still open and deliberately not touched: the phone is 75% furniture on its
+> first screen, `.projhead` being 135px of it. That is a compositional fix (a
+> collapsing head, or the crew and toggle moving into the sticky bar), not a
+> padding edit, and shrinking the parts individually is the densification the
+> Issue warns against.
+>
+> **Two suites no longer need the whole queue to themselves (#184, ADR in
+> 0329–30).** `verify:slack` and `verify:worker` both refused to start while
+> any job was live anywhere, because dequeue is global — so in a full pass
+> whichever ran second failed on the first one's debris, as "22/26" rather than
+> as "the queue was dirty". `dequeue_job` gained `p_requested_by`, which
+> narrows both the claim and the capacity question to one scope. Both
+> directions now pass back to back with no purge between them.
+>
+> **The control audit had been blind to half the product, and the recorded
+> explanation was the wrong one (#183).** 91 of 182 desktop controls
+> unpressable, the same thirteen every route, the entire left rail — while the
+> phone leg skipped two. The cause is one press: the sweep presses the chevron
+> that collapses the sidebar, the studio REMEMBERS that in `localStorage`, and
+> every rail control after it is behind `main`. The buttons still resolve,
+> because a collapsed rail clips them rather than removing them, which is why
+> it read as an actionability mystery. Found by keeping the actionability log
+> that `catch {}` had been discarding — two reasonable fixes tried before that
+> (force-clicking, a taller viewport) changed nothing and were reverted.
+> **13 unpressable → 0** on the first route measured.
+>
+> **Three audits were looking somewhere other than where Grant looks.**
+> `verify:layouts` ran without a token, so it had never measured a single
+> writer control — given one it found sixteen touch targets under 44px and a
+> 13px input, all years old. `verify:wired` read a hardcoded list of nineteen
+> filenames, so the twentieth module was uncovered by construction; it walks the
+> directory now. And `verify:controls` wrote its report to a path built from its
+> own route filter, so a run filtered by a route containing a slash lost
+> everything it found.
+>
+> **One frontend, and it is the designed one.** `ai-team-hq.vercel.app` serves
+> `web/studio`; `web/hq/index.html` is deleted (ADR-0019, #68). Every write
+> action, all six operational sections and the voice call moved across, and the
+> suites moved with them — `verify:ui` walks nineteen studio screens at three
+> sizes, and `verify:design` fails if a second frontend ever reappears.
+>
+> **The office now learns, notices and can be taught.** `app.notice()` finds
+> what nobody asked about — an unowned deadline, a quiet project, a source that
+> gave nothing, a limitation that recurred — and a dismissal buys a fortnight of
+> silence per dismissal rather than lowering a score. It feeds the morning
+> briefing's recommendations, which arrive daily at 07:00 Athens. And skills are
+> data: Grant can tell the office a procedure in a Telegram message and it goes
+> in front of the relevant work from the next job on, visible and retirable on
+> each person's card. **A skill may name a tool and may never name an address**
+> (ADR-0017) — that one rule is what makes a procedure safe to let an agent
+> write, and `app.staff_may_use()` reads neither skills nor lessons, asserted
+> behaviourally and structurally.
+>
+> **Overnight, 11–12 September.** Twenty-seven of the thirty UX-review items
+> are closed, plus #11 and #24 which turned out to be blockers. Google Calendar
+> sync is built and **switched off** — turn it on at Settings → Behaviour →
+> *"Put dated tasks in my Google Calendar"*. Everything else is live.
+>
+> The last five of that night: **#103** the dock — a fixed column that keeps a
+> conversation with the team open while you move around, reaching `/voice/turn`
+> like the call does · **#81** dashboard arrangements now live in Supabase
+> rather than `localStorage`, which is **ADR-0021** and the rule for everything
+> customisable after it · **#90** Disconnect works for Notion and NotebookLM as
+> well as Google, refuses honestly where there is no safe disconnect, and says
+> where to revoke at the provider because Postgres cannot · **#108** dashboard
+> panels stopped clipping their own content mid-word · **#107** a contact shows
+> the labels its role already names, so no chip reads zero beside somebody who
+> plainly belongs in it.
+>
+> Two things to know before reading further:
+>
+> - **`calendar.sync_tasks` is false on purpose.** It works end to end,
+>   verified with one controlled round trip against the real diary. A task that
+>   becomes done has its event **deleted** without asking — only ever events
+>   carrying our own task id (ADR-0020). That is the one decision worth your
+>   eye before you flip it.
+> - **`public.tasks` had zero rows and no way to make one**, which is why #11
+>   got built ahead of the calendar. A calendar sync over an empty task table
+>   would have been #72 exactly.
+>
+> **Grant's UX review of the studio is filed as #75 and half-built.** Thirty
+> items, persisted verbatim at `docs/spec/ux-review-2026-09-11.md` and filed as
+> #76–#105. Fourteen are closed: the navigation is his shape now (picker top
+> left, sections in the sidebar, Lately and Settings at the bottom, no status
+> strip, no Desk, the rail collapses to nothing), the covers are 64px marks
+> rather than slabs, light and dark is a real three-state setting, and the
+> connect buttons connect.
+>
+> Two of them were worse than described. **#102 was not "off does not work"**:
+> closing the call sheet threw away the only reference to a live microphone,
+> so nothing could ever stop it and reopening started a second. **#87 could
+> not have been fixed as written**: there was no dark-mode setting to fix —
+> every palette's dark tokens lived only inside `prefers-color-scheme`.
+>
+> **Six new checks, each written because something passed while broken.**
+> `check:templates` parses every `web/**/*.js` as a module and refuses a
+> backtick in an HTML comment. `verify:wired` fails on a control no source
+> file looks up. `verify:talk` now counts live audio tracks across every
+> stream the stub handed out, including ones the page has forgotten.
+> `verify:layouts` fails when a box hides content and gives the eye neither a
+> real scrollbar gutter nor a marker — the third clipping-class defect a green
+> suite had missed. `verify:arrangement` asserts what LEAVES the page, because
+> a layout saved only to `localStorage` drags, snaps, survives a reload and
+> captures perfectly, and is wrong only on the second device. And
+> `verify:disconnect` checks a destructive action **without being
+> destructive**: every SQL assertion runs inside `begin … rollback`, the page's
+> own payload is read back inside the transaction, and it then re-asserts that
+> the real credentials are still there.
+>
+> **Each of the three new suites was proved by putting its bug back.**
+> `verify:layouts` reported 2192px of Documents hidden with nothing to say so;
+> `verify:arrangement` went to 1/6; and `verify:disconnect` needs no such
+> demonstration because it deletes a real credential and rolls it back on
+> every run.
+>
+> **The backlog is current as of 11 September.** Every issue verified complete
+> was closed with the evidence in a comment rather than a tick — #9, #48, #52,
+> #53, #55, #56, #57, #58, #59, #61, #62, #66, #68. **#50 stays open on
+> purpose**: six of its seven boxes are ticked and the last one — a real
+> capability acquired end to end without a coding session — needs the office to
+> ask for a tool it does not have and be granted it. Five findings from that
+> day's work that were in nobody's Issue are now filed: Claire is the only
+> agent with no bot of her own and the only one permitted to speak to Grant
+> (#70) · modules are in the canonical IA with no table behind them (#71) ·
+> *build the mechanism, forget the mouth*, five instances in one session, which
+> wants a check rather than another note (#72) · the backtick-in-a-template
+> -literal trap fired five times in a day despite being documented (#73) ·
+> `verify:controls` audits the studio without a token, so it cannot see a
+> single write control (#74).
 >
 > **Recently landed:** the frontend build prompt persisted to
 > `docs/spec/` · integration assessment · GitHub as the operational record
@@ -79,7 +844,355 @@ Then run `npm run inventory` before trusting any credential.
 | · MCP | ✅ read and write, with OAuth for ChatGPT's developer mode |
 | · recurring duties | ✅ seven live: capacity report, calendar, mail, discovery, Notion, Slack token rotation, nightly backup. One left disabled — `vault-export`, which needs Grant |
 
-146 migrations · 770 unit tests · ~30 live suites, all green.
+304 migrations · 976 unit tests · ~67 live suites, all green.
+
+**The Governance page shipped with harness debris on it, and it is fixed
+(0303-0304).** An hour after #54 went live, a status sweep found Ruby's card
+reading *"probe-need-j4je9xrc — the office has no such tool — 8x"*: five rows of
+`verify:proposes` debris on the surface built to make the office legible, which
+is the exact trap `jobs.is_fixture` exists to prevent. `app.office_health()` was
+separately reporting fourteen stalled research jobs from the same crashed run.
+
+The cause is worth keeping: `job_impediments.is_fixture` is a copy taken from
+the job by trigger at insert, and §6 then refuses UPDATE — so once the job's
+attribution was corrected, the copy stayed wrong for ever. The tally now asks
+the job as well, whose `is_fixture` is generated and always current. The first
+attempt used `coalesce` (job first, copy as fallback) and put two rows BACK on
+the page, because their copy said fixture and their job said real; the rule is
+that **either witness may exclude and neither may include**, so it is `or`
+(0304). Nothing was deleted — all 105 impediment rows are still on the ledger,
+41 of them visible through `p_include_fixtures`, and none counted as work.
+`verify:governs` is 24 checks now: one asserts no name on the page matches a
+probe pattern, and one asserts the two-witness rule directly.
+
+**Grant can see what the office learned, and change it (#54, migration 0302).**
+The last child of #46, and the one that makes the rest of that epic safe rather
+than unnerving: with #48 landing, behaviour changes for reasons that live in a
+table, and a table nobody surfaced removes his ability to tell a system that is
+getting better from one that is drifting. A **Governance** tab now sits beside
+Behaviour in the settings sheet — a sibling rather than part of it, because
+Behaviour is eight switches and this is four lists, and folding them together
+makes both harder to use. It answers four questions from one call,
+`app.hq_governance`:
+
+- **what it learned** — every live lesson as a quotation, with its scope, the
+  project or person it applies to, who learned it, and the job it came from.
+  `app.retract_lesson` writes a RETRACTION row that supersedes it: `lessons` is
+  append-only, so nothing is deleted, the reason is recorded next to it, and
+  "why did it change" stays answerable. Retracting twice is a no-op; retracting
+  a retraction is refused by name.
+- **what it wants** — open proposals first, then anything settled in the last
+  thirty days, each approvable or declinable in place with the argument and the
+  cost on it. **The decline is the durable half**: `proposals_one_per_need`
+  means the same need cannot be raised again while the row stands, which is
+  what stops a boundary becoming a nag. Reopening is allowed and is always a
+  person's decision.
+- **what it noticed** — suggestions with their outcome and their dismissal
+  count, because a thing offered four times and dismissed four times is the
+  office failing to take a hint. `suggestions.because` is JSONB — the numbers
+  the noticing pass counted, not a sentence — so it renders as counted facts.
+- **what each of them can do** — remit, tool count, and the list of walls hit
+  in ninety days from `app.impediments_tally`. #54 calls that last list the
+  most useful thing on the page and it is right.
+
+`verify:governs` is 22 checks, and it tears itself down through the feature
+under test: the lesson it writes is retracted, which is the only removal an
+append-only ledger allows, and the assertion that the payload no longer carries
+it is the same assertion that proves the teardown worked.
+
+**Three audits were pointed somewhere new and found five things.** #54's
+acceptance says it must pass `verify:ui`, `verify:layouts` and
+`verify:controls` — and `verify:layouts` had never opened the settings sheet at
+all, which is the "a verification that looks somewhere other than where the
+user looks" trap in its purest form. Extending it to `settings/governance`
+(52 states now, from 38) immediately found: `--ink-3` failing WCAG AA at 12px
+on five palettes; the settings sheet hiding 2,857px on a phone behind an
+overlay scrollbar with no affordance at all — #108's defect, still live, on
+every settings tab; and a false red of its own, because the studio scales the
+shell to 0.994 behind an open sheet and a 44px button therefore measures 43.74.
+The first two are fixed, the third is fixed in the audit. `verify:ui` now feeds
+the governance pane real rows at all three sizes, and `verify:wired` walks
+seventeen screens rather than sixteen. `verify:hq`'s tool control was also
+repaired: it asserted that `web.search` could be revoked and re-granted, and
+0298 had switched `web.search` off — a control that must fail on a change that
+was correct.
+
+**Every connector says what it can do, and what we never ask it for (#51,
+migrations 0300-0301).** `knowledge_connectors.notes` was prose written for a
+person; an agent cannot ask prose whether it can recover an audio overview.
+`public.connector_capabilities` is one row per verb — 24 across six connectors —
+with `reach` (`api` / `unofficial` / `browser_only` / `none`), what it costs,
+what in the office uses it, and `verified_by` saying whether that is known from
+a probe, a suite, or merely declared. The negatives are in it deliberately, as
+#51 asks: Notion has no teamspace on any version, Drive is read-only by scope,
+GitHub write is disabled at risk 3. `app.unused_capabilities()` is the gap as a
+QUERY rather than an opinion — today it returns exactly one honest row, that the
+office can create a note in a notebook and never does — and `capability_index`
+carries it as `could` so it reaches the prompt. Only the gap, not the whole
+sheet: 24 verbs on every prompt would cost more than they are worth.
+`verify:sheets` (14 checks) proves the NotebookLM rows claiming a probe are
+backed by the actual probe output, and that a verb moves in and out of the gap
+when the office stops and starts using it.
+
+**The office gained a capability without a coding session (#50, migrations
+0298-0299).** The epic's own acceptance box, done rather than simulated: Emma
+authored *"Research a topic with the reach we already have"* through
+`app.teach_skill` — no migration, no deploy, no handler — and it comes back from
+`app.skills_for` on her next job with `missing: []`, because it was written
+against reach she actually holds. Found on the way: **`tool_permissions` listed
+`web.search`, level 0, ENABLED, and nothing implements it** — so every agent's
+sheet told it that it could search the web. That is #64 with the sign reversed,
+and reversed is worse: being told no about something possible costs a feature
+request, being told yes about something impossible costs the work, silently.
+0298 adds `delivered_by`, fills it for all fifteen real tools, disables
+`web.search` with the reason (disabled and NOT deleted — a listed gap can become
+a proposal, a deleted one cannot), and adds a constraint so an enabled tool must
+name what performs it. `npm run verify:acquire` (11 checks) proves the whole
+chain including the half that makes it safe: authoring a skill that names
+`web.search` and `spend.money` changes nothing about what the agent holds, and
+`staff_may_use` still refuses.
+
+**The office says what it understood, and asks for what it needs (#47, #49,
+migrations 0295-0297).** `jobs.understood_as` is the agent's own one-sentence
+reading, written BEFORE acting and write-once — a wrong reading is invisible
+until it is written down, because an output built on a misreading looks like a
+perfectly good output. `public.proposals` is #49's core object: a ROW, not a
+message, because a message cannot be declined, only ignored and sent again on
+Thursday. One row per (agent, kind, need) FOR EVER — the unique index IS the
+durable decline — with a remedy, an argument carrying the count, and a state.
+`app.raise_proposals` reads `impediments_tally`, so noticing costs a SQL query
+rather than a model call per job, which #49 requires; a declined proposal is not
+reopened, not re-counted and not re-delivered. Claire batches through
+`app.proposals_to_send` and stamps `delivered_at`, so nobody else speaks and
+nothing sends twice. `npm run verify:proposes` (19 checks) drives four identical
+failures, asserts ONE proposal with a count of four, declines it, drives four
+more and asserts silence. 0297 exists because the suite could not tear itself
+down: `job_impediments` is append-only by §6, so the subjects had to become
+fixtures — permanent but excluded from every real tally — and `raise_proposals`
+gained the `p_include_fixtures` parameter its own tally already had. Five
+proposals raised from older harness debris were **declined**, not deleted: the
+ledger is append-only and declining is the mechanism for permanent silence.
+
+**An agent knows what it can do (#64, `verify:knows`).** Claire told Grant *"I
+cannot add interactive Telegram buttons; I only generate plain text"* — false
+when she said it, and he went and asked for a feature he already had. The two
+mechanisms (`capabilityBrief` in the prompt, `contradictsReality` as the net
+under it) were already built; the proof was not, and the third box was open.
+The suite asserts his exact sentence is caught, six other wordings of the same
+claim, and — the half that decides whether the guard survives — six TRUE
+sentences it must not fire on, because a net that catches honest answers gets
+loosened and the bug comes back. `notebook_capability` reported three read
+capabilities while `act.py` creates notebooks and generates audio, so the probe
+now also reports what the adapter OFFERS, checked by asking the client whether
+the method exists rather than by creating a notebook on every run — named
+`offers_*` so a reader can tell which half was exercised and which was only
+found, and deliberately unable to promote the probe's state.
+
+**Delegation leaves a trace (#65, migration 0294).** Re-measured against the
+Issue's own numbers: jobs addressed had moved from 0/499 to 9/856 and four of
+those went to a specialist, so the CHOOSING was real — but `consultations` was
+still 0 and outputs with no author had gone from 140 to 1,060. The reason for
+the first: the hand-written INSERT passed a `text[]` and a slug where two UUIDs
+belong, so it raised on **every** hand-off, and the call site ended
+`.catch(() => undefined)`. A swallowed error on a write nobody reads back is
+indistinguishable from a feature that was never built. It goes through
+`app.record_consultation` now, which takes slugs and does the resolution once,
+refuses consulting yourself (which would make the rate look healthy) and a name
+nobody answers to; a refusal is recorded as an impediment rather than
+discarded. `app.judge_consultation` fills `changed_outcome` from the review the
+output already gets, and records in `outcome_note` what it inferred it from, so
+weak evidence is not later mistaken for strong. An output with no author now
+takes the job's `recipient_agent` by trigger rather than by editing 28 handlers
+— history is deliberately NOT backfilled, because nothing recorded who wrote
+those and a name Grant would read as fact is worse than the gap.
+`app.delegation_health` answers the Issue in the numbers it was filed with, and
+`npm run verify:handoff` reports the rate rather than asserting a threshold.
+
+**Claire has a conversation, and says back everything she was asked (#63, #60,
+`verify:conversation`).** Both mechanisms were built in an earlier session and
+neither had a proof, which is why both Issues stayed open after the code landed
+— this repository's own #72 pattern with the halves swapped. The suite is the
+last box on each: a two-message exchange where the second is understood in terms
+of the first, and Grant's 11 September voice note replayed verbatim with all six
+clauses accounted for. Nothing needed fixing in the office; two of the suite's
+own checks did — one asserted `create_project` where the planner correctly emits
+`project` (the handler decides its fate later), and one was written so it could
+not fail.
+
+**Project switching works, and three bugs were hiding behind one red check
+(#177, migrations 0291-0293).** `verify:agents` was 50/53 on "project
+switching", and the issue was right to insist on diagnosing before fixing: it
+was **both** of its candidates plus a third nobody was looking for. The suite's
+subjects were `fixture-` named and `app.current_project` deliberately refuses a
+fixture (0164), so every check read `resolved=null` against code that partly
+worked — #45's trap again. Behind that: 0164 had added the fixture guard by
+retyping the function from memory and dropped 0026's `order by switched_at desc
+… limit 1`, so **clearing a project context did nothing** (an inner join drops
+the switch-to-NULL that un-scoping is, and the previous project persisted for
+ever), "the latest wins" was whatever the planner returned first, and the guard
+fell back to an older switch instead of declining. 0292 then let
+`app.project_delete` sweep the switch log, without which a project that had ever
+been the subject of a conversation was undeletable — and said so with the raw
+constraint name 0282 exists to avoid. 0293 is the same shape one table over:
+0282 loosened the alias uniqueness to ACTIVE projects to release 561 phrases,
+and `app.add_project_alias` — the only writer anybody calls — still pre-checked
+against all of them, so the release was unreachable from the day it shipped.
+`verify:agents` is 56/56 and `verify:identity` 30/30.
+
+**What is waiting on Grant is where the work is (#151, migrations
+0289-0290).** The landing page has shown "2 things waiting on you" since 0240;
+inside a project — where he could actually deal with it — it showed nothing,
+because `hq_studio` reduced `needs_me` to one item for the banner and threw the
+rest away. Now `app.studio_waiting` per project, in the header, above the
+sections, collapsed to a line until pressed and absent entirely when nothing is
+waiting. The third bullet had no mechanism at all: `answer_generation_approval`
+did one kind and every other blocker could only be discussed, so
+`app.hq_answer_blocker` is the general answer — refusing anything the blocker
+did not offer, delegating to the generation path where that is what it is, and
+releasing the job it was holding. 0290 is the bug `verify:waiting` found on its
+first run: `waiting_user -> queued` is not a legal transition, and the legal
+road is `paused` then `queued`, which is also the honest one — both hops land in
+`job_state_transitions`. `npm run verify:waiting` is 21 checks and writes three
+captures; opening one of them found the second bug, that an overdue item was
+indistinguishable from a calm one on a bar with two rows.
+
+**A time on the page stays true while the page is open (#153, migration
+0288).** Every "3 days ago" was computed in SQL when the payload was built —
+harmless when a page lived for a minute, and quietly wrong now that #117's
+watcher keeps the studio open all afternoon. The projections carry the instant
+beside the rendered string (`at`, `lastAt`, `askedAt`, `deliveredAt`), the words
+are made in `web/studio/when.js`, and `pulse.js` re-makes them on the tick it
+already runs — no second timer, and `retime()` sits ahead of the `running` guard
+because a slow fetch holds it across exactly the minutes when the times go
+stale. The rendered string stays as the fallback, which is what made this safe
+to roll through the projections one at a time. `tests/studio/when.test.ts` pins
+every boundary; `npm run verify:times` proves the wiring by leaving a real
+browser open, moving its clock two hours, and reading the same element again —
+with a control that the clock alone changes nothing, and a check that stopping
+the watcher stops the times, so a second timer could not hide.
+
+**Modules are real, and are not a new table (#71, migrations 0286-0287).** The
+Issue asked for `public.modules`. The canonical IA it cites does not contain the
+word; the frontend prompt uses it for the dashboard's PANELS, which #81 built.
+The section the studio actually renders is a third thing — numbered, named parts
+of the work with a state and counts — and **every piece of that already existed**:
+`tasks.is_milestone`, `tasks.priority`, `tasks.parent_task_id`, `collections`.
+So a module is a milestone task that gathers documents, the one missing join is
+`collections.for_task_id`, and `app.studio_modules` derives the rest at read time
+so a count cannot drift from what it counts. `hq_task_add` learned `p_milestone`
+(0287, dropping both halves by exact signature first — the public wrapper is the
+one that silently drops a new parameter), so making a module is one call rather
+than add-then-promote. `npm run verify:modules` is 16 checks against a subject
+built with decoys: a fixture child, a grandchild, and a collection that is
+nobody's shelf, each of which a plausible join would count.
+
+**Contact labels and custom fields are the office's, not the browser's (#110,
+migration 0285).** The last thing in the studio on the wrong side of ADR-0021 —
+a label Grant invented on the laptop was not there on the phone, and one cleared
+browser lost the lot. `contact_labels`, `contact_label_links` and
+`contacts.fields`, keyed on `contact_id` and never on the name (which was wrong
+the first time two people share one). #107's derived labels survive with both
+their rules intact: `contacts.labels_set` is what tells "no labels" from "never
+touched", because an absent link row says both and without it a label he removes
+comes straight back. Both writes replace the whole value rather than applying a
+delta, which is 0250's shape for `p_panels` and gives #118's undo an exact
+inverse — `hq_undo` learned all three reversals in the same migration, since
+recording an inverse it cannot perform turns Undo into a button that consumes
+the offer and does nothing. `verify:arrangement` grew seven checks, the last of
+which is the one that matters: after every write, `localStorage` is still empty.
+
+**The corpus holds material and nothing else (#19, #20, migrations
+0283-0284).** `duty:notion-sync` stored two things that were never source
+material. The three databases the office WRITES into — Projects, Tasks and Docs
+— were ingested as documents, each one a bulleted index of its own rows that
+matched a search for any row title and re-synced whenever anything was renamed;
+a Notion object whose id is in `project_attachments.external_ref` is now the
+attachment, not a document in it. And the six module pages
+`office.notion_import` authored were read straight back and counted as material
+Grant supplied. #20 asked whether `documents` needed an origin column — it
+already has one, `yours | source | made`, and the bug was that 0178 DERIVED it
+from the connector, which stopped being the definition the moment the office
+began writing into a connector and reading its own work back. `origin` is
+provenance, `connector` is location, and `notion-import` now states the
+provenance in the same pass that creates the page. `npm run verify:corpus`
+drives the sync against a stub Notion that presents both shapes, and proves
+each invariant by first planting the broken row. 0284 is the bug that found:
+`documents.produced_by` was NOT NULL defaulting to `''`, so the `coalesce` in
+every reader was dead and a made document rendered with a blank origin line.
+
+**Since 2026-09-11 the studio can take things back (#118, migrations
+0263-0266).** Every write with an EXACT inverse records it at the moment it
+still knows the previous value — a rename, a task edit, a state change, an icon
+or hue, an arrangement, a detached source — and a strip offers to reverse it.
+Everything else offers nothing and says why: a replaced project photo, a
+disconnected service (the credential is deleted from the Vault), a new project
+(the confirmation is the safeguard). `npm run verify:inverse` proves the
+exactness per action against the live database, and carries a control that
+records a deliberately WRONG inverse and requires the same comparison to catch
+it.
+
+**A write-capable job now says what it would do before it does it (#131,
+migrations 0267-0269).** `Handler.plan()` is computed by the same code path that
+performs the work — `syncTasksToCalendar` was split at exactly that seam — and
+the worker records it against the job before the handler runs, at one
+chokepoint. `app.request_approval` appends it to the blocker, so an approval
+shows the list rather than the category. `npm run verify:dryrun` runs the
+planner with a `fetch` that throws on any outward write, then runs the handler
+with one that counts, and fails a handler that does more than it planned. Not
+yet covered: `office.notion_import`, whose plan depends on a model call and so
+needs the STORED plan to be the thing executed.
+
+**A queued job is no longer invisible (#112, migrations 0270-0271).** Nine
+hourly jobs sat queued for eight hours with a green dashboard, because
+`office_health()` counted complete, failed and in-flight and a job nobody has
+taken is none of those. `verify:worker` now holds the kinds enabled duties
+enqueue against the kinds the real registry declares — `buildPass` exposes them
+— and fails before a deploy rather than eight hours after.
+`app.jobs_stuck_queued()` measures a stall against the period of the duty that
+made the job, `office_health()` reports it, and the studio shows an orange strip
+naming the kind and the age.
+
+**An output can declare its shape (#130, migrations 0272-0273).**
+`public.output_shapes` holds the contract as rows — one authority, because the
+validator has to run where the row is written and every consumer is SQL — and a
+trigger refuses a declared shape whose facts do not match, naming the key and
+what it should have been. `body` stays: prose is what Grant reads. The duties
+that report "nothing changed" now say so in a field. Still prose-only:
+`research_summary`, `tasks_extracted` and `draft_document`, which need their
+handlers taught to ask the model for structure.
+
+**The office knows what it can do, per person (#148, migrations 0277-0279).**
+`app.capability_index(staff)` is generated on every call from
+`tool_permissions`, `staff_tools`, `knowledge_connectors`, `connection_health`
+and `tool_requests`, and answers four different questions — can / must ask /
+nobody may / already refused. It replaces `verbsNow()`, a hand-written list in
+TypeScript that covered three of twenty-one tools; the verbs are a column now,
+so the office can correct one without a deploy. It also fixed a duplicate that
+had been in **every capability brief the office had ever sent**: Slack and
+Telegram each have two `connection_health` rows and the surfaces branch never
+deduped.
+
+**Tasks exist across the whole portfolio (#173, migrations 0280-0281).**
+`tasks.project_id` is nullable, so a task can belong to no dashboard project;
+`app.hq_portfolio_tasks()` aggregates every open one with overdue, waiting,
+stale, unowned and suggested computed on read in Grant's timezone; and the
+studio has a Tasks screen whose first row answers *"what should I be doing
+next"* rather than only listing. Ticking one there is the same row the project
+view ticks, so undo works for free.
+
+**The office recognises a failure it has seen before (#132, migrations
+0274-0276).** `failure_signatures` counts a repeat instead of logging it again,
+and `app.notice()` raises one that has happened three or more times in a
+fortnight — *"this has failed the same way eleven times"* is a recommendation.
+Deliberately not a circuit breaker: recognising a repeat and refusing to try
+again are different features, and the second silently stops work Grant expects.
+
+The table is **provably free of payload** because it has nowhere to put one —
+no text column an error message could be written into, only a dotted kind, one
+of nine class words, and an id. `verify:failures` attacks that rather than
+asserting it, and found a real hole on the first run: a Slack-token-shaped
+string satisfied the original subject pattern completely. 0276 narrowed it to a
+UUID or a short lowercase handle AND held it against the credential shapes.
 
 **There is no cron and no GitHub Actions.** Grant switched Actions off on
 2026-09-08 — *"for any process"* — and everything scheduled moved to
@@ -344,3 +1457,388 @@ the time before the hardening is finished.
 is no public API, so an unattended client must impersonate a browser session,
 which is exactly what the ban named. Pasting a source in by hand still works and
 produces a document like any other.
+
+---
+
+## Pre-human backend acceptance — 14 September 2026
+
+Grant supplied a **Pre-Human Backend Acceptance & Full-System Stress Test**
+specification (`docs/spec/backend-acceptance-2026-09-14.md`, verbatim) and a
+**Master UX QA Governance Prompt** (`docs/spec/ux-qa-governance-2026-09-14.md`,
+verbatim). Backend readiness comes first — the acceptance document ends
+*"BACKEND READINESS FIRST. HUMAN TESTING SECOND."*
+
+The programme is #224. **Verdict: 🟠 ORANGE — begin human testing, with five
+named limits.** Full report: `docs/testing/backend-readiness-2026-09-14.md`.
+
+### What was run
+
+All **74 backend suites**: 72 passed on the sweep, 0 timed out, **0 could not be
+run**, and both failures were real and are fixed. Plus 1,017 unit tests, the
+behavioural evaluator, and the coverage matrix. Roughly 95 minutes of wall clock
+at **£0** — free-tier models only.
+
+### What is new
+
+| | |
+|---|---|
+| `npm run gate` | the **fast readiness gate**, 15 curated checks in 384s. It did not exist: `verify:all` is `verify` + `audit:credentials` + `verify:db`, and `verify:db` is a 47-command chain ending in two destructive sweeps |
+| `npm run coverage` | the Phase 1 **capability coverage matrix**, generated from the repository. 30 domains: 17 full, 11 partial, **2 with no suite at all** |
+
+### The two real defects, both fixed
+
+- **0361 — "the latest switch wins" was decided by a coin flip.** `switched_at`
+  is the transaction timestamp and `switch_id` was a random uuid, so two
+  switches in one transaction ordered arbitrarily. In production that points a
+  chat at the project from two switches ago. A monotonic identity column now
+  breaks the tie, with a ten-round regression check.
+- **0360 — `app.project_delete` could not remove a project that had ever had a
+  Slack channel**, and crashed the sweep rather than refusing. 11 debris
+  projects have since been swept out of Grant's views; zero remain.
+
+Four smaller ones: `e2e.ts` always exited 0; its report filename had a stale
+date baked in; `check:leaks --sweep` aborted on first failure; and a
+token-shape security check matched its own help text.
+
+### The five reasons it is ORANGE, in the order they would bite
+
+1. **Recurring duties have never been tested** (#225) — the only thing that acts
+   without Grant asking.
+2. **Gmail, Drive and Calendar have never touched a real Google** — blocked on a
+   Phase 9 OAuth client (ADR-0013).
+3. **The behavioural corpus is 7 cases** (#171). The judge agrees with Grant
+   7/7, so the instrument is sound; it has almost nothing to measure.
+4. **`verify:chaos` covers 7 of §18's 20 cases** (#228).
+5. **`verify:agents` was flaky for three days and nothing measures flake**
+   (#226).
+
+**NotebookLM has no suite either** (#227) — and the deliverable there is a
+capability probe recording limitations as data, never a revival of the sync,
+which ADR-0013 refused.
+
+### Not done, deliberately
+
+The **18 frontend suites** were not run in this pass. They belong to the UX QA
+standard, not to a backend acceptance programme, and the coverage matrix names
+them rather than leaving them out. The UX remediation epic (#223, children
+#214–#222) has not been started.
+
+### Second pass, same day — Grant said "solve part 1"
+
+Four of the five ORANGE reasons closed, and the fifth measured and bounded.
+
+| | |
+|---|---|
+| `verify:duties` | **21/21** — the domain that had nothing (#225) |
+| `verify:notebook` | **18/18** — the other one (#227). **All 30 domains now have a suite** |
+| `verify:chaos` | 21 → **29** (#228) |
+| `verify:identity` | 30 → **39** — the project create/rename/archive arc |
+| eval corpus | 7 → **20 cases**, ten good and ten poor (#171) |
+| flake tracking | per-run history keyed by commit (#226) |
+| free-tier headroom | now asserted — database 50 MB of 500, storage 102 MB of 1,024 |
+| the gate | **15/15 in 395s** |
+| the sweep | **92 of 94, 0 failed, 0 could not run** |
+
+**Two more real defects, both fixed:**
+
+- **0365 — `hq_rename_project` never checked for a name clash.** `hq_create_project`
+  refuses a name a live project already holds; rename did not check at all, so two
+  active projects could answer to one name. Reachable from Project Settings.
+- **Renaming a project makes it permanently undeletable** — the rename enqueues a
+  job and a job can never be removed. Not a bug; a property, and the reason the new
+  arc runs inside a rollback.
+
+**The finding worth remembering:** the evaluator's judge was grading *compliance*,
+not trustworthiness. Its rubric asked *"did it do what was asked?"*, which rewards a
+confident fabrication and penalises an honest refusal — the exact inversion of the
+office's first invariant. Seven historical cases could never show it; twenty with
+paired controls showed it immediately. Corrected in `JUDGE_VERSION` 2026-09-14.1.
+
+**And a limit on the instrument:** agreement moves **±2 cases between runs** of an
+unchanged corpus even with the model pinned and `temperature: 0` — measured, not
+assumed. `npm run eval` prints that margin now. #229 has the options.
+
+Still 🟠 ORANGE, for three narrower reasons: Google is unproven against a real
+Google and jointly blocked; the judge has a ±2 margin; and duties are tested to
+dispatch rather than through the handler.
+
+---
+
+## Backend intelligence breadth — the programme after the acceptance pass
+
+Grant, 14 September, after the routing fix landed. Specification stored verbatim
+at `docs/spec/backend-intelligence-breadth-2026-09-14.md`.
+
+> The backend plumbing has extensive deterministic coverage, but **intelligence
+> breadth is NOT yet proven.**
+
+**The epic is #231.** If you are picking this project up, read that Issue and the
+spec file before touching the router.
+
+### What was measured, and it is the point
+
+Production, not a suite. All 505 routing decisions ever recorded:
+
+| roster | times |
+|---|---|
+| Emma | 269 |
+| Claire | 146 |
+| nobody | 70 |
+| Tom | 20 |
+
+**Oliver, Daniel, Ruby, Marcus and Grace had never been selected once.**
+`delegation_depth` was **0 across all 505**. Consultations: 19 against ~267 real
+instructions.
+
+`verify:delegation` and `verify:handoff` both passed throughout. They prove the
+mechanism works WHEN DRIVEN. They prove nothing about whether real traffic uses
+it — and that distinction is the spine of the whole programme.
+
+### Fixed
+
+`ROSTER_CEILINGS.question` was `[]`, evaluated before subject-matter routing, and
+`question` is 237 of 505 — so the commonest thing Grant does could not reach a
+specialist. Opened to all seven with `TOPIC_ONLY` making them earn it. Deployed.
+
+**4 distinct people now, up from 2. Daniel and Ruby routed to for the first time
+in the system's history.** `verify:roster` 5/7 → 7/7.
+
+### Not fixed, and deliberately not fixed by adding three phrases
+
+Marcus, Grace and Tom still missed on their own targeted asks. Grant:
+
+> Do NOT solve this merely by adding the three exact failed phrases. The
+> requirement is **semantic breadth**. If the current architecture fundamentally
+> cannot generalise beyond keywords, identify that as an **architectural
+> limitation**.
+
+His own example settles the likely answer: *"Run the numbers if we sell it
+cheaper"* is plainly a finance question and matches no word in any expertise list.
+
+### The Issues that carry it
+
+| | |
+|---|---|
+| **#231** | the epic — evidence, all eleven workstreams, 14 acceptance criteria |
+| **#232** | routing breadth, confusion matrix, negative controls, overlapping domains (A–D) |
+| **#233** | real multi-agent collaboration — `delegation_depth > 0` proven in canonical state (E) |
+| **#234** | agent action/capability coverage, six levels from "in code" to "observed" (F) |
+| **#235** | intelligence breadth coverage model, tiers 1/2/3, mutation testing (G–H) |
+| **#236** | prove `verify:drains` goes RED — a guard nobody has seen fail (J) |
+| **#176** | production utilisation telemetry (I) — extended by comment, its P3 now questionable |
+| **#65** | closed, criteria unmet in production — carried forward by #233 |
+
+### Also landed in this pass
+
+- **`verify:drains`**, in the fast gate. The worker was absent ~15 hours on
+  13 September while pg_cron logged **1,440 successful heartbeats**; eleven of
+  Grant's messages waited. `office_health` has no word for "waiting" and still
+  does not — that gap is #236.
+- **`verify:google-live`** 12/12, and a correction: Gmail, Drive and Calendar were
+  **never** blocked on an OAuth client. The credential has worked since
+  8 September. The readiness report said otherwise and was wrong. The Drive API
+  had genuinely never been enabled — one click, now fixed.
+- **`npm run q`**, a plain query helper, after three attempts to read a fifteen-row
+  answer failed on the shape of the `db-query.sh` wrapper rather than the query.
+
+### Standing rule from this programme (workstream K)
+
+Every genuine defect becomes a permanent regression **property**, never a test of
+the phrase that exposed it. Banked so far: questions structurally unable to reach
+specialists · ambiguous questions taking `ceiling[0]` · expertise/fallback
+vocabulary drift · a specialist available but never naturally selected · a
+mechanism existing but never naturally invoked · a heartbeat green while the queue
+is static · health checks blind to never-started work · **vacuous tests passing
+because they matched zero rows** · harness traffic mistaken for production failure.
+
+---
+
+## The backend intelligence campaign — 14 September 2026
+
+Grant asked, directly: *"Are we sure that the sub-agents are being used?"* and
+*"are we getting prompt responses when we ask messages to the team?"* The
+answers were no and mostly. This is what was measured, what was wrong, and what
+now holds.
+
+### Where it started
+
+`npm run measure` (new, #231) reads what the office ACTUALLY did, real traffic
+only, and appends every snapshot to `.out/measurements.jsonl`. The baseline:
+
+| | |
+|---|---|
+| agents ever chosen | **3 of 8** — communications, finance, growth, operations and quality had never been selected once |
+| max delegation depth | **0**, across every real job in the system's history |
+| consultations | 13 real, every one Claire choosing who answers |
+| median instruction | 53s, p95 45,656s — a 15-hour worker outage, invisible behind 1,440 successful heartbeats |
+
+### #232 — the routing understood words, not meaning
+
+`npm run verify:routing-breadth` — 91 realistic asks, 10–15 per specialist,
+ten linguistic forms, through the exact calls `handlers/instruction.ts` makes.
+**31% overall**, and 0% for every phrasing that names a subject without using
+its noun: vague, colloquial, command, speech. Grant's own examples missed.
+
+Three defects, all #230's shape:
+
+1. `app.who_knows_about` is a trigram match on `staff.expertise`. New
+   `src/agents/subject.ts` reads the request for MEANING — one cheap model
+   call, only when the literal matcher found nothing, prompt built from
+   `public.staff` so the vocabulary stays Grant's.
+2. `classifyIntent` returned `thought` both for a deliberate remark and for
+   anything it did not understand, and `thought` convenes nobody. New
+   `Classification.recognised` separates them.
+3. Five `ROSTER_CEILINGS` predated half the roster — `direct_command` could not
+   reach the communications director, so *"draft the announcement"* went to
+   research.
+
+**31% → 78%.** Communications 18% → 91%, operations 25% → 92%. Claire fallbacks
+44 → 2. The ten Claire-only negative controls still hold at zero.
+
+### #233 — a second specialist now actually does the work
+
+`app.enqueue_child` and the depth cap had existed for months with no caller.
+`pickRoster` returned up to five names and the handler used one;
+`recordDecision`'s `delegationDepth` argument had never been passed by anybody.
+
+Each additional specialist now gets a child job, `announce = false`, addressed
+directly so the chain terminates at one by construction.
+`npm run verify:collaborates` — 10/10, on the deployed worker: finance answers,
+communications gets real work, `delegation_depth` 1, a consultation between two
+specialists, zero grandchildren, and a control proving the cap still refuses.
+
+### #234 — `npm run levels`
+
+Every tool placed on Grant's six levels, generated, with harness traffic
+excluded. Eleven at L6. **Four granted to all eight agents and never
+exercised**, including `task.create` — nothing in this office has ever created
+a task. Plus a new check that every job kind named in `delivered_by` has a
+handler: zero unimplemented claims.
+
+### #235 — `npm run breadth`
+
+The coverage model first, as instructed. **27 of 37 dimensions have cases; ten
+have none**, and four of those ten are how Grant actually behaves —
+corrections, changed intent, contradictory instructions, cross-project work.
+Filed as #237. Dimensions live in `public.breadth_dimensions` (0366), editable
+by him. Tiers defined; tier 3 specified and deliberately not run.
+`npm run mutate` generates semantic variants and prints them — adoption is a
+commit, because a corpus graded by the thing under test measures nothing.
+
+### #236 — the queue check can go red
+
+`verify:drains` now manufactures a real backdated queued job in a rolled-back
+transaction and asserts the same query sees it.
+
+### What is still true and uncomfortable
+
+- **Five agents remain "never chosen" in REAL traffic**, because no real
+  traffic has arrived since the fix. The office can now reach them, proved
+  through the canonical path. Whether it does is a question only Grant's next
+  few days can answer, and `npm run measure -- --compare` is how to ask it.
+- 18 of 91 routing cases still miss, mostly genuine ownership overlaps
+  (strategy vs growth on "enterprise or SMB"). That is a `staff.expertise`
+  question and his to settle, not a routing defect.
+- `public.tasks` is empty and `github.read` has never been called.
+
+---
+
+## Campaign two — can Grant live with it? — 15 September 2026
+
+Campaign one asked whether the mechanisms work. This one asked whether the
+office survives the way Grant actually talks: corrections, a changed mind, two
+projects in one conversation, references to something three turns back.
+
+**The answer is that it does now, and it did not at the start of the night.**
+Nine sessions, 34 turns, every one injected through `inbound_commands` and
+answered by the deployed worker. `npm run session -- --list`.
+
+### Eight product defects, all found by USING the office
+
+| | what Grant would have seen |
+|---|---|
+| **no path to a task** | *"Yes, do it. Create the task."* → *"Sure, I'll create it. I need a few details first: 1. Title 2. Due date 3. Owner 4. Parent task"* → and `public.tasks` stayed empty. `task.create` was granted to all eight agents with nothing routing to it |
+| **a fabricated read failed into silence** | the coherence gate refused two of four turns in one conversation and he received **nothing** — no answer, no explanation |
+| **"I've posted a Slack message to the team"** | `deliveries`: zero. He would have waited for replies from people who were never asked |
+| **"not that, this instead" did nothing** | the imperative in a second sentence was invisible to the classifier, so a whole SHAPE of correction convened nobody |
+| **"the onboarding not the pricing"** | went to the finance director — the one specialist the sentence excluded |
+| **eight clauses filed as a procedure** | a global skill called *"Shoulding decide"*, none of the eight answered, and nonsense in the office's memory |
+| **a scaffolding-only reply** | *"Ask me again and I will retry"* — the office passing its own problem back to him |
+| **an invented intake form** | the model filled in what `tool_permissions` did not say, including a parent task that is not a parameter |
+
+### What holds
+
+- **No cross-project contamination.** A → implicit switch → B → a write → back
+  to A: every turn filed correctly, and every task in the right project.
+- **Action versus discussion.** A thought, a question and an explicit hold all
+  write nothing; only the command writes. 6/6.
+- **Adversarial.** A document that does not exist is not summarised, a disabled
+  capability is not pretended, a false premise about its own history is not
+  accepted. 3/3.
+- **Routing generalises rather than memorises.** Development 79%, **held out
+  75%** on thirty formulations written afterwards — inside the noise for the
+  sample size, so no overfitting.
+
+**133/139 expectations across 34 turns.** The six that remain are the
+contradictions session, where the office answers honestly about what it lacks
+rather than engaging with the conflict, and one voice-note turn that reaches
+the Chief of Staff rather than the operations director — better than the
+excluded specialist it used to reach, not yet right.
+
+### Still uncomfortable
+
+- `conversation.max_turns` is **12** and `conversation.window_minutes` is
+  **30**. A working session longer than twelve turns cannot see its own
+  beginning, and one spanning more than half an hour loses everything older —
+  and Grant talks to this office across a day, not inside half an hour. Not
+  changed tonight: it is a cost/latency decision, not a defect.
+- 41 fixture session projects accumulated before the harness stopped
+  multiplying them. All carry a job, so none can ever be deleted (ADR-0022).
+  Invisible to Grant — they are fixtures — and permanent, like the other 22.
+- `github.read` has still never been called and `public.tasks` is empty again
+  after teardown.
+
+---
+
+## 17 September 2026 — the capability campaign
+
+Seven Issues advanced in one autonomous run, on branch
+`claude/phase-7-communications-kh8ow8`. Every one is still OPEN with its
+remaining boxes named in a comment on the Issue itself; none was closed,
+because none had every acceptance criterion satisfied.
+
+| Issue | What the office can now do that it could not | Migrations |
+|---|---|---|
+| **#260** | list what a notebook has MADE, including what Grant made himself, without fabricating a link for a type NotebookLM gives no link for | 0429–0431 |
+| **#172** | answer from the correspondence, with a message belonging to a project by DERIVATION (a contact, or an alias in the subject — never the excerpt) and mail joining the coverage it reports honestly | 0432–0434 |
+| **#258** | turn a request into a real, validated, stored PDF and send it back on Telegram | 0435 |
+| **#263** | stop in the middle of a job and carry on, without repeating an external write or guessing through a stale checkpoint | 0436 |
+| **#262** | work several specialists at once and write one answer that cannot credit somebody who did not contribute | 0437 |
+| **#264** | start governed work from something happening, with a storm rule for each failure that actually happens | 0438–0439 |
+| **#265** | register an outside MCP provider, discover what it offers, and grant nothing by doing so | 0440–0441 |
+
+**Two ADRs**: 0037 (mail belongs to a project by derivation, not by a link
+table) and 0038 (the office writes PDFs itself, because jobs run in Deno).
+
+**One assessment**: `docs/agent-runtime-assessment-2026-09-17.md` answers
+#16 / #135 / #261 without labelling them "needs budget". Three decisions are
+Grant's and none blocks the £0 work.
+
+### Live product defects found by using it, not by reading it
+
+- **69 of Grant's 90 Telegram messages could not be replied to in-thread.**
+  `BOT_FOR_INBOUND` matched an unaddressed command against a bot with a null
+  `staff_slug`, and no bot row has ever had one. The pager answered them, so
+  nothing looked broken — until a FILE needed to reach him.
+- **`app.discard_document` has never discarded anything.** It wrote a state the
+  CHECK forbids and raised 23514 every time.
+- **Google's refresh token is dead** (`invalid_grant`). Gmail and Calendar have
+  been returning nothing for two days while the hourly duty succeeded. Grant
+  has been paged; reconnecting needs a browser.
+- **`dependency_wait` was not resumable**, so the first live fan-in sat paused
+  for eighteen minutes with the answer never written.
+
+### What a fresh session should read
+
+`CLAUDE.md`, then `docs/AUTONOMOUS-RUN.md`, whose progress table has a row per
+Issue with what is done, what remains and what the evidence was.

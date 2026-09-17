@@ -116,7 +116,35 @@ function plainly(reason: string, names: ReadonlyMap<string, string>): string {
   for (const [slug, name] of names) {
     stripped = stripped.replaceAll(slug, name)
   }
+  /*
+    Only the terms that are not already English.
+
+    This loop put `Reads to me like a question` in the channel correctly, and
+    also put this in it:
+
+        One specialist: the a question is about evidence, and forbids
+        convening a team for it.
+
+    The router's reason said "the question is about evidence" — using
+    `question` as an ordinary English noun, because it is one — and the
+    substitution replaced it with `a question`, article and all. Four of the
+    seven §6 classes have this problem: `thought`, `question`, `discussion`
+    and `suggestion` are words a person writing a sentence will use, and
+    replacing them can only make the sentence worse.
+
+    The three that genuinely need translating are the ones spelled as
+    vocabulary rather than as English — `light_investigation`,
+    `direct_command`, and anything added later in that shape. An underscore is
+    what makes them recognisable, and it is also what guarantees a false match
+    is impossible: no English sentence contains one.
+
+    `narrate` still names the class in full, through `READS_AS` directly. That
+    is a deliberate label of the classification, not a word caught inside
+    somebody else's sentence, and it reads correctly because a whole clause was
+    written around it.
+  */
   for (const [term, said] of Object.entries(READS_AS)) {
+    if (!term.includes('_')) continue
     stripped = stripped.replaceAll(term, said)
   }
 
@@ -208,6 +236,22 @@ export async function narrateHandoffs(
              select 1 from public.deliveries d
               where d.dedupe_key = 'narration:' || r.job_id::text
            )
+       /*
+         Harness traffic is not the office working.
+
+         Grant's floor channel was carrying "Filed under zz test slack
+         80106050." and the same handoff twice — verification runs, narrated as
+         though they were his day. CLAUDE.md has the rule and the reason:
+         jobs.is_fixture exists precisely because harness traffic was once
+         reported to him as the office collapsing, and this is the same mistake
+         with the sign reversed. The flag is GENERATED from requested_by, so it
+         cannot be got wrong by a caller.
+
+         (And the backticks that were in this comment a minute ago ended the
+         template literal, which is the trap CLAUDE.md lists first. It only
+         checks the web folder.)
+       */
+       and not j.is_fixture
        -- Old decisions are not news. A first run after a quiet fortnight should
        -- not post a fortnight of backlog into a channel nobody had yet.
        and r.decided_at > now() - interval '6 hours'

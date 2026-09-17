@@ -13,10 +13,12 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import type { UsageOutcome } from '../inference/policy.ts'
 import { recordUsage } from '../inference/record.ts'
+import { redactSecrets } from '../text/secrets.ts'
 import type { AllowedModel } from './guards.ts'
 import {
   assertModelAllowed,
-  assertResponseWasFree,
+  assertResponseWithinBudget,
+  type Budget,
   buildRequestBody,
   PaidCallPreventedError,
 } from './guards.ts'
@@ -97,6 +99,21 @@ export interface CompletionRequest {
   /** Optional explicit model. Omit to take the highest-priority usable one. */
   readonly model?: string
   readonly maxTokens?: number
+  /**
+   * Sampling temperature, when the caller needs the SAME answer twice.
+   *
+   * Omitted for ordinary work — the office is not trying to be deterministic
+   * when it writes to Grant, and pinning it there would make every reply
+   * flatter for no benefit.
+   *
+   * `npm run eval` sets it to 0, and that is not a preference. A judge left at
+   * the provider default gave 17/19 and then 16/19 on an UNCHANGED corpus with
+   * different cases disagreeing each run, which is the same defect as 0361's
+   * random tiebreak wearing a different hat: a number that changes when nothing
+   * under test changed is not a measurement. The router already pins the judge
+   * MODEL for exactly this reason and stopped one step short.
+   */
+  readonly temperature?: number
   /** Ties the call to a job for usage accounting and the ledger. */
   readonly correlationId?: string
   /**
@@ -119,7 +136,15 @@ export interface CompletionResult {
   readonly content: string
   readonly promptTokens: number
   readonly completionTokens: number
-  /** Always 0 — a non-zero value throws before this is constructed. */
+  /**
+   * What the provider reported for this response, in US dollars.
+   *
+   * Zero on a free model, and zero is no longer the only legal value: a cost
+   * ABOVE the provider's per-call ceiling throws before this is constructed,
+   * a cost below it is recorded. Reporting it as 0 while a funded key was
+   * charged would be the same defect as a column that can only ever say one
+   * thing.
+   */
   readonly cost: number
 }
 
@@ -128,6 +153,15 @@ interface ProviderRow {
   base_url: string
   free_only: boolean
   secret_ref: string | null
+  /**
+   * What this provider may charge, straight off its registry row.
+   *
+   * Carried on the provider rather than the model because it is a statement
+   * about what Grant has funded, not about what a model happens to cost — a
+   * new model appearing in the allow-list must not arrive with its own
+   * permission to spend.
+   */
+  budget: Budget
 }
 
 /**
@@ -164,14 +198,37 @@ export class ProviderRouter {
     this.maxAttempts = Math.max(1, maxAttempts)
   }
 
-  /** Layer 3's data, read fresh: availability is a measured, expiring fact. */
-  private async loadAllowList(): Promise<{ provider: ProviderRow; models: AllowedModel[] }> {
+  /**
+   * Layer 3's data, read fresh: availability is a measured, expiring fact —
+   * and, since #127, so is competence.
+   *
+   * `app.model_order` (0394) returns the allow-list already in the order to
+   * try it, each row carrying the reason. The order is NOT restated here, and
+   * that is the point: the previous version of this method restated the view's
+   * `ORDER BY` because a view's ordering does not survive being selected from,
+   * and the two copies then disagreed — `model_priority` was added to one and
+   * not the other, which sent the first real paid request to three free models
+   * instead. One list assembled once, by the thing that knows why.
+   *
+   * The kind is read from the job rather than passed in, so it cannot be
+   * passed WRONGLY and no caller has to be changed to get it right. A call
+   * with no job is not given a false kind: `(unattributed)` is what the record
+   * itself calls those rows, and it is a real record of real calls.
+   */
+  private async loadAllowList(
+    jobId?: string,
+  ): Promise<{ provider: ProviderRow; models: AllowedModel[]; why: Map<string, string> }> {
+    const forJob =
+      jobId === undefined || jobId === ''
+        ? `'(unattributed)'`
+        : `coalesce((select j.kind from public.jobs j where j.job_id = '${jobId.replace(/'/g, "''")}'::uuid), '(unattributed)')`
     const { rows } = await this.db.execute(`
-      select m.provider, m.model_id, m.pricing_prompt, m.pricing_completion,
-             p.base_url, p.free_only, p.secret_ref::text as secret_ref
-      from public.usable_models m
-      join public.providers p on p.provider = m.provider
-      order by p.priority, m.model_id
+      select o.provider, o.model_id, o.pricing_prompt, o.pricing_completion,
+             o.base_url, o.secret_ref::text as secret_ref, o.standing, o.why,
+             p.free_only,
+             p.max_price_prompt, p.max_price_completion, p.max_cost_per_call_usd
+      from app.model_order(${forJob}) o
+      join public.providers p on p.provider = o.provider
     `)
     if (rows.length === 0) throw new NoUsableModelError()
 
@@ -182,13 +239,50 @@ export class ProviderRouter {
         base_url: String(first.base_url),
         free_only: first.free_only === true,
         secret_ref: first.secret_ref === null ? null : String(first.secret_ref),
+        budget: {
+          maxPricePrompt: Number(first.max_price_prompt ?? 0),
+          maxPriceCompletion: Number(first.max_price_completion ?? 0),
+          maxCostPerCallUsd: Number(first.max_cost_per_call_usd ?? 0),
+        },
       },
       models: rows.map((r) => ({
         model_id: String(r.model_id),
         pricing_prompt: r.pricing_prompt === null ? null : String(r.pricing_prompt),
         pricing_completion: r.pricing_completion === null ? null : String(r.pricing_completion),
       })),
+      why: new Map(rows.map((r) => [String(r.model_id), String(r.why ?? '')])),
     }
+  }
+
+  /**
+   * Say, in the job's own trace, which model was chosen and on what evidence.
+   *
+   * #127's last acceptance criterion — *"the router explains its choice in the
+   * trace"* — and it is written from the SAME row the order came from, so the
+   * explanation cannot drift from the decision it explains.
+   *
+   * Never allowed to fail the call. A trace is bookkeeping and the work is the
+   * work; but it is not swallowed silently either, because a write nobody
+   * reads back is indistinguishable from a feature that was never built. It
+   * fails into the console, which is where a worker's faults are read.
+   */
+  private async explainChoice(
+    jobId: string | undefined,
+    model: string,
+    why: string,
+  ): Promise<void> {
+    if (jobId === undefined || jobId === '' || why === '') return
+    const detail = JSON.stringify({ chose: model, because: why }).replace(/'/g, "''")
+    await this.db
+      .execute(
+        `select app.job_trace_add('${jobId.replace(/'/g, "''")}'::uuid, 'decision',
+           '${detail}'::jsonb, null, null, null, null)`,
+      )
+      .catch((error: unknown) => {
+        console.error(
+          `router: could not trace the model choice — ${String((error as Error).message)}`,
+        )
+      })
   }
 
   /**
@@ -242,7 +336,7 @@ export class ProviderRouter {
    *   provenance a lie.
    */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const { provider, models } = await this.loadAllowList()
+    const { provider, models, why } = await this.loadAllowList(request.jobId)
 
     // A named model is honoured exactly, or it fails. See above.
     if (request.model !== undefined) {
@@ -254,7 +348,12 @@ export class ProviderRouter {
 
     for (const [index, model] of candidates.entries()) {
       try {
-        return await this.attempt(provider, models, request, model)
+        const result = await this.attempt(provider, models, request, model)
+        // Traced after it worked, not before it was tried: the interesting
+        // fact is which model ANSWERED, and a model that threw and was failed
+        // over from is already recorded in `inference_usage` with its outcome.
+        await this.explainChoice(request.jobId, model, why.get(model) ?? '')
+        return result
       } catch (error) {
         // Non-negotiable: these end the call rather than advancing it.
         // `PaidCallPreventedError` covers both "this model is not on the
@@ -299,10 +398,15 @@ export class ProviderRouter {
     // Layers 1 and 3, before the request exists.
     assertModelAllowed(model, models, provider.free_only)
 
-    const body = buildRequestBody(model, {
-      messages: request.messages,
-      ...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
-    })
+    const body = buildRequestBody(
+      model,
+      {
+        messages: request.messages,
+        ...(request.maxTokens === undefined ? {} : { max_tokens: request.maxTokens }),
+        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+      },
+      provider.budget,
+    )
 
     // `response.json()` is `unknown`, correctly: the provider's response is
     // untrusted input. Named so the assertion happens once, here, rather than
@@ -360,10 +464,10 @@ export class ProviderRouter {
     }
 
     // Layer 4. Throwing here rather than absorbing the charge is deliberate: a
-    // non-zero cost means an earlier layer was bypassed, which is a defect to
-    // surface, not an expense to swallow.
+    // cost above the provider's ceiling means an earlier layer was bypassed,
+    // which is a defect to surface, not an expense to swallow.
     try {
-      assertResponseWasFree(model, payload.usage)
+      assertResponseWithinBudget(model, payload.usage, provider.budget.maxCostPerCallUsd)
     } catch (error) {
       await this.recordFailure(
         provider.provider,
@@ -377,9 +481,11 @@ export class ProviderRouter {
     const content = choice?.message?.content ?? ''
 
     if (content.trim() === '') {
-      // The call succeeded and cost nothing, so this is not a provider failure
-      // and must not trip the breaker — the provider did its job. Recording
-      // success keeps the breaker honest about availability.
+      // The call succeeded, so this is not a provider failure and must not trip
+      // the breaker — the provider did its job. Recording success keeps the
+      // breaker honest about availability. On a funded key it did cost
+      // something, which is exactly why the charge is accounted below rather
+      // than dropped: an answer we could not use is the expensive kind.
       await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
       await this.account(
         provider.provider,
@@ -391,6 +497,7 @@ export class ProviderRouter {
           completion: payload.usage?.completion_tokens ?? 0,
         },
         Date.now() - startedAt,
+        payload.usage?.cost ?? 0,
       )
       throw new EmptyCompletionError(
         payload.model ?? model,
@@ -400,6 +507,7 @@ export class ProviderRouter {
     }
 
     await this.db.execute(`select app.record_provider_success('${provider.provider}')`)
+    const costUsd = payload.usage?.cost ?? 0
     await this.account(
       provider.provider,
       payload.model ?? model,
@@ -410,6 +518,7 @@ export class ProviderRouter {
         completion: payload.usage?.completion_tokens ?? 0,
       },
       Date.now() - startedAt,
+      costUsd,
     )
 
     return {
@@ -417,7 +526,7 @@ export class ProviderRouter {
       content,
       promptTokens: payload.usage?.prompt_tokens ?? 0,
       completionTokens: payload.usage?.completion_tokens ?? 0,
-      cost: 0,
+      cost: costUsd,
     }
   }
 
@@ -443,6 +552,7 @@ export class ProviderRouter {
     request: Pick<CompletionRequest, 'correlationId' | 'jobId'>,
     tokens: { prompt: number; completion: number } = { prompt: 0, completion: 0 },
     latencyMs?: number,
+    costUsd: number | null = null,
   ): Promise<void> {
     // No correlation id means no job to attribute this to. Recorded anyway,
     // under a generated one: an unattributed call is still a call, and
@@ -457,9 +567,13 @@ export class ProviderRouter {
         outcome,
         promptTokens: tokens.prompt,
         completionTokens: tokens.completion,
-        // OpenRouter's free tier reports no cost, and §11 says that is exactly
-        // when a figure must not be called authoritative. `null` carries that.
-        providerReportedCost: null,
+        // `null` where the provider reported nothing — §11 says an unreported
+        // figure must not be called authoritative, and null carries that. On a
+        // funded key the provider DOES report, and passing the real number is
+        // what makes `inference_usage` able to answer what a day costs. It was
+        // hardcoded null while every model was free, which is a column that
+        // could only ever say one thing.
+        providerReportedCost: costUsd,
         latencyMs,
       })
     } catch {
@@ -468,14 +582,22 @@ export class ProviderRouter {
   }
 
   private async recordFailure(provider: string, message: string): Promise<void> {
-    // §15: redact token patterns before anything reaches stored error text.
-    // A provider error frequently carries the URL it was called with.
-    const redacted = message
-      .replace(/xox[abposr]-[A-Za-z0-9-]+/g, '[REDACTED]')
-      .replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]')
-      .replace(/sbp_[a-f0-9]+/g, '[REDACTED]')
-      .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
-      .slice(0, 400)
+    /*
+      §15: redact token patterns before anything reaches stored error text. A
+      provider error frequently carries the URL it was called with.
+
+      This was four patterns written inline here. It is now the shared list in
+      `src/text/secrets.ts`, because there were three separate vocabularies in
+      this repository — this one, the Telegram URL redactor, and the CHECK
+      constraint on `connection_health` — and each was missing what the others
+      had. This one had never heard of a Notion token, a GitHub PAT or a Google
+      refresh token, all three of which the office holds.
+
+      A redaction list in three places is a redaction list that is wrong in at
+      least two of them, and it fails silently: what you find out is that a
+      credential was stored, and you find it out late.
+    */
+    const redacted = redactSecrets(message).slice(0, 400)
     await this.db.execute(
       `select app.record_provider_failure('${provider}', '${redacted.replace(/'/g, "''")}')`,
     )

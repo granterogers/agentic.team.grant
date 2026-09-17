@@ -150,9 +150,18 @@ export function sourceHandler(deps: {
               'with the pricing note" is a complete and useful answer, and inventing ' +
               'significance is worse than finding none. If it contradicts something we hold, ' +
               'lead with the contradiction.\n\n' +
-              'Under 100 words, first person, no bullet points, no headings, no summary of ' +
+              'Under 100 words, first person, no headings, no summary of ' +
               'the document. Never write "I hope this helps", "Here is a summary", "As an ' +
-              'AI". Do not sign your name.' +
+              'AI". Do not sign your name. ' +
+              // #209, narrowed harder here than in the conversational handler
+              // and deliberately so. This answers ONE question — what does
+              // this change — and one answer is a sentence. The list case is
+              // real but rare: a source that contradicts three things we hold
+              // is three findings, and running them together is what makes a
+              // notification unreadable. Same numbered form as everywhere
+              // else, so the shape does not change per surface.
+              'If it changes three or more separate things, number them "1. ", "2. ", "3. " ' +
+              'one per line, so he can reply about one of them. Otherwise write prose.' +
               (context === ''
                 ? ' We hold nothing else on this subject, so say that this is the first thing ' +
                   'we have on it.'

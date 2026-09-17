@@ -40,6 +40,8 @@ export interface SlackDeliveryRequest {
   readonly teamId: string
   readonly channelId: string
   readonly threadTs?: string | null
+  /** See `SlackMessageBody.broadcast`. */
+  readonly broadcast?: boolean
   readonly purpose: DeliveryPurpose
   readonly staff: StaffPresentation | null
   readonly staffId?: string | null
@@ -98,6 +100,7 @@ export class SlackOffice {
       username: identity?.username ?? null,
       iconUrl: identity?.iconUrl ?? null,
       iconEmoji: identity?.iconEmoji ?? null,
+      broadcast: request.broadcast === true,
     }
 
     const result = await this.delivery.deliver({

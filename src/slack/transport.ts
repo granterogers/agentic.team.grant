@@ -32,6 +32,21 @@ export interface SlackMessageBody {
   readonly username?: string | null
   readonly iconUrl?: string | null
   readonly iconEmoji?: string | null
+  /**
+   * Show a threaded reply in the channel as well as in its thread.
+   *
+   * Slack's `reply_broadcast`. Without it a threaded reply is visible only to
+   * someone who opens the thread, and the change that started threading
+   * answers under Grant's own questions would have made every answer HARDER
+   * to see while making the relationship clearer — a net loss, and the exact
+   * shape of defect that passes every check because both halves are correct.
+   *
+   * Set only when we are STARTING a thread on a message of Grant's. Inside a
+   * thread he opened himself he is already watching, and broadcasting every
+   * reply into the channel is the noise he complained about wearing a
+   * different hat.
+   */
+  readonly broadcast?: boolean
 }
 
 export class SlackTransport implements Transport {
@@ -50,7 +65,10 @@ export class SlackTransport implements Transport {
         event_payload: { dedupe_key: request.dedupeKey },
       },
     }
-    if (request.threadRef !== null) body.thread_ts = request.threadRef
+    if (request.threadRef !== null) {
+      body.thread_ts = request.threadRef
+      if (message.broadcast === true) body.reply_broadcast = true
+    }
     if (message.username !== null && message.username !== undefined) {
       body.username = message.username
     }

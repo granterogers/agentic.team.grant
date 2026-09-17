@@ -41,11 +41,31 @@ const checks: { what: string; outcome: string; passed: boolean }[] = []
 // renamed out from under the function or one that never existed.
 const dangling = (
   await db.execute(`
-    with bodies as (
+    with raw as (
       select n.nspname || '.' || p.proname as fn, pg_get_functiondef(p.oid) as def
       from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
       where n.nspname in ('app', 'public')
+    ),
+    bodies as (
+      -- A COMMENT IS NOT A CALL, and this check reported one as a dangling
+      -- reference the day 0452 dropped app.what_i_can_do: hq_governance
+      -- explains in prose why it no longer calls it, and the regex read the
+      -- explanation as the call. The explanation is the thing that stops
+      -- somebody putting it back, so the check has to read past it rather
+      -- than the comment having to go.
+      --
+      -- Innermost-first for the block form, which is all a regex can do about
+      -- comments Postgres NESTS; a stray closing marker left behind carries no
+      -- qualified name, so it cannot hide a real reference. Only a strict
+      -- subset of the text is removed, which is the direction that matters:
+      -- this can never invent a reference, only decline to read one inside a
+      -- comment.
+      select fn,
+             regexp_replace(
+               regexp_replace(def, '/\\*.*?\\*/', ' ', 'gs'),
+               '--[^' || chr(10) || ']*', ' ', 'g') as def
+        from raw
     ),
     referenced as (
       select b.fn,
@@ -63,6 +83,34 @@ const dangling = (
        union
       select lower(n.nspname || '.' || t.typname)
         from pg_type t join pg_namespace n on n.oid = t.typnamespace
+       union
+      /*
+        Runtime settings, which are not relations and never were.
+
+        app.undoing is a GUC. current_setting of it is how hq_undo, undo_none
+        and undo_offer stop an undo from recording an undo of itself. It is
+        the word app, a dot and a name, inside a STRING LITERAL -- so a regex
+        over the function body sees it and the catalogue does not, and three
+        correct functions were reported as naming a table that does not exist.
+
+        Taken from the settings the bodies themselves name rather than from a
+        hand-written list, so a new one is covered the day it is written. This
+        is the narrowest honest widening: a GUC really is a qualified name
+        that legitimately has no catalogue entry.
+
+        Two things this comment must not contain, both learned here. No
+        backtick: it lives inside a JS template literal and a backtick ends the
+        string, which is CLAUDE.md's first trap and check:templates does not
+        cover scripts. And no slash-star sequence: Postgres NESTS block
+        comments, so writing the glob for the web folder opened a nested
+        comment that was never closed.
+      */
+      select distinct lower(m[1])
+        from bodies b,
+             lateral regexp_matches(
+               b.def,
+               '(?:current_setting|set_config)\\s*\\(\\s*''((?:app|public)\\.[a-z_][a-z0-9_]*)''',
+               'gi') as m
     )
     select distinct r.fn, r.ref
       from referenced r
@@ -95,6 +143,37 @@ const control = (
         where name = 'public.a_relation_that_does_not_exist') as impossible
   `)
 ).rows[0] as { known_names: number; impossible: number }
+
+/*
+  CONTROL for the comment stripping above.
+
+  Removing text is the one way this check can go quietly blind: a regex that
+  matched too much would leave nothing to resolve and the suite would report
+  that every qualified name resolves. So count what survives, and require it
+  to be a corpus rather than a handful.
+*/
+const surviving = (
+  await db.execute(`
+    with raw as (
+      select pg_get_functiondef(p.oid) as def
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname in ('app', 'public')
+    )
+    select count(*)::int as n
+      from raw r,
+           lateral regexp_matches(
+             regexp_replace(
+               regexp_replace(r.def, '/\\*.*?\\*/', ' ', 'gs'),
+               '--[^' || chr(10) || ']*', ' ', 'g'),
+             '\\m(app|public)\\.[a-z_][a-z0-9_]*', 'gi')
+  `)
+).rows[0] as { n: number }
+
+checks.push({
+  what: 'CONTROL: stripping comments leaves the references it is meant to read',
+  outcome: `${String(surviving.n)} qualified name(s) survive the strip`,
+  passed: surviving.n > 500,
+})
 
 checks.push({
   what: 'CONTROL: the catalogue query sees real relations and not a fabricated one',

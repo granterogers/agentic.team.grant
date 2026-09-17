@@ -1,0 +1,1686 @@
+{
+  "at": "2026-09-15T17:55:29.336Z",
+  "cells": [
+    {
+      "agent": "chief-of-staff",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "chief-of-staff",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "communications-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "communications-director",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "finance-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "finance-director",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "growth-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "growth-director",
+      "tool": "web.search",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "operations-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "operations-director",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "quality-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "quality-director",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "research-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "research-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "research-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "research-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "research-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "research-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "research-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "research-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "research-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "research-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "research-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "research-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "research-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "research-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "research-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "research-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "research-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "research-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "research-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "research-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "research-director",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "calendar.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_calendar"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "calendar.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.write_calendar_tasks"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "db.delete",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Destructive. Nothing in V1 needs it, and a capability that exists is a capability that can be reached."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "db.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — every handler reads its own database; a completed real job IS the evidence"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "draft.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a draft is a row in public.outputs"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "github.read",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. src/github/api.ts is real and tested by verify:github, and its only importer is that suite - there is no handler, no job kind and no planner step, so nothing Grant can type reaches it. Wire a job kind and re-enable; until then saying otherwise is #64."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "github.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §13 puts destructive GitHub operations in the highest tier. There is no automated path to this in V1, and src/github/api.ts contains no method that writes — the absence is structural, not just a flag."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "gmail.draft",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: not implemented. src/google/mail.ts exports parseFrom and refreshMail and nothing else - there is no draft writer, and the description claimed one. gmail.send stays off by policy; this one is off because it does not exist."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "gmail.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "gmail.search",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind google.read_mail"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "gmail.send",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: Gmail is draft-only by policy. The OAuth scope permitting it is not a reason to expose it; sending stays disabled until Grant explicitly enables it. Re-disabled by 0022 after a defective verification check enabled it - see that migration's header."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "note.create",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: no route from a user request. The notebook.push_document handler is registered and correct, and nothing enqueues it: the nine artefacts a planner can request are all NotebookLM generations. Closest of the three to being real - it needs a way to ask, not an implementation."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "notebook.read",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.ask, notebook.collect"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "notebook.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind notebook.add_source, notebook.generate"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "notion.write",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — real jobs of kind office.notion_import, office.notion_sync"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "preference.update",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a changed preference is a row in public.preference_instructions"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "production.write",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Requires explicit approval and has no automated path in V1."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "slack.post",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 6,
+      "status": "proven",
+      "why": "L6 in real traffic — a post is a delivery on the slack channel"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "spend.money",
+      "granted": false,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: §11: paid inference is prevented by four layers; this is the same prohibition at the tool router."
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "task.create",
+      "granted": true,
+      "advertised": true,
+      "reachable": true,
+      "atLevel": 2,
+      "status": "proven",
+      "why": "reached on the canonical path by 26 harness turn(s); L2 in real traffic"
+    },
+    {
+      "agent": "strategy-director",
+      "tool": "web.search",
+      "granted": true,
+      "advertised": false,
+      "reachable": false,
+      "atLevel": 0,
+      "status": "n/a-policy",
+      "why": "disabled by policy: Nothing implements this. The row claimed reach the office does not have, and every agent's capability sheet repeated the claim — so an agent asked to research something would say it would search the web and then not. It stays listed, disabled, because the office genuinely wants it: a listed gap can become a proposal (#49), a deleted one cannot. Re-enable it in the same change that implements it."
+    }
+  ],
+  "leaks": []
+}

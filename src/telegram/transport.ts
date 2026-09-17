@@ -31,6 +31,7 @@ import {
   TransportError,
 } from '../channels/delivery.ts'
 import { TelegramApiError, type TelegramClient } from './api.ts'
+import { inlineKeyboard } from './message.ts'
 
 /** What `TelegramTransport` expects in `SendRequest.body`. */
 export interface TelegramMessageBody {
@@ -38,7 +39,62 @@ export interface TelegramMessageBody {
   readonly keyboard?: readonly (readonly { text: string; callback_data?: string; url?: string }[])[]
   /** A pager should not also ring. Set for anything below `important`. */
   readonly silent?: boolean
+  /**
+   * Send this as a playable audio file rather than as text (#66).
+   *
+   * `url` when Telegram can fetch it itself, `bytes` when it cannot — which is
+   * the case for anything in our private bucket. Telegram caps a bot upload at
+   * 50MB and will not say so kindly, so the caller checks first.
+   */
+  readonly audio?: {
+    readonly url?: string
+    readonly bytes?: Uint8Array
+    readonly filename: string
+    readonly title: string
+    readonly performer?: string
+    readonly durationSeconds?: number
+  }
+  /**
+   * Send this as a file rather than as text (#258).
+   *
+   * The same shape as `audio` and for the same reason: a URL is one JSON
+   * request and bytes are a multipart upload, and a private bucket forces the
+   * second. Separate from `audio` because Telegram's methods are separate —
+   * `sendAudio` gives a scrubber and `sendDocument` gives a file card, and a
+   * PDF in an audio player is not a smaller mistake for being close.
+   */
+  readonly document?: {
+    readonly url?: string
+    readonly bytes?: Uint8Array
+    readonly filename: string
+    readonly mime: string
+  }
+  /**
+   * Suppress the default feedback buttons. Rare, and each use says why.
+   *
+   * Not a general escape hatch: the default exists because Grant asked for
+   * these on everything, and a flag that gets set out of habit puts us back
+   * where we were.
+   */
+  readonly noFeedback?: boolean
 }
+
+/*
+  Purposes that must NOT get thumbs up and down.
+
+  Two kinds, and both would be worse with them:
+
+  - `ack` is "got it, working on it". Asking whether an acknowledgement was
+    useful is noise, and it is the most frequent message the office sends.
+  - a credential delivery is a one-off operational message; a 👍 on it records
+    nothing anyone will read and puts a button under a secret.
+
+  An APPROVAL request is excluded by a different mechanism — `resultContext`
+  already swaps the six buttons for approve/decline, so it arrives with a
+  keyboard and the default never applies. That is deliberate: 👍 on "may I
+  generate this?" answers nothing.
+*/
+const NO_FEEDBACK_PURPOSES: ReadonlySet<string> = new Set(['ack'])
 
 export class TelegramTransport implements Transport {
   readonly channel = 'telegram' as const
@@ -47,6 +103,32 @@ export class TelegramTransport implements Transport {
 
   async send(request: SendRequest): Promise<SendResult> {
     const message = request.body as TelegramMessageBody
+
+    /*
+      A file, sent as a file.
+
+      Issue #66. Grant: *"just directly have the audio file sent to me on
+      Telegram that I can play it directly in Telegram rather than necessarily
+      having to open notebook."* `sendMessage` was the only method this
+      transport used, so the best it could do was a link — which is the trip to
+      NotebookLM he was trying to avoid, one click further away.
+
+      `sendAudio` rather than `sendVoice`: a voice note is a waveform bubble
+      with no title, which is right for a fifteen-second reply and wrong for a
+      twenty-minute overview. `sendAudio` shows the title, the duration and a
+      scrubber, and it survives being forwarded.
+    */
+    if (message.audio !== undefined) return await this.sendAudio(request, message)
+    /*
+      A generated artifact, sent as a file (#258).
+
+      Grant asked for a researched PDF back through Telegram and was told the
+      office had no means. The means ends here, and a caption rather than a
+      separate message: a file card with the sentence on it is one thing
+      arriving, and two messages is the office talking about a file it has
+      just sent.
+    */
+    if (message.document !== undefined) return await this.sendDocument(request, message)
     const body: Record<string, unknown> = {
       chat_id: request.targetRef,
       text: message.text,
@@ -64,8 +146,38 @@ export class TelegramTransport implements Transport {
         allow_sending_without_reply: true,
       }
     }
-    if (message.keyboard !== undefined && message.keyboard.length > 0) {
-      body.reply_markup = { inline_keyboard: message.keyboard }
+    /*
+      Every message to Grant carries the feedback pair, unless it already has
+      buttons of its own.
+
+      Issue #59, and specifically his second time asking:
+
+          "ensure that ALL messages sent to me on Telegram come with that
+           little thumbs up, thumbs down button at the end to make it easier to
+           provide feedback if the message has been understood or if it
+           requires correction."
+
+      The first fix added them to `replyChannel`. That was one of six senders:
+      the pager had them, and `progress.ts`, `scripts/notify.ts`,
+      `hq-token.ts` and `mcp.ts` did not. Patching each is how the seventh
+      sender ships without them, so the default lives here — the one place
+      every Telegram message passes through, including ones nobody has written
+      yet.
+
+      A caller that supplies its own keyboard wins, so approve/decline and the
+      full six are untouched. A caller with nothing to say gets the pair.
+    */
+    const keyboard =
+      message.keyboard !== undefined && message.keyboard.length > 0
+        ? message.keyboard
+        : message.noFeedback === true ||
+            NO_FEEDBACK_PURPOSES.has(request.purpose) ||
+            request.correlationId === null
+          ? undefined
+          : inlineKeyboard(['feedback.useful', 'feedback.not_useful'], request.correlationId, null)
+
+    if (keyboard !== undefined && keyboard.length > 0) {
+      body.reply_markup = { inline_keyboard: keyboard }
     }
 
     try {
@@ -75,6 +187,149 @@ export class TelegramTransport implements Transport {
         // `ok: true` with no message id should not happen, and if it does we
         // cannot address the message afterwards — which is the same position an
         // indeterminate send leaves us in, so it is reported the same way.
+        throw new TransportError('indeterminate:no_message_id', 'indeterminate')
+      }
+      return { messageRef: String(result.message_id) }
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      if (error instanceof TelegramApiError) throw new TransportError(error.code, error.kind)
+      throw error
+    }
+  }
+
+  /**
+   * Send a playable audio file.
+   *
+   * Two paths because Telegram offers two, and which one applies is decided by
+   * whether the bytes are reachable from the public internet. A URL is one JSON
+   * request; bytes are a multipart upload, and the upload is what a private
+   * bucket forces.
+   */
+  private async sendAudio(request: SendRequest, message: TelegramMessageBody): Promise<SendResult> {
+    const audio = message.audio
+    if (audio === undefined) throw new TransportError('no_audio', 'terminal')
+
+    const fields: Record<string, string> = {
+      chat_id: request.targetRef,
+      title: audio.title,
+      // The caption carries the words that would otherwise have been the whole
+      // message, so nothing is lost by sending a file instead of a sentence.
+      caption: message.text.slice(0, 1024),
+      parse_mode: 'HTML',
+      disable_notification: String(message.silent === true),
+      ...(audio.performer === undefined ? {} : { performer: audio.performer }),
+      ...(audio.durationSeconds === undefined
+        ? {}
+        : { duration: String(Math.round(audio.durationSeconds)) }),
+    }
+    if (request.threadRef !== null) {
+      fields.reply_to_message_id = String(Number(request.threadRef))
+      fields.allow_sending_without_reply = 'true'
+    }
+
+    try {
+      let response: { result?: unknown }
+      if (audio.url !== undefined && audio.url !== '') {
+        // Telegram fetches it. One request, and it fails if the URL is not
+        // publicly reachable — which is why a private bucket takes the other
+        // path rather than trying this first and falling back.
+        response = await this.telegram.call('sendAudio', { ...fields, audio: audio.url })
+      } else if (audio.bytes !== undefined) {
+        const form = new FormData()
+        for (const [k, v] of Object.entries(fields)) form.append(k, v)
+        form.append(
+          'audio',
+          // `Uint8Array` into a Blob, not a Buffer: this runs in Deno as well
+          // as Node, and Buffer is not a global there. Bitten three times.
+          /*
+            The array is widened rather than typed.
+
+            `BlobPart` is a DOM lib name and this project runs `tsc` without
+            the DOM lib — deliberately, so a real DOM mistake in Node code
+            cannot pass. `Blob` and `FormData` are Node 18+ globals and work
+            at runtime; only the part type is missing, so it is the one thing
+            widened rather than switching the lib on for the whole project.
+          */
+          new Blob([audio.bytes] as unknown as ConstructorParameters<typeof Blob>[0], {
+            type: 'audio/mpeg',
+          }),
+          audio.filename,
+        )
+        response = await this.telegram.callForm('sendAudio', form)
+      } else {
+        throw new TransportError('audio_has_neither_url_nor_bytes', 'terminal')
+      }
+
+      const result = response.result as { message_id?: number } | undefined
+      if (result?.message_id === undefined) {
+        throw new TransportError('indeterminate:no_message_id', 'indeterminate')
+      }
+      return { messageRef: String(result.message_id) }
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      if (error instanceof TelegramApiError) throw new TransportError(error.code, error.kind)
+      throw error
+    }
+  }
+
+  /**
+   * A file, with the message as its caption (#258).
+   *
+   * Deliberately a near-copy of `sendAudio` rather than a shared helper. The
+   * two differ in the method name, the field name, the caption limit and the
+   * fact that a document has a MIME type and no duration — factoring that into
+   * one function with four parameters saves twenty lines and makes both harder
+   * to read, and the audio path is the one that took three attempts to get
+   * right.
+   *
+   * Telegram caps a bot upload at 50 MB and refuses unkindly, so the size is
+   * checked here rather than discovered. An artifact too big to send is not a
+   * lost artifact: it is stored, and the caller is told to hand over a link
+   * instead, which is #258's own rule about channel limits.
+   */
+  private async sendDocument(
+    request: SendRequest,
+    message: TelegramMessageBody,
+  ): Promise<SendResult> {
+    const file = message.document
+    if (file === undefined) throw new TransportError('no_document', 'terminal')
+    if (file.bytes !== undefined && file.bytes.byteLength > 45_000_000) {
+      throw new TransportError('document_too_large_for_telegram', 'terminal')
+    }
+
+    const fields: Record<string, string> = {
+      chat_id: request.targetRef,
+      caption: message.text.slice(0, 1024),
+      parse_mode: 'HTML',
+      disable_notification: String(message.silent === true),
+    }
+    if (request.threadRef !== null) {
+      fields.reply_to_message_id = String(Number(request.threadRef))
+      fields.allow_sending_without_reply = 'true'
+    }
+
+    try {
+      let response: { result?: unknown }
+      if (file.url !== undefined && file.url !== '') {
+        response = await this.telegram.call('sendDocument', { ...fields, document: file.url })
+      } else if (file.bytes !== undefined) {
+        const form = new FormData()
+        for (const [k, v] of Object.entries(fields)) form.append(k, v)
+        form.append(
+          'document',
+          // Uint8Array into a Blob, never a Buffer: this runs in Deno too.
+          new Blob([file.bytes] as unknown as ConstructorParameters<typeof Blob>[0], {
+            type: file.mime,
+          }),
+          file.filename,
+        )
+        response = await this.telegram.callForm('sendDocument', form)
+      } else {
+        throw new TransportError('document_has_neither_url_nor_bytes', 'terminal')
+      }
+
+      const result = response.result as { message_id?: number } | undefined
+      if (result?.message_id === undefined) {
         throw new TransportError('indeterminate:no_message_id', 'indeterminate')
       }
       return { messageRef: String(result.message_id) }

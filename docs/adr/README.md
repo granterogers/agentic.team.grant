@@ -25,6 +25,15 @@ a **new** ADR superseding the old one — records are never edited away.
 | [0013](0013-the-project-is-the-source-of-truth.md) | The project is the source of truth; knowledge tools are connectors | Accepted |
 
 | [0014](0014-the-team-attaches-to-projects.md) | The team attaches to projects; it does not own them | Proposed |
+| [0015](0015-a-lesson-may-change-behaviour-never-reach.md) | A lesson may change how an agent works; never what it can reach | Accepted |
+| [0016](0016-routing-reads-the-roster.md) | Routing reads the roster, and the roster is data Grant edits | Accepted |
+| [0017](0017-a-skill-names-tools-never-addresses.md) | A skill may name a tool; it may never name an address | Accepted |
+| [0018](0018-an-approval-is-a-record-with-limits.md) | An approval is a record with limits; a decline is durable and specific | Accepted |
+| [0019](0019-the-studio-becomes-the-product.md) | The studio becomes the product; `web/hq/index.html` is retired | Accepted |
+| [0020](0020-tasks-reach-the-diary-one-way.md) | Tasks reach the diary one way, and only ever touch events we made | Accepted |
+| [0021](0021-an-arrangement-belongs-to-the-person.md) | An arrangement belongs to the person, not to the browser | Accepted |
+| [0022](0022-a-project-is-archived-not-deleted.md) | A project is archived, not deleted; deletion is for debris | Accepted |
+| [0023](0023-absence-on-a-project-means-everyone.md) | Absence on a project means everyone; an automation is a standing instruction | Accepted |
 
 **Note the collision:** two ADRs were written as 0012 on the same day, by two
 sessions that each read the highest number and then wrote. They are left as

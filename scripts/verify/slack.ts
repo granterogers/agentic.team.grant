@@ -26,7 +26,7 @@
  */
 
 import { processCallbacks } from '../../src/channels/callbacks.ts'
-import { combinedNotifier, pagerChannel } from '../../src/channels/notify.ts'
+import { combinedNotifier, pagerChannel, resultContext } from '../../src/channels/notify.ts'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { hold, release } from '../../src/jobs/quiet.ts'
@@ -34,7 +34,7 @@ import type { Handler, HandlerOutput, Job } from '../../src/jobs/worker.ts'
 import { dequeue, recoverStalled, runJob } from '../../src/jobs/worker.ts'
 import { SlackApiError, SlackClient } from '../../src/slack/api.ts'
 import type { ResultMessage } from '../../src/slack/blocks.ts'
-import { ACTIONS } from '../../src/slack/blocks.ts'
+import { ACTIONS, provenanceLine } from '../../src/slack/blocks.ts'
 import { resolveTarget, slackChannel } from '../../src/slack/notifier.ts'
 import { DELIVERY_EVENT_TYPE, SlackOffice } from '../../src/slack/office.ts'
 import { ChannelProvisioner, channelNameFor } from '../../src/slack/provision.ts'
@@ -89,19 +89,49 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const stamp = String(Date.now()).slice(-8)
 const PROJECT_SLUG = `fixture-slack-office-${stamp}`
-// Unique per run: a channel name is claimed for good once used, archived or
-// not, so a constant fixture name would collide with yesterday's channel.
-const PROJECT_NAME = `Slack office verification fixture ${stamp}`
+/*
+  Born named as debris, not renamed into it at the end.
+
+  The channel name is derived from this, so this string is what appears in
+  Grant's sidebar. It used to be "Slack office verification fixture 12345678",
+  which became `#slack_office_verification_fixture_12345678` — and
+  `parkAndArchive` below renamed it to `zz_test_…` at teardown, which is the
+  right thing at the wrong MOMENT: a run that crashes never reaches teardown,
+  and ten of these were sitting in his Mentions on 13 September, above his four
+  real channels, each with an unread badge.
+
+  Naming it `zz_test_` at creation means a crashed run leaves a channel that is
+  already obvious debris and already sorts to the bottom of every client.
+  `parkAndArchive` still runs and is still worth keeping — it is what handles
+  the channels created before this change — it just has nothing left to fix.
+
+  Grant said this once already, in almost these words: *"I don't want a bunch
+  of weird alphanumeric channel names"*. The answer that time was a cleanup
+  rule. A cleanup rule only runs when the run finishes.
+
+  Unique per run: a channel name is claimed for good once used, archived or
+  not, so a constant fixture name would collide with yesterday's channel.
+*/
+const PROJECT_NAME = `zz test slack ${stamp}`
+/*
+  Hoisted so the suite can render the provenance line it EXPECTS from the same
+  values it sends. Inline, `message('x').metadata` is typed nullable — the
+  ResultMessage type allows a message with no metadata — and narrowing it at
+  the call site would be asserting a fact this constant simply states.
+*/
+const METADATA = {
+  confidence: 'medium',
+  evidence: 'inferred',
+  sources: ['https://example.invalid/quote'],
+  contradictions: null,
+  reviewed: true,
+  routine: false,
+} as const
+
 const message = (body: string): ResultMessage => ({
   staffTitle: 'Research Director',
   body,
-  metadata: {
-    confidence: 'medium',
-    evidence: 'inferred',
-    sources: ['https://example.invalid/quote'],
-    contradictions: null,
-    reviewed: true,
-  },
+  metadata: METADATA,
   correlationId: CORRELATION,
   actions: [...ACTIONS],
   projectUrl: null,
@@ -493,18 +523,40 @@ record(
 const preSwept = await recoverStalled(db)
 if (preSwept.length > 0) console.log(`recovered ${String(preSwept.length)} stalled job(s).`)
 
-const live = await one<{ n: number }>(`
+/*
+  This suite claims only its own work (#184, migration 0329).
+
+  It used to refuse to start while ANY job was live anywhere — the same rule
+  and the same reason as `verify:worker`: dequeue is global and would hand this
+  script somebody else's job, for which it holds no handler.
+
+  Both suites having that precondition, and neither cancelling what it creates,
+  is the coupling: in a full pass whichever ran second failed on the first
+  one's debris, and it failed as "62/70" rather than as "the queue was dirty".
+
+  `dequeue(db, worker, …, MINE)` asks for work requested by this exact name and
+  asks the capacity question of that scope alone, so nothing else in the queue
+  is reachable from here and nothing else in the queue matters. What is left to
+  clean up is only what this suite itself left behind — the routing probes at
+  the bottom of this file cancel theirs the moment their checks are done, but a
+  run that crashed between the two would not have.
+*/
+const MINE = 'verify:slack'
+const mine = await one<{ n: number }>(`
   select count(*)::int as n from public.jobs
-  where state not in ('complete', 'cancelled', 'failed')
+  where requested_by = ${lit(MINE)}
+    and state not in ('complete', 'cancelled', 'failed')
 `)
-if (Number(live?.n) > 0) {
-  // Same rule, and the same reason, as `verify:worker`: dequeue is global and
-  // will hand this script somebody else's job, for which it has no handler.
-  console.error(
-    `the queue is not empty: ${String(live?.n)} live job(s). This suite runs a real job ` +
-      'and needs the queue to itself. `npm run purge:fixtures -- --go` clears debris.',
+if (Number(mine?.n) > 0) {
+  console.log(
+    `${String(mine?.n)} of this suite's job(s) left over from a previous run — cancelling.`,
   )
-  process.exit(2)
+  await db.execute(`
+    update public.jobs
+       set state = 'cancelled', state_reason = 'verify:slack debris from an earlier run'
+     where requested_by = ${lit(MINE)}
+       and state not in ('complete', 'cancelled', 'failed')
+  `)
 }
 
 const E2E_CORRELATION = String(
@@ -595,7 +647,7 @@ if (telegramToken !== undefined && telegramToken !== '') {
   )
 }
 const notifier = combinedNotifier(channels, db)
-const dequeued = await dequeue(db, `verify-slack-${stamp}`)
+const dequeued = await dequeue(db, `verify-slack-${stamp}`, true, true, undefined, MINE)
 const jobResult =
   dequeued === null
     ? null
@@ -638,11 +690,27 @@ const resultMessage = (Array.isArray(presented.body.messages) ? presented.body.m
     (raw as { metadata?: { event_payload?: { dedupe_key?: string } } }).metadata?.event_payload
       ?.dedupe_key === `job:${E2E_JOB}:result`,
 ) as { username?: string; blocks?: unknown[] } | undefined
+/*
+  The EXACT line the renderer produces, not the word "confidence".
+
+  This asserted that the posted blocks contained the literal string
+  'confidence', which was true of `*medium* confidence · evidence: *inferred*`
+  and stopped being true when #186 rewrote the line into English — Grant's
+  complaint was that it read as internal field names. The check went red on a
+  correct change, which is the third time in this repository and is why
+  CLAUDE.md says to assert the property rather than the artefact.
+
+  Asserting the rendered line is STRONGER than either: it fails if the line is
+  missing, if it is truncated, and if the renderer and the sender ever disagree
+  about what was sent. `provenanceLine` is pure, so calling it here costs
+  nothing and cannot drift from what the office actually posts.
+*/
+const expectedLine = provenanceLine(METADATA)
 record(
   'presented as the staff member the router convened, with the §12 provenance line',
-  `username=${String(resultMessage?.username)} blocks=${String(resultMessage?.blocks?.length ?? 0)}`,
+  `username=${String(resultMessage?.username)} · line=${expectedLine.slice(0, 54)}`,
   resultMessage?.username === STAFF.name &&
-    JSON.stringify(resultMessage?.blocks ?? []).includes('confidence'),
+    JSON.stringify(resultMessage?.blocks ?? []).includes(expectedLine),
 )
 
 const stateReason = await one<{ r: string }>(
@@ -653,6 +721,236 @@ record(
   `state_reason=${String(stateReason?.r)}`,
   String(stateReason?.r).includes('delivered to slack via thread'),
 )
+
+// ===========================================================================
+// #186: a reply goes UNDER the message that asked, not beside it
+// ===========================================================================
+//
+// Grant, 13 September, having sent three screenshots of his workspace: "you'd
+// really need to work on it looking a lot better, making it obvious what
+// things are related to that kind of thing."
+//
+// Nothing was related to anything. Slack reports thread_ts as null for a
+// top-level message, the notifier read that as "no thread", and thirty-one
+// real questions in his test channel had not one reply attached to any of
+// them. The message's own ts, which the adapter has always written into
+// origin_ref as channel:ts, is the thread to start.
+//
+// Driven through resolveTarget rather than asserted on the composed body: the
+// destination is what this decides, and asserting the blocks would be checking
+// a layer below the one that changed.
+const topLevelJob = await one<{ id: string }>(`
+  insert into public.jobs
+    (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+  values (extensions.gen_random_uuid(), ${lit(PROJECT_ID)}::uuid,
+          ${lit(`slack-toplevel-${stamp}`)}, 'research.conclusion', 'verify:slack', 100)
+  returning job_id::text as id, correlation_id::text as corr
+`)
+const topLevel = await one<{ id: string; corr: string }>(`
+  select job_id::text as id, correlation_id::text as corr from public.jobs
+   where job_id = ${lit(String(topLevelJob?.id))}::uuid
+`)
+const ASKED_AT = '1789252035.147200'
+const topCommand = await one<{ id: string }>(`
+  insert into public.inbound_commands
+    (origin_channel, origin_ref, actor, instruction, dedupe_key, job_id, processed_at)
+  values ('slack', ${lit(`${CHANNEL}:${ASKED_AT}`)}, 'grant',
+          'Give me one sentence on whether we should switch supplier.',
+          ${lit(`slack:message:${stamp}top`)}, ${lit(String(topLevel?.id))}::uuid, app.now_utc())
+  returning command_id::text as id
+`)
+// thread_ts NULL, which is what Slack sends for a message posted at the top
+// level of a channel. That null is the whole bug.
+await db.execute(`
+  insert into public.inbound_commands_slack
+    (command_id, team_id, channel_id, thread_ts, is_dm, resolved_project_id)
+  values (${lit(String(topCommand?.id))}::uuid, ${lit(TEAM_ID)}, ${lit(CHANNEL)},
+          null, false, ${lit(PROJECT_ID)}::uuid)
+`)
+const underTheQuestion = await resolveTarget(
+  db,
+  {
+    jobId: String(topLevel?.id),
+    correlationId: String(topLevel?.corr),
+    projectId: PROJECT_ID,
+  } as unknown as Job,
+  'research-director',
+)
+record(
+  'a question asked at the top level of a channel is answered UNDER it, in a thread',
+  `via=${String(underTheQuestion?.via)} thread=${String(underTheQuestion?.threadTs)}`,
+  underTheQuestion?.via === 'thread' && underTheQuestion?.threadTs === ASKED_AT,
+)
+// Threading without this would have made every answer HARDER to see while
+// making the relationship clearer: a threaded reply is invisible in the
+// channel unless Slack is told to broadcast it. Both halves correct, the pair
+// a net loss — which is the shape of defect that passes every check.
+record(
+  'and it is broadcast, so starting a thread does not take the answer off the channel',
+  `broadcast=${String(underTheQuestion?.broadcast)}`,
+  underTheQuestion?.broadcast === true,
+)
+
+/*
+  CONTROL. Inside a thread Grant opened himself he is already watching, so
+  broadcasting every reply back into the channel is the noise this change is
+  about. Without this check the rule above is satisfied by broadcasting
+  everything.
+*/
+await db.execute(`
+  update public.inbound_commands_slack set thread_ts = ${lit('1789111111.000100')}
+   where command_id = ${lit(String(topCommand?.id))}::uuid
+`)
+const insideAThread = await resolveTarget(
+  db,
+  {
+    jobId: String(topLevel?.id),
+    correlationId: String(topLevel?.corr),
+    projectId: PROJECT_ID,
+  } as unknown as Job,
+  'research-director',
+)
+record(
+  'CONTROL: a reply inside a thread he already opened is not broadcast',
+  `thread=${String(insideAThread?.threadTs)} broadcast=${String(insideAThread?.broadcast)}`,
+  insideAThread?.threadTs === '1789111111.000100' && insideAThread?.broadcast === false,
+)
+
+/*
+  CONTROL. A ref naming another channel must thread NOWHERE rather than into a
+  room Grant is not reading — a reply in the wrong thread is a reply nobody
+  finds, which is worse than one that is merely unthreaded.
+*/
+await db.execute(`
+  update public.inbound_commands_slack set thread_ts = null
+   where command_id = ${lit(String(topCommand?.id))}::uuid;
+  update public.inbound_commands set origin_ref = ${lit(`C0SOMEWHEREELSE:${ASKED_AT}`)}
+   where command_id = ${lit(String(topCommand?.id))}::uuid
+`)
+const mismatched = await resolveTarget(
+  db,
+  {
+    jobId: String(topLevel?.id),
+    correlationId: String(topLevel?.corr),
+    projectId: PROJECT_ID,
+  } as unknown as Job,
+  'research-director',
+)
+record(
+  'CONTROL: a ref naming a different channel threads nowhere rather than into the wrong room',
+  `via=${String(mismatched?.via)} thread=${String(mismatched?.threadTs)}`,
+  mismatched?.threadTs === null && mismatched?.via === 'channel',
+)
+
+// ===========================================================================
+// #186: a routine read is not dressed up as a finding
+// ===========================================================================
+//
+// What Grant was looking at, 270 times in ten days:
+//
+//     Looked at 1 Drive folder. Nothing new.
+//     Confident — checked against 1 source.
+//     [ 👍 Useful ] [ 👎 Not useful ] [ ⋯ ]
+//
+// Two thirds of that message is furniture and neither piece does any work.
+// §12's honesty rules exist to stop INFERENCE being read as observation, and a
+// deterministic output IS observation; #59's feedback exists to correct
+// JUDGEMENT, and there is no judgement in "nothing new" to thumb down.
+//
+// Asserted through resultContext, which is where the decision is made. The
+// composed blocks are covered by tests/slack/blocks.test.ts; asserting them
+// here would be checking a layer below the one that changed.
+const dutyJob = await one<{ id: string; corr: string }>(`
+  insert into public.jobs
+    (correlation_id, project_id, idempotency_key, kind, requested_by, priority, state)
+  values (extensions.gen_random_uuid(), ${lit(PROJECT_ID)}::uuid,
+          ${lit(`slack-duty-${stamp}`)}, 'drive.watch', 'verify:slack', 100, 'queued')
+  returning job_id::text as id, correlation_id::text as corr
+`)
+const mechanical = await one<{ id: string }>(`
+  insert into public.outputs (job_id, body, deterministic, reviewer_status, reviewed_at, confidence, evidence)
+  values (${lit(String(dutyJob?.id))}::uuid, 'Looked at 1 Drive folder. Nothing new.',
+          true, 'approved', app.now_utc(), 'high', 'verified')
+  returning output_id::text as id
+`)
+const judgement = await one<{ id: string }>(`
+  insert into public.outputs (job_id, body, deterministic, reviewer_status, reviewed_at, confidence, evidence)
+  values (${lit(String(dutyJob?.id))}::uuid,
+          'All three suppliers quoted within 4% of each other.', false, 'approved',
+          app.now_utc(), 'medium', 'inferred')
+  returning output_id::text as id
+`)
+const asJob = {
+  jobId: String(dutyJob?.id),
+  correlationId: String(dutyJob?.corr),
+  projectId: PROJECT_ID,
+} as unknown as Job
+/*
+  A project URL base is passed so that `open_project` is actually on offer.
+
+  Without it the last check below reads `[].every(...)`, which is true — the
+  check would pass because the list is EMPTY rather than because the right
+  things survived, and this file has three recorded instances of exactly that.
+*/
+const URL_BASE = 'https://ai-team-hq.vercel.app'
+const routineCtx = await resultContext(db, asJob, String(mechanical?.id), URL_BASE)
+const judgementCtx = await resultContext(db, asJob, String(judgement?.id), URL_BASE)
+
+record(
+  'a mechanical read is marked routine, from the column rather than from a guess',
+  `routine=${String(routineCtx.routine)}`,
+  routineCtx.routine === true,
+)
+record(
+  'and it is offered nothing to thumb up or down, because there is no judgement in it',
+  routineCtx.actions.join(', ') || '(no actions)',
+  !routineCtx.actions.includes('feedback.useful') &&
+    !routineCtx.actions.includes('feedback.not_useful') &&
+    !routineCtx.actions.includes('more_detail') &&
+    !routineCtx.actions.includes('mute_24h'),
+)
+/*
+  CONTROL, and the one that matters most: everything above would also pass if
+  the provenance line and the feedback pair had been deleted outright — which
+  is the change #185 exists to prevent, because "worked out, not looked up" is
+  the sentence that stops an inference being read as an observation.
+*/
+record(
+  'CONTROL: a judgement on the same job keeps the caption and the whole feedback loop',
+  `routine=${String(judgementCtx.routine)} actions=${judgementCtx.actions.join(', ')}`,
+  judgementCtx.routine === false &&
+    judgementCtx.actions.includes('feedback.useful') &&
+    judgementCtx.actions.includes('feedback.not_useful'),
+)
+/*
+  And the pair that is NOT feedback survives on both. Undo is the safe action
+  and CLAUDE.md already records that discouraging it is the failure mode; Open
+  project is navigation, not an opinion.
+*/
+record(
+  'the controls that are not opinions survive a routine read',
+  routineCtx.actions.join(', ') || '(no actions)',
+  routineCtx.actions.includes('open_project') &&
+    routineCtx.actions.every((a) => a === 'undo' || a === 'open_project'),
+)
+
+/*
+  Both probe jobs cancelled the moment their checks are done, rather than left
+  to the teardown at the bottom of the file.
+
+  Neither is ever dequeued — they exist so that a real output row has a real
+  job to hang off — and a queued job that nothing will run holds capacity in a
+  global queue. #184 is the coupling this avoids: verify:worker and this suite
+  both refuse to start while any job is live, so a crashed run between here and
+  teardown fails the NEXT suite with "22/26" rather than "the queue was dirty".
+  The teardown still cancels them; this makes the window as small as it can be.
+*/
+await db.execute(`
+  update public.jobs
+     set state = 'cancelled', state_reason = 'verify:slack routing probe, never run'
+   where job_id in (${lit(String(topLevel?.id))}::uuid, ${lit(String(dutyJob?.id))}::uuid)
+     and state not in ('complete', 'cancelled', 'failed')
+`)
 
 const notifRow = await one<{ n: number }>(`
   select count(*)::int as n from public.notification_events
@@ -697,7 +995,7 @@ await db.execute(`
           array['supplier'], 'none_found', array['research-director'],
           'Same single specialist.')
 `)
-const mutedDequeued = await dequeue(db, `verify-slack-${stamp}`)
+const mutedDequeued = await dequeue(db, `verify-slack-${stamp}`, true, true, undefined, MINE)
 const mutedResult =
   mutedDequeued === null
     ? null
@@ -1272,6 +1570,47 @@ for (const row of health.rows) console.log(`  ${JSON.stringify(row)}`)
   )
 }
 
+/*
+  EVERY dashboard project has a room of its own (#187).
+
+  Grant asked for this in one sentence — *"all projects have a dedicated
+  channel name in Slack"* — and before 0416 four of the five active projects
+  had none, because the provisioner's only callers were this suite and a
+  script an agent runs.
+
+  Asserted on the real projects rather than on the fixture, because the fixture
+  proves the mechanism and this proves the OUTCOME: a mechanism that works and
+  is never called is the defect that was filed.
+
+  Named rather than counted, so the failure says which project is missing one.
+*/
+{
+  const without = (
+    await db.execute(`
+      select p.name
+        from public.projects p
+       where p.status = 'active' and not p.is_fixture
+         and not exists (select 1 from public.slack_channel_map m
+                          where m.project_id = p.project_id and m.active)
+       order by p.name`)
+  ).rows as { name: string }[]
+  const total = Number(
+    (
+      await db.execute(
+        `select count(*)::int as n from public.projects
+          where status = 'active' and not is_fixture`,
+      )
+    ).rows[0]?.n ?? 0,
+  )
+  record(
+    'every active dashboard project has a Slack channel of its own',
+    without.length === 0
+      ? `${String(total)}/${String(total)}`
+      : `${String(total - without.length)}/${String(total)} — missing: ${without.map((w) => w.name).join(', ')}`,
+    without.length === 0,
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) {
@@ -1354,6 +1693,48 @@ try {
       'with channels:join.',
   )
 }
+/*
+  What this run LEFT, asserted rather than printed (#186).
+
+  The criterion is "no verification run leaves a channel in Grant's Slack -
+  asserted in the suite, not swept afterwards". Three of the four things that
+  Issue asks for hold; this one cannot, with the scopes this app is installed
+  with: the lockout check must leave the channel, archiving needs membership,
+  and conversations.join needs channels:join. So each full run leaves exactly
+  one channel behind.
+
+  The prose above says so and prose is not a check. A note in a log is how a
+  known cost becomes a forgotten one, and "the teardown printed something"
+  looks identical to "the teardown worked" - which is the trap this repository
+  has already paid for twice. So the count is asserted: exactly one channel
+  may survive a full run, it must be the lobby, and it must already carry a
+  name that says what it is. Two would mean parkAndArchive silently stopped
+  working, and zero would mean channels:join has arrived and this check is
+  what tells somebody to delete the comment above.
+*/
+const survived = (
+  await db.execute(`
+    select channel_id, channel_name from public.slack_channel_map
+     where project_id = ${lit(PROJECT_ID)}::uuid and active
+  `)
+).rows as { channel_id: string; channel_name: string }[]
+record(
+  'the run leaves at most the one channel the lockout check costs, and it is named as a fixture',
+  survived.length === 0
+    ? 'nothing survived — channels:join has arrived; delete the known-cost branch above'
+    : `${String(survived.length)} left: ${survived.map((c) => `#${c.channel_name}`).join(' ')}`,
+  survived.length <= 1 &&
+    /*
+      Three spellings, because the name reaches this row by three routes:
+      `zz test slack <stamp>` is the PROJECT name, Slack slugs it to
+      `zz-test-slack-<stamp>`, and parkAndArchive renames it `zz_test_<stamp>`.
+      Anchoring on `zz_` alone would have failed on the commonest case - the
+      rename succeeding and the archive not - which is a check firing on
+      correct behaviour, and this file already records what that costs.
+    */
+    survived.every((c) => c.channel_id === CHANNEL && /^zz[-_ ]/i.test(c.channel_name)),
+)
+
 try {
   await db.execute(`
     update public.slack_channel_map

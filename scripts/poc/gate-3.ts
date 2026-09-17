@@ -446,6 +446,31 @@ await clearPreference(db)
 await db.execute(
   `delete from public.inbound_commands where actor = '4242' or actor = 'telegram:4242'`,
 )
+/*
+  And the JOBS this run made, which the delete above cannot touch.
+
+  A job can never be deleted — `job_state_transitions` is append-only — so the
+  only way to stop this run's traffic being counted as the office's real work
+  is to attribute it honestly. `is_fixture` is GENERATED from `requested_by`,
+  so correcting the name recomputes the flag.
+
+  Why it is needed at all: this harness posts a Telegram webhook impersonating
+  Grant with `from.id = 4242`, the adapter translates that to actor `4242`, and
+  `enqueue_inbound` composes `requested_by` as `telegram:4242`. The generated
+  expression HAS a `gate-%` branch and it never fires, because the channel
+  prefix sits in front of it. A Telegram id must be numeric, so the payload
+  cannot carry a fixture-shaped name and this has to be done here.
+
+  Twenty-seven of these accumulated before anything read them. Then #198's
+  channel states and #202's undelivered list went live, read them as real, and
+  reported Telegram DEGRADED with twenty-one undelivered messages — harness
+  traffic presented to Grant as the office failing, which is the trap CLAUDE.md
+  records more often than any other. Migration 0351 corrected the backlog.
+*/
+await db.execute(
+  `update public.jobs set requested_by = 'telegram:verify-gate3'
+    where requested_by = 'telegram:4242'`,
+)
 await clearPreference(db)
 await db.execute(`
   delete from public.inbound_commands

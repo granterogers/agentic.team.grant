@@ -204,4 +204,47 @@ export class TelegramClient {
       throw new TelegramApiError(code, kind, method, null)
     }
   }
+
+  /**
+   * The same call, with a multipart body.
+   *
+   * Issue #66. Sending a file Telegram cannot fetch itself means uploading it,
+   * and an upload is `multipart/form-data` — which `call` cannot do, because it
+   * sets a JSON content type and stringifies the body.
+   *
+   * Deliberately a separate method rather than a branch inside `call`. `call`
+   * retries, and retrying an upload of an audio file is a second copy of a
+   * twenty-megabyte body against a rate limit; a `sendAudio` that failed
+   * indeterminately is reconciled the same way every other Telegram write is,
+   * which is to say not at all — a bot cannot read its own sent messages back,
+   * so never sending it again is the only guarantee available and it is the
+   * safe one.
+   *
+   * The content type is deliberately NOT set: `fetch` derives it from the
+   * FormData along with the multipart boundary, and setting it by hand omits
+   * the boundary and produces a 400 that reads like a bad request.
+   */
+  async callForm(method: string, form: FormData): Promise<TelegramResponse> {
+    let response: Response
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}/bot${this.token}/${method}`, {
+        method: 'POST',
+        body: form,
+      })
+    } catch (error) {
+      const detail = redact(error instanceof Error ? error.message : String(error))
+      throw new TelegramApiError(`indeterminate:${detail}`, 'indeterminate', method)
+    }
+
+    let parsed: TelegramResponse
+    try {
+      parsed = (await response.json()) as TelegramResponse
+    } catch {
+      throw new TelegramApiError('indeterminate:non_json_response', 'indeterminate', method)
+    }
+    if (parsed.ok) return parsed
+
+    const { code, kind } = classifyDescription(parsed.description, parsed.error_code)
+    throw new TelegramApiError(code, kind, method, parsed.parameters?.retry_after ?? null)
+  }
 }

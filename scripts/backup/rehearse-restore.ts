@@ -263,25 +263,75 @@ try {
     failures.length === 0 && loaded === attempted && loaded > 0,
   )
 
-  // The counts the archive claims, against the counts that came back. This is
-  // the assertion that catches a truncated write or a silently dropped batch.
+  /*
+    The counts the archive claims, against the counts that actually came back.
+
+    This is the assertion that catches a truncated write or a silently dropped
+    batch, and until tonight it did not make it: the query counted rows in
+    `pg_catalog.pg_class` matching one oid — which is one, always — so the check
+    proved only that a table existed. It now counts the rows in each restored
+    table and compares them to the number the archive says it wrote.
+  */
   const restored = (
     await db.execute(`
-      select c.relname as t, (select count(*) from pg_catalog.pg_class x where x.oid = c.oid) as ok
+      select c.relname as t
         from pg_catalog.pg_class c
         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
        where n.nspname = ${lit(SCRATCH)} and c.relkind = 'r'
     `)
   ).rows
+  const short: string[] = []
+  for (const [qualified, claimed] of Object.entries(archive.row_counts ?? {})) {
+    const name = qualified.replace('.', '__')
+    if (!restored.some((r) => String(r.t) === name)) continue
+    const back = Number(
+      (await db.execute(`select count(*)::int as n from ${SCRATCH}."${name}"`)).rows[0]?.n ?? 0,
+    )
+    if (back !== Number(claimed)) short.push(`${qualified} ${String(back)}/${String(claimed)}`)
+  }
   record(
-    'and every non-empty table came back as a table',
-    `${String(restored.length)} table(s) in ${SCRATCH}`,
-    restored.length > 0,
+    'and every table came back with the number of rows the archive claims',
+    short.length === 0
+      ? `${String(restored.length)} table(s), every count matched`
+      : short.slice(0, 4).join(', '),
+    restored.length > 0 && short.length === 0,
   )
 
-  // Drift against live is expected — the office has been working since the
-  // archive was taken — so this reports rather than fails. What would be
-  // alarming is the archive claiming MORE than the database holds.
+  /*
+    Drift against live.
+
+    The office has been working since the archive was taken, so a table holding
+    MORE than the archive is normal and is only reported.
+
+    Holding FEWER is normal too — for most tables. Fixtures are purged, projects
+    are deleted, documents are removed. The first version of this check called
+    any shrink "impossible" and failed the whole rehearsal on
+    `public.documents 55>51`, which was four fixture documents being tidied up
+    exactly as designed. A backup is a photograph; objecting that the room has
+    changed is not a defect report.
+
+    Where a shrink IS impossible is the append-only tables — §6 of the master
+    spec, enforced by `app.reject_ledger_mutation()` on DELETE, UPDATE and
+    TRUNCATE. If one of those has fewer rows than an archive taken yesterday,
+    something got past a trigger that cannot be got past, and that is worth
+    failing over. The list is read from the triggers rather than written down
+    here, so a table made append-only later is covered without anyone
+    remembering to come back.
+  */
+  const appendOnly = new Set(
+    (
+      await db.execute(`
+        select n.nspname || '.' || c.relname as t
+          from pg_catalog.pg_trigger g
+          join pg_catalog.pg_class c on c.oid = g.tgrelid
+          join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+          join pg_catalog.pg_proc p on p.oid = g.tgfoid
+         where p.proname = 'reject_ledger_mutation' and not g.tgisinternal
+      `)
+    ).rows.map((r) => String(r.t)),
+  )
+
+  const shrunk: string[] = []
   const impossible: string[] = []
   for (const [qualified, claimed] of Object.entries(archive.row_counts ?? {})) {
     if (!live.includes(qualified)) continue
@@ -290,13 +340,23 @@ try {
       (await db.execute(`select count(*)::int as n from "${String(schema)}"."${String(table)}"`))
         .rows[0]?.n ?? 0,
     )
-    if (claimed > now) impossible.push(`${qualified} ${String(claimed)}>${String(now)}`)
+    if (Number(claimed) <= now) continue
+    const gap = `${qualified} ${String(claimed)}→${String(now)}`
+    if (appendOnly.has(qualified)) impossible.push(gap)
+    else shrunk.push(gap)
   }
   record(
-    'no table claims more rows than the database has',
-    impossible.length === 0 ? 'none' : impossible.slice(0, 4).join(', '),
+    'no append-only table has lost rows since the archive was taken',
+    impossible.length === 0
+      ? `${String(appendOnly.size)} append-only table(s), none shorter than the archive`
+      : impossible.slice(0, 4).join(', '),
     impossible.length === 0,
   )
+  if (shrunk.length > 0) {
+    console.log(
+      `   (${String(shrunk.length)} table(s) smaller than the archive, which is allowed: ${shrunk.slice(0, 6).join(', ')})`,
+    )
+  }
 } finally {
   // Created seconds ago, never held anything but copies.
   await db.execute(`drop schema if exists ${SCRATCH} cascade`)

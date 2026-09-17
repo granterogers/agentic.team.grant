@@ -75,6 +75,55 @@ const db = new ManagementApiExecutor(
 )
 
 const go = process.argv.includes('--go')
+
+/*
+  Remove the harness specialists nobody ever worked through (#269).
+
+  The retirement above is right about a real person and was being applied to a
+  row that had never done anything. Retiring and never removing made a fixture
+  specialist permanent by construction, and the roster reached 276 rows of
+  which 268 were harness debris, growing by three a run. Grant's Team page was
+  never wrong - hq_team filters active - but the readers that forget the filter
+  are the ones this repository has been caught by five times.
+
+  The safety is not a list this script maintains. 16 of the 19 foreign keys
+  pointing at public.staff RESTRICT, so a specialist who consulted, delivered,
+  produced an output, learned a lesson, held a skill, owned a duty or asked for
+  a tool cannot be deleted and the history keeps its author.
+  app.purge_fixture_staff pre-checks the three that do not refuse and reports
+  what held every row it could not take, rather than stopping at the first.
+
+  Declared as a function because it has to be reachable from BOTH the report
+  path and the --go path, and the report path exits early.
+*/
+async function reportOrSweepStaff(going: boolean): Promise<void> {
+  const swept = (
+    await db.execute(`select app.purge_fixture_staff(${going ? 'true' : 'false'}) as r`)
+  ).rows[0] as {
+    r: {
+      removed: number
+      could_not_remove: number
+      still_fixture: number
+      held: { slug: string; held_by: string }[]
+    }
+  }
+  if (swept.r.removed === 0 && swept.r.could_not_remove === 0) return
+  console.log(
+    going
+      ? `\nremoved ${String(swept.r.removed)} harness specialist(s) nobody worked through; ` +
+          `${String(swept.r.still_fixture)} fixture row(s) remain`
+      : `\n${String(swept.r.removed)} harness specialist(s) could be removed. Pass --go.`,
+  )
+  // Named, not counted. A sweep that says "12 could not be removed" and does
+  // not say what holds them is a sweep nobody can act on.
+  for (const h of swept.r.held.slice(0, 8)) {
+    console.log(`  kept ${h.slug} — ${h.held_by} names it`)
+  }
+  if (swept.r.held.length > 8) {
+    console.log(`  … and ${String(swept.r.held.length - 8)} more`)
+  }
+}
+
 const predicate = FIXTURE_PREFIXES.map((p) => `slug like '${p}%'`).join(' or ')
 
 const found = await db.execute(`
@@ -107,6 +156,16 @@ if (found.rows.length === 0) {
 // a collision unlikely rather than impossible.
 if (!go) {
   if (found.rows.length > 0) console.log('\nreport only. Pass --go to retire them.')
+  /*
+    Report the staff sweep before leaving (#269).
+
+    The first wiring of it sat below this exit, so a dry run with no active
+    fixture PROJECTS printed "no active fixture projects" and stopped - and
+    said nothing about 268 removable specialists. A report mode that is silent
+    about the thing you ran it to see is worse than no report, because it
+    reads as nothing to do.
+  */
+  await reportOrSweepStaff(false)
   process.exit(0)
 }
 
@@ -123,6 +182,33 @@ if (found.rows.length > 0) {
     delete from public.documents where project_id in (
       select project_id from public.projects where (${predicate})
     )
+  `)
+  /*
+    And the tasks (#266).
+
+    Thirty-one of the thirty-two rows in `public.tasks` were debris on fixture
+    projects, and the sweep had never collected them. They are all correctly
+    labelled — `tasks.is_fixture` is GENERATED from `added_by` and every one of
+    them was added by a `verify:` name — so nothing reported them to Grant
+    wrongly. That is the reason to sweep them rather than the reason not to:
+    the pile was harmless until a new reader looked without the filter, and this
+    repository has rebuilt that pile four times (jobs, lessons, provider_health,
+    impediments).
+
+    BOTH conditions, not either. A fixture project's tasks go because the
+    project is going; a fixture task on a REAL project goes because it is
+    fixture traffic — and that second one is the shape the jobs sweep missed by
+    construction, because #45 sends any suite testing something that filters
+    fixtures to use a real project.
+
+    `public.tasks` has no append-only trigger (`tasks_touch` only sets
+    `updated_at`), so unlike `skills` and `job_impediments` these can actually
+    be removed.
+  */
+  await db.execute(`
+    delete from public.tasks
+     where project_id in (select project_id from public.projects where (${predicate}))
+        or is_fixture
   `)
   // Jobs first, and this was missing until it mattered. Archiving a project
   // left its jobs LIVE, so every verification run added a few more to a set
@@ -164,6 +250,8 @@ if (staffLeft.rows.length > 0) {
   )
 }
 
+await reportOrSweepStaff(true)
+
 // Blockers on a project that is no longer active.
 //
 // A blocker is a question waiting on Grant, and `needs_me` puts it at the top
@@ -202,6 +290,39 @@ const orphans = await db.execute(`
 `)
 if (orphans.rows.length > 0) {
   console.log(`\nretired ${String(orphans.rows.length)} orphaned fixture job(s).`)
+}
+
+/*
+  Fixture jobs on a REAL project, which the sweep above can never see.
+
+  It matches on the project's slug, so it only ever finds jobs belonging to a
+  fixture project. But #45's rule sends a suite that tests something which
+  FILTERS fixtures to use a real subject — and `jobs.is_fixture` is GENERATED
+  from `requested_by`, not from the project. So `verify:governs` and
+  `verify:proposes` hang fixture jobs off Grant's real projects by design, and
+  nothing has ever swept them.
+
+  They had reached twelve, sitting queued for hours. Harmless to every count
+  that excludes fixtures — which is the point of the flag — and NOT harmless to
+  `verify:slack` and `verify:worker`, both of which refuse to run while the
+  queue holds anything at all, because dequeue is global and would hand them
+  somebody else's job with no handler for it. Two suites blocked by debris that
+  every other reader was correctly ignoring.
+
+  `cancelled`, not `failed`: nothing went wrong with them. They were never
+  going to be run.
+*/
+const strandedFixtures = await db.execute(`
+  update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+    state_reason = 'fixture job never dequeued, cancelled by purge:fixtures'
+  where is_fixture
+    and state not in ('complete', 'cancelled', 'failed')
+  returning job_id
+`)
+if (strandedFixtures.rows.length > 0) {
+  console.log(
+    `\ncancelled ${String(strandedFixtures.rows.length)} fixture job(s) left in the queue.`,
+  )
 }
 
 // Delivery debris. Every `verify:*` dedupe key belongs to a verification run,

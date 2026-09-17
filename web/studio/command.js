@@ -122,8 +122,31 @@ export function candidates({ projects, project, sections, settings, crew, docsFo
     })
   }
 
+  /*
+    The global views, and exactly the ones the rail has (§57, §59).
+
+    This offered a "Desk — projects where you left them" that #77 removed:
+    `view: 'desk'` matches no branch in `drawShell`, so it fell through to the
+    home board — a row that named a screen that no longer exists and quietly
+    took you somewhere else. Nothing could see it, either: `verify:wired` reads
+    attributes off rendered controls and these rows are built from data.
+
+    And it was missing the two the rail DOES have. Searching "tasks" from the
+    home board found nothing but the Ask row, on a product whose left rail has
+    a Tasks entry with a count on it.
+
+    The wording is the rail's wording, deliberately — #222 is about one name per
+    thing, and a command bar that calls it something else is a second name.
+  */
   out.push({ kind: 'section', id: 'portfolio', title: 'All projects', hint: 'Home', go: { view: 'portfolio' } })
-  out.push({ kind: 'section', id: 'desk', title: 'Desk', hint: 'Projects where you left them', go: { view: 'desk' } })
+  out.push({
+    kind: 'section', id: 'tasks', title: 'Tasks',
+    hint: 'Everything on your plate, across every project', go: { view: 'tasks' },
+  })
+  out.push({
+    kind: 'section', id: 'lately', title: 'Recent activity',
+    hint: 'What the office has done', go: { view: 'lately' },
+  })
 
   return out
 }
@@ -147,4 +170,15 @@ export const KIND_NAME = {
   contact: 'Person',
   task: 'Task',
   agent: 'Team',
+  /*
+    The two that come from the office rather than from the page (#37).
+
+    Named for where the match WAS rather than for what the thing is: a row
+    labelled "Document" matched its title, and one labelled "Inside" matched
+    its words. The distinction is the whole reason the second group exists, and
+    a reader who cannot see it will wonder why the same document is listed
+    twice.
+  */
+  inside: 'Inside',
+  answer: 'Answer',
 }

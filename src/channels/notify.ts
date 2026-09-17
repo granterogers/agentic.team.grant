@@ -24,6 +24,7 @@
  * every channel's actual outcome, including the boring ones.
  */
 
+import { refuseToSend } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { HandlerOutput, Job, Notifier, NotifyOutcome } from '../jobs/worker.ts'
 import type { ActionId } from '../slack/blocks.ts'
@@ -57,6 +58,18 @@ export interface ResultContext {
   readonly staffId: string | null
   /** False for §10-substantive output that has not been reviewed. */
   readonly reviewed: boolean
+  /**
+   * True when this output is a mechanical read rather than a judgement.
+   *
+   * `outputs.deterministic`, resolved here for the same reason everything else
+   * in this type is: two surfaces deciding it separately would eventually
+   * disagree, and the disagreement would show as Telegram cautioning about a
+   * folder listing that Slack presented as plain fact.
+   *
+   * See `MessageMetadata.routine` in `src/slack/blocks.ts` for what it costs a
+   * message, and why.
+   */
+  readonly routine: boolean
   readonly actions: readonly ActionId[]
   readonly projectUrl: string | null
 }
@@ -115,6 +128,7 @@ export async function resultContext(
     review?.deterministic === true ||
     review?.status === 'approved' ||
     review?.status === 'approved_with_reservations'
+  const routine = review?.deterministic === true
 
   const projectUrl =
     projectUrlBase === null || projectUrlBase === undefined || job.projectId === null
@@ -128,7 +142,7 @@ export async function resultContext(
     select app.open_approval_for_job(${lit(job.jobId)}::uuid) as id
   `)
   if ((asking.rows[0] as { id?: string | null } | undefined)?.id != null) {
-    return { staff, staffId, reviewed, actions: ['approve', 'decline'], projectUrl }
+    return { staff, staffId, reviewed, routine, actions: ['approve', 'decline'], projectUrl }
   }
 
   // Undo is offered only when there is something to undo — an offer that does
@@ -146,10 +160,37 @@ export async function resultContext(
       action !== 'approve' &&
       action !== 'decline' &&
       (action !== 'undo' || undoable) &&
-      (action !== 'open_project' || projectUrl !== null),
+      (action !== 'open_project' || projectUrl !== null) &&
+      /*
+        A mechanical read is offered nothing to judge.
+
+        👍 and 👎 are #59's feedback loop and they ask "was this the right
+        call". "Looked at 1 Drive folder. Nothing new." contains no call, so a
+        thumbs-down on it records dissatisfaction with a fact and teaches the
+        loop nothing. "More detail" has nothing more to give: the whole of the
+        output is the sentence.
+
+        What SURVIVES here is the pair that is not feedback. Undo stays
+        because a mechanical write is exactly the thing most worth undoing —
+        and CLAUDE.md already records that discouraging undo is the failure
+        mode. Open project stays because it is navigation.
+
+        Mute is the one judgement call in this list. It is the honest reply to
+        a noisy duty, and it is dropped anyway: it belongs to the whole duty
+        rather than to one run of it, muting from a message that arrives 270
+        times means finding whichever of the 270 is on screen, and the
+        preferences are where a standing decision belongs. Recorded rather
+        than assumed — if Grant reaches for it and it is not there, that is a
+        one-line change back.
+      */
+      (!routine ||
+        (action !== 'feedback.useful' &&
+          action !== 'feedback.not_useful' &&
+          action !== 'mute_24h' &&
+          action !== 'more_detail')),
   )
 
-  return { staff, staffId, reviewed, actions, projectUrl }
+  return { staff, staffId, reviewed, routine, actions, projectUrl }
 }
 
 export interface CombinedOptions {
@@ -209,6 +250,51 @@ export function combinedNotifier(
     )
     if ((quiet.rows[0] as { announce?: boolean } | undefined)?.announce === false) {
       return { delivered: false, note: 'nothing worth announcing' }
+    }
+
+    /*
+      The last gate before a person (#185).
+
+      On 13 September Claire told Grant, at 03:45, that she had pulled the
+      project records and that the database read showed five active projects.
+      None of the five existed, and the output row said `evidence: inferred` —
+      the office knew nothing had been read, and rendered that knowledge as
+      grey caption text UNDER the sentence claiming the read.
+
+      `metadataProblems` now refuses that combination when the output is
+      CREATED, which is the right place and not the only one that matters:
+      `resumeNotifications` rebuilds an output from its stored row and sends it
+      without passing through creation at all. So the rule is asserted again
+      here, at the one point every channel goes through, for the same reason
+      the `announce` gate above is here rather than in each channel.
+
+      Refused, not fixed. Editing the sentence would put words in an agent's
+      mouth, and dropping it silently is what #185 objects to in the first
+      place — so it becomes an impediment, which is #49's mechanism for "an
+      agent could not do this" and the surface Grant already reads it on.
+    */
+    const refusal = refuseToSend({
+      confidence: output.confidence,
+      evidence: output.evidence,
+      sources: output.sources,
+      contradictions: output.contradictions,
+      body: output.body,
+    })
+    if (refusal !== null) {
+      // Never throws. A job that failed to send and then failed to write down
+      // why it failed to send is the worst outcome available here, and the
+      // note below is the fallback record either way.
+      try {
+        await db.execute(
+          `select app.cannot(${lit(job.jobId)}::uuid, 'missing_data',
+             ${lit(refusal.needed)}, 'the sending path',
+             ${lit(refusal.reason.slice(0, 500))},
+             ${lit(`output ${outputId} was written and not sent`)})`,
+        )
+      } catch {
+        /* Recording a refusal must not become a second failure. */
+      }
+      return { delivered: false, note: `not sent: ${refusal.reason}`.slice(0, 200) }
     }
 
     const context = await resultContext(db, job, outputId, options.projectUrlBase)
@@ -300,6 +386,7 @@ export function pagerChannel(
         staffTitle: context.staff?.title ?? null,
         staffId: context.staffId,
         reviewed: context.reviewed,
+        routine: context.routine,
         severity: output.severity ?? severity,
         actions: context.actions,
       })

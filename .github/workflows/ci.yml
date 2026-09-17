@@ -24,6 +24,14 @@ name: CI
 # accept while the budget is the binding constraint.
 on:
   workflow_dispatch:
+  # The office asking for a run, under the ceiling in `public.ci_runs` (#17).
+  #
+  # `repository_dispatch` and not `workflow_dispatch` because the only GitHub
+  # credential this office holds carries contents and nothing else — probed,
+  # not assumed: every /actions/ endpoint answers 403. This is still on demand
+  # only. No schedule and no push trigger has come back.
+  repository_dispatch:
+    types: [run-ci]
 
 # A newer push to the same ref makes the older run irrelevant.
 concurrency:
@@ -52,6 +60,14 @@ jobs:
     name: checks
     runs-on: ubuntu-latest
     steps:
+      # What the ledger charges this job, measured by the job itself.
+      #
+      # The office cannot read GitHub's billing: that needs actions:read and
+      # the dispatch token has no Actions scope at all. It does not need to —
+      # GitHub bills per JOB rounded up to the minute, so the job is the only
+      # thing that knows the real figure, and it knows it exactly.
+      - name: note when this job started
+        run: echo "CI_BEGAN=$(date -u +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
@@ -102,3 +118,51 @@ jobs:
             if [ "$r" = "success" ]; then echo "✅ $check"; else echo "❌ $check ($r)"; fail=1; fi
           done
           exit "$fail"
+
+      # Tell the office what this cost, whatever happened above.
+      #
+      # `if: always()` because a failed run costs exactly what a passing one
+      # does, and a ceiling that only counts successes is wrong in the
+      # expensive direction.
+      #
+      # Only when the office asked. A run Grant started by hand from the
+      # Actions tab has no reservation to settle, and posting against a null
+      # id would be a row describing nothing.
+      #
+      # The body is built in a FILE, never inline: CLAUDE.md records an Issue
+      # body whose backticks the shell expanded and executed.
+      - name: report the minutes to the office
+        if: always() && github.event_name == 'repository_dispatch'
+        continue-on-error: true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: baujwlzcziasnfhhkchg
+          CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+          CI_OUTCOME: ${{ job.status }}
+        run: |
+          if [ -z "$CI_RUN_ID" ]; then
+            echo "no ci_run_id in the payload - nothing to report"
+            exit 0
+          fi
+          MINUTES=$(( ( $(date -u +%s) - CI_BEGAN + 59 ) / 60 ))
+          echo "this job took about ${MINUTES} minute(s), outcome ${CI_OUTCOME}"
+          MINUTES="$MINUTES" python3 - <<'PY' > /tmp/ci-report.json
+          import json, os, re, uuid
+          # The id arrives in an event payload, so it is parsed as a uuid
+          # rather than pasted into SQL. It is the office's own dispatch today;
+          # a value going into a statement is validated anyway.
+          run_id = str(uuid.UUID(os.environ["CI_RUN_ID"]))
+          outcome = re.sub(r"[^a-z]", "", os.environ.get("CI_OUTCOME", "").lower())[:20]
+          sql = (
+              f"select app.ci_report('{run_id}'::uuid, "
+              f"{int(os.environ['MINUTES'])}, 'checks {outcome}')"
+          )
+          print(json.dumps({"query": sql}))
+          PY
+          curl -sS -X POST \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @/tmp/ci-report.json \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+            | head -c 300
+          echo

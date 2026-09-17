@@ -621,6 +621,217 @@ const output = (): HandlerOutput =>
 }
 
 // ---------------------------------------------------------------------------
+// #228 — the cases §18 names that nothing reached.
+//
+// verify:chaos covered the OUTAGES: a transport that refuses, a provider that
+// 500s, a connector switched off, a crash after commit. Everything below is the
+// other half — failures in DURABLE STATE rather than over a wire, which is the
+// half that survives a restart and therefore the half Grant would meet as "the
+// office is behaving oddly" rather than "something is down".
+//
+// Every one of these is inside a transaction that rolls back, or writes only to
+// the fixture project already created above. None of them touches real work.
+// ---------------------------------------------------------------------------
+
+/*
+  Two workers leasing the same job.
+
+  The lease is the entire reason a second worker cannot start the first one's
+  work, and nothing had ever tried it. Asserted through the real dequeue rather
+  than by reading the SQL, because a lease that looks right and does not hold is
+  indistinguishable from one that does until two workers run at once — and they
+  do, every time a deploy overlaps a tick.
+*/
+{
+  const kind = `verification.lease_${run}`
+  await db.execute(`
+    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by,
+                             state, announce)
+    values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(`chaos-lease-${run}`)}, ${lit(kind)},
+            'verify:chaos', 'queued', false)`)
+  const first = await one(
+    `select job_id::text as id from app.dequeue_job(
+       p_worker => ${lit(`chaos-a-${run}`)}, p_can_transcribe => false,
+       p_can_subprocess => false, p_kinds => array[${lit(kind)}], p_requested_by => null)`,
+  )
+  const second = await one(
+    `select job_id::text as id from app.dequeue_job(
+       p_worker => ${lit(`chaos-b-${run}`)}, p_can_transcribe => false,
+       p_can_subprocess => false, p_kinds => array[${lit(kind)}], p_requested_by => null)`,
+  )
+  record(
+    'two workers dequeue at once: exactly ONE gets the job',
+    `first=${first?.id === undefined ? 'nothing' : 'claimed'} second=${second?.id === undefined ? 'nothing' : 'ALSO CLAIMED'}`,
+    first?.id !== undefined && second?.id === undefined,
+  )
+  const holder = await one(
+    `select leased_by, leased_until is not null as leased
+       from public.jobs where job_id = ${lit(String(first?.id))}::uuid`,
+  )
+  record(
+    'and the winner holds a lease with its own name on it, so the loser can never be right',
+    `leased_by=${String(holder?.leased_by)} leased=${String(holder?.leased)}`,
+    holder?.leased_by === `chaos-a-${run}` && holder?.leased === true,
+  )
+
+  /*
+    Clock skew on lease expiry.
+
+    A lease that has passed its expiry must be reclaimable — otherwise a worker
+    that died holding one strands the job for ever, which is exactly what two
+    stranded jobs once did to every deploy:worker for a day. Backdating the
+    expiry is the only honest way to ask this without waiting out a real lease.
+  */
+  /*
+    Reclaimed by `app.recover_stalled_jobs`, NOT by dequeue.
+
+    The first draft backdated the lease and then called `dequeue_job` again,
+    which returned nothing and read exactly like a stranded job — a live defect,
+    on the face of it. It is not: dequeue takes `state = 'queued'` and this job
+    is `running`, so nothing was wrong except which layer the question was put
+    to. CLAUDE.md already has this one: assert at the layer where the decision
+    is actually made. Recovery is what decides an abandoned job is abandoned.
+  */
+  await db.execute(`
+    update public.jobs set leased_until = app.now_utc() - interval '1 hour'
+     where job_id = ${lit(String(first?.id))}::uuid`)
+  await db.execute('select app.recover_stalled_jobs()')
+  const back = await one(
+    `select state, leased_by from public.jobs where job_id = ${lit(String(first?.id))}::uuid`,
+  )
+  /*
+    `retrying`, not `queued` — and the difference is the point rather than a
+    detail to paper over. Recovery does not pretend the attempt never happened;
+    it records that one was made and lost, so `attempts` still counts and a job
+    that strands repeatedly runs out of attempts instead of looping for ever.
+    Asserting `queued` here (the first draft did) would have demanded the office
+    forget the dead attempt.
+  */
+  record(
+    'an expired lease is RECOVERED, so a worker that died does not strand the job for ever',
+    `state=${String(back?.state)} leased_by=${String(back?.leased_by ?? 'null')}`,
+    back?.state === 'retrying',
+  )
+  record(
+    "and the dead worker's claim is released, so nothing still believes it holds the job",
+    `leased_by=${String(back?.leased_by ?? 'null')}`,
+    back?.leased_by === null || back?.leased_by === undefined,
+  )
+  await db.execute(`
+    update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+      state_reason = 'chaos lease probe'
+     where job_id = ${lit(String(first?.id))}::uuid and state not in ('complete','cancelled','failed')`)
+}
+
+/*
+  A migration applied twice.
+
+  `npm run migrate` skips what is recorded, so the interesting question is not
+  whether the runner is careful — it is whether the LEDGER refuses a second
+  record of the same name. If it does not, a re-run silently reapplies and the
+  count in CLAUDE.md stops meaning anything.
+*/
+{
+  let refusedTwice = ''
+  try {
+    await db.execute(`
+      begin;
+      insert into app.schema_migrations (name, checksum)
+      select name, checksum from app.schema_migrations order by name limit 1;
+      rollback;`)
+  } catch (error) {
+    refusedTwice = error instanceof Error ? error.message : String(error)
+  }
+  /*
+    The outcome prints the REAL message.
+
+    The first draft hardcoded "23505 duplicate key" as the text shown whenever
+    anything was thrown, while testing for that string separately — so the row
+    asserted one thing and displayed another, and went red while claiming the
+    exact words it had failed to find. A report line that states something it
+    did not verify is the same defect as the audit that printed "12 of 6".
+  */
+  record(
+    'a migration recorded twice is refused by the ledger, not silently reapplied',
+    refusedTwice === ''
+      ? 'IT WAS ALLOWED — the ledger accepts duplicates'
+      : refusedTwice.replace(/\s+/g, ' ').slice(0, 80),
+    /duplicate|unique|23505/i.test(refusedTwice),
+  )
+}
+
+/*
+  An empty document, and a malformed one.
+
+  #41 §8 names both and nothing had reached them. The question is not whether
+  the office copes gracefully — it is whether it REFUSES, because a zero-byte
+  document that lands in the corpus is a document Grant will one day open and
+  find nothing in, long after the thing that made it is forgotten.
+*/
+{
+  const tries: Array<[string, string]> = [
+    ['a document with an empty title', `${lit('')}, ${lit('some real content')}`],
+    ['a document with empty content', `${lit(`Empty content ${run}`)}, ${lit('')}`],
+  ]
+  for (const [what, values] of tries) {
+    let said = ''
+    try {
+      await db.execute(`
+        begin;
+        insert into public.documents (project_id, title, content, connector, origin, produced_by)
+        values (${lit(projectId)}::uuid, ${values}, 'none', 'made', 'verify:chaos');
+        rollback;`)
+    } catch (error) {
+      said = error instanceof Error ? error.message : String(error)
+    }
+    /*
+      Reported rather than asserted either way, deliberately.
+
+      Whether an empty document SHOULD be refused at the column is a product
+      decision nobody has made, and a suite is the wrong place to make it. What
+      a suite can do is state what actually happens, so the decision is taken
+      with the fact in front of it rather than assumed in either direction.
+    */
+    record(
+      `${what} is ${said === '' ? 'ACCEPTED' : 'refused'} — recorded, not judged`,
+      said === '' ? 'the database allows it; #228 asks whether it should' : said.slice(0, 70),
+      true,
+    )
+  }
+}
+
+/*
+  Stale state: acting on a job that finished while you were deciding.
+
+  This is the failure `enforce_job_transition` exists for, and the reason two
+  stranded jobs once blocked every deploy for a day with a message four steps
+  from the cause. `committing`, `committed` and `notifying` can only go to
+  `failed` — asserted here so a future loosening of the state machine has to
+  argue with something.
+*/
+{
+  let illegal = ''
+  try {
+    await db.execute(`
+      begin;
+      insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by,
+                               state, announce, started_at, finished_at)
+      values (gen_random_uuid(), ${lit(projectId)}::uuid, ${lit(`chaos-stale-${run}`)},
+              ${lit(`verification.stale_${run}`)}, 'verify:chaos', 'complete', false, app.now_utc(), app.now_utc());
+      update public.jobs set state = 'notifying'
+       where kind = ${lit(`verification.stale_${run}`)};
+      rollback;`)
+  } catch (error) {
+    illegal = error instanceof Error ? error.message : String(error)
+  }
+  record(
+    'a terminal job cannot be moved back into flight, however stale the caller',
+    illegal === '' ? 'IT WAS ALLOWED' : illegal.slice(0, 74),
+    illegal.toLowerCase().includes('transition'),
+  )
+}
+
+// ---------------------------------------------------------------------------
 
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')

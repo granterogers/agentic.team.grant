@@ -7,6 +7,9 @@
   at their real lengths, including the awkward ones.
 */
 
+import * as people from './people.js'
+
+
 /*
   The real portraits.
 
@@ -40,7 +43,7 @@ const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public
   one the office reads as "in hand"; Grace, who is quality and risk, sits next
   to the warning amber without being it.
 */
-export const CREW = [
+const FALLBACK_CREW = [
   { slug: 'claire', face: `${FACES}/chief-of-staff.jpg`, name: 'Claire', role: 'Chief of Staff',
     hue: 'p-moss', tone: 152, state: 'busy', doing: 'On a call with you' },
   { slug: 'emma', face: `${FACES}/research-director.jpg`, name: 'Emma', role: 'Research',
@@ -59,7 +62,7 @@ export const CREW = [
     hue: 'p-slate', tone: 196, state: 'idle' },
 ]
 
-export const PROJECTS = [
+const FALLBACK_PROJECTS = [
   {
     slug: 'legacy-coaching-course',
     name: 'Legacy Coaching Course',
@@ -68,6 +71,26 @@ export const PROJECTS = [
     connectors: ['Notion', 'NotebookLM'],
     done: 9, total: 24, docs: 12,
     next: 'Interviews by 16 Sep',
+    /*
+      Something waiting, in the prototype too (#151).
+
+      §14A requires realistic data, and "realistic" for this bar means it is
+      sometimes there — a state that only ever appears against the live office
+      is a state no capture run has ever looked at.
+    */
+    waiting: [
+      {
+        id: 'w1',
+        what: 'Generate the audio overview for the Legacy course notebook',
+        why: 'It costs about 10 of the notebook\u2019s allowance, and about 40 of 40 are left in this five-hour window.',
+        who: 'Claire',
+        when: '2 days ago',
+        at: null,
+        overdue: false,
+        blocks: false,
+        options: ['Go ahead', 'Not now'],
+      },
+    ],
     modules: [
       { n: 1, name: 'Legacy Opening Assessment', state: 'done', docs: 2, tasks: 4 },
       { n: 2, name: 'Ideal Client Avatar', state: 'doing', docs: 3, tasks: 4 },
@@ -157,14 +180,39 @@ export const PROJECTS = [
       connectors.
     */
     sources: [
+      /*
+        A watched Drive folder (#62).
+
+        Grant: *"anytime I drop a document in there, chief of staff is like, oh,
+        we see that a file has been dropped. What would you like me to do with
+        that?"* So a Drive source says when it was last looked at, not merely
+        that it is connected — the useful fact about a watcher is whether it is
+        awake.
+      */
+      { kind: 'connector', name: 'Google Drive', what: 'Course material — watched for new files',
+        health: 'ok', last: '6 minutes ago', gave: 3 },
       { kind: 'connector', name: 'Notion', what: 'Six module pages, written by the office',
         health: 'ok', last: '2 days ago', gave: 6 },
       { kind: 'connector', name: 'NotebookLM', what: 'The interview corpus',
         health: 'ok', last: '4 hours ago', gave: 12 },
-      { kind: 'reference', name: 'Journey vs Destination (published)', what: 'The piece Priya came through',
-        last: 'Added 3 weeks ago', gave: 0 },
-      { kind: 'reference', name: 'Zoom cloud recordings', what: 'Interview recordings, not yet pulled in',
-        last: 'Added 1 week ago', gave: 0 },
+      /*
+        References, in the shape `app.studio_sources` returns since #35
+        (migration 0306): a `via` naming what kind of thing it is, a real URL,
+        and NO health, last-read or contribution count.
+
+        Those three are null on purpose rather than missing. A reference is a
+        pointer — it never fails, nothing syncs it, and nothing has read it —
+        so a card that showed "Read never" beside a bookmark would be inventing
+        a state it does not have.
+      */
+      { kind: 'reference', id: 'm-r1', ref: 'website', via: 'A website',
+        name: 'innergy.com/journey-vs-destination',
+        url: 'https://innergy.com/journey-vs-destination',
+        what: 'The piece Priya came through', health: null, last: null, gave: null },
+      { kind: 'reference', id: 'm-r2', ref: 'application', via: 'An application',
+        name: 'zoom.us/recording', url: 'https://zoom.us/recording',
+        what: 'Interview recordings, not yet pulled in',
+        health: null, last: null, gave: null },
     ],
 
     /*
@@ -182,7 +230,13 @@ export const PROJECTS = [
         from: 'Grant · chat', who: 'oliver', asked: '2 days ago',
         context: { kind: 'project', title: 'Legacy Coaching Course' },
         state: 'review', delivered: '2 days ago',
-        output: { title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+        /*
+          `id` is the OUTPUT's, since #28. The row's own `id` is the JOB's, and
+          IMPORT TO PROJECT acts on one output — a job can produce several and
+          the card is showing one of them. Without an id here the mock renders
+          the old single-press button and the sheet cannot be captured at all.
+        */
+        output: { id: 'o1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
         derived: ['WS01 — Legacy Opening Assessment', 'Journey VS Destination'],
       },
       {
@@ -267,11 +321,326 @@ export const PROJECTS = [
   },
 ]
 
-export const WAITING = {
+const FALLBACK_WAITING = {
   what: 'Wellness needs its Notion databases shared before anything can be written there',
   who: 'Marcus', when: '2 days ago',
   note: 'Everything else on that project is carrying on.',
 }
 
+/*
+  ---------------------------------------------------------------------------
+  Real data (#68, ADR-0019)
+  ---------------------------------------------------------------------------
+
+  Grant chose to make the studio the product rather than port its design into
+  the plain page, so this file stops being the source of truth and becomes the
+  fallback plus the design layer.
+
+  Two things stay here on purpose:
+
+  **The mock, as a fallback.** With no token, or with the API unreachable, the
+  studio still renders. That matters more than it sounds: §14A's loop is render
+  → capture → critique, and a design that cannot be looked at without a live
+  backend is a design nobody critiques on the morning the backend is down.
+
+  **The colour.** `hue` and `tone` are decisions from `docs/design/direction.md`
+  about perception — the greens spaced further apart than the blues because they
+  are closer to the eye — and they are not facts about a project. Putting them
+  in a database column is how somebody eventually sets one to a hex code.
+*/
+
+/*
+  The database calls her `chief-of-staff` and the design calls her Claire.
+
+  Issue #42, which has been open since the prototype was written. Rather than
+  renaming eight rows in a live office to match a prototype, the mapping lives
+  here — one place, and the direction of travel is obvious if the slugs are ever
+  reconciled.
+*/
+export const DESIGN = {
+  'chief-of-staff':          { slug: 'claire', hue: 'p-moss',  tone: 152 },
+  'research-director':       { slug: 'emma',   hue: 'p-rust',  tone: 28 },
+  'communications-director': { slug: 'oliver', hue: 'p-iris',  tone: 292 },
+  'strategy-director':       { slug: 'tom',    hue: 'p-slate', tone: 248 },
+  'finance-director':        { slug: 'daniel', hue: 'p-plum',  tone: 338 },
+  'operations-director':     { slug: 'marcus', hue: 'p-amber', tone: 78 },
+  'growth-director':         { slug: 'ruby',   hue: 'p-rust',  tone: 4 },
+  'quality-director':        { slug: 'grace',  hue: 'p-slate', tone: 196 },
+}
+
+/*
+  A project's hue, stable for the life of its slug.
+
+  Not stored, and not assigned by position: position changes when a project is
+  created and every card in the portfolio would change colour at once, which
+  looks like a fault. A hash of the slug means Legacy Coaching Course is the
+  same green next week and a new project takes whatever is left.
+*/
+const HUES = ['p-moss', 'p-slate', 'p-amber', 'p-iris', 'p-rust', 'p-plum']
+
+/*
+  Assigned in one pass over the whole list rather than one project at a time.
+
+  A pure hash per slug is stable, which is the property that matters, but two of
+  four projects came out the same purple on the first real render — and two
+  adjacent cards sharing a colour is worse than nobody having one, because it
+  teaches you the colour means nothing. Exactly the argument `data.js` already
+  makes about Emma and Ruby both being rust.
+
+  So the hash picks a STARTING point and collisions walk to the next free hue.
+  Stable while the set of projects is stable, which is the honest guarantee: a
+  new project can shift one other card, and that is a better trade than two
+  cards that look related and are not.
+*/
+const hueFor = (slug) => {
+  let n = 0
+  for (const ch of String(slug)) n = (n * 31 + ch.charCodeAt(0)) % 9973
+  return HUES[n % HUES.length]
+}
+
+const huesFor = (slugs) => {
+  const taken = new Set()
+  const out = {}
+  for (const slug of [...slugs].sort()) {
+    const wanted = HUES.indexOf(hueFor(slug))
+    let at = wanted
+    while (taken.has(HUES[at]) && taken.size < HUES.length) at = (at + 1) % HUES.length
+    out[slug] = HUES[at]
+    taken.add(HUES[at])
+  }
+  return out
+}
+
+/** Live, and mutable in place so importers holding the array see the update. */
+export const CREW = [...FALLBACK_CREW]
+export const PROJECTS = [...FALLBACK_PROJECTS]
+export const WAITING = { ...FALLBACK_WAITING }
+
+/*
+  Whether what is on screen is the office or the mock, and WHICH KIND of not-live
+  it is (#119).
+
+  There used to be one boolean and a sentence, so "you are not signed in" and
+  "the office is down" wore the same calm label: `Prototype data`. The first is
+  normal and expected; the second means an outage, and it should not take a
+  second look to tell them apart. The more alarming state was wearing the
+  quieter word.
+
+  `state` is one of:
+
+    prototype    no token. Nothing is wrong. This is the design, on invented
+                 projects, which is exactly what it says.
+    unreachable  the fetch failed or timed out. The office may be down and
+                 nothing on screen is current. Offers a retry.
+    refused      a 401 with a token present. The token is stale, and it is
+                 cleared, because a page retrying a dead token forever is a
+                 page that never recovers.
+    stale        it answered once and has stopped. Distinguished because the
+                 numbers on screen were real at `at` and are not now, which is
+                 a different warning from never having had any.
+
+  `live` stays a boolean and stays true only for the good case, so every
+  existing reader keeps working.
+*/
+export const source = {
+  live: false,
+  at: null,
+  state: 'prototype',
+  why: 'not asked yet',
+  /** How many times in a row a fetch has failed. Drives the retry's wording. */
+  misses: 0,
+}
+
+/*
+  Whether the office is keeping up (#112).
+
+  A separate object from `source`, because they answer different questions and
+  conflating them is how one masks the other. `source` is *can we see the
+  office*; this is *is the office falling behind*. A perfectly reachable office
+  with nine jobs nobody has taken is `source.live === true` and badly wrong, and
+  that combination is exactly what went unnoticed for eight hours.
+*/
+export const health = {
+  /** Jobs queued past the period of the duty that made them. */
+  stalled: 0,
+  /** Which kinds, and how long the oldest has waited. Named, not counted. */
+  kinds: [],
+  /*
+    Providers whose circuit breaker is open (#240, migration 0372).
+
+    The office being unable to THINK is a different fact from the queue being
+    behind, and it is the more urgent one: a stalled queue is work waiting, and
+    this is work that cannot be done at all. Kept apart rather than folded into
+    `stalled` for that reason.
+  */
+  cannotThink: [],
+}
+
+const replace = (target, rows) => {
+  target.length = 0
+  for (const r of rows) target.push(r)
+}
+
+/**
+ * Fetch the real office and put it behind the same shapes.
+ *
+ * Deliberately forgiving: any failure leaves the mock in place and records why.
+ * A studio that shows a stack trace instead of a design is a studio nobody can
+ * judge, and the fallback is already realistic data at realistic lengths.
+ */
+/**
+ * The parts of the payload that are not lists of things.
+ *
+ * A module-level holder rather than a return value, because `hydrate` is
+ * awaited for its EFFECT — every other thing it loads is written into an
+ * exported array — and making one key travel differently would be two ways of
+ * getting at one payload.
+ */
+export const FROM_OFFICE = { appearance: null }
+
+export async function hydrate(endpoint, token) {
+  try {
+    /*
+      A timeout, because a fetch with none can hang for the browser's default
+      and the page sits on a spinner-less blank claiming nothing is wrong. Ten
+      seconds is far longer than the office ever takes and far shorter than a
+      person will wait before deciding the product is broken.
+    */
+    const stop = AbortSignal.timeout(10_000)
+    const r = await fetch(`${endpoint}?section=studio`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: stop,
+    })
+    if (r.status === 401 || r.status === 403) {
+      const refused = new Error('that token was not accepted')
+      refused.name = 'Refused'
+      throw refused
+    }
+    if (!r.ok) throw new Error(`http ${r.status}`)
+    const { data } = await r.json()
+    if (!data || !Array.isArray(data.projects)) throw new Error('unexpected shape')
+
+    /*
+      How he chose to have it look, from the office rather than this browser
+      (#124, ADR-0021).
+
+      Held rather than applied here: `data.js` knows about data and the theme
+      is the app's to put on the document. An absent key means nothing has
+      been chosen, which is different from an empty object and is why the
+      default is null.
+    */
+    FROM_OFFICE.appearance =
+      data.appearance !== null && typeof data.appearance === 'object' ? data.appearance : null
+
+    const base = data.avatar_base ?? FACES
+    replace(
+      CREW,
+      (data.crew ?? []).map((c) => {
+        const d = DESIGN[c.slug] ?? { slug: c.slug, hue: 'p-slate', tone: 210 }
+        return {
+          ...d,
+          // The real slug travels too: everything that writes back — a chat
+          // addressed to somebody, a tool grant — needs the name the office
+          // answers to, not the one the design calls them.
+          staffSlug: c.slug,
+          face: c.avatar_ref ? `${base}/${c.avatar_ref}` : '',
+          name: c.name,
+          role: c.role,
+          state: c.state,
+          doing: c.doing,
+          expertise: c.expertise ?? [],
+        }
+      }),
+    )
+
+    const hues = huesFor(data.projects.map((p) => p.slug))
+    replace(
+      PROJECTS,
+      data.projects.map((p) => ({
+        ...p,
+        hue: hues[p.slug] ?? hueFor(p.slug),
+        // Every section the studio renders, guaranteed to be an array so a
+        // renderer never has to ask. An absent section and an empty one are the
+        // same thing to a reader, and only one of them can throw.
+        // #151. Guaranteed an array like every other section: an absent one
+        // and an empty one are the same thing to a reader, and only one of
+        // them can throw.
+        waiting: p.waiting ?? [],
+        modules: p.modules ?? [],
+        documents: p.documents ?? [],
+        tasks: p.tasks ?? [],
+        contacts: p.contacts ?? [],
+        sources: p.sources ?? [],
+        activity: p.activity ?? [],
+        requests: p.requests ?? [],
+      })),
+    )
+
+    // The labels Grant defined for contacts (#110, migration 0285). In this
+    // payload rather than a second fetch: a second fetch fails by quietly
+    // returning nothing, which renders as a contacts tab with no categories and
+    // is indistinguishable from a person who never defined any.
+    people.hydrate(data.contactLabels)
+
+    for (const k of Object.keys(WAITING)) delete WAITING[k]
+    if (data.waiting) Object.assign(WAITING, data.waiting)
+
+    /*
+      Reset before assigning, not merged. An office that has RECOVERED must
+      clear the warning, and a merge would leave the last bad answer on screen
+      for ever -- a stale alarm being worse than none, because the next real one
+      is ignored.
+    */
+    health.stalled = Number(data.health?.stalled ?? 0)
+    health.kinds = Array.isArray(data.health?.kinds) ? data.health.kinds : []
+
+    source.live = true
+    source.at = data.generated_at ?? new Date().toISOString()
+    source.state = 'live'
+    source.why = ''
+    source.misses = 0
+    return true
+  } catch (e) {
+    source.live = false
+    source.misses += 1
+    /*
+      Unknown, not healthy. The office not answering says nothing about whether
+      it is keeping up, and leaving the last good answer on screen would be a
+      green light sourced from a page that cannot see anything.
+    */
+    health.stalled = 0
+    health.kinds = []
+    // Unknown, not healthy - the same reasoning as the two lines above it.
+    health.cannotThink = []
+    /*
+      Name the kind of failure, because the answer differs.
+
+      A refused token is the page's to fix — clear it, and the next load is an
+      honest prototype rather than a loop retrying a credential that will never
+      work again. Everything else is the office's, and all the page can do is
+      say so and offer to try again.
+
+      `stale` rather than `unreachable` once it has answered at least once: the
+      numbers on screen WERE real, and "these are from 11 minutes ago" is a
+      different warning from "there has never been anything here".
+    */
+    if (e instanceof Error && (e.name === 'Refused' || /http 40[13]/.test(e.message))) {
+      source.state = 'refused'
+      source.why = 'that token was not accepted — sign in again'
+      try { localStorage.removeItem('hq.token') } catch { /* nothing to clear */ }
+    } else {
+      source.state = source.at === null ? 'unreachable' : 'stale'
+      source.why =
+        e instanceof Error && e.name === 'TimeoutError'
+          ? 'the office did not answer in ten seconds'
+          : e instanceof Error
+            ? e.message
+            : String(e)
+    }
+    return false
+  }
+}
+
 export const byId = (slug) => PROJECTS.find((p) => p.slug === slug) ?? PROJECTS[0]
-export const crewBy = (slug) => CREW.find((c) => c.slug === slug) ?? CREW[0]
+export const crewBy = (slug) =>
+  CREW.find((c) => c.slug === slug || c.staffSlug === slug) ?? CREW[0]

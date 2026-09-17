@@ -640,7 +640,24 @@ const POLICY_BASELINE: Readonly<Record<string, boolean>> = {
   'db.delete': false,
   'production.write': false,
   'spend.money': false,
-  'gmail.draft': true,
+  /*
+    Disabled by 0370, deliberately: src/google/mail.ts exports parseFrom and
+    refreshMail and nothing that drafts a mail, so the row was advertising a
+    capability to all eight agents with nothing behind it - 0298's defect,
+    which is worse than being told no, because Grant finds out when nothing
+    arrives.
+
+    The baseline said true and had said it since 0018. So this check went red
+    on a CORRECT change and reported `DRIFTED: gmail.draft=false` about the
+    fix. Fourth instance in this repository of a control going stale when the
+    thing it controls for changes - web.search is the same story, one table
+    over - and it is the reason the value is written here with its migration
+    named rather than simply flipped: the next person to see this red should
+    be able to tell "somebody disabled a capability on purpose" from "somebody
+    disabled a capability by accident", which is the whole point of a drift
+    check.
+  */
+  'gmail.draft': false,
   'notebook.read': true,
 }
 const live = await db.execute(`
@@ -927,23 +944,49 @@ record(
 // 7. Project switching (Phase 4's last item)
 // ===========================================================================
 
-const scopeRef = `fixture-chat-${run}`
-const otherProject = await one(`
-  with created as (
-    insert into public.projects (slug, name, status)
-    values (${lit(`fixture-other-${run}`)}, 'Fixture: the other project', 'active')
-    returning project_id
-  ),
-  attached as (
-    insert into public.project_attachments
-      (project_id, connector, external_ref, display_name, role)
-    select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
-      from created
-    returning project_id
+/*
+  This section, alone in this suite, uses REAL subjects. Issue #177, and #45's
+  trap underneath it.
+
+  `app.current_project` deliberately refuses a switch that names a FIXTURE
+  project (0164: a harness that dies must not leave Grant's chat pointed at its
+  fixture). `projects.is_fixture` is GENERATED from the slug. So a section that
+  tests project switching CANNOT use `fixture-` subjects — the resolver is right
+  to refuse them, and every check below reads `resolved=null` against code that
+  works.
+
+  That is exactly what happened, and it cost more than the eleven checks #45
+  describes: the wrong-reason failure HID two real bugs in the same function
+  (0291) for as long as it was red.
+
+  So: two `probe-` projects, torn down at the end of this section. `probe-` and
+  not some other real name because `app.project_debris()` lists that prefix, so
+  a teardown that fails is caught by `npm run check:leaks` the same day.
+*/
+const scopeRef = `probe-chat-${run}`
+const realProject = async (slug: string, name: string): Promise<string> =>
+  String(
+    (
+      await one(`
+        with created as (
+          insert into public.projects (slug, name, status)
+          values (${lit(slug)}, ${lit(name)}, 'active')
+          returning project_id
+        ),
+        attached as (
+          insert into public.project_attachments
+            (project_id, connector, external_ref, display_name, role)
+          select project_id, 'upload', 'probe', 'Verification probe', 'source'
+            from created
+          returning project_id
+        )
+        select project_id::text as id from created
+      `)
+    )?.id,
   )
-  select project_id::text as id from created
-`)
-const otherId = String(otherProject?.id)
+
+const switchFrom = await realProject(`probe-switch-a-${run}`, 'Probe: switching, the first')
+const otherId = await realProject(`probe-switch-b-${run}`, 'Probe: switching, the second')
 
 const unresolved = await one(`
   select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p
@@ -957,8 +1000,8 @@ record(
 
 await db.execute(`
   insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
-  values ('telegram_chat', ${lit(scopeRef)}, ${lit(projectId)}::uuid, 'verify:agents',
-          'Switching to the fixture project to demonstrate scoped context.')
+  values ('telegram_chat', ${lit(scopeRef)}, ${lit(switchFrom)}::uuid, 'verify:agents',
+          'Switching to a real project to demonstrate scoped context.')
 `)
 const afterSwitch = await one(
   `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
@@ -967,7 +1010,7 @@ record(
   'project switching',
   'a switch scopes that surface and survives as durable state',
   `resolved=${String(afterSwitch?.p).slice(0, 8)}`,
-  afterSwitch?.p === projectId,
+  afterSwitch?.p === switchFrom,
 )
 
 // The latest switch wins, and the earlier one is still on the record - which
@@ -1007,6 +1050,105 @@ record(
   'clearing the context is a recorded event, not a deleted row',
   `resolved=${String(cleared?.p ?? 'null')}, ${String(historyAfter?.n)} switch(es) still on record`,
   (cleared?.p === null || cleared?.p === undefined) && Number(historyAfter?.n) === 3,
+)
+
+/*
+  And the fixture guard itself (0164), which until 0291 reached BACKWARDS.
+
+  A scope whose latest switch names a fixture must read as no scope — not fall
+  through to the real project it was pointed at two switches ago, which is a
+  chat quietly working on the wrong thing while looking entirely reasonable.
+
+  Asserted with a real switch underneath it, so a resolver that ignored the
+  guard and one that fell back both fail, and for different reasons.
+*/
+/*
+  Its own fixture, made here. `projectId` belongs to section 1 and an earlier
+  section has already retired it by this point — reusing it failed on the
+  foreign key, which is a fair warning that a subject shared across a thousand
+  lines is a subject whose lifetime nobody is tracking.
+*/
+/*
+  Active, with an attachment. `app.enforce_switch_target_active` refuses a
+  switch into a paused or archived project — *"switching into an archived
+  project would file new work somewhere nobody is looking"* — and ADR-0014
+  refuses an active project with no enabled source. Both are right; the fixture
+  simply has to be a well-formed project to be switched INTO at all.
+
+  `fixture-` named, so `purge:fixtures` collects it — the opposite of the two
+  `probe-` subjects above, and for the opposite reason: this one exists
+  precisely to BE a fixture the resolver refuses.
+*/
+const harnessFixture = await realProject(`fixture-switch-${run}`, 'Fixture: a harness that died')
+await db.execute(`
+  insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+  values ('telegram_chat', ${lit(scopeRef)}, ${lit(switchFrom)}::uuid, 'verify:agents',
+          'Back to a real project, so the guard below has something to fall back TO.'),
+         ('telegram_chat', ${lit(scopeRef)}, ${lit(harnessFixture)}::uuid, 'verify:agents',
+          'A harness switching the scope to its own fixture, and then dying.')
+`)
+const guarded = await one(
+  `select app.resolve_project('telegram_chat', ${lit(scopeRef)}, null)::text as p`,
+)
+record(
+  'project switching',
+  'a switch to a FIXTURE reads as no scope, and does not fall back to an older one',
+  `resolved=${String(guarded?.p ?? 'null')}`,
+  guarded?.p === null || guarded?.p === undefined,
+)
+
+/*
+  0361, and the reason the check above was worth distrusting even when green.
+
+  It reported 56/56 on 11 September and 55/56 on 14 September against identical
+  code, because BOTH halves of the tiebreak were undecided: switched_at is
+  app.now_utc(), which is now() — the TRANSACTION timestamp, so the two switches
+  written in one statement above share an instant to the microsecond — and
+  switch_id was gen_random_uuid(), so `order by switch_id desc` was ordering by
+  noise. Which switch counted was a coin flip, in the suite and in production
+  alike: a chat could be pointed at the project from two switches ago while
+  looking entirely reasonable.
+
+  A single green run cannot tell a fixed coin from a lucky one, so this asserts
+  the PROPERTY directly and repeatedly: write two switches in one transaction,
+  and the second must win every time. Ten rounds is not proof of determinism in
+  the mathematical sense; it is enough that a 50/50 defect survives it once in
+  a thousand runs, where one round survives every other run.
+
+  The subjects are `switchFrom` and `otherId`, the two REAL probe projects this
+  section owns and tears down at the end. Not `projectId` — that belongs to
+  section 1 and has already been retired by the time execution reaches here,
+  which this file warns about forty lines above and which the first draft of
+  this check did anyway. It failed 10 of 10 and looked exactly like a live
+  ordering defect: a retired project is a fixture, a fixture switch correctly
+  reads as no scope, and the loop counted every null as the older switch
+  winning. The test was wrong and the fix was right, in the one direction that
+  would have sent somebody rewriting a working function.
+
+  Each round uses its own scope_ref, and the rows go when the probe projects go
+  — project_delete clears project_switches (0292), so there is nothing extra to
+  tear down and nothing left on an append-only table.
+*/
+const ORDER_ROUNDS = 10
+let wrongWinner = 0
+for (let i = 0; i < ORDER_ROUNDS; i += 1) {
+  const ref = `order-proof-${run}-${String(i)}`
+  await db.execute(`
+    insert into public.project_switches (scope_kind, scope_ref, project_id, switched_by, reason)
+    values ('telegram_chat', ${lit(ref)}, ${lit(switchFrom)}::uuid, 'verify:agents', 'first'),
+           ('telegram_chat', ${lit(ref)}, ${lit(otherId)}::uuid, 'verify:agents',
+            'second, and the one that counts')
+  `)
+  const seen = await one(`select app.current_project('telegram_chat', ${lit(ref)})::text as p`)
+  if (seen?.p !== otherId) wrongWinner += 1
+}
+record(
+  'project switching',
+  'REGRESSION 0361: two switches in one transaction, and the LAST one written always wins',
+  wrongWinner === 0
+    ? `${String(ORDER_ROUNDS)} rounds, the second switch won every time`
+    : `THE OLDER SWITCH WON ${String(wrongWinner)} of ${String(ORDER_ROUNDS)} ROUNDS — the tiebreak is undecided again`,
+  wrongWinner === 0,
 )
 
 // Explicit beats everything.
@@ -1072,6 +1214,31 @@ record(
   rewriteSwitch.slice(0, 120),
   rewriteSwitch.includes('append-only'),
 )
+
+/*
+  Teardown for this section's real subjects (#45).
+
+  At the END of the section, not in the middle of it — the first version sat
+  after the clearing check and deleted two projects that six later checks were
+  still using, which is a teardown that breaks the thing it is tidying up after.
+
+  `project_delete` refuses a project holding documents or jobs; these hold
+  neither, and since 0292 it sweeps the switch log itself — which it could not
+  before, so a project that had ever been the subject of a conversation was
+  undeletable and said so with a raw constraint name.
+*/
+for (const gone of [`probe-switch-a-${run}`, `probe-switch-b-${run}`]) {
+  const said = (await one(`select public.project_delete(${lit(gone)}) as r`))?.r as {
+    ok?: boolean
+    error?: string
+  }
+  record(
+    'project switching',
+    `the real subject ${gone} is torn down`,
+    said?.ok === true ? 'gone' : String(said?.error),
+    said?.ok === true,
+  )
+}
 
 // ===========================================================================
 // Report FIRST, then clean up

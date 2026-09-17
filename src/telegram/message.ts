@@ -22,6 +22,7 @@
 
 import type { Confidence, Evidence } from '../agents/quality.ts'
 import type { ActionId } from '../slack/blocks.ts'
+import { attestsSomething, provenanceLine } from '../slack/blocks.ts'
 
 /** Telegram's hard limit. Ours is far below it, on purpose. */
 export const TELEGRAM_MAX_TEXT = 4096
@@ -54,6 +55,29 @@ export interface PagerMetadata {
   readonly confidence: Confidence
   readonly evidence: Evidence
   readonly reviewed: boolean
+  /**
+   * What it drew on, or verified against.
+   *
+   * Added with #186, when the provenance line became the same shared English
+   * Slack uses. It was not here before because the old line never mentioned
+   * sources — and defaulting it to empty would have made the pager say
+   * "nothing cited" about a finding with five citations, which is precisely
+   * the honesty rule that change tightened.
+   *
+   * The caller has it: `pager.page` receives the whole `HandlerOutput`.
+   */
+  readonly sources: readonly string[]
+  readonly contradictions: string | null
+  /**
+   * True when the output is a mechanical read rather than a judgement.
+   *
+   * The same flag Slack carries, for the same reason and read from the same
+   * column — see `MessageMetadata.routine` in `src/slack/blocks.ts`. Optional
+   * here only so that the several callers that build a page by hand are not
+   * all made to say `routine: false`; absent means "a judgement", which is the
+   * cautious reading and the one the honesty rules are written for.
+   */
+  readonly routine?: boolean
 }
 
 export interface PagerMessage {
@@ -184,44 +208,226 @@ export function inlineKeyboard(
  * unreviewed output is labelled first, before the body, because on a phone the
  * first line is often the only line read.
  */
+/**
+ * Slack's `*bold*` into Telegram's `<b>`, and everything else escaped.
+ *
+ * Escaping FIRST and converting after, so a body containing a literal `<` is
+ * still safe and a pair of asterisks still becomes bold. The other way round —
+ * convert then escape — turns the tags this just added into visible text.
+ */
+/**
+ * Slack's emoji shortcodes, which Telegram has never heard of.
+ *
+ * `:warning:` is a name Slack resolves against its own emoji set. Telegram's
+ * HTML parse mode resolves nothing, so the eight characters arrive on Grant's
+ * phone as eight characters — Slack vocabulary leaking into a surface that
+ * does not speak it, which is #208's whole complaint wearing a different hat.
+ *
+ * Translated generally rather than one shortcode at a time, and anything not
+ * on the list is REMOVED rather than passed through: an unknown shortcode is a
+ * name only Slack can resolve, so its literal text is never the right answer.
+ * Losing a decoration is cheap; showing him a colon-wrapped word is not.
+ */
+const SLACK_EMOJI: Readonly<Record<string, string>> = {
+  warning: '\u26a0\ufe0f',
+  white_check_mark: '\u2705',
+  heavy_check_mark: '\u2714\ufe0f',
+  rotating_light: '\ud83d\udea8',
+  bulb: '\ud83d\udca1',
+  memo: '\ud83d\udcdd',
+  pencil: '\u270f\ufe0f',
+  calendar: '\ud83d\udcc5',
+  file_folder: '\ud83d\udcc1',
+  speech_balloon: '\ud83d\udcac',
+  mag: '\ud83d\udd0d',
+  microscope: '\ud83d\udd2c',
+  books: '\ud83d\udcda',
+  compass: '\ud83e\udded',
+  gear: '\u2699\ufe0f',
+  shield: '\ud83d\udee1\ufe0f',
+  abacus: '\ud83e\uddee',
+  chart_with_upwards_trend: '\ud83d\udcc8',
+  chess_pawn: '\u265f\ufe0f',
+  hourglass: '\u23f3',
+  information_source: '\u2139\ufe0f',
+}
+
+/*
+  A shortcode must START with a letter and be at least two characters, and may
+  not sit against a word character on either side. That is what keeps "3:2:1"
+  and "12:30" out of it — neither has a letter between the colons — while
+  still catching a shortcode at the start of a line or in the middle of a
+  sentence.
+*/
+const SHORTCODE = /(?<![A-Za-z0-9_]):([a-z][a-z0-9_+-]+):(?![A-Za-z0-9_])/g
+
+/**
+ * What to do with a shortcode nobody has a character for.
+ *
+ * `strip` for text the OFFICE composes — the provenance line, a header, any
+ * furniture. There, an unresolvable name is our own mistake and showing it to
+ * Grant is never the right answer.
+ *
+ * `keep` for the model's own body. Deleting words a message actually said is
+ * worse than a stray colon-wrapped one: the reader can see past punctuation,
+ * and cannot see past a sentence with a hole in it. A KNOWN shortcode is still
+ * translated there, because the emoji is unambiguously what was meant.
+ */
+export function slackEmojiToUnicode(line: string, unknown: 'strip' | 'keep'): string {
+  const out = line.replace(SHORTCODE, (whole, name: string) => {
+    const known = SLACK_EMOJI[name]
+    if (known !== undefined) return known
+    return unknown === 'strip' ? '' : whole
+  })
+  return unknown === 'strip'
+    ? out
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/(^|\n) +/g, '$1')
+        .replace(/ +(\n|$)/g, '$1')
+    : out
+}
+
+/**
+ * Slack's bold into Telegram's tags, and everything else escaped.
+ *
+ * Escaping FIRST and converting after, so a body containing a literal less-than
+ * is still safe and a pair of asterisks still becomes bold. The other way round
+ * — convert then escape — turns the tags this just added into visible text.
+ *
+ * Emoji shortcodes go last, on text that is already escaped: every character a
+ * shortcode is made of survives escaping unchanged, so the order costs nothing
+ * and the unicode it emits is not something to escape.
+ */
+function slackEmphasisToHtml(line: string): string {
+  return slackEmojiToUnicode(escapeHtml(line).replace(/\*([^*]+)\*/g, '<b>$1</b>'), 'strip')
+}
+
 export function pagerText(message: PagerMessage): string {
   const parts: string[] = []
+
+  /**
+   * What a project is CALLED on a phone (#208).
+   *
+   * `Unnamed` is the reserved project 0334 created for anything that names no
+   * project — Grant's own framing: *"you can just create an untitled or undefined
+   * project. Stuff that's not a bit specific project."* It is an excellent
+   * internal name and a poor thing to read on a lock screen, because it describes
+   * a database row rather than what is in front of you.
+   *
+   * Grant, 14 September: *"just see conversation rather than unnamed."*
+   *
+   * Only the reserved one is renamed. A real dashboard project keeps its real
+   * name — that name is the answer to "which project is this about", which is the
+   * whole reason the header exists.
+   */
+  const displayProject = (name: string): { label: string; mark: string } =>
+    name.toLowerCase() === 'unnamed'
+      ? /*
+           A speech bubble, not a folder. The header answers "what is this
+           about" at a glance, and a filing-cabinet icon on something that is
+           explicitly NOT filed anywhere answers it wrongly, which is the same
+           mismatch as showing the internal name.
+        */
+        { label: 'Conversation', mark: '💬' }
+      : { label: name, mark: '📁' }
 
   const project =
     message.projectName === undefined ||
     message.projectName === null ||
     message.projectName.trim() === ''
       ? null
-      : message.projectName.trim()
+      : displayProject(message.projectName.trim())
 
-  // First line, before even the review warning. One bot speaks for eight people
-  // across every project, so "which project" is the first question every one of
-  // these raises and the lock screen shows one line.
-  if (project !== null) parts.push(`📁 <b>${escapeHtml(project)}</b>`)
+  // First line, before even the review warning. One bot speaks across every
+  // project, so "which project" is the first question every one of these raises
+  // and the lock screen shows one line.
+  //
+  // ONCE, not twice. It used to be repeated as a footer under the provenance
+  // line, on the reasoning that a long message pushes the header off the top —
+  // true, and it made a two-line hello say the same word at both ends. Grant,
+  // 14 September: "I don't need unnamed to be twice. Certainly don't need to
+  // see it twice." (#208)
+  if (project !== null) parts.push(`${project.mark} <b>${escapeHtml(project.label)}</b>`)
 
-  if (message.metadata !== null && !message.metadata.reviewed) {
+  const warnedUnreviewed = message.metadata !== null && !message.metadata.reviewed
+  if (warnedUnreviewed) {
     parts.push('⚠️ <b>Not reviewed</b> — do not rely on this yet')
   }
 
-  const who =
-    message.staffName === null
-      ? null
-      : message.staffTitle === null || message.staffTitle === message.staffName
-        ? message.staffName
-        : `${message.staffName} · ${message.staffTitle}`
-  if (who !== null) parts.push(`<b>${escapeHtml(who)}</b>`)
+  /*
+    No sender line (#208).
 
-  parts.push(escapeHtml(trimForPager(message.body)))
+    It used to say "Claire and her title" above every message. Grant, 14
+    September: "I don't need to see the contact's name and the message. I
+    already have it, so you can remove that."
+
+    Right twice over. `telegram.only_chief_speaks` is true, so it is always
+    her; and since #70 the bot IS hers, so the chat is named after her at the
+    top of his screen. Repeating it on every message is the product
+    introducing itself to somebody who already knows who is talking, which is
+    the opposite of the "more human, more personable" he asked for.
+
+    `staffName` and `staffTitle` stay on the type: Slack still shows them, and
+    it should, because several people post there.
+  */
+
+  /*
+    The body goes through the emoji translation too, and keeps what the
+    translation does not know (#208). A model that writes a check-mark
+    shortcode meant the check mark; a model that writes something only Slack
+    could resolve still wrote a word, and removing words from an answer is a
+    worse failure than leaving one oddly punctuated.
+  */
+  parts.push(slackEmojiToUnicode(escapeHtml(trimForPager(message.body)), 'keep'))
 
   if (message.metadata !== null) {
-    parts.push(
-      `<i>${escapeHtml(message.metadata.confidence)} confidence · evidence: ${escapeHtml(message.metadata.evidence)}</i>`,
-    )
-  }
+    /*
+      The same English as Slack (#186), from the same function.
 
-  // And last, after the provenance. A long message pushes the header off the
-  // top, and the end of it is where the decision gets made.
-  if (project !== null) parts.push(`<i>— ${escapeHtml(project)}</i>`)
+      This said "medium confidence · evidence: inferred" — three internal field
+      names — and Slack said exactly the same until Grant looked at his phone
+      and called it *"not intuitive or acting like it's a human"*. Fixing one
+      surface and leaving the other is how two channels end up describing the
+      same output in two vocabularies.
+
+      `provenanceLine` is pure and already shared through `Confidence` and
+      `Evidence`, so this is an import rather than a second implementation —
+      which is the whole reason the Slack one was worth putting in a function.
+      It emits Slack's `*bold*`; Telegram wants tags, so the markers are
+      converted rather than the sentence rewritten.
+    */
+    // Skipped for a mechanical read, exactly as in Slack. A pager line saying
+    // "Confident — checked against 1 source" under "Calendar refreshed" spends
+    // a line of a lock screen on nothing.
+    /*
+      And skipped again when the line could only report that nothing happened
+      (#208).
+
+      `routine` covers a mechanical read. This covers the other case Grant
+      objected to: a message that claims nothing, carrying "Fairly confident —
+      worked out, not looked up, nothing cited." Two absences under "I'm here.
+      No need for a meeting."
+
+      `attestsSomething` is shared with Slack and is narrow on purpose — it
+      consults the BODY, because the metadata on that harmless hello is
+      identical to the metadata on #185's five invented projects. What
+      separates them is whether the words claim a read, and anything that does
+      keeps its provenance beside it.
+    */
+    if (message.metadata.routine !== true && attestsSomething(message.metadata, message.body)) {
+      /*
+        Without the unreviewed clause when the header already carried it (#208).
+
+        Those two lines are pushed under exactly the same condition, so the
+        warning was reaching Grant twice in every unreviewed message — once in
+        bold above the body and once in grey italics below it. The prominent
+        one is the one worth keeping: on a phone the first line is often the
+        only line read, which is why it is first.
+      */
+      const line = provenanceLine(message.metadata, { unreviewed: warnedUnreviewed })
+      parts.push(`<i>${slackEmphasisToHtml(line)}</i>`)
+    }
+  }
 
   const text = parts.join('\n\n')
   // Belt and braces. The trim above makes this unreachable for any realistic

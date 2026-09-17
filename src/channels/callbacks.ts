@@ -153,6 +153,53 @@ const FEEDBACK_SIGNAL: Readonly<Record<string, string>> = {
   not_useful: 'negative',
 }
 
+/**
+ * Ask what should have happened instead.
+ *
+ * Issue #59. Sent on the channel the press came from and nowhere else — a
+ * correction asked for on Slack because the button was pressed on Telegram is
+ * a question in a room he is not looking at.
+ *
+ * Deliberately not a model call. It is one sentence, it is the same sentence
+ * every time by design, and putting a free model between Grant and a fixed
+ * question is how it starts varying in ways nobody asked for.
+ *
+ * Never throws. This is the follow-up to an acknowledgement that already
+ * happened; failing it must not un-record the feedback.
+ */
+const askForTheCorrection = async (db: SqlExecutor, row: PendingRow): Promise<void> => {
+  if (row.origin_channel !== 'telegram') return
+  const [chatId, messageId] = String(row.origin_ref).split(':')
+  if (chatId === undefined || chatId === '') return
+
+  const { rows } = await db.execute(`
+    select app.callback_ack(b.bot_id, 'not_useful') as ack
+      from public.telegram_chats c
+      join public.telegram_bots b on b.bot_id = c.bot_id and b.enabled
+     where c.chat_id = ${lit(chatId)}
+     limit 1
+  `)
+  const token = (rows[0] as { ack?: { token?: string } } | undefined)?.ack?.token
+  if (typeof token !== 'string' || token === '') return
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      // Threaded under the message he marked, so a correction typed twenty
+      // minutes later still says which answer it is about.
+      ...(messageId !== undefined && /^\d+$/.test(messageId)
+        ? { reply_to_message_id: Number(messageId), allow_sending_without_reply: true }
+        : {}),
+      text:
+        'What should I have done instead? Tell me in a sentence and I will ' +
+        'take it as an instruction, not just a note.',
+      disable_notification: true,
+    }),
+  })
+}
+
 const recordFeedback = async (
   db: SqlExecutor,
   row: PendingRow,
@@ -263,6 +310,30 @@ export const processCallbacks = async (
       case 'not_useful': {
         await recordFeedback(db, row, action)
         await resolveNotification(db, row, 'acted')
+
+        /*
+          A thumbs-down that only records displeasure is half a feature.
+
+          Grant asked for the buttons as *"a means to confirm or to quickly
+          confirm something or to correct something"* — and correcting was the
+          half that did not exist. 👎 wrote a `negative` row to `feedback` and
+          stopped, which tells the office something is wrong and nothing about
+          what.
+
+          So it asks. The reply he types then arrives as an ordinary inbound
+          message on the same chat, which the instruction handler already
+          reads in context (#63) — so the correction lands as an INSTRUCTION,
+          which is what it is, rather than as more feedback.
+
+          `feedback`'s own comment draws this line: *"a reaction is a weak
+          signal and a typed sentence is not, and treating them alike is how a
+          stray emoji becomes a policy."* The reaction opens the door; the
+          sentence is the thing worth keeping.
+        */
+        if (action === 'not_useful') {
+          await askForTheCorrection(db, row).catch(() => undefined)
+        }
+
         done.push({
           commandId: row.command_id,
           action,

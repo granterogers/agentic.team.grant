@@ -171,6 +171,38 @@ export interface BlockerDraft {
   readonly workCanContinue: boolean
   readonly projectId?: string | undefined
   readonly jobId: string
+  /**
+   * The capability answering `standingOption` authorizes from now on (#15).
+   *
+   * Both or neither — a CHECK on `public.blockers` enforces it, because a tool
+   * with no option is a permission nobody can grant and an option with no tool
+   * is a button that does nothing.
+   *
+   * Named rather than parsed: `approvalOptions` is free text a handler writes
+   * in whatever English reads best, and deciding a permission by matching words
+   * in it would be #130's parsing defect applied to a security boundary.
+   */
+  readonly standingTool?: string | undefined
+  readonly standingOption?: string | undefined
+  /**
+   * What answering with a particular option PERFORMS (#257).
+   *
+   * A job kind and one payload per thing, written HERE rather than read out of
+   * the option text — `approvalOptions` is free English and deriving work from
+   * it would be #130's parsing defect on a path that enqueues jobs.
+   *
+   * `handlers/drive.ts` is why this exists: it has offered "Add them to the
+   * project as source documents" since #62 and answering it could never work,
+   * because the page token advances whether or not Grant was asked and the
+   * files are gone from the next change list.
+   */
+  readonly onAnswer?:
+    | {
+        readonly option: string
+        readonly kind: string
+        readonly payloads: readonly Record<string, unknown>[]
+      }
+    | undefined
 }
 
 /**

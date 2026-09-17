@@ -42,11 +42,25 @@ import { combinedNotifier, pagerChannel } from '../channels/notify.ts'
 import { announceStart } from '../channels/progress.ts'
 import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { artifactHandler } from '../handlers/artifact.ts'
 import { backupHandler } from '../handlers/backup.ts'
+import { briefingHandler } from '../handlers/briefing.ts'
+import { browserGatherHandler } from '../handlers/browser-gather.ts'
+import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
+import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
+import { channelsHandler } from '../handlers/channels.ts'
+import { ciDispatchHandler } from '../handlers/ci-dispatch.ts'
+import { collectHandler } from '../handlers/collect.ts'
+import { driveWatchHandler } from '../handlers/drive.ts'
+import { driveReadHandler } from '../handlers/drive-read.ts'
+import { extractTasksHandler } from '../handlers/extract-tasks.ts'
+import { googleRevokeHandler } from '../handlers/google-revoke.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
+import { jobTracesHandler } from '../handlers/job-traces.ts'
 import { mailHandler } from '../handlers/mail.ts'
+import { mcpDiscoverHandler } from '../handlers/mcp-discover.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
 import { notionImportHandler } from '../handlers/notion-import.ts'
@@ -55,6 +69,7 @@ import { planHandler } from '../handlers/plan.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
+import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { vaultExportHandler } from '../handlers/vault-export.ts'
 import type { Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
@@ -134,11 +149,30 @@ export interface PassResult {
  * is installed, which bot pages, whether there is a key to think with. A pass
  * that assumed any of those would be a pass that half-works silently.
  */
+/**
+ * A pass, plus the kinds it can actually handle (#112).
+ *
+ * `kinds` is a property on the function rather than a second return value, so
+ * every existing caller keeps working and nothing has to be threaded through
+ * two runtimes to get at it.
+ *
+ * It exists because nine hourly jobs sat queued for eight hours: the duty
+ * enqueued `google.write_calendar_tasks`, the handler was written and
+ * registered, and the DEPLOYED worker had been built before either existed. It
+ * dequeued a kind it had never heard of and left it. Nothing was red, because a
+ * queued job is not a failed job.
+ *
+ * Reading the registry from outside is what lets a check hold it against the
+ * kinds the database enqueues. Any other way of listing the kinds would be a
+ * second copy of this array, which is the drift the check is written against.
+ */
+export type Pass = (() => Promise<PassResult>) & { readonly kinds: readonly string[] }
+
 export const buildPass = async (
   db: SqlExecutor,
   workerId: string,
   options: PassOptions = {},
-): Promise<() => Promise<PassResult>> => {
+): Promise<Pass> => {
   const log = options.log ?? ((): void => {})
   const max = options.max ?? 10
   // Timings in the log, because Grant asked for a reply inside a minute and
@@ -186,6 +220,7 @@ export const buildPass = async (
   const vaultKey = String(setup?.vault_key ?? '')
   const cannotThink = orKey === '' && vaultKey === ''
 
+  let slackTeamId = ''
   const botToken = String(
     (
       await db.execute(
@@ -203,6 +238,7 @@ export const buildPass = async (
         )
       ).rows[0]?.team_id,
     )
+    slackTeamId = teamId
     const office = await SlackOffice.configured(db, slack)
     channels.push(slackChannel(db, office, { teamId }))
 
@@ -284,7 +320,67 @@ export const buildPass = async (
     ...notebookHandlers(db),
     planHandler(db),
     capacityHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
+    briefingHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
+    driveWatchHandler(db),
+    // #96. The other half of what drive.watch asks about: "Add them to the
+    // project as source documents" was an option nothing implemented.
+    driveReadHandler({ db, projectRef, serviceKey }),
+    collectHandler({ db, projectRef, serviceKey }),
     calendarHandler(db),
+    /*
+      #109. Registered unconditionally and deliberately so.
+
+      It only ever runs when `hq_disconnect` enqueued it, which happens because
+      Grant pressed Disconnect — and the one moment it must not be missing is
+      the moment a credential is parked waiting for it. A handler gated on
+      `google.enabled` would be absent exactly when signing out matters most,
+      and the parked token would sit there with no job that can reach it.
+    */
+    googleRevokeHandler(db),
+    // The other direction: dated tasks into the diary (#94, ADR-0020). Off
+    // until `calendar.sync_tasks` is turned on.
+    calendarTasksHandler(db),
+    jobTracesHandler(db),
+    /*
+      #21. The build diary pruned its rows and kept its pictures — 38 orphans
+      against a 1 GB allowance. Registered beside the trace prune because it is
+      the same duty wearing a different table.
+    */
+    buildShotsHandler({ db, projectRef, serviceKey }),
+    /*
+      A page the office is signed in to, read and photographed (#135, #16).
+
+      Gather only. The unavailable adapter is what runs until somebody sets the
+      two Vault entries, which is deliberate: the degradation path is the
+      default path and gets exercised every day rather than only during an
+      outage.
+    */
+    browserGatherHandler({ db, projectRef, serviceKey }),
+    /*
+      Running a workflow on demand, under the month's minute ceiling (#17).
+
+      The ceiling lives in the database and `app.ci_reserve` is the only door,
+      so registering this handler cannot widen what the office may spend.
+    */
+    ciDispatchHandler({ db }),
+    /*
+      Every dashboard project gets a channel, without anybody remembering (#187).
+
+      TWO KINDS, ONE HANDLER. `office.provision_channels` is enqueued when a
+      project is created; `office.rename_channels` has been enqueued by
+      `app.hq_rename_project` since 0073 with NOTHING implementing it — eleven
+      such jobs exist and every one of them is cancelled, so renaming a project
+      has never renamed its channel. `ensureChannel` is idempotent and a rename
+      is the case where the mapping exists and the name has moved, so one
+      handler answers both honestly.
+
+      Registered unconditionally, the way googleRevokeHandler is: an office
+      with no Slack answers "Slack is not connected" from inside the handler,
+      which is an outcome, rather than dying as NoHandlerError, which is not.
+    */
+    ...['office.provision_channels', 'office.rename_channels'].map((kind) =>
+      channelsHandler({ db, botToken, teamId: slackTeamId }, kind),
+    ),
     mailHandler(db),
     // §16's nightly copy. Registered unconditionally: the handler reports
     // "no storage key" as an outcome rather than failing, because a backup
@@ -312,6 +408,43 @@ export const buildPass = async (
     // in Notion as pages. Every capability existed and nothing put them
     // together, which is why the teamspace stayed empty (0166).
     notionImportHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Finding the tasks inside something we have read (#130).
+
+      `tasks_extracted` has been a declared and validated shape since 0272 and
+      had never held a row — a contract nothing produces, which is the same
+      family as a column nothing writes.
+    */
+    extractTasksHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Turning a request into a finished file (#258).
+
+      Registered here with the storage credentials because the pipeline ends in
+      Storage and in a document row, and a handler that could write the report
+      and not keep it would be the half-capability the Issue is about.
+    */
+    artifactHandler({
+      db,
+      projectRef,
+      router: cannotThink ? null : new ProviderRouter(db, orKey),
+      serviceKey,
+    }),
+    /*
+      And the job that waits for several specialists and answers (#262).
+
+      Registered beside the rest because a branch is an ordinary job and so is
+      this: no orchestrator, no scheduler, nothing running between ticks. It
+      wakes, asks whether the branches are in, and pauses itself when they are
+      not.
+    */
+    synthesiseHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Asking an outside MCP provider what it offers (#265).
+
+      No router: discovery is two JSON-RPC calls and a classification made from
+      a table of words, deliberately reproducible and deliberately arguable.
+    */
+    mcpDiscoverHandler({ db }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is
@@ -342,7 +475,7 @@ export const buildPass = async (
 
   log(`setup: done at ${String(Date.now() - buildStartedAt)}ms`)
 
-  return async (): Promise<PassResult> => {
+  const pass = async (): Promise<PassResult> => {
     const passStartedAt = Date.now()
     const at = (what: string): void => log(`${what} at ${String(Date.now() - passStartedAt)}ms`)
     // Button presses first. Approving a generation enqueues it, so pressing the
@@ -409,4 +542,7 @@ export const buildPass = async (
       cannotThink,
     }
   }
+
+  // The registry, readable from outside. See the note on `Pass` above.
+  return Object.assign(pass, { kinds: handlers.map((h) => h.kind) })
 }

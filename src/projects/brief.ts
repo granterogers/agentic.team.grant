@@ -181,6 +181,17 @@ export const generateBrief = async (
       )
       .join('\n\n')
 
+  /*
+    No `jobId`, deliberately (#268).
+
+    Every other caller of `complete` in `src/` attributes its call so it lands
+    under a job KIND in `public.model_record`. This one has no job to name:
+    `generateBrief` is reached only from `scripts/projects/brief.ts`, which a
+    person runs. Inventing a job for it would put harness traffic into a
+    measurement, which is what 0395 was written to undo.
+
+    So the call is counted under `(unattributed)`, which is true.
+  */
   const completion = await router.complete({
     messages: [{ role: 'user', content: body }],
     // Generous, because free models on this tier are reasoning models and

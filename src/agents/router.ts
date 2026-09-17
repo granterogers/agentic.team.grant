@@ -345,24 +345,134 @@ export interface RoutingDecision {
 const ROSTER_CEILINGS: Readonly<Record<IntentClass, readonly RoleSlug[]>> = {
   // A remark is a remark. Nobody is convened to hear it.
   thought: [],
-  // Answering from what we already hold is retrieval, not a meeting.
-  question: [],
-  discussion: ['strategy-director'],
-  suggestion: ['strategy-director'],
-  light_investigation: ['research-director'],
-  assignment: ['research-director', 'strategy-director', 'operations-director'],
-  direct_command: ['research-director', 'strategy-director', 'operations-director'],
+  /*
+    #230. A question may reach a specialist, but only when the SUBJECT earns it.
+
+    This was `[]` — a question could never convene anybody, by construction —
+    and `question` is 237 of the 505 routing decisions this office has ever
+    made, the largest class by a distance. So the commonest thing Grant does
+    could only ever reach the Chief of Staff, and five of the eight people here
+    had never been selected once in the system's history.
+
+    `verify:roster` proved it rather than argued it: eight instructions each
+    written for one specific person — a gross-margin question for Daniel, a
+    channel question for Ruby, a bottleneck question for Marcus — and every one
+    of them went to Claire, with the router logging "question needs no
+    specialist" each time.
+
+    The comment that used to sit here said *"answering from what we already hold
+    is retrieval, not a meeting"*, and that is TRUE OF SOME QUESTIONS. "What
+    documents do we have on this project" is retrieval. "What does a fifteen per
+    cent cut to the middle tier do to our gross margin" is a question too, and
+    it is the thing a finance director is for. §9's rule was never wrong; the
+    equation `question = trivial` was.
+
+    So the ceiling opens to every specialist and `TOPIC_ONLY` below makes them
+    earn it — the intersection with the subject matter is what decides, and a
+    question that names no subject still goes to Claire exactly as before.
+  */
+  question: [
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'operations-director',
+    'quality-director',
+    'research-director',
+    'strategy-director',
+  ],
+  /*
+    #232, and it is #230's defect a third time.
+
+    These five lists predate half the roster, and a ceiling is a HARD gate: the
+    roster is the intersection of the ceiling with the subject, so a specialist
+    missing from the list cannot be reached however clearly the request names
+    them. `direct_command` was research, strategy and operations — so *"Draft
+    the announcement email for the pricing change"* named the communications
+    director, was refused by this table, and fell to `ceiling[0]`. Six of the
+    corpus's eleven communications cases went to the research director that
+    way, which is worse than going to Claire: the wrong specialist answers
+    confidently.
+
+    So each list opens to everyone the class could plausibly need, and the
+    SUBJECT decides within it — which is the same correction #230 made to
+    `question`, and it is safe for the same reason. The first entry of each is
+    unchanged, because that is what an unclassifiable request of this class
+    still falls back to.
+  */
+  discussion: [
+    'strategy-director',
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'operations-director',
+    'quality-director',
+    'research-director',
+  ],
+  suggestion: [
+    'strategy-director',
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'operations-director',
+    'quality-director',
+    'research-director',
+  ],
+  light_investigation: [
+    'research-director',
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'operations-director',
+    'quality-director',
+    'strategy-director',
+  ],
+  assignment: [
+    'research-director',
+    'strategy-director',
+    'operations-director',
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'quality-director',
+  ],
+  direct_command: [
+    'research-director',
+    'strategy-director',
+    'operations-director',
+    'finance-director',
+    'growth-director',
+    'communications-director',
+    'quality-director',
+  ],
 }
+
+/**
+ * Intents where a specialist must be EARNED by the subject matter (#230).
+ *
+ * For every other class, an unmatched topic still takes `ceiling[0]` — an
+ * unclassifiable assignment is work, and somebody has to hold it. For these,
+ * an unmatched topic means NOBODY, and the Chief of Staff picks it up as she
+ * always did.
+ *
+ * That asymmetry is the whole safety of opening `question` up. Without it,
+ * every "what documents do we have" would convene a finance director on the
+ * strength of being first in a list, which is worse than the defect being
+ * fixed and would show up as cost and latency on the commonest message Grant
+ * sends.
+ */
+const TOPIC_ONLY: ReadonlySet<IntentClass> = new Set<IntentClass>(['question'])
 
 /** Subject-matter hints, so a roster is about the work and not just its class. */
 const TOPIC_ROLES: readonly { readonly role: RoleSlug; readonly pattern: RegExp }[] = [
   {
     role: 'finance-director',
-    pattern: /\b(cost|costs|pricing|price|budget|revenue|margin|forecast|spend)\b/i,
+    pattern:
+      /\b(cost|costs|pricing|prices|price|budget|budgets|revenue|margin|margins|forecast|forecasts|spend)\b/i,
   },
   {
     role: 'growth-director',
-    pattern: /\b(marketing|positioning|messaging|audience|campaign|launch|demand|brand)\b/i,
+    pattern:
+      /\b(marketing|positioning|messaging|audience|audiences|campaign|campaigns|channel|channels|launch|demand|brand)\b/i,
   },
   {
     role: 'communications-director',
@@ -374,7 +484,7 @@ const TOPIC_ROLES: readonly { readonly role: RoleSlug; readonly pattern: RegExp 
   },
   {
     role: 'research-director',
-    pattern: /\b(research|evidence|sources?|compare|competitor|benchmark|study)\b/i,
+    pattern: /\b(research|evidence|sources?|compare|competitors?|benchmarks?|study|studies)\b/i,
   },
 ]
 
@@ -391,45 +501,247 @@ const TOPIC_ROLES: readonly { readonly role: RoleSlug; readonly pattern: RegExp 
  * of it, and the 0018 trigger enforces that regardless of what is decided
  * here.
  */
+/*
+  Who the subject names, from the database when it answered and from this
+  file's regexes when it did not.
+
+  One definition, two callers — the unrecognised branch below and the ordinary
+  intersection after it. CLAUDE.md: a list built twice is a list that will
+  disagree.
+*/
+const subjects = (
+  topical: readonly RoleSlug[] | undefined,
+  instruction: string,
+): readonly RoleSlug[] =>
+  topical ?? TOPIC_ROLES.filter((t) => t.pattern.test(instruction)).map((t) => t.role)
+
 export const pickRoster = (
   classification: Classification,
   instruction: string,
+  /*
+    Who the roster says knows about this, in rank order.
+
+    Passed in rather than looked up here, because the lookup is a database call
+    and this function is pure — which is what makes every routing rule in it
+    testable without a database. Omitted, it falls back to `TOPIC_ROLES`.
+
+    Issue #65. `TOPIC_ROLES` is five regexes in this file and it has routed
+    correctly for months; it is also the one thing Grant cannot change. He is
+    building a dashboard to *"look at each agent, what their skill sets are,
+    and adjust and add and refine"*, and a regex in TypeScript is not
+    adjustable. `app.who_knows_about` reads `staff.expertise`, which is a
+    column he edits, and 0201 moved this file's vocabulary into it.
+
+    The hardcoded list stays as the fallback rather than being deleted: if the
+    database is unreachable or an expertise column is emptied by mistake,
+    routing degrades to what it did yesterday instead of to nothing.
+  */
+  topical?: readonly RoleSlug[],
+  /*
+    Who works on THIS project (#36, migration 0323).
+
+    Grant can take a specialist off a project in Settings, and the Issue asks
+    for that to take effect rather than merely to be stored — a setting nothing
+    reads is #64 with the sign reversed, and being told YES about something
+    that does not happen is the expensive direction.
+
+    Passed in for the same reason `topical` is: this function is pure, and
+    every routing rule in it stays testable without a database. Omitted means
+    no restriction, which is what a project with no decisions recorded against
+    it deserves and what every caller that has no project should get.
+  */
+  onProject?: readonly RoleSlug[],
 ): { readonly roster: readonly RoleSlug[]; readonly reason: string } => {
-  const ceiling = ROSTER_CEILINGS[classification.intent]
+  const here = (r: RoleSlug): boolean => onProject === undefined || onProject.includes(r)
+
+  /*
+    Text no rule understood, whose subject is nonetheless clear (#232).
+
+    This is #230's defect one layer up. `classifyIntent` falls back to
+    `thought` for anything its regexes do not cover, `thought`'s ceiling is
+    empty, and the early return below therefore discarded a correctly
+    identified specialist before the subject was ever consulted. Measured over
+    the 91-case corpus, every phrasing that describes a subject without naming
+    it — vague, colloquial, spoken — scored 0%, and *"Run the numbers if we
+    sell it cheaper"* was one of them.
+
+    `recognised` is what makes this safe to open. A DELIBERATE remark — "fyi",
+    "just thinking", "note to self" — is recognised, keeps the empty ceiling
+    and still convenes nobody, which is what §9 is actually about. Only text
+    nothing understood reaches this branch.
+
+    **One person, never a team**, and never on a guess: the subject must be
+    named by `topical`, and nothing here falls back to `ceiling[0]`. That is
+    §6 resolving ambiguity downward, and it is also the shape
+    `routing_decisions_unconfident_stays_small` requires of the row — an
+    unrecognised request is by definition not confident.
+  */
+  if (!classification.recognised) {
+    const named = subjects(topical, instruction).filter(here)
+    const one = named[0]
+    return one === undefined
+      ? {
+          roster: [],
+          reason:
+            'no intent rule matched this and nothing in it names a subject area, ' +
+            'so the Chief of Staff has it',
+        }
+      : {
+          roster: [one],
+          reason:
+            'no intent rule matched this, but the subject is clearly ' +
+            `${one.replace('-director', '')} — one specialist, because an unrecognised ` +
+            'request is not evidence that a team is needed',
+        }
+  }
+
+  const ceiling = ROSTER_CEILINGS[classification.intent].filter(here)
   if (ceiling.length === 0) {
+    /*
+      Two different empties, and saying which is the whole value of the line.
+
+      A `thought` convenes nobody because §9 says trivial work spawns no
+      subagents. An `assignment` on a project Grant has taken every specialist
+      off ALSO convenes nobody, and reporting that as "trivial work" would
+      hide his own setting from him in the one place he would look for it.
+      Either way the Chief of Staff picks it up, which is what an empty roster
+      means everywhere else in this system.
+    */
+    const wasFull = ROSTER_CEILINGS[classification.intent].length > 0
     return {
       roster: [],
-      reason: `${classification.intent} needs no specialist (§9: trivial work spawns no subagents)`,
+      reason: wasFull
+        ? `${classification.intent} would normally go to ` +
+          `${ROSTER_CEILINGS[classification.intent].join(', ')}, and none of them are on ` +
+          'this project, so the Chief of Staff has it'
+        : `${classification.intent} needs no specialist (§9: trivial work spawns no subagents)`,
     }
   }
 
   if (!classification.confident) {
-    // §6 resolves ambiguity downward, and a team convened off a maybe is the
-    // uncontrolled workload Phase 5 rules out. One agent may ask; a committee
-    // may not. Mirrors `routing_decisions_unconfident_stays_small`.
-    const one = ceiling[0] as RoleSlug
+    /*
+      #230. For a TOPIC_ONLY class, a contested reading convenes NOBODY.
+
+      Taking `ceiling[0]` here would hand every ambiguous question to the
+      finance director purely for being first in the list — the ceiling is now
+      seven roles wide rather than empty, so the old line would have turned a
+      fix into a much noisier bug. §6 resolves ambiguity downward and the
+      floor for a question is the Chief of Staff.
+    */
+    /*
+      Contested, so at most ONE person either way — and the subject picks them.
+
+      §6 resolves ambiguity downward and a team convened off a maybe is the
+      uncontrolled workload Phase 5 rules out. One agent may ask; a committee
+      may not. Mirrors `routing_decisions_unconfident_stays_small`.
+
+      Which one, though, is a question the old code answered twice and badly.
+      For a TOPIC_ONLY class it took nobody even when the subject was
+      unmistakable — *"Talk me out of doing this. What am I missing?"* names
+      the quality director and reads as both a question and a discussion, so it
+      went to Claire for being AMBIGUOUS rather than for being unclear. For
+      every other class it took `ceiling[0]`, ignoring the subject entirely and
+      handing a contested finance request to the research director for being
+      first in a list.
+
+      Both are the same mistake: an uncertain READING is not an uncertain
+      SUBJECT. Take the person the subject names; fall back to `ceiling[0]`
+      only where an unnamed subject still has to go to somebody, which is every
+      class except the TOPIC_ONLY ones.
+    */
+    const named = subjects(topical, instruction).filter((r) => ceiling.includes(r))
+    const one = named[0] ?? (TOPIC_ONLY.has(classification.intent) ? undefined : ceiling[0])
+    const contested = `the reading was contested (${classification.considered.join(' or ')})`
+    if (one === undefined) {
+      return {
+        roster: [],
+        reason:
+          `${contested}, and a ${classification.intent} only convenes a specialist when the ` +
+          'subject is clear, so the Chief of Staff has it',
+      }
+    }
     return {
       roster: [one],
       reason:
-        `the reading was contested (${classification.considered.join(' or ')}), so one ` +
-        'specialist to establish what is being asked, rather than a team on a guess',
+        `${contested}, so one specialist — ` +
+        (named[0] === undefined
+          ? 'nothing named a subject, so the first of the class'
+          : `the request is about ${one.replace('-director', '')}`) +
+        ' — rather than a team on a guess',
     }
   }
 
-  const topical = TOPIC_ROLES.filter((t) => t.pattern.test(instruction)).map((t) => t.role)
-  const chosen = ceiling.filter((r) => topical.includes(r))
+  const fromRoster = subjects(topical, instruction)
+  /*
+    Ordered by the SUBJECT, not by the ceiling (#231).
 
-  // Nothing topical matched: take the single cheapest-to-justify role from the
-  // ceiling rather than all of it. An unclassifiable assignment is still work,
-  // but it is not evidence that everyone is needed.
-  const roster = chosen.length > 0 ? chosen : [ceiling[0] as RoleSlug]
+    `ceiling` is already filtered to who is on the project, so either
+    direction carries that restriction — but the direction decides WHO
+    ANSWERS, because `handlers/instruction.ts` takes `roster[0]` as the
+    speaker and hands the rest the work as subagents.
+
+    Written the other way round, the hardcoded ceiling list picked. Held-out
+    acceptance traffic found it twice in nine turns: *"Draft the announcement
+    copy for the tier change"* was ranked communications, growth by
+    `who_knows_about` — correctly, "announcement", "copy" and "draft" are all
+    in the communications director's expertise — and `light_investigation`'s
+    ceiling lists growth before communications, so Ruby answered. *"Audit the
+    refund policy for compliance risk"* ranked quality first and went to
+    research the same way.
+
+    The ceiling is a GATE. It says who this class of request may reach; it has
+    never had an opinion about which of them is most apt, and the list's order
+    is an artefact of how it was typed. `who_knows_about` returns a ranking,
+    from Grant's own expertise columns, and it was being thrown away.
+
+    #230 and #232 both fixed a version of "the ceiling's first entry decided",
+    for the empty case and the unconfident case. This is the third and it is
+    the ordinary one. The unconfident branch above already reads
+    subject-first, so the two branches now agree.
+  */
+  const chosen = fromRoster.filter((r) => ceiling.includes(r))
+
+  /*
+    Nothing topical matched.
+
+    For most classes: take the single cheapest-to-justify role from the ceiling
+    rather than all of it. An unclassifiable assignment is still work, but it is
+    not evidence that everyone is needed.
+
+    For a TOPIC_ONLY class (#230): take NOBODY. A question that names no subject
+    area is the retrieval the original comment was right about, and it goes to
+    the Chief of Staff exactly as it did before this change.
+  */
+  /*
+    Nobody, for every class — the fourth and last instance of "the ceiling's
+    first entry decided" (#249).
+
+    This used to read `topicOnly ? [] : [ceiling[0]]`, so a confident
+    assignment that named no subject went to whoever happened to be typed
+    first in the class's list. The comment forty lines above says it outright:
+    the ceiling is a GATE, it has never had an opinion about which of its
+    members is most apt, and the list's order is an artefact of how it was
+    typed. Taking the first of it is that artefact deciding who answers.
+
+    #230 fixed this for the empty case, #232 for the unconfident case, #231 for
+    the ordinary intersection. This is the remaining one, and it was
+    unreachable until #249 taught the classifier to recognise instructions it
+    had no phrase for — "Sort that out for me when you get a chance" was an
+    unrecognised remark before, and became a confident assignment with no
+    subject.
+
+    An empty roster is not a refusal. It means the Chief of Staff has it, which
+    is what it means everywhere else here, and she is the right answer to an
+    instruction whose subject nobody can name.
+  */
+  const roster = chosen
 
   return {
     roster: roster.slice(0, ROSTER_CEILING),
     reason:
       chosen.length > 0
-        ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${topical.join(', ')}, so the intersection was taken`
-        : `${classification.intent} permits ${ceiling.join(', ')}, but nothing in the request names a subject area, so only the first was taken`,
+        ? `${classification.intent} permits ${ceiling.join(', ')}; the request is about ${fromRoster.join(', ')}, so the intersection was taken in that order of fit`
+        : `${classification.intent} permits ${ceiling.join(', ')}, and nothing in the request names a subject area, so the Chief of Staff has it rather than whoever is first in that list`,
   }
 }
 
@@ -442,7 +754,14 @@ export const pickRoster = (
 export const route = (
   instruction: string,
   scan: DuplicateScan,
-  options: { readonly linkTo?: string; readonly justification?: string } = {},
+  options: {
+    readonly linkTo?: string
+    readonly justification?: string
+    /** From `app.who_knows_about`. See `pickRoster`. */
+    readonly topical?: readonly RoleSlug[]
+    /** From `app.staff_on_project`. See `pickRoster`. */
+    readonly onProject?: readonly RoleSlug[]
+  } = {},
 ): RoutingDecision => {
   const classification = classifyIntent(instruction)
   const clarify = needsClarification(classification)
@@ -457,7 +776,7 @@ export const route = (
           'the reading was too uncertain to act on, so the decision is to ask ' +
           'rather than to convene anyone',
       }
-    : pickRoster(classification, instruction)
+    : pickRoster(classification, instruction, options.topical, options.onProject)
 
   let resolution: DuplicateResolution = 'none_found'
   let linkedJobId: string | null = null

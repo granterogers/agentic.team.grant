@@ -201,6 +201,8 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
                 `${String(outcome.sourcesRemoved)} source(s) we held are no longer listed`,
               ],
               fallback: body,
+              // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
+              job: { jobId: job.jobId, correlationId: job.correlationId },
               words: 45,
             })
           : body,

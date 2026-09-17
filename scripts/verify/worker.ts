@@ -76,64 +76,65 @@ if (preSwept.length > 0) {
   console.log(`recovered ${String(preSwept.length)} stalled job(s) before starting.`)
 }
 
-// The queue is GLOBAL and so is the capacity limit, so this script needs it to
-// itself: `dequeue_job` hands out whatever is next, including another suite's
-// leftovers, and a worker with no handler for a foreign job kind throws.
+// How much of THIS SUITE's work is still live.
+//
+// It used to count the whole queue, and the history of that is worth keeping
+// because it is the argument for the scope that replaced it. The queue is
+// global and so is the capacity limit, so this script needed the whole thing
+// to itself: `dequeue_job` hands out whatever is next, including another
+// suite's leftovers, and a worker with no handler for a foreign job kind
+// throws.
 //
 // Found the hard way twice. First running alongside `verify:db`, where every
 // dequeue returned null and fourteen checks went red describing a busy queue as
 // though it were a defect. Then again on leaked probe jobs from `verify:jobs`,
 // where the dequeue succeeded and handed this script somebody else's work.
 //
-// An unclear failure is a failure that gets misdiagnosed, so this refuses to
-// start. Exit code 2, distinct from the 1 that means a check actually failed.
-//
-// Since 2026-09-09 there are seven live duties, so the office is rarely idle
-// for long and "refuse immediately" started failing this suite on a queue that
-// was simply busy. The queue is already held above, so nothing NEW arrives —
-// what is left is whatever was in flight at that moment, and the honest thing
-// is to wait for it rather than to declare a working office a broken one.
-//
-// Two minutes, because a job that has not finished in two minutes is stuck
-// rather than busy, and that is worth refusing over.
+// The answer then was to wait two minutes for the office to go quiet and
+// refuse if it had not — which is honest and turns every other suite's debris
+// into this one's failure (#184). Since 0329 the dequeue is scoped instead, so
+// what is counted here is only what this suite itself left behind.
 const liveNow = async (): Promise<number> =>
   Number(
     (
       await one(`
         select count(*)::int as live from public.jobs
-         where state not in ('complete', 'cancelled', 'failed')
+         where requested_by = 'verify:worker'
+           and state not in ('complete', 'cancelled', 'failed')
       `)
     )?.live ?? 0,
   )
 
-for (let waited = 0; waited < 120 && (await liveNow()) > 0; waited += 5) {
-  if (waited === 0) console.log('waiting for the office to go quiet before starting…')
-  // The pause stops new work being CLAIMED, not work already running, so this
-  // is waiting for in-flight jobs to reach a terminal state on their own.
-  await new Promise((r) => setTimeout(r, 5_000))
-}
+/*
+  This suite claims only its own work (#184, migration 0329).
 
-const queueState = await one(`
-  select app.capacity_limit('max_concurrent_jobs', 3) as limit_,
-         (select count(*)::int from public.jobs
-           where state not in ('complete', 'cancelled', 'failed')) as live
-`)
-if (Number(queueState?.live) > 0) {
-  const others = await db.execute(`
-    select kind, state::text as state, count(*)::int as n from public.jobs
-    where state not in ('complete', 'cancelled', 'failed')
-    group by 1, 2 order by 3 desc limit 5
-  `)
-  console.error(
-    `the queue is still not empty after two minutes: ${String(queueState?.live)} live job(s).\n` +
-      others.rows
-        .map((r) => `  ${String(r.n)} x ${String(r.kind)} (${String(r.state)})`)
-        .join('\n') +
-      '\n\nThis script needs the queue to itself - dequeue is global and hands out ' +
-      "whatever is next, including another suite's work.\n" +
-      'Wait for the other run to finish, or `npm run purge:fixtures -- --go` if those are debris.',
+  It used to wait two minutes for the whole office to go quiet and then refuse
+  to run if anything was still live — correctly, because dequeue is global and
+  would hand this script a job it holds no handler for. The cost was a
+  coupling: `verify:slack` has the same precondition and neither suite cancels
+  what it creates, so in a full pass whichever ran second failed on the first
+  one's debris, as "22/26" rather than as "the queue was dirty".
+
+  `dequeue(db, WORKER, …, MINE)` asks for work requested by this exact name and
+  asks the capacity question of that scope alone. Nothing else in the queue is
+  reachable from here, so nothing else in the queue matters.
+
+  The stalled-job sweep stays: it is about THIS suite's own leases from a
+  previous crashed run, which the scope does not help with.
+*/
+const MINE = 'verify:worker'
+
+const stillMine = await liveNow()
+if (stillMine > 0) {
+  console.log(
+    `${String(stillMine)} of this suite's job(s) left over from a previous run — cancelling.`,
   )
-  process.exit(2)
+  await db.execute(`
+    update public.jobs
+       set state = 'cancelled', state_reason = 'verify:worker debris from an earlier run'
+     where requested_by = ${lit(MINE)}
+       and state not in ('complete', 'cancelled', 'failed')
+  `)
 }
 
 const project = await one(`
@@ -268,7 +269,7 @@ const reject: Reviewer = () =>
 // ===========================================================================
 
 const detJob = await enqueue('status.count_jobs', `fixture-worker-det-${run}`)
-const detDequeued = await dequeue(db, WORKER)
+const detDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const detResult = detDequeued === null ? null : await runJob(db, detDequeued, HANDLERS, approve)
 
 record(
@@ -292,11 +293,27 @@ record(
 // ===========================================================================
 
 await enqueue('research.liar', `fixture-worker-liar-${run}`)
-const liarJob = await dequeue(db, WORKER)
+const liarJob = await dequeue(db, WORKER, true, true, undefined, MINE)
+/*
+  The refusal is what matters, and where it now lands.
+
+  This used to assert that `runJob` THREW. It no longer does: since #130 the
+  worker catches a refused output insert and fails the job with the database's
+  own sentence, rather than letting the exception out and taking the rest of
+  the drain with it -- every other job in the pass punished for one handler's
+  mistake.
+
+  The property asserted is therefore the stronger one. Not "an exception
+  escaped", which is an implementation detail and was never the point, but: the
+  row was refused, the job is FAILED, and the reason recorded against it is the
+  constraint's own words. A caller reading `job_state_transitions` a week later
+  can see why.
+*/
 let liarError = 'no error'
 if (liarJob !== null) {
   try {
-    await runJob(db, liarJob, HANDLERS, approve)
+    const outcome = await runJob(db, liarJob, HANDLERS, approve)
+    liarError = `${outcome.finalState}: ${outcome.note}`
   } catch (error) {
     liarError =
       error instanceof SqlExecutionError || error instanceof Error
@@ -304,6 +321,14 @@ if (liarJob !== null) {
         : String(error)
   }
 }
+const liarState =
+  liarJob === null
+    ? undefined
+    : ((
+        await db.execute(`
+          select state, state_reason from public.jobs where job_id = ${lit(liarJob.jobId)}::uuid
+        `)
+      ).rows[0] as { state: string; state_reason: string } | undefined)
 record(
   'a handler claiming a deterministic path while naming a model is refused at the insert',
   // The job id is in the outcome because "no error" was ambiguous between "the
@@ -312,13 +337,36 @@ record(
   `${liarJob === null ? 'NOTHING DEQUEUED' : liarJob.jobId.slice(0, 8)}: ${liarError.slice(0, 120)}`,
   liarError.includes('cannot be marked deterministic'),
 )
+record(
+  'and the job is left FAILED with that reason, rather than the drain dying',
+  liarState === undefined
+    ? 'NOTHING DEQUEUED'
+    : `${liarState.state}: ${String(liarState.state_reason).slice(0, 90)}`,
+  liarState?.state === 'failed' &&
+    String(liarState.state_reason).includes('cannot be marked deterministic'),
+)
+/*
+  And nothing was written. A refusal that leaves a half-row behind would be
+  worse than one that throws, because the row is what every consumer reads.
+*/
+const liarLeft = (
+  await db.execute(`
+    select count(*)::int as n from public.outputs
+     where job_id = ${lit(liarJob?.jobId ?? '00000000-0000-4000-8000-000000000000')}::uuid
+  `)
+).rows[0] as { n: number }
+record(
+  'and no output row survives the refusal',
+  `${String(liarLeft.n)} output(s)`,
+  Number(liarLeft.n) === 0,
+)
 
 // ===========================================================================
 // 3. Incoherent metadata fails before a reviewer is spent on it
 // ===========================================================================
 
 const incJob = await enqueue('research.incoherent', `fixture-worker-inc-${run}`)
-const incDequeued = await dequeue(db, WORKER)
+const incDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 let reviewerCalled = false
 const countingReviewer: Reviewer = (o, j) => {
   reviewerCalled = true
@@ -345,7 +393,7 @@ record(
 // ===========================================================================
 
 const rejJob = await enqueue('research.conclusion', `fixture-worker-rej-${run}`)
-const rejDequeued = await dequeue(db, WORKER)
+const rejDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const rejResult = rejDequeued === null ? null : await runJob(db, rejDequeued, HANDLERS, reject)
 record(
   'a rejected output sends the job back rather than committing it',
@@ -359,7 +407,7 @@ record(
 )
 
 await enqueue('research.conclusion', `fixture-worker-ok-${run}`)
-const okDequeued = await dequeue(db, WORKER)
+const okDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const okResult = okDequeued === null ? null : await runJob(db, okDequeued, HANDLERS, approve)
 record(
   'an approved output commits, so review is a gate and not a wall',
@@ -372,7 +420,7 @@ record(
 // ===========================================================================
 
 const boomJob = await enqueue('research.explodes', `fixture-worker-boom-${run}`)
-const boomDequeued = await dequeue(db, WORKER)
+const boomDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 const boomResult = boomDequeued === null ? null : await runJob(db, boomDequeued, HANDLERS, approve)
 record(
   'a handler that throws sends the job to retrying with the reason recorded',
@@ -389,7 +437,7 @@ record(
 )
 
 const unknownJob = await enqueue('research.nobody_handles_this', `fixture-worker-unk-${run}`)
-const unkDequeued = await dequeue(db, WORKER)
+const unkDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 let unkError = 'no error'
 if (unkDequeued !== null) {
   try {
@@ -419,7 +467,7 @@ record(
 // The half that makes pausing safe rather than merely kinder: it must leave
 // the queue. A job that stayed queued would be dequeued again immediately and
 // spin for as long as the handler is missing.
-const unkRequeued = await dequeue(db, WORKER)
+const unkRequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
 record(
   'CONTROL: and it is out of the queue, so it cannot spin against the same missing handler',
   unkRequeued === null ? 'nothing dequeued' : `dequeued ${unkRequeued.kind}`,
@@ -465,7 +513,16 @@ record(
 
 // Concurrency: a second worker must not be handed a job the first holds.
 await enqueue('status.count_jobs', `fixture-worker-race-${run}`)
-const [a, b] = await Promise.all([dequeue(db, `${WORKER}-a`), dequeue(db, `${WORKER}-b`)])
+// Scoped to MINE, like every other dequeue in this suite. These two were the
+// last unscoped calls left after #184, and they were reached only when the
+// office happened to have work queued: the pair picked up a real `drive.watch`
+// job, `runJob` threw `NoHandlerError` because this suite holds no handler for
+// it, and the whole suite died four sections early with a real job leased to a
+// fixture worker. A scope that covers most of a file is not a scope.
+const [a, b] = await Promise.all([
+  dequeue(db, `${WORKER}-a`, true, true, undefined, MINE),
+  dequeue(db, `${WORKER}-b`, true, true, undefined, MINE),
+])
 record(
   'two workers racing for one job do not both get it',
   `a=${a === null ? 'null' : a.jobId.slice(0, 8)} b=${b === null ? 'null' : b.jobId.slice(0, 8)}`,
@@ -487,7 +544,11 @@ await db.execute(`
       leased_until = app.now_utc() - interval '1 minute'
   where job_id = ${lit(stalled)}::uuid
 `)
-const blockedBefore = await dequeue(db, `${WORKER}-blocked`)
+// Scoped too, and this one had to be: it asserts the dequeue returns NOTHING
+// while a stalled lease holds the scope's capacity. Unscoped it would return
+// any real office job that happened to be queued and report the capacity rule
+// broken, which is a suite failing on somebody else's work.
+const blockedBefore = await dequeue(db, `${WORKER}-blocked`, true, true, undefined, MINE)
 record(
   'a job held by a dead worker still counts against capacity',
   blockedBefore === null
@@ -566,7 +627,7 @@ if (apiKey === '') {
   }
 
   const liveJob = await enqueue('research.live', `fixture-worker-live-${run}`)
-  const liveDequeued = await dequeue(db, WORKER)
+  const liveDequeued = await dequeue(db, WORKER, true, true, undefined, MINE)
   let liveState = 'none'
   if (liveDequeued !== null) {
     const r = await runJob(db, liveDequeued, [...HANDLERS, liveHandler], approve)
@@ -593,6 +654,166 @@ if (apiKey === '') {
     Number(spend?.calls) >= 1 && Number(spend?.total) === 0,
   )
 }
+
+// ===========================================================================
+// Nothing is enqueued that nothing can handle (#112)
+// ===========================================================================
+
+/*
+  The check that would have caught nine hourly jobs sitting queued for eight
+  hours.
+
+  `google.write_calendar_tasks` was enqueued once an hour by a duty. Its handler
+  existed and was registered. The DEPLOYED worker had been built before either,
+  so it dequeued a kind it had never heard of and left it -- and nothing was
+  red, because a queued job is not a failed job.
+
+  Everything passed. `npm test` passed, because the handler has unit tests and
+  they test the handler. `verify:calendar` passed, because it exercises the SQL
+  and the sync function directly. Nothing anywhere compared **the kinds the
+  database enqueues** against **the kinds the worker registry declares**, so a
+  duty writing into a void was invisible.
+
+  Two halves, and both are here because they fail at different times: the static
+  one fails BEFORE a deploy, the live one catches the general case -- including
+  a handler that exists and throws before it can claim anything.
+*/
+
+const { buildPass } = await import('../../src/office/pass.ts')
+/*
+  The real registry, from the real composition root, read through the property
+  `buildPass` now exposes. Listing the kinds any other way would be a second
+  copy of that array -- which is precisely the drift this is written against.
+*/
+const built = await buildPass(db, `verify-worker-registry-${run}`, { max: 0 })
+const registered = new Set(built.kinds)
+
+const duties = (
+  await db.execute(`
+    select distinct job_kind as kind from public.responsibilities where enabled
+  `)
+).rows.map((r) => String((r as { kind: string }).kind))
+
+// ===========================================================================
+// A scope is a scope (#184, migrations 0329-30)
+// ===========================================================================
+//
+// The property, not the mechanism: another suite's work sitting in the queue
+// is neither claimable from here nor a reason this suite cannot run. Asserted
+// because it is the whole of #184, and because the failure it prevents does
+// not look like itself — it looked like "22/26" rather than "the queue was
+// dirty", three consecutive runs of this file disagreeing with each other.
+const FOREIGN = 'verify:worker-someone-else'
+/*
+  A kind nothing else in the office enqueues, because the CONTROL below has to
+  dequeue with the scope filter genuinely off and would otherwise be handed
+  whatever the office has queued. It was: the control claimed a real
+  `drive.watch` job, reported the wrong kind, and left a duty's work running
+  under a fixture worker until its lease expired. Filtering by KIND keeps the
+  control honest — the requester filter, which is the thing under test, stays
+  off — while making it impossible to reach real work.
+*/
+const PROBE_KIND = 'research.scope_probe'
+const foreignJob = await one(`
+  insert into public.jobs
+    (correlation_id, project_id, idempotency_key, kind, requested_by, priority)
+  values (gen_random_uuid(), ${lit(projectId)}::uuid,
+          ${lit(`fixture-foreign-${run}`)}, ${lit(PROBE_KIND)}, ${lit(FOREIGN)}, 100)
+  returning job_id::text as id
+`)
+const notMine = await dequeue(db, WORKER, true, true, undefined, MINE)
+record(
+  "another suite's queued job is not handed to a scoped worker",
+  notMine === null ? 'nothing claimed, correctly' : `CLAIMED ${notMine.kind}`,
+  notMine === null,
+)
+/*
+  CONTROL. The check above passes just as well if the queue is empty, if the
+  capacity limit is full, or if `dequeue` is broken — which is three ways to be
+  green about nothing. An UNSCOPED claim must find the very same job.
+*/
+const unscoped = await dequeue(db, WORKER, true, true, [PROBE_KIND])
+record(
+  'CONTROL: an unscoped worker finds that same job, so the filter is what refused it',
+  unscoped === null ? 'NOTHING CLAIMED — the check above proved nothing' : unscoped.kind,
+  unscoped !== null && unscoped.jobId === String(foreignJob?.id),
+)
+await db.execute(`
+  update public.jobs
+     set state = 'cancelled', state_reason = 'verify:worker scope probe'
+   where requested_by = ${lit(FOREIGN)}
+     and state not in ('complete', 'cancelled', 'failed')
+`)
+
+const homeless = duties.filter((kind) => !registered.has(kind))
+record(
+  'every kind an enabled duty enqueues has a handler registered',
+  homeless.length === 0
+    ? `${String(duties.length)} duty kind(s), all handled`
+    : `NOTHING HANDLES ${homeless.join(', ')}`,
+  homeless.length === 0,
+)
+
+/*
+  CONTROL. An assertion over two sets passes trivially if either is empty or if
+  the comparison is the wrong way round, and this one would then have said
+  nothing about the eight hours. So one handler is removed from the copy and the
+  same comparison must find it.
+*/
+const maimed = new Set(registered)
+const victim = duties.find((k) => registered.has(k)) ?? ''
+maimed.delete(victim)
+const wouldCatch = duties.filter((kind) => !maimed.has(kind))
+record(
+  'CONTROL: unregistering a handler makes that check fail',
+  victim === ''
+    ? 'no duty kind was registered to remove -- the check above proves nothing'
+    : `removing ${victim} is caught (${String(wouldCatch.length)} found)`,
+  victim !== '' && wouldCatch.length === 1 && wouldCatch[0] === victim,
+)
+
+/*
+  And the live half, which does not care WHY nothing took the job.
+
+  Too long is the period of the duty that made it: an hourly kind queued for
+  over an hour means the last one was not taken before the next arrived. An
+  hour is the floor for a kind no duty creates.
+*/
+const stuck = (await db.execute('select * from app.jobs_stuck_queued()')).rows as {
+  kind: string
+  n: number
+  oldest_minutes: number
+  period_minutes: number
+}[]
+record(
+  'and nothing is sitting queued past the period of the duty that made it',
+  stuck.length === 0
+    ? 'nothing is waiting'
+    : stuck
+        .map(
+          (s) =>
+            `${String(s.n)}x ${s.kind} oldest ${String(s.oldest_minutes)}m against a ${String(s.period_minutes)}m period`,
+        )
+        .join(' · '),
+  stuck.length === 0,
+)
+
+/*
+  The one number, which could not have shown any of this.
+
+  `office_health()` counted complete, failed and in-flight. A job nobody has
+  taken is none of those, so the dashboard stayed green for eight hours while
+  the office fell behind. Asserting the FIELD exists, not that it is zero --
+  a green office and a broken health function look identical from the outside.
+*/
+const health = (await db.execute('select app.office_health() as h')).rows[0] as {
+  h: Record<string, unknown>
+}
+record(
+  'and the health number can say so, rather than only counting failures',
+  `stalled=${String(health.h.stalled)} failed=${String(health.h.failed)}`,
+  typeof health.h.stalled === 'number' && Array.isArray(health.h.stalled_kinds),
+)
 
 // ===========================================================================
 // Report, then clean up

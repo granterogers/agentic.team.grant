@@ -47,18 +47,56 @@ await new Promise<void>((r) => {
 const tab = process.env.TAB ?? 'team'
 const selectors = process.argv.slice(2)
 
+/*
+  PHONE=1 measures a real phone, not a narrow desktop.
+
+  Section 25 of the UX QA standard: *"Width does not equal touch."* A 390px
+  viewport with a mouse gets the desktop's hover rules and the desktop's touch
+  targets, and this repository has already read 50x29 off a control that is
+  58x52 in a real touch context. `hasTouch` and `isMobile` are what make the
+  coarse-pointer media queries apply, so a measurement taken without them
+  describes a device nobody owns.
+*/
+const phone = process.env.PHONE === '1'
 const browser = await chromium.launch()
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const ctx = await browser.newContext(
+  phone
+    ? {
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        hasTouch: true,
+        isMobile: true,
+        userAgent:
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' +
+          ' (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      }
+    : { viewport: { width: 1440, height: 900 } },
+)
 const page = await ctx.newPage()
 page.on('pageerror', (e) => {
   console.error(`THREW: ${e.message}`)
 })
 await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(700)
-await page.locator('.project[data-open="legacy-coaching-course"]').click()
-await page.waitForTimeout(700)
-await page.locator(`[role="tab"][data-tab="${tab}"]`).click()
-await page.waitForTimeout(700)
+/*
+  GO=lately measures a rail destination instead of a project tab.
+
+  Everything this tool could reach was inside a project, so the four screens
+  the rail goes to - the portfolio, Tasks, Recent activity, Settings - could
+  not be measured at all. Recent activity is the one that needed it: its
+  capture showed a hard seam across the full width of the page and there was
+  no way to ask which box ended there.
+*/
+const go = process.env.GO ?? ''
+if (go === '') {
+  await page.locator('.project[data-open="legacy-coaching-course"]').click()
+  await page.waitForTimeout(700)
+  await page.locator(`[data-tab="${tab}"]`).click()
+  await page.waitForTimeout(700)
+} else {
+  await page.locator(`[data-go="${go}"]`).first().click({ force: true })
+  await page.waitForTimeout(900)
+}
 
 /*
   The measuring function is passed as a STRING, not a closure.
@@ -79,8 +117,24 @@ const MEASURE = (sel: string) => `(() => {
     + '  display:' + cs.display + ' position:' + cs.position + ' overflow:' + cs.overflow
 })()`
 
+/* KIDS: every child of a container, so you can see who is eating the row. */
+const KIDS = (sel: string) => `(() => {
+  const p = document.querySelector(${JSON.stringify(sel)})
+  if (p === null) return ${JSON.stringify(sel)} + ' — MISSING'
+  return [...p.children].map((el) => {
+    const r = el.getBoundingClientRect()
+    const cs = getComputedStyle(el)
+    return '   ' + el.tagName.toLowerCase() + '.' + (el.className || '(none)')
+      + \`  \${Math.round(r.width)}×\${Math.round(r.height)} at \${Math.round(r.x)}\`
+      + \`  flex:\${cs.flex} pos:\${cs.position} y:\${Math.round(r.y)} disp:\${cs.display}\`
+  }).join(String.fromCharCode(10))
+})()`
+
 for (const sel of selectors) {
-  console.log(await page.evaluate(MEASURE(sel)))
+  if (sel.endsWith(' >')) {
+    console.log(`${sel.slice(0, -2)} children:`)
+    console.log(await page.evaluate(KIDS(sel.slice(0, -2))))
+  } else console.log(await page.evaluate(MEASURE(sel)))
 }
 
 await browser.close()

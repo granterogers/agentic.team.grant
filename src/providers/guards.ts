@@ -8,10 +8,20 @@
  *
  * Layer  What it does                                         Verified
  * -----  ---------------------------------------------------  --------------
- *   1    provider.max_price all-zero, allow_fallbacks false   404, prevents
+ *   1    provider.max_price at the provider's budget,         404, prevents
+ *        allow_fallbacks false
  *   2    a dedicated key with a hard spend cap                limit: 5
  *   3    allow-list from measured probes, not pricing         ADR-0009
- *   4    post-response breaker on usage.cost > 0              here
+ *   4    post-response breaker on usage.cost above budget     here
+ *
+ * ## The budget is data, not zero
+ *
+ * Until 2026-09-15 every one of these layers was hardcoded to ZERO, because
+ * the office ran only on free models. Moving to a low-cost paid model does not
+ * remove a single layer — it gives each one a number to compare against, held
+ * on the `providers` row where Grant can change it. A budget of zero is still
+ * expressible and is still the DEFAULT, so a provider nobody has funded behaves
+ * exactly as it did before this change.
  *
  * Evidence for 1 and 3: docs/test-evidence/phase-2-inference-guards.md.
  */
@@ -45,6 +55,76 @@ export const FORCED_PROVIDER_OPTIONS = {
 } as const
 
 /**
+ * What a provider is permitted to charge.
+ *
+ * `maxPricePrompt` and `maxPriceCompletion` are US dollars per MILLION tokens,
+ * which is the unit OpenRouter's `max_price` speaks; `maxCostPerCallUsd` is
+ * dollars for one response, which is the unit `usage.cost` speaks. They are
+ * different units on purpose — layer 1 refuses an endpoint before it runs and
+ * layer 4 refuses a response after it has — and conflating them is how a
+ * per-million ceiling gets compared against a per-call charge and passes a
+ * thousand-fold overspend.
+ */
+export interface Budget {
+  readonly maxPricePrompt: number
+  readonly maxPriceCompletion: number
+  readonly maxCostPerCallUsd: number
+}
+
+/** The budget every provider has until somebody funds it. */
+export const NO_BUDGET: Budget = {
+  maxPricePrompt: 0,
+  maxPriceCompletion: 0,
+  maxCostPerCallUsd: 0,
+} as const
+
+/**
+ * Layer 1, at the budget the provider actually has.
+ *
+ * `data_collection: 'deny'` is NOT part of the budget and never becomes
+ * configurable here: it is the privacy posture D2 Option B bought, and it
+ * applies to every candidate endpoint whatever the price ceiling says.
+ *
+ * ## Why `allow_fallbacks` follows the budget
+ *
+ * It is pinned false at zero budget, exactly as it always was, and true once a
+ * ceiling exists. That reads like a safeguard being relaxed and is the
+ * opposite, because of what the flag actually controls.
+ *
+ * `provider.allow_fallbacks` chooses among the UPSTREAM HOSTS serving the one
+ * model in the request. It has never been able to change WHICH MODEL answers
+ * — that is the top-level `models` array, which this office does not send and
+ * `buildRequestBody` has no field for. So the hazard the flag was written for
+ * was never "a different model": it was "a free model is refused and the
+ * request lands on a host that charges", and with `max_price` all zero there
+ * was nothing else to prevent that. The flag WAS the price bound.
+ *
+ * Now the price bound is the price bound. Every candidate host has to satisfy
+ * the ceiling below, so the worst a fallback can do is cost the same as the
+ * endpoint it replaced.
+ *
+ * Measured, 2026-09-15, which is why this is not a theoretical tidy-up: pinned
+ * to one host, `openai/gpt-oss-120b` returned `429 queue_timeout` from AkashML
+ * with `limit_source: upstream_provider_shared_pool`. The identical request
+ * with fallbacks allowed and the same ceiling was served by Groq, http 200. A
+ * paid model pinned to the single cheapest host is a paid model with a free
+ * model's availability, which is most of what Grant is paying to leave behind.
+ */
+export function forcedProviderOptions(budget: Budget = NO_BUDGET): Record<string, unknown> {
+  const funded = budget.maxPricePrompt > 0 || budget.maxPriceCompletion > 0
+  return {
+    allow_fallbacks: funded,
+    data_collection: 'deny',
+    max_price: {
+      prompt: budget.maxPricePrompt,
+      completion: budget.maxPriceCompletion,
+      request: 0,
+      image: 0,
+    },
+  }
+}
+
+/**
  * Model identifiers that must never be sent, whatever a registry says.
  *
  * `openrouter/auto` and its `:free` variant price at `-1` — dynamically priced.
@@ -73,28 +153,43 @@ export class PaidCallPreventedError extends Error {
 }
 
 /**
- * Layer 4. A response that reports a non-zero cost means the earlier layers
- * were bypassed, which is a defect rather than an expense to absorb.
+ * Layer 4. A response that cost more than the provider's budget means the
+ * earlier layers were bypassed, which is a defect rather than an expense to
+ * absorb.
  *
  * `usage.cost` absent is treated as suspicious, not as zero: a provider that
  * stops reporting cost is a provider we can no longer verify, and §11's
  * "'free' means measured, not assumed" applies to the response as much as to
- * the registry.
+ * the registry. That half does not relax when a budget exists — it gets
+ * STRICTER, because an unreported cost against a funded key is a charge nobody
+ * can see.
+ *
+ * `ceilingUsd` defaults to zero, so a caller that has not thought about a
+ * budget gets the behaviour this function had when it was called
+ * `assertResponseWasFree`: any charge at all is a defect.
+ *
+ * The ceiling is per RESPONSE, not per day. It is not a spend limit — layer 2's
+ * key cap is — it is a tripwire on the single call, sized so that a routine
+ * answer never approaches it and a mis-routed request to something expensive
+ * cannot complete quietly. Measured 2026-09-15 on gpt-oss-120b: a real office
+ * turn costs about $0.0001, so a $0.01 ceiling is a hundredfold headroom.
  */
-export function assertResponseWasFree(
+export function assertResponseWithinBudget(
   model: string,
   usage: { cost?: number | null } | undefined,
+  ceilingUsd = 0,
 ): void {
   if (usage === undefined || usage.cost === undefined || usage.cost === null) {
     throw new PaidCallPreventedError(
       model,
-      'the provider reported no usage.cost, so this call cannot be verified as free',
+      'the provider reported no usage.cost, so this call cannot be verified as within budget',
     )
   }
-  if (usage.cost > 0) {
+  if (usage.cost > ceilingUsd) {
     throw new PaidCallPreventedError(
       model,
-      `the response reported cost ${usage.cost}, so an earlier layer was bypassed`,
+      `the response reported cost ${usage.cost}, above this provider's ` +
+        `per-call ceiling of ${ceilingUsd}, so an earlier layer was bypassed`,
     )
   }
 }
@@ -136,7 +231,7 @@ export function assertModelAllowed(
     throw new PaidCallPreventedError(
       model,
       'not in the measured allow-list — a model is callable only after a probe ' +
-        'executed it at zero cost (ADR-0009)',
+        'executed it within budget (ADR-0009)',
     )
   }
 
@@ -158,6 +253,7 @@ export function assertModelAllowed(
 export function buildRequestBody(
   model: string,
   body: Record<string, unknown>,
+  budget: Budget = NO_BUDGET,
 ): Record<string, unknown> {
   const callerProvider =
     typeof body.provider === 'object' && body.provider !== null
@@ -168,6 +264,6 @@ export function buildRequestBody(
     ...body,
     model,
     // Caller options first, forced options second. Order is the enforcement.
-    provider: { ...callerProvider, ...FORCED_PROVIDER_OPTIONS },
+    provider: { ...callerProvider, ...forcedProviderOptions(budget) },
   }
 }

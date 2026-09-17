@@ -119,18 +119,31 @@ describe('messages', () => {
   it('refuses our own messages, checked before anything else', () => {
     // Without this the app answers itself, forever. It is the first check in
     // the function for that reason.
+    /*
+      Asserted on the REASON, not just the class. #195.
+
+      Every refusal in this function throws `UnsupportedSlackEventError`, so
+      `toThrow(UnsupportedSlackEventError)` passes whichever branch caught it —
+      and a refusal for the wrong reason looks exactly like the rule working.
+      CLAUDE.md records that failure: a check that asserted only that
+      *something* threw reported a PASS twice, once for a wrong column name and
+      once for a generated column.
+
+      If the loop guard were deleted tomorrow, these two would still throw
+      somewhere further down and a class-only assertion would stay green.
+    */
     expect(() =>
       toCanonicalCommand(
         envelope({ type: 'message', user: BOT, channel: 'C1', ts: '1.1', text: 'hello' }),
         BOT,
       ),
-    ).toThrow(UnsupportedSlackEventError)
+    ).toThrow(/originated from this app/)
     expect(() =>
       toCanonicalCommand(
         envelope({ type: 'message', bot_id: 'B123', channel: 'C1', ts: '1.1', text: 'hello' }),
         BOT,
       ),
-    ).toThrow(UnsupportedSlackEventError)
+    ).toThrow(/originated from this app/)
   })
 
   it.each(['message_changed', 'message_deleted', 'channel_join', 'channel_leave', 'bot_message'])(

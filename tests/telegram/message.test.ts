@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { toCanonicalCommand } from '../../src/channels/telegram.ts'
-import { ACTIONS } from '../../src/slack/blocks.ts'
+import { ACTIONS, provenanceLine } from '../../src/slack/blocks.ts'
 import {
   BUTTONS_PER_ROW,
   CALLBACK_ACTIONS,
@@ -28,7 +28,13 @@ const message = (over: Partial<Parameters<typeof pagerText>[0]> = {}) => ({
   staffName: 'Research Director',
   staffTitle: 'Research Director',
   body: 'All three suppliers quoted within 4% of each other.',
-  metadata: { confidence: 'medium' as const, evidence: 'inferred' as const, reviewed: true },
+  metadata: {
+    confidence: 'medium' as const,
+    evidence: 'inferred' as const,
+    reviewed: true,
+    sources: [] as readonly string[],
+    contradictions: null,
+  },
   correlationId: CORR,
   actions: [...ACTIONS],
   ...over,
@@ -143,32 +149,118 @@ describe('the keyboard', () => {
 describe('the message', () => {
   it('leads with the not-reviewed warning, because the first line is often the only one read', () => {
     const text = pagerText(
-      message({ metadata: { confidence: 'low', evidence: 'speculative', reviewed: false } }),
+      message({
+        metadata: {
+          confidence: 'low',
+          evidence: 'speculative',
+          reviewed: false,
+          sources: [],
+          contradictions: null,
+        },
+      }),
     )
     expect(text.split('\n')[0]).toContain('Not reviewed')
   })
 
-  it('never shows confidence without evidence beside it', () => {
-    const text = pagerText(message())
-    expect(text).toContain('medium confidence')
-    expect(text).toContain('evidence: inferred')
+  it('never shows how sure it is without saying on what basis', () => {
+    /*
+      §12's rule, as a property. #186 replaced "medium confidence · evidence:
+      inferred" with the same English Slack uses — Grant called the old wording
+      *"not intuitive or acting like it's a human"* — and this asserted the two
+      literal strings, so it went red on a correct change.
+
+      Compared against `provenanceLine` itself rather than against a new pair
+      of literals: the point of the change was that BOTH surfaces say the same
+      thing, and a copy of the expected wording here could drift from Slack's
+      without anything noticing.
+    */
+    /*
+      On a message that ATTESTS something. #208 stopped showing the line where
+      it could only report that nothing happened, so the old fixture — inferred,
+      nothing cited, claiming nothing — is now the suppressed case and would
+      have made this assert the presence of a line that is deliberately gone.
+    */
+    const cited = message({
+      metadata: {
+        confidence: 'medium' as const,
+        evidence: 'inferred' as const,
+        reviewed: true,
+        sources: ['the supplier quotes'] as readonly string[],
+        contradictions: null,
+      },
+    })
+    const text = pagerText(cited)
+    const expected = provenanceLine({
+      confidence: 'medium',
+      evidence: 'inferred',
+      reviewed: true,
+      sources: ['the supplier quotes'],
+      contradictions: null,
+    })
+    // The pager renders Slack's `*bold*` as tags, so compare on the words.
+    expect(text).toContain(expected.replace(/\*/g, ''))
+    // And it still carries both halves, which is the rule the wording serves.
+    expect(text.toLowerCase()).toContain('confident')
+    expect(text.toLowerCase()).toContain('worked out')
   })
 
-  it('does not repeat the name when the title is the same', () => {
-    const text = pagerText(message())
-    expect(text).toContain('<b>Research Director</b>')
-    expect(text).not.toContain('Research Director · Research Director')
+  it('says nothing about confidence when there is nothing to be confident about', () => {
+    /*
+      #208. Grant, looking at a two-line hello carrying "Fairly confident —
+      worked out, not looked up, nothing cited": *"I don't need that confidence
+      text... I'm trying to make a bit more human."*
+
+      Two absences under a sentence that claims nothing is the product clearing
+      its throat. §12 is not weakened: confidence and evidence are still never
+      shown APART — here they are both absent.
+    */
+    const text = pagerText(message({ body: 'I am here. No need for a meeting.' }))
+    expect(text.toLowerCase()).not.toContain('confident')
+    expect(text.toLowerCase()).not.toContain('nothing cited')
+    // The message itself survives, obviously.
+    expect(text).toContain('I am here.')
   })
 
-  it('shows both when they differ', () => {
-    expect(pagerText(message({ staffName: 'Ada', staffTitle: 'Research Director' }))).toContain(
-      'Ada · Research Director',
+  it('but a message that CLAIMS to have read something keeps its provenance', () => {
+    /*
+      The guard that makes the suppression above safe, and the reason it
+      consults the body at all.
+
+      #185: Claire told Grant five projects existed, in a sentence claiming a
+      database read, with `evidence: inferred` and no sources — metadata
+      IDENTICAL to the harmless hello above. The only thing separating them is
+      whether the words make a claim, so the words are what decides.
+
+      Asserted on the property rather than the sentence: a wording lock here
+      would be the fifth instance in CLAUDE.md's trap list.
+    */
+    const text = pagerText(
+      message({ body: 'I pulled the project records. The db read shows five active projects.' }),
     )
+    expect(text.toLowerCase()).toContain('worked out')
   })
 
-  it('omits the author entirely for a message from no one', () => {
-    const text = pagerText(message({ staffName: null, staffTitle: null }))
-    expect(text).not.toContain('<b>')
+  it('never names the sender, whoever it is', () => {
+    /*
+      #208. Grant: *"I don't need to see the contact's name and the message. I
+      already have it, so you can remove that."*
+
+      Three tests used to live here, asserting how the name and title were
+      combined. The feature is gone: `telegram.only_chief_speaks` is true so it
+      is always Claire, and since #70 the bot is hers, so the chat is named
+      after her at the top of his screen.
+
+      Asserted over BOTH shapes the old code branched on, so a partial revert
+      shows up rather than passing on the branch nobody checked.
+    */
+    for (const who of [
+      { staffName: 'Research Director', staffTitle: 'Research Director' },
+      { staffName: 'Ada', staffTitle: 'Research Director' },
+    ]) {
+      const text = pagerText(message(who))
+      expect(text).not.toContain('Ada')
+      expect(text).not.toContain('Research Director')
+    }
   })
 
   it('stays inside Telegram hard limit even for an absurd body', () => {
@@ -181,7 +273,13 @@ describe('one bot, many projects: every page says which (0070)', () => {
     staffName: 'Research Director',
     staffTitle: 'Research Director',
     body: 'The two sources disagree on the launch date.',
-    metadata: { confidence: 'medium' as const, evidence: 'inferred' as const, reviewed: true },
+    metadata: {
+      confidence: 'medium' as const,
+      evidence: 'inferred' as const,
+      reviewed: true,
+      sources: [] as readonly string[],
+      contradictions: null,
+    },
     correlationId: 'c-1',
     actions: [] as const,
   }
@@ -195,12 +293,27 @@ describe('one bot, many projects: every page says which (0070)', () => {
     expect(lines[0]).toContain('Money Mastery')
   })
 
-  it('and on the LAST line', () => {
-    // A long message pushes the header off the top. The end is where the
-    // decision gets made, and it is the worst possible moment not to know what
-    // you are deciding about.
-    const lines = pagerText({ ...base, projectName: 'Money Mastery' }).split('\n\n')
-    expect(lines[lines.length - 1]).toContain('Money Mastery')
+  it('exactly once, never twice', () => {
+    /*
+      #208. It used to be repeated as a footer, on the reasoning that a long
+      message pushes the header off the top — true, and it made a two-line
+      hello say the same word at both ends. Grant: *"I don't need unnamed to be
+      twice. Certainly don't need to see it twice."*
+
+      Counted rather than checked for absence at the end: "not in the last
+      line" would pass if it appeared three times in the middle.
+    */
+    const text = pagerText({ ...base, projectName: 'Money Mastery' })
+    expect(text.split('Money Mastery').length - 1).toBe(1)
+  })
+
+  it('and the reserved Unnamed project reads as Conversation', () => {
+    // #208, and 0334 for why the row is called Unnamed at all. An internal
+    // name is a poor thing to read on a lock screen; Grant: *"just see
+    // conversation rather than unnamed."*
+    const text = pagerText({ ...base, projectName: 'Unnamed' })
+    expect(text).toContain('Conversation')
+    expect(text).not.toContain('Unnamed')
   })
 
   it('puts the project even above the not-reviewed warning', () => {
@@ -218,7 +331,11 @@ describe('one bot, many projects: every page says which (0070)', () => {
     // warning — and a placeholder would be noise on every one of them.
     const text = pagerText({ ...base, projectName: null })
     expect(text).not.toContain('📁')
-    expect(text).not.toContain('—')
+    // The FOOTER, not a bare em dash. #186's provenance line legitimately
+    // contains one — "Fairly confident — worked out, not looked up" — so a
+    // character that used to appear only in the project footer no longer
+    // identifies it. Asserting the shape of the thing being ruled out.
+    expect(text).not.toMatch(/<i>— .+<\/i>/)
     expect(pagerText({ ...base, projectName: '   ' })).toBe(text)
     expect(pagerText(base)).toBe(text)
   })
@@ -240,5 +357,87 @@ describe('the approval pair', () => {
     expect(rows[0]).toHaveLength(2)
     expect(rows[0]?.[0]?.callback_data).toBe(`approve:${CORR}`)
     expect(rows[0]?.[1]?.callback_data).toBe(`decline:${CORR}`)
+  })
+})
+
+describe('Slack vocabulary does not reach the phone (#208)', () => {
+  /*
+    Found by rendering four real message shapes and reading them, which is the
+    only way either of these was ever going to show up: both compile, both
+    escape correctly, and both are perfectly well-formed HTML.
+  */
+  const unreviewed = {
+    confidence: 'medium' as const,
+    evidence: 'inferred' as const,
+    reviewed: false,
+    sources: ['the pricing page'] as readonly string[],
+    contradictions: null,
+  }
+
+  const SHORTCODE = /(?<![A-Za-z0-9_]):[a-z][a-z0-9_+-]+:(?![A-Za-z0-9_])/
+
+  it('leaves no emoji shortcode in anything the office itself composed', () => {
+    /*
+      The property, not the one shortcode that was found. `:warning:` came
+      from `provenanceLine`; the staff emoji in `slack/identity.ts` are eight
+      more, and the next one added is not going to remember this test exists.
+
+      Scoped to the furniture, because the body is the model's words and the
+      rule there is different — see the two cases below it.
+    */
+    const shapes = [
+      pagerText(message({ metadata: unreviewed })),
+      pagerText(message({ metadata: unreviewed, projectName: 'Wellness' })),
+      pagerText(message({ metadata: { ...unreviewed, reviewed: true, sources: [] } })),
+      pagerText(message({ metadata: { ...unreviewed, evidence: 'verified' as const } })),
+    ]
+    for (const text of shapes) expect(text).not.toMatch(SHORTCODE)
+  })
+
+  it('translates a shortcode it knows, in the body as well', () => {
+    const text = pagerText(message({ body: 'Shipped :white_check_mark: today' }))
+    expect(text).toContain('Shipped ✅ today')
+  })
+
+  it('keeps an unknown shortcode in the body rather than putting a hole in it', () => {
+    // The asymmetry, asserted on purpose: furniture is ours to fix, the body
+    // is what the message actually said.
+    const text = pagerText(message({ body: 'Shipped :no_such_emoji: today' }))
+    expect(text).toContain('Shipped :no_such_emoji: today')
+  })
+
+  it('leaves a ratio and a clock time alone, which are not shortcodes', () => {
+    // The regression the shortcode rule could most easily cause: a colon
+    // between two things is ordinary punctuation far more often than it is
+    // Slack.
+    const text = pagerText(message({ body: 'Split 3:2:1, reviewed at 12:30.' }))
+    expect(text).toContain('Split 3:2:1, reviewed at 12:30.')
+  })
+
+  it('warns once that nobody has checked this, not twice', () => {
+    const body = 'The pricing page says forty pounds a month.'
+    const text = pagerText(message({ body, metadata: unreviewed, projectName: 'Wellness' }))
+    const warnings = text.toLowerCase().match(/not reviewed|nobody has checked/g) ?? []
+    expect(warnings).toHaveLength(1)
+    // And the one that survives is the prominent one, above the body, because
+    // on a phone the first line is often the only line read.
+    expect(text.indexOf('Not reviewed')).toBeLessThan(text.indexOf(body))
+  })
+
+  it('still shows confidence with evidence on that same message', () => {
+    // §12 is what the de-duplication must not cost. The review warning is a
+    // third thing, said elsewhere; the pair is untouched.
+    const text = pagerText(message({ metadata: unreviewed })).toLowerCase()
+    expect(text).toContain('confident')
+    expect(text).toContain('worked out')
+    expect(text).toContain('1 source')
+  })
+
+  it('keeps the warning in Slack, where nothing else has said it', () => {
+    // The option exists to stop a repetition, never to lose a warning. Slack
+    // has no header line, so the clause is the only place it is said.
+    expect(provenanceLine(unreviewed)).toContain('Nobody has checked this yet')
+    expect(provenanceLine(unreviewed, {})).toContain('Nobody has checked this yet')
+    expect(provenanceLine(unreviewed, { unreviewed: true })).not.toContain('Nobody has checked')
   })
 })

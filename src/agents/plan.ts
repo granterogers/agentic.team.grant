@@ -96,6 +96,27 @@ export interface Plan {
   readonly project: string | null
   /** The instruction as given, kept so the confirmation can quote it. */
   readonly instruction: string
+  /**
+   * Things he asked for that this planner has no step for.
+   *
+   * Issue #60. Grant asked for six things in one voice note — a notebook named
+   * Coaching for Success, research on coaching wellness, relevant sources, a
+   * presentation, a short audio explanation, and the links sent back — and the
+   * say-back listed two of them. The four it could not represent did not
+   * fail; they VANISHED, and the plan then offered a Go ahead button under a
+   * one-third understanding.
+   *
+   * That is worse than not parsing at all. A plan that understands nothing and
+   * says so is recoverable; one that understands a third and presents it as
+   * complete makes a partial reading look checked.
+   *
+   * So an unrepresentable clause is named here and said out loud. It is
+   * deliberately NOT turned into a step: this file's whole premise is that
+   * every step corresponds to a job kind that exists, and inventing a
+   * `research` step nothing can run would produce a confident plan followed by
+   * silence.
+   */
+  readonly unread?: readonly string[]
 }
 
 /**
@@ -143,6 +164,54 @@ const NAMED_PROJECT = new RegExp(
   String.raw`\b(?:notebook\s+)?project\s+(?:called|named|titled)\s+${NAME}${NAME_ENDS}`,
   'i',
 )
+
+/**
+ * The name in the NEXT sentence.
+ *
+ * Grant, 11 September: *"Create for me a new Google Notebook project. You can
+ * call it Coaching for Success and I want you to do some research…"*
+ *
+ * Both patterns above require the name to follow the word "project" inside one
+ * sentence — `NEW_PROJECT` allows forty characters between them and neither
+ * crosses a full stop. He put a full stop there, which is how a person speaks,
+ * and the planner emitted no project at all. The two artifact steps it did find
+ * then said "make a slide deck FROM IT" with no "it" in the plan.
+ *
+ * Matched only when a project was asked for and not otherwise named — "call it
+ * whatever you like" must not become a project called "whatever you like", so
+ * this is a fallback and never a first reading.
+ */
+const WANTS_A_PROJECT = /\bnew\b[^.!?]{0,40}?\b(?:notebook|project)\b/i
+const CALL_IT = new RegExp(
+  String.raw`\b(?:you\s+can\s+)?(?:call|name|title)\s+(?:it|this|the\s+(?:project|notebook))\s+${NAME}${NAME_ENDS}`,
+  'i',
+)
+
+/*
+  Things he asks for that this planner cannot represent.
+
+  Each is a real request with no job kind behind it, and each was silently
+  dropped before #60. Naming them is not the same as doing them: the say-back
+  admits the gap, and the impediment tally (#47) is where a repeated one turns
+  into a proposal for the capability.
+
+  The order is the order they are reported in, which is roughly the order they
+  would happen.
+*/
+const CANNOT_YET: readonly { readonly what: string; readonly test: RegExp }[] = [
+  {
+    what: 'research the topic and find sources for it',
+    test: /\b(do\s+some\s+research|research\s+(?:the|this|it|how|into|on)|find\s+(?:me\s+)?(?:relevant\s+)?sources|gather\s+sources|look\s+into)\b/i,
+  },
+  {
+    what: 'send you the links back here when it is done',
+    test: /\bsend\s+(?:me|it|them|us)?\s*(?:the\s+)?(?:link|links|url|urls)\b/i,
+  },
+  {
+    what: 'upload files from your computer',
+    test: /\bupload\b(?!\s+(?:to|into)\s+(?:the\s+)?notebook)/i,
+  },
+]
 
 /**
  * A request to report on what the sources say.
@@ -206,7 +275,17 @@ function askablePart(instruction: string): string {
 export function readPlan(instruction: string): Plan | null {
   const steps: Step[] = []
 
-  const found = NEW_PROJECT.exec(instruction) ?? NAMED_PROJECT.exec(instruction)
+  /*
+    The name, from wherever in the instruction it is.
+
+    `CALL_IT` is a fallback and only when a project was asked for — see its
+    note. Ordered so an explicit "project called X" always wins over a loose
+    "call it X" later in the message.
+  */
+  const found =
+    NEW_PROJECT.exec(instruction) ??
+    NAMED_PROJECT.exec(instruction) ??
+    (WANTS_A_PROJECT.test(instruction) ? CALL_IT.exec(instruction) : null)
   const projectName = found === null ? null : String(found[1]).trim()
   // `project`, not `create_project`. Whether it exists is a fact about the
   // world and this function does not touch the world.
@@ -246,6 +325,7 @@ export function readPlan(instruction: string): Plan | null {
     steps,
     project: projectName ?? links?.namedProject ?? null,
     instruction: instruction.trim(),
+    unread: CANNOT_YET.filter((c) => c.test.test(instruction)).map((c) => c.what),
   }
 }
 
@@ -286,8 +366,25 @@ export function describePlan(plan: Plan): string {
         return `${n} Attach that ${step.link.kind === 'notion' ? 'Notion page' : 'notebook'} to it.`
       case 'add_source':
         return `${n} Put ${step.link.url} into the notebook and wait for Google to read it — a video gets transcribed, which takes a few minutes.`
-      case 'generate':
-        return `${n} Make ${KIND_LABEL[step.artifact]} from it. I will ask you before I do.`
+      case 'generate': {
+        /*
+          "from it" needs an "it".
+
+          When the plan has no project and no source, "Make a slide deck from
+          it" reads as though there is something to make it from — and in the
+          voice note that produced #60 there was not: the project step had been
+          lost, so the say-back promised a deck built on nothing. Naming the
+          subject when there is one, and admitting there is not when there is
+          not, is the difference between a plan and a plausible sentence.
+        */
+        const subject =
+          plan.project !== null
+            ? `from “${plan.project}”`
+            : plan.steps.some((x) => x.kind === 'add_source' || x.kind === 'attach')
+              ? 'from what we put in'
+              : 'from the sources in that notebook'
+        return `${n} Make ${KIND_LABEL[step.artifact]} ${subject}. I will ask you before I do.`
+      }
       case 'ask':
         return `${n} Read what it says and answer you here.`
       default:
@@ -295,11 +392,41 @@ export function describePlan(plan: Plan): string {
     }
   })
 
+  /*
+    What it could NOT read, said before the go-ahead.
+
+    Issue #60. A plan covering part of an instruction must not present itself
+    as complete — the confirm button is what makes a partial reading dangerous,
+    because it looks checked. So the gap is stated, and the closing line stops
+    being a bare "go ahead" when there is one.
+  */
+  /*
+    `?? []`, and not out of caution.
+
+    A plan is also read back out of `jobs.pinned_config` when Grant presses Go
+    ahead — and a plan stored there before this field existed genuinely has no
+    `unread` key. A required field on the interface keeps `readPlan` honest;
+    tolerating its absence here keeps an approval of yesterday's plan from
+    throwing on a property that could not have been written.
+  */
+  const unread = plan.unread ?? []
+  const missed =
+    unread.length === 0
+      ? []
+      : [
+          '',
+          `I could not work out how to ${unread.join(', or ')}. That part I have ` +
+            'left out rather than guessed at.',
+        ]
+
   return [
     `Let me say that back. You want:\n`,
     ...lines,
+    ...missed,
     '',
-    'Go ahead and I will start. Say what to change if I have it wrong.',
+    unread.length === 0
+      ? 'Go ahead and I will start. Say what to change if I have it wrong.'
+      : 'Say go ahead for the part I did understand, or tell me how to do the rest.',
   ].join('\n')
 }
 

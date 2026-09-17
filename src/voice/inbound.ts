@@ -148,6 +148,16 @@ export async function transcribeOverApi(
   filename: string,
   transcriber: Transcriber,
   vocabulary: readonly string[] = [],
+  /**
+   * How long the recording is, per Telegram.
+   *
+   * The speech API reports no duration and it would be wrong to invent one —
+   * but Telegram states it on the voice message itself, and that IS measured.
+   * Not passing it through is why a 59-second note was echoed as "Heard (0s)",
+   * which is the one number in that message whose whole job is to reveal a
+   * transcript much shorter than the recording.
+   */
+  seconds = 0,
 ): Promise<Transcript> {
   const { baseUrl, model, key } = transcriber
   if (baseUrl === undefined || model === undefined || key === undefined || key === '') {
@@ -192,9 +202,10 @@ export async function transcribeOverApi(
 
   return {
     text,
-    // The API reports no duration, and inventing one would put a number in the
-    // ledger that nothing measured.
-    seconds: 0,
+    // From Telegram, which states it on the voice message. Still 0 when the
+    // caller does not know — inventing one would put a number in the ledger
+    // that nothing measured.
+    seconds,
     language: 'en',
     model,
     hinted: hint !== '',

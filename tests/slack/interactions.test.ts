@@ -144,6 +144,30 @@ describe('the button value, which is untrusted', () => {
     expect(correlationOf(press())).toBe(CORR)
   })
 
+  it('reads an OVERFLOW press, which puts its payload somewhere else (#186)', () => {
+    /*
+      Slack sends `{type:'overflow', selected_option:{value}}` and leaves the
+      element's own `value` undefined. #186 moved Mute 24h and More detail
+      behind a `⋯` so a message stops being four full-width buttons on a phone
+      — and reading only `value` would have made both of them silently dead:
+      a press, a 200, and nothing happening.
+    */
+    const overflowPress = {
+      type: 'block_actions',
+      actions: [
+        {
+          action_id: 'more_actions',
+          selected_option: { value: JSON.stringify({ a: 'mute_24h', c: CORR }) },
+        },
+      ],
+    }
+    expect(correlationOf(overflowPress)).toBe(CORR)
+  })
+
+  it('CONTROL: a button still reads from value, so nothing regressed', () => {
+    expect(correlationOf(press())).toBe(CORR)
+  })
+
   it('rejects anything that is not a uuid, however plausible', () => {
     // The value round-trips through a client and is visible to anyone who can
     // inspect the message. §10 forbids free-form input reaching a tool call,

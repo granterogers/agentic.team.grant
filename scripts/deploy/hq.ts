@@ -13,7 +13,8 @@
  * to rotate would silently lock Grant's phone out of the dashboard.
  */
 import { randomBytes } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
+import { join, relative } from 'node:path'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
 const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN
@@ -81,11 +82,42 @@ console.log(`endpoint v${String(result.version)} ${String(result.status)} — ${
 // --- verify the endpoint, by its answers rather than its status ------------
 // A Vercel deploy in this project once returned 200 with 339,010 bytes of auth
 // wall; the rule since then is that a status code is not a verification.
-const unauthorized = await fetch(`${endpoint}?section=overview`)
-const authorized = await fetch(`${endpoint}?section=overview`, {
+/*
+  Given time to wake up before being believed (#189).
+
+  A Supabase edge function is cold the instant it is deployed, and the first
+  request to it can time out or come back without a body — so a good deploy
+  failed its own probe and printed "the endpoint did not behave as required"
+  about an endpoint that was fine two seconds later. A deploy that fails
+  intermittently is worse than one that is slow: it teaches whoever is running
+  it to re-run without reading, which is how a real failure gets through.
+
+  Three attempts, a second apart, and the LAST answer is the one reported — so
+  a genuine misbehaviour still fails, and only the cold start is forgiven. The
+  unauthenticated probe is retried with it because a 401 that has not woken up
+  yet is not a 401.
+*/
+const wait = async (ms: number) => {
+  await new Promise((r) => setTimeout(r, ms))
+}
+let unauthorized = await fetch(`${endpoint}?section=overview`)
+let authorized = await fetch(`${endpoint}?section=overview`, {
   headers: { Authorization: `Bearer ${token}` },
 })
-const body = (await authorized.json()) as { data?: { counts?: unknown } }
+let body = (await authorized.json().catch(() => ({}))) as { data?: { counts?: unknown } }
+for (
+  let go = 0;
+  go < 2 && (unauthorized.status !== 401 || body.data?.counts === undefined);
+  go += 1
+) {
+  console.log('  (cold — waiting a second and asking again)')
+  await wait(1200)
+  unauthorized = await fetch(`${endpoint}?section=overview`)
+  authorized = await fetch(`${endpoint}?section=overview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  body = (await authorized.json().catch(() => ({}))) as { data?: { counts?: unknown } }
+}
 console.log(`  unauthenticated: http ${String(unauthorized.status)} (must be 401)`)
 console.log(
   `  authenticated:   http ${String(authorized.status)} counts=${body.data?.counts !== undefined ? 'present' : 'MISSING'}`,
@@ -185,7 +217,93 @@ if (project === undefined) {
   }
 }
 
-const html = await readFile('web/hq/index.html', 'utf8')
+/*
+  The studio is the page now (ADR-0019, #68).
+
+  `web/hq/index.html` is deleted. It kept the root URL until every one of its
+  fifteen write actions existed in the studio, which is the condition ADR-0019
+  set — retiring it sooner would have removed capability in the name of a
+  redesign, the failure 0119 named in a different context: *"a permission
+  system's first job is to not change behaviour on the day it is installed."*
+
+  Grant's bookmark is the root, so the studio serves there. `/studio/` keeps
+  working, because a URL that has been handed out is a URL somebody has open.
+*/
+const html = await readFile('web/studio/index.html', 'utf8')
+
+/*
+  The studio prototype, at /studio/.
+
+  Grant, looking at the deployed dashboard: *"excuse me but where all the nice
+  graphics that we spent so long trying to perfect?"* — and the honest answer
+  was that they had never been deployed. `web/studio` is the designed frontend,
+  it has had days of visual iteration, and it existed only on disk and as PNGs
+  in `.out/`. Every critique of it was made from a screenshot, which is exactly
+  the thing §14A says not to do.
+
+  It ships alongside rather than instead of. They are different things: the HQ
+  page is live and wired to the office, the studio is the M0 prototype and its
+  data is invented. Two URLs says that more clearly than one page trying to be
+  both.
+
+  Fonts and PDFs go up base64: Vercel's file API takes a string, and a woff2
+  read as utf8 is a corrupted woff2 that fails silently as a fallback face —
+  which is the exact failure the sandbox already has, and shipping it to
+  production would make the one thing we cannot check locally also wrong live.
+*/
+/*
+  Read as bytes rather than as text. A file missing from this set is uploaded
+  as UTF-8 and arrives corrupted — which is a 404's quieter cousin, because the
+  request succeeds and the browser simply cannot decode what it gets.
+
+  `.webp` was missing, and #206's six materials were the first WebP this
+  project has ever served.
+*/
+const BINARY = new Set(['.woff2', '.pdf', '.png', '.jpg', '.jpeg', '.ico', '.webp'])
+/*
+  Not everything under `web/studio` belongs on the internet.
+
+  `textures/raw/` is 14 MB of source photographs that exist only to be
+  re-tuned — gitignored, and it would otherwise be uploaded twice (once at the
+  root and once under `studio/`) on every deploy, for nothing.
+*/
+const SKIP_DIRS = new Set(['raw'])
+const studioFiles: { file: string; data: string; encoding?: 'base64' }[] = []
+const walk = async (dir: string): Promise<void> => {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (!SKIP_DIRS.has(entry.name)) await walk(full)
+      continue
+    }
+    const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase()
+    const rel = relative('web/studio', full).split('\\').join('/')
+    const at = `studio/${rel}`
+    studioFiles.push(
+      BINARY.has(ext)
+        ? { file: at, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
+        : { file: at, data: await readFile(full, 'utf8') },
+    )
+    /*
+      And at the root, because the page is served there now.
+
+      Two copies of each asset rather than a rewrite rule: this is a static
+      deployment with no routing layer, `index.html` asks for `./app.js`, and a
+      relative path from `/` and from `/studio/` are different files as far as
+      the host is concerned. Thirty-one small files twice is cheaper than a
+      config that only one person understands.
+    */
+    if (rel !== 'index.html') {
+      studioFiles.push(
+        BINARY.has(ext)
+          ? { file: rel, data: (await readFile(full)).toString('base64'), encoding: 'base64' }
+          : { file: rel, data: await readFile(full, 'utf8') },
+      )
+    }
+  }
+}
+await walk('web/studio')
+console.log(`  studio: ${String(studioFiles.length)} files`)
 const reader = await readFile('api/notebook.py', 'utf8')
 // The write side, and the script it spawns. `act.py` ships as a plain file
 // rather than being reimplemented in the function: fourteen actions with a
@@ -208,6 +326,7 @@ const deployment = await fetch('https://api.vercel.com/v13/deployments', {
       { file: 'scripts/notebook/act.py', data: actScript },
       { file: 'requirements.txt', data: requirements },
       { file: 'vercel.json', data: vercelConfig },
+      ...studioFiles,
     ],
     projectSettings: { framework: null },
   }),
@@ -260,6 +379,31 @@ console.log(
 )
 if (!looksRight) {
   console.error('the page URL did not serve the page')
+  process.exit(1)
+}
+
+/*
+  And a DEEP LINK, which is the half no test on this machine can cover (#157).
+
+  `verify:routes` runs against a server that performs the same rewrite by hand,
+  so it proves the studio reads and writes its address correctly and proves
+  nothing whatever about `vercel.json`. A rewrite that stops matching is
+  invisible in every local check and turns every link Grant has saved into a
+  404 — which is the one failure mode of this feature that matters, because the
+  whole point of it is links that outlive the session.
+
+  A project slug is not needed: an unknown one is a legitimate route and lands
+  on the portfolio, so the assertion is that the HOST served the application
+  rather than looked for a file.
+*/
+const deep = await fetch(`https://${String(page.url)}/p/any-project/tasks`)
+const deepBody = await deep.text()
+const deepOk = deep.status === 200 && deepBody.includes('Team HQ')
+console.log(
+  `  deep link: http ${String(deep.status)} — ${deepOk ? 'the rewrite is live' : 'THE REWRITE IS NOT WORKING'}`,
+)
+if (!deepOk) {
+  console.error('a saved link to a project would 404 — check the rewrite in vercel.json')
   process.exit(1)
 }
 // --- and prove the reader reads --------------------------------------------

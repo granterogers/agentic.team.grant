@@ -52,24 +52,34 @@ interface Pattern {
   readonly needsNotebook: boolean
 }
 
+/*
+  Plurals matter more than they look.
+
+  Every phrase below takes an optional `s`, because #260's questions are almost
+  always plural — "all the mind maps", "the study guides" — and `\bmind\s*map\b`
+  does not match "mind maps": the boundary after "map" fails against the "s".
+  It cost one test on the first run of `artifactListing`, and it was equally
+  true of the generation matcher the whole time ("make me some mind maps" named
+  nothing).
+*/
 const PATTERNS: readonly Pattern[] = [
   {
     kind: 'audio',
-    phrases: [/\baudio\s+(overview|summary)\b/, /\bpodcast\b/, /\baudio\b/],
+    phrases: [/\baudio\s+(overview|summary)s?\b/, /\bpodcasts?\b/, /\baudio\b/],
     needsNotebook: false,
   },
   {
     kind: 'slides',
-    phrases: [/\bslide\s*deck\b/, /\bslide[s]?\b/, /\bpresentation\b/, /\bdeck\b/],
+    phrases: [/\bslide\s*decks?\b/, /\bslide[s]?\b/, /\bpresentations?\b/, /\bdecks?\b/],
     needsNotebook: false,
   },
-  { kind: 'video', phrases: [/\bvideo\s+overview\b/, /\bvideo\b/], needsNotebook: false },
-  { kind: 'mindmap', phrases: [/\bmind\s*map\b/], needsNotebook: false },
+  { kind: 'video', phrases: [/\bvideo\s+overviews?\b/, /\bvideos?\b/], needsNotebook: false },
+  { kind: 'mindmap', phrases: [/\bmind\s*maps?\b/], needsNotebook: false },
   { kind: 'flashcards', phrases: [/\bflash\s*cards?\b/], needsNotebook: true },
-  { kind: 'study_guide', phrases: [/\bstudy\s+guide\b/], needsNotebook: true },
-  { kind: 'infographic', phrases: [/\binfographic\b/], needsNotebook: true },
-  { kind: 'quiz', phrases: [/\bquiz\b/], needsNotebook: true },
-  { kind: 'report', phrases: [/\breport\b/], needsNotebook: true },
+  { kind: 'study_guide', phrases: [/\bstudy\s+guides?\b/], needsNotebook: true },
+  { kind: 'infographic', phrases: [/\binfographics?\b/], needsNotebook: true },
+  { kind: 'quiz', phrases: [/\bquiz(?:zes)?\b/], needsNotebook: true },
+  { kind: 'report', phrases: [/\breports?\b/], needsNotebook: true },
 ]
 
 /** Asking for something to be made, rather than asking about it. */
@@ -183,4 +193,181 @@ export const KIND_LABEL: Record<RequestedKind, string> = {
   quiz: 'quiz',
   flashcards: 'flashcard set',
   study_guide: 'study guide',
+}
+
+/*
+  Asking what a notebook HAS, rather than asking for a new one (#260).
+
+  Grant's example: *"Give me all the audio overviews in the Money Mastery
+  notebook."*
+
+  `notebookRequest` above deliberately answers null to that — `ASKING_ABOUT`
+  and the absence of a MAKE verb both rule it out, and they are right to: it
+  would be alarming if asking what exists generated something. But nothing then
+  handled it, so the question fell through to an ordinary conversation turn and
+  was answered from whatever the model happened to believe.
+
+  This is the other half. It is deliberately NOT the inverse of the generation
+  matcher: a listing request has its own verbs, and the overlap — "can you get
+  me the audio overview" — is read as a listing, because listing is the
+  reversible one. Listing something that was not there says "there are none";
+  generating something that was only asked about spends a quota and puts a file
+  in his notebook.
+*/
+
+/** Asking to see what is there. */
+const LISTING =
+  /\b(list|show|give\s+me|send\s+me|fetch|find|what|which|are\s+there|do\s+we\s+have|have\s+we\s+got|any)\b/i
+
+/**
+ * Plural or otherwise asking for a SET.
+ *
+ * "the audio overview" is one thing, probably the one just made; "the audio
+ * overviews" is the library. Both are answered by enumerating, so this is not
+ * a gate — it is recorded so a caller can phrase the reply in the right
+ * number.
+ */
+const ASKS_FOR_MANY = /\b(all|every|each|list|overviews|decks|maps|reports|guides|sets)\b/i
+
+export interface ArtifactListingRequest {
+  /** The kinds asked about. Empty means every kind — "what has it generated?" */
+  readonly kinds: readonly RequestedKind[]
+  /** True when the phrasing asks for a set rather than one thing. */
+  readonly many: boolean
+}
+
+/**
+ * What a listing question is asking for, or null when it is not one.
+ *
+ * Null far more often than not: a generation request, a definition question
+ * and an ordinary sentence all come back null, and each has its own control in
+ * the tests.
+ */
+export function artifactListing(instruction: string): ArtifactListingRequest | null {
+  const text = instruction.toLowerCase()
+
+  // A request to MAKE one is not a request to see them, whatever else it says.
+  if (notebookRequest(instruction) !== null) return null
+  // And nor is a request for a report the office should write (#258). Same
+  // rule, one artifact later: making outranks enumerating.
+  if (asksForAFile(instruction.trim())) return null
+  if (!LISTING.test(text)) return null
+  // A brief is not a question. Same guard, same reason as above.
+  if (looksLikeABrief(instruction)) return null
+
+  /*
+    A definition question is not a listing.
+
+    "What IS an audio overview?" asks what the thing is; "What audio overviews
+    are there?" asks which exist. The tell is the verb immediately after the
+    interrogative, and getting it wrong in this direction costs a list nobody
+    wanted in answer to a question about a word.
+  */
+  if (/\bwhat\s+(is|are)\s+(an?|the)\b/i.test(instruction)) return null
+
+  const found: { kind: RequestedKind; at: number }[] = []
+  for (const pattern of PATTERNS) {
+    for (const phrase of pattern.phrases) {
+      const m = phrase.exec(text)
+      if (m === null) continue
+      if (mentionedNotAsked(text, m.index)) continue
+      found.push({ kind: pattern.kind, at: m.index })
+      break
+    }
+  }
+
+  /*
+    No kind named, and the notebook named: "what has the notebook generated?"
+    is a legitimate listing of everything, and answering it with nothing
+    because no type word appeared would be the literal-matcher failure this
+    repository keeps paying for.
+  */
+  if (found.length === 0) {
+    return NOTEBOOK.test(text) && /\b(generated|made|produced|artefacts?|artifacts?)\b/i.test(text)
+      ? { kinds: [], many: true }
+      : null
+  }
+
+  return {
+    kinds: [...new Set(found.sort((a, b) => a.at - b.at).map((f) => f.kind))],
+    many: ASKS_FOR_MANY.test(text),
+  }
+}
+
+/*
+  Asking for a finished document, rather than for an answer (#258).
+
+  Grant: *"Read the X document, research the subject properly, create a
+  beautifully illustrated PDF report with the relevant information, and send it
+  to me here."* The office said it had no means, and the first thing that has
+  to work is recognising that this is not a question.
+
+  The distinction that matters is between a REQUEST FOR A FILE and a request
+  for prose. "Tell me where the coaching course has got to" wants three
+  paragraphs on Telegram; "write me a report on where the coaching course has
+  got to" wants something he can open, print and forward. Both are legitimate
+  and the expensive direction here is the opposite of #260's: producing a file
+  nobody asked for is a minute of compute and a document in his project, while
+  answering a request for a report with a paragraph is the refusal that opened
+  this Issue.
+
+  So the match requires a FORMAT NOUN or an explicit "report" — never a bare
+  verb like "write" or "produce", which govern half the things he asks for.
+*/
+
+/** The words for a thing you can open, as opposed to a thing you can read. */
+const ARTIFACT_NOUN =
+  /\b(pdf|report|white\s?paper|whitepaper|one[-\s]?pager|brief(?:ing)?\s+document|document\s+for|briefing\s+note|dossier|(?:a|an|the|your|this)\s+write[-\s]?up)\b/i
+
+/** Asking for it to be MADE, as opposed to asking about one that exists. */
+const MAKE_IT =
+  /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together)\b/i
+
+/**
+ * A request for a file, and what it should be about.
+ *
+ * Returns null for anything that merely mentions a report — "did you see the
+ * report Elena sent" names the noun and asks for nothing — because the verb
+ * has to be there too, and for a request to LIST what exists, which #260
+ * already owns.
+ */
+export interface ArtifactRequest {
+  /** The whole instruction, which is the brief. */
+  readonly brief: string
+  /** The format asked for, where one was named. Only `pdf` is built. */
+  readonly format: 'pdf'
+}
+
+/**
+ * The predicate both matchers consult, so neither can claim the other’s
+ * sentence.
+ *
+ * Pulled out rather than having `artifactRequest` defer to `artifactListing`,
+ * which is how the first version was written and which got the precedence
+ * exactly backwards. "Write me a PDF report on where the course has got to,
+ * using what we hold on it" contains the word "what", LISTING counts that as a
+ * listing signal wherever it appears, and "report" is one of the artifact
+ * kinds — so the office answered a request for a document with "Looking
+ * through the notebook for report — back shortly." and made nothing.
+ *
+ * A cycle is why the deference was there at all. A shared predicate has no
+ * cycle and states the rule once: asking for something to be MADE outranks
+ * asking to SEE what exists, because the second is answerable from the
+ * first’s result and not the other way round.
+ */
+function asksForAFile(said: string): boolean {
+  if (said === '') return false
+  if (!ARTIFACT_NOUN.test(said)) return false
+  if (!MAKE_IT.test(said)) return false
+  // "Send me the report you wrote yesterday" is a delivery request, not a
+  // writing one, and answering it by writing a second report is the worst
+  // available outcome.
+  return !/\b(you\s+(already\s+)?(wrote|made|sent|produced)|from\s+(yesterday|last\s+week))\b/i.test(
+    said,
+  )
+}
+
+export function artifactRequest(text: string): ArtifactRequest | null {
+  const said = text.trim()
+  return asksForAFile(said) ? { brief: said, format: 'pdf' } : null
 }

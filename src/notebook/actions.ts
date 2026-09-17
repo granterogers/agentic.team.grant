@@ -471,6 +471,41 @@ export class NotebookActions {
   }
 
   /** Ask the notebook about its own sources. */
+  /**
+   * The bytes of a finished artifact.
+   *
+   * Issue #66. Everything up to "the notebook has an artifact" existed and
+   * nothing could get one out, so the chain stopped one step short of the only
+   * step Grant cares about — having the audio in his hand rather than a reason
+   * to go and open NotebookLM.
+   *
+   * Two shapes come back because the library offers two, and which one depends
+   * on its version: a share URL, or the bytes. A URL is preferred and returned
+   * as-is — it is smaller to pass through the JSON envelope, and the caller can
+   * stream it rather than holding an audio file in memory on a serverless
+   * function with a 60s ceiling.
+   */
+  async download(
+    notebookId: string,
+    artifactId: string,
+  ): Promise<{
+    url: string | null
+    bytes: Uint8Array | null
+    title: string | null
+    kind: string
+  }> {
+    const r = await this.act('download', { notebook_id: notebookId, artifact_id: artifactId })
+    const b64 = r.base64 === undefined || r.base64 === null ? null : String(r.base64)
+    return {
+      url: r.url === undefined || r.url === null ? null : String(r.url),
+      // `Uint8Array`, not `Buffer`. This module is imported by code that runs
+      // in Deno, where Buffer is not a global — bitten three times already.
+      bytes: b64 === null ? null : Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)),
+      title: r.title === undefined || r.title === null ? null : String(r.title),
+      kind: String(r.kind ?? 'unknown'),
+    }
+  }
+
   async ask(notebookId: string, question: string): Promise<string> {
     const r = await this.act('ask', { notebook_id: notebookId, question })
     return String(r.answer ?? '')

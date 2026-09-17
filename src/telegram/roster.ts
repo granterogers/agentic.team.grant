@@ -122,13 +122,33 @@ export async function roster(db: SqlExecutor): Promise<readonly RosterEntry[]> {
  * rather than quietly.
  *
  * `addressed_to` is the reliable field: the webhook resolves it from the bot
- * that was written to (0072), the roster gives each staff member exactly one
- * bot (0054), and the chief's bot is registered as the pager with a null
- * `staff_slug` — which is why null and 'chief-of-staff' both land there.
+ * that was written to (0072) and the roster gives each staff member exactly
+ * one bot (0054).
+ *
+ * ## The null case, which was broken for months
+ *
+ * This read `or (t.staff_slug is null and (c.addressed_to is null or ...))`,
+ * on the stated assumption that *"the chief's bot is registered as the pager
+ * with a null `staff_slug`"*. **There is no bot row with a null `staff_slug`
+ * and there never was one in this database** — all eight carry their person's
+ * slug — so that branch matched nothing, and an inbound Telegram command with
+ * no addressee could not be joined to a bot at all.
+ *
+ * **69 of Grant's 90 Telegram messages are that case.** The office still
+ * answered them, through the pager, so nothing looked broken: what he lost was
+ * the reply arriving in the thread from the bot he wrote to — and, the moment
+ * #258 existed, the ability to receive a FILE at all, because the pager has no
+ * attachment path and `reply.ts` is the only thing that does.
+ *
+ * A comment asserting a property with nothing checking it, which CLAUDE.md
+ * already records four times. Found by sending a real request and watching the
+ * PDF go to Slack.
+ *
+ * `coalesce` rather than a second branch: "nobody was named" and "the chief
+ * was named" are the same instruction — answer as the office — and writing
+ * them as one expression is what stops the two drifting again.
  */
 export const BOT_FOR_INBOUND = `
   join public.telegram_bots t
-    on (t.staff_slug = c.addressed_to
-        or (t.staff_slug is null
-            and (c.addressed_to is null or c.addressed_to = 'chief-of-staff')))
+    on t.staff_slug = coalesce(c.addressed_to, 'chief-of-staff')
 `

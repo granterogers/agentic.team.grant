@@ -21,7 +21,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import type { HandlerOutput, Job, NotifyOutcome } from '../jobs/worker.ts'
 import { TelegramClient } from '../telegram/api.ts'
-import { escapeHtml } from '../telegram/message.ts'
+import { escapeHtml, inlineKeyboard } from '../telegram/message.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
 import { TelegramTransport } from '../telegram/transport.ts'
 import { DeliveryService } from './delivery.ts'
@@ -133,6 +133,52 @@ export function replyChannel(db: SqlExecutor): {
             (context.reviewed
               ? ''
               : '\n\n<i>⚠️ not reviewed yet — I would not rely on this as it stands</i>'),
+          /*
+            The buttons, which this path has never sent.
+
+            Grant: *"the message is sent to me by Telegram from my boss have
+            that little thumbs up, thumbs down button at the end of them just
+            as a means to confirm or to quickly confirm something or to correct
+            something."*
+
+            Every piece of §12's six was built — the keyboard builder, the
+            callback parser, the handler that writes to `feedback` — and the
+            pager renders them. This channel received `context.actions` all
+            along and dropped it on the floor.
+
+            It is the worst one to have missed. This channel declares
+            `surface: 'telegram'` and runs BEFORE the pager so that a job
+            arriving on Telegram is answered here and the pager stays quiet —
+            which means buttons appeared only on messages Grant did not ask
+            for, and never on the replies to the ones he sent. Exactly
+            backwards, and invisible to every test, because the machinery all
+            works and the surface he lives in was the one not calling it.
+
+            `context.actions` rather than a list of our own: `resultContext`
+            already decides which apply — dropping Undo when there is nothing
+            to undo, swapping the six for approve/decline on an approval — and
+            a second list here would drift from it within a month.
+          */
+          keyboard: inlineKeyboard(context.actions, job.correlationId, context.projectUrl),
+          /*
+            The file rides on this message, not after it (#66).
+
+            Grant, on a voice note that arrived as two messages: *"try to have
+            everything self contained."* A twenty-minute audio overview and the
+            sentence explaining it, sent separately, is that failure in the
+            other direction — so the transport sends one `sendAudio` with the
+            words as its caption.
+          */
+          ...(output.attachAudio === undefined ? {} : { audio: output.attachAudio }),
+          /*
+            And a generated artifact, the same way (#258).
+
+            Grant asked for a researched PDF back through Telegram and was told
+            the office had no means. This line is where the means arrives, and
+            it rides on the answer for the reason above rather than as a second
+            message.
+          */
+          ...(output.attachFile === undefined ? {} : { document: output.attachFile }),
           silent: false,
         },
       })

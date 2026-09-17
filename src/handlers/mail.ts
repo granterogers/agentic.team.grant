@@ -54,8 +54,40 @@ export function mailHandler(db: SqlExecutor): Handler {
         } satisfies HandlerOutput
       }
 
+      /*
+        And the cache is pruned to the retention ADR-0037 decided.
+
+        Nothing had ever pruned `mail_messages`. The refresh caps at fifty a
+        run and marks what left the window `vanished_at`, so it grows slowly
+        and for ever -- a table holding Grant's subject lines indefinitely is
+        not what anybody chose, it is what nobody chose. 180 days is long
+        enough for "have we already discussed this" and short enough to be a
+        limit.
+
+        Here rather than in its own duty because it belongs to the same act:
+        the thing that fills the cache is the thing that should keep it to
+        size, and a second hourly job to delete nothing most hours is a job
+        Grant would have to understand.
+
+        Swallowed on failure and SAID when it removes something. A retention
+        sweep must never turn a successful refresh into a failed job, and a
+        sweep nobody can see is 0350's delete that matched nothing and reported
+        success.
+      */
+      let pruned = 0
+      try {
+        const { rows } = await db.execute(`select app.forget_mail_before(180) as r`)
+        const raw = rows[0]?.r
+        const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { removed?: unknown }
+        pruned = typeof r?.removed === 'number' ? r.removed : 0
+      } catch {
+        // A cache that could not be pruned is a cache, not an outage.
+      }
+
       return {
-        body: `Mail refreshed: ${outcome.note}.`,
+        body: `Mail refreshed: ${outcome.note}${
+          pruned === 0 ? '' : `, and ${String(pruned)} older than 180 days forgotten`
+        }.`,
         confidence: 'high',
         evidence: 'verified',
         sources: ['google:gmail'],

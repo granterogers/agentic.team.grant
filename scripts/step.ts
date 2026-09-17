@@ -36,6 +36,21 @@ const flag = (name: string): string | null => {
   return at === -1 ? null : (args[at + 1] ?? null)
 }
 const has = (name: string): boolean => args.includes(`--${name}`)
+/*
+ * A flag given more than once, for `--shot`.
+ *
+ * Visual work is rarely one picture: a change is judged at desktop and phone,
+ * in both schemes, and pasting three links means uploading three images. The
+ * step row carries ONE shot, so the first is the one attached and the rest are
+ * uploaded and printed — which is what they are for. Grant: *"you will always
+ * have to give me the image links each time to judge."*
+ */
+const flags = (name: string): string[] => {
+  const out: string[] = []
+  for (const [i, a] of args.entries())
+    if (a === `--${name}` && args[i + 1] !== undefined) out.push(args[i + 1] as string)
+  return out
+}
 
 // Everything that is not a flag or a flag's value is the headline.
 const consumed = new Set<number>()
@@ -92,14 +107,24 @@ async function upload(path: string): Promise<string | null> {
 
 const finishing = flag('finish')
 if (finishing !== null) {
-  const shot = flag('shot')
-  const url = shot === null ? null : await upload(shot)
+  const urls = (await Promise.all(flags('shot').map(upload))).filter((u) => u !== null)
+  const url = urls[0] ?? null
   const state = has('blocked') ? 'blocked' : (flag('state') ?? 'done')
   await db.execute(`
     select public.build_step_finish(${lit(finishing)}::uuid, ${lit(state)},
                                     ${lit(flag('produced'))}, ${lit(url)})
   `)
+  /*
+    Print the URL. Grant: *"I can't see anything.. you will always have to give
+    me the image links each time to judge."*
+
+    Opening a step printed the link and finishing one did not, which is exactly
+    backwards — the screenshot worth looking at is the one attached to finished
+    work. Every `--shot` now prints where the image is, so it can be pasted into
+    the reply rather than left on a page he has to go and find.
+  */
   console.log(`step ${finishing} → ${state}`)
+  for (const u of urls) console.log(`  shot ${u}`)
   process.exit(0)
 }
 
@@ -111,8 +136,8 @@ if (headline === '') {
   process.exit(2)
 }
 
-const shot = flag('shot')
-const url = shot === null ? null : await upload(shot)
+const urls = (await Promise.all(flags('shot').map(upload))).filter((u) => u !== null)
+const url = urls[0] ?? null
 const state = has('blocked') ? 'blocked' : has('finish-now') ? 'done' : 'doing'
 
 const row = (
@@ -130,4 +155,5 @@ const row = (
 ).rows[0] as { id?: string }
 
 console.log(`${state}: ${headline}`)
-console.log(`  id ${String(row.id)}${url === null ? '' : `\n  shot ${url}`}`)
+console.log(`  id ${String(row.id)}`)
+for (const u of urls) console.log(`  shot ${u}`)

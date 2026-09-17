@@ -40,6 +40,17 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { seedAppearance } from './seed-appearance.ts'
+
+/*
+  Which density to audit (#124).
+
+  Both must be green and the two floors are why: compact tightens the space
+  BETWEEN controls and may not shrink the controls, so a scale that went too
+  far shows up here as a touch target under 44px or type under 12px rather
+  than as somebody's opinion. `DENSITY=compact npm run verify:layouts`.
+*/
+const DENSITY = process.env.DENSITY === 'compact' ? 'compact' : 'comfortable'
 
 const ROOT = 'web/studio'
 const PORT = 4615
@@ -71,7 +82,39 @@ await new Promise<void>((r) => {
 
 const WIDTHS = (process.env.WIDTHS ?? '390,768,1024,1440').split(',').map(Number)
 const PALETTES = ['paper', 'slate', 'clay', 'ink', 'moss']
-const ROUTES = ['overview', 'team', 'documents', 'tasks', 'contacts', 'sources', 'activity']
+/*
+  A route is a project tab, or — prefixed — a tab of the settings sheet.
+
+  `settings/governance` is here because #54 put a whole reading surface behind
+  a sheet this audit had never opened. Thirty-eight green states said nothing
+  about it: an audit that looks somewhere other than where the user looks
+  passes for the wrong reason, which this repository has now done three times
+  in one day.
+*/
+const ROUTES = [
+  'overview',
+  'team',
+  'documents',
+  'tasks',
+  'contacts',
+  'sources',
+  // Activity stopped being a section with #222; the panel on Overview is the
+  // surface a person actually reaches now.
+  /*
+    Project Settings, all four panes (#36).
+
+    Every one, because this audit's own header records what happens otherwise:
+    thirty-eight green states said nothing about a surface it had never opened,
+    and the first run pointed at one found three defects. Four panes is four
+    surfaces, and the pane with the switches and the text boxes is the one with
+    touch targets and 16px inputs on it.
+  */
+  'project/people',
+  'project/automations',
+  'project/labels',
+  'project/project',
+  'settings/governance',
+]
 
 type Finding = { where: string; what: string }
 const findings: Finding[] = []
@@ -89,17 +132,70 @@ let checked = 0
   purpose — the section tabs and the phone's bottom bar both scroll.
 */
 const GEOMETRY = `(() => {
-  const out = { wide: [], small: [], tiny: [], input: [] }
+  const out = { wide: [], small: [], tiny: [], input: [], clipped: [], flat: [] }
   const w = document.documentElement.clientWidth
   const sw = document.documentElement.scrollWidth
   if (sw > w + 1) out.wide.push('document is ' + sw + 'px in a ' + w + 'px viewport')
+
+  /*
+    A box that hides content must SAY it hides content (#108).
+
+    The dashboard panels scroll, and Chromium draws an overlay scrollbar that
+    is invisible until you are already scrolling. So a panel ended mid-row,
+    sliced horizontally through a title, and it did not read as "there is more
+    below" -- it read as a rendering fault, on the tab you land on. Every
+    check was green: it is not overflow, not small type, not low contrast and
+    not a dead control. It was found by opening the PNG, which is the third
+    time that has been the only thing that found a defect.
+
+    So: any box with more content than it shows must give the eye one of two
+    things. Either a classic scrollbar taking real width in the gutter -- the
+    difference between offsetWidth and clientWidth -- or a marker class this
+    page sets when there is content beyond the edge, which is what draws the
+    fade. An overlay scrollbar counts as neither, because it is not painted.
+  */
+  for (const el of document.querySelectorAll('*')) {
+    const cs = getComputedStyle(el)
+    if (!/(auto|scroll)/.test(cs.overflowY)) continue
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue
+    const hidden = el.scrollHeight - el.clientHeight
+    if (hidden <= 4) continue
+    const gutter = el.offsetWidth - el.clientWidth > 2
+    const marked = el.closest('.more, .above, [data-more]') != null ||
+                   el.parentElement?.classList.contains('more') === true
+    if (!gutter && !marked) {
+      const what = (el.getAttribute('aria-label') || el.className || el.tagName).toString()
+      out.clipped.push(hidden + 'px hidden in "' + what.trim().slice(0, 40) + '" with nothing to say so')
+    }
+  }
 
   const named = (el) => {
     const t = (el.getAttribute('aria-label') || el.textContent || el.tagName).trim()
     return t.replace(/\\s+/g, ' ').slice(0, 44)
   }
+  /*
+    What is BEHIND an open sheet is not the surface being audited.
+
+    With a sheet open the studio blurs the shell, drops its saturation and
+    scales it to 0.994 -- deliberately, so the sheet reads as nearer. That
+    scale multiplies every rect behind it, and a 44px button measures 43.74:
+    the audit reported the theme toggle as an undersized touch target on two
+    widths, on a page nobody can touch, because pointer-events are off there
+    too. Measuring a decorative transform is exactly the false red that gets a
+    check switched off.
+
+    Scoped rather than excluded by class name: when a sheet is open the sheet
+    IS the page, so everything else is skipped.
+
+    No backticks in this comment: it lives inside a template literal.
+  */
+  const front = document.body.classList.contains('behind')
+    ? [...document.querySelectorAll('#settings, #viewer')].filter((v) => !v.hidden)
+    : []
+  const inFront = (el) => front.length === 0 || front.some((v) => v.contains(el))
   for (const el of document.querySelectorAll('*')) {
     if (el.ownerSVGElement != null) continue
+    if (!inFront(el)) continue
     const r = el.getBoundingClientRect()
     if (r.width === 0 && r.height === 0) continue
     const cs = getComputedStyle(el)
@@ -158,6 +254,52 @@ const GEOMETRY = `(() => {
         const px = Number.parseFloat(cs.fontSize)
         if (px < 16) out.input.push(px.toFixed(1) + 'px "' + named(el) + '"')
       }
+    }
+  }
+
+  /*
+    A card cannot be flat by accident (#38).
+
+    [data-lift] carries the whole treatment - face, border, depth, pointer
+    glare, tilt and the reduced-motion opt-out - so a new card is one
+    attribute and nothing else. The failure this catches is the one that
+    already happened: .member, .job, .source and .wrow shipped with a plain
+    background and no glare, and they LOOKED CONSISTENT BESIDE EACH OTHER, so
+    two rounds of screenshot review passed them. The comparison that finds it
+    is against the rest of the product, and no human review forces that.
+
+    So: anything wearing the card radius and a FLAT fill, that is not marked.
+    A gradient face is what [data-lift] gives you, so background-image is the
+    discriminator rather than the colour - and it is a property rather than a
+    list of class names, which is the whole point of the Issue.
+
+    Deliberately narrow. Only the card radius, only elements big enough to be
+    a card, and only where the fill is a solid surface colour: a chip, a pill,
+    an input and a button all legitimately have a flat fill, and a check that
+    called them cards would be one somebody switches off.
+  */
+  const cardRadius = getComputedStyle(document.documentElement)
+    .getPropertyValue('--r-card').trim()
+  if (cardRadius !== '') {
+    for (const el of document.querySelectorAll('div, section, article, li, aside')) {
+      if (el.closest('[data-lift]') !== null) continue
+      /*
+        A VIEWPORT is not a card. The project map is a 740x666 pannable
+        frame that legitimately wears the card radius: its border goes
+        AROUND its content, where a card's face sits behind it. It declares
+        itself with data-plane already, so the exclusion is a property the
+        page asserts about itself rather than a class name this audit has to
+        keep in step - which is the whole argument of the Issue.
+      */
+      if (el.closest('[data-plane]') !== null) continue
+      const cs = getComputedStyle(el)
+      if (cs.borderTopLeftRadius !== cardRadius) continue
+      const r = el.getBoundingClientRect()
+      if (r.width < 120 || r.height < 60) continue
+      if (cs.backgroundImage !== 'none') continue
+      const bg = cs.backgroundColor
+      if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') continue
+      out.flat.push('"' + named(el) + '" ' + Math.round(r.width) + 'x' + Math.round(r.height))
     }
   }
   return out
@@ -246,12 +388,45 @@ const CONTRAST = `(() => {
 
 const browser = await chromium.launch()
 
+/*
+  A token, so the WRITER's controls are drawn and therefore measured.
+
+  Without one `canWrite()` is false and the page draws a reader's view: no
+  textareas, no selects, no time input, no buttons. This audit reported 68
+  green states over Project Settings while having seen none of the controls on
+  it — an audit that looks somewhere other than where the user looks passes for
+  the wrong reason, and the user is a writer.
+
+  Not a real token. `verify:wired` uses the same word for the same purpose: the
+  page only asks whether one is present before drawing, and every fetch it then
+  makes fails and falls back to the invented data, which is what this audit
+  measures anyway.
+*/
+const AS_WRITER = `try{localStorage.setItem('hq.token','audit')}catch(e){}`
+
 const open = async (page: import('playwright').Page, route: string) => {
   await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(450)
   await page.locator('.project[data-open="legacy-coaching-course"]').click()
   await page.waitForTimeout(400)
-  await page.locator(`[role="tab"][data-tab="${route}"]`).click()
+  if (route.startsWith('project/')) {
+    // The pane fetches its own payload before it draws, so the wait is longer
+    // than a tab switch: measuring at 300ms would measure the word "Reading
+    // the office…" and report a screen with nothing on it as clean.
+    await page.locator('[data-tab="settings"]').click()
+    await page.waitForTimeout(1100)
+    await page.locator(`[data-setpane="${route.slice('project/'.length)}"]`).click()
+    await page.waitForTimeout(450)
+    return
+  }
+  if (route.startsWith('settings/')) {
+    await page.locator('[data-settings]').first().click()
+    await page.waitForTimeout(450)
+    await page.locator(`[data-setting="${route.slice('settings/'.length)}"]`).click()
+    await page.waitForTimeout(450)
+    return
+  }
+  await page.locator(`[data-tab="${route}"]`).click()
   await page.waitForTimeout(300)
 }
 
@@ -281,6 +456,18 @@ for (const width of WIDTHS) {
       ? void r.continue()
       : void r.abort(),
   )
+  await ctx.addInitScript(AS_WRITER)
+  /*
+    The geometry pass seeds appearance too (#124).
+
+    It did not before — only the contrast pass did — so the first
+    `DENSITY=compact` run measured the comfortable layout at all four widths
+    and reported 64 states and 0 findings. The control added beside it caught
+    that on its first run, which is the whole argument for having one: a
+    density that silently did not apply is indistinguishable from a density
+    that passes.
+  */
+  await ctx.addInitScript(seedAppearance('dark', { density: DENSITY }))
   const page = await ctx.newPage()
   for (const route of ROUTES) {
     await open(page, route)
@@ -292,13 +479,35 @@ for (const width of WIDTHS) {
         small: 'text under 12px',
         tiny: 'target under 44px',
         input: 'input under 16px',
+        clipped: 'content cut with no affordance',
+        // #38: a card that is not marked, so it has no face, no depth, no
+        // glare and no tilt. It looks right beside the other new ones and
+        // flat beside the rest of the product.
+        flat: 'card radius with a flat fill and no data-lift',
       }[kind]
       for (const item of [...new Set(list)].slice(0, 4)) {
         findings.push({ where: `${String(width)}px ${route}`, what: `${String(label)} — ${item}` })
       }
     }
   }
-  console.log(`  geometry ${String(width)}px — done`)
+  /*
+    CONTROL: the page really is in the density this run asked for (#124).
+
+    Without it, `DENSITY=compact` that failed to take effect would audit the
+    comfortable layout, report 64 states and 0 findings, and read exactly like
+    a compact scale that passes. That is the shape of defect this repository
+    records most: a verification that looks somewhere other than where it says
+    it is looking. The attribute is always written, precisely so it can be
+    read back.
+  */
+  const inForce = await page.evaluate(`document.documentElement.dataset.density || ''`)
+  if (inForce !== DENSITY) {
+    findings.push({
+      where: `${String(width)}px`,
+      what: `asked for the ${DENSITY} density and the page is in "${String(inForce)}"`,
+    })
+  }
+  console.log(`  geometry ${String(width)}px — done, in the ${DENSITY} density`)
   await ctx.close()
 }
 
@@ -317,15 +526,24 @@ for (const scheme of ['light', 'dark'] as const) {
         ? void r.continue()
         : void r.abort(),
     )
+    await ctx.addInitScript(AS_WRITER)
     await ctx.addInitScript(
-      `try { localStorage.setItem('studio.appearance', JSON.stringify({ palette: '${palette}', texture: 'plaster' })) } catch {}`,
+      seedAppearance(scheme, { palette, texture: 'plaster', density: DENSITY }),
     )
     const page = await ctx.newPage()
-    await open(page, 'overview')
-    const bad = (await page.evaluate(CONTRAST)) as string[]
-    checked++
-    for (const item of bad.slice(0, 5)) {
-      findings.push({ where: `${scheme}/${palette}`, what: `contrast — ${item}` })
+    /*
+      Two surfaces, not one. The overview is the page you land on; governance
+      is the one with four new tinted states on it — an accent scope pill, a
+      muted state pill, a warning tally and a red count — and none of them
+      exists anywhere the overview can see.
+    */
+    for (const where of ['overview', 'settings/governance'] as const) {
+      await open(page, where)
+      const bad = (await page.evaluate(CONTRAST)) as string[]
+      checked++
+      for (const item of bad.slice(0, 5)) {
+        findings.push({ where: `${scheme}/${palette} ${where}`, what: `contrast — ${item}` })
+      }
     }
     await ctx.close()
   }

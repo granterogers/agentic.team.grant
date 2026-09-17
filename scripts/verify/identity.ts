@@ -29,9 +29,11 @@
  *
  * ## Fixtures
  *
- * Every project this creates is named `fixture-identity-<run>` and archived at
- * the end. Nothing is deleted — the ledger refuses deletes anyway (§16) — and
- * `purge:fixtures` sweeps the archived rows.
+ * ## Subjects
+ *
+ * The projects this creates are REAL, not fixtures, because the function under
+ * test excludes fixtures by design. They are named `Identity proof <run>` and
+ * removed at the end. See the note on SUBJECT below.
  */
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -46,6 +48,37 @@ const db = new ManagementApiExecutor(ref, supabase)
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const run = Date.now().toString(36)
+
+/*
+  The subjects of this suite are NOT fixture projects, and that is the point.
+
+  `app.resolve_project_by_name` deliberately excludes fixtures:
+
+      live as (select p.* from public.projects p
+                where p.status = 'active' and not p.is_fixture)
+
+  and `projects.is_fixture` is GENERATED from the slug — 'fixture-%', 'verify-%',
+  'ledger-proof-%'. So every subject named `fixture-identity-…` was invisible to
+  the very function under test, and eleven checks failed against a feature that
+  works. Verified directly against a real project:
+
+      hq_create_project('Legacy Coaching Course', …)
+        -> needs_confirmation: true, 1 candidate, nothing created
+      hq_create_project('legacy coaching', …)
+        -> needs_confirmation: true, 0.743 near match, nothing created
+
+  Making resolution see fixtures would be changing the product to suit the test.
+  So the subjects are real projects with a distinctive name, removed at the end.
+
+  **The slug is derived from the NAME, not from `p_ref`.** `p_ref` is the
+  connector reference. Getting that backwards is how a teardown keyed on the
+  reference matched nothing and left six real, active projects in Grant's
+  project list. Everything that has to find these rows again keys on SLUG.
+*/
+const SUBJECT = `identityproof-${run}`
+/** What `app.hq_create_project` will actually derive from those names. */
+const SLUG = `identity-proof-${run}`
+const SLUG_OTHER = `identity-proof-other-${run}`
 
 const one = async (sql: string): Promise<Record<string, unknown> | undefined> =>
   (await db.execute(sql)).rows[0] as Record<string, unknown> | undefined
@@ -103,10 +136,24 @@ for (const [a, b, why] of [
   // is what forcing a create means — and then the phrase belongs to whichever
   // claimed it, by design: one phrase, one project. Asserting over the shared
   // ones would be asserting that the uniqueness rule does not hold.
+  /*
+    And not fixtures, because `resolve_project_by_name` filters them BY DESIGN.
+
+    `is_fixture` is GENERATED from the slug, and the resolver excludes fixtures
+    so harness projects can never be routed to. Asserting that one resolves
+    from its own name is asserting the opposite of the feature under test —
+    and it fired on `ledger-proof-mtyxxxuc`, an active fixture left by
+    `verify:ledger`, reporting a working resolver as broken.
+
+    The property is "every active project GRANT CAN BE ROUTED TO answers to its
+    own name". A fixture is not one of those, so it is not in the population.
+    Same correction as #45's, from the other side.
+  */
   const missing = await all(`
     select p.slug, p.name
       from public.projects p
      where p.status = 'active'
+       and not p.is_fixture
        and not exists (
          select 1 from public.projects q
           where q.status = 'active' and q.project_id <> p.project_id
@@ -120,7 +167,7 @@ for (const [a, b, why] of [
   record(
     'every active project resolves from its own name',
     missing.length === 0
-      ? `${String((await all(`select 1 from public.projects where status = 'active'`)).length)} projects`
+      ? `${String((await all(`select 1 from public.projects where status = 'active' and not is_fixture`)).length)} projects`
       : `${String(missing.length)} do not: ${missing.map((m) => String(m.slug)).join(', ')}`,
     missing.length === 0,
   )
@@ -132,7 +179,7 @@ for (const [a, b, why] of [
 
 const created = await one(`
   select app.hq_create_project(
-    ${lit(`Fixture identity ${run}`)}, 'upload', ${lit(`fixture-identity-${run}`)}, null, true
+    ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}`)}, null, true
   ) as r
 `)
 const madeRaw = (created?.r ?? {}) as { project_id?: string; error?: string }
@@ -152,7 +199,7 @@ if (projectId === '') {
 // would not resolve.
 {
   const rows = await all(
-    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(`Fixture identity ${run}`)}) r
+    `select r.confidence::float8 c from app.resolve_project_by_name(${lit(`Identity proof ${run}`)}) r
       where r.project_id = ${lit(projectId)}::uuid`,
   )
   record(
@@ -204,8 +251,8 @@ const alias = `the ${run} thing`
 // "the finance thing" is the ambiguity that made the duplicate.
 {
   const second = await one(`
-    select app.hq_create_project(${lit(`Fixture identity other ${run}`)}, 'upload',
-      ${lit(`fixture-identity-other-${run}`)}, null, true) as r
+    select app.hq_create_project(${lit(`Identity proof other ${run}`)}, 'upload',
+      ${lit(`${SUBJECT}-other`)}, null, true) as r
   `)
   const otherId = String(((second?.r ?? {}) as { project_id?: string }).project_id ?? '')
   const clash = (
@@ -232,8 +279,8 @@ const alias = `the ${run} thing`
 {
   const attempt = (
     await one(`
-    select app.hq_create_project(${lit(`Fixture identity ${run}`)}, 'upload',
-      ${lit(`fixture-identity-dup-${run}`)}) as r
+    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+      ${lit(`${SUBJECT}-dup`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: unknown[]; project_id?: string }
 
@@ -248,7 +295,7 @@ const alias = `the ${run} thing`
   // The assertion that actually matters. `ai-learning-2` exists because the old
   // path answered this question by making a second project.
   const dupes = await all(
-    `select project_id from public.projects where slug like ${lit(`fixture-identity-${run}%`)}`,
+    `select project_id from public.projects where slug like ${lit(`${SLUG}%`)}`,
   )
   record(
     'and no second project was made behind the question',
@@ -262,8 +309,8 @@ const alias = `the ${run} thing`
 {
   const near = (
     await one(`
-    select app.hq_create_project(${lit(`fixture identity ${run} tracker`)}, 'upload',
-      ${lit(`fixture-identity-near-${run}`)}) as r
+    select app.hq_create_project(${lit(`identity proof ${run} tracker`)}, 'upload',
+      ${lit(`${SUBJECT}-near`)}) as r
   `)
   )?.r as { needs_confirmation?: boolean; candidates?: { name?: string }[] }
   record(
@@ -280,8 +327,8 @@ const alias = `the ${run} thing`
 {
   const forced = (
     await one(`
-    select app.hq_create_project(${lit(`Fixture identity ${run}`)}, 'upload',
-      ${lit(`fixture-identity-forced-${run}`)}, null, true) as r
+    select app.hq_create_project(${lit(`Identity proof ${run}`)}, 'upload',
+      ${lit(`${SUBJECT}-forced`)}, null, true) as r
   `)
   )?.r as { project_id?: string }
   record(
@@ -358,7 +405,7 @@ const alias = `the ${run} thing`
   // confident match and several plausible ones. The temptation there is to take
   // the best fuzzy candidate. That is precisely how work lands in the wrong
   // project while looking entirely reasonable, so it must return null.
-  const vague = `fixture identity`
+  const vague = `identity proof`
   const close = await all(
     `select r.confidence::float8 c from app.resolve_project_by_name(${lit(vague)}) r
       order by r.confidence desc`,
@@ -374,18 +421,71 @@ const alias = `the ${run} thing`
     confident.length === 0 && plausible.length > 0 && guessed?.p === null,
   )
 
-  // And the invariant that makes the two-confident-match case unreachable, so a
-  // future change that drops the unique index fails here rather than silently
-  // reintroducing the coin toss.
-  const uniq = await one(`
-    select count(*) n from pg_indexes
-     where schemaname = 'public' and indexname = 'project_aliases_normalised_uniq'
+  /*
+    And the invariant that makes the two-confident-match case unreachable.
+
+    This used to assert that `project_aliases_normalised_uniq` existed BY NAME,
+    with a comment saying a future change that dropped it should fail here
+    rather than silently reintroduce the coin toss. It did exactly that when
+    0282 dropped it — and the drop was correct, so the check was right to fire
+    and wrong in what it asked.
+
+    The property itself is already covered above: *"the same phrase cannot mean
+    two projects"*, through `add_project_alias`, which is the sanctioned writer
+    and names the owner rather than raising a constraint. A second copy of that
+    would be a second thing to keep in step.
+
+    What is NOT covered is the half 0282 was actually for. A global unique index
+    counted ARCHIVED projects, so thirty-two retired probes held 561 routing
+    phrases that live projects should have had — the same table whose missing
+    rows caused #44. The trigger that replaced it checks only among projects
+    Grant can be routed to, and that behaviour is new, so it is what gets a
+    check.
+
+    Asserted through `add_project_alias` rather than a raw insert, for the
+    reason the first attempt at this demonstrated twice: a raw insert failed on
+    a generated column and then on a check constraint, and the FIRST of those
+    was reported as a PASS. A refusal for the wrong reason looks exactly like
+    the rule working.
+  */
+  const taken = `identity proof ${run} uniqueness probe`
+  /*
+    Named so the RUN comes before the word, because the teardown at the bottom
+    matches `identity-proof-<run>%` and a slug of `identity-proof-rival-<run>`
+    falls outside it. Three of these leaked into Grant's project switcher before
+    that was noticed, which is the cheapest possible reminder that a teardown
+    matching a prefix only covers subjects named to fall under it.
+  */
+  const rival = await one(`
+    select app.hq_create_project(${lit(`Identity proof ${run} rival`)}, 'upload',
+      ${lit(`${SUBJECT}-rival`)}, null, true) as r
   `)
+  const rivalId = String(((rival?.r ?? {}) as { project_id?: string }).project_id ?? '')
+
+  await one(`select app.add_project_alias(${lit(projectId)}::uuid, ${lit(taken)}) as r`)
+  const blocked = (
+    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+  )?.r as { error?: string; conflicts_with?: string }
   record(
-    'and one phrase can still only ever mean one project',
-    Number(uniq?.n) === 1 ? 'the global uniqueness index is in place' : 'THE UNIQUE INDEX IS GONE',
-    Number(uniq?.n) === 1,
+    'CONTROL: while the holder is active, the phrase is not free',
+    blocked?.error === undefined ? 'it was allowed' : String(blocked.error).slice(0, 80),
+    String(blocked?.conflicts_with) === projectId,
   )
+
+  await db.execute(`
+    update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid
+  `)
+  const freed = (
+    await one(`select app.add_project_alias(${lit(rivalId)}::uuid, ${lit(taken)}) as r`)
+  )?.r as { error?: string }
+  record(
+    'and an archived project stops holding a phrase a live one should get',
+    freed?.error === undefined ? 'the phrase was released' : String(freed.error).slice(0, 80),
+    freed?.error === undefined,
+  )
+  await db.execute(`
+    update public.projects set status = 'active' where project_id = ${lit(projectId)}::uuid
+  `)
 
   /*
     An identifier in the words outranks the switch.
@@ -477,13 +577,234 @@ const alias = `the ${run} thing`
 }
 
 // ===========================================================================
+// #224 — create, near-duplicate, rename, and what the OLD name does afterwards
+//
+// The readiness report of 14 September put Projects at Partial with exactly
+// this gap: name resolution and ambiguity were well covered, and creating,
+// renaming and the behaviour of a name after it stops being current were not
+// proven as one arc.
+//
+// Rename matters more than it looks. Grant refers to a project by whatever he
+// called it last, often weeks later and usually in a voice note. A rename that
+// leaves the old name resolving to NOTHING loses him the project. A rename that
+// leaves it resolving to something ELSE is worse, because the work lands
+// somewhere plausible and wrong.
+// ===========================================================================
+
+/*
+  RENAME RUNS INSIDE A ROLLBACK, and finding out why cost a real project.
+
+  `app.hq_rename_project` ENQUEUES an `office.rename_channels` job — sensibly,
+  because the Slack channel has to be renamed too. But a job can never be
+  deleted (`job_state_transitions` is append-only by §6), and `project_delete`
+  refuses a project holding one. So renaming a REAL project makes it permanently
+  undeletable, and the first draft of this arc left three archived projects
+  behind on its first run, which is CLAUDE.md's twenty-five-permanent-projects
+  pile being rebuilt by the suite written to close a coverage gap.
+
+  A fixture project is not the answer either: `resolve_project_by_name` filters
+  `not is_fixture`, so the name assertions below would pass for the wrong reason
+  against one. #45's question has to be asked about the SPECIFIC reader.
+
+  So the whole arc is one statement ending in `rollback`. The rename happens,
+  the job is enqueued, every question is asked of the uncommitted state — which
+  is exactly the state a caller would see — and then none of it happened.
+*/
+const RENAMED = `Identity proof ${run} renamed`
+const OTHER_NAME = `Identity proof other ${run}`
+
+const resolves = (name: string, alias: string): string => `
+  (select coalesce(
+     (select (array_agg(r.project_id))[1]::text
+        from app.resolve_project_by_name(${lit(name)}) r
+       where r.confidence >= 0.90), 'null')) as ${alias}`
+
+const arc = await one(`
+begin;
+create temp table _dupe as select app.hq_create_project(
+  ${lit(`Identity proof ${run}`)}, 'upload', ${lit(`${SUBJECT}-dupe`)}, null, false) as r;
+create temp table _ren as select app.hq_rename_project(${lit(SLUG)}, ${lit(RENAMED)}) as r;
+create temp table _mid as
+  select (select name from public.projects where project_id = ${lit(projectId)}::uuid) as nm,
+         ${resolves(`Identity proof ${run}`, 'old_goes')},
+         ${resolves(RENAMED, 'new_goes')};
+create temp table _clash as
+  select app.hq_rename_project(${lit(SLUG)}, ${lit(OTHER_NAME)}) as r;
+update public.projects set status = 'archived' where project_id = ${lit(projectId)}::uuid;
+create temp table _arch as select ${resolves(RENAMED, 'after_archive')};
+create temp table _out as
+  select (select r::text from _dupe)  as dupe,
+         (select r::text from _ren)   as ren,
+         (select nm from _mid)        as nm,
+         (select old_goes from _mid)  as old_goes,
+         (select new_goes from _mid)  as new_goes,
+         (select r::text from _clash) as clash,
+         (select after_archive from _arch) as after_archive;
+select * from _out;
+rollback;`)
+
+type Said = {
+  project_id?: string
+  ok?: boolean
+  error?: string
+  question?: string
+  needs_confirmation?: boolean
+  candidates?: { slug?: string; name?: string }[]
+}
+const said = (raw: unknown): Said => {
+  try {
+    return JSON.parse(String(raw ?? '{}')) as Said
+  } catch {
+    return {}
+  }
+}
+
+/*
+  The first draft asserted an ERROR here and was wrong about the contract, in the
+  direction worth recording: the office does something BETTER than refusing. It
+  returns `needs_confirmation` with a question and the candidates it matched —
+
+      There is already something by that name. Did you mean one of these, or is
+      'Identity proof …' genuinely new?
+
+  which is Grant's standing instruction implemented rather than merely obeyed:
+  "Please don't assume I wish to create a new project - this is a large task and
+  should always be confirmed." A check asserting `error` would have gone red on
+  correct behaviour and invited somebody to 'fix' the asking away.
+
+  So the property is: nothing was created, and the question names what it
+  collided with. Not the mechanism, and not the wording.
+*/
+const dupeSaid = said(arc?.dupe)
+record(
+  'creating a project whose name already exists does not silently duplicate it',
+  dupeSaid.project_id === undefined
+    ? 'nothing was created'
+    : `IT WAS CREATED: ${String(dupeSaid.project_id).slice(0, 8)}`,
+  dupeSaid.project_id === undefined,
+)
+record(
+  'and it ASKS, naming the project it matched, rather than deciding for him',
+  dupeSaid.needs_confirmation === true
+    ? `asked, ${String(dupeSaid.candidates?.length ?? 0)} candidate(s): ${String(dupeSaid.candidates?.[0]?.slug)}`
+    : `no question asked: ${String(dupeSaid.error ?? JSON.stringify(dupeSaid)).slice(0, 60)}`,
+  dupeSaid.needs_confirmation === true &&
+    (dupeSaid.candidates ?? []).some((c) => /identity-proof/i.test(String(c.slug))),
+)
+
+const renameSaid = said(arc?.ren)
+record(
+  'a project can be renamed through the path the page uses',
+  renameSaid.error === undefined ? 'renamed' : String(renameSaid.error).slice(0, 80),
+  renameSaid.error === undefined,
+)
+record(
+  'the new name is what the row then carries',
+  `name=${String(arc?.nm)}`,
+  String(arc?.nm) === RENAMED,
+)
+
+/*
+  THE ONE THAT MATTERS. What does the OLD name do afterwards?
+
+  Three outcomes and only one is a failure. The same project is ideal — he
+  called it that for weeks. NOTHING is acceptable and honest, because null means
+  ASK. A DIFFERENT project is the quiet disaster: the work lands somewhere
+  plausible and he does not find out for a fortnight.
+
+  Asserted as that property, never as the mechanism. Whether the office keeps
+  the old name as an alias is a design decision nobody has made; whether it can
+  route Grant somewhere wrong is not a decision at all.
+*/
+const oldGoesTo = String(arc?.old_goes ?? 'null')
+record(
+  'the OLD name never routes to a DIFFERENT project — the same one, or nothing',
+  oldGoesTo === 'null'
+    ? 'nothing, which means ask, and is honest'
+    : oldGoesTo === projectId
+      ? 'still the same project, so the old name was kept'
+      : `WRONG PROJECT: ${oldGoesTo.slice(0, 8)}`,
+  oldGoesTo === 'null' || oldGoesTo === projectId,
+)
+record(
+  'and the NEW name resolves to it, so the rename did not trade one lost project for another',
+  String(arc?.new_goes).slice(0, 8),
+  String(arc?.new_goes) === projectId,
+)
+
+/*
+  Renaming ONTO a name a live project already holds.
+
+  `hq_create_project` refuses this. `hq_rename_project` does not — the same
+  collision, one door apart, and only one of them checks. That is CLAUDE.md's
+  pre-check rule with the sign flipped: not a constraint loosened without its
+  pre-check, but a pre-check that only ever existed on one of the two writers.
+  Fixed in 0365.
+*/
+const clashSaid = said(arc?.clash)
+record(
+  'renaming onto a name a live project already holds is refused',
+  clashSaid.error === undefined
+    ? 'IT WAS ALLOWED — two projects would answer to one name'
+    : String(clashSaid.error).slice(0, 80),
+  clashSaid.error !== undefined,
+)
+
+record(
+  'an ARCHIVED project stops answering to its own name',
+  String(arc?.after_archive) === 'null'
+    ? 'nothing resolves, which is right'
+    : `STILL RESOLVES: ${String(arc?.after_archive).slice(0, 8)}`,
+  String(arc?.after_archive) === 'null',
+)
+
+/*
+  And the rollback took the enqueued rename job with it, which is the assertion
+  that makes the whole approach honest rather than merely tidy.
+*/
+const renameDebris = await one(`
+  select count(*)::int as n from public.jobs
+   where kind = 'office.rename_channels'
+     and project_id = ${lit(projectId)}::uuid`)
+record(
+  'and the rename job the rollback discarded left nothing behind',
+  `${String(renameDebris?.n)} rename job(s)`,
+  Number(renameDebris?.n) === 0,
+)
+
+// ===========================================================================
 // Tidy up
 // ===========================================================================
 
-await db.execute(`
-  update public.projects set status = 'archived', updated_at = app.now_utc()
-   where slug like ${lit(`fixture-identity-%${run}%`)} or slug like ${lit(`fixture-identity-${run}%`)}
-`)
+/*
+  These are REAL projects, not fixtures, so `purge:fixtures` will never collect
+  them and leaving them behind means leaving them in Grant's project list.
+  Archiving alone is not enough either: an abandoned archived project still
+  holds its rows on the globally unique alias table, and the next run would
+  find its own name already taken.
+
+  The order is forced by ADR-0014 — an ACTIVE project must have an enabled
+  attachment, and the trigger fires on the attachment delete. Archive first,
+  then the attachments, then the project. Aliases cascade with the project;
+  documents do not (#43), but this suite creates none.
+
+  Matched on the derived slug, scoped to this run, so a concurrent run is
+  untouched.
+*/
+const mine = `(slug like ${lit(`${SLUG}%`)} or slug like ${lit(`${SLUG_OTHER}%`)})`
+await db.execute(`update public.projects set status = 'archived', updated_at = app.now_utc()
+                   where ${mine}`)
+await db.execute(`delete from public.project_attachments
+                   where project_id in (select project_id from public.projects where ${mine})`)
+await db.execute(`delete from public.projects where ${mine}`)
+
+// Prove it. A teardown that silently matches nothing is how this went wrong.
+const left = await all(`select slug from public.projects where ${mine}`)
+record(
+  'the suite leaves nothing of its own behind',
+  left.length === 0 ? 'clean' : left.map((r) => String(r.slug)).join(', '),
+  left.length === 0,
+)
 
 const passed = checks.filter((c) => c.passed).length
 console.log(`\n| check | outcome | |`)
