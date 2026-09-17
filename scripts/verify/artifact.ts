@@ -192,13 +192,32 @@ check(
   child.id !== undefined,
 )
 
-const saidSo = await one(`
-  select coalesce(body, '') as body from public.outputs
-   where job_id = ${lit(parentId)}::uuid order by created_at desc limit 1`)
+/*
+  The say-back, waited for rather than assumed.
+
+  One gate run printed this check's outcome as the word `undefined` — which is
+  what `one()` returns for NO ROW AT ALL, not a bad sentence. The parent had
+  settled and its output had not landed yet. A check that cannot tell "the
+  office said the wrong thing" from "the office has not said anything yet" is
+  the same defect as reporting NO OUTPUT about an answered job, so this waits,
+  and when there is genuinely nothing it says the job's state instead of
+  printing a JavaScript word at Grant.
+*/
+let said = ''
+for (let waited = 0; waited < 12 && said === ''; waited += 1) {
+  const row = await one(`
+    select coalesce(body, '') as body from public.outputs
+     where job_id = ${lit(parentId)}::uuid order by created_at desc limit 1`)
+  said = String(row.body ?? '')
+  if (said === '') await pause(5_000)
+}
+const parentState = await one(
+  `select state::text as s from public.jobs where job_id = ${lit(parentId)}::uuid`,
+)
 check(
   'and said it was writing one rather than claiming it had',
-  String(saidSo.body).slice(0, 70),
-  /writing|write|will send|on it/i.test(String(saidSo.body)),
+  said === '' ? `NO OUTPUT — the job is ${String(parentState.s)}` : said.slice(0, 70),
+  /writing|write|will send|on it/i.test(said),
 )
 
 // --- generate, validate, store ----------------------------------------------

@@ -1,8 +1,6 @@
 {
   "note": "Gateway actions and read sections that nothing in web/ names (#72, one layer up). Created 2026-09-17 after `stop_job` was found unpressed since the browser work \u2014 the action existed, the database function worked, and Grant could not stop a running job. `check:pressable` fails on a NEW entry and on a baseline entry that has become pressed, so this file may only shrink. Each entry below is one of three things: a missing control, something deliberately for an agent holding the bearer token (#13), or a reader the page genuinely does not need. The `why` map says which, and an entry with no reason is an admission rather than a decision.",
   "why": {
-    "action:document_approve": "MISSING CONTROL. Four documents sit in `draft`, three of them PDFs the office made today, and #28's review gate has no press. The document payload does not currently carry `state`, so this needs the migration, the renderer, the store and the hydrator \u2014 the four-place change 0420 records.",
-    "action:document_discard": "MISSING CONTROL. The other half of the same gate. `app.discard_document` writes `archived` correctly now; nothing offers it.",
     "action:document_tag": "MISSING CONTROL, and the least urgent of the three: tagging is organisation rather than a decision Grant is blocked on.",
     "action:project_unarchive": "MISSING CONTROL. A project archived by mistake cannot be brought back from the product, only from SQL. Small and worth doing.",
     "action:revoke_tool": "MISSING CONTROL. The Governance page approves and declines tool requests and cannot take a granted tool BACK, which is the half that matters after a mistake.",
@@ -34,8 +32,6 @@
     "action:browser_session_forget",
     "action:collection_put",
     "action:collection_take",
-    "action:document_approve",
-    "action:document_discard",
     "action:document_tag",
     "action:grant_standing",
     "action:offer_connector_tool",

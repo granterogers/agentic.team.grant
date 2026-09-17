@@ -154,6 +154,7 @@
     "verify:unified": "tsx scripts/verify/unified.ts",
     "verify:artifact": "tsx scripts/verify/artifact.ts",
     "verify:stop": "tsx scripts/verify/stop.ts",
+    "verify:review": "tsx scripts/verify/review.ts",
     "verify:schema": "tsx scripts/verify/schema.ts",
     "slack:rename-channels": "tsx scripts/slack/rename-channels.ts",
     "notion:sync": "tsx scripts/notion/sync.ts",

@@ -422,6 +422,51 @@ for (const [size, opts] of SIZES) {
     await page.locator('[data-tab="documents"]').click()
     await page.waitForTimeout(500)
     await shoot('documents')
+
+    /*
+      The review queue (#28, #276), which nothing else can photograph.
+
+      Two conditions have to hold at once and the prototype can honestly
+      produce neither: the office must have MADE something nobody has decided
+      about, and the viewer must be able to write. So the rows go in through
+      the capture door, and the token is a local-only stand-in for "signed in"
+      — both are removed immediately afterwards, and neither can reach the
+      deployed page, because the door is guarded on `location.hostname`.
+
+      Without this the block would ship unlooked-at, and §14A is explicit that
+      no graphical change is complete because it compiles.
+    */
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      if (w === undefined) throw new Error('the capture door is not open')
+      localStorage.setItem('hq.token', 'local-capture-only')
+      const hour = 3600000
+      w.reviewing['legacy-coaching-course'] = [
+        { document_id: 'shot-1', title: 'Legacy Coaching Course — current status',
+          produced_by: 'Emma', state: 'draft', kind: 'pdf',
+          created_at: new Date(Date.now() - 2 * hour).toISOString(),
+          derived_from: ['The programme brief', 'Week 4 review notes'] },
+        { document_id: 'shot-2', title: 'Draft announcement for the September cohort',
+          produced_by: 'Oliver', state: 'draft', kind: 'doc',
+          created_at: new Date(Date.now() - 20 * hour).toISOString(),
+          derived_from: [] },
+      ]
+      w.render()
+    })()`)
+    await page.waitForTimeout(400)
+    await page.evaluate(
+      `(() => { const el = document.querySelector('.review');
+                if (el !== null) el.scrollIntoView({ block: 'start' }); })()`,
+    )
+    await page.waitForTimeout(300)
+    await shoot('review-queue')
+    await page.evaluate(`(() => {
+      localStorage.removeItem('hq.token')
+      delete window.__shots.reviewing['legacy-coaching-course']
+      window.__shots.render()
+    })()`)
+    await page.waitForTimeout(300)
+
     // The talk action on a document, and where it lands.
     await page.locator('[data-doc="0"]').scrollIntoViewIfNeeded()
     await page.waitForTimeout(200)

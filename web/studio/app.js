@@ -161,6 +161,16 @@ const stories = {}
   distinguished, and one list holding both is how that stops being true.
 */
 const notebookMade = {}
+/*
+  What the team has made and Grant has not decided about (#28, #276).
+
+  Same three states as the two above: undefined means nobody has asked, null
+  means the ask is in flight, an array means it answered. No mock, ever — a
+  prototype that invents a review queue is inviting a press that would approve
+  a document which does not exist, and every other lazy block here mocks only
+  a SHAPE. An empty queue is the ordinary case and says nothing at all.
+*/
+const reviewing = {}
 /* Signed-in sites, and what the office opened on them (#135, #16). */
 const browserSites = {}
 const browserSeen = {}
@@ -3942,10 +3952,63 @@ function facetKeep(list, rows, facetOf) {
   return chosen === null ? rows : rows.filter((r) => facetOf(r) === chosen)
 }
 
+/*
+  What the team made and Grant has not decided about (#28, #276).
+
+  0315 made an unapproved document invisible in the gallery, which is half of
+  the gate: the other half is being able to let one in, and it had no control
+  anywhere. `document_approve` and `document_discard` have been gateway
+  actions with nothing pressing them, which is exactly what `check:pressable`
+  was written to find.
+
+  Above the gallery rather than inside it, because these rows are not in the
+  project yet and putting them in the same grid is what 0315 removed. Drawn
+  only when the queue has something: a permanently-present empty panel reads
+  as a fault, and this one is empty most of the time by design.
+
+  Discard is quiet and confirmed. Approve is the ordinary press.
+*/
+function reviewBlock(p) {
+  if (!canWrite()) return ''
+  needReview(p.slug)
+  const rows = reviewing[p.slug]
+  if (!Array.isArray(rows) || rows.length === 0) return ''
+  const row = (r) => `<article class="revrow">
+    <div class="revbody">
+      <b>${esc(r.title)}</b>
+      <!--
+        when.stamp returns a time element, so escaping it printed the markup
+        on the page: "made <time data-rel datetime=...>2 hours ago</time>".
+        Found by opening the capture, which is the only thing that finds it -
+        it is not overflow, not low contrast, not small type and not a dead
+        control. Every other caller in this file passes it through unescaped.
+      -->
+      <span class="t-meta">${esc(r.produced_by ?? 'The team')} · made
+        ${when.stamp(r.created_at)}${
+          (r.derived_from ?? []).length === 0 ? ''
+            : ` · from ${esc((r.derived_from ?? []).slice(0, 2).join(', '))}`}</span>
+    </div>
+    <button class="btn" data-doc-approve="${esc(r.document_id)}"
+      data-doc-title="${esc(r.title)}">Approve</button>
+    <button class="btn quiet" data-doc-discard="${esc(r.document_id)}"
+      data-doc-title="${esc(r.title)}">Discard</button>
+  </article>`
+  return `<section class="review" aria-label="Waiting for your decision">
+    <h3 class="t-label">Waiting for you <span class="n">${rows.length}</span></h3>
+    <p class="t-meta" style="margin:0 0 var(--s3)">The team made these. They are
+      not in the project until you approve them.</p>
+    ${rows.map(row).join('')}
+  </section>`
+}
+
 function documentsSection(p) {
   const docs = allDocs(p)
   if (docs.length === 0) {
-    return `<div class="tabbody">${emptyState({
+    // The review block still draws here. A project whose ONLY content is a
+    // draft the office just made is precisely the case this gate exists for,
+    // and hiding the queue behind "there are no documents" would mean the one
+    // moment it matters is the one moment it is not shown.
+    return `<div class="tabbody">${reviewBlock(p)}${emptyState({
       says: `Nothing in ${esc(p.name)} yet.`,
       ask: { name: 'Ask the team to gather what exists',
              say: `Find everything already written about ${p.name} — in Drive, Notion and NotebookLM — and bring it in.` },
@@ -3954,6 +4017,7 @@ function documentsSection(p) {
     })}</div>`
   }
   return `<div class="tabbody">
+    ${reviewBlock(p)}
     <div class="tabhead">
       <p class="t-lead" style="margin:0">${docs.length} in ${esc(p.name)}.
         Anything the team made is here only because you approved it.</p>
@@ -9088,6 +9152,70 @@ function drawShell() {
     })
   }
 
+  /*
+    Approve, and discard, for what the team made (#28, #276).
+
+    Both actions have existed at the gateway since the import work and neither
+    had ever been pressed. Approve is what puts a made document INTO the
+    project — 0315 filters the gallery on exactly that state, so the row
+    appearing in the gallery afterwards is the whole feedback.
+
+    Discard confirms first. It is not irreversible — 0435 writes `archived`,
+    deliberately, so the row and its provenance survive and ADR-0040's
+    restoration path applies — but it removes something from in front of Grant
+    on one press, and the confirmation says what it actually does rather than
+    implying deletion.
+
+    The store entry is dropped before the refresh so the queue is re-read
+    rather than redrawn from the answer to a question asked before the press.
+  */
+  for (const b of root.querySelectorAll('[data-doc-approve]')) {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      const done = await attempt(
+        b,
+        'Approving…',
+        () => act('document_approve', { p_document: b.dataset.docApprove }),
+        (r) =>
+          r?.ok === false
+            ? String(r?.error ?? 'that could not be approved')
+            : `Approved — ${b.dataset.docTitle} is in the project now.`,
+      )
+      if (done) {
+        delete reviewing[state.project]
+        await refresh()
+      }
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-doc-discard]')) {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      if (
+        !sure(
+          `Discard ${b.dataset.docTitle}? It leaves this list and does not ` +
+            'join the project. Nothing is deleted — the document and where it ' +
+            'came from are kept, and it can be brought back.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        'Discarding…',
+        () => act('document_discard', { p_document: b.dataset.docDiscard }),
+        (r) =>
+          r?.already === true
+            ? 'That was already out of the project.'
+            : `Discarded — ${b.dataset.docTitle} is out of the project.`,
+      )
+      if (done) {
+        delete reviewing[state.project]
+        await refresh()
+      }
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-unblock]')) {
     b.addEventListener('click', () => {
       const row = workspace.rows(byId(state.project)).find((r) => r.id === b.dataset.unblock)
@@ -11469,6 +11597,30 @@ function mockMade(p) {
   ]
 }
 
+/**
+ * Fetch what is waiting for Grant's decision, once, then redraw (#28, #276).
+ *
+ * Mirrors `needMade`, including the guard that makes it safe to call from a
+ * renderer: the null is written BEFORE the await, so a second render while the
+ * first request is in flight does not start a second one.
+ *
+ * A failure renders nothing rather than a mock. The block carries two buttons
+ * that CHANGE something, and drawing them over invented rows would be a
+ * control that cannot do what it offers.
+ */
+async function needReview(slug) {
+  if (reviewing[slug] !== undefined) return
+  const p = byId(slug)
+  reviewing[slug] = null
+  try {
+    const rows = await settles(read('review', p.id))
+    reviewing[slug] = Array.isArray(rows) ? rows : []
+  } catch {
+    reviewing[slug] = []
+  }
+  render()
+}
+
 async function needHistory(slug) {
   if (stories[slug] !== undefined) return
   const p = byId(slug)
@@ -12087,11 +12239,18 @@ live()
   But a screen with no capture is a screen nobody is watching, and this
   repository lost a week of visual work to exactly that once.
 
+  The review queue (#276) is here for the same reason and it is the stronger
+  case: the block draws only when the office has MADE something nobody has
+  decided about, and it carries two buttons that change the project. The
+  prototype must not invent those rows — a press on an invented document is a
+  press that cannot work — so the only way the block is ever photographed is
+  from here.
+
   So the store is reachable from a script running against a LOCAL server, and
   only there. `location.hostname` is the guard because it cannot be satisfied
   by anything the deployed page can be talked into: the origin is what it is.
   Nothing in the product reads this object.
 */
 if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
-  globalThis.__shots = { browserSites, browserSeen, render }
+  globalThis.__shots = { browserSites, browserSeen, reviewing, render }
 }

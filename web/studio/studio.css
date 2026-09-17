@@ -6290,3 +6290,56 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 .reach { padding: 0 6px; border-radius: 999px; font-size: 11.5px;
          border: 1px solid color-mix(in srgb, var(--ink-3) 35%, transparent); }
 .reach.r-destructive { border-color: color-mix(in srgb, var(--warn, #b4552b) 55%, transparent); }
+
+/*
+  What the team made and Grant has not decided about (#28, #276).
+
+  Above the gallery, and deliberately not shaped like a document card: these
+  rows are NOT in the project yet, and 0315's whole point is that they do not
+  sit among the approved ones looking identical. A row, with the decision at
+  the end of it.
+
+  The leading hairline uses --warn rather than a person's hue, because what it
+  says is "this is waiting on you", not "this belongs to Ruby".
+*/
+.review { display: grid; gap: var(--s3); margin-bottom: var(--s5); }
+.review h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.review h3 .n {
+  font: 600 12px/1 var(--display); padding: 3px 7px; border-radius: 999px;
+  background: var(--sunken); color: var(--ink-3);
+}
+.revrow {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s4); border-radius: var(--r-card);
+  border: 1px solid var(--edge);
+  border-left: 3px solid color-mix(in srgb, var(--warn, #b4552b) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 4%), var(--surface));
+  box-shadow: var(--lift-1);
+}
+.revbody { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.revbody b { font: 500 15px/1.4 var(--text); }
+.revrow .btn { flex: none; }
+/*
+  --ink-2, not the shared quiet --ink-3.
+
+  Beside a filled Approve, the faintest ink made Discard read as DISABLED in
+  the first capture — a control that looks like it cannot be pressed is as bad
+  as one that cannot. Quiet still, because the destructive half of a pair
+  should not compete; readable, because it is a real choice.
+*/
+.revrow .btn.quiet { color: var(--ink-2); }
+
+/*
+  Phone: the decision goes under the title rather than beside it.
+
+  Three items on one 390px row makes the title two words wide. The buttons
+  keep the 44px floor and share the width, so both are reachable with a thumb.
+  At the END of the file, because a media query adds no specificity and every
+  phone rule written higher up in this stylesheet has been silently overridden
+  by source order at least twice.
+*/
+@media (max-width: 860px) {
+  .revrow { flex-wrap: wrap; }
+  .revbody { flex: 1 0 100%; }
+  .revrow .btn { flex: 1 1 0; min-height: 44px; justify-content: center; }
+}

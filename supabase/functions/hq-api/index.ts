@@ -253,6 +253,19 @@ const SECTIONS: Readonly<
   */
   project_artifacts: { fn: 'project_artifacts', arg: 'p_project' },
   /*
+    What the team has made and Grant has not decided about (#28, #276).
+
+    0315 closed half of the review gate — an unapproved document is not in the
+    project's gallery — and the other half, letting one IN, had no control at
+    all: `document_approve` and `document_discard` were gateway actions nothing
+    in the page could press, which is what `check:pressable` found.
+
+    The reader is `awaiting_review`, which had never returned a row in its
+    life: it filtered a state nothing writes. 0471 widened it to the states
+    that exist and gave it the row the page needs.
+  */
+  review: { fn: 'awaiting_review', arg: 'p_project' },
+  /*
     How far a job got, and why it stopped (#263).
 
     Takes a JOB id rather than a project, which is why it is its own section

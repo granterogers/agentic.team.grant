@@ -2583,6 +2583,15 @@ Each of these cost real time. They are here so they cost it once.
   for an agent holding the bearer token (#13) / a reader the page does not
   need, and an entry with no reason is an admission.
 
+- **A suite that reads its evidence only on the path it drove itself scores a
+  correct answer as no answer.** `verify:unified` dequeued the job when it
+  could and waited for the deployed worker when it could not — and the read of
+  `public.outputs` sat inside the first branch, so whenever the live worker won
+  the race the suite reported `NO OUTPUT` and two grounding checks failed
+  against an answer that was right there in the table. Canonical evidence does
+  not care which process produced it: read the row, not the return value of
+  the path you happened to take.
+
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`

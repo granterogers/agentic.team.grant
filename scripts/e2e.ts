@@ -239,6 +239,7 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     step would make the button too expensive to press.
   */
   ['verify:stop', 'a running job can be stopped, and keeps what it already finished (#41)'],
+  ['verify:review', 'Grant can let a made document into the project, or keep it out (#28)'],
   /*
     The index itself, and the correspondence beside it.
 

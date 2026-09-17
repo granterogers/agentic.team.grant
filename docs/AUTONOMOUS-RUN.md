@@ -104,6 +104,8 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
 | **#41** | cancellation dimension closed — Grant can STOP a running job; `verify:stop` 13/13 |
 | **#272** | baseline 15 → 12 (one caller added, two dead functions removed) |
 | **#276** | NEW — `check:pressable`, and the 27 gateway actions and sections with no control |
+| **migrations at close** | **470** |
+| **defect found last** | `verify:unified` read the output only when the suite itself ran the job, so a job the deployed worker answered correctly scored NO OUTPUT. The read is unconditional now — 10/10. |
 | **next** | #276's missing controls, starting with document approve/discard (#28's gate has no press) |
 
 **The most useful thing this stretch produced is a new class of check.**
