@@ -18,6 +18,64 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+## THE MANDATE IN FORCE — the capability campaign, 17 September 2026
+
+**This supersedes the backlog campaign below as the ACTIVE mandate.** That one
+finished: 71 open became 21, and the twenty-one that remain are each a
+substantial capability, a cost question or something only Grant can do.
+
+Grant, 2026-09-17:
+
+> *"Work down the remaining substantial capability backlog in dependency
+> order, strengthening the underlying architecture before layering more
+> complex capabilities on top."*
+>
+> *"Do NOT ask Grant to decide ordinary engineering questions."* ·
+> *"A blocked issue is NOT a reason to end the autonomous run."*
+
+### The dependency order, reconstructed from the code on 17 September
+
+Grant proposed `#15 → #128/#129 → #257 → #260/#172 → #258 → #263 → #262 →
+#264 → #265` and said to change it where the repository disagrees. It does not
+disagree; what the code adds is WHY each edge exists.
+
+| # | What it is | Why it sits here |
+|---|---|---|
+| **#15** | approval policy | Everything downstream acts outward. `autonomy_settings` and `app.autonomy_for` exist and **nothing in `src/` reads either** — the dial Grant can set is connected to nothing, and `raiseBlocker` in `handlers/drive.ts` asks unconditionally. That is #15's title exactly: interrupts on everything or nothing. |
+| **#128 / #129** | hand-off, memory | Both write canonical state the layers above read back. |
+| **#257** | unified knowledge | Foundational: project association must imply discoverable knowledge. |
+| **#260 / #172** | NotebookLM artifacts, Gmail | Both are sources #257 has to be able to answer from. |
+| **#258** | artifact generation | Needs retrieval (#257) to have something to generate FROM. |
+| **#263** | checkpoints | Exactly-once external effects; generation is the first thing long enough to need resuming. |
+| **#262** | parallel agents | Needs #263, or a fan-out that dies repeats external effects. |
+| **#264 / #265** | event triggers, MCP intake | Both start governed work from outside; both need #15's policy to govern it. |
+
+**#272** is reduced opportunistically — every layer above finds capabilities
+with no caller. **#41** is an evolving certification suite, extended as each
+capability becomes real, not a feature to close. **#133** waits for the traces
+the layers above produce.
+
+### What is already true, and must not be rebuilt
+
+- `tool_permissions.level` is 0/1/2/3 across 22 tools — **that is the action
+  class** #15 asks for, already data Grant edits.
+- `public.autonomy_level` is `observe | suggest | act_with_review | act`;
+  `app.autonomy_for(project)` resolves project-over-global with a conservative
+  default. Two rows exist, both written by `verify:autonomy`.
+- `public.blockers` already carries `requested_action`, `why_needed`,
+  `consequences_of_delay`, `approval_options` and `work_can_continue` — the
+  surfacing half of #15, with 397 resolved rows. It works; nothing decides
+  when to use it.
+- `src/tools/plan.ts` is #131's dry run: the plan is produced by the code path
+  that performs the action. An approval shows the plan.
+- `public.tool_requests` + `hq_approve_tool` / `hq_decline_tool` is ADR-0018,
+  wired to the Governance page on 16 September (#272).
+
+### Where to restart after a compaction
+
+Reread `CLAUDE.md`, then this section, then the issue named as IN PROGRESS
+below. Continue without asking Grant.
+
 ## THE MANDATE IN FORCE — the backlog campaign, 16–17 September 2026
 
 **Grant, 2026-09-16, mid-run:**

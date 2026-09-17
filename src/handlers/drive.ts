@@ -30,6 +30,7 @@
  * him not to attach folders.
  */
 
+import { mayAct, recordRefusal } from '../agents/approval.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { changesIn, describeKind, driveAccess, startToken } from '../google/drive.ts'
 import { raiseBlocker } from '../inference/record.ts'
@@ -96,6 +97,12 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
 
       let asked = 0
       let looked = 0
+      // What the policy let it do, and what the policy stopped (#15). Counted
+      // apart from `asked`, because "I took eleven files in" and "I asked about
+      // eleven files" are different sentences and the report must not be able
+      // to say the wrong one.
+      let took = 0
+      let refused = 0
 
       for (const f of folders) {
         looked += 1
@@ -162,6 +169,58 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           .join(', ')
         const rest = arrived.length > 4 ? `, and ${String(arrived.length - 4)} more` : ''
 
+        /*
+          Ask the policy BEFORE asking Grant (#15).
+
+          This is the sentence #15 exists for. Until now this handler called
+          `raiseBlocker` unconditionally -- it asked whatever he had set the
+          dial to, and one of the options it offered him was literally "Just
+          tell me when things land here, do not ask again", which nothing could
+          honour because there was nowhere to write the answer.
+
+          `drive.ingest` is a level-1 tool: the document lands as a project
+          source with no text read yet, nothing is opened, nothing is sent. So
+          `act_with_review` and `act` take it in and say so; `suggest` asks, as
+          today; `observe` refuses and records why.
+        */
+        const policy = await mayAct(db, { projectId: f.project_id, tool: 'drive.ingest' })
+
+        if (policy.verdict === 'proceed') {
+          for (const file of arrived) {
+            await db.execute(`
+              select app.record_drive_document(
+                ${lit(f.project_id)}::uuid, ${lit(f.folder_id)}, ${lit(file.id)},
+                ${lit(file.name)}, null, 'the office')
+            `)
+          }
+          took += arrived.length
+          await db.execute(`
+            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+              ${lit(changes.nextToken ?? f.page_token)}, false, null)
+          `)
+          continue
+        }
+
+        if (policy.verdict === 'refuse') {
+          /*
+            #211: a gate that refuses without recording is a lost answer. The
+            impediment is what the Governance page reads, and it names the tool
+            and the reason rather than leaving a folder quietly unwatched.
+          */
+          await recordRefusal(db, {
+            jobId: job.jobId,
+            tool: 'drive.ingest',
+            because: policy.because,
+            noticedBy: 'chief-of-staff',
+          })
+          refused += 1
+          await db.execute(`
+            select app.drive_watch_checked(${lit(f.attachment_id)}::uuid,
+              ${lit(changes.nextToken ?? f.page_token)}, false, null)
+          `)
+          continue
+        }
+
         await raiseBlocker(db, {
           projectId: f.project_id,
           jobId: job.jobId,
@@ -179,10 +238,18 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           approvalOptions: [
             'Add them to the project as source documents',
             'Add them and summarise each one',
-            'Just tell me when things land here, do not ask again',
+            // Answering with this one writes a standing authorization for
+            // `drive.ingest` in this project, which is what makes it true
+            // rather than a sentence (#15, migration 0421).
+            'Add them from now on without asking me',
             'Ignore these',
           ],
           originatingAgent: 'chief-of-staff',
+          // Answering with that option writes a standing authorization for
+          // `drive.ingest` in THIS project, and the next arrival is taken in
+          // rather than asked about (#15, migrations 0421 and 0422).
+          standingTool: 'drive.ingest',
+          standingOption: 'Add them from now on without asking me',
           // The rest of the project carries on. This is a question, not a halt.
           workCanContinue: true,
         })
@@ -194,23 +261,57 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         `)
       }
 
-      if (asked === 0) {
+      if (asked === 0 && took === 0 && refused === 0) {
         return quiet(
           `Looked at ${count(looked, 'Drive folder', 'Drive folders')}. Nothing new.`,
           looked,
         )
       }
+
+      /*
+        One sentence per thing that actually happened, in the order Grant cares
+        about: what was taken in, what he is being asked about, what the policy
+        stopped. A report that folds all three into "I have asked what to do"
+        would be claiming an action for a folder it refused, which is the
+        output-contradicts-its-own-metadata defect #185 exists for.
+      */
+      const said: string[] = []
+      if (took > 0) {
+        said.push(
+          `${count(took, 'new file', 'new files')} went into the project as ` +
+            `${took === 1 ? 'a source' : 'sources'}, because you said not to ask about that.`,
+        )
+      }
+      if (asked > 0) {
+        said.push(
+          `${count(asked, 'folder has', 'folders have')} something new in ${
+            asked === 1 ? 'it' : 'them'
+          }. I have asked what to do.`,
+        )
+      }
+      if (refused > 0) {
+        said.push(
+          `${count(refused, 'folder is', 'folders are')} set to watch only, so I have ` +
+            'left what arrived alone and written down that I could not take it in.',
+        )
+      }
+
       return {
-        body: `${count(asked, 'folder has', 'folders have')} something new in ${
-          asked === 1 ? 'it' : 'them'
-        }. I have asked what to do.`,
+        body: said.join(' '),
         shape: 'nothing_happened',
-        facts: { changed: true, looked_at: looked },
-        // The blocker itself is what reaches him, with its own options on it.
-        // This job saying the same thing seconds later is the duplication the
-        // instruction handler already had to fix once: "this job goes quiet and
-        // the request speaks for both".
-        announce: false,
+        facts: { changed: took > 0, looked_at: looked },
+        /*
+          A blocker speaks for itself, and this job saying the same thing
+          seconds later is the duplication the instruction handler already had
+          to fix once: "this job goes quiet and the request speaks for both".
+
+          Taking a file in is different. Nothing else tells him, and the whole
+          point of a standing authorization is that he stops being ASKED, not
+          that the office goes silent — CLAUDE.md's rule that a gate which
+          fails into silence gets quieter the better it gets, with the sign
+          flipped.
+        */
+        announce: took > 0,
         confidence: 'high',
         evidence: 'verified',
         sources: [`job:${job.jobId}`],

@@ -1,8 +1,7 @@
 {
-  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day; the three hq_*_tool wrappers, app.expire_temporary_staff and app.expire_undo_offers wired the same day under #272.",
+  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day; the three hq_*_tool wrappers, app.expire_temporary_staff and app.expire_undo_offers wired the same day under #272; app.autonomy_for wired by 0421 under #15 \u2014 the dial now decides something.",
   "recorded": "2026-09-16",
   "unreached": [
-    "app.autonomy_for",
     "app.channel_for",
     "app.create_temporary_specialist",
     "app.eval_run_record",

@@ -210,6 +210,20 @@ const SECTIONS: Readonly<
   */
   governance: { fn: 'hq_governance', args: { p_limit: 40 } },
   /*
+    What the office may do without asking, and what Grant has said not to ask
+    about again (#15, migrations 0421 and 0422).
+
+    Beside `governance` rather than inside it: governance is what the office
+    LEARNED and WANTS, and this is what it is PERMITTED. The two answer
+    different questions and one of them is a security surface, which is a
+    reason to be able to read it on its own.
+
+    No argument. A standing authorization scoped to one project still belongs
+    on the one page that lists every permission in force — a security surface
+    that can only be read a project at a time is one nobody audits.
+  */
+  standing: { fn: 'hq_standing' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the
@@ -392,6 +406,20 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     as `staff_tool_set(granted=false)`: that sets a per-person grant, this
     records a withdrawal against the request that earned it.
   */
+  /*
+    Saying "do not ask me about this again", and taking it back (#15).
+
+    `p_project` is optional and its absence is meaningful: no project means
+    everywhere, which is the WIDER scope, so the page always sends one and the
+    default exists for a caller that genuinely means everywhere. `p_until` is
+    optional because most standing authorizations are not meant to expire.
+
+    Neither takes a `p_by`. The wrapper hardcodes 'grant' exactly as
+    `hq_approve_tool` does — an agent cannot widen its own permissions because
+    there is no argument through which to try.
+  */
+  grant_standing: { fn: 'hq_grant_standing', required: ['p_tool', 'p_reason'] },
+  revoke_standing: { fn: 'hq_revoke_standing', required: ['p_authorization'] },
   approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'] },
   decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'] },
   revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'] },

@@ -2118,6 +2118,52 @@ Each of these cost real time. They are here so they cost it once.
   Visible in one dark phone capture and in nothing else — no contrast failure,
   no overflow, no dead control. A border as well as a fill.
 
+- **A dial with no reader is worse than no dial, because it looks like a
+  decision.** `autonomy_settings`, `public.autonomy_level` and
+  `app.autonomy_for(project)` were all correct and all complete, the Settings
+  page could set the level, and **nothing in `src/` ever asked what it was** —
+  `autonomy_for` sat in `check:callers`' baseline and the only two rows in the
+  table were written by `verify:autonomy`. So Grant could tell the office to
+  act on its own, watch it say it had, and get asked about everything anyway.
+  #15's title is that sentence. When a setting exists, grep for the reader
+  before believing the feature does.
+
+- **The prototype and the product can hold two vocabularies for one enum, and
+  only the prototype is what a capture sees.** `settings.js`'s fallback offered
+  `ask | standing | wide` as autonomy levels; `public.autonomy_level` is
+  `observe | suggest | act_with_review | act`, and `hq_autonomy_set` refuses
+  the other three by name. The LIVE payload was right the whole time, which is
+  exactly why nothing went red: with a token the page is correct, and every
+  screenshot this repository takes is without one. 0311's two-words-for-one-
+  thing, in the one place no suite is pointed at.
+
+- **A floor belongs in a CHECK, not in a sentence.** #15 asks that destructive
+  actions cannot bypass the policy. `autonomy_policy` is data Grant may edit,
+  so the guarantee is
+  `check (action_level < 3 or verdict <> 'proceed')` — a level-3 action can
+  never resolve to `proceed` however the matrix is edited. The companion
+  trigger refuses a standing authorization on a level-3 tool, because a CHECK
+  cannot read another table. Both are pushed by `verify:approval` and both
+  assert on the MESSAGE: a refusal for the wrong reason looks exactly like the
+  rule working.
+
+- **A standing authorization may upgrade `ask` and must not touch `refuse`.**
+  The subtle door in the same feature: `observe` + a live standing row still
+  refuses, or "watch this project only" would be undone by an exception Grant
+  granted about something else. It is a one-line condition and it needs its own
+  control, because nothing else in the suite would have caught it.
+
+- **An offer may only promise what the press can perform — the blocker
+  edition.** `handlers/drive.ts` had offered *"do not ask again"* as an
+  approval option since it was written and nothing could honour it. The fix is
+  two columns (`blockers.standing_tool`, `standing_option`) naming what
+  answering grants, NOT a parser over `approval_options` — those are free text
+  a handler composes in whatever English reads best, and deciding a permission
+  by matching words in them would be #130's parsing defect on a security
+  boundary. `raiseBlocker` throws when the named option is not in the list,
+  because `hq_answer_blocker` refuses an answer outside it: a standing offer
+  nobody could ever accept is the control that exists and cannot be pressed.
+
 ---
 
 ## Visual standard

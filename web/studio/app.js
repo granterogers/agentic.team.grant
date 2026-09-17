@@ -5104,10 +5104,58 @@ function behaviourTab() {
       <span class="pillvalue">${esc(b.value)}</span>
     </article>`
   }
+  /*
+    The exceptions to the dial above (#15).
+
+    A standing authorization is Grant having said "do not ask me about this
+    again" -- usually by answering a question with that option rather than by
+    coming here. So this list is mostly a place to AUDIT and to take one back,
+    which is why there is a Revoke and no Add: a permission granted from a
+    settings page is one granted without the question that motivated it.
+
+    Level is shown because it is the thing that decides: a level-2 exception
+    lets outward work happen unasked, and a level-3 one cannot exist at all.
+  */
+  const standing = (a) => `<article class="behave row ${a.live ? '' : 'spent'}" data-lift data-tilt="1.6" data-saidwrap>
+    <div class="bhead">
+      <b><code class="govreqtool">${esc(a.tool)}</code> in ${esc(a.scope)}</b>
+      <span class="t-meta">${esc(a.reason)}</span>
+      <!--
+        The reason only when it adds something.
+
+        app.revoke_standing supplies "you took it back" when Grant gives none,
+        which under a line already reading "Taken back" is the same sentence
+        twice - the repetition #186 found in the provenance line, in a smaller
+        place. No backticks in this comment: template literal.
+      -->
+      ${a.revoked
+        ? `<span class="t-meta">Taken back ${when.stamp(a.revoked)}${
+            a.revoked_reason && a.revoked_reason !== 'you took it back'
+              ? ` — ${esc(a.revoked_reason)}`
+              : ''
+          }</span>`
+        : `<span class="t-meta">Since ${when.stamp(a.since)}${a.until ? `, until ${when.stamp(a.until)}` : ''}</span>`}
+      <span class="t-meta" data-said></span>
+    </div>
+    ${a.live
+      ? `<button class="gobtn danger" data-unstand="${esc(a.id)}"
+                 ${canWrite() ? '' : 'disabled'}>Revoke</button>`
+      : '<span class="pillvalue">Taken back</span>'}
+  </article>`
+
+  const live = config.STANDING.filter((a) => a.live).length
+
   return `<div class="setbody">
     <p class="t-lead" style="margin:0">What the team may do on its own, and when it
       should stop and ask you.</p>
     <div class="behaves">${config.BEHAVIOURS.map(row).join('')}</div>
+
+    <section class="govsec">
+      <h3 class="govtitle">Things you said not to ask about<span class="t-meta">${esc(String(live))} in force</span></h3>
+      ${config.STANDING.length === 0
+        ? '<p class="t-meta govempty">Nothing. Every exception here comes from you answering a question with “do not ask me again”.</p>'
+        : `<div class="behaves">${config.STANDING.map(standing).join('')}</div>`}
+    </section>
   </div>`
 }
 
@@ -6372,6 +6420,31 @@ function settingsSheet() {
     b.addEventListener('click', () => {
       // The value it will become, not the one it shows.
       applyBehaviour(b, b.dataset.via, b.dataset.now === '1' ? 'false' : 'true')
+    })
+  }
+
+  /*
+    Taking back a standing authorization (#15).
+
+    No confirmation. Revoking NARROWS what the office may do on its own, and
+    the control immediately above it uses exactly that rule: nobody regrets
+    being asked more often, and confirming a narrowing is how a confirmation
+    becomes noise.
+
+    No reason is asked for either, unlike declining a tool request — a decline
+    is durable and shapes what an agent may ask for next, where this is simply
+    switching an exception off, and `revoke_standing` supplies "you took it
+    back" rather than storing an empty string.
+  */
+  for (const b of v.querySelectorAll('[data-unstand]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Saving…',
+        () => act('revoke_standing', { p_authorization: b.dataset.unstand }),
+        'It will ask you again.',
+      )
+      if (done !== null) await afterWrite()
     })
   }
 

@@ -4741,6 +4741,16 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .govreqtool rather than .govtool because .govtools already exists three
   hundred lines below and a near-collision is how .stage cost a day.
 */
+/*
+  A behaviour row that is no longer in force (#15).
+
+  Sunken and softened rather than removed: a standing authorization Grant took
+  back is the evidence that revoking works, and #49's argument about a durable
+  decline applies to a durable revocation in the same way.
+*/
+.behave.spent { background: var(--sunken); }
+.behave.spent b { opacity: 0.72; }
+
 .govreqtool {
   font: 500 13px/1.5 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   padding: 1px 5px;
@@ -4760,7 +4770,16 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 .govdismiss {
   padding: 2px 8px; border-radius: 999px;
   font-size: 12px; font-weight: 600;
-  background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  /*
+    Pulled towards the ink rather than left at the raw token.
+    `--warn` is #A2620A, which on its own 18% tint measures 3.97-4.10:1 at 12px
+    across the four light palettes -- below AA, and found by `verify:layouts`
+    the first time a request card put this pill on a surface it walks. Mixing
+    with `--ink` keeps the hue and works in both schemes, because `--ink` is
+    light where `--warn` is light.
+  */
+  color: color-mix(in srgb, var(--warn) 72%, var(--ink));
 }
 
 /* --- What each of them can do. A profile whose body is its failures. ----- */

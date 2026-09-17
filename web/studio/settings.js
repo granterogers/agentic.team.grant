@@ -116,11 +116,21 @@ export const isWrong = (state) =>
 const FALLBACK_BEHAVIOURS = [
   {
     id: 'autonomy', name: 'How much the team does without asking',
-    kind: 'choice', value: 'standing',
+    kind: 'choice', value: 'suggest',
+    /*
+      The four levels `public.autonomy_level` actually has.
+
+      This list used to read `ask | standing | wide` -- three names the enum
+      does not contain, so every capture of this pane showed a dial offering
+      options `hq_autonomy_set` refuses by name. The LIVE payload was right all
+      along, which is why nothing went red: the prototype and the product had
+      different vocabularies and only the prototype is what a capture sees.
+    */
     options: [
-      { id: 'ask', name: 'Ask me first', note: 'Every external action waits for you.' },
-      { id: 'standing', name: 'Standing authorization', note: 'Routine work proceeds. Consequential actions wait.' },
-      { id: 'wide', name: 'Wide', note: 'Only purchases and destructive changes wait.' },
+      { id: 'observe', name: 'Watch only', note: 'The team reads and reports. It changes nothing anywhere.' },
+      { id: 'suggest', name: 'Ask me first', note: 'Every action outside our own records waits for you.' },
+      { id: 'act_with_review', name: 'Act, then show me', note: 'Routine work proceeds and lands in front of you afterwards.' },
+      { id: 'act', name: 'Act', note: 'Only purchases and destructive changes stop and ask.' },
     ],
   },
   {
@@ -141,6 +151,29 @@ const FALLBACK_BEHAVIOURS = [
     id: 'undo', name: 'Keep everything undoable',
     kind: 'switch', value: true,
     note: 'Every action the office takes is recorded so it can be reversed.',
+  },
+]
+
+/*
+  Shaped like `standing_authorizations` joined to `tool_permissions` (#15).
+
+  Two rows, one live and one taken back, because the pane has to be judgeable
+  in both states: a permission in force is the thing Grant audits, and one he
+  revoked is the thing that tells him revoking works.
+*/
+const FALLBACK_STANDING = [
+  {
+    id: 'f-sa1', tool: 'drive.ingest', level: 1, live: true,
+    what: 'Add a file that has appeared in a watched Drive folder to the project as a source document.',
+    scope: 'Legacy Coaching Course', reason: 'You answered "Add them from now on without asking me" on 15 Sep.',
+    by: 'grant', since: '2026-09-15T09:12:00Z', until: null, revoked: null, revoked_reason: null,
+  },
+  {
+    id: 'f-sa2', tool: 'notion.write', level: 2, live: false,
+    what: 'Create and update Notion pages.',
+    scope: 'everywhere', reason: 'Let it write the weekly page without asking.',
+    by: 'grant', since: '2026-09-02T16:40:00Z', until: null,
+    revoked: '2026-09-11T08:05:00Z', revoked_reason: 'you took it back',
   },
 ]
 
@@ -216,6 +249,7 @@ const FALLBACK_SPEND = {
 
 export const CONNECTIONS = [...FALLBACK_CONNECTIONS]
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
+export const STANDING = [...FALLBACK_STANDING]
 export const CHANNELS = [...FALLBACK_CHANNELS]
 export const SPEND = { ...FALLBACK_SPEND }
 export const TEAM = []
@@ -319,6 +353,24 @@ export async function hydrateSettings(read) {
     )
     replace(SPARE_BOTS, d.spare_bots ?? [])
     replace(BEHAVIOURS, d.behaviours ?? [])
+
+    /*
+      Its own call, because it is its own section (#15).
+
+      `standing` is a security surface: every permission in force, across every
+      project, on one page. Folding it into `studio_settings` would make it
+      arrive only when that pane loads, and would make an audit of what the
+      office may do depend on a settings screen having been opened.
+
+      Failing to read it leaves the prototype rows in place and the pane still
+      renders, the same rule `hydrateGovernance` follows -- a settings tab
+      showing a stack trace is worse than one saying it could not ask.
+    */
+    read('standing')
+      .then((rows) => {
+        if (Array.isArray(rows)) replace(STANDING, rows)
+      })
+      .catch(() => undefined)
     replace(CONNECTIONS, d.connections ?? [])
     replace(CHANNELS, d.channels ?? [])
 

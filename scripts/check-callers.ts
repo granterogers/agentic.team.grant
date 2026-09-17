@@ -226,7 +226,9 @@ for (const v of [...mouthless, ...onlyTests]) {
 
 if (fresh.length > 0) {
   console.error(
-    `\ncheck:callers FAILED — ${String(fresh.length)} capability nobody can reach (#72):`,
+    `\ncheck:callers FAILED — ${String(fresh.length)} ${
+      fresh.length === 1 ? 'capability' : 'capabilities'
+    } nobody can reach (#72):`,
   )
   for (const f of fresh) console.error(`  ${f}`)
   console.error(
@@ -239,8 +241,11 @@ if (fresh.length > 0) {
 
 if (fixed.length > 0) {
   console.error(
-    `\ncheck:callers FAILED — ${String(fixed.length)} baseline entr(y/ies) are now reachable. ` +
-      `Remove them from ${BASELINE} so the number keeps going down:`,
+    // A report line a person reads must be a sentence, not a template with the
+    // plural left in it. CLAUDE.md already records what "12 of 6" cost.
+    `\ncheck:callers FAILED — ${String(fixed.length)} baseline ${
+      fixed.length === 1 ? 'entry is' : 'entries are'
+    } now reachable. ` + `Remove them from ${BASELINE} so the number keeps going down:`,
   )
   for (const f of fixed) console.error(`  ${f}`)
   process.exit(1)

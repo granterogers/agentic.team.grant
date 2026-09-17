@@ -72,16 +72,34 @@ export const recordUsage = async (db: SqlExecutor, record: UsageRecord): Promise
 /** Returns the new blocker's id, so the caller can put it in the ledger. */
 export const raiseBlocker = async (db: SqlExecutor, draft: BlockerDraft): Promise<string> => {
   const options = draft.approvalOptions.map((o) => lit(o)).join(', ')
+
+  /*
+    An offer may only promise what the press can perform (#15, and the rule
+    0390 cost four defects to learn).
+
+    `app.hq_answer_blocker` refuses an answer that is not one of the options,
+    so a `standingOption` missing from the list is a standing authorization
+    nobody could ever grant — the control that exists and cannot be pressed.
+    Caught here rather than by a check constraint, because the constraint
+    cannot see inside a text array.
+  */
+  if (draft.standingOption !== undefined && !draft.approvalOptions.includes(draft.standingOption)) {
+    throw new Error(
+      `standingOption ${JSON.stringify(draft.standingOption)} is not one of the approval options`,
+    )
+  }
   const { rows } = await db.execute(`
     insert into public.blockers
       (project_id, job_id, requested_action, why_needed, consequences_of_delay,
-       approval_options, originating_agent, work_can_continue)
+       approval_options, originating_agent, work_can_continue,
+       standing_tool, standing_option)
     values
       (${nullableLit(draft.projectId)}::uuid, ${lit(draft.jobId)}::uuid,
        ${lit(draft.requestedAction)}, ${lit(draft.whyNeeded)},
        ${lit(draft.consequencesOfDelay)},
        array[${options}]::text[], ${lit(draft.originatingAgent)},
-       ${draft.workCanContinue ? 'true' : 'false'})
+       ${draft.workCanContinue ? 'true' : 'false'},
+       ${nullableLit(draft.standingTool)}, ${nullableLit(draft.standingOption)})
     returning blocker_id::text as blocker_id
   `)
   const id = rows[0]?.blocker_id

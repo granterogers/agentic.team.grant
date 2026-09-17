@@ -124,6 +124,7 @@
     "brief": "tsx scripts/projects/brief.ts",
     "purge:fixtures": "tsx scripts/maintenance/purge-fixtures.ts",
     "verify:agents": "tsx scripts/verify/agents.ts",
+    "verify:approval": "tsx scripts/verify/approval.ts",
     "avatars": "tsx scripts/staff/generate-avatars.ts",
     "verify:autonomy": "tsx scripts/verify/autonomy.ts",
     "verify:undo": "tsx scripts/verify/undo.ts",

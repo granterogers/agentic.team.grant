@@ -171,6 +171,19 @@ export interface BlockerDraft {
   readonly workCanContinue: boolean
   readonly projectId?: string | undefined
   readonly jobId: string
+  /**
+   * The capability answering `standingOption` authorizes from now on (#15).
+   *
+   * Both or neither — a CHECK on `public.blockers` enforces it, because a tool
+   * with no option is a permission nobody can grant and an option with no tool
+   * is a button that does nothing.
+   *
+   * Named rather than parsed: `approvalOptions` is free text a handler writes
+   * in whatever English reads best, and deciding a permission by matching words
+   * in it would be #130's parsing defect applied to a security boundary.
+   */
+  readonly standingTool?: string | undefined
+  readonly standingOption?: string | undefined
 }
 
 /**
