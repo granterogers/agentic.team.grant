@@ -673,6 +673,48 @@ export const isConnected = (state) =>
 */
 export const MCP = { loaded: false, url: '', tools: [], clients: [], recent: [], steps: [] }
 
+/*
+  The office as a CLIENT — providers it has registered (#265).
+
+  Distinct from `MCP` above, which is the office as a SERVER: what Grant's
+  ChatGPT connects to. This is the other direction, and the two were confused
+  once already — `mcp_inventory` shipped as a gateway section and no page ever
+  read it, so a whole side of the integration was invisible.
+
+  Rows rather than an empty list for the same reason every fallback here has
+  them: nothing is registered yet, and a design that can only be seen once
+  somebody connects something is a design nobody has judged.
+*/
+const FALLBACK_PROVIDERS = [
+  {
+    name: 'weather-mcp', display_name: 'Weather MCP', endpoint: 'https://example.test/mcp',
+    healthy: true, discovered: 6, offered: 2, usable: 1, last_probe: '2026-09-17T09:30:00Z',
+    tools: [
+      { name: 'get_forecast', reach: 'read', enabled: true },
+      { name: 'set_alert', reach: 'write', enabled: false },
+    ],
+  },
+  {
+    name: 'crm-mcp', display_name: 'A CRM', endpoint: 'https://example.test/crm',
+    healthy: false, discovered: 11, offered: 0, usable: 0, last_probe: '2026-09-16T22:02:00Z',
+    detail: 'it did not answer',
+    tools: [{ name: 'delete_contact', reach: 'destructive', enabled: false }],
+  },
+]
+
+export const PROVIDERS = { loaded: false, rows: [...FALLBACK_PROVIDERS] }
+
+export async function hydrateProviders(read) {
+  try {
+    const d = await read('connectors')
+    PROVIDERS.rows = Array.isArray(d) ? d : []
+    PROVIDERS.loaded = true
+  } catch {
+    PROVIDERS.loaded = false
+  }
+  return PROVIDERS
+}
+
 export async function hydrateMcp(read) {
   try {
     const d = await read('mcp')

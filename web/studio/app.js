@@ -5906,6 +5906,44 @@ function connectionsTab() {
       </div>
     </div>
     <div class="servicegrid">${list.map(card).join('')}</div>
+
+    <!--
+      Outside providers the office has registered (#265).
+
+      The other direction from the MCP block below: that one is what connects
+      TO this office, this is what the office connects to. The inventory was
+      built, verified and never rendered, so a whole side of the integration
+      was invisible — which is the failure this whole run is about.
+
+      Three numbers per provider on purpose. A provider can advertise forty
+      tools, the office can offer six, and NONE be usable until Grant
+      approves: showing only what was offered would read as reach.
+
+      No backticks in this comment: template literal.
+    -->
+    <section class="provsec">
+      <h3 class="t-label">Providers the office uses</h3>
+      ${(config.PROVIDERS?.rows ?? []).length === 0
+        ? `<p class="t-meta">None registered. A provider is somewhere the office can
+             discover capabilities from — discovering them grants nothing on its own.</p>`
+        : `<div class="provgrid">${(config.PROVIDERS?.rows ?? []).map((p) => `
+          <article class="prov ${p.healthy ? 'well' : 'unwell'}">
+            <b>${esc(p.display_name || p.name || '')}</b>
+            <span class="stage s-${p.healthy ? 'approved' : 'review'}">${
+              p.healthy ? 'answering' : esc(p.detail ?? 'not answering')
+            }</span>
+            <span class="t-meta">${esc(String(p.discovered ?? 0))} discovered ·
+              ${esc(String(p.offered ?? 0))} offered ·
+              <b>${esc(String(p.usable ?? 0))} usable</b></span>
+            ${((p.tools ?? []).length === 0)
+              ? ''
+              : `<ul class="provtools">${(p.tools ?? []).slice(0, 4).map((t) => `<li>
+                  <code>${esc(t.name ?? '')}</code>
+                  <span class="reach r-${esc(t.reach ?? 'unknown')}">${esc(t.reach ?? 'unknown')}</span>
+                  <span class="t-meta">${t.enabled ? 'granted' : 'not granted'}</span>
+                </li>`).join('')}</ul>`}
+          </article>`).join('')}</div>`}
+    </section>
     <!--
       How to connect a client to this office (#91).
 
@@ -6520,6 +6558,21 @@ function settingsSheet() {
           seconds later; every click after that hit the backdrop.
         */
         if (state.setting === 'governance' && !v.hidden) {
+          settingsSheet()
+          sheet(v, true)
+        }
+      }
+      /*
+        The same lazy pattern for outside providers (#265).
+
+        Connections draws immediately from what the page already holds; the
+        provider inventory is one more table and is fetched only when somebody
+        opens the tab. The same guard applies — a redraw landing after the
+        person has moved on reopens a sheet they closed.
+      */
+      if (state.setting === 'connections' && !config.PROVIDERS.loaded) {
+        await config.hydrateProviders(read)
+        if (state.setting === 'connections' && !v.hidden) {
           settingsSheet()
           sheet(v, true)
         }

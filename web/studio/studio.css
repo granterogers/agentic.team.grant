@@ -6266,4 +6266,27 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   background: var(--sunken);
 }
 .gtrigstate.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
-.gtrigstate.off { color: var(--ink-3); }
+/*
+  --ink-2, not --ink-3.
+
+  The first version used the faintest ink to say "off" and measured 3.63:1 in
+  dark ink and 3.89:1 in dark moss, against the 4.5 floor. verify:layouts
+  found it the same run it was written. A switched-off trigger still has to be
+  READABLE — it is the state a person is most likely to be checking.
+*/
+.gtrigstate.off { color: var(--ink-2); }
+
+/* Outside providers, and the reach of what they offer (#265). */
+.provsec { margin-top: var(--s5); display: grid; gap: 6px; }
+.provgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: var(--s4); }
+.prov { display: grid; gap: 4px; padding: var(--s4);
+        border: 1px solid var(--edge); border-radius: var(--r-card);
+        background: var(--surface); }
+.prov.unwell { border-color: color-mix(in srgb, var(--warn, #b4552b) 45%, var(--edge)); }
+.provtools { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
+.provtools li { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.provtools code { font-size: 12.5px; }
+.reach { padding: 0 6px; border-radius: 999px; font-size: 11.5px;
+         border: 1px solid color-mix(in srgb, var(--ink-3) 35%, transparent); }
+.reach.r-destructive { border-color: color-mix(in srgb, var(--warn, #b4552b) 55%, transparent); }
