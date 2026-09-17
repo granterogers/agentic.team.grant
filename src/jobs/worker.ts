@@ -225,6 +225,24 @@ export interface HandlerOutput {
     readonly durationSeconds?: number
   }
   /**
+   * Send this output as a file rather than as text (#258).
+   *
+   * The same idea as `attachAudio` and deliberately a second field rather than
+   * a widened one: Telegram's `sendAudio` and `sendDocument` are different
+   * methods producing different things, and a PDF arriving in an audio player
+   * is not a smaller mistake for being close. A handler that has both has a
+   * bug, and two fields make that sayable.
+   *
+   * Not stored on the output row: the bytes are in Storage and the document
+   * row records where. This is a delivery instruction with the lifetime of one
+   * send.
+   */
+  readonly attachFile?: {
+    readonly bytes: Uint8Array
+    readonly filename: string
+    readonly mime: string
+  }
+  /**
    * How loudly. `routine` is Slack only; `important` and above buzz a phone.
    *
    * Undefined means routine, which is the important half of this: §12 gives

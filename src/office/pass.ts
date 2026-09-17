@@ -42,6 +42,7 @@ import { combinedNotifier, pagerChannel } from '../channels/notify.ts'
 import { announceStart } from '../channels/progress.ts'
 import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { artifactHandler } from '../handlers/artifact.ts'
 import { backupHandler } from '../handlers/backup.ts'
 import { briefingHandler } from '../handlers/briefing.ts'
 import { buildShotsHandler } from '../handlers/build-shots.ts'
@@ -395,6 +396,19 @@ export const buildPass = async (
       family as a column nothing writes.
     */
     extractTasksHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Turning a request into a finished file (#258).
+
+      Registered here with the storage credentials because the pipeline ends in
+      Storage and in a document row, and a handler that could write the report
+      and not keep it would be the half-capability the Issue is about.
+    */
+    artifactHandler({
+      db,
+      projectRef,
+      router: cannotThink ? null : new ProviderRouter(db, orKey),
+      serviceKey,
+    }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is

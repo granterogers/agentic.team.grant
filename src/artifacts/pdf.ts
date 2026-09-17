@@ -56,20 +56,56 @@ const enc = new TextEncoder()
  * Unicode did not, so those five need a map rather than a cast.
  */
 const WIN_ANSI: Readonly<Record<number, number>> = {
-  8211: 0x96,
-  8212: 0x97,
+  338: 0x8c,
+  339: 0x9c,
+  8211: 0x96, // en dash
+  8212: 0x97, // em dash
   8216: 0x91,
   8217: 0x92,
   8220: 0x93,
   8221: 0x94,
   8226: 0x95,
+  8230: 0x85, // ellipsis
+  8249: 0x8b,
+  8250: 0x9b,
+  8482: 0x99,
+}
+
+/**
+ * Characters with no WinAnsi slot that have an obvious stand-in.
+ *
+ * This list exists because the first real report the office wrote came back
+ * saying "high?performing", "AI?driven" and "client?focused". The model had
+ * used U+2011, the non-breaking hyphen, which has no WinAnsi slot — so every
+ * one became a question mark in a document Grant would have received. A hyphen
+ * is not the character the model chose and is indistinguishable from it on the
+ * page, which a question mark is not.
+ *
+ * The fallback for anything still unmapped stays a question mark rather than
+ * nothing: a dropped character is a sentence that reads correctly and is
+ * wrong, and a visible one is a defect somebody reports.
+ */
+const STANDS_IN: Readonly<Record<number, number>> = {
+  160: 0x20, // no-break space
+  173: 0x2d, // soft hyphen
+  8203: 0x20, // zero-width space
+  8206: 0x20,
+  8207: 0x20,
+  8208: 0x2d, // hyphen
+  8209: 0x2d, // non-breaking hyphen
+  8210: 0x2d, // figure dash
+  8213: 0x2d, // horizontal bar
+  8242: 0x27, // prime
+  8243: 0x22, // double prime
+  8722: 0x2d, // minus sign
+  65279: 0x20, // byte order mark
 }
 
 const pdfString = (text: string): Uint8Array => {
   const out: number[] = [0x28] // (
   for (const ch of text) {
     const cp = ch.codePointAt(0) ?? 32
-    const byte = WIN_ANSI[cp] ?? (cp <= 0xff ? cp : 0x3f) // '?' for anything else
+    const byte = WIN_ANSI[cp] ?? STANDS_IN[cp] ?? (cp <= 0xff ? cp : 0x3f)
     if (byte === 0x28 || byte === 0x29 || byte === 0x5c) out.push(0x5c)
     out.push(byte)
   }
@@ -264,17 +300,45 @@ export function assemble(pages: readonly Page[], info: DocumentInfo): Uint8Array
       `${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`
     )
   }
+  /*
+    Metadata is UTF-16, and the page content is not.
+
+    A PDF string is PDFDocEncoding unless it opens with the UTF-16 big-endian
+    byte order mark, while a string inside a content stream is in the FONT's
+    encoding, which these fonts declare as WinAnsi. Writing the title in
+    WinAnsi put an en dash at 0x96, which is a control character in the
+    encoding a reader applies to metadata: Chromium showed the tab as
+    "Legacy Coaching Course OE Current Status Report" while the same dash on
+    the page was perfect. Two encodings in one file is not a mistake — it is
+    what the format says — and using one for both is.
+  */
+  const utf16 = (text: string): Uint8Array => {
+    const out: number[] = [0x28, 0xfe, 0xff]
+    for (const ch of text) {
+      const cp = ch.codePointAt(0) ?? 32
+      const units =
+        cp > 0xffff ? [0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff)] : [cp]
+      for (const u of units) {
+        for (const b of [u >> 8, u & 0xff]) {
+          if (b === 0x28 || b === 0x29 || b === 0x5c) out.push(0x5c)
+          out.push(b)
+        }
+      }
+    }
+    out.push(0x29)
+    return Uint8Array.from(out)
+  }
   const infoParts = join([
     enc.encode('<< /Title '),
-    pdfString(info.title),
+    utf16(info.title),
     enc.encode(' /Author '),
-    pdfString(info.author),
+    utf16(info.author),
     enc.encode(' /Subject '),
-    pdfString(info.subject),
+    utf16(info.subject),
     enc.encode(' /Producer '),
-    pdfString(info.producer),
+    utf16(info.producer),
     enc.encode(' /Creator '),
-    pdfString(info.producer),
+    utf16(info.producer),
     enc.encode(` /CreationDate (${iso(info.created)}) /ModDate (${iso(info.created)}) >>`),
   ])
   const infoId = add(infoParts)

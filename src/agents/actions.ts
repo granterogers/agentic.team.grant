@@ -248,6 +248,9 @@ export function artifactListing(instruction: string): ArtifactListingRequest | n
 
   // A request to MAKE one is not a request to see them, whatever else it says.
   if (notebookRequest(instruction) !== null) return null
+  // And nor is a request for a report the office should write (#258). Same
+  // rule, one artifact later: making outranks enumerating.
+  if (asksForAFile(instruction.trim())) return null
   if (!LISTING.test(text)) return null
   // A brief is not a question. Same guard, same reason as above.
   if (looksLikeABrief(instruction)) return null
@@ -289,4 +292,82 @@ export function artifactListing(instruction: string): ArtifactListingRequest | n
     kinds: [...new Set(found.sort((a, b) => a.at - b.at).map((f) => f.kind))],
     many: ASKS_FOR_MANY.test(text),
   }
+}
+
+/*
+  Asking for a finished document, rather than for an answer (#258).
+
+  Grant: *"Read the X document, research the subject properly, create a
+  beautifully illustrated PDF report with the relevant information, and send it
+  to me here."* The office said it had no means, and the first thing that has
+  to work is recognising that this is not a question.
+
+  The distinction that matters is between a REQUEST FOR A FILE and a request
+  for prose. "Tell me where the coaching course has got to" wants three
+  paragraphs on Telegram; "write me a report on where the coaching course has
+  got to" wants something he can open, print and forward. Both are legitimate
+  and the expensive direction here is the opposite of #260's: producing a file
+  nobody asked for is a minute of compute and a document in his project, while
+  answering a request for a report with a paragraph is the refusal that opened
+  this Issue.
+
+  So the match requires a FORMAT NOUN or an explicit "report" — never a bare
+  verb like "write" or "produce", which govern half the things he asks for.
+*/
+
+/** The words for a thing you can open, as opposed to a thing you can read. */
+const ARTIFACT_NOUN =
+  /\b(pdf|report|white\s?paper|whitepaper|one[-\s]?pager|brief(?:ing)?\s+document|document\s+for|briefing\s+note|dossier|(?:a|an|the|your|this)\s+write[-\s]?up)\b/i
+
+/** Asking for it to be MADE, as opposed to asking about one that exists. */
+const MAKE_IT =
+  /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together)\b/i
+
+/**
+ * A request for a file, and what it should be about.
+ *
+ * Returns null for anything that merely mentions a report — "did you see the
+ * report Elena sent" names the noun and asks for nothing — because the verb
+ * has to be there too, and for a request to LIST what exists, which #260
+ * already owns.
+ */
+export interface ArtifactRequest {
+  /** The whole instruction, which is the brief. */
+  readonly brief: string
+  /** The format asked for, where one was named. Only `pdf` is built. */
+  readonly format: 'pdf'
+}
+
+/**
+ * The predicate both matchers consult, so neither can claim the other’s
+ * sentence.
+ *
+ * Pulled out rather than having `artifactRequest` defer to `artifactListing`,
+ * which is how the first version was written and which got the precedence
+ * exactly backwards. "Write me a PDF report on where the course has got to,
+ * using what we hold on it" contains the word "what", LISTING counts that as a
+ * listing signal wherever it appears, and "report" is one of the artifact
+ * kinds — so the office answered a request for a document with "Looking
+ * through the notebook for report — back shortly." and made nothing.
+ *
+ * A cycle is why the deference was there at all. A shared predicate has no
+ * cycle and states the rule once: asking for something to be MADE outranks
+ * asking to SEE what exists, because the second is answerable from the
+ * first’s result and not the other way round.
+ */
+function asksForAFile(said: string): boolean {
+  if (said === '') return false
+  if (!ARTIFACT_NOUN.test(said)) return false
+  if (!MAKE_IT.test(said)) return false
+  // "Send me the report you wrote yesterday" is a delivery request, not a
+  // writing one, and answering it by writing a second report is the worst
+  // available outcome.
+  return !/\b(you\s+(already\s+)?(wrote|made|sent|produced)|from\s+(yesterday|last\s+week))\b/i.test(
+    said,
+  )
+}
+
+export function artifactRequest(text: string): ArtifactRequest | null {
+  const said = text.trim()
+  return asksForAFile(said) ? { brief: said, format: 'pdf' } : null
 }

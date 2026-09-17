@@ -74,6 +74,7 @@
 
 import {
   artifactListing,
+  artifactRequest,
   KIND_LABEL,
   notebookRequest,
   type RequestedKind,
@@ -2226,7 +2227,53 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 return null
               })
 
-      const pullOut = job.projectId === null ? null : extractionRequest(instruction)
+      /*
+        A request for a FILE, not for a paragraph (#258).
+
+        Grant asked for a researched PDF back through Telegram and was told the
+        office had no means. This is where the means is reached, and it goes
+        before the extraction and the task path deliberately: "write me a
+        report on what needs doing" is a report, not twelve tasks, and whichever
+        of the three claims the sentence first decides what he gets.
+
+        A child job rather than this turn, because writing a report takes a
+        model call over eight documents and this turn has to answer him now.
+        The child's answer carries the file.
+      */
+      const wantsFile = job.projectId === null ? null : artifactRequest(instruction)
+      const writingFile =
+        wantsFile === null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.enqueue_child(
+                  ${lit(job.jobId)}::uuid, 'artifact.report',
+                  jsonb_build_object(
+                    'brief', ${lit(wantsFile.brief.slice(0, 2_000))},
+                    'by', ${lit(who.slug)},
+                    'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                    'command_id', ${lit(String(payload.command_id ?? ''))}
+                  ),
+                  interval '0', true
+                )::text as id`)
+              .then(
+                () =>
+                  'Writing that up as a PDF from what this project holds \u2014 I will send you ' +
+                  'the file when it is done.',
+              )
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'write a report as a file', ${lit(who.slug)},
+                      ${lit(`could not start it: ${String((error as Error).message).slice(0, 140)}`)},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
+      const pullOut =
+        job.projectId === null || wantsFile !== null ? null : extractionRequest(instruction)
       const extracting =
         pullOut === null
           ? null
@@ -2329,8 +2376,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
 
       const confirmation =
-        [linked, made, filed, extracting, enumerating].filter((x) => x !== null).join('\n\n') ||
-        null
+        [linked, made, filed, extracting, enumerating, writingFile]
+          .filter((x) => x !== null)
+          .join('\n\n') || null
 
       /*
         How many things this turn actually DID (#248).
@@ -2358,6 +2406,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (extracting === null ? 0 : 1) +
         // Looking through the notebook is a thing this turn started (#260).
         (enumerating === null ? 0 : 1) +
+        // And starting a report is a thing it did, not a thing it described (#258).
+        (writingFile === null ? 0 : 1) +
         who.alsoConvened.length
 
       // The same retrieval the office uses, so an instruction answered in

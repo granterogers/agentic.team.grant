@@ -116,16 +116,33 @@ describe('the file', () => {
     expect(cover).not.toContain('A heading')
   })
 
-  it('carries the title, author and dates in its metadata', () => {
+  it('carries the title, author and dates in its metadata, in UTF-16', () => {
+    /*
+      UTF-16 with a byte order mark, which is what the format says a metadata
+      string is unless it is PDFDocEncoding — and what the first version got
+      wrong. The en dash in a real title was written as WinAnsi 0x96, a control
+      character in the encoding a reader applies to metadata, and Chromium
+      showed the tab as "Legacy Coaching Course OE Current Status Report" while
+      the same dash on the page was perfect.
+    */
     const text = dec.decode(renderReport(report()).bytes)
-    expect(text).toContain('/Title (A report)')
-    expect(text).toContain('/Author (Agentic Team)')
+    const utf16 = (v: string): string => `\u00fe\u00ff${[...v].map((c) => `\u0000${c}`).join('')}`
+    expect(text).toContain(`/Title (${utf16('A report')})`)
+    expect(text).toContain(`/Author (${utf16('Agentic Team')})`)
     expect(text).toMatch(/\/CreationDate \(D:2026091708/)
   })
 
-  it('escapes the characters that would end a PDF string', () => {
-    const text = dec.decode(renderReport(report({ title: 'A (tricky) \\ title' })).bytes)
-    expect(text).toContain('/Title (A \\(tricky\\) \\\\ title)')
+  it('escapes the characters that would end a PDF string, in both encodings', () => {
+    const meta = dec.decode(renderReport(report({ title: 'A (tricky) \\ title' })).bytes)
+    // Escaped inside the UTF-16 title, where the low byte is the character.
+    expect(meta).toContain('\u0000A\u0000 \u0000\\(')
+    // And on the page, where the string is WinAnsi.
+    const page = dec.decode(
+      layout(
+        report({ blocks: [{ kind: 'paragraph', text: 'A (tricky) \\ line' }] }),
+      ).pages[1]?.stream() ?? new Uint8Array(),
+    )
+    expect(page).toContain('A \\(tricky\\) \\\\ line')
   })
 
   it('says so on the page when it cites nothing, rather than omitting the section', () => {

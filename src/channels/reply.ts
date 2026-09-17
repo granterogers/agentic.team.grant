@@ -170,6 +170,15 @@ export function replyChannel(db: SqlExecutor): {
             words as its caption.
           */
           ...(output.attachAudio === undefined ? {} : { audio: output.attachAudio }),
+          /*
+            And a generated artifact, the same way (#258).
+
+            Grant asked for a researched PDF back through Telegram and was told
+            the office had no means. This line is where the means arrives, and
+            it rides on the answer for the reason above rather than as a second
+            message.
+          */
+          ...(output.attachFile === undefined ? {} : { document: output.attachFile }),
           silent: false,
         },
       })
