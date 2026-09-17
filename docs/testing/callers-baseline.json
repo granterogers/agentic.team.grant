@@ -1,5 +1,5 @@
 {
-  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day; the three hq_*_tool wrappers, app.expire_temporary_staff and app.expire_undo_offers wired the same day under #272; app.autonomy_for wired by 0421 under #15 \u2014 the dial now decides something; public.project_artifacts wired as an hq-api section under #260. 0451 dropped public.hq_stranded_work and public.hq_eval_latest: the Governance page now reads both through app.hq_governance, so the separate wrappers were a second door to the same data. 31 -> 29 on 2026-09-17.",
+  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day; the three hq_*_tool wrappers, app.expire_temporary_staff and app.expire_undo_offers wired the same day under #272; app.autonomy_for wired by 0421 under #15 \u2014 the dial now decides something; public.project_artifacts wired as an hq-api section under #260. 0451 dropped public.hq_stranded_work and public.hq_eval_latest: the Governance page now reads both through app.hq_governance, so the separate wrappers were a second door to the same data. 31 -> 29 on 2026-09-17. 0452 dropped public.what_i_can_do (a second implementation of capabilityBrief, which builds every prompt) and public.hq_output_shapes (a mouth over a registry nothing reads); public.containers_stored_as_documents gained its caller in check:leaks. 29 -> 26 on 2026-09-17.",
   "recorded": "2026-09-16",
   "unreached": [
     "app.channel_for",
@@ -18,9 +18,7 @@
     "public.add_task",
     "public.awaiting_review",
     "public.connector_sheet",
-    "public.containers_stored_as_documents",
     "public.delegation_health",
-    "public.hq_output_shapes",
     "public.project_tasks",
     "public.proposals_to_send",
     "public.purge_fixture_staff",
@@ -29,7 +27,6 @@
     "public.self_changes",
     "public.set_task_state",
     "public.skill_effect",
-    "public.telegram_capacity",
-    "public.what_i_can_do"
+    "public.telegram_capacity"
   ]
 }
