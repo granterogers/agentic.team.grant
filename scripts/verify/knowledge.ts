@@ -627,6 +627,100 @@ console.log('\nwhat the index cannot speak for (#257)')
 }
 
 // ---------------------------------------------------------------------------
+// A file renamed at the SOURCE (#257)
+// ---------------------------------------------------------------------------
+
+{
+  /*
+    #257's sixth acceptance criterion is *"updates, renames and deletions
+    reconcile correctly"*. Content updates already did — editing re-indexes and
+    the old text stops matching, two hundred lines above. Renames never had:
+    `record_file_document` found the row by storage path, returned
+    `already_there` and touched nothing, so a file renamed in Drive kept the
+    title it was first read with. Grant searching for its new name would find
+    nothing — which is this Issue's ORIGINAL complaint wearing different
+    clothes.
+
+    Three cases, and the middle one is the reason it is not simply "the source
+    wins": `app.rename_document` lets him rename a document himself, with an
+    undo, so overwriting on every re-read would silently take that back.
+  */
+  /*
+    The executor hands a jsonb column back as an OBJECT, not a string —
+    `JSON.parse(String(x))` on one produces "[object Object]" is not valid
+    JSON, which reads like a corrupt payload and is a guessed shape.
+  */
+  const asJson = (v: unknown): Record<string, unknown> =>
+    v === null || v === undefined
+      ? {}
+      : ((typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>)
+  const path = `${projectId}/drive/renamed-${run}.pdf`
+  const keep = `${projectId}/drive/steady-${run}.pdf`
+  const put = (title: string, storage: string) => `
+    app.record_file_document(${lit(projectId)}::uuid, ${lit(title)}, ${lit(storage)},
+      'application/pdf', 2048, null, ${lit(`ext-${run}`)}, null, 'grant', null, 'yours')`
+
+  const upstream = await one(`
+    begin;
+    create temp table rn (k text primary key, v jsonb) on commit drop;
+    insert into rn values ('first', ${put(`Plan ${run}.pdf`, path)});
+    insert into rn values ('again', ${put(`Plan ${run} FINAL.pdf`, path)});
+    select (select v from rn where k = 'again') as again,
+           (select title from public.documents where storage_path = ${lit(path)}) as title;
+    rollback;`)
+  const againJson = asJson(upstream?.again)
+  record(
+    'a file renamed at the source is found under its NEW name',
+    `${String(upstream?.title ?? '(nothing)')}`,
+    String(upstream?.title ?? '') === `Plan ${run} FINAL.pdf` &&
+      againJson.renamed_at_source === true,
+  )
+
+  const mine = await one(`
+    begin;
+    create temp table rm (k text primary key, v jsonb) on commit drop;
+    insert into rm values ('first', ${put(`Plan ${run}.pdf`, path)});
+    select app.rename_document(
+      (select document_id from public.documents where storage_path = ${lit(path)}),
+      ${lit(`What I call it ${run}`)});
+    insert into rm values ('again', ${put(`Plan ${run} FINAL.pdf`, path)});
+    select (select v from rm where k = 'again') as again,
+           (select title from public.documents where storage_path = ${lit(path)}) as title,
+           (select source_title from public.documents where storage_path = ${lit(path)}) as source;
+    rollback;`)
+  const mineJson = asJson(mine?.again)
+  record(
+    'but a name GRANT gave it survives the source renaming it',
+    `his "${String(mine?.title ?? '')}" kept; the source now says "${String(mine?.source ?? '')}"`,
+    String(mine?.title ?? '') === `What I call it ${run}` && mineJson.kept_your_name === true,
+  )
+  record(
+    "and the source's new name is written down rather than lost",
+    String(mine?.source ?? ''),
+    String(mine?.source ?? '') === `Plan ${run} FINAL.pdf`,
+  )
+
+  /*
+    The control. Without it, a function that reported `renamed_at_source` on
+    every single re-read would pass both checks above — and would rewrite the
+    title on every Drive sync, which is worse than never rewriting it.
+  */
+  const steady = await one(`
+    begin;
+    create temp table rs (k text primary key, v jsonb) on commit drop;
+    insert into rs values ('first', ${put(`Steady ${run}.pdf`, keep)});
+    insert into rs values ('again', ${put(`Steady ${run}.pdf`, keep)});
+    select (select v from rs where k = 'again') as again;
+    rollback;`)
+  const steadyJson = asJson(steady?.again)
+  record(
+    'CONTROL: re-reading an UNCHANGED file reports no rename and rewrites nothing',
+    `renamed_at_source=${String(steadyJson.renamed_at_source)}`,
+    steadyJson.already_there === true && steadyJson.renamed_at_source === false,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Report, then clean up after itself
 // ---------------------------------------------------------------------------
 
