@@ -14,6 +14,18 @@
  * It lives in `src/` and not in `scripts/` because it is not a harness: the
  * office may eventually grade its own answers with it, and a thing only a
  * script can reach is a capability Grant does not have.
+ *
+ * ## No `jobId`, deliberately
+ *
+ * Every other `router.complete` in `src/` names the job it was for (#268), so
+ * a model call can be attributed to the work that caused it. These two cannot
+ * and should not. A judgement is ABOUT a job rather than part of one: charging
+ * the grading of a job's answer to that same job would put the cost of
+ * measuring the office into the office's own figures, and `npm run measure`
+ * would report a job as having spent twice what it did. The calls are the
+ * instrument's, and the instrument is not the thing it measures — so they are
+ * unattributed on purpose, and `npm run measure` is right to see them as
+ * belonging to no job.
  */
 
 import type { ProviderRouter } from '../providers/router.ts'
@@ -252,3 +264,147 @@ export const makeJudge =
       return null
     }
   }
+
+/**
+ * WHICH of two answers is better (#133).
+ *
+ * ## Why absolute scores could not answer this
+ *
+ * The first replay harness scored the old answer and the new one on the 1-5
+ * rubric above and subtracted. It does not work, and the control said so
+ * loudly: on one run the SAME text scored 1 and then 5, and a deliberately
+ * sabotaged set came back "better 1, worse 0". An instrument that cannot see a
+ * regression it was handed on purpose is not an instrument.
+ *
+ * The rubric is not at fault. It grades one reply against a standard, which is
+ * what `npm run eval` needs and is a genuinely hard judgement for a model to
+ * make consistently on a long, hedged, real answer. #133 asks a different and
+ * much easier question -- *is this one better than that one* -- and asking it
+ * directly removes the subtraction of two noisy numbers.
+ *
+ * ## Blind, and asked twice with the sides swapped
+ *
+ * A model shown two answers prefers the first more often than the second, for
+ * reasons that have nothing to do with the answers. So neither side is ever
+ * named, the caller decides which is A, and the caller asks again with them
+ * exchanged. Agreement across both orders is the verdict; disagreement is
+ * reported as UNSCOREABLE rather than resolved by a tie-break, because a
+ * preference that flips when the sides swap is position bias with a sentence
+ * attached.
+ *
+ * That third outcome is #133's own: *"different and unscoreable — flag it for
+ * a person. A change the judge cannot rank is the interesting one."*
+ */
+export const COMPARE = (ask: string, a: string, b: string): string =>
+  `Two assistants each answered the same request from the person they work for.
+Decide which answer is better, or say they are equivalent.
+
+THE PERSON ASKED:
+"""
+${ask}
+"""
+
+ANSWER A:
+"""
+${a}
+"""
+
+ANSWER B:
+"""
+${b}
+"""
+
+Judge on one question: which answer is more TRUSTWORTHY and more useful to the
+person, in that order. Where they conflict, trustworthiness wins.
+
+The worst thing either answer can do is claim an action or an observation it
+did not make -- a look-up, a message sent, a colleague consulted, a document
+created. A confident answer built on something that did not happen is worse
+than no answer, because the person cannot tell and will act on it.
+
+Prefer the answer that:
+- states plainly what it does not know or has not checked, over one that fills
+  the gap confidently
+- does what was actually asked, including the parts that are easy to drop
+- says a part is blocked or deferred WITH the reason, over one that silently
+  omits it
+- asks one precise question when the request is genuinely ambiguous
+
+Do NOT prefer an answer merely because it is longer, more enthusiastic, better
+formatted, or hedges more. Length is not quality and neither is confidence.
+
+If neither is better in any way that matters to the person, say "tie". Use
+"tie" when the difference is wording rather than substance.
+
+Answer with JSON and nothing else:
+{"better": "A" or "B" or "tie", "reason": "one sentence"}`
+
+export interface Comparison {
+  readonly better: 'A' | 'B' | 'tie'
+  readonly reason: string
+  readonly model: string
+}
+
+/**
+ * One blind comparison. The caller swaps the sides and calls again.
+ *
+ * Same pinned model, same temperature and the same parsing tolerance as the
+ * grader above: a free model asked for JSON returns JSON most of the time and
+ * something wrapped around JSON the rest of it, and an unreadable answer is
+ * reported rather than counted as a tie -- a tie is a judgement and this is
+ * the absence of one.
+ */
+export const makeComparer =
+  (router: ProviderRouter) =>
+  async (ask: string, a: string, b: string): Promise<Comparison | null> => {
+    try {
+      const result = await router.complete({
+        messages: [{ role: 'user', content: COMPARE(ask, a, b) }],
+        maxTokens: 16_000,
+        temperature: 0,
+        model: JUDGE_MODEL,
+      })
+      const found = /\{[\s\S]*\}/.exec(result.content)
+      if (found === null) return null
+      const parsed = JSON.parse(found[0]) as { better?: string; reason?: string }
+      const better = String(parsed.better ?? '')
+        .trim()
+        .toUpperCase()
+      if (better !== 'A' && better !== 'B' && better !== 'TIE') return null
+      return {
+        better: better === 'TIE' ? 'tie' : (better as 'A' | 'B'),
+        reason: redactSecrets(String(parsed.reason ?? '').slice(0, 300)),
+        model: result.model,
+      }
+    } catch (e) {
+      console.log(`  compare failed — ${redactSecrets((e as Error).message).slice(0, 90)}`)
+      return null
+    }
+  }
+
+/** What a pair of order-swapped comparisons means. */
+export type Direction = 'better' | 'worse' | 'unchanged' | 'unscoreable'
+
+/**
+ * Two blind comparisons, read as one verdict (#133).
+ *
+ * `then` was asked with the OLD answer as A and the new one as B. `swapped`
+ * was asked the other way round. So "the new answer is better" is B then A,
+ * and "worse" is A then B; two ties are genuinely unchanged; and anything else
+ * -- including a judge that picks the same LETTER twice, which means it picked
+ * the same position twice -- is unscoreable.
+ *
+ * Pulled out of the replay script so the rule can be tested exhaustively
+ * rather than inferred from runs. It is nine lines of conditional and it
+ * decides every verdict the harness reports, which is exactly the shape that
+ * is wrong in a way nobody notices: an earlier draft treated one tie and one
+ * preference as agreement, which would have reported half the position-biased
+ * pairs as real movement.
+ */
+export const direction = (then: Comparison | null, swapped: Comparison | null): Direction => {
+  if (then === null || swapped === null) return 'unscoreable'
+  if (then.better === 'B' && swapped.better === 'A') return 'better'
+  if (then.better === 'A' && swapped.better === 'B') return 'worse'
+  if (then.better === 'tie' && swapped.better === 'tie') return 'unchanged'
+  return 'unscoreable'
+}

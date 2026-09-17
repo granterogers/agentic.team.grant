@@ -206,6 +206,7 @@
     "verify:disconnect": "tsx scripts/verify/disconnect.ts",
     "eval": "tsx scripts/eval.ts",
     "replay": "tsx scripts/replay.ts",
+    "verify:judge": "tsx scripts/verify/judge.ts",
     "verify:pulse": "tsx scripts/verify/pulse.ts",
     "verify:motion": "tsx scripts/verify/motion.ts",
     "verify:offline": "tsx scripts/verify/offline.ts",

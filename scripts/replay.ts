@@ -34,11 +34,18 @@
  *
  * ## Three things that would make this lie, and what is done about each
  *
- * **Nondeterminism.** The same prompt twice is not the same answer. So the
- * verdict is never taken from one case: the run judges the ORIGINAL answer
- * twice first, prints that spread as the noise floor, and refuses to call
- * anything a regression unless the shift clears it. #229 already recorded that
- * a pinned model at temperature 0 moved two points between runs.
+ * **Nondeterminism.** The same prompt twice is not the same answer, and the
+ * JUDGE is not deterministic either -- the first build of this harness scored
+ * each answer 1-5 and subtracted, and on one run the same text scored 1 and
+ * then 5. Differencing two noisy numbers is noise, and the degradation control
+ * proved it by coming back "better 1, worse 0" on a sabotaged set.
+ *
+ * So the judge compares the two answers DIRECTLY instead, blind, and is asked
+ * twice with the sides exchanged. Agreement is the verdict; a reversal is
+ * reported as unscoreable, which is #133's own third outcome. A direction is
+ * only called when more than one case moved that way. And the run opens by
+ * showing the judge one answer as BOTH sides: anything but a tie there is
+ * position bias, and a run with it concludes nothing.
  *
  * **Time.** A job that said "by Friday" resolves differently a fortnight
  * later. `InstructionDeps.now` exists for this and the replay passes the
@@ -56,7 +63,7 @@
 
 import { writeFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
-import { makeJudge } from '../src/eval/judge.ts'
+import { direction, makeComparer } from '../src/eval/judge.ts'
 import type { Job } from '../src/jobs/worker.ts'
 import { dequeue, runJob } from '../src/jobs/worker.ts'
 import { buildPass } from '../src/office/pass.ts'
@@ -212,7 +219,26 @@ const corpus = (
        and coalesce(j.pinned_config->>'instruction', '') !~ '\\s[a-z0-9]{8}$'
        and j.state = 'complete'
        and coalesce(j.pinned_config->>'instruction', '') <> ''
-       and length(coalesce(o.body, '')) > 40
+       and length(coalesce(o.body, '')) > ${DEGRADE ? '400' : '40'}
+       /*
+         The control needs cases where a degradation can SHOW.
+
+         No backticks in this comment. It is a SQL comment inside a template
+         literal, which is the trap CLAUDE.md records and which cost this file
+         twice in one afternoon.
+
+         The first degrade run reported "better 1, worse 1" and read as the
+         harness being blind. It was not: verify:judge scores the pinned judge
+         5/5 on clear pairs, and the sabotage was verified to work -- the
+         office answered "Ready for request." and "Plan posted to Slack." in
+         four words. The problem was the sample. Two of the four cases were
+         /start and a link-attachment confirmation, whose HONEST answer is
+         already one line, so a four-word answer is barely different from the
+         right one and the judge was correct to call it close. Requiring a
+         substantive original answer under the degrade flag is not weakening
+         the control: one that cannot distinguish its own treatment from its
+         baseline is measuring nothing.
+       */
        ${ONE_CASE === null ? '' : `and j.job_id = ${lit(ONE_CASE)}::uuid`}
      order by btrim(lower(j.pinned_config->>'instruction')), j.created_at desc
      limit ${String(Math.max(1, Math.min(200, HOW_MANY)))}
@@ -228,36 +254,34 @@ console.log(`replay — ${String(corpus.length)} real request(s), against the co
 console.log(`         run ${run}; nothing is delivered and every job written is a fixture\n`)
 
 const router = new ProviderRouter(db, process.env.OPENROUTER_API_KEY ?? '')
-const judge = makeJudge(router)
+const compare = makeComparer(router)
 
 /*
-  THE NOISE FLOOR, measured before anything is compared.
+  THE POSITION-BIAS CONTROL, measured before anything is compared.
 
-  The same judge, the same pinned model, temperature 0, the same text twice.
-  #229 recorded this moving two points, and a run that reported a one-point
-  shift as "worse" without printing this would be reporting the instrument.
-  Measured on the first case's ORIGINAL answer, which is text neither side of
-  the comparison can have improved.
+  The first version of this harness scored each answer 1-5 and subtracted. It
+  could not work and the degradation control proved it: the same text scored 1
+  and then 5 on one run, and a deliberately sabotaged set came back "better 1,
+  worse 0". Differencing two noisy absolute judgements produces noise.
+
+  The comparison is blind and asked twice with the sides exchanged, so the
+  control for it is the one that matters here: show the judge the SAME answer
+  as both A and B. There is no correct preference, so anything but a tie is the
+  judge preferring a position. Reported either way, and a run where it prefers
+  a side is a run whose verdicts are worth less -- which is why it prints
+  rather than merely gating.
 */
 const first = corpus[0] as Original
-const noiseA = await judge({
-  slug: 'noise-a',
-  ask: first.instruction,
-  answer: first.body,
-  context: null,
-})
+const biasA = await compare(first.instruction, first.body, first.body)
 await pause(4_000)
-const noiseB = await judge({
-  slug: 'noise-b',
-  ask: first.instruction,
-  answer: first.body,
-  context: null,
-})
-const noise = noiseA === null || noiseB === null ? null : Math.abs(noiseA.score - noiseB.score)
+const biasB = await compare(first.instruction, first.body, first.body)
+const biased = [biasA, biasB].filter((c) => c !== null && c.better !== 'tie').length
 console.log(
-  noise === null
-    ? 'noise floor: the judge could not be read twice — treat every shift below as unmeasured'
-    : `noise floor: the same answer scored ${String(noiseA?.score)} then ${String(noiseB?.score)} — ${String(noise)} point(s)\n`,
+  biasA === null && biasB === null
+    ? 'position control: the judge could not be read at all — treat this run as unmeasured\n'
+    : biased === 0
+      ? 'position control: the same answer against itself is a tie both ways\n'
+      : `position control: the judge preferred a POSITION on ${String(biased)} of 2 identical pairs — verdicts below are weaker than they look\n`,
 )
 
 interface Result {
@@ -265,8 +289,6 @@ interface Result {
   /** Never the text. See REDACTION above the report. */
   intent: string
   words: number
-  was: number | null
-  now: number | null
   verdict: 'better' | 'worse' | 'unchanged' | 'unscoreable'
   why: string
   identical: boolean
@@ -400,8 +422,6 @@ for (const [i, orig] of corpus.entries()) {
       job: orig.job_id,
       intent: orig.intent_class ?? 'unclassified',
       words: orig.words,
-      was: null,
-      now: null,
       verdict: 'unscoreable',
       why: failure,
       identical: false,
@@ -411,63 +431,58 @@ for (const [i, orig] of corpus.entries()) {
 
   const identical = newBody.trim() === orig.body.trim()
   /*
-    Both answers cut to the same length, or neither.
+    Both answers cut at the same point, or neither.
 
     A replayed report runs to thousands of characters and the judge is a
-    reasoning model: one case spent 8,839 tokens thinking before emitting
-    anything and came back empty, which lands as unscoreable and quietly
-    changes the denominator. Raising the ceiling twice did not reach it.
-
-    Truncation changes what is graded, so the thing that matters is that it is
-    SYMMETRIC: the old answer and the new one are cut at the same point by the
-    same rule, so the comparison -- which is the whole measurement -- is
-    unaffected. An absolute score on a truncated report is worth less than one
-    on a short reply, and that is why the report prints the shift rather than
-    the mean.
+    reasoning model that spends its ceiling thinking before it emits anything.
+    Truncation changes what is read, so what matters is that it is SYMMETRIC:
+    the same rule cuts both sides, so the comparison -- which is the entire
+    measurement -- is unaffected.
   */
   const READABLE = 4_000
   const cut = (t: string): string =>
     t.length <= READABLE ? t : `${t.slice(0, READABLE)}\n\n[cut for grading]`
-  const was = await judge({
-    slug: `was-${String(i)}`,
-    ask: orig.instruction,
-    answer: cut(orig.body),
-    context: null,
-  })
-  await pause(4_000)
-  const now = identical
-    ? was
-    : await judge({
-        slug: `now-${String(i)}`,
-        ask: orig.instruction,
-        answer: cut(newBody),
-        context: null,
-      })
 
-  const verdict: Result['verdict'] =
-    was === null || now === null
-      ? 'unscoreable'
-      : identical
-        ? 'unchanged'
-        : now.score > was.score
-          ? 'better'
-          : now.score < was.score
-            ? 'worse'
-            : 'unchanged'
+  /*
+    Asked twice, with the sides exchanged, and agreement is the verdict.
+
+    `then` puts the NEW answer second; `swapped` puts it first. A judge that
+    says the new answer is better in both orders has said something about the
+    answers. One that changes its mind has said something about the order, and
+    that is reported as unscoreable -- #133's own third outcome, *"a change the
+    judge cannot rank is the interesting one"* -- rather than resolved by a
+    tie-break, which would be inventing a verdict out of a disagreement.
+  */
+  const then = identical ? null : await compare(orig.instruction, cut(orig.body), cut(newBody))
+  if (!identical) await pause(4_000)
+  const swapped = identical ? null : await compare(orig.instruction, cut(newBody), cut(orig.body))
+
+  /*
+    The rule lives in `direction`, and is unit-tested exhaustively there.
+
+    All sixteen combinations of two comparisons are enumerated in
+    `tests/eval/direction.test.ts`, because this is nine lines of conditional
+    that decides every verdict the harness reports and an earlier draft of it
+    counted one tie plus one preference as agreement.
+  */
+  const verdict: Result['verdict'] = identical ? 'unchanged' : direction(then, swapped)
+
+  const why =
+    verdict === 'unscoreable' && then !== null && swapped !== null
+      ? `the judge reversed when the sides were swapped (${then.better} then ${swapped.better})`
+      : (then?.reason ?? 'the answer is byte-identical to the one Grant received')
 
   console.log(
-    verdict === 'unscoreable'
-      ? 'unscoreable — the judge could not be read'
-      : `${String(was?.score)} → ${String(now?.score)}  ${verdict}${identical ? ' (identical text)' : ''}`,
+    verdict === 'unchanged' && identical
+      ? 'unchanged (identical text)'
+      : `${verdict}${verdict === 'unscoreable' ? ' — ' : ''}${verdict === 'unscoreable' ? why.slice(0, 60) : ''}`,
   )
   results.push({
     job: orig.job_id,
     intent: orig.intent_class ?? 'unclassified',
     words: orig.words,
-    was: was?.score ?? null,
-    now: now?.score ?? null,
     verdict,
-    why: now?.reason ?? was?.reason ?? '',
+    why,
     identical,
   })
 }
@@ -490,28 +505,31 @@ const better = results.filter((r) => r.verdict === 'better').length
 const worse = results.filter((r) => r.verdict === 'worse').length
 const same = results.filter((r) => r.verdict === 'unchanged').length
 const unscoreable = results.filter((r) => r.verdict === 'unscoreable').length
-const shift = better - worse
 
 /*
   The verdict, which refuses to be dramatic about one case.
 
-  #133: *"Never report a single replay as a regression."* So a shift is only
-  called when it clears the measured noise floor AND more than one case moved
-  the same way. Everything else is reported as movement within the noise, with
-  the numbers printed so nobody has to take that on trust.
+  #133: *"Never report a single replay as a regression."* With a pairwise
+  judge there is no scale to compare against a noise floor, so the rule is
+  stated directly: a direction is only called when MORE THAN ONE case moved
+  that way and they outnumber the other direction. One case moving is one
+  case, and it is printed as such.
+
+  A run where the position control failed cannot conclude anything, and says
+  so instead of quietly reporting the bias as a finding about the office.
 */
-const floor = noise ?? 1
 const decided =
-  Math.abs(shift) > floor && (shift > 0 ? better > 1 : worse > 1)
-    ? shift > 0
+  biased > 0
+    ? 'UNMEASURED — the judge preferred a position on identical text, so no direction can be read from this run'
+    : better > 1 && better > worse
       ? 'BETTER than the history'
-      : 'WORSE than the history'
-    : 'WITHIN THE NOISE — no regression and no improvement can be claimed'
+      : worse > 1 && worse > better
+        ? 'WORSE than the history'
+        : 'NO DIRECTION — nothing moved far enough, or not enough cases moved together'
 
 console.log(
   `\n  better ${String(better)} · worse ${String(worse)} · unchanged ${String(same)} · unscoreable ${String(unscoreable)}`,
 )
-console.log(`  noise floor ${String(floor)} point(s); net shift ${String(shift)}`)
 console.log(`  ${decided}`)
 console.log(
   hygienic
@@ -524,6 +542,26 @@ if (childrenStopped > 0) {
   )
 }
 
+/*
+  The degradation control, asserted rather than eyeballed.
+
+  #133: *"a deliberately degraded prompt shows up as worse."* The first build
+  of this harness failed exactly here -- sabotage came back "better 1, worse
+  0" -- and the failure is the reason the judge is pairwise now. So the check
+  runs inside the command: under --degrade, a run that does not come back
+  WORSE exits non-zero, because a detector that cannot be made to go red is
+  not evidence of anything.
+*/
+if (DEGRADE) {
+  const detected = worse > better
+  console.log(
+    detected
+      ? `  CONTROL PASSED — sabotage was detected as worse (${String(worse)} worse against ${String(better)} better)`
+      : `  CONTROL FAILED — sabotage was NOT detected (${String(worse)} worse against ${String(better)} better). This harness cannot currently see a regression.`,
+  )
+  if (!detected) process.exitCode = 1
+}
+
 const report = [
   '# Replay against real history',
   '',
@@ -533,7 +571,12 @@ const report = [
     ? '**CONTROL RUN (`--degrade`).** Every request was deliberately sabotaged before it was replayed. A run that does not come back WORSE means this harness cannot detect a regression.'
     : '**Real run.** Each request below is a real thing Grant asked, replayed against current code, with the same judge scoring the old answer and the new one.',
   '',
-  `**${decided}** — better ${String(better)}, worse ${String(worse)}, unchanged ${String(same)}, unscoreable ${String(unscoreable)}; noise floor ${String(floor)} point(s).`,
+  `**${decided}** — better ${String(better)}, worse ${String(worse)}, unchanged ${String(same)}, unscoreable ${String(unscoreable)}.`,
+  '',
+  'The judge compares the two answers directly, blind, and is asked twice with the',
+  'sides exchanged; agreement is the verdict and a reversal is reported as',
+  'unscoreable. Absolute 1-5 scoring was tried first and could not detect a',
+  'deliberately sabotaged run, which is why it is gone.',
   '',
   'What this does NOT hold constant: the documents. They are retrieved as they are',
   'now, not as they were, because nothing stored what was retrieved. A document added',
@@ -551,11 +594,10 @@ const report = [
   '',
   "The judge's reasoning quotes the answer, so it stays on the console too.",
   '',
-  '| job | intent | words | was | now | verdict |',
-  '|---|---|---|---|---|---|',
+  '| job | intent | words | verdict |',
+  '|---|---|---|---|',
   ...results.map(
-    (r) =>
-      `| \`${r.job.slice(0, 8)}\` | ${r.intent} | ${String(r.words)} | ${String(r.was ?? '—')} | ${String(r.now ?? '—')} | ${r.verdict} |`,
+    (r) => `| \`${r.job.slice(0, 8)}\` | ${r.intent} | ${String(r.words)} | ${r.verdict} |`,
   ),
   '',
 ].join('\n')
