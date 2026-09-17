@@ -125,6 +125,39 @@ check(
 )
 
 /*
+  A SECOND connector, through its own ingestion contract (#257).
+
+  The acceptance list asks for Drive as well as the notebook, and the point of
+  the Issue is that the agent layer should not care which is which: *"adding a
+  future connector requires implementing the ingestion/index contract, not
+  modifying every agent/channel."*
+
+  So this goes in through `app.record_drive_document` -- the function
+  `drive-read.ts` calls -- rather than an insert, because an insert would prove
+  the TABLE works and the contract is the thing under test. No Google
+  credential is needed or wanted for that: the contract is the boundary, and
+  what sits on the far side of it is Google's problem rather than this index's.
+*/
+await db.execute(`
+  insert into public.project_attachments (project_id, connector, external_ref, display_name, role)
+  values (${lit(projectId)}::uuid, 'drive', ${lit(`folder-${run}`)},
+          'A linked Drive folder', 'source');
+  select app.record_drive_document(
+    ${lit(projectId)}::uuid, ${lit(`folder-${run}`)}, ${lit(`file-${run}`)},
+    ${lit(`The ${TOKEN} pricing sheet`)},
+    ${lit(`Pricing for the ${TOKEN} work is banded. The standard band is the one most clients take.`)},
+    'verify:unified');
+`)
+const bothConnectors = await one(`
+  select count(distinct connector)::int as n
+    from app.search_documents(${lit(TOKEN)}, ${lit(projectId)}::uuid, 10, 'any')`)
+check(
+  'two different connectors feed ONE searchable project memory',
+  `${String(bothConnectors.n)} connector(s) answer the same query`,
+  Number(bothConnectors.n) === 2,
+)
+
+/*
   The question, asked the way Grant asks it and NOT the way that worked.
 
   It names the topic and not the connector. An earlier phrasing here said "the
@@ -171,10 +204,32 @@ for (let attempt = 0; attempt < 5 && job === null; attempt += 1) {
         state_reason = 'not this suite''s job' where job_id = ${lit(got.jobId)}::uuid`)
   } else await pause(1_000)
 }
+/*
+  The deployed worker may have taken it first, and that is the office working.
+
+  #184's scope keeps other SUITES out; nothing keeps the live worker out, and
+  it ticks every minute. A run that failed here would be reporting "the office
+  answered this through its normal path" as a defect — so when the job is gone,
+  this waits for it to settle and reads the answer it produced, which is a
+  stronger end-to-end result than the in-process run rather than a weaker one.
+*/
+const ranHere = job !== null
+if (job === null) {
+  for (let waited = 0; waited < 24; waited += 1) {
+    const st = await one(
+      `select state::text as s from public.jobs where job_id = ${lit(jobId)}::uuid`,
+    )
+    if (['complete', 'failed', 'cancelled'].includes(String(st.s))) break
+    await pause(5_000)
+  }
+}
+const whoRan = await one(
+  `select state::text as s from public.jobs where job_id = ${lit(jobId)}::uuid`,
+)
 check(
   'the office picked the message up',
-  job === null ? 'NOTHING DEQUEUED' : 'dequeued',
-  job !== null,
+  ranHere ? 'dequeued here' : `the deployed worker took it — ${String(whoRan.s)}`,
+  ranHere || String(whoRan.s) === 'complete',
 )
 
 let body = ''
@@ -304,7 +359,10 @@ const visible = await one(`
 check(
   'CONTROL: and its own project can, so the isolation is scope and not silence',
   `${String(visible.n)} hit(s) from its own project`,
-  Number(visible.n) === 1,
+  // Two, because two connectors fed this project and both mention the token.
+  // The number is the point: the project sees all of its own knowledge and
+  // none of anybody else's.
+  Number(visible.n) === 2,
 )
 
 // --- teardown --------------------------------------------------------------

@@ -94,8 +94,18 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
 | **started from** | `68b7958` (PR #274 merged) |
 | **branch** | `claude/phase-7-communications-kh8ow8`, restarted from main |
 | **migrations** | 463 |
-| **#133** | **DONE** — `npm run replay` + `npm run verify:judge`, both controls proved |
-| **next** | #257, then #258, then #172 |
+| **#133** | **DONE and closed** — `npm run replay` + `npm run verify:judge`, both controls proved |
+| **#257** | retrieval, reconciliation and the end-to-end criterion all done — `npm run verify:unified` 10/10 |
+| **next** | #258 (signed-link artifact delivery), then #172, with #41 throughout |
+
+**#257, where it stands.** Every acceptance box is now met and evidenced:
+NotebookLM and Drive both feed one index through their own ingestion
+contracts (`verify:unified` proves two connectors answering one query);
+retrieval returns each document ONCE and excludes archived material (0464);
+upstream deletions reconcile under ADR-0040 with two strikes, a blast-radius
+refusal and a symmetric return path (0465, 0466); provenance is cited;
+isolation is proved in both directions. `verify:knowledge` 38/38,
+`verify:unified` 10/10, both in the gate.
 
 **What #133 shipped, and the two things that make it evidence rather than
 code:**

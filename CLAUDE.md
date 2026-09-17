@@ -2461,6 +2461,70 @@ Each of these cost real time. They are here so they cost it once.
   pressing it. When a removal turns a suite red, ask whether the suite was
   pointed at the live thing before deciding the removal was wrong.
 
+- **A judge that scores each answer and subtracts cannot detect a regression,
+  and only a control says so.** #133's first build graded the old and the new
+  answer 1-5 with #116's rubric; on one run the SAME text scored 1 and then 5,
+  and a deliberately sabotaged set came back *"better 1, worse 0"*. The rubric
+  is not at fault — it grades one reply against a standard, which is what
+  `npm run eval` needs. The comparative question is easier and must be asked
+  directly: show both answers blind, ask which is better, then ask AGAIN with
+  the sides exchanged. Agreement is the verdict, a reversal is position bias,
+  and six of the sixteen combinations are unscoreable, which is the instrument
+  abstaining rather than failing.
+- **A control that cannot distinguish its treatment from its baseline is
+  measuring nothing.** The same degradation control then failed a second time,
+  and the judge was NOT the cause: `npm run verify:judge` scores it 5/5 on
+  clear pairs. Two of the four sabotaged cases were `/start` and a link
+  confirmation, whose honest answer is already one line — so a four-word answer
+  is barely different from the right one and the judge was correct to call it
+  close. Requiring a substantive baseline is not weakening a control.
+- **A suite that drives the real enqueue path with a real-looking actor
+  produces jobs indistinguishable from Grant's — fifth and sixth instance.**
+  `verify:history` (61 jobs) and `verify:transport` (29) both call
+  `app.enqueue_inbound` on purpose, so `requested_by` is `telegram:grant` or
+  `slack:U0HIST`, and BOTH witnesses miss it: `is_fixture` is generated from
+  that string, and `app.harness_job` asks whether the PROJECT is a fixture —
+  these land on real projects. `npm run replay` picked three of them as "real
+  history", which is how they were found. 0342 added `%:verify-%` so a suite
+  can name its ACTOR; where the actor is part of what is being asserted, the
+  suite corrects its own attribution in teardown and ASSERTS it.
+- **Chasing harness traffic by NAME fails; ask a property of the REQUEST.**
+  Three rounds of excluding probe text from the replay corpus each found
+  another shape. What worked is structural: a real request came through a real
+  channel AND **its answer was actually delivered to somebody**. A harness
+  almost never gets that far, and unlike a list of names it cannot go stale.
+- **A replay can deliver to Grant through the work it SPAWNS.** Replaying
+  "write me a PDF report" made the office enqueue `artifact.report` children
+  with `announce = true` — a child inherits `requested_by` and takes the
+  column DEFAULT for announce. Nothing reached him by luck: the fixture parent
+  had no message to reply to. And an INSERT-only trigger is not enough, because
+  `src/jobs/worker.ts` writes the handler's own announce decision back with an
+  UPDATE after the run (0461, then 0462).
+- **Retrieval returned the same document twice, and the rule to stop it had
+  existed for months.** Every file on Grant's real project appeared once as
+  `notebooklm` and once as `notion`, identical rank — the notion copy carries
+  `mirrors_document_id` because the office WROTE it, which 0169 already calls
+  "not new material". With five hits into an 8,000-character block, a corpus
+  with sixteen mirrors spends half a turn's evidence saying one thing twice,
+  and the answer cites one document as though it were two sources. A mirror
+  steps aside only when its original is visible in the same scope.
+- **Driving a function finds what reading it cannot — the symmetric half.**
+  0465 marked, archived and un-marked a vanished source, and a source that came
+  BACK stayed archived for ever. Four passes against real rows found it in one
+  run; the migration read perfectly. Converging is symmetric or it is not
+  converging.
+- **A test that runs ONE attempt is asserting against the retry loop.**
+  `verify:unified` reported NO OUTPUT and read as a product failure. The job
+  had gone `running -> retrying` with "incoherent output metadata" — #185's
+  coherence gate refusing one attempt, which is the gate working, with its
+  refusal written into `pinned_config` so the next attempt can see it. Drive
+  the office's own recovery, and report the attempt count.
+- **The deployed worker can take a suite's job, and failing on that reports
+  the office working as a defect.** #184's scope keeps other SUITES out; nothing
+  keeps the live worker out and it ticks every minute. Wait for the job to
+  settle and read the answer it produced — an end-to-end result through the
+  real worker is stronger than the in-process one, not weaker.
+
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`
