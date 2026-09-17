@@ -2525,6 +2525,38 @@ Each of these cost real time. They are here so they cost it once.
   settle and read the answer it produced — an end-to-end result through the
   real worker is stronger than the in-process one, not weaker.
 
+- **A mechanism keyed on a table nothing populates is a feature nobody has.**
+  `public.contacts` holds ZERO rows, and ADR-0037 calls a contact match *"the
+  strongest statement of relevance the database holds"* — so #172's strong tier
+  has never once fired on real data. The writer and the studio form both exist
+  and capture an email, so nothing is broken; it is simply unused. Before
+  reporting a derivation as working, ask how many rows the thing it derives
+  FROM actually has. Same family as the dial with no reader and the column
+  nothing writes.
+- **His half of the conversation is invisible, and that decides what the
+  question can answer.** Mail is associated with a project by WHO SENT IT or by
+  the subject, so Grant's own replies — not from a contact, no alias inherited
+  — belong to no project. Fine for "what has come in" and fatal for "what am I
+  waiting on". The fix is the THREAD: one conversation, so if any message in it
+  belongs to the project the thread does. Applied only where the thread is the
+  unit of the question, never to the reader that feeds every prompt, because
+  six negative controls are written against that reader's exact scope.
+- **Take the counterpart's name from the last message and you will address the
+  person who is not there.** The first draft of `mail_awaiting` named the
+  thread's other party off its most recent message — so on exactly the threads
+  Grant is waiting on somebody else, it read "waiting on Grant Rogers". Ask who
+  the thread is WITH, which is the most recent sender who is not him.
+- **The cache stores a recipient COUNT, not recipients**, deliberately
+  (ADR-0037). So a cold outbound thread to somebody who has never written back
+  has no signal at all and cannot be reported as awaiting a reply. That is a
+  trade following from a privacy decision rather than a defect, and it is the
+  boundary of what "outstanding commitments" can honestly mean here.
+- **`biome ci` fails on FORMATTING and on IMPORT ORDER, and says so far below
+  the findings.** Recorded once already and paid for twice more in one session:
+  a commit went out with lint exit 1 because the findings above the failure were
+  all warnings. `npx biome format .` names the file; `npx biome ci .` piped
+  through a colour strip names the rule. **Read the exit code.**
+
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`

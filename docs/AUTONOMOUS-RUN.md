@@ -98,7 +98,23 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
 | **#257** | retrieval, reconciliation and the end-to-end criterion all done — `npm run verify:unified` 10/10 |
 | **#258** | Slack signed-link delivery built and tested; the remaining box is one LIVE Slack round trip |
 | **gate** | **24/24** on a clean tree at 1,290s, including `verify:judge` and `verify:unified` |
-| **next** | the artifact chain end to end (closes #258's last box, advances #41), then #172 |
+| **#258** | Slack signed-link delivery + `verify:artifact` 11/11 end to end; open, one live Slack round trip left |
+| **#172** | `app.mail_awaiting` — what has gone quiet, both directions; `verify:mail` 30/30 |
+| **suites** | `verify:judge`, `verify:unified`, `verify:artifact`, `verify:knowledge`, `verify:mail` all added to the gate |
+| **next** | re-run the gate (27 entries now), then #272 debt / further #41 dimensions |
+
+**What is genuinely left on each open issue, so nobody re-derives it:**
+
+| issue | what remains |
+|---|---|
+| #258 | one LIVE Slack round trip. Everything below it is tested and the wire format asserted. Weigh it against the cost: `verify:slack` leaves a permanent channel in Grant's workspace, because Slack cannot delete one. |
+| #172 | "identify decisions and deadlines" and "prepare replies" (gmail.draft is enabled and unexercised). The commitments question is answered as far as metadata honestly allows — see the CLAUDE.md entry about the recipient COUNT. |
+| #260 | quota-blocked on NotebookLM. |
+| #259 | unstarted, deliberately deprioritised by Grant. |
+| #272 | 15 baseline entries; 9 want a product surface rather than a caller. |
+| #261 | free architecture; no acceptance criterion has yet been shown to REQUIRE paid compute. That test is the deliverable, not a bill. |
+| #16 / #135 | Cloudflare account + token (free tier), Grant's to create. |
+| #18, #213, #270 | human actions, recorded, not to be re-asked. |
 
 **#172, what inspection found.** Further along than the Issue reads:
 ADR-0037, migration 0432, `app.mail_for_project`, `mail_search`,

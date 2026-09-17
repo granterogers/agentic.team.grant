@@ -229,6 +229,19 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     file, which is the half a happy-path suite would call a pass.
   */
   ['verify:artifact', 'a request for a PDF produces a real, stored, linkable PDF (#258)'],
+  /*
+    The index itself, and the correspondence beside it.
+
+    Both were outside the gate while carrying the rules that decide what
+    reaches a model: which documents retrieval returns and which it hides
+    (0464, ADR-0040), how an upstream deletion reconciles (0465, 0466), and
+    which of Grant's mail a project may see at all (ADR-0037). CLAUDE.md's own
+    entry is that a suite outside the gates for a change is a suite that will
+    be red and unnoticed — `verify:arrangement` sat broken for a morning
+    exactly that way.
+  */
+  ['verify:knowledge', 'one document one hit, archived out of search, deletions reconcile (#257)'],
+  ['verify:mail', 'a project sees only its own correspondence, and what has gone quiet (#172)'],
   [
     'verify:wrappers',
     'every RPC a client calls is reachable — PostgREST exposes only `public`, and a missing wrapper is invisible until called',
