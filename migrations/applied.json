@@ -467,5 +467,6 @@
   "0466_and_a_source_that_comes_back_comes_back.sql": "1e253ad13fee13777ca1c85436406f75e9ed4925743a4232c01937e80a49f61e",
   "0467_a_thread_nobody_came_back_on.sql": "1cadcad69506b2934cbe52be296b0c9b4de619af7cdaaede844418bfd3b7266e",
   "0468_a_thread_is_one_conversation_including_his_half_of_it.sql": "45f28915c16818b9af87b96a99b38cdc9289c8be4c3e866e1734fa2a96339534",
-  "0469_the_briefing_says_how_long_the_oldest_has_waited.sql": "f752faf27a784623ce4d83cdbc9197568850e576c32097e4cdaf618eed631c89"
+  "0469_the_briefing_says_how_long_the_oldest_has_waited.sql": "f752faf27a784623ce4d83cdbc9197568850e576c32097e4cdaf618eed631c89",
+  "0470_two_channel_lookups_the_provisioner_outgrew.sql": "b697953aa1a16342795e103bed122468cbf577841520e3eadee700bae1a5e658"
 }
