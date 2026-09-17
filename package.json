@@ -54,6 +54,7 @@
     "verify:impediments": "tsx scripts/verify/impediments.ts",
     "verify:notice": "tsx scripts/verify/notice.ts",
     "verify:delegation": "tsx scripts/verify/delegation.ts",
+    "verify:decisions": "tsx scripts/verify/decisions.ts",
     "verify:drive": "tsx scripts/verify/drive.ts",
     "verify:failures": "tsx scripts/verify/failures.ts",
     "verify:corpus": "tsx scripts/verify/corpus.ts",

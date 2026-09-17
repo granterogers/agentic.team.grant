@@ -5427,6 +5427,37 @@ function governanceTab() {
     </div>
   </article>`
 
+  /*
+    A decision, and what it ruled out (#129).
+
+    The ruled-out list is given its own line rather than folded into the
+    reason, because it is the thing the Issue is about and the thing that would
+    otherwise be skimmed: "we chose Notion" invites the question again, "we
+    chose Notion over Drive because the team edits in place" closes it.
+
+    A superseded decision stays on the page, sunken. That is the Issue's own
+    acceptance criterion — a log that hides what it replaced cannot answer when
+    the office changed its mind — and it is why this is a list rather than a
+    lookup.
+  */
+  const decision = (d) => `<article class="govcase ${d.live ? 'g-open' : 'g-declined'}" data-lift data-tilt="1.4" data-saidwrap>
+    <div class="govhead">
+      <b>${esc(d.question)}</b>
+      <span class="govstate">${d.live ? 'Standing' : 'Replaced'}</span>
+    </div>
+    <p class="govarg"><b>${esc(d.chose)}</b> — ${esc(d.because)}</p>
+    ${(d.ruled_out ?? []).length === 0
+      ? ''
+      : `<p class="govnote">Ruled out: ${(d.ruled_out ?? []).map((x) => esc(x)).join(' · ')}</p>`}
+    <div class="govfoot">
+      <div class="govfrom">
+        <span class="t-meta">${d.by === 'grant' ? 'You decided' : `${esc(d.by)} decided`}</span>
+        ${d.project ? `<span class="t-meta">${esc(d.project)}</span>` : ''}
+        <span class="t-meta">${when.stamp(d.at)}</span>
+      </div>
+    </div>
+  </article>`
+
   const empty = (what) => `<p class="t-meta govempty">${esc(what)}</p>`
 
   return `<div class="setbody">
@@ -5460,6 +5491,13 @@ function governanceTab() {
       ${g.noticed.length === 0
         ? empty('Nothing noticed yet. The noticing pass runs over finished work.')
         : `<ul class="govnotes">${g.noticed.map(noted).join('')}</ul>`}
+    </section>
+
+    <section class="govsec">
+      <h3 class="govtitle">What it has settled<span class="t-meta">${esc(String(config.DECISIONS.filter((d) => d.live).length))} standing</span></h3>
+      ${config.DECISIONS.length === 0
+        ? empty('Nothing yet. A decision is written down when you answer a question or settle a proposal.')
+        : `<div class="govcases">${config.DECISIONS.map(decision).join('')}</div>`}
     </section>
 
     <section class="govsec">

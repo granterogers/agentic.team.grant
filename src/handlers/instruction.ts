@@ -188,6 +188,16 @@ interface Speaker {
   readonly handoff: Handoff | null
 }
 
+/** A row of `app.decisions_about` — what the office already settled (#129). */
+interface Decided {
+  readonly question: string
+  readonly chose: string
+  readonly ruled_out: readonly string[]
+  readonly because: string
+  readonly by: string
+  readonly project: string | null
+}
+
 export interface InstructionDeps {
   readonly db: SqlExecutor
   readonly router: ProviderRouter
@@ -2393,6 +2403,59 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const context = contextBlock(hits)
 
       /*
+        What the office has already settled (#129).
+
+        Across EVERY project, deliberately: `retrieve()` searches within a
+        dashboard project because that is right for documents, and the whole
+        point of the decision log is that a question settled three weeks ago on
+        another project is still settled. ADR-0036 states it — this is the one
+        retrieval surface where a project boundary is not a privacy boundary.
+
+        Never fatal and never noisy: at most four, and an empty answer is the
+        common case.
+      */
+      const settledAlready =
+        confirmation !== null
+          ? []
+          : (((
+              await deps.db
+                .execute(`select app.decisions_about(${lit(instruction.slice(0, 500))}, 4) as d`)
+                .catch(() => ({ rows: [{ d: '[]' }] }))
+            ).rows[0]?.d as Decided[] | string | undefined) ?? [])
+
+      const settled: Decided[] = Array.isArray(settledAlready)
+        ? settledAlready
+        : (JSON.parse(String(settledAlready)) as Decided[])
+
+      /*
+        Split by WHO decided, because that decides how it may be used.
+
+        A decision Grant made is a record of what he said, which
+        `provenance.ts` counts as evidence. One the office reached on its own
+        is the office's prose, which it does not — the same asymmetry that
+        keeps `answeredBefore` out of `established()`, applied to a row instead
+        of a turn. Folding both into one list would let a conclusion the office
+        drew become a fact it may cite.
+      */
+      const hisDecisions = settled.filter((d) => d.by === 'grant')
+      const oursDecisions = settled.filter((d) => d.by !== 'grant')
+
+      const decidedBlock =
+        settled.length === 0
+          ? ''
+          : `Things already settled. Do not re-derive these, and do not propose ` +
+            `something that was ruled out without saying it was:\n\n${settled
+              .map(
+                (d) =>
+                  `· ${d.question} → ${d.chose}${
+                    d.ruled_out.length === 0 ? '' : ` (not: ${d.ruled_out.join(', ')})`
+                  } — ${d.because} [${d.by === 'grant' ? 'Grant decided' : `${d.by} decided`}${
+                    d.project === null ? '' : `, on ${d.project}`
+                  }]`,
+              )
+              .join('\n')}`
+
+      /*
         What a colleague handed over, if this job is the second half of one
         (#128).
 
@@ -2710,6 +2773,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
                 /*
+                  What is already settled (#129).
+
+                  Before the colleague's draft and after the documents: a
+                  decision is a stronger constraint than a draft and a weaker
+                  source than a document, and the order of these system
+                  messages is the order of authority the answer should give
+                  them.
+                */
+                ...(decidedBlock === ''
+                  ? []
+                  : [{ role: 'system' as const, content: decidedBlock }]),
+                /*
                   The colleague's draft (#128).
 
                   AFTER the documents deliberately. The order of these system
@@ -2996,7 +3071,20 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const shown: Context = {
         asked: instruction,
-        saidBefore: [...turns.map((t) => t.said), ...memory.recalled.map((m) => m.said)],
+        saidBefore: [
+          ...turns.map((t) => t.said),
+          ...memory.recalled.map((m) => m.said),
+          /*
+            A decision GRANT made is a record of what he said (#129).
+
+            So it belongs here, with the rest of his words, and the office's
+            own conclusions do not — they go to `answeredBefore` below. Folding
+            both into one list would let a conclusion the office drew become a
+            fact it may cite, which is the whole asymmetry `provenance.ts`
+            exists to keep.
+          */
+          ...hisDecisions.map((d) => `${d.question} — ${d.chose}. ${d.because}`),
+        ],
         retrieved: [
           ...(context === '' ? [] : [context]),
           ...(projectList === '' ? [] : [projectList]),
@@ -3045,6 +3133,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             her. `established()` excludes this list for exactly that reason.
           */
           ...(handedOver?.body === undefined ? [] : [handedOver.body]),
+          // And decisions the OFFICE reached, for the same reason (#129).
+          ...oursDecisions.map((d) => `${d.question} — ${d.chose}. ${d.because}`),
         ],
       }
 

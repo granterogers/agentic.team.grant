@@ -422,5 +422,7 @@
   "0421_the_dial_grant_can_set_now_decides_something.sql": "35efecacdca6a09d7a830d517e3b99e7d1c695fe8ffb72c18ff190fea86841a4",
   "0422_answering_from_now_on_writes_the_row.sql": "6de25e16ef5221162a1750f696a25835d73f35e92f025f6c212a90b40db79801",
   "0423_work_a_person_asked_for_does_not_ask_again.sql": "7a945e5ec7694624705a499fe48b00796f4189536bf3d46895d4ec719e4972b2",
-  "0424_a_duty_you_switched_on_is_a_standing_authorization.sql": "c5d6acc8d0a77c06c68202420300f2c5d36fc6135fa1f55c46774b7999bb75ed"
+  "0424_a_duty_you_switched_on_is_a_standing_authorization.sql": "c5d6acc8d0a77c06c68202420300f2c5d36fc6135fa1f55c46774b7999bb75ed",
+  "0425_a_decision_is_not_a_document.sql": "dd9ff87b73f8544c6c41b5d3d36cca368ad2655403acf37bb40135265138ac39",
+  "0426_the_office_writes_down_what_it_decided.sql": "bc314579d85f73ef48bf163a107a27cf50ea3319f9b0023ddfa3142c4d727fbb"
 }

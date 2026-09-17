@@ -4828,6 +4828,17 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 .govwall {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 13px; font-weight: 600; color: var(--ink);
+  /*
+    An ellipsis needs all THREE of these, and this rule had two.
+
+    Without `white-space: nowrap` the overflow never happens, so
+    `text-overflow` has nothing to do and the name wraps instead — in a three
+    column grid that broke `web.search` across two lines as "web.searc / h" and
+    `calendar.write` as "calendar.wr / ite". A dotted identifier split mid-token
+    does not read as a tool name at all. Found by opening the capture.
+  */
+  white-space: nowrap;
+  flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis;
 }
 .govwalls li .t-meta { flex: 1 1 auto; min-width: 0; }

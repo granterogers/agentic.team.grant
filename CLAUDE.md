@@ -2202,6 +2202,30 @@ Each of these cost real time. They are here so they cost it once.
   Oliver may write up what Emma found; a figure of Emma's does not become
   grounded for him by having passed through her.
 
+- **`text-overflow: ellipsis` needs all THREE properties and this rule had
+  two.** `.govwall` set `overflow: hidden` and `text-overflow: ellipsis` and no
+  `white-space: nowrap`, so the overflow never happened and the ellipsis had
+  nothing to do: in a three-column grid `web.search` rendered as
+  "web.searc / h" and `calendar.write` as "calendar.wr / ite". A dotted
+  identifier split mid-token does not read as a tool name at all. No contrast
+  failure, no overflow finding, no dead control — found by opening the capture.
+
+- **A suite whose own rows are FIXTURES cannot assert that a reader finds
+  them.** `verify:decisions` wrote every row as `verify:decisions-<run>`, which
+  makes `is_fixture` true by generation, and then asserted that
+  `app.decisions_about` returns them — a reader that correctly excludes
+  fixtures, so four checks failed against a product that was right. The suite
+  needs TWO authors: a real one for anything a reader must see (safe, because
+  every section ends in `rollback`) and the `verify:` one for the single check
+  that fixtures never reach a prompt. Ask which side of your own filter each
+  row is on before writing the assertion.
+
+- **`array_to_string` is STABLE, so a generated column containing it is
+  refused.** 0425 wanted `ruled_out` in a weighted tsvector and Postgres said
+  *"generation expression is not immutable"*. The reader matches the array with
+  a trigram instead, where a stable function is perfectly legal — and the
+  column comment says WHY it is missing, so nobody adds it back.
+
 ---
 
 ## Visual standard

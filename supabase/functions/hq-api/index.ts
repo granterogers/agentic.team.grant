@@ -224,6 +224,16 @@ const SECTIONS: Readonly<
   */
   standing: { fn: 'hq_standing' },
   /*
+    What the office has settled, and what that ruled out (#129).
+
+    Its own section rather than a field on `governance`, for the reason
+    `standing` is: governance is what the office LEARNED and WANTS, and this is
+    what it CONCLUDED. And it is the one reading surface that deliberately
+    crosses every project (ADR-0036), so folding it into a payload that is
+    otherwise project-shaped would invite somebody to scope it.
+  */
+  decisions: { fn: 'hq_decisions', args: { p_limit: 40 } },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the

@@ -161,6 +161,44 @@ const FALLBACK_BEHAVIOURS = [
   in both states: a permission in force is the thing Grant audits, and one he
   revoked is the thing that tells him revoking works.
 */
+/*
+  Shaped like `app.decisions_so_far` (#129).
+
+  Three rows, and the third is the one that makes the section worth having: a
+  superseded decision beside the one that replaced it. "Both visible" is the
+  Issue's own acceptance criterion, because a history that hides what it
+  replaced cannot answer when the office changed its mind.
+*/
+const FALLBACK_DECISIONS = [
+  {
+    id: 'f-d1', live: true, by: 'grant', at: '2026-09-14T11:20:00Z',
+    project: 'Legacy Coaching Course',
+    question: 'Where do the module pages live?',
+    chose: 'Notion',
+    ruled_out: ['Google Drive', 'a folder of markdown files'],
+    because: 'The team needs to edit in place, and Drive cannot do that without a round trip.',
+    supersedes: null,
+  },
+  {
+    id: 'f-d2', live: true, by: 'operations-director', at: '2026-09-10T15:05:00Z',
+    project: null,
+    question: 'Should the office chase an unanswered question?',
+    chose: 'Once, after two days',
+    ruled_out: ['Every day until answered', 'Never'],
+    because: 'Four questions went stale in a fortnight and one daily chase read as nagging.',
+    supersedes: null,
+  },
+  {
+    id: 'f-d3', live: false, by: 'grant', at: '2026-08-28T09:40:00Z',
+    project: 'Legacy Coaching Course',
+    question: 'Where do the module pages live?',
+    chose: 'Google Drive',
+    ruled_out: ['Notion'],
+    because: 'Everyone already had Drive open.',
+    supersedes: null,
+  },
+]
+
 const FALLBACK_STANDING = [
   {
     id: 'f-sa1', tool: 'drive.ingest', level: 1, live: true,
@@ -250,6 +288,7 @@ const FALLBACK_SPEND = {
 export const CONNECTIONS = [...FALLBACK_CONNECTIONS]
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
 export const STANDING = [...FALLBACK_STANDING]
+export const DECISIONS = [...FALLBACK_DECISIONS]
 export const CHANNELS = [...FALLBACK_CHANNELS]
 export const SPEND = { ...FALLBACK_SPEND }
 export const TEAM = []
@@ -369,6 +408,13 @@ export async function hydrateSettings(read) {
     read('standing')
       .then((rows) => {
         if (Array.isArray(rows)) replace(STANDING, rows)
+      })
+      .catch(() => undefined)
+
+    // And the decision log, the same way and for the same reason (#129).
+    read('decisions')
+      .then((rows) => {
+        if (Array.isArray(rows)) replace(DECISIONS, rows)
       })
       .catch(() => undefined)
     replace(CONNECTIONS, d.connections ?? [])
