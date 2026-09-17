@@ -189,6 +189,90 @@ for (const [autonomy, wants] of Object.entries(expected)) {
 }
 
 // ===========================================================================
+// 1b. Work a person asked for does not stop to ask them again (0423)
+// ===========================================================================
+
+console.log('\nwho asked: a person, or a schedule')
+
+/*
+  One transaction, three jobs, one enabled level-3 capability.
+
+  `jobs.requested_by` is what decides, and it is composed rather than chosen:
+  `duty:<name>` for a schedule and `<channel>:<actor>` for a person. Both are
+  written here so the difference is driven rather than assumed, and the whole
+  thing rolls back so neither job survives.
+*/
+{
+  const got = await one(`
+    begin;
+    insert into public.tool_permissions (tool, level, description, enabled, verbs, delivered_by)
+    values (${lit(LIVE_THREE)}, 3, 'A fixture level-3 capability, alive only inside this transaction.',
+            true, array['be consequential'], 'scripts/verify/approval.ts');
+    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (extensions.gen_random_uuid(), null, ${lit(`verify-approval-duty-${run}`)},
+            'research', 'duty:fixture-schedule');
+    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (extensions.gen_random_uuid(), null, ${lit(`verify-approval-person-${run}`)},
+            'research', 'telegram:grant');
+    select
+      (app.may_act(null, 'notion.write',
+        (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-duty-${run}`)}))
+        ->> 'verdict') as by_duty,
+      (app.may_act(null, 'notion.write',
+        (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-person-${run}`)}))
+        ->> 'verdict') as by_person,
+      (app.may_act(null, ${lit(LIVE_THREE)},
+        (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-person-${run}`)}))
+        ->> 'verdict') as person_level_three,
+      (app.may_act(null, 'notion.write', null) ->> 'verdict') as no_job;
+    rollback;
+  `)
+  check('a duty writing outward still asks', `duty → ${String(got.by_duty)}`, got.by_duty === 'ask')
+  check(
+    'and work a person asked for does not',
+    `person → ${String(got.by_person)}`,
+    got.by_person === 'proceed',
+  )
+  check(
+    'CONTROL: but a person asking does NOT reach a level-3 action',
+    `person + level 3 → ${String(got.person_level_three)}`,
+    got.person_level_three === 'ask',
+  )
+  check(
+    'CONTROL: and no job at all reads as unprompted, never as permission',
+    `no job → ${String(got.no_job)}`,
+    got.no_job === 'ask',
+  )
+}
+
+/*
+  CONTROL for the control: `observe` refuses even work a person asked for.
+
+  A project set to watch only and then asked to write is a contradiction
+  between two things Grant said, and the office must surface it rather than
+  quietly deciding which one it preferred.
+*/
+{
+  const got = await one(`
+    begin;
+    insert into public.autonomy_settings (project_id, level, set_by, reason)
+    values (null, 'observe', 'verify:approval', 'driving the asked-for rule');
+    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (extensions.gen_random_uuid(), null, ${lit(`verify-approval-observe-${run}`)},
+            'research', 'telegram:grant');
+    select (app.may_act(null, 'notion.write',
+      (select job_id from public.jobs where idempotency_key = ${lit(`verify-approval-observe-${run}`)}))
+      ->> 'verdict') as v;
+    rollback;
+  `)
+  check(
+    'CONTROL: watch only refuses even work a person asked for',
+    `observe + a person asking → ${String(got.v)}`,
+    got.v === 'refuse',
+  )
+}
+
+// ===========================================================================
 // 2. The floor: a level-3 action can never become automatic
 // ===========================================================================
 

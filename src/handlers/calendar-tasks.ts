@@ -18,10 +18,12 @@
  * is how a person stops reading the channel that would have told them it broke.
  */
 
+import { governOutward } from '../agents/approval.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { planTasksForCalendar, syncTasksToCalendar } from '../google/calendar-write.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import type { Plan } from '../tools/plan.ts'
+import { detail, summarise } from '../tools/plan.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -37,6 +39,46 @@ export function calendarTasksHandler(db: SqlExecutor): Handler {
     */
     plan: async (): Promise<Plan> => (await planTasksForCalendar(db)).plan,
     handle: async (job: Job): Promise<HandlerOutput> => {
+      /*
+        The policy, before the diary (#15).
+
+        This duty writes OUTWARD — `calendar.write` is level 2 — and it is
+        unprompted: nobody asked for this run, a schedule fired it. So it is
+        exactly the case #15's matrix is about, and the reason it does not
+        interrupt Grant sixteen times a day is 0424: switching the duty on IS
+        the standing authorization, as a row he can see and revoke.
+
+        The plan comes first so the question can name what would happen. #131:
+        approving something you cannot see is not an approval, it is consent to
+        a category — and this is the same plan the sync carries out, not a
+        second description of it.
+      */
+      const planned = (await planTasksForCalendar(db)).plan
+      const gate = await governOutward(db, {
+        jobId: job.jobId,
+        tool: planned.tool,
+        summary: `The diary is behind the task list: ${summarise(planned)}`,
+        detail: detail(planned),
+        empty: planned.steps.length === 0,
+        agent: 'operations-director',
+        standingOption: 'Keep the diary in step without asking me',
+      })
+      if (!gate.go) {
+        return {
+          body: gate.said,
+          shape: 'nothing_happened',
+          facts: { changed: false, looked_at: planned.steps.length },
+          // A blocker speaks for itself; a refusal has nothing else to say it.
+          announce: gate.blocker === null,
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: 'deterministic_retrieval',
+          model: null,
+        } satisfies HandlerOutput
+      }
+
       const outcome = await syncTasksToCalendar(db)
 
       const moved = outcome.created + outcome.updated + outcome.removed

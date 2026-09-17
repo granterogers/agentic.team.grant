@@ -71,6 +71,20 @@ the layers above produce.
 - `public.tool_requests` + `hq_approve_tool` / `hq_decline_tool` is ADR-0018,
   wired to the Governance page on 16 September (#272).
 
+### Progress
+
+| Issue | State | Evidence |
+|---|---|---|
+| **#15** | **done, ADR-0035** | 0421–0424 · `verify:approval` **28/28** with a harness audit (matrix cell flipped, suite went red naming it, restored, green) · `verify:drive` 42/42 · `verify:calendar` 7/7 · `verify:dryrun` 25/25 · `verify:layouts` 64 states 0 findings · `verify:controls` settings 96/0/0 |
+| **#128** | next | |
+
+**What #15 does NOT claim**, so nobody re-litigates it: three outward paths are
+governed — `drive.watch`'s ingest, the calendar duty, and anything through
+`governOutward`. `office.notion_sync` is deliberately NOT gated because it has
+no dry-run plan, and gating it before it can say what it would do would be an
+approval request nobody could read (#131). `notion-import` and
+`notebook.generate` have their own approval flows and are not double-gated.
+
 ### Where to restart after a compaction
 
 Reread `CLAUDE.md`, then this section, then the issue named as IN PROGRESS

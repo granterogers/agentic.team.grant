@@ -183,6 +183,15 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           `act_with_review` and `act` take it in and say so; `suggest` asks, as
           today; `observe` refuses and records why.
         */
+        /*
+          No `jobAskedFor`, deliberately.
+
+          Pressing Check now asks for a LOOK at the folder. Taking in whatever
+          turned up is something this job might additionally do, and reading
+          his request as consent for it would be reading "check that folder" as
+          "and add everything in it". Only a standing authorization or the dial
+          makes this proceed.
+        */
         const policy = await mayAct(db, { projectId: f.project_id, tool: 'drive.ingest' })
 
         if (policy.verdict === 'proceed') {

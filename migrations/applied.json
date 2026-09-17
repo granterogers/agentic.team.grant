@@ -420,5 +420,7 @@
   "0419_a_channel_is_for_a_project_that_stayed.sql": "4eafeedf3b8041c90d2ff9879071d592990bddd8074d0f82d3f226f12603f191",
   "0420_grant_can_answer_when_the_office_asks.sql": "50e0aca25dc82cb4c38f59178ef52c0fb56bd0edff2ce51e407cd0517521a249",
   "0421_the_dial_grant_can_set_now_decides_something.sql": "35efecacdca6a09d7a830d517e3b99e7d1c695fe8ffb72c18ff190fea86841a4",
-  "0422_answering_from_now_on_writes_the_row.sql": "6de25e16ef5221162a1750f696a25835d73f35e92f025f6c212a90b40db79801"
+  "0422_answering_from_now_on_writes_the_row.sql": "6de25e16ef5221162a1750f696a25835d73f35e92f025f6c212a90b40db79801",
+  "0423_work_a_person_asked_for_does_not_ask_again.sql": "7a945e5ec7694624705a499fe48b00796f4189536bf3d46895d4ec719e4972b2",
+  "0424_a_duty_you_switched_on_is_a_standing_authorization.sql": "c5d6acc8d0a77c06c68202420300f2c5d36fc6135fa1f55c46774b7999bb75ed"
 }
