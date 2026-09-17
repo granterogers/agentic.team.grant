@@ -178,7 +178,29 @@ for (const d of corpus) {
   console.log(`  CORPUS  ${d.slug} — "${d.title}", ${String(d.content_chars)} chars, ${d.made}`)
 }
 
-if (sweepable.length === 0 && live.length === 0 && corpus.length === 0) {
+/*
+  Documents that are really CONTAINERS (#272, #283).
+
+  `app.containers_stored_as_documents` has existed since 0283 taught syncNotion
+  to skip Notion containers, and nothing has ever called it — a hygiene query
+  with no sweep to report into. This is that sweep: the same command Grant runs
+  to find what a suite left behind is the right place to find what an importer
+  left behind.
+
+  Reported and never removed. A container stored as a document is a symptom of
+  the importer, and deleting the row would hide it until the next sync wrote it
+  back — the same reasoning the corpus rows above carry.
+*/
+const containers = (await db.execute('select * from app.containers_stored_as_documents()'))
+  .rows as { slug?: string; title?: string; connector?: string }[]
+for (const c of containers) {
+  console.log(
+    `  CONTAINER  ${String(c.slug ?? '?')} — "${String(c.title ?? '')}" ` +
+      `came in through ${String(c.connector ?? '?')} and is a folder, not a document`,
+  )
+}
+
+if (sweepable.length === 0 && live.length === 0 && corpus.length === 0 && containers.length === 0) {
   console.log('  nothing a suite should have removed.')
 }
 

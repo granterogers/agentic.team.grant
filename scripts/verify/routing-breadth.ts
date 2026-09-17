@@ -573,11 +573,39 @@ console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 */
 const missed = [...fellBack, ...wrong]
 if (missed.length > 0) {
-  console.log(`\n${String(missed.length)} case(s) did not reach their specialist:\n`)
+  /*
+    Say which KIND of miss each one is, because they have opposite causes and
+    the same appearance.
+
+    A case the semantic layer decided and got wrong is a routing finding: the
+    vocabulary or the expertise columns need work. A case it was never asked
+    about is a LITERAL match that went to the wrong person. And a run where
+    the provider was rate-limited produces neither — `nameSubjects` degrades
+    to an empty array by design, so every case falls back and the list fills
+    with misses that say nothing about routing at all.
+
+    This suite went 13 misses in one gate run and 0 standalone against
+    identical code, which is the swing that made the gate untrustworthy. A
+    bare count cannot tell those apart; the tally below can, and it costs
+    nothing because `viaSemantic` was already on every row.
+  */
+  const bySemantic = missed.filter((m) => m.viaSemantic).length
+  console.log(
+    `\n${String(missed.length)} case(s) did not reach their specialist ` +
+      `(${String(bySemantic)} the semantic layer decided, ` +
+      `${String(missed.length - bySemantic)} matched literally):\n`,
+  )
   for (const m of missed) {
     console.log(
-      `  [${m.form}] wanted ${m.wants}, got ${m.chosen.length === 0 ? 'Claire' : m.chosen.join(',')}` +
+      `  [${m.form}]${m.viaSemantic ? ' (meaning)' : ' (literal)'} wanted ${m.wants}, ` +
+        `got ${m.chosen.length === 0 ? 'Claire' : m.chosen.join(',')}` +
         ` — "${m.ask.slice(0, 60)}"`,
+    )
+  }
+  if (asked > 0 && named === 0) {
+    console.log(
+      '\n  NOTE: the semantic layer was asked and never answered — every miss above is a ' +
+        'provider outage, not a routing finding. Re-run before believing any of it.',
     )
   }
 }
