@@ -94,8 +94,20 @@ the git log. A unit is finished when it is committed AND its issue is updated.
   an unbound approval pause is refused by CHECK and by the function.
   `credential()` pauses instead of failing when a secret is missing.
   verify:checkpoints 27/27 with a harness audit.
-- **NEXT:** #264 and #265 — verify against their checklists, close or name the
-  one box left. Then #259 (unstarted, self-contained), #133, #41.
+- **#264 CLOSED.** The two unproven boxes were the security half: a hostile
+  event moves no permission row, the work goes to the specialist the TRIGGER
+  names, and `event_triggers` has no column that could grant reach. The
+  framework was also invisible — the Governance page now shows what listens.
+- **#265 CLOSED, and it found a real defect.** `guess_reach` classified
+  `delete_everything` as READ because a hostile description said so — and
+  underneath, snake_case names never matched at all, so every classification
+  ever made came from the untrusted description. 0458: the name is evidence,
+  the description may only escalate. The suite now discovers against the
+  office's own MCP server over real HTTP (10 tools), and Connections shows
+  registered providers.
+- **NEXT:** #262 against its checklist, then #259 (unstarted, self-contained),
+  #133, #41. #257/#260/#258/#172 each have named remaining boxes in the table
+  below.
 
 ---
 
