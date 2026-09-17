@@ -18,7 +18,77 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-## THE MANDATE IN FORCE — the capability campaign, 17 September 2026
+## THE MANDATE IN FORCE — the 8-hour completion run, 17 September 2026
+
+**This supersedes the capability campaign below as the ACTIVE mandate.** That
+one ran the dependency order and advanced nine issues; none was closed, which
+is what this run exists to correct.
+
+Grant, 2026-09-17:
+
+> *"Your objective is not to spend the session planning, narrating, auditing
+> endlessly, or expanding the backlog. Your objective is to materially reduce
+> the outstanding backlog and leave the repository substantially more
+> complete, reliable and usable than it is now."*
+>
+> *"Prefer five genuinely completed issues over five partially started
+> epics."* · *"A successful run should ideally end with FEWER meaningful open
+> issues than it started with."*
+>
+> *"Do NOT stop after completing one issue. Do NOT ask Grant what to do
+> next."*
+
+**The loop, and it does not end with a report:**
+AUDIT → SELECT → IMPLEMENT → EXERCISE → FIX → VERIFY → COMMIT → CLOSE ISSUE →
+SELECT NEXT.
+
+### The order this run follows, and why
+
+| Priority | Work | Why here |
+|---|---|---|
+| **A** | **#273** — the gate reports 15/22 for harness reasons | *"A green result that depends on luck, timing or hidden cleanup is not green."* Nothing below can be trusted until the signal is. |
+| **B** | **#272** — triage the `check:callers` baseline | Every entry is either a missing production caller, dead code, or something mislabelled as production. *"Do not mechanically connect functions merely to satisfy check:callers."* |
+| **C** | Close what is genuinely finished | #263, #262, #264, #265 are each built and verified and still OPEN. Verify against acceptance criteria and close with evidence, or name the one box left. |
+| **D** | The roadmap, in dependency order | #259 is unstarted and self-contained; #133 and #41 are testing infrastructure; the rest are advanced. |
+
+### The product principle that decides every design question here
+
+> *"The recurring failure mode we are trying to eliminate is: capability
+> exists somewhere in the repository but the actual user cannot reach it."*
+>
+> Prefer **natural request → canonical routing → real capability → canonical
+> state → useful result → delivery** over **function exists → unit test
+> passes**.
+
+### Human-blocked, recorded once and then SKIPPED for this run
+
+Do not stop to remind Grant about these again.
+
+| Issue | Exact human action |
+|---|---|
+| **#18** | Rotate `github.read_token` at https://github.com/settings/personal-access-tokens — it was pasted into a chat transcript on 2026-09-09 and is still live. |
+| **#213** | Rotate the Slack bot token and signing secret at https://api.slack.com/apps — both were pasted into chat. |
+| **#270** | Add the `channels:join` scope to the Slack app. `npm run slack:add-scope -- channels:join` prepares the manifest; the install has to be approved by a person. |
+
+### Cost rule, restated because #261/#16/#135 keep meeting it
+
+Nothing paid may be enabled. Where an issue needs non-free compute:
+investigate the free alternative, implement everything that does not depend on
+the decision, mark only the irreducible part blocked, and continue. The
+assessment at `docs/agent-runtime-assessment-2026-09-17.md` already did this
+once and found Cloudflare's browser free tier.
+
+### RUN LOG — append one line per completed unit, newest last
+
+Kept so a fresh session knows what this run has already done without reading
+the git log. A unit is finished when it is committed AND its issue is updated.
+
+- (run started; entries follow)
+
+---
+
+## The capability campaign, 17 September 2026 — SUPERSEDED BY THE ABOVE
+
 
 **This supersedes the backlog campaign below as the ACTIVE mandate.** That one
 finished: 71 open became 21, and the twenty-one that remain are each a
