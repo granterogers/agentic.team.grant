@@ -101,7 +101,18 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
 | **#258** | Slack signed-link delivery + `verify:artifact` 11/11 end to end; open, one live Slack round trip left |
 | **#172** | `app.mail_awaiting` — what has gone quiet, both directions; `verify:mail` 30/30 |
 | **suites** | `verify:judge`, `verify:unified`, `verify:artifact`, `verify:knowledge`, `verify:mail` all added to the gate |
-| **next** | re-run the gate (27 entries now), then #272 debt / further #41 dimensions |
+| **#41** | cancellation dimension closed — Grant can STOP a running job; `verify:stop` 13/13 |
+| **#272** | baseline 15 → 12 (one caller added, two dead functions removed) |
+| **#276** | NEW — `check:pressable`, and the 27 gateway actions and sections with no control |
+| **next** | #276's missing controls, starting with document approve/discard (#28's gate has no press) |
+
+**The most useful thing this stretch produced is a new class of check.**
+`check:callers` walks database functions and cannot see a gateway action, so
+`stop_job` sat unpressed since the browser work — the action existed, the
+function worked, and Grant could not stop a running job. `check:pressable`
+asks the question one layer up, is in the gate, and found 27. Each is
+baselined WITH A REASON separating a missing control from something
+deliberately for an agent (#13) from a reader the page does not need.
 
 **What is genuinely left on each open issue, so nobody re-derives it:**
 

@@ -2557,6 +2557,22 @@ Each of these cost real time. They are here so they cost it once.
   all warnings. `npx biome format .` names the file; `npx biome ci .` piped
   through a colour strip names the rule. **Read the exit code.**
 
+- **A name collision makes an absence look like a presence.** `stop_job` had
+  existed at the gateway since the browser work with nothing pressing it, and
+  grepping the page for "stop" is reassuring and useless: `data-stop` in
+  `app.js` is an unrelated click-propagation stopper and fills the file with
+  the word. Grant could not stop a running job. Grep for the CALL
+  (`act('stop_job'`), never for the noun — and `npm run check:pressable` now
+  asks the question for every gateway action, because `check:callers` walks
+  database functions and a gateway action is a key in an object.
+- **Twenty-seven of them, which makes it a class rather than an oversight.**
+  Document approve and discard (#28's review gate, with four drafts waiting),
+  revoking a granted tool, un-archiving a project, all three MCP connector
+  actions, collections, forgetting a browser session. Each is baselined with a
+  REASON, because the honest three-way split is missing control / deliberately
+  for an agent holding the bearer token (#13) / a reader the page does not
+  need, and an entry with no reason is an admission.
+
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`
