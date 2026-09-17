@@ -116,6 +116,9 @@ interface Original {
   body: string
   config: Record<string, unknown>
   requested_by: string
+  /** For the written report, which must carry no message text. See REDACTION. */
+  intent_class: string | null
+  words: number
 }
 
 const asJson = (v: unknown): Record<string, unknown> =>
@@ -131,10 +134,13 @@ const asJson = (v: unknown): Record<string, unknown> =>
 */
 const corpus = (
   await db.execute(`
-    select j.job_id::text as job_id, j.project_id::text as project_id,
+    select distinct on (btrim(lower(j.pinned_config->>'instruction')))
+           j.job_id::text as job_id, j.project_id::text as project_id,
            j.created_at::text as created_at, j.requested_by,
            j.pinned_config->>'instruction' as instruction,
            j.pinned_config as config,
+           j.intent_class,
+           array_length(regexp_split_to_array(btrim(j.pinned_config->>'instruction'), '\\s+'), 1) as words,
            o.body
       from public.jobs j
       join lateral (
@@ -142,12 +148,73 @@ const corpus = (
          where job_id = j.job_id order by created_at desc limit 1
       ) o on true
      where j.kind = 'office.instruction'
+       /*
+         THREE filters, because one of them was not enough and the first run
+         proved it: a default replay picked a probe from an earlier session,
+         "Asked nowhere in particular", and scored it as real history.
+
+         No backticks anywhere in this comment. It is a SQL comment inside a JS
+         template literal, and CLAUDE.md records that exact combination costing
+         five separate sessions; it cost this one too, as three TS1005 errors
+         pointing at the comment rather than at the string it ended.
+
+         The is_fixture column is GENERATED from requested_by and cannot see a
+         job whose PROJECT is a fixture -- 0355 wrote app.harness_job for
+         exactly that, and it excludes 46 of the 195 rows this query first
+         returned. A real request also came through a real surface, so the
+         channel prefix is a second, independent witness; origin_channel is a
+         closed vocabulary of four, so this cannot go stale the way a list of
+         probe names would. Per 0304's asymmetry both filters can only ever
+         EXCLUDE, which is the safe direction: dropping a real case costs one
+         case, and keeping a probe measures the harness.
+       */
        and not j.is_fixture
+       and not app.harness_job(j.job_id)
+       and (j.requested_by like 'telegram:%' or j.requested_by like 'voice:%'
+            or j.requested_by like 'slack:%' or j.requested_by like 'teamhq:%')
+       /*
+         The third witness, and the only one that is not a naming convention:
+         the answer was actually SENT to somebody.
+
+         Chasing probe names one suite at a time failed three times in a row
+         here -- verify:history, then verify:transport, then a second shape
+         from the same suite -- because it is an enumeration of what harnesses
+         happen to write today. Delivery is a property of the REQUEST instead:
+         a person asked, the office answered, and the answer went to them
+         through a channel. A harness almost never gets that far, and the two
+         suites that deliberately do now name themselves (0460, 0463).
+
+         It costs recall -- 148 candidates become 113 -- and the cases it drops
+         are ones where the office answered and nothing was sent, which is
+         exactly the population most likely to be a probe.
+       */
+       and exists (select 1 from public.deliveries d
+                    where d.job_id = j.job_id and d.sent_at is not null)
+       /*
+         A fourth witness and a deduplication, both structural rather than a
+         list of names.
+
+         Every harness in this repository labels its run with
+         Math.random().toString(36).slice(2, 10), so a trailing eight-character
+         token after a space is the one CONVENTION shared by all of them --
+         "transport proof s3e3hott", "Simultaneous probe rzjktst2". That is a
+         property of how harnesses are written here, not of which harnesses
+         exist, so it does not go stale when somebody writes the next one.
+
+         And a harness repeats itself where a person does not: the
+         cross-interface suite sends one identical sentence through all four
+         surfaces, nine times each, which put eighteen copies of the same
+         request into a corpus of a hundred. DISTINCT ON the text keeps the
+         most recent of each, which both drops that and makes the sample
+         broader, since a replay of the same sentence twenty times measures one
+         thing twenty times.
+       */
+       and coalesce(j.pinned_config->>'instruction', '') !~ '\\s[a-z0-9]{8}$'
        and j.state = 'complete'
        and coalesce(j.pinned_config->>'instruction', '') <> ''
        and length(coalesce(o.body, '')) > 40
        ${ONE_CASE === null ? '' : `and j.job_id = ${lit(ONE_CASE)}::uuid`}
-     order by j.created_at desc
+     order by btrim(lower(j.pinned_config->>'instruction')), j.created_at desc
      limit ${String(Math.max(1, Math.min(200, HOW_MANY)))}
   `)
 ).rows as unknown as Original[]
@@ -195,7 +262,9 @@ console.log(
 
 interface Result {
   job: string
-  instruction: string
+  /** Never the text. See REDACTION above the report. */
+  intent: string
+  words: number
   was: number | null
   now: number | null
   verdict: 'better' | 'worse' | 'unchanged' | 'unscoreable'
@@ -204,6 +273,8 @@ interface Result {
 }
 
 const results: Result[] = []
+/** Follow-on jobs the replays caused and this run stopped. Reported, never hidden. */
+let childrenStopped = 0
 
 for (const [i, orig] of corpus.entries()) {
   if (i > 0) await pause(4_000)
@@ -290,6 +361,35 @@ for (const [i, orig] of corpus.entries()) {
       )
       failure = `no answer — ${String(st.state)}: ${String(st.why).slice(0, 80)}`
     }
+    /*
+      Stop the follow-on work this replay caused.
+
+      "Write me a PDF report" makes the office enqueue `artifact.report`
+      children, which is the office working correctly and is not what a replay
+      measures: the thing being compared is the PARENT'S answer, and the
+      children are consequences that were already had the first time. Left
+      queued they would be drained by the deployed worker, spend tokens and
+      write documents into a real project for a request nobody made today.
+
+      Cancelled, not deleted -- a job can never be removed -- and only from a
+      non-terminal state, because `enforce_job_transition` refuses
+      complete -> cancelled and is right to. Migration 0461 is the half of this
+      that cannot race: it forces announce = false on anything in this
+      namespace at INSERT, so a child drained before this statement still
+      cannot reach Grant.
+    */
+    const stopped = await one(`
+      with cancelled as (
+        update public.jobs
+           set state = 'cancelled', finished_at = app.now_utc(),
+               state_reason = 'follow-on work from a replay; not re-done'
+         where requested_by = ${lit(MINE)}
+           and job_id <> ${lit(replayId)}::uuid
+           and state not in ('complete', 'cancelled', 'failed', 'committing',
+                             'committed', 'notifying')
+        returning 1
+      ) select count(*)::int as n from cancelled`)
+    if (Number(stopped.n) > 0) childrenStopped += Number(stopped.n)
   } catch (e) {
     failure = (e as Error).message.slice(0, 100)
   }
@@ -298,7 +398,8 @@ for (const [i, orig] of corpus.entries()) {
     console.log(`unscoreable`)
     results.push({
       job: orig.job_id,
-      instruction: orig.instruction,
+      intent: orig.intent_class ?? 'unclassified',
+      words: orig.words,
       was: null,
       now: null,
       verdict: 'unscoreable',
@@ -309,10 +410,28 @@ for (const [i, orig] of corpus.entries()) {
   }
 
   const identical = newBody.trim() === orig.body.trim()
+  /*
+    Both answers cut to the same length, or neither.
+
+    A replayed report runs to thousands of characters and the judge is a
+    reasoning model: one case spent 8,839 tokens thinking before emitting
+    anything and came back empty, which lands as unscoreable and quietly
+    changes the denominator. Raising the ceiling twice did not reach it.
+
+    Truncation changes what is graded, so the thing that matters is that it is
+    SYMMETRIC: the old answer and the new one are cut at the same point by the
+    same rule, so the comparison -- which is the whole measurement -- is
+    unaffected. An absolute score on a truncated report is worth less than one
+    on a short reply, and that is why the report prints the shift rather than
+    the mean.
+  */
+  const READABLE = 4_000
+  const cut = (t: string): string =>
+    t.length <= READABLE ? t : `${t.slice(0, READABLE)}\n\n[cut for grading]`
   const was = await judge({
     slug: `was-${String(i)}`,
     ask: orig.instruction,
-    answer: orig.body,
+    answer: cut(orig.body),
     context: null,
   })
   await pause(4_000)
@@ -321,7 +440,7 @@ for (const [i, orig] of corpus.entries()) {
     : await judge({
         slug: `now-${String(i)}`,
         ask: orig.instruction,
-        answer: newBody,
+        answer: cut(newBody),
         context: null,
       })
 
@@ -343,7 +462,8 @@ for (const [i, orig] of corpus.entries()) {
   )
   results.push({
     job: orig.job_id,
-    instruction: orig.instruction,
+    intent: orig.intent_class ?? 'unclassified',
+    words: orig.words,
     was: was?.score ?? null,
     now: now?.score ?? null,
     verdict,
@@ -398,6 +518,11 @@ console.log(
     ? `  hygiene: ${String(mine.all_of_them)} replay job(s), all fixtures, none announced`
     : `  HYGIENE FAILED: ${String(mine.fixtures)} of ${String(mine.all_of_them)} are fixtures, ${String(mine.announced)} announced`,
 )
+if (childrenStopped > 0) {
+  console.log(
+    `  ${String(childrenStopped)} follow-on job(s) the replays caused were cancelled rather than re-done`,
+  )
+}
 
 const report = [
   '# Replay against real history',
@@ -414,11 +539,23 @@ const report = [
   'now, not as they were, because nothing stored what was retrieved. A document added',
   'since is a real difference in what the office can answer with.',
   '',
-  '| asked | was | now | verdict | the judge on the new answer |',
-  '|---|---|---|---|---|',
+  '## REDACTION — why this table names no request',
+  '',
+  'Every row below is a real thing Grant asked, and the answer is about his own',
+  'business. A committed report is the wrong place for either: this file is in the',
+  'repository, it is read by people and by models, and #172 is about to put mail in',
+  'the same corpus. So the table carries the job id, what the office classified the',
+  'request as, and the scores -- enough to pull the case up with',
+  '`npm run replay -- --case <job>` and read it in the terminal, and not enough to',
+  'leak anything by being read.',
+  '',
+  "The judge's reasoning quotes the answer, so it stays on the console too.",
+  '',
+  '| job | intent | words | was | now | verdict |',
+  '|---|---|---|---|---|---|',
   ...results.map(
     (r) =>
-      `| ${r.instruction.replace(/\s+/g, ' ').replace(/\|/g, '/').slice(0, 70)} | ${String(r.was ?? '—')} | ${String(r.now ?? '—')} | ${r.verdict} | ${r.why.replace(/\|/g, '/').slice(0, 110)} |`,
+      `| \`${r.job.slice(0, 8)}\` | ${r.intent} | ${String(r.words)} | ${String(r.was ?? '—')} | ${String(r.now ?? '—')} | ${r.verdict} |`,
   ),
   '',
 ].join('\n')

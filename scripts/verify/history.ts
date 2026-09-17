@@ -927,6 +927,42 @@ try {
     liveJobs === 0,
   )
 
+  /*
+    The attribution on the jobs this run caused (#133, migration 0460).
+
+    This suite drives the REAL enqueue path on purpose, so `enqueue_inbound`
+    composes `requested_by` as <origin_channel>:<actor> and the actors here are
+    'grant' and 'U0HIST'. Every witness therefore says real: `is_fixture` is
+    generated from that string, `app.harness_job` adds "is the project a
+    fixture" and two of these inserts deliberately carry no project at all, and
+    the teardown above cancels BY PROJECT so it could never reach them.
+
+    Sixty-one accumulated before `npm run replay` selected three of them as
+    real history. 0351 did exactly this for gate-3's telegram:4242 and the
+    lesson did not travel; it is travelling now, with an assertion under it,
+    because CLAUDE.md's rule is that a suite which believes its work is
+    invisible must make that belief checkable.
+
+    Keyed on the run id, which every instruction this file writes carries, so
+    it cannot touch another run's work or anything a person typed.
+  */
+  await db.execute(`
+    update public.jobs
+       set requested_by = 'verify:history'
+     where not is_fixture
+       and coalesce(pinned_config->>'instruction', '') like ${lit(`%${run}`)}
+  `)
+  const lookReal = await num(`
+    select count(*)::int as n from public.jobs
+     where not is_fixture
+       and coalesce(pinned_config->>'instruction', '') like ${lit(`%${run}`)}
+  `)
+  check(
+    'teardown — no job of this run is still counted as something Grant asked',
+    `${String(lookReal)} reading as real`,
+    lookReal === 0,
+  )
+
   const strays = Number(
     (
       await one(`

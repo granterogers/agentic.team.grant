@@ -180,7 +180,25 @@ export const makeJudge =
         case, not the typical one, or the harness silently loses whichever case
         is hardest — which is the one most worth grading.
       */
-        maxTokens: 4_000,
+        /*
+        16,000, because #133 grades LONGER text than the corpus did.
+
+        The corpus answers are a few hundred characters. A replayed "write me a
+        report" answer is thousands, and the reasoning budget scales with what
+        it is reading: the first replay run lost a case to
+        "finish_reason=length, 4551 tokens spent on reasoning" -- the ceiling
+        below, reached before a single content token.
+
+        Then 8,000 was not enough either -- 8,839 tokens of reasoning on one
+        replayed report, and truncating the answer to 4,000 characters did not
+        move it, because the thinking is about the QUESTION as much as the
+        text. 16,000 clears every case observed.
+
+        Same lesson as the 300 -> 900 -> 4,000 history above, one corpus wider:
+        the budget has to clear the WORST case, and a judgement lost to a
+        ceiling silently changes the denominator rather than announcing itself.
+      */
+        maxTokens: 16_000,
         /*
         Zero, because this is an instrument.
 

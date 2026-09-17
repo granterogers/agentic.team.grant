@@ -457,5 +457,9 @@
   "0456_the_last_door_onto_the_old_task_api.sql": "39359e03cea024eee9b8b409e695577c1783c669bc8903130702e2c173856fce",
   "0457_an_approval_binds_to_the_action_it_approved.sql": "6130088ea045a791e40c1276729916d3ac1e2575d3e10f60ca81ca1f11ed0581",
   "0458_a_tool_name_is_evidence_and_a_description_is_a_claim.sql": "a3c71e30a1faf58f440e5cd5a8fbcedbeefc23449b7cac5304582c1535f475e7",
-  "0459_a_file_renamed_at_the_source_is_found_by_its_new_name.sql": "8a5f7310cb0e80c1953461ed5f0eaf063765cb0782399e5b74f2ffe2974ff099"
+  "0459_a_file_renamed_at_the_source_is_found_by_its_new_name.sql": "8a5f7310cb0e80c1953461ed5f0eaf063765cb0782399e5b74f2ffe2974ff099",
+  "0460_a_suite_that_spoke_as_grant_left_sixty_one_real_jobs.sql": "0be016a3b8d2b83c7d738d34445b548dae74251a9b92580c4807c713307a540f",
+  "0461_a_replay_can_never_speak_to_grant.sql": "86d6c06e9802fef6d0896a4b686f3f44f9e59a2fcff322534aaa846cfb090331",
+  "0462_the_invariant_has_to_survive_the_worker_writing_it_back.sql": "0bd2e9f5c12a907bfbfced1df7716520bab93a343896235fc91b6a30c85a46d6",
+  "0463_and_twenty_nine_more_from_the_transport_suite.sql": "a83db6c128a1a89dc4d46798d4bed5d186d8a06b636b897e15312434286b7a3e"
 }
