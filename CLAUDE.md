@@ -2442,6 +2442,25 @@ Each of these cost real time. They are here so they cost it once.
   DATABASE functions; a section is a key in an object. When a feature ends in a
   gateway section, grep `web/studio` for `read('<name>')` before believing
   anybody can see it.
+- **A COMMENT IS NOT A CALL, and a dangling-reference check cannot tell the
+  difference.** 0452 dropped `app.what_i_can_do` and left, in
+  `app.hq_governance`, the paragraph explaining why the page no longer computes
+  that list a second time — which is the thing that stops somebody putting it
+  back. `verify:schema` read the explanation as the call and reported a
+  correct function as naming something that does not exist. The check reads
+  past comments now, and because removing text is the one way it could go
+  quietly blind it counts what survives the strip and was proved still able to
+  fail on a plpgsql function naming a table that is not there. A SQL-language
+  function cannot be that control: Postgres parses one at creation and refuses
+  it, which is why the defect only ever exists in plpgsql.
+- **A suite that is the only caller of the API it tests is the defect it is
+  meant to find.** `verify:tasks` drove `add_task`, `project_tasks` and
+  `set_task_state` long after `task_add`, `hq_task_state` and `studio_tasks`
+  replaced them — so `check:callers` could see the old family was dead only
+  because a suite is not a caller, and removing it broke the one thing still
+  pressing it. When a removal turns a suite red, ask whether the suite was
+  pointed at the live thing before deciding the removal was wrong.
+
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`
