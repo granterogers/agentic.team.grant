@@ -846,5 +846,151 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
         } satisfies HandlerOutput
       },
     },
+
+    /*
+      What the notebook HAS, rather than what to make next (#260).
+
+      Grant: *"Give me all the audio overviews in the Money Mastery
+      notebook."* Until now the office could generate an artifact and collect
+      one by id, and could not answer that question at all — `public.artifacts`
+      held only the five rows a job had started, so an audio overview he made
+      himself in NotebookLM's own interface was invisible.
+
+      Three steps, and the middle one is the point:
+
+        1. ask the notebook what it has, through the supported library;
+        2. ADOPT each one — `app.record_notebook_artifact` does not care who
+           made it, and keeps `requested_by_job` null for the ones the office
+           merely found;
+        3. poll the finished ones that have no link yet, because `artifacts()`
+           lists them and `poll()` is what returns a URL.
+
+      Then answer from the office's own table rather than from the listing, so
+      the reply and the portal cannot disagree about what exists.
+
+      No fabricated links, structurally: `artifacts_ready_has_a_link` refuses a
+      `ready` row with no URL, and `record_notebook_artifact` demotes rather
+      than lying. An artifact with no openable link is reported as one.
+    */
+    {
+      kind: 'notebook.list_artifacts',
+      handle: async (job: Job): Promise<HandlerOutput> => {
+        const { actions, notebook } = await need(job)
+        const payload = await payloadOf(db, job)
+        const kinds = Array.isArray(payload.kinds) ? payload.kinds.map((k) => String(k)) : []
+        const projectId = String(job.projectId)
+
+        const listed = await actions.artifacts(notebook.id)
+
+        let adopted = 0
+        for (const a of listed) {
+          /*
+            A link only for the ones that are finished AND have none yet.
+
+            `poll` is a round trip each, so polling everything would turn one
+            question into a dozen calls against a connector with a quota. A
+            failed or pending artifact has no link to have.
+          */
+          let url: string | null = null
+          if (a.done) {
+            try {
+              url = (await actions.poll(notebook.id, a.artifactId)).url
+            } catch {
+              // A link that cannot be fetched is an artifact with no link,
+              // which the row already knows how to say.
+              url = null
+            }
+          }
+          const state = a.failed ? 'failed' : a.done ? 'ready' : 'generating'
+          await db
+            .execute(`
+              select app.record_notebook_artifact(
+                ${lit(projectId)}::uuid, ${lit(notebook.id)}, ${lit(a.artifactId)},
+                ${lit(a.kind)}, ${lit(a.title ?? '')},
+                ${url === null ? 'null' : lit(url)}, ${lit(state)}, null)
+            `)
+            .then(() => {
+              adopted += 1
+            })
+            .catch(() => undefined)
+        }
+
+        const { rows } = await db.execute(`
+          select app.artifacts_in(${lit(projectId)}::uuid,
+            ${kinds.length === 0 ? 'null' : `array[${kinds.map((k) => lit(k)).join(', ')}]::text[]`})
+            as a`)
+        const raw = (rows[0] as { a?: unknown } | undefined)?.a
+        const found = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? [])) as {
+          kind: string
+          title: string
+          url: string | null
+          openable: boolean
+          state: string
+          detail: string | null
+        }[]
+
+        const asked = kinds.length === 0 ? 'anything' : kinds.map((k) => LABEL[k] ?? k).join(' or ')
+
+        if (found.length === 0) {
+          return {
+            body: `I looked through “${notebook.name}” and there ${
+              listed.length === 0 ? 'is nothing in it yet' : `is nothing matching ${asked}`
+            }. ${
+              listed.length === 0
+                ? ''
+                : `It has ${String(listed.length)} other thing${listed.length === 1 ? '' : 's'} in it.`
+            }`.trim(),
+            shape: 'nothing_happened',
+            facts: { changed: false, looked_at: listed.length },
+            announce: true,
+            confidence: 'high',
+            evidence: 'verified',
+            sources: [`notebooklm:${notebook.id} ${notebook.name}`],
+            contradictions: null,
+            path: 'deterministic_retrieval',
+            model: null,
+          } satisfies HandlerOutput
+        }
+
+        /*
+          A real list, with the link where there is one and the reason where
+          there is not.
+
+          An ordered list rather than lines: #209 cost three attempts to learn
+          that at 390px a wrapped line reads as two items, and every channel
+          renders this one.
+        */
+        const lines = found.map((a, i) => {
+          const where = a.openable
+            ? a.url
+            : a.state === 'failed'
+              ? 'it failed'
+              : (a.detail ?? 'no link the office can open')
+          return `${String(i + 1)}. ${a.title} — ${LABEL[a.kind] ?? a.kind} — ${where}`
+        })
+        const openable = found.filter((a) => a.openable).length
+
+        return {
+          body: `“${notebook.name}” has ${String(found.length)} ${
+            kinds.length === 0 ? 'generated thing' : asked
+          }${found.length === 1 ? '' : 's'}${
+            openable === found.length
+              ? ''
+              : `, ${String(openable)} of which I can give you a link to`
+          }:\n\n${lines.join('\n')}`,
+          shape: 'nothing_happened',
+          facts: { changed: adopted > 0, looked_at: listed.length },
+          announce: true,
+          confidence: 'high',
+          // Read from the notebook this turn, not inferred: the list is what
+          // the connector said it holds.
+          evidence: 'verified',
+          sources: [`notebooklm:${notebook.id} ${notebook.name}`],
+          contradictions: null,
+          path: 'deterministic_retrieval',
+          model: null,
+        } satisfies HandlerOutput
+      },
+    },
   ]
 }

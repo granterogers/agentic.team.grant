@@ -234,6 +234,25 @@ const SECTIONS: Readonly<
   */
   decisions: { fn: 'hq_decisions', args: { p_limit: 40 } },
   /*
+    What a project has MADE, as opposed to what it was given (#260).
+
+    Audio overviews, slide decks, mind maps — the things NotebookLM generated,
+    including the ones Grant made himself in its own interface, which the
+    office adopts rather than ignoring.
+
+    Named `project_artifacts`, not `artifacts`: there is already an `artifacts`
+    section reading `hq_artifacts`, which is the GLOBAL list with the project
+    name on each row. Two keys of one name in this object is not an error — the
+    later one silently wins — which is how the first draft of this replaced a
+    working section with a different one.
+
+    Takes the project id, like every other project-scoped section. `openable`
+    is on each row because NotebookLM does not expose a stable link for every
+    type, and a page that drew an anchor regardless would be the fabricated
+    link this Issue forbids.
+  */
+  project_artifacts: { fn: 'project_artifacts', arg: 'p_project' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the

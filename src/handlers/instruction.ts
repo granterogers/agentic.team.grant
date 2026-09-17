@@ -72,7 +72,12 @@
  * message sent to Ines would be a colleague answering through a switchboard.
  */
 
-import { KIND_LABEL, notebookRequest, type RequestedKind } from '../agents/actions.ts'
+import {
+  artifactListing,
+  KIND_LABEL,
+  notebookRequest,
+  type RequestedKind,
+} from '../agents/actions.ts'
 import {
   capabilityBrief,
   capabilityNow,
@@ -2169,6 +2174,55 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         over up to fourteen thousand characters. It appears in Active Jobs, is
         cancellable, and is traced like everything else.
       */
+      /*
+        Asking what the notebook HAS (#260).
+
+        Checked before the extraction and the task, and after the generation
+        matcher — `artifactListing` returns null for anything `notebookRequest`
+        claimed, so the two can never both fire and the order here only decides
+        which guard reads the sentence first.
+
+        A CHILD JOB, for the reason the extraction is one: this turn is a
+        conversation and that one is a round trip to NotebookLM plus a poll per
+        finished artifact. It appears in Active Jobs, is cancellable, and is
+        traced like everything else. This turn goes quiet about it and the
+        child speaks, so Grant gets one message rather than two.
+      */
+      const listing = job.projectId === null ? null : artifactListing(instruction)
+      const enumerating =
+        listing === null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.enqueue_child(
+                  ${lit(job.jobId)}::uuid, 'notebook.list_artifacts',
+                  jsonb_build_object(
+                    'kinds', ${lit(JSON.stringify(listing.kinds))}::jsonb,
+                    'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                    'command_id', ${lit(String(payload.command_id ?? ''))}
+                  ),
+                  interval '0', true
+                )::text as id`)
+              .then(() =>
+                listing.kinds.length === 0
+                  ? 'Looking through the notebook to see what it has made — back shortly.'
+                  : `Looking through the notebook for ${listing.kinds
+                      .map((k) => KIND_LABEL[k] ?? k)
+                      .join(' and ')} — back shortly.`,
+              )
+              // Same rule as the hand-off and the extraction: bookkeeping may
+              // never fail Grant's actual work, and a swallowed write is
+              // indistinguishable from a feature nobody built.
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'list what the notebook has made', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))}, null)`)
+                  .catch(() => undefined)
+                return null
+              })
+
       const pullOut = job.projectId === null ? null : extractionRequest(instruction)
       const extracting =
         pullOut === null
@@ -2272,7 +2326,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
 
       const confirmation =
-        [linked, made, filed, extracting].filter((x) => x !== null).join('\n\n') || null
+        [linked, made, filed, extracting, enumerating].filter((x) => x !== null).join('\n\n') ||
+        null
 
       /*
         How many things this turn actually DID (#248).
@@ -2298,6 +2353,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (made === null ? 0 : 1) +
         (filed === null ? 0 : 1) +
         (extracting === null ? 0 : 1) +
+        // Looking through the notebook is a thing this turn started (#260).
+        (enumerating === null ? 0 : 1) +
         who.alsoConvened.length
 
       // The same retrieval the office uses, so an instruction answered in

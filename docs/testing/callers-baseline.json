@@ -1,5 +1,5 @@
 {
-  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day; the three hq_*_tool wrappers, app.expire_temporary_staff and app.expire_undo_offers wired the same day under #272; app.autonomy_for wired by 0421 under #15 \u2014 the dial now decides something.",
+  "note": "Capabilities with no caller outside scripts/. See scripts/check-callers.ts and #72. This file may only SHRINK \u2014 the check fails when an entry becomes reachable and is not removed. 40 on 2026-09-16; app.mcp_expire_codes wired the same day; the three hq_*_tool wrappers, app.expire_temporary_staff and app.expire_undo_offers wired the same day under #272; app.autonomy_for wired by 0421 under #15 \u2014 the dial now decides something; public.project_artifacts wired as an hq-api section under #260.",
   "recorded": "2026-09-16",
   "unreached": [
     "app.channel_for",
@@ -23,7 +23,6 @@
     "public.hq_eval_latest",
     "public.hq_output_shapes",
     "public.hq_stranded_work",
-    "public.project_artifacts",
     "public.project_tasks",
     "public.proposals_to_send",
     "public.purge_fixture_staff",

@@ -72,6 +72,8 @@ const ok = (what: string, good: boolean, note = '') => {
 const rows = async (sql: string): Promise<Record<string, unknown>[]> =>
   (await db.execute(sql)).rows as Record<string, unknown>[]
 const one = async (sql: string): Promise<Record<string, unknown>> => (await rows(sql))[0] ?? {}
+const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+const run = Math.random().toString(36).slice(2, 10)
 
 console.log('\nverify:notebook — what NotebookLM claims, and whether anything stands behind it\n')
 
@@ -347,6 +349,113 @@ ok(
   Number(debris.loose) === 0,
   `${String(debris.loose)} unarchived untitled-notebook project(s)`,
 )
+
+// ---------------------------------------------------------------------------
+// What the notebook HAS, including what Grant made himself (#260)
+// ---------------------------------------------------------------------------
+
+/*
+  The gap this closes, and why it is not the API.
+
+  `NotebookActions.artifacts()` has enumerated a notebook's generated outputs
+  through the supported library all along, and `poll()` returns a URL for a
+  finished one. What the office could not do is ADOPT: every row in
+  `public.artifacts` was written by a job that generated one, so an audio
+  overview Grant made himself in NotebookLM's own interface was invisible —
+  and "give me all the audio overviews" is mostly a question about those.
+
+  Driven at the database, inside a rollback, because the live path spends a
+  NotebookLM quota and the properties worth asserting are all here: adoption,
+  the no-fabricated-link rule, the kind filter, and the refusal to un-finish
+  something already finished.
+*/
+console.log('\nadopting what the notebook made (#260)')
+
+{
+  const got = await one(`
+    begin;
+    insert into public.projects (name, slug, status)
+    values (${lit(`Fixture artifacts ${run}`)}, ${lit(`fixture-artifacts-${run}`)}, 'paused');
+
+    -- One Grant made, finished, with a link. One finished with NO link, which
+    -- is the case NotebookLM produces for types it exposes no URL for.
+    select app.record_notebook_artifact(
+      (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
+      ${lit(`nb-${run}`)}, 'a1', 'audio', 'An overview he made himself',
+      'https://notebooklm.google.com/notebook/x', 'ready', null);
+    select app.record_notebook_artifact(
+      (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
+      ${lit(`nb-${run}`)}, 'a2', 'mindmap', 'A mind map', null, 'ready', null);
+    select app.record_notebook_artifact(
+      (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
+      ${lit(`nb-${run}`)}, 'a3', 'slides', 'A deck', null, 'generating', null);
+
+    -- The listing later reports the finished one as pending, which a notebook
+    -- does. It must not un-finish it: the CHECK would then strip the URL.
+    select app.record_notebook_artifact(
+      (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
+      ${lit(`nb-${run}`)}, 'a1', 'audio', 'An overview he made himself', null, 'generating', null);
+
+    select
+      jsonb_array_length(app.artifacts_in(
+        (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}))) as all_kinds,
+      jsonb_array_length(app.artifacts_in(
+        (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
+        array['audio'])) as just_audio,
+      (select state from public.artifacts where notebook_ref = ${lit(`nb-${run}`)} and external_ref = 'a1') as a1_state,
+      (select url is not null from public.artifacts where notebook_ref = ${lit(`nb-${run}`)} and external_ref = 'a1') as a1_link,
+      (select state from public.artifacts where notebook_ref = ${lit(`nb-${run}`)} and external_ref = 'a2') as a2_state,
+      (select detail from public.artifacts where notebook_ref = ${lit(`nb-${run}`)} and external_ref = 'a2') as a2_detail,
+      (select count(*) from public.artifacts
+        where notebook_ref = ${lit(`nb-${run}`)} and requested_by_job is not null) as claimed_as_ours,
+      (app.artifacts_in(
+        (select project_id from public.projects where slug = ${lit(`fixture-artifacts-${run}`)}),
+        array['mindmap']) -> 0 ->> 'openable') as mindmap_openable;
+    rollback;
+  `)
+
+  ok(
+    'an artifact the office never generated is adopted',
+    Number(got.all_kinds) === 3,
+    `${String(got.all_kinds)} artifact(s) in the project`,
+  )
+  ok(
+    'and is not claimed as the office’s own work',
+    Number(got.claimed_as_ours) === 0,
+    `${String(got.claimed_as_ours)} row(s) with a job behind them`,
+  )
+  ok(
+    'filtering by kind returns only that kind',
+    Number(got.just_audio) === 1,
+    `${String(got.just_audio)} audio of ${String(got.all_kinds)}`,
+  )
+  /*
+    The Issue's own line: missing link capability is reported accurately rather
+    than producing a fabricated link. A finished artifact with no URL is
+    demoted and says why, because `artifacts_ready_has_a_link` would otherwise
+    refuse the row outright and the whole listing would fail on one type.
+  */
+  ok(
+    'a finished artifact with no link is not called ready, and says why',
+    got.a2_state === 'generating' && String(got.a2_detail).includes('no link'),
+    `${String(got.a2_state)} — ${String(got.a2_detail).slice(0, 60)}`,
+  )
+  ok(
+    'and the reader says plainly that it cannot be opened',
+    got.mindmap_openable === false || got.mindmap_openable === 'false',
+    `openable: ${String(got.mindmap_openable)}`,
+  )
+  /*
+    CONTROL. A later listing that reports a finished artifact as pending must
+    not un-finish it — the CHECK would strip the URL and the office would lose
+    a link it already had.
+  */
+  ok(
+    'CONTROL: a later listing cannot un-finish something already finished',
+    got.a1_state === 'ready' && (got.a1_link === true || got.a1_link === 't'),
+    `${String(got.a1_state)}, link: ${String(got.a1_link)}`,
+  )
+}
 
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 if (fail > 0) process.exit(1)

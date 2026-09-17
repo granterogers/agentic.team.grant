@@ -1972,6 +1972,32 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
 .source.live { border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); }
 .srcfoot { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-top: 6px; }
 
+/*
+  Made in the notebook (#260): a list, not a second card grid.
+
+  Source material and generated artifacts are deliberately shaped differently
+  so they cannot be mistaken for each other at a glance — the cards above are
+  things the project READS FROM, and these are things that CAME OUT. A row is
+  three columns on a desktop and stacks on a phone, because the title is the
+  long part and a fixed chip column would wrap it to one word per line.
+*/
+.nbmade { margin-top: var(--s5); display: grid; gap: 6px; }
+.nbmade h3 { margin: 0; }
+.nbmade > p { margin: 0 0 4px; }
+.nbrows { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px;
+          border: 1px solid var(--edge); border-radius: var(--r-card);
+          background: var(--edge); overflow: hidden; }
+.nbrow { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto;
+         align-items: baseline; gap: var(--s3);
+         padding: 10px var(--s4); background: var(--surface); }
+.nbkind { font: 600 12.5px/1.3 var(--text); color: var(--ink-2);
+          letter-spacing: .01em; }
+.nbtitle { font: 500 14px/1.4 var(--text); min-width: 0; overflow-wrap: anywhere; }
+.nbtitle a { color: inherit; text-decoration: underline;
+             text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+             text-underline-offset: 3px; }
+.nbtitle a:hover { text-decoration-color: var(--accent); }
+
 /* Documents, as a gallery rather than a shelf: a section has room to wrap. */
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: var(--s4); }
 @media (max-width: 560px) { .gallery { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); } }
@@ -6184,3 +6210,14 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   box-shadow: var(--lift-2, 0 20px 60px rgba(0,0,0,.25));
 }
 .droplayer .dropcard b { font: 600 19px/1.2 var(--display, var(--text)); }
+
+/*
+  The notebook list on a phone (#260). At 390px three columns put one word per
+  line in the title, so the row stacks and the kind becomes a label above it.
+  Last in the file deliberately: a media query adds no specificity, and every
+  phone rule written above the base rules it overrides has been silently lost
+  in this stylesheet twice.
+*/
+@media (max-width: 860px) {
+  .nbrow { grid-template-columns: 1fr; gap: 2px; padding: 10px var(--s3); }
+}
