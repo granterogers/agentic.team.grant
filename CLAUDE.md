@@ -2272,6 +2272,62 @@ Each of these cost real time. They are here so they cost it once.
   belongs behind "there is no token", the state the page already announces
   with its own strip — not behind "the request failed".
 
+- **A comment asserting how the data is shaped is worth nothing without a
+  query — and this one cost 69 of Grant's 90 Telegram messages.**
+  `BOT_FOR_INBOUND` joined an unaddressed inbound command to a bot with a null
+  `staff_slug`, and its own comment explained that *"the chief's bot is
+  registered as the pager with a null `staff_slug`"*. **No bot row has ever had
+  a null `staff_slug`** — all eight carry their person's — so the
+  branch matched nothing and those commands could not be answered on Telegram
+  at all. It looked fine because the pager answered them anyway; what was lost
+  was the reply arriving in the thread, and the moment #258 existed, the
+  ability to receive a FILE, because the pager has no attachment path. One
+  `select` settles a claim like this and nobody ran it for months.
+
+- **An offer may only promise what the press can perform — and
+  `app.discard_document` has never discarded anything.** It writes
+  `state = 'rejected'`; `documents_state_check` permits `draft`, `review`,
+  `approved` and `archived`. So it raised 23514 every time, from inside a
+  SECURITY DEFINER function, and #28's review gate offered two buttons of which
+  one was real. The whole table is 98 approved rows and 5 drafts, which is
+  exactly what a discard path that always throws looks like from outside.
+  Found by trying to tidy up after a run, which is how this class always
+  surfaces.
+
+- **A structural check cannot see a collision.** The first PDF the office
+  produced validated perfectly — header, trailer, every xref offset
+  landing on its object, the right page count — and had the introduction
+  printed straight over the title. The cover draws at absolute positions and
+  never moves the cursor, so the page break saw an untouched page and did
+  nothing. Everything §14A says about opening the image applies to a generated
+  document exactly as it does to a screen.
+
+- **A PDF uses two encodings and using one for both is the mistake.** A string
+  inside a content stream is in the FONT's encoding (WinAnsi here); a string in
+  the metadata dictionary is PDFDocEncoding unless it opens with the UTF-16
+  byte order mark. An en dash written as WinAnsi 0x96 in the title is a control
+  character to a reader, and Chromium showed the tab as "Legacy Coaching Course
+  OE Current Status Report" while the same dash on the page was perfect.
+  And anything outside WinAnsi with no stand-in becomes `?`: the first real
+  report said "high?performing" because the model used U+2011, the
+  non-breaking hyphen.
+
+- **A length cap that cuts mid-word is the clipped content a layout is checked
+  for, arriving through the guard instead.** A table cell read "client
+  independe". Truncate at a word and say so with an ellipsis; a cell that stops
+  at a word reads as a summary and one that stops mid-word reads as a bug,
+  because it is one.
+
+- **When two matchers can claim one sentence, extract the predicate rather
+  than making one defer to the other.** #258's "write me a PDF report" was
+  claimed by #260's LISTING matcher, because `LISTING` counts the word "what"
+  wherever it appears and `report` is one of the artifact kinds — so the
+  office answered a request for a document with *"Looking through the notebook
+  for report — back shortly."* and made nothing. Deference is the obvious
+  fix and it is a cycle; a shared predicate states the precedence once, and the
+  precedence is that MAKING outranks ENUMERATING, because the second is
+  answerable from the first's result and not the other way round.
+
 ---
 
 ## Visual standard
