@@ -265,6 +265,14 @@ const SECTIONS: Readonly<
   */
   job_progress: { fn: 'job_progress', arg: 'p_job' },
   /*
+    Every trigger and how it is doing (#264).
+
+    `declined` is shown beside `fired` on purpose: a trigger that has fired
+    twice and declined ninety times is either working exactly as designed or
+    badly misconfigured, and only both numbers can tell them apart.
+  */
+  triggers: { fn: 'trigger_health' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the

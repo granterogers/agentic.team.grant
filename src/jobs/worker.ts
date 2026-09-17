@@ -431,6 +431,16 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
     starting is exactly when "something was interrupted" is most likely true,
     and this costs one query.
   */
+  /*
+    And anything that HAPPENED which nobody has decided about yet (#264).
+
+    A signal is recorded inside whatever transaction noticed it -- a document
+    arriving, a connection failing -- and deliberately does nothing there, so a
+    misconfigured trigger cannot fail an import. Deciding happens here, a
+    moment later, where a failure costs the decision and not the document.
+  */
+  await db.execute('select app.fire_pending_signals(20)').catch(() => undefined)
+
   const ready = (
     await db.execute(
       `select (x ->> 'job_id') as job_id, (x ->> 'reason') as reason

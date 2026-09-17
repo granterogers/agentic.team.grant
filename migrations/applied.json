@@ -435,5 +435,7 @@
   "0434_searching_the_mail_with_a_question_rather_than_a_phrase.sql": "4f4eaa1baf5bd6164b4a3741563cfbd4be8770f0e4ce36fe0f3e00546cb3de42",
   "0435_a_document_you_discard_is_actually_discarded.sql": "acfc8d64c09601fe1c5ff208796496c571915a077c8e9acb9d22c114cd9b7a30",
   "0436_a_job_can_stop_in_the_middle_and_carry_on.sql": "ddf3c8032bada7927c5535ffd8f03f0c9fd8c900d43aac66139df09e49be54a9",
-  "0437_several_specialists_at_once_and_one_answer_after.sql": "e3ce60b7b93eab1622bdfa61e3de9b6b7da853e24cd0eae45d69b2ebe6311edd"
+  "0437_several_specialists_at_once_and_one_answer_after.sql": "e3ce60b7b93eab1622bdfa61e3de9b6b7da853e24cd0eae45d69b2ebe6311edd",
+  "0438_something_happens_and_the_office_starts_work.sql": "1c8a5a74b694caffeafc061e91790d4f5487f0b16008fae0a97c7321d9237571",
+  "0439_the_office_notices_a_document_arriving.sql": "aab6aa08f1104ef1d3f8e9ebd3c681cfc1eeec4d8d491378bbee8a9e6d7742ab"
 }
