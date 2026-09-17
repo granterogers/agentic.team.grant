@@ -153,6 +153,7 @@
     "verify:knowledge": "tsx scripts/verify/knowledge.ts",
     "verify:unified": "tsx scripts/verify/unified.ts",
     "verify:artifact": "tsx scripts/verify/artifact.ts",
+    "verify:stop": "tsx scripts/verify/stop.ts",
     "verify:schema": "tsx scripts/verify/schema.ts",
     "slack:rename-channels": "tsx scripts/slack/rename-channels.ts",
     "notion:sync": "tsx scripts/notion/sync.ts",

@@ -230,6 +230,16 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   */
   ['verify:artifact', 'a request for a PDF produces a real, stored, linkable PDF (#258)'],
   /*
+    Stopping work that is running.
+
+    `stop_job` existed at the gateway and nothing had ever pressed it, so a job
+    spending tokens on the wrong thing could only be waited out. The suite
+    covers the whole dimension — including that a step in flight finishes and
+    the work already done survives, because a stop that discarded a finished
+    step would make the button too expensive to press.
+  */
+  ['verify:stop', 'a running job can be stopped, and keeps what it already finished (#41)'],
+  /*
     The index itself, and the correspondence beside it.
 
     Both were outside the gate while carrying the rules that decide what

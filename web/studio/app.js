@@ -3466,6 +3466,12 @@ function activeJobs(p) {
       </div>
       ${r.blocked === undefined ? '' :
         `<button class="btn" data-unblock="${esc(r.id)}">${esc(r.unblock ?? 'Sort it out')}</button>`}
+      ${r.blocked !== undefined || r.state !== 'working' || !canWrite() ? '' :
+        // Stop, for work that is running. The gateway has had this action
+        // since the browser work and nothing has ever pressed it, so a job
+        // spending tokens on the wrong thing could only be waited out.
+        `<button class="btn quiet" data-stop-job="${esc(r.id)}"
+          title="Ask it to stop at its next checkpoint">Stop</button>`}
     </article>`
   }
 
@@ -9051,6 +9057,37 @@ function drawShell() {
     The prototype cannot actually clear a blocker, and pretending otherwise
     would be the lying button again — so it says what would happen and to whom.
   */
+  /*
+    Stop a job that is running (#41's cancellation dimension).
+
+    `stop_job` has existed at the gateway since the browser work and NOTHING
+    has ever called it — `data-stop` elsewhere in this file is an unrelated
+    click-propagation stopper, which is the kind of name collision that makes
+    a grep look reassuring when it is not. So a job spending tokens on the
+    wrong thing could only be waited out.
+
+    The wording is the honest part. This is a REQUEST, not a kill: the runner
+    reads a column between steps, so the job stops at its next checkpoint and
+    a step already in flight finishes. Saying "Stopped" would be claiming
+    something that has not happened yet, which is the whole failure this
+    repository keeps finding.
+  */
+  for (const b of root.querySelectorAll('[data-stop-job]')) {
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      const done = await attempt(
+        b,
+        'Asking…',
+        () => act('stop_job', { p_job: b.dataset.stopJob }),
+        (r) =>
+          r?.ok === false
+            ? String(r?.note ?? 'there was nothing to stop')
+            : 'Asked it to stop — it will finish the step it is on and then halt.',
+      )
+      if (done) await refresh()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-unblock]')) {
     b.addEventListener('click', () => {
       const row = workspace.rows(byId(state.project)).find((r) => r.id === b.dataset.unblock)
