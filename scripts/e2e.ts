@@ -332,6 +332,19 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:callers',
     'no NEW capability ships with nothing that calls it — #72 had five in one session, each green in its own suite',
   ],
+  /*
+    And the same question one layer up.
+
+    `check:callers` walks DATABASE functions; a gateway action is a key in an
+    object, so it cannot see one. `stop_job` sat unpressed since the browser
+    work — the action existed, the function worked, and Grant could not stop a
+    running job — and the grep that should have caught it looked fine, because
+    an unrelated `data-stop` filled the page with the word.
+  */
+  [
+    'check:pressable',
+    'no gateway action ships without a control that presses it — the same defect as #72, one layer up',
+  ],
 ]
 
 type Result = {
