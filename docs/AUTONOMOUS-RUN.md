@@ -105,9 +105,15 @@ the git log. A unit is finished when it is committed AND its issue is updated.
   the description may only escalate. The suite now discovers against the
   office's own MCP server over real HTTP (10 tools), and Connections shows
   registered providers.
-- **NEXT:** #262 against its checklist, then #259 (unstarted, self-contained),
-  #133, #41. #257/#260/#258/#172 each have named remaining boxes in the table
-  below.
+- **#262 CLOSED.** Three unproven boxes: permissions never union (the
+  asymmetry had to be CONSTRUCTED — every agent holds the same sixteen tools),
+  nothing serialises the branches, and a single-domain request cannot fan out.
+  Plus a check on the branch ceiling that reads the setting rather than the
+  number. verify:parallel 19/19 -> 29/29.
+- **NEXT:** #257's two named boxes (Drive rename/delete reconciliation, the
+  end-to-end Telegram regression), then #133 and #41. #260/#258/#172 each have
+  named remaining boxes in the table below; #135/#16/#261 wait on a credential
+  or a cost decision.
 
 ---
 
