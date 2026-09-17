@@ -96,7 +96,20 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
 | **migrations** | 463 |
 | **#133** | **DONE and closed** — `npm run replay` + `npm run verify:judge`, both controls proved |
 | **#257** | retrieval, reconciliation and the end-to-end criterion all done — `npm run verify:unified` 10/10 |
-| **next** | #258 (signed-link artifact delivery), then #172, with #41 throughout |
+| **#258** | Slack signed-link delivery built and tested; the remaining box is one LIVE Slack round trip |
+| **gate** | **24/24** on a clean tree at 1,290s, including `verify:judge` and `verify:unified` |
+| **next** | the artifact chain end to end (closes #258's last box, advances #41), then #172 |
+
+**#172, what inspection found.** Further along than the Issue reads:
+ADR-0037, migration 0432, `app.mail_for_project`, `mail_search`,
+`forget_mail_before` and a 180-day retention all exist, and the instruction
+handler already brings correspondence alongside documents. What is left is the
+question Grant singled out — *"are there outstanding commitments I have
+forgotten?"* — and it is **bounded by the cache**: `src/google/mail.ts` fetches
+`format=metadata`, so there are no message BODIES anywhere. A commitment
+extractor over subject lines and hundred-character snippets would be guessing,
+and the honest version is narrow. Say that on the Issue rather than building a
+plausible-looking thing that invents commitments.
 
 **#257, where it stands.** Every acceptance box is now met and evidenced:
 NotebookLM and Drive both feed one index through their own ingestion
