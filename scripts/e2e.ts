@@ -209,6 +209,17 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     measurement that decays silently.
   */
   ['verify:judge', 'the comparative judge can still tell a good answer from a bad one (#133)'],
+  /*
+    The one criterion #257 is actually about.
+
+    Grant asked about a document in a linked Google Notebook and was told it
+    could not be found; only naming the connector retrieved it. This asks the
+    same question without naming it, end to end from the inbound command
+    through the real handler to the answer, and asserts the office knows what
+    only that document says. Everything else in this Issue is a mechanism; this
+    is the behaviour.
+  */
+  ['verify:unified', 'a linked source is findable without being named (#257)'],
   [
     'verify:wrappers',
     'every RPC a client calls is reachable — PostgREST exposes only `public`, and a missing wrapper is invisible until called',
