@@ -281,6 +281,17 @@ if (job !== null) {
     if (again === null) break
     job = again
   }
+}
+/*
+  Read the answer from where it lives, whoever ran the job.
+
+  This read used to sit inside the branch above, so when the deployed worker
+  won the dequeue race the suite reported NO OUTPUT about a job that had
+  answered — a harness defect reported as a product defect, which is the class
+  CLAUDE.md warns about most. The output row is the canonical evidence either
+  way.
+*/
+{
   const out = await one(`
     -- The sources column is JSONB, not text[]. Read from information_schema
     -- rather than guessed, after the guess cost one run. No backticks in a SQL
