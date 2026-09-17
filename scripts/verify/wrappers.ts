@@ -65,9 +65,19 @@ const CLIENT_FACING = [
   'voice_lookup',
   'office_health',
   'hq_build',
-  'project_tasks',
-  'add_task',
-  'set_task_state',
+  /*
+    The superseded task API is deliberately absent.
+
+    `project_tasks`, `add_task` and `set_task_state` were this list's answer to
+    "how does a client read and write tasks" until `task_add`, `hq_task_state`
+    and `studio_tasks` replaced them. Migrations 0454-0456 removed both halves
+    of the old family after `check:callers` proved each one dead, and this list
+    was one of the two places still naming them — a check asserting that a
+    wrapper exists for something nothing should call is a check that argues for
+    putting it back.
+  */
+  'hq_task_add',
+  'hq_task_state',
   'relations_of',
   'link',
   'put_in_collection',
