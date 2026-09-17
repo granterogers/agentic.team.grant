@@ -1797,3 +1797,48 @@ excluded specialist it used to reach, not yet right.
   Invisible to Grant — they are fixtures — and permanent, like the other 22.
 - `github.read` has still never been called and `public.tasks` is empty again
   after teardown.
+
+---
+
+## 17 September 2026 — the capability campaign
+
+Seven Issues advanced in one autonomous run, on branch
+`claude/phase-7-communications-kh8ow8`. Every one is still OPEN with its
+remaining boxes named in a comment on the Issue itself; none was closed,
+because none had every acceptance criterion satisfied.
+
+| Issue | What the office can now do that it could not | Migrations |
+|---|---|---|
+| **#260** | list what a notebook has MADE, including what Grant made himself, without fabricating a link for a type NotebookLM gives no link for | 0429–0431 |
+| **#172** | answer from the correspondence, with a message belonging to a project by DERIVATION (a contact, or an alias in the subject — never the excerpt) and mail joining the coverage it reports honestly | 0432–0434 |
+| **#258** | turn a request into a real, validated, stored PDF and send it back on Telegram | 0435 |
+| **#263** | stop in the middle of a job and carry on, without repeating an external write or guessing through a stale checkpoint | 0436 |
+| **#262** | work several specialists at once and write one answer that cannot credit somebody who did not contribute | 0437 |
+| **#264** | start governed work from something happening, with a storm rule for each failure that actually happens | 0438–0439 |
+| **#265** | register an outside MCP provider, discover what it offers, and grant nothing by doing so | 0440–0441 |
+
+**Two ADRs**: 0037 (mail belongs to a project by derivation, not by a link
+table) and 0038 (the office writes PDFs itself, because jobs run in Deno).
+
+**One assessment**: `docs/agent-runtime-assessment-2026-09-17.md` answers
+#16 / #135 / #261 without labelling them "needs budget". Three decisions are
+Grant's and none blocks the £0 work.
+
+### Live product defects found by using it, not by reading it
+
+- **69 of Grant's 90 Telegram messages could not be replied to in-thread.**
+  `BOT_FOR_INBOUND` matched an unaddressed command against a bot with a null
+  `staff_slug`, and no bot row has ever had one. The pager answered them, so
+  nothing looked broken — until a FILE needed to reach him.
+- **`app.discard_document` has never discarded anything.** It wrote a state the
+  CHECK forbids and raised 23514 every time.
+- **Google's refresh token is dead** (`invalid_grant`). Gmail and Calendar have
+  been returning nothing for two days while the hourly duty succeeded. Grant
+  has been paged; reconnecting needs a browser.
+- **`dependency_wait` was not resumable**, so the first live fan-in sat paused
+  for eighteen minutes with the answer never written.
+
+### What a fresh session should read
+
+`CLAUDE.md`, then `docs/AUTONOMOUS-RUN.md`, whose progress table has a row per
+Issue with what is done, what remains and what the evidence was.
