@@ -167,6 +167,7 @@
     "verify:capabilities": "tsx scripts/verify/capabilities.ts",
     "verify:chaos": "tsx scripts/verify/chaos.ts",
     "verify:security": "tsx scripts/verify/security.ts",
+    "verify:sequence": "tsx scripts/verify/sequence.ts",
     "verify:shapes": "tsx scripts/verify/shapes.ts",
     "setup:python": "tsx scripts/setup/python.ts",
     "deploy:mcp": "tsx scripts/deploy/mcp.ts",

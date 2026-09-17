@@ -148,7 +148,18 @@ describe('metadata combinations that are individually legal and jointly impossib
       contradictions: 'Source A says 4%, source B says 11%.',
     })
     expect(p).toHaveLength(1)
-    expect(p[0]?.problem).toContain('averaging')
+    /*
+      The PROPERTY, not the word.
+
+      This asserted the literal 'averaging' and went red when the message was
+      reworded to drop a section mark — a model copies what it reads, and "§16
+      forbids" had been reaching Grant's answers. Seventh instance of a
+      wording lock in this repository, so: it names the field, and it names
+      both halves of the impossibility.
+    */
+    expect(p[0]?.field).toBe('confidence')
+    expect(p[0]?.problem.toLowerCase()).toContain('contradiction')
+    expect(p[0]?.problem.toLowerCase()).toContain('confidence is not high')
   })
 
   it('does not fire on whitespace masquerading as a contradiction', () => {

@@ -2164,6 +2164,44 @@ Each of these cost real time. They are here so they cost it once.
   because `hq_answer_blocker` refuses an answer outside it: a standing offer
   nobody could ever accept is the control that exists and cannot be pressed.
 
+- **An issue number in a refusal the MODEL reads becomes an issue number in
+  Grant's answer.** Seven outputs in thirty days opened *"Setting aside
+  constraint #242."* — one of them an announcement email to customers. The
+  prompt never mentions #242; the coherence gate does. Its refusal ends up in
+  `pinned_config` so the retry can see it, which is the closed loop the gate
+  needs, and from the model's seat the reference is part of the instruction.
+  Eleven messages in `quality.ts` carried one and two carried a section mark.
+  **A comment is for a person and a message is for a model**: the comments keep
+  their references, the strings lose them, and
+  `tests/agents/quality-messages.test.ts` reads the source and asserts it as a
+  property so the next message added cannot bring one back.
+
+- **A type assertion on a database row makes a NEW interface field look
+  supplied.** `rows[0] as Omit<Speaker, 'reason' | 'alsoConvened' | 'convened'>`
+  claims the row already carries everything else — so adding `handoff` to
+  `Speaker` compiled green while one of the two return branches never set it,
+  and the first live run died four attempts deep on *"Cannot read properties of
+  undefined (reading 'to')"*. tsc cannot help: the cast is the assertion that
+  it is fine. Add the new field to the Omit list, so the branch is forced to
+  supply it.
+
+- **`settled(state)` includes `failed`, so a check written with it can pass
+  while the thing it tests has crashed.** `verify:sequence`'s first run
+  reported *"the receiving agent answered in their own name — failed as
+  communications-director"* as GREEN. #209's lesson in a different costume: a
+  check satisfied by the subject having died is worse than no check, because
+  the report says the question was asked. Assert `complete` where completing is
+  the property.
+
+- **A handoff carries the office's own prose, so it belongs in
+  `answeredBefore` and never in `retrieved`.** #128 hands Emma's output to
+  Oliver. `provenance.ts` excludes the office's own prose from `established()`
+  precisely so one fabrication cannot launder every repetition of itself, and
+  putting a colleague's draft in the retrieved list would launder it through a
+  second agent instead — the same defect with a colleague added to the chain.
+  Oliver may write up what Emma found; a figure of Emma's does not become
+  grounded for him by having passed through her.
+
 ---
 
 ## Visual standard

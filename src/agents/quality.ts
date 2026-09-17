@@ -1319,11 +1319,15 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
   }
 
   if (m.evidence === 'speculative' && m.confidence === 'high') {
+    // No section mark and no issue number in the sentence below: it is written
+    // for a MODEL to read, and the model copies what it reads. Seven of Grant's
+    // answers once opened "Setting aside constraint #242." for that reason.
     problems.push({
       field: 'confidence',
       problem:
-        'high confidence in a speculative finding. §12 exists to keep these ' +
-        'apart, and this pairing is what it looks like when they are conflated.',
+        'high confidence in a speculative finding. Confidence is how sure you ' +
+        'are; evidence is what you are sure FROM, and these two cannot both be ' +
+        'true of one finding.',
     })
   }
 
@@ -1380,7 +1384,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           `the text tells Grant what he said ("${said}") and this conversation has no ` +
           'earlier turn at all — there is nothing he could have told you. Ask what he ' +
           'means, or say you have nothing on it; never attribute a fact to him that ' +
-          'only the model produced (#231).',
+          'only the model produced.',
       })
     }
   }
@@ -1393,7 +1397,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         `the text says it sent something ("${sentClaim}"), and an agent answering an ` +
         'instruction has no way to send anything — the notifier runs after this, on ' +
         'this answer. Nobody was contacted. Say what you WILL do, or hand the work ' +
-        'over, but do not report a message that does not exist (#237).',
+        'over, but do not report a message that does not exist.',
     })
   }
 
@@ -1412,7 +1416,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         problem:
           `the text says something was made ("${built}") and this job did ` +
           'nothing — no task, no document, no child job. Say what you would ' +
-          'need in order to do it, or ask for it; do not report it as done (#248).',
+          'need in order to do it, or ask for it; do not report it as done.',
       })
     }
   }
@@ -1426,7 +1430,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         'nothing in this job can do that — the notifier turns THIS answer into a ' +
         'message to Grant and opens no other conversation. Say who should be asked ' +
         'and let him ask, or hand the work to the specialist, but do not promise a ' +
-        'message that will never be sent (#231).',
+        'message that will never be sent.',
     })
   }
 
@@ -1445,7 +1449,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         problem:
           `the text gives a specific time or date ("${invented}") that appears nowhere in ` +
           'the request, the conversation or the documents that were retrieved, so it was ' +
-          'made up. Say you have no record of it and ask where it is (#231).',
+          'made up. Say you have no record of it and ask where it is.',
       })
     }
   }
@@ -1471,7 +1475,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
         problem:
           `a standing rule was in force — "${dropped}" — and this answer does not keep it ` +
           'and does not mention it. Do the most useful thing, and say in one clause which ' +
-          'constraint you set aside (#242).',
+          'constraint you set aside.',
       })
     }
   }
@@ -1492,7 +1496,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
           `the text states what our records contain ("${claimed}") and nothing was read ` +
           'this turn — no document was retrieved and no list was queried, so that is not ' +
           'something you can know. Having been MENTIONED in this conversation is not the ' +
-          'same as existing. Say you have no record of it (#231).',
+          'same as existing. Say you have no record of it.',
       })
     }
   }
@@ -1512,7 +1516,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problem:
         `${deliberating}. What Grant receives has to be the answer, not the ` +
         'working — no planning out loud, no tool calls, no scratch. Say the ' +
-        'thing itself, in prose, addressed to him (#246).',
+        'thing itself, in prose, addressed to him.',
     })
   }
 
@@ -1523,7 +1527,7 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
       problem:
         `the text claims to have read something ("${readClaim}") while evidence is ` +
         `"${m.evidence}", which means nothing was read. One of the two is wrong, and ` +
-        'the sentence is the half Grant sees (#185).',
+        'the sentence is the half Grant sees.',
     })
   }
 
@@ -1534,8 +1538,8 @@ export const metadataProblems = (m: OutputMetadata): readonly MetadataProblem[] 
     problems.push({
       field: 'confidence',
       problem:
-        'high confidence alongside recorded contradictions. §16 forbids ' +
-        'resolving disagreement by averaging; if the contradiction is real the ' +
+        'high confidence alongside recorded contradictions. Averaging away a ' +
+        'disagreement is not resolving it: if the contradiction is real the ' +
         'confidence is not high, and if it is not real it should not be recorded.',
     })
   }
@@ -1655,7 +1659,7 @@ export const refuseToSend = (m: OutputMetadata): SendRefusal | null => {
       reason:
         `the message says "${readClaim}" while the output records evidence ` +
         `"${m.evidence}", which means nothing was read. The sentence is the half ` +
-        'a person believes, so it is not sent (#185).',
+        'a person believes, so it is not sent.',
     }
   }
 
@@ -1665,7 +1669,7 @@ export const refuseToSend = (m: OutputMetadata): SendRefusal | null => {
         needed: 'a source that resolves',
         reason:
           'the output claims verified evidence and cites nothing. Verified means ' +
-          'somebody can go and check, and there is nowhere to go (#185).',
+          'somebody can go and check, and there is nowhere to go.',
       }
     }
     const bad = unresolvableSources(m.sources)

@@ -78,12 +78,55 @@ const MOST = 6
  * trimmed original, so a caller can tell "this has one subject" from "this has
  * several" by the length rather than by asking again.
  */
-export const clauses = (text: string): readonly string[] => {
+export const clauses = (text: string): readonly string[] => split(text).map((c) => c.text)
+
+/** An ask, and the words that joined it to the one before. */
+export interface Clause {
+  readonly text: string
+  /**
+   * The separator this clause came after, lower-cased and trimmed. Empty for
+   * the first clause.
+   *
+   * Kept because a coordinator is not a neutral comma: *"find the numbers AND
+   * THEN write it up"* is a sequence and *"find the numbers AND the dates"* is
+   * two independent asks, and #128's whole question is which of the two a
+   * request is. `clauses()` discarded it, so a caller wanting to know had to
+   * split the text a second time — the two-lists-that-will-disagree defect
+   * this repository has already paid for.
+   */
+  readonly joinedBy: string
+}
+
+/**
+ * The asks and their joins, from ONE pass of the boundary expression.
+ *
+ * `String.split` with a capturing group interleaves the separators into the
+ * result, so the parts and the joins come out of the same regex rather than
+ * two that could drift.
+ */
+export const split = (text: string): readonly Clause[] => {
   const whole = text.trim()
   if (whole === '') return []
-  const parts = whole
-    .split(BOUNDARY)
-    .map((p) => p.trim().replace(/^[,;]\s*/, ''))
-    .filter((p) => p.length >= SHORTEST)
-  return parts.length <= 1 ? [whole] : parts.slice(0, MOST)
+
+  // The capturing form of BOUNDARY. Built from the same source so the two can
+  // never say different things about where a clause ends.
+  const capturing = new RegExp(`(${BOUNDARY.source})`, 'gi')
+  const pieces = whole.split(capturing)
+
+  const out: { text: string; joinedBy: string }[] = []
+  let joinedBy = ''
+  for (const [i, raw] of pieces.entries()) {
+    const piece = raw ?? ''
+    if (i % 2 === 1) {
+      // A separator. It becomes the join of whatever clause survives next.
+      joinedBy = piece.trim().toLowerCase()
+      continue
+    }
+    const body = piece.trim().replace(/^[,;]\s*/, '')
+    if (body.length < SHORTEST) continue
+    out.push({ text: body, joinedBy: out.length === 0 ? '' : joinedBy })
+  }
+
+  if (out.length <= 1) return [{ text: whole, joinedBy: '' }]
+  return out.slice(0, MOST)
 }

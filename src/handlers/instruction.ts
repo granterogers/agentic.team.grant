@@ -80,12 +80,13 @@ import {
   EMPTY_CAPABILITY,
   toolNames,
 } from '../agents/capability.ts'
-import { clauses } from '../agents/clauses.ts'
+import { split } from '../agents/clauses.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
 import { assignedTo, dueOn } from '../agents/due.ts'
 import { extractionRequest } from '../agents/extract.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
+import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
@@ -171,6 +172,20 @@ interface Speaker {
    * one; the speaker is still `slug`.
    */
   readonly convened: readonly string[]
+  /**
+   * The clause somebody ELSE continues with, once this one has answered (#128).
+   *
+   * Null for almost every request, and deliberately: a handoff fires only when
+   * the clauses are joined by a sequence word and belong to two different
+   * people. A missed handoff costs what the office did before — two parallel
+   * answers — and a wrong one leaves a specialist waiting for work that was
+   * never coming.
+   *
+   * Not acted on here. The child is enqueued AFTER the answer exists, because
+   * the whole difference between a handoff and a second request is that it
+   * carries what the first agent produced.
+   */
+  readonly handoff: Handoff | null
 }
 
 export interface InstructionDeps {
@@ -194,6 +209,17 @@ interface Payload {
   readonly origin_channel?: string
   readonly origin_ref?: string
   readonly command_id?: string
+  /**
+   * The output a colleague handed over, and why (#128).
+   *
+   * Set by the worker when it enqueues a handoff child. `from_output` is the
+   * `outputs.output_id` of the first agent's answer — the thing that makes
+   * this a handoff rather than a second request.
+   */
+  readonly from_output?: string
+  readonly handed_off_because?: string
+  /** The slug of the agent who handed it on. Written by #233's path too. */
+  readonly handed_off_by?: string
 }
 
 /**
@@ -300,7 +326,9 @@ export async function speaker(
       select slug, name, title, communication_style, responsibilities
         from public.staff where slug = ${lit(byName)} and active
     `)
-    const s = rows[0] as Omit<Speaker, 'reason' | 'alsoConvened' | 'convened'> | undefined
+    const s = rows[0] as
+      | Omit<Speaker, 'reason' | 'alsoConvened' | 'convened' | 'handoff'>
+      | undefined
     if (s !== undefined) {
       /*
         Nobody else, and that is what stops delegation recursing.
@@ -332,6 +360,23 @@ export async function speaker(
         // Addressing somebody IS convening them, so this one is not empty:
         // Grant picked the specialist himself.
         convened: [s.slug, ...also],
+        /*
+          And an addressed job never hands on (#128).
+
+          A handoff child carries `addressed_to`, so it arrives here — and if
+          this branch could produce one, a two-clause request answered by the
+          receiver would hand on again. The chain terminates at one by
+          construction, which is what the comment above already claimed about
+          `alsoConvened` and now holds for the sequential case too.
+
+          Explicit rather than implied: `rows[0]` is CAST to the Speaker shape
+          minus the fields this branch supplies, so a new field left out of the
+          cast's Omit list reads as present to the compiler and is undefined at
+          runtime. That is exactly how this arrived — `who.handoff.to` threw
+          "Cannot read properties of undefined" on the first live run, four
+          attempts deep, with tsc green.
+        */
+        handoff: null,
       }
     }
   }
@@ -394,7 +439,16 @@ export async function speaker(
     old number was for and changing it would move every routing decision this
     office has ever measured.
   */
-  const asks = clauses(forLookup)
+  /*
+    `split` rather than `clauses`, because #128 needs the JOINS.
+
+    "and then" is a sequence and "and" is a list, and that one word is the
+    whole difference between handing the first agent's output to the second and
+    running them in parallel. Same regex, same boundaries, same clauses — one
+    pass that keeps what joined them.
+  */
+  const parts = split(forLookup)
+  const asks = parts.map((c) => c.text)
   const perAsk = asks.length === 1 ? 3 : 1
 
   // Nothing to look up. `withoutNegated` can empty a message that was entirely
@@ -507,13 +561,28 @@ export async function speaker(
     onProject as never,
   )
   const chosen = roster[0] ?? 'chief-of-staff'
-  const alsoConvened = roster.slice(1)
+
+  /*
+    Is the second clause waiting on the first? (#128)
+
+    `found` already says who each clause belongs to, and `parts` now says what
+    joined them, so this costs nothing beyond a pure function over data the
+    routing already has.
+
+    A handoff REMOVES its receiver from `alsoConvened`. Otherwise the same
+    specialist would get a parallel job carrying the whole original instruction
+    AND a handoff carrying the first one's output — two jobs for one clause,
+    the second of which would be answering a question the first had already
+    answered worse.
+  */
+  const handoff = handoffIn(parts, (i) => found?.find((x) => x.i === i)?.slug, chosen)
+  const alsoConvened = roster.slice(1).filter((slug) => slug !== handoff?.to)
   const convened = roster
   const { rows } = await db.execute(`
     select slug, name, title, communication_style, responsibilities
       from public.staff where slug = ${lit(chosen)} and active
   `)
-  const s = rows[0] as Omit<Speaker, 'reason' | 'alsoConvened' | 'convened'> | undefined
+  const s = rows[0] as Omit<Speaker, 'reason' | 'alsoConvened' | 'convened' | 'handoff'> | undefined
   return s === undefined
     ? {
         slug: 'chief-of-staff',
@@ -524,8 +593,9 @@ export async function speaker(
         reason,
         alsoConvened,
         convened,
+        handoff,
       }
-    : { ...s, reason, alsoConvened, convened }
+    : { ...s, reason, alsoConvened, convened, handoff }
 }
 
 /**
@@ -2323,6 +2393,47 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const context = contextBlock(hits)
 
       /*
+        What a colleague handed over, if this job is the second half of one
+        (#128).
+
+        The critical decision is WHERE this goes, and it is not `retrieved`. A
+        colleague's answer is the office's own prose, and `provenance.ts` is
+        explicit that an assistant turn is a record of what was SAID and never
+        of what is TRUE. Putting Emma's research into Oliver's `retrieved`
+        would make her figures grounded for him — one fabrication laundering
+        itself through a second agent, which is the defect that whole module
+        exists to prevent, with a colleague added to the chain.
+
+        So it goes in the PROMPT, labelled as a colleague's draft, and into
+        `answeredBefore`, which `established()` deliberately excludes. Oliver
+        can write it up; he cannot cite it as a source.
+      */
+      const handedOver =
+        typeof payload.from_output !== 'string' || payload.from_output === ''
+          ? null
+          : (((
+              await deps.db
+                .execute(`
+                  select o.body as body, coalesce(s.name, o.staff_id::text) as who
+                    from public.outputs o
+                    left join public.staff s on s.staff_id = o.staff_id
+                   where o.output_id = ${lit(payload.from_output)}::uuid
+                `)
+                .catch(() => ({ rows: [] }))
+            ).rows[0] as { body?: string; who?: string } | undefined) ?? null)
+
+      const handedOverBlock =
+        handedOver?.body === undefined || handedOver.body.trim() === ''
+          ? ''
+          : `${String(handedOver.who ?? 'A colleague')} has already done the first part of ` +
+            `this and handed it to you${
+              typeof payload.handed_off_because === 'string' && payload.handed_off_because !== ''
+                ? ` — ${payload.handed_off_because}`
+                : ''
+            }. This is THEIR draft, not a source: use it, and do not present ` +
+            `anything in it as a fact you have checked.\n\n${handedOver.body.slice(0, 6_000)}`
+
+      /*
         The dashboard projects, as canonical state rather than as recollection
         (#231).
 
@@ -2598,6 +2709,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 ...(context === ''
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+                /*
+                  The colleague's draft (#128).
+
+                  AFTER the documents deliberately. The order of these system
+                  messages is the order of authority the answer should give
+                  them, and a colleague's prose sits below a retrieved document
+                  for the same reason it is excluded from `established()`: it
+                  is a record of what was said, not of what is true.
+
+                  The block says so in words as well, because a model reading
+                  three system messages does not infer precedence from their
+                  order.
+                */
+                ...(handedOverBlock === ''
+                  ? []
+                  : [{ role: 'system' as const, content: handedOverBlock }]),
                 // Canonical state, so a question about the office's own spine
                 // has an answer that is both honest and useful.
                 ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
@@ -2909,6 +3036,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         answeredBefore: [
           ...turns.map((t) => t.answered ?? ''),
           ...memory.recalled.map((m) => m.answered),
+          /*
+            A colleague's handover is the office's own prose (#128).
+
+            Here and NOT in `retrieved`, which is the whole safety property of
+            the handoff: Oliver may write up what Emma found, and a figure of
+            Emma's does not become grounded for him by having passed through
+            her. `established()` excludes this list for exactly that reason.
+          */
+          ...(handedOver?.body === undefined ? [] : [handedOver.body]),
         ],
       }
 
@@ -2958,6 +3094,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // What this turn actually did, so #248's check has a number to compare
         // the answer against.
         acted,
+        /*
+          And who continues (#128).
+
+          Only set when `speaker` found a sequence between two different
+          people. The worker enqueues it AFTER this output is written and
+          reviewed, because a handoff carries what was produced and a rejected
+          answer must not be handed on.
+        */
+        ...(who.handoff === null
+          ? {}
+          : {
+              handoff: {
+                to: who.handoff.to,
+                from: who.slug,
+                clause: who.handoff.clause,
+                because: who.handoff.because,
+              },
+            }),
       } satisfies HandlerOutput
     },
   }

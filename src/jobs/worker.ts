@@ -174,6 +174,27 @@ export interface HandlerOutput {
    * a constraint to enforce.
    */
   readonly standingRules?: readonly string[]
+
+  /**
+   * The clause somebody else continues with, once this answer exists (#128).
+   *
+   * On the OUTPUT rather than performed by the handler, because a handoff
+   * carries what the first agent produced and only the worker has the
+   * `output_id` — the handler returns an output, the worker writes it.
+   *
+   * Undefined on almost every output. A handoff fires only when a request's
+   * clauses are joined by a sequence word and belong to two different people.
+   */
+  readonly handoff?: {
+    /** Who continues. A staff slug. */
+    readonly to: string
+    /** Who is handing it on. A staff slug — the agent that answered. */
+    readonly from: string
+    /** What they are asked to do, verbatim from the request. */
+    readonly clause: string
+    /** Why it is a handoff, in the office's words. */
+    readonly because: string
+  }
   /**
    * How many things this turn actually did — #248.
    *
@@ -1006,6 +1027,61 @@ export const runJob = async (
         jobId: job.jobId,
         finalState: retryable ? 'retrying' : 'failed',
         note: `review ${verdict.status}`,
+      }
+    }
+  }
+
+  /*
+    And hand it on, if this answer was somebody else's starting point (#128).
+
+    HERE rather than in the handler, and here rather than earlier, for three
+    reasons that each cost something if ignored:
+
+      * the output has to EXIST, because the whole difference between a handoff
+        and a second request is that it carries what the first agent produced;
+      * the review has to have PASSED — every rejecting branch above returns,
+        so reaching this line means the work was accepted, and handing on a
+        rejected answer would propagate it;
+      * the handler cannot do it. It returns an output and the worker writes
+        it, so the handler has no `output_id` to pass.
+
+    `app.enqueue_child` inherits the correlation id, the project and the
+    requester, and `enforce_delegation_depth` caps the chain — so an agent that
+    can enqueue an agent still cannot enqueue a loop.
+
+    `p_announce => false`: Grant hears from the Chief of Staff and nobody else.
+    The chain is visible in Active Jobs, which is where he asked to see work.
+
+    Never fatal. A handoff that cannot be enqueued must not fail an answer that
+    is already written, reviewed and about to be delivered — but it must not be
+    silent either, which is what the impediment is for (#211).
+  */
+  if (output.handoff !== undefined) {
+    try {
+      await db.execute(`
+        select app.enqueue_child(
+          ${lit(job.jobId)}::uuid, 'office.instruction',
+          jsonb_build_object(
+            'instruction', ${lit(output.handoff.clause.slice(0, 4_000))},
+            'addressed_to', ${lit(output.handoff.to)},
+            'origin_channel', 'teamhq',
+            'handed_off_by', ${lit(output.handoff.from)},
+            'handed_off_because', ${lit(output.handoff.because.slice(0, 500))},
+            'from_output', ${lit(outputId)}
+          ),
+          interval '0', false
+        )
+      `)
+    } catch (error) {
+      const why = (error as Error).message.replace(/\s+/g, ' ').slice(0, 300)
+      try {
+        await db.execute(
+          `select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+             ${lit(`hand the rest to ${output.handoff.to}`)}, 'the worker',
+             ${lit(why)}, null)`,
+        )
+      } catch {
+        /* Recording a refusal must not become a second failure. */
       }
     }
   }

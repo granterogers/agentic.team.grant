@@ -76,7 +76,8 @@ the layers above produce.
 | Issue | State | Evidence |
 |---|---|---|
 | **#15** | **done, ADR-0035** | 0421–0424 · `verify:approval` **28/28** with a harness audit (matrix cell flipped, suite went red naming it, restored, green) · `verify:drive` 42/42 · `verify:calendar` 7/7 · `verify:dryrun` 25/25 · `verify:layouts` 64 states 0 findings · `verify:controls` settings 96/0/0 |
-| **#128** | next | |
+| **#128** | **done** | `verify:sequence` **15/15** live, end to end: the finance director answered the margin clause and handed the announcement clause to the communications director, carrying the output; the comms director completed it in their own name citing nothing of the colleague's. CONTROL: the same request with "and" instead of "and then" hands nothing on and still fans out. `verify:handoff` 13/13 · `verify:collaborates` 10/10 · `verify:delegation` 17/17 · 1,541 tests |
+| **#129** | next | |
 
 **What #15 does NOT claim**, so nobody re-litigates it: three outward paths are
 governed — `drive.watch`'s ingest, the calendar duty, and anything through
