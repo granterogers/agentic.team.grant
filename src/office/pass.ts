@@ -58,6 +58,7 @@ import { googleRevokeHandler } from '../handlers/google-revoke.ts'
 import { instructionHandler } from '../handlers/instruction.ts'
 import { jobTracesHandler } from '../handlers/job-traces.ts'
 import { mailHandler } from '../handlers/mail.ts'
+import { mcpDiscoverHandler } from '../handlers/mcp-discover.ts'
 import { notebookHandlers } from '../handlers/notebook.ts'
 import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
 import { notionImportHandler } from '../handlers/notion-import.ts'
@@ -419,6 +420,13 @@ export const buildPass = async (
       not.
     */
     synthesiseHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Asking an outside MCP provider what it offers (#265).
+
+      No router: discovery is two JSON-RPC calls and a classification made from
+      a table of words, deliberately reproducible and deliberately arguable.
+    */
+    mcpDiscoverHandler({ db }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is

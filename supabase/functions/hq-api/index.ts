@@ -273,6 +273,14 @@ const SECTIONS: Readonly<
   */
   triggers: { fn: 'trigger_health' },
   /*
+    Registered providers, what they offer, and what of that is USABLE (#265).
+
+    Three separate numbers on purpose: a provider can advertise forty tools,
+    the office can offer six, and none of them be reachable until Grant
+    approves. Showing only what was offered would read as reach.
+  */
+  connectors: { fn: 'mcp_inventory' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the
@@ -469,6 +477,20 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   */
   grant_standing: { fn: 'hq_grant_standing', required: ['p_tool', 'p_reason'] },
   revoke_standing: { fn: 'hq_revoke_standing', required: ['p_authorization'] },
+  /*
+    Registering and disconnecting an outside provider (#265).
+
+    Deliberately NOT an action for enabling a discovered tool. Offering one
+    makes a switched-off capability; switching it on is the existing approval
+    path, which already has its own action and its own record. A second door
+    to the same decision is how the invariant erodes.
+  */
+  register_connector: {
+    fn: 'register_mcp_provider',
+    required: ['p_name', 'p_endpoint'],
+  },
+  revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
+  offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
   approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'] },
   decline_tool: { fn: 'hq_decline_tool', required: ['p_request_id'] },
   revoke_tool: { fn: 'hq_revoke_tool', required: ['p_slug', 'p_tool'] },
