@@ -139,7 +139,29 @@ const work = async (jobId: string): Promise<boolean> => {
             state_reason = 'not this suite''s job' where job_id = ${lit(got.jobId)}::uuid`)
       } else await pause(1_000)
     }
-    if (job === null) return false
+    if (job === null) {
+      /*
+        Somebody else has it, and almost certainly the deployed worker: #184's
+        scope keeps other SUITES out and nothing keeps the live worker out,
+        and it ticks every minute.
+
+        The gate caught this the honest way. The worker took the child, this
+        returned false, the suite carried on, and six checks reported
+        "NOTHING MADE" about a report the office was in the middle of writing.
+        `verify:unified` already had the fix and the lesson did not travel.
+
+        Waiting is also the better result: an end-to-end pass through the real
+        worker is stronger evidence than the in-process run, not weaker.
+      */
+      for (let waited = 0; waited < 30; waited += 1) {
+        const settled = await one(
+          `select state::text as s from public.jobs where job_id = ${lit(jobId)}::uuid`,
+        )
+        if (['complete', 'failed', 'cancelled'].includes(String(settled.s))) return true
+        await pause(5_000)
+      }
+      return false
+    }
     await runJob(db, job, pass.handlers, pass.review)
     const st = await one(
       `select state::text as s from public.jobs where job_id = ${lit(jobId)}::uuid`,
@@ -180,7 +202,22 @@ check(
 )
 
 // --- generate, validate, store ----------------------------------------------
-if (child.id !== undefined) await work(String(child.id))
+/*
+  And say so if it never settled, rather than asserting over work in progress.
+
+  The gate caught this the honest way: the deployed worker took the child, the
+  suite could not dequeue it, and six checks reported "NOTHING MADE" about a
+  report the office was in the middle of writing. `work` waits for the real
+  worker now — but a timeout is still possible, and a run that timed out must
+  say that rather than letting the checks below read as findings about the
+  product.
+*/
+const childFinished = child.id === undefined ? false : await work(String(child.id))
+check(
+  'the artifact job finished, so the checks below describe a job that ran',
+  childFinished ? 'settled' : 'STILL RUNNING — everything below is about work in progress',
+  childFinished,
+)
 
 const made = await one(`
   select d.document_id::text as id, d.title, d.origin, coalesce(d.external_ref, '') as ref
