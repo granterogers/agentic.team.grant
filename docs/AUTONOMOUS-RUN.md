@@ -83,7 +83,19 @@ once and found Cloudflare's browser free tier.
 Kept so a fresh session knows what this run has already done without reading
 the git log. A unit is finished when it is committed AND its issue is updated.
 
-- (run started; entries follow)
+- **#273 CLOSED.** verify:recovers took its own parked job. `mine()` asks for a
+  specific job; section 2 settles its parked one. 18/18 three times. Gate
+  15/22 -> 19/22.
+- **#272 advanced, 40 -> 15.** Two wired to the Governance page (stranded work,
+  the eval score), eight functions dropped on evidence the check produced, and
+  check:callers learned that an OPERATOR COMMAND is a caller — eight entries
+  were reachable all along by an `npm run` Grant uses.
+- **#263 CLOSED.** 0457 makes an approval bind to a sha256 of the exact action;
+  an unbound approval pause is refused by CHECK and by the function.
+  `credential()` pauses instead of failing when a secret is missing.
+  verify:checkpoints 27/27 with a harness audit.
+- **NEXT:** #264 and #265 — verify against their checklists, close or name the
+  one box left. Then #259 (unstarted, self-contained), #133, #41.
 
 ---
 
