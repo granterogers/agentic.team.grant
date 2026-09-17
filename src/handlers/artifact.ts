@@ -527,6 +527,17 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           bytes: again.bytes,
           filename: filenameFor(finalReport.title, 'pdf'),
           mime: 'application/pdf',
+          /*
+            And where it already is, for Slack (#258).
+
+            `storeArtifact` put the bytes at this path before this message was
+            composed, so the file exists whether or not any channel attaches
+            it. Slack cannot take bytes — no `files:write` — and mints a signed
+            link from this instead.
+          */
+          ...(typeof kept.path === 'string' && kept.path !== ''
+            ? { storagePath: kept.path }
+            : {}),
         },
         body:
           `${finalReport.title} — ${String(kept.pages)} pages, from ${String(

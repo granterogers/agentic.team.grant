@@ -241,6 +241,22 @@ export interface HandlerOutput {
     readonly bytes: Uint8Array
     readonly filename: string
     readonly mime: string
+    /**
+     * Where the bytes already are, for a channel that cannot take bytes (#258).
+     *
+     * Telegram gets the file itself, because `sendDocument` exists and a
+     * document arriving in the chat is better than a link to one. Slack holds
+     * `chat:write` and NOT `files:write`, so an upload is scope-blocked exactly
+     * as #270 is — and Grant decided on 2026-09-17 to deliver a signed LINK
+     * there rather than ask for another scope, reusing the signed-URL
+     * infrastructure #96 already built.
+     *
+     * The path and not the URL, deliberately. A signed URL lives ten minutes;
+     * an output can be delivered to two channels, retried tomorrow, or read off
+     * the row later, and a URL minted when the handler ran would be dead by
+     * then. Each channel mints its own at the moment it sends.
+     */
+    readonly storagePath?: string
   }
   /**
    * How loudly. `routine` is Slack only; `important` and above buzz a phone.

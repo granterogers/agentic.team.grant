@@ -129,6 +129,20 @@ export interface ResultMessage {
   readonly actions: readonly ActionId[]
   /** Present only when `open_project` is offered. */
   readonly projectUrl?: string | null
+  /**
+   * A file the office made, for a channel that cannot carry one (#258).
+   *
+   * Telegram gets the bytes; Slack holds `chat:write` and not `files:write`,
+   * so an upload is scope-blocked exactly as #270 is. Grant decided on
+   * 2026-09-17 to deliver a signed LINK rather than ask for another scope.
+   *
+   * `url` null with a filename present is the honest degradation: the file was
+   * made and is in the project, and this message could not mint a link to it.
+   * Saying so is the point — an offer may only promise what the press can
+   * perform, and a message describing a document nobody can open is the same
+   * defect as a button that does nothing.
+   */
+  readonly file?: { readonly filename: string; readonly url: string | null } | null
 }
 
 export class BlockLimitError extends Error {
@@ -474,6 +488,29 @@ export function resultBlocks(message: ResultMessage): readonly SlackBlock[] {
     }
   }
 
+  /*
+    The file, as a link, in Slack's own syntax.
+
+    `<url|label>` is mrkdwn and must NOT be escaped -- #186 records that Slack
+    text is not HTML text, and the pair of lessons either side of it is that a
+    shortcode is vocabulary one surface resolves and another prints. This is
+    the same shape used the right way round: written for Slack, in the notifier
+    that only ever feeds Slack.
+
+    Above the buttons, because it is the thing the message is about.
+  */
+  if (message.file !== null && message.file !== undefined) {
+    blocks.push(
+      section(
+        message.file.url === null
+          ? `📄 *${message.file.filename}* — it is in the project's documents. ` +
+              'I could not make a link to it from here, so open it from the dashboard.'
+          : `📄 <${message.file.url}|${message.file.filename}> — the link works for ten minutes; ` +
+              "it is in the project's documents for good.",
+      ),
+    )
+  }
+
   if (message.actions.length > 0) {
     blocks.push(...actionBlocks(message.actions, message.correlationId, message.projectUrl))
   }
@@ -499,5 +536,14 @@ export function fallbackText(message: ResultMessage): string {
   const prefix = message.staffTitle === null ? '' : `${message.staffTitle}: `
   const unreviewed =
     message.metadata !== null && !message.metadata.reviewed ? '[not reviewed] ' : ''
-  return truncate(`${unreviewed}${prefix}${first.replace(/\s+/g, ' ')}`, 300)
+  /*
+    The notification text names the file, without the link.
+
+    This string is what a phone shows before the message is opened, and a
+    signed URL there would be a credential in a push notification -- which is
+    also where it would be screenshotted. The name is the useful half.
+  */
+  const file =
+    message.file === null || message.file === undefined ? '' : `[${message.file.filename}] `
+  return truncate(`${unreviewed}${prefix}${file}${first.replace(/\s+/g, ' ')}`, 300)
 }

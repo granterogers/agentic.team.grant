@@ -265,7 +265,16 @@ export const buildPass = async (
     )
     slackTeamId = teamId
     const office = await SlackOffice.configured(db, slack)
-    channels.push(slackChannel(db, office, { teamId }))
+    /*
+      The project ref and the service key travel with it (#258).
+
+      Slack delivers a file as a signed LINK, because it holds `chat:write` and
+      not `files:write` and Grant chose a link over another scope. Read here
+      rather than in the notifier: §15 keeps credential lookup in the
+      composition root, and a channel that reached the vault itself would be a
+      channel that cannot be tested without one.
+    */
+    channels.push(slackChannel(db, office, { teamId, projectRef, serviceKey }))
 
     // Grant: *"create an additional channel in Slack where I see the
     // communications between the Chief of Staff and the rest of the members."*
