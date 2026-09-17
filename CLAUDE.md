@@ -2557,6 +2557,16 @@ Each of these cost real time. They are here so they cost it once.
   all warnings. `npx biome format .` names the file; `npx biome ci .` piped
   through a colour strip names the rule. **Read the exit code.**
 
+- **Stopping a job's follow-on work does not take back what it already
+  wrote.** 0461 and 0462 stopped a replay DELIVERING; nothing stopped it
+  DEPOSITING, and three `artifact.report` children that finished before the
+  cancellation left three near-duplicate PDFs in Grant's real Legacy Coaching
+  Course project. Worse than clutter: `app.search_documents` excludes archived
+  material and NOT drafts, so they were retrievable, and an answer citing two
+  of them as separate sources is the provenance defect this repository keeps
+  paying for — manufactured by the harness built to measure it. A harness that
+  causes real work must sweep what that work produced, and assert the sweep.
+
 - **A name collision makes an absence look like a presence.** `stop_job` had
   existed at the gateway since the browser work with nothing pressing it, and
   grepping the page for "stop" is reassuring and useless: `data-stop` in

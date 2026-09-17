@@ -297,6 +297,8 @@ interface Result {
 const results: Result[] = []
 /** Follow-on jobs the replays caused and this run stopped. Reported, never hidden. */
 let childrenStopped = 0
+/** Documents the replays' children wrote into real projects, and this run removed. */
+let documentsSwept = 0
 
 for (const [i, orig] of corpus.entries()) {
   if (i > 0) await pause(4_000)
@@ -412,6 +414,34 @@ for (const [i, orig] of corpus.entries()) {
         returning 1
       ) select count(*)::int as n from cancelled`)
     if (Number(stopped.n) > 0) childrenStopped += Number(stopped.n)
+
+    /*
+      And take back what the children already WROTE.
+
+      Cancelling the queue is not enough, and three drafts in Grant's real
+      Legacy Coaching Course project proved it: an `artifact.report` child that
+      had already finished before the cancellation had written a PDF and a
+      `documents` row. 0461 and 0462 stopped a replay DELIVERING; nothing
+      stopped it depositing.
+
+      It matters more than "an extra row". `app.search_documents` excludes
+      archived material and NOT drafts, so three near-duplicate status reports
+      written for a test were retrievable — and an answer citing two of them as
+      separate sources is the provenance defect this repository keeps paying
+      for, manufactured by the harness that measures it.
+
+      Deleted rather than archived: a replay's output is not history. Nothing
+      asked for it and nobody should be able to find it later and wonder.
+    */
+    const swept = await one(`
+      with gone as (
+        delete from public.documents d
+         using public.jobs j
+         where j.job_id = d.produced_by_job
+           and j.requested_by = ${lit(MINE)}
+        returning 1
+      ) select count(*)::int as n from gone`)
+    if (Number(swept.n) > 0) documentsSwept += Number(swept.n)
   } catch (e) {
     failure = (e as Error).message.slice(0, 100)
   }
@@ -540,6 +570,25 @@ if (childrenStopped > 0) {
   console.log(
     `  ${String(childrenStopped)} follow-on job(s) the replays caused were cancelled rather than re-done`,
   )
+}
+if (documentsSwept > 0) {
+  console.log(
+    `  ${String(documentsSwept)} document(s) a replay wrote into a real project were removed`,
+  )
+}
+/*
+  Asserted, not assumed. A sweep that matched nothing looks exactly like a
+  sweep that worked, and this one runs against Grant's real projects.
+*/
+const leftBehind = await one(`
+  select count(*)::int as n from public.documents d
+    join public.jobs j on j.job_id = d.produced_by_job
+   where j.requested_by = ${lit(MINE)}`)
+if (Number(leftBehind.n) > 0) {
+  console.error(
+    `  DEBRIS: ${String(leftBehind.n)} document(s) this run wrote are still in a real project`,
+  )
+  process.exitCode = 1
 }
 
 /*
