@@ -87,6 +87,37 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
   rather than a Gmail-specific memory.
 - **#41** continuously, as a programme rather than a checkbox.
 
+### WHERE THIS RUN IS — updated as it goes
+
+| | |
+|---|---|
+| **started from** | `68b7958` (PR #274 merged) |
+| **branch** | `claude/phase-7-communications-kh8ow8`, restarted from main |
+| **migrations** | 463 |
+| **#133** | **DONE** — `npm run replay` + `npm run verify:judge`, both controls proved |
+| **next** | #257, then #258, then #172 |
+
+**What #133 shipped, and the two things that make it evidence rather than
+code:**
+
+- `npm run replay` re-asks real past requests against current code. The corpus
+  is chosen by four structural witnesses (not a fixture, not a harness job,
+  from a real channel, and the answer was ACTUALLY DELIVERED to a person),
+  because chasing probe names failed three times running.
+- `npm run verify:judge` calibrates the comparative judge against five
+  invented pairs with a known direction — **in the gate**, because a
+  measurement whose instrument decays silently is worse than none.
+- **Control 1:** `--degrade` sabotages every request and the run must come back
+  WORSE. It does (2 worse against 1 better), and the command exits non-zero if
+  it does not.
+- **Control 2:** an ordinary run must not manufacture a regression. It reports
+  NO DIRECTION with 0 worse.
+
+**Four defects found by building it**, all recorded in CLAUDE.md and fixed:
+61 + 29 harness jobs reading as things Grant asked (0460, 0463); a replay able
+to deliver through the children it spawned (0461, 0462); and a judge design
+that could not see a sabotaged run at all.
+
 ### What inspection established about #133, before starting it
 
 `job_traces` does NOT carry what #133 assumed. It holds four kinds — `prompt`,

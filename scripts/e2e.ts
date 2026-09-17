@@ -197,6 +197,18 @@ const NEVER: Record<string, string> = {
 const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   // Persistence and the shapes a client actually reaches.
   ['verify:schema', "the schema's own dangling references"],
+  /*
+    The instrument, before anything it measures.
+
+    `npm run replay` reports better/worse/unchanged against real history, and
+    every one of those verdicts is worth exactly what the judge making it is
+    worth. This repository has already shipped a version whose judge could not
+    detect a deliberately sabotaged run, and the only reason anybody found out
+    was running the control. Five pairs with a known direction, both ways
+    round, about a minute: cheap enough to keep, and the alternative is a
+    measurement that decays silently.
+  */
+  ['verify:judge', 'the comparative judge can still tell a good answer from a bad one (#133)'],
   [
     'verify:wrappers',
     'every RPC a client calls is reachable — PostgREST exposes only `public`, and a missing wrapper is invisible until called',
