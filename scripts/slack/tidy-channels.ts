@@ -155,6 +155,30 @@ for (const channel of live.body.channels ?? []) {
     continue
   }
 
+  /*
+    A room for a project that is no longer there (0477).
+
+    Ours by our own record, and its project is archived — so nobody will ever
+    post in it again and it sits in Grant's sidebar for ever. This is how two
+    `identity_proof_…` channels outlived the crashed run that made them: their
+    names match no fixture pattern, because #45 forces a suite testing a
+    fixture filter to use real-looking names, so nothing here could see them.
+
+    A property rather than a pattern, which is the whole point: it holds for a
+    project Grant archives himself, and it cannot go stale the way a list of
+    prefixes does.
+  */
+  if (record !== undefined && record.status === 'archived') {
+    plans.push({
+      id: channel.id,
+      from: channel.name,
+      to: null,
+      action: 'archive',
+      why: `its project (${String(record.project_name ?? record.project_slug)}) is archived`,
+    })
+    continue
+  }
+
   if (WORKSPACE[channel.name] !== undefined) {
     const want = WORKSPACE[channel.name] as string
     plans.push(

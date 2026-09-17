@@ -38,6 +38,7 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
+import { raiseBlocker } from '../inference/record.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { SlackClient } from '../slack/api.ts'
 import { ChannelProvisioner } from '../slack/provision.ts'
@@ -129,15 +130,68 @@ export function channelsHandler(deps: ChannelsDeps, kind: string): Handler {
         attempt.
       */
       if (result.outcome === 'failed' || result.outcome === 'name_conflict') {
+        /*
+          A name conflict is a QUESTION, and until 0477 it was a loop.
+
+          The comment above is right that neither outcome improves on a second
+          attempt, and the enqueuer knew nothing about that: a debris project
+          whose desired name was taken accumulated 740 of these jobs in twelve
+          hours, each announcing the same failure. 0477 bounds the sweep; this
+          is the other half — the office asks once, where Grant can answer,
+          instead of reporting the same impossibility daily for ever.
+
+          Guarded on an open blocker for this project rather than on a count:
+          asking twice about one collision is the thing to avoid, and the
+          enqueuer reads the same row to decide not to come back.
+        */
+        if (result.outcome === 'name_conflict') {
+          const asked = Number(
+            (
+              (
+                await db.execute(`
+                  select count(*)::int as n from public.blockers
+                   where project_id = ${lit(String(row.id))}::uuid and state = 'open'
+                     and requested_action like '%Slack channel%'`)
+              ).rows[0] as { n?: number }
+            )?.n ?? 0,
+          )
+          if (asked === 0) {
+            await raiseBlocker(db, {
+              projectId: String(row.id),
+              jobId: job.jobId,
+              requestedAction:
+                `“${String(row.name)}” has no Slack channel of its own, because ` +
+                `#${String(result.channelName)} already exists and is not one of ours. ` +
+                'What would you like me to do?',
+              whyNeeded:
+                'I will not take over a channel somebody else made, and I cannot ' +
+                'guess a second name you would recognise.',
+              consequencesOfDelay:
+                'Nothing breaks. The project works everywhere else; it just has no ' +
+                'room of its own, and I will not ask again until you answer.',
+              approvalOptions: [
+                `Use #${String(result.channelName)}_project instead`,
+                'Leave it without a channel',
+              ],
+              originatingAgent: 'operations-director',
+              // The office is not stuck: everything else about the project
+              // works, so the answer is wanted rather than waited on.
+              workCanContinue: true,
+            })
+          }
+        }
         return {
           ...base,
           facts: { changed: false, looked_at: 1 },
           body: `I could not give ${String(row.name)} a Slack channel: ${
             result.outcome === 'name_conflict'
-              ? `#${String(result.channelName)} is taken by a channel that is not ours, so somebody has to choose`
+              ? `#${String(result.channelName)} is taken by a channel that is not ours, so I have asked you to choose`
               : String(result.errorCode ?? 'Slack refused')
           }. The project is fine; it just has no room of its own yet.`,
-          announce: true,
+          // The blocker is the notification path for a conflict. Announcing as
+          // well would say the same thing twice, which is what 740 of these
+          // jobs did once a minute.
+          announce: result.outcome !== 'name_conflict',
         }
       }
 

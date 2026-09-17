@@ -1354,13 +1354,57 @@ record(
 // `conversations.history` returns `not_in_channel` too. Every check that needs
 // to ask Slack what is in the channel has already run.
 await slack.call('conversations.leave', { channel: CHANNEL })
-const whileOut = await office.deliver(
+/*
+  Leaving a PUBLIC channel does not stop the app posting to it, and this check
+  spent months asserting that it did.
+
+  The app holds `chat:write.public`, so `chat.postMessage` to a public channel
+  it is not in succeeds — the run that found this reported `sent error=null`
+  where the suite demanded `failed not_in_channel`. Slack's behaviour, not
+  ours, and not a defect: it is why Grant's projects can be written to before
+  anybody invites the bot.
+
+  What the office must get right is still worth proving, so it is proved where
+  it lives: given `not_in_channel` from Slack, the delivery fails with THAT
+  reason rather than crashing or reporting something vaguer. Injected through
+  the same fetch seam `amnesiacOffice` and `strandedOffice` above use, because
+  the alternative — a private channel — needs a scope the app does not hold,
+  and the alternative to THAT was leaving a room behind on every run (#270).
+*/
+const lockedOutFetch: typeof fetch = async (input, init) => {
+  const url = String(input)
+  if (url.includes('chat.postMessage')) {
+    return new Response(JSON.stringify({ ok: false, error: 'not_in_channel' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  return fetch(input, init)
+}
+const lockedOut = new SlackOffice(db, new SlackClient(botToken, { fetchImpl: lockedOutFetch }))
+const whileOut = await lockedOut.deliver(
   deliverOpts(`verify:${stamp}:while-out`, CHANNEL, 'Sent while locked out.'),
 )
 record(
-  'being removed from a channel fails the delivery with the reason, not a crash',
+  'a not_in_channel from Slack fails the delivery with the reason, not a crash',
   `${whileOut.outcome} error=${String(whileOut.errorCode)}`,
   whileOut.outcome === 'failed' && whileOut.errorCode === 'not_in_channel',
+)
+/*
+  CONTROL: and the real client, to the same channel, with the bot OUT of it.
+
+  Without this the check above proves only that a stub returns what it was told
+  to. This says what the app can actually do — and it is the line that would
+  have caught the change: if `chat:write.public` is ever dropped, this goes red
+  and the office loses the ability to post anywhere it has not been invited.
+*/
+const stillReaches = await office.deliver(
+  deliverOpts(`verify:${stamp}:public-write`, CHANNEL, 'Posted from outside the room.'),
+)
+record(
+  'CONTROL: and chat:write.public still lets the office post to a room it is not in',
+  `${stillReaches.outcome} error=${String(stillReaches.errorCode)}`,
+  stillReaches.outcome === 'sent',
 )
 await office.recordRemoval(CHANNEL)
 const removalRecorded = await one<{ bot_present: boolean; active: boolean }>(
@@ -1679,38 +1723,54 @@ for (const extra of (
 let parkedLobby = created.channelName
 try {
   parkedLobby = await parkAndArchive(CHANNEL, created.channelName)
+  /*
+    And the MAP, here rather than only in the cleanup block below.
+
+    This is the whole of the "one channel survives every run" cost #270 was
+    opened about, and it is an ORDERING defect rather than a missing scope. The
+    lobby WAS archived in Slack and its map row WAS updated — in the tidy-up
+    that runs AFTER the survivor check, which asks Postgres. So the assertion
+    read a row that Slack had already shut, every run, and the conclusion drawn
+    from it was that the app needed `channels:join`. It has had that scope
+    since 5 September; the rejoin check passes on every run.
+
+    The map should agree with Slack at the moment it changes, which is here.
+  */
+  await db.execute(`
+    update public.slack_channel_map
+       set active = false, archived_at = app.now_utc(), channel_name = ${lit(parkedLobby)}
+     where channel_id = ${lit(CHANNEL)}
+  `)
   console.log(`\narchived #${created.channelName} as #${parkedLobby}`)
 } catch (error) {
-  // Expected, and worth printing in full rather than swallowing: archiving
-  // needs membership, the lockout check deliberately gave that up, and the app
-  // cannot rejoin without `channels:join`. So each full run leaves one empty
-  // channel behind until that scope is installed. Naming it here is the
-  // difference between a known cost and a mystery.
+  /*
+    Still caught, because Slack can refuse for reasons that are not ours — and
+    no longer EXPECTED. `conversations.join` works (the rejoin check above
+    proves it on every run), so the bot is back in the room before this runs
+    and archiving is allowed. If this branch ever prints again, something has
+    changed about the app's scopes and the suite says so out loud.
+  */
   console.log(
     `\n#${created.channelName} (${CHANNEL}) could not be archived: ` +
-      `${(error as Error).message.slice(0, 60)}. ` +
-      "This is the lockout check's cost; it clears once the app is reinstalled " +
-      'with channels:join.',
+      `${(error as Error).message.slice(0, 80)}. ` +
+      'That should not happen while the app can rejoin a channel it left.',
   )
 }
 /*
   What this run LEFT, asserted rather than printed (#186).
 
   The criterion is "no verification run leaves a channel in Grant's Slack -
-  asserted in the suite, not swept afterwards". Three of the four things that
-  Issue asks for hold; this one cannot, with the scopes this app is installed
-  with: the lockout check must leave the channel, archiving needs membership,
-  and conversations.join needs channels:join. So each full run leaves exactly
-  one channel behind.
+  asserted in the suite, not swept afterwards", and as of 0477 it HOLDS. The
+  app can rejoin a channel it left (the rejoin check above proves it every
+  run), so the lobby is archived like every other room, and the reason a
+  survivor was reported for months was a missing map update rather than a
+  missing scope (#270).
 
-  The prose above says so and prose is not a check. A note in a log is how a
-  known cost becomes a forgotten one, and "the teardown printed something"
-  looks identical to "the teardown worked" - which is the trap this repository
-  has already paid for twice. So the count is asserted: exactly one channel
-  may survive a full run, it must be the lobby, and it must already carry a
-  name that says what it is. Two would mean parkAndArchive silently stopped
-  working, and zero would mean channels:join has arrived and this check is
-  what tells somebody to delete the comment above.
+  Asserted rather than printed, because "the teardown printed something" looks
+  identical to "the teardown worked" - a trap this repository has paid for
+  twice. ZERO is the expectation now. A survivor means parkAndArchive stopped
+  working or the map update was missed again, and the outcome line names the
+  channel so the next person does not have to go looking.
 */
 const survived = (
   await db.execute(`
@@ -1719,20 +1779,11 @@ const survived = (
   `)
 ).rows as { channel_id: string; channel_name: string }[]
 record(
-  'the run leaves at most the one channel the lockout check costs, and it is named as a fixture',
+  'the run leaves NO channel behind in Grant’s Slack (#270)',
   survived.length === 0
-    ? 'nothing survived — channels:join has arrived; delete the known-cost branch above'
+    ? 'nothing survived'
     : `${String(survived.length)} left: ${survived.map((c) => `#${c.channel_name}`).join(' ')}`,
-  survived.length <= 1 &&
-    /*
-      Three spellings, because the name reaches this row by three routes:
-      `zz test slack <stamp>` is the PROJECT name, Slack slugs it to
-      `zz-test-slack-<stamp>`, and parkAndArchive renames it `zz_test_<stamp>`.
-      Anchoring on `zz_` alone would have failed on the commonest case - the
-      rename succeeding and the archive not - which is a check firing on
-      correct behaviour, and this file already records what that costs.
-    */
-    survived.every((c) => c.channel_id === CHANNEL && /^zz[-_ ]/i.test(c.channel_name)),
+  survived.length === 0,
 )
 
 try {

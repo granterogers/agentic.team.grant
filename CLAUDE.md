@@ -2614,6 +2614,34 @@ Each of these cost real time. They are here so they cost it once.
   not care which process produced it: read the row, not the return value of
   the path you happened to take.
 
+- **740 jobs in twelve hours, asking for a channel that could never be made.**
+  A debris project whose desired Slack name was taken by somebody else's
+  channel was re-enqueued by `provision_missing_channels` on every tick, and
+  `channels.ts` returned a courteous "somebody has to choose" — with
+  `announce: true` — one a minute from 10:02 to 22:34. The handler's own
+  comment said a conflict is "reported rather than retried, because neither
+  gets better on a second attempt", and the enqueuer had never been told.
+  **Both halves right alone; only their disagreement wrong**, which is the
+  hardest kind to see and the third instance in this file. 0477 bounds the
+  sweep to one attempt a day per project and skips a project with an open
+  blocker about it; the handler raises that blocker once, so the office asks
+  rather than repeating. Grant was spared 740 messages by an accident — the job
+  had no reply-to and no Slack destination — and luck is not a design.
+
+- **#270 asked Grant for a scope his app has had since 5 September.** The
+  Issue's premise was that `verify:slack` must leave one channel behind because
+  the bot cannot rejoin a room it left. `conversations.join` works — the suite
+  asserts it on every run and it passes. The survivor was an ORDERING defect:
+  the lobby's `slack_channel_map` row was updated in the cleanup block that
+  runs AFTER the assertion, so the check read a row Slack had already shut.
+  Two neighbouring facts, both established by driving Slack rather than
+  reasoning: `conversations.archive` really does need membership
+  (`not_in_channel` from outside), and `chat:write.public` means leaving a
+  public channel does NOT stop the app posting to it — so the lockout check had
+  been asserting a Slack behaviour that no longer happens, and now injects the
+  error through the same fetch seam the file already uses, with a control that
+  proves the real client still reaches the room.
+
 - **A plpgsql body is parsed, not executed, so a spliced reference to the
   loop's own record variable survives CREATE and dies on first use.** 0474
   narrowed the proposal round with `for t in select … where t.kind <> …` — `t`
