@@ -164,6 +164,7 @@ const notebookMade = {}
 /* Signed-in sites, and what the office opened on them (#135, #16). */
 const browserSites = {}
 const browserSeen = {}
+let browserLeft = null
 const maps = {}
 const placed = {}
 
@@ -11152,7 +11153,13 @@ function signedInSites(p) {
   return `<section class="nbmade bsites">
     <h3 class="t-label">Signed in to</h3>
     <p class="t-meta">Pages the office can read on your behalf. It reads and
-      photographs; it does not press anything.</p>
+      photographs; it does not press anything.${
+        browserLeft === null
+          ? ''
+          : ` ${esc(String(browserLeft.left_minutes ?? 0))} of ${esc(
+              String(browserLeft.cap_minutes ?? 0),
+            )} free browser-minutes left today.`
+      }</p>
     <ul class="nbrows">${rows
       .map(
         (b) => `<li class="nbrow">
@@ -11215,12 +11222,19 @@ async function needSites(slug) {
   const p = byId(slug)
   browserSites[slug] = null
   try {
-    const [sessions, lately] = await Promise.all([
+    /*
+      The budget comes back with the sessions, because the answer to "why did
+      it not open anything" belongs on the same screen as the question. It is
+      global rather than per project, since the cap is.
+    */
+    const [sessions, lately, budget] = await Promise.all([
       settles(read('browser_sessions', p.id)),
       settles(read('browser_lately', p.id)),
+      settles(read('browser_budget')),
     ])
     browserSites[slug] = Array.isArray(sessions) ? sessions : []
     browserSeen[slug] = Array.isArray(lately) ? lately : []
+    browserLeft = budget && typeof budget === 'object' ? budget : null
   } catch {
     browserSites[slug] = []
     browserSeen[slug] = []

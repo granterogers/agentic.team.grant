@@ -19,6 +19,7 @@
  * the one surface where a mistake is reachable from the internet.
  */
 
+import { readdir, readFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
@@ -714,12 +715,44 @@ record(
     section — and reported a correct document as missing two. Validate the
     test before believing the finding, which is the third time today.
   */
-  const mustHave = ['overview', 'projects', 'studio', 'team', 'settings', 'document', 'search']
-  const missingS = mustHave.filter((n) => !sections.includes(n))
+  /*
+    DERIVED from the page, not listed here.
+
+    A hand-written list is a list that freezes: seven names were checked while
+    the studio had grown to twenty-seven, and three sections added this morning
+    would have gone unprobed. Reading the source asserts the PROPERTY -- every
+    section the page asks for exists on the deployed gateway -- and it cannot
+    go stale, which is the same correction this repository has made about an
+    index asserted by name and a whitelist of source schemes.
+  */
+  const studio = new URL('../../web/studio/', import.meta.url)
+  const pageSource = (
+    await Promise.all(
+      (
+        await readdir(studio)
+      )
+        .filter((f) => f.endsWith('.js'))
+        .map((f) => readFile(new URL(f, studio), 'utf8')),
+    )
+  ).join('\n')
+  const asked = [
+    ...new Set([...pageSource.matchAll(/\bread\(\s*'([a-z_]+)'/g)].map((m) => m[1] as string)),
+  ].sort()
+  const missingS = asked.filter((n) => !sections.includes(n))
+  /*
+    The control. A regex that matched nothing would report a perfect score
+    about a question it never asked -- the found-nothing shape, three
+    instances of which are already in CLAUDE.md.
+  */
+  record(
+    'the page names sections at all, so the check above is asking something',
+    `${String(asked.length)} distinct section(s) read by the studio scripts`,
+    asked.length > 10,
+  )
   record(
     'and every section the page actually asks for is in it',
     missingS.length === 0
-      ? `${mustHave.length}/${mustHave.length}`
+      ? `${String(asked.length)}/${String(asked.length)}`
       : `missing: ${missingS.join(', ')}`,
     missingS.length === 0,
   )
