@@ -12,7 +12,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import type { SqlExecutor, SqlResult } from '../../src/db/executor.ts'
+import { SlackClient } from '../../src/slack/api.ts'
 import { fallbackText, resultBlocks } from '../../src/slack/blocks.ts'
+import { SlackOffice } from '../../src/slack/office.ts'
 
 const message = (
   file: { filename: string; url: string | null } | null,
@@ -89,5 +92,86 @@ describe('#258 — a made file reaches Slack as a signed link', () => {
     expect(fileAt).toBeGreaterThanOrEqual(0)
     expect(actionsAt).toBeGreaterThanOrEqual(0)
     expect(fileAt).toBeLessThan(actionsAt)
+  })
+})
+
+/*
+  And the whole way out, not only the renderer.
+
+  #258's defect was never that a renderer could not draw a link: it was that
+  nothing ever passed one, because `attachFile` was read in exactly one branch
+  of one file. A test of `resultBlocks` alone would have been green throughout
+  that entire period. This drives `SlackOffice.deliver` and reads what actually
+  went on the wire.
+*/
+class ScriptedDb implements SqlExecutor {
+  readonly kind = 'scripted'
+  async execute(sql: string): Promise<SqlResult> {
+    if (sql.includes('claim_delivery')) {
+      return {
+        rows: [
+          {
+            delivery_id: '33333333-3333-3333-3333-333333333333',
+            outcome: 'claimed',
+            message_ref: null,
+            attempt: 1,
+          },
+        ],
+      }
+    }
+    if (sql.includes('record_delivery_sent')) return { rows: [{ outcome: 'sent' }] }
+    return { rows: [{ outcome: 'recorded' }] }
+  }
+}
+
+const posted = async (
+  file: { filename: string; url: string | null } | null,
+): Promise<Record<string, unknown>> => {
+  const sent: Record<string, unknown>[] = []
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+    sent.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+    return new Response(JSON.stringify({ ok: true, ts: '1700000000.000100' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as unknown as typeof fetch
+  const slack = new SlackClient('xoxb-test', { fetchImpl, sleep: async () => {} })
+  await new SlackOffice(new ScriptedDb(), slack).deliver({
+    dedupeKey: 'job:abc:result',
+    teamId: 'T0BUCJ2L5FD',
+    channelId: 'C0BUNF6NKHA',
+    threadTs: null,
+    purpose: 'result',
+    staff: null,
+    staffId: null,
+    correlationId: '44444444-4444-4444-4444-444444444444',
+    message: {
+      staffTitle: null,
+      body: 'The report is written.',
+      metadata: null,
+      correlationId: '44444444-4444-4444-4444-444444444444',
+      actions: [],
+      file,
+    },
+  })
+  return sent[0] ?? {}
+}
+
+describe('#258 — the link survives the whole delivery, not just the renderer', () => {
+  it('puts the signed link in the message Slack actually receives', async () => {
+    const body = await posted({ filename: 'Q3.pdf', url: 'https://e.test/sign/tok' })
+    expect(JSON.stringify(body.blocks)).toContain('<https://e.test/sign/tok|Q3.pdf>')
+  })
+
+  it('and the honest degradation reaches Slack too', async () => {
+    const body = await posted({ filename: 'Q3.pdf', url: null })
+    const json = JSON.stringify(body.blocks)
+    expect(json).toMatch(/could not make a link/)
+    expect(json).not.toContain('https://')
+  })
+
+  it('CONTROL: a message with no file carries no file line at all', async () => {
+    const body = await posted(null)
+    expect(JSON.stringify(body.blocks)).not.toMatch(/📄/)
   })
 })
