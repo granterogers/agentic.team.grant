@@ -125,8 +125,22 @@ Issue itself; read that rather than reconstructing it.
 **The state of the signal.** `check:callers` is green at **15**, down from 40
 at #272's title. The gate was 15/22 when this run started and the three reds
 were: verify:recovers (fixed, #273), check:leaks (fixture debris, swept) and
-check:callers (mid-edit). `verify:routing-breadth` varies with the provider
-and now SAYS which kind of miss it had.
+check:callers (mid-edit).
+
+The run's LAST gate came back 17/22, and four of the five reds were the
+harness disagreeing with removals it had not been told about rather than
+anything in the product — all four repaired, each at the layer where the
+decision is made:
+
+| red | what it actually was |
+|---|---|
+| `verify:tasks` | it was the only caller of the task API 0454-0456 removed. Rewritten against `task_add`, `hq_task_state`, `studio_tasks` — what the studio presses. **24/24** |
+| `verify:schema` | it read the COMMENT in `hq_governance` explaining why `what_i_can_do` is gone as a call to it. Reads past comments now, with a control counting what survives the strip and a proved synthetic failure. **3/3** |
+| `verify:wrappers` | it demanded a public wrapper for three functions nothing should call. Names the live pair instead. **43/43** |
+| `check:leaks` | one fixture task. Swept. |
+
+`verify:routing-breadth` is the fifth and is model variance; it now SAYS
+which kind of miss it had.
 
 **The next autonomous action, exactly.** Take #133 (*"Nothing replays real
 history against a change"*) — it is testing infrastructure that makes every
