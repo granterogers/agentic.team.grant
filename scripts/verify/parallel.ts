@@ -439,5 +439,201 @@ section = 'cancelling the question'
   )
 }
 
+// ---------------------------------------------------------------------------
+console.log('permissions never combine')
+section = 'permissions never combine'
+// ---------------------------------------------------------------------------
+
+{
+  /*
+    #262 states it plainly: *"A parent that delegates to Emma and Daniel does
+    not receive the union of their external reach."*
+
+    Every agent currently holds the same sixteen tools, so there is no natural
+    asymmetry to measure — the difference has to be MADE, inside a rollback, or
+    the check would pass on a roster where everybody can do everything and mean
+    nothing at all.
+
+    A fixture tool is granted to one branch agent only. What is asserted is
+    that delegating to them does not give the parent their reach, and the
+    control is that the branch agent really does have it — without that, a
+    `staff_may_use` that refused everybody would read as the invariant holding.
+  */
+  const TOOL = `fixture.branch_${run}`
+  const got = await one(`
+    begin;
+    ${SETUP}
+    insert into public.tool_permissions (tool, description, level, enabled, delivered_by)
+    values (${lit(TOOL)}, 'A fixture tool, granted to one branch agent only.', 0, true,
+            'handler');
+    insert into public.staff_tools (staff_slug, tool)
+    values ('finance-director', ${lit(TOOL)});
+    create temp table u (k text primary key, v jsonb) on commit drop;
+    insert into u values ('fan', app.fan_in_over(${PARENT},
+      'Is this worth doing?', ${BRANCHES}, 'office.synthesise', null));
+    select (select v from u where k = 'fan') as fan,
+           app.staff_may_use('finance-director', ${lit(TOOL)}) as branch_may,
+           app.staff_may_use('chief-of-staff', ${lit(TOOL)}) as parent_may,
+           app.staff_may_use('research-director', ${lit(TOOL)}) as sibling_may;
+    rollback;`)
+
+  const truthy = (v: unknown): boolean => v === true || v === 'true' || asJson(v).allowed === true
+  /*
+    Tolerant of nothing, because a section that could not run returns nothing —
+    the same guard `asJson` carries two hundred lines up, and the reason the
+    first draft of this section took the suite down on a TypeError one line
+    after the SQL error it should have reported.
+  */
+  const said = (v: unknown): string => (v === undefined ? '(nothing came back)' : JSON.stringify(v))
+
+  ok(
+    'CONTROL: the branch agent really does hold the tool',
+    truthy(got.branch_may),
+    said(got.branch_may).slice(0, 50),
+  )
+  ok(
+    'the parent that delegated to them does NOT gain their reach',
+    !truthy(got.parent_may),
+    said(got.parent_may).slice(0, 50),
+  )
+  ok(
+    'and neither does a sibling branch',
+    !truthy(got.sibling_may),
+    said(got.sibling_may).slice(0, 50),
+  )
+  ok(
+    'CONTROL: and the delegation being tested really happened',
+    ((asJson(got.fan).branches ?? []) as unknown[]).length >= 2,
+    `${String(((asJson(got.fan).branches ?? []) as unknown[]).length)} branch(es) registered`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+console.log('nothing serialises the branches, and nothing fans out alone')
+section = 'concurrency and restraint'
+// ---------------------------------------------------------------------------
+
+{
+  /*
+    Two boxes that are really one question: does the office run branches
+    concurrently WHEN it should, and leave a single-domain request alone?
+
+    Concurrency is asserted as the absence of anything that would prevent it,
+    which is the honest form: the branches are ordinary queued jobs with no
+    dependency between them, nothing is `paused`, and none carries a
+    `not_before` that would hold it back. Whether two actually overlap on the
+    clock is the worker's capacity, which this suite does not control and
+    should not pretend to.
+  */
+  const got = await one(`
+    begin;
+    ${SETUP}
+    select app.fan_in_over(${PARENT},
+      'Is this worth doing?', ${BRANCHES}, 'office.synthesise', null);
+    /*
+      The BRANCHES, not every child. The synthesis job is a child of the same
+      parent — correctly — so counting children reported four of three and the
+      test was wrong rather than the product.
+    */
+    select count(*) filter (where j.state = 'queued')::int as queued,
+           count(*) filter (where j.not_before is not null)::int as held_back,
+           count(*) filter (where j.waiting_on is not null)::int as waiting,
+           count(distinct j.recipient_agent)::int as agents
+      from public.jobs j
+      join public.job_branches b on b.job_id = j.job_id
+     where j.parent_job_id = ${PARENT};
+    rollback;`)
+
+  ok(
+    'every branch is queued and eligible at the same moment',
+    Number(got.queued) === 3,
+    `${String(got.queued)} of 3 queued`,
+  )
+  ok(
+    'nothing holds one back behind another',
+    Number(got.held_back) === 0 && Number(got.waiting) === 0,
+    `${String(got.held_back)} with a not_before, ${String(got.waiting)} waiting on something`,
+  )
+  ok(
+    'and each goes to a different specialist, which is what makes concurrency worth having',
+    Number(got.agents) === 3,
+    `${String(got.agents)} distinct agent(s)`,
+  )
+
+  /*
+    Restraint. `instruction.ts` fans out only at `branchesStarted.length >= 2`,
+    so one specialist is structurally incapable of becoming a group — and
+    `fan_in_over` refuses it a second time with a sentence. Asserted at the
+    database, which is the layer that cannot be bypassed by a handler change.
+  */
+  const alone = await one(`
+    begin;
+    ${SETUP}
+    select app.fan_in_over(${PARENT}, 'A single-domain question', jsonb_build_array(
+      jsonb_build_object('job_id', ${CHILD('research-director')},
+                         'agent', 'research-director',
+                         'purpose', 'the only thing being asked', 'required', true)),
+      'office.synthesise', null) as v,
+      (select count(*)::int from public.branch_groups where parent_job_id = ${PARENT}) as groups;
+    rollback;`)
+  ok(
+    'a single-domain request does not become a fan-out',
+    String(asJson(alone.v).error ?? '').includes('just a job') && Number(alone.groups) === 0,
+    `${String(asJson(alone.v).error ?? '(it fanned out)').slice(0, 60)}, ${String(alone.groups)} group(s)`,
+  )
+}
+
+// ---------------------------------------------------------------------------
+console.log('the ceiling on how wide a question may go')
+section = 'the ceiling'
+// ---------------------------------------------------------------------------
+
+{
+  /*
+    #262's cost section asks for a deterministic max branch count, and
+    `fan_in_over` reads one from `system_config` rather than hard-coding it —
+    so the check reads the same setting rather than asserting a number, which
+    would go red the day Grant changes it.
+  */
+  const cap = await one(`
+    select coalesce(nullif(value #>> '{}', '')::int, 3) as cap
+      from public.system_config where key = 'parallel.max_branches'`)
+  const capN = Number(cap.cap ?? 3)
+
+  const got = await one(`
+    begin;
+    ${SETUP}
+    insert into public.jobs
+      (kind, idempotency_key, correlation_id, parent_job_id, requested_by, project_id,
+       state, recipient_agent, announce)
+    select 'office.instruction', ${lit(`par-${run}`)} || '-extra-' || g,
+           (select correlation_id from public.jobs where idempotency_key = ${lit(`par-${run}`)}),
+           ${PARENT}, ${lit(`teamhq:verify-par-${run}`)},
+           (select project_id from public.projects where slug = ${lit(`fixture-parallel-${run}`)}),
+           'queued', 'research-director', false
+      from generate_series(1, ${String(capN + 1)}) g;
+    select app.fan_in_over(${PARENT}, 'A question asked too many ways', (
+        select jsonb_agg(jsonb_build_object(
+          'job_id', j.job_id, 'agent', 'research-director',
+          'purpose', 'one of too many', 'required', false))
+          from public.jobs j
+         where j.parent_job_id = ${PARENT}
+           and j.idempotency_key like ${lit(`par-${run}-extra-%`)}
+      ), 'office.synthesise', null) as v,
+      (select count(*)::int from public.branch_groups where parent_job_id = ${PARENT}) as groups;
+    rollback;`)
+
+  ok(
+    `more branches than the office allows is refused, and names the ceiling`,
+    String(asJson(got.v).error ?? '').includes('allows') && Number(got.groups) === 0,
+    `${String(asJson(got.v).error ?? '(it was allowed)').slice(0, 70)}`,
+  )
+  ok(
+    'CONTROL: and the ceiling is a setting Grant can change, not a number in the code',
+    capN >= 2,
+    `parallel.max_branches = ${String(capN)}`,
+  )
+}
+
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 if (fail > 0) process.exit(1)
