@@ -844,6 +844,25 @@ const FALLBACK_GOVERNANCE = {
     { at: '2026-09-14T16:58:22Z', cases: 18, agreed: 16, mean_score: 2.78, judge_model: 'a free model', note: '2 case(s) unreadable' },
     { at: '2026-09-14T16:46:54Z', cases: 19, agreed: 16, mean_score: 2.95, judge_model: 'a free model', note: '1 case(s) unreadable' },
   ],
+  /*
+    Invented triggers, behind the no-token banner (#264). None is configured
+    in the real office yet, and a section that renders nothing is a section
+    nobody can judge — which is how the trigger framework came to be built,
+    verified and completely invisible.
+  */
+  triggers: [
+    {
+      name: 'notes-to-tasks', source: 'office', event_type: 'document.added',
+      job_kind: 'office.extract_tasks', enabled: true, fired: 4, declined: 1,
+      last_fired: '2026-09-17T08:12:00Z',
+      last_declined: { why: 'it last fired 40 seconds ago and the cooldown is 3600' },
+    },
+    {
+      name: 'stale-connection', source: 'office', event_type: 'connection.failing',
+      job_kind: 'office.instruction', enabled: false, fired: 0, declined: 0,
+      last_fired: null, last_declined: null,
+    },
+  ],
 }
 
 export const GOVERNANCE = {
@@ -856,11 +875,28 @@ export const GOVERNANCE = {
   requests: [...FALLBACK_GOVERNANCE.requests],
   stranded: { ...FALLBACK_GOVERNANCE.stranded },
   scoring: [...FALLBACK_GOVERNANCE.scoring],
+  triggers: [...FALLBACK_GOVERNANCE.triggers],
 }
 
 export async function hydrateGovernance(read) {
   try {
-    const d = await read('governance')
+    /*
+      Two reads, not one (#264).
+
+      `triggers` is its own section because an agent holding the bearer token
+      should be able to ask what is listening without pulling the whole
+      governance payload. The PAGE wants both on one screen, so it asks for
+      both at once rather than folding the section into the payload and
+      leaving the section with no caller — which is the defect this work is
+      about, and it would be poor form to create another one closing it.
+
+      Settled, not awaited as a pair: a failing trigger read must not take the
+      governance page down with it.
+    */
+    const [d, t] = await Promise.all([
+      read('governance'),
+      read('triggers').catch(() => null),
+    ])
     if (!d || !Array.isArray(d.lessons)) throw new Error('unexpected shape')
     Object.assign(GOVERNANCE, {
       at: d.at ?? null,
@@ -885,6 +921,7 @@ export async function hydrateGovernance(read) {
       */
       stranded: d.stranded ?? { total: 0, kinds: [], oldest: null, why: '' },
       scoring: Array.isArray(d.scoring) ? d.scoring : [],
+      triggers: Array.isArray(t) ? t : [],
       loaded: true,
     })
   } catch {

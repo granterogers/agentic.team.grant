@@ -5626,6 +5626,37 @@ function governanceTab() {
           </li>`).join('')}</ul>`}
     </section>
 
+    <!--
+      What starts work on its own (#264).
+
+      The framework was built, verified and completely invisible: a section on
+      the gateway that no page read. Grant's questions from the Issue are the
+      columns — what exists, is it on, what does it listen for, what does it
+      start, when did it last fire, and was anything declined.
+
+      No backticks in this comment: template literal.
+    -->
+    <section class="govsec">
+      <h3 class="govtitle">What starts work on its own<span class="t-meta">${
+        (g.triggers ?? []).filter((t) => t.enabled).length
+      } on</span></h3>
+      ${(g.triggers ?? []).length === 0
+        ? empty('Nothing is listening. A trigger turns something happening — a document arriving, a connection failing — into work, under the same permissions as anything else.')
+        : `<ul class="govnotes">${(g.triggers ?? []).map((t) => `<li class="govnote gtrig">
+            <b>${esc(t.name ?? '')}</b>
+            <span class="gtrigstate ${t.enabled ? 'on' : 'off'}">${t.enabled ? 'on' : 'off'}</span>
+            <span class="t-meta">${esc(t.source ?? '')} · ${esc(t.event_type ?? '')} → ${esc(t.job_kind ?? '')}</span>
+            <span class="t-meta">${
+              t.last_fired ? `last fired ${esc(when.words(t.last_fired))}` : 'never fired'
+            }${Number(t.declined ?? 0) > 0 ? ` · ${esc(String(t.declined))} declined` : ''}</span>
+            ${
+              t.last_declined && t.last_declined.why
+                ? `<span class="t-meta govwhy">${esc(t.last_declined.why)}</span>`
+                : ''
+            }
+          </li>`).join('')}</ul>`}
+    </section>
+
     <section class="govsec">
       <h3 class="govtitle">What it noticed<span class="t-meta">${esc(String(g.noticed.length))}</span></h3>
       ${g.noticed.length === 0
