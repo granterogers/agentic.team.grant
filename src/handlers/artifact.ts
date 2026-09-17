@@ -422,6 +422,19 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         }
       }
 
+      if (run.kind === 'stopped') {
+        return {
+          ...base,
+          announce: true,
+          body:
+            `You asked me to stop, so I did, at "${run.at}". ` +
+            'Everything I had already finished is recorded, so asking again carries on ' +
+            'from there rather than starting over.',
+          evidence: 'verified',
+          path: 'deterministic_retrieval',
+        }
+      }
+
       const gathered = run.outcomes.gather ?? {}
       const drafted = run.outcomes.draft ?? {}
       const kept = run.outcomes.store ?? {}

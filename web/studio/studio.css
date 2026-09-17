@@ -6221,3 +6221,31 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 @media (max-width: 860px) {
   .nbrow { grid-template-columns: 1fr; gap: 2px; padding: 10px var(--s3); }
 }
+
+/*
+  Signed-in sites (#135). Four columns rather than the notebook's three: state,
+  site, purpose, last used — and the state is a chip because it is the one
+  thing a person scans for down the column.
+*/
+.bsites .nbrow { grid-template-columns: 116px minmax(0, 1fr) minmax(0, 1.4fr) auto; }
+.bsites .brow { grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1fr) auto; }
+.bsites .bseen { margin-top: var(--s4); }
+.bstate {
+  /*
+    A border as well as a fill. A chip whose fill matches its parent has no
+    shape at all, which is what happened to the tool name on a settled
+    governance card and was visible in exactly one capture.
+  */
+  justify-self: start; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ink-3) 40%, transparent);
+  background: var(--sunken); font-size: 12px;
+}
+.bstate.b-live { border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+                 color: var(--ink-1); }
+.bstate.b-needs_sign_in, .bstate.b-signed_out { color: var(--ink-2); }
+.bstate.b-revoked { color: var(--ink-3); }
+
+/* And on a phone the same stack the notebook rows take, for the same reason. */
+@media (max-width: 860px) {
+  .bsites .nbrow, .bsites .brow { grid-template-columns: 1fr; gap: 2px; }
+}

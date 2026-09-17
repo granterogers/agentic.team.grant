@@ -88,6 +88,22 @@ export interface Step {
 export type RunEnd =
   | { readonly kind: 'done'; readonly outcomes: Readonly<Record<string, Outcome>> }
   | { readonly kind: 'paused'; readonly at: string; readonly pause: Paused }
+  /**
+   * Somebody asked for this job to stop, and it stopped between steps.
+   *
+   * Deliberately NOT a pause and deliberately not a new job state. A pause
+   * invites resumption and the person asked for the opposite; a new state
+   * would need the transition table, the recovery loop and every reader to
+   * learn a word for something the existing ones already express. The job
+   * finishes normally, saying what it managed before it was stopped, and the
+   * completed steps stay recorded so nothing is repeated if it is asked for
+   * again.
+   */
+  | {
+      readonly kind: 'stopped'
+      readonly at: string
+      readonly outcomes: Readonly<Record<string, Outcome>>
+    }
 
 /**
  * Run the steps, skipping what is already recorded.
@@ -105,6 +121,17 @@ export async function runSteps(
   const outcomes: Record<string, Outcome> = {}
 
   for (const [index, step] of steps.entries()) {
+    /*
+      Asked BEFORE each step rather than during one.
+
+      The runtime doing the work is somewhere else and there is no connection
+      to interrupt, so Stop is a fact in the database that this loop reads. A
+      step already in flight finishes -- interrupting it is what the effect
+      declarations exist to avoid.
+    */
+    if (await stopRequested(db, jobId)) {
+      return { at: step.name, kind: 'stopped', outcomes }
+    }
     const effect: Effect = step.effect ?? 'none'
     const { rows } = await db.execute(
       `select app.step_begin(${lit(jobId)}::uuid, ${lit(step.name)}, ${String(index)},
@@ -164,6 +191,17 @@ export async function runSteps(
   }
 
   return { kind: 'done', outcomes }
+}
+
+/** Has somebody asked for this job to stop? */
+export async function stopRequested(db: SqlExecutor, jobId: string): Promise<boolean> {
+  const { rows } = await db.execute(`select app.stop_requested(${lit(jobId)}::uuid) as r`)
+  return rows[0]?.r === true
+}
+
+/** Ask for a job to stop. It ends after its current step. */
+export async function requestStop(db: SqlExecutor, jobId: string, who: string): Promise<void> {
+  await db.execute(`select app.request_stop(${lit(jobId)}::uuid, ${lit(who)})`)
 }
 
 /** Stop the job where it is, with a reason a person can act on. */

@@ -281,6 +281,31 @@ const SECTIONS: Readonly<
   */
   connectors: { fn: 'mcp_inventory' },
   /*
+    The sessions a project has with sites the office is signed in to (#135).
+
+    Sessions, not browsers. What comes back says whether there IS a credential
+    and never anything about it — a page that could distinguish "a jar is
+    stored" from "and here is a bit of it" would make every screenshot of the
+    Browser tab a leak.
+  */
+  browser_sessions: { fn: 'browser_sessions_for', arg: 'p_project' },
+  /*
+    What the office has actually opened, most recent first (#135).
+
+    Harness traffic is already excluded by the reader, which is the sixth time
+    this repository has had to arrange that and the first time it was arranged
+    before anybody saw a suite's rows on a real page.
+  */
+  browser_lately: { fn: 'browser_lately', arg: 'p_project', args: { p_limit: 30 } },
+  /*
+    What is left of today's ten free browser-minutes (#16).
+
+    Global rather than project-scoped, because the cap is. Shown beside the
+    sessions so the answer to "why did it not open anything" is on the same
+    screen as the question.
+  */
+  browser_budget: { fn: 'browser_budget' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the
@@ -489,6 +514,31 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     fn: 'register_mcp_provider',
     required: ['p_name', 'p_endpoint'],
   },
+  /*
+    Establishing a signed-in session for a project (#135).
+
+    The jar arrives in the body and goes straight into `app.store_secret`
+    inside one SQL function. It is never held here, never logged and never
+    returned: what comes back is a session id and a site. That is why the
+    action is a thin pass-through rather than three steps in TypeScript.
+  */
+  browser_session_establish: {
+    fn: 'browser_session_establish',
+    required: ['p_project', 'p_site', 'p_purpose', 'p_jar'],
+  },
+  /*
+    Forgetting one. Removes the Vault row as well as the reference, in that
+    order, because a dangling reference is worse than a missing credential
+    (0350 took down every job in the building).
+  */
+  browser_session_forget: {
+    fn: 'browser_session_forget',
+    required: ['p_session'],
+  },
+  /*
+    Stop. A column the runner reads between steps, not a socket.
+  */
+  stop_job: { fn: 'request_stop', required: ['p_job'] },
   revoke_connector: { fn: 'revoke_mcp_provider', required: ['p_provider'] },
   offer_connector_tool: { fn: 'offer_mcp_tool', required: ['p_discovered'] },
   approve_tool: { fn: 'hq_approve_tool', required: ['p_request_id'] },

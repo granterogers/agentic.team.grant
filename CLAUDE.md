@@ -2354,6 +2354,23 @@ Each of these cost real time. They are here so they cost it once.
   discovering them one at a time. Read `pg_constraint` before writing the
   insert.
 
+- **A data-modifying CTE's rows are invisible to the rest of its own
+  statement, and a suite written that way reports the reader as empty.** The
+  first draft of `verify:browser` created a project in a `with p as (insert
+  …)` and called the reader in the same select: six checks red, all of them
+  describing a reader that works. The tell is that the WRITER in the same
+  statement succeeded — because it was handed the id directly and the reader
+  had to look the row up. Put the setup in its own statement and reference it
+  by slug; when a section needs a writer's answer AND a reader's, keep the
+  writers' answers in a temp table, because only the last select comes back.
+- **A drive that is not wrapped in a transaction writes to a real project, and
+  an append-only table cannot take it back.** One `do $x$ … rollback` block
+  behaved and its rewrite as a plain CTE did not, which put a permanent
+  browsing row on one of Grant's live projects thirty seconds after the table
+  existed. Recovered by disabling the ledger trigger, deleting the row and
+  re-enabling it — honest for a row minutes old with nothing depending on it,
+  and not a thing to do twice. #210's rule applies to a DRIVE exactly as it
+  applies to a suite: wrap the call, not the assertion.
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`

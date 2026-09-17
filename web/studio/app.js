@@ -161,6 +161,9 @@ const stories = {}
   distinguished, and one list holding both is how that stops being true.
 */
 const notebookMade = {}
+/* Signed-in sites, and what the office opened on them (#135, #16). */
+const browserSites = {}
+const browserSeen = {}
 const maps = {}
 const placed = {}
 
@@ -3594,6 +3597,7 @@ function sources(p) {
         </span>
       </article>`).join('')}</div>
     ${madeInNotebook(p)}
+    ${signedInSites(p)}
   </div>`
 }
 
@@ -11118,6 +11122,112 @@ const settles = (p2, ms = 12_000) => Promise.race([
  * a failure with a token renders nothing at all, which is the honest answer to
  * both "there are none" and "we could not ask".
  */
+/*
+  Signed-in sites, and what the office actually opened on them (#135, #16).
+
+  A session, not a browser. The assessment this is built from separates
+  persistent STATE, which is free, from persistent COMPUTE, which is not: what
+  persists here is a cookie jar in the Vault, and every gather opens a fresh
+  Chromium somewhere ephemeral and destroys it. So the heading is about SITES,
+  not about a browser that is running, because there is never one running.
+
+  Lives inside Sources rather than becoming a seventh project tab. A site the
+  office is signed in to is a place the project reads from, the database now
+  agrees (it is a knowledge connector as of migration 0445), and a tab costs
+  every project a navigation target for a capability most of them will not use.
+
+  Drawn only when the project has a session. An empty block under a populated
+  one reads as a fault, which is the same rule the block above it follows.
+
+  No backticks in this comment: template literal.
+*/
+function signedInSites(p) {
+  const rows = browserSites[p.slug]
+  if (rows === undefined) {
+    needSites(p.slug)
+    return ''
+  }
+  if (rows === null || rows.length === 0) return ''
+  const seen = browserSeen[p.slug] ?? []
+  return `<section class="nbmade bsites">
+    <h3 class="t-label">Signed in to</h3>
+    <p class="t-meta">Pages the office can read on your behalf. It reads and
+      photographs; it does not press anything.</p>
+    <ul class="nbrows">${rows
+      .map(
+        (b) => `<li class="nbrow">
+        <span class="nbkind bstate b-${esc(b.state ?? 'live')}">${esc(SITE_SAID[b.state] ?? b.state ?? '')}</span>
+        <span class="nbtitle">${esc(b.site ?? '')}</span>
+        <span class="t-meta">${esc(b.purpose ?? '')}</span>
+        <span class="t-meta">${
+          b.last_alive_at ? `Last worked ${esc(when.words(b.last_alive_at))}` : 'Not used yet'
+        }</span>
+      </li>`,
+      )
+      .join('')}</ul>
+    ${
+      seen.length === 0
+        ? ''
+        : `<h3 class="t-label bseen">Lately</h3>
+    <ul class="nbrows">${seen
+      .slice(0, 8)
+      .map(
+        (a) => `<li class="nbrow brow">
+        <span class="nbkind">${esc(a.verb ?? '')}</span>
+        <span class="nbtitle">${esc(a.url ?? '')}</span>
+        <!--
+          The detail only when it ADDS something. A successful read records the
+          detail "read", which the verb column already says: two columns
+          saying one word is a stutter on the desktop and a wasted line of
+          three on a phone. Found by opening the capture.
+        -->
+        <span class="t-meta">${
+          a.ok
+            ? esc(a.detail && a.detail !== a.verb ? a.detail : '')
+            : esc(`did not work — ${a.detail ?? 'no reason given'}`)
+        }</span>
+        <span class="t-meta">${esc(when.words(a.at))}</span>
+      </li>`,
+      )
+      .join('')}</ul>`
+    }
+  </section>`
+}
+
+/** The five states a session can be in, said in words rather than in enum. */
+const SITE_SAID = {
+  live: 'Signed in',
+  needs_sign_in: 'Needs a sign-in',
+  signed_out: 'Signed out',
+  revoked: 'Revoked',
+}
+
+/*
+  Asked once per project, and never invented.
+
+  No prototype fallback at all, unlike the block above it. An invented
+  signed-in session would be a claim that the office holds a credential for a
+  site, which is the one kind of fiction a screenshot of this page must never
+  contain — somebody reading it would believe a login exists.
+*/
+async function needSites(slug) {
+  if (browserSites[slug] !== undefined) return
+  const p = byId(slug)
+  browserSites[slug] = null
+  try {
+    const [sessions, lately] = await Promise.all([
+      settles(read('browser_sessions', p.id)),
+      settles(read('browser_lately', p.id)),
+    ])
+    browserSites[slug] = Array.isArray(sessions) ? sessions : []
+    browserSeen[slug] = Array.isArray(lately) ? lately : []
+  } catch {
+    browserSites[slug] = []
+    browserSeen[slug] = []
+  }
+  render()
+}
+
 async function needMade(slug) {
   if (notebookMade[slug] !== undefined) return
   const p = byId(slug)
@@ -11794,3 +11904,21 @@ onWrite((_action, result) => {
 })
 
 live()
+
+/*
+  A door for the capture harness, and for nothing else (#135).
+
+  `signedInSites` draws only when the project HAS a session, and the page will
+  never invent one — an invented signed-in session is a claim that the office
+  holds a credential for a site, and a screenshot of that would be believed.
+  But a screen with no capture is a screen nobody is watching, and this
+  repository lost a week of visual work to exactly that once.
+
+  So the store is reachable from a script running against a LOCAL server, and
+  only there. `location.hostname` is the guard because it cannot be satisfied
+  by anything the deployed page can be talked into: the origin is what it is.
+  Nothing in the product reads this object.
+*/
+if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+  globalThis.__shots = { browserSites, browserSeen, render }
+}

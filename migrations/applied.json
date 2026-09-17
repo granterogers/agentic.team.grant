@@ -439,5 +439,12 @@
   "0438_something_happens_and_the_office_starts_work.sql": "1c8a5a74b694caffeafc061e91790d4f5487f0b16008fae0a97c7321d9237571",
   "0439_the_office_notices_a_document_arriving.sql": "aab6aa08f1104ef1d3f8e9ebd3c681cfc1eeec4d8d491378bbee8a9e6d7742ab",
   "0440_a_connector_is_possible_reach_not_granted_reach.sql": "ff111b62ef8b7253f65d5f6cfd2bf5e5ad4d7c8c7f59863e86888148150dcd7f",
-  "0441_the_settings_page_can_register_a_connector.sql": "3453ead432db1acce1088561d4a7b7275c7d24dc4c6ca603ea0ea420ecafb8e8"
+  "0441_the_settings_page_can_register_a_connector.sql": "3453ead432db1acce1088561d4a7b7275c7d24dc4c6ca603ea0ea420ecafb8e8",
+  "0442_a_session_that_stays_valid_not_a_browser_that_stays_open.sql": "dd98d66d39e9e61438bb59a6b6618b1de0f9870e3cfa5ab1c28616ef66c9b8b0",
+  "0443_a_browsing_ledger_a_suite_cannot_pollute.sql": "b826a17294e63a8236904726d0aa5a972f83d5e2affebd3f22f7e046ac044385",
+  "0444_a_page_the_office_read_is_a_source.sql": "bd670528996ffcf6f0b220f2731a33f8383fa027c27906eb54309770ce5f288e",
+  "0445_the_browser_is_a_knowledge_connector.sql": "dbbe64d1fee84033d6d66c32943120fed5084d721a20776a08d8a9722c1d5acf",
+  "0446_the_browser_tab_can_read_what_it_shows.sql": "923d5e31b4edb81d321838992e7652201d71b29dad3f7692f8fdd53115e74ba8",
+  "0447_a_session_is_established_in_one_place.sql": "efeb3c67f6643f86814039629ff8fd1acebec056b4bfd47c3c8a831bd2f6fb91",
+  "0448_one_door_to_forgetting_a_session.sql": "f4fd3252cc7ada9cad0fcca3ba6bef0e6adcc86e711e28e975cb43f98a81e76d"
 }

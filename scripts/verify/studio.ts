@@ -597,6 +597,57 @@ for (const [size, opts] of SIZES) {
     }
 
     /*
+      Signed-in sites (#135), which nothing else can photograph.
+
+      The block draws only when the project HAS a session, and the page will
+      never invent one: an invented signed-in session is a claim that the
+      office holds a credential for a site, and a screenshot of that would be
+      believed. So the demonstration rows are injected HERE, in the capture
+      harness, where they cannot reach a person -- and a screen with no capture
+      is a screen nobody is watching, which this repository has paid for once
+      already in the same week.
+    */
+    // Strings, not closures: this file has no DOM lib, so `window` and
+    // `document` are not names at compile time. Playwright evaluates either.
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      if (w === undefined) throw new Error('the capture door is not open')
+      const slug = 'legacy-coaching-course'
+      const hour = 3600000
+      w.browserSites[slug] = [
+        { site: 'suppliers.example.com',
+          purpose: 'Read the trade price list every Monday morning.',
+          state: 'live', has_credential: true,
+          last_alive_at: new Date(Date.now() - 2 * hour).toISOString() },
+        { site: 'portal.example.org',
+          purpose: 'Check the accreditation renewal dates each quarter.',
+          state: 'needs_sign_in', has_credential: false, last_alive_at: null },
+      ]
+      w.browserSeen[slug] = [
+        { at: new Date(Date.now() - 2 * hour).toISOString(), verb: 'read',
+          url: 'https://suppliers.example.com/prices', ok: true, detail: 'read', ms: 4200 },
+        { at: new Date(Date.now() - 26 * hour).toISOString(), verb: 'shot',
+          url: 'https://suppliers.example.com/prices', ok: false,
+          detail: 'the screenshot came back 500', ms: 900 },
+      ]
+      w.render()
+    })()`)
+    await page.waitForTimeout(400)
+    /*
+      Scrolled to, not merely drawn.
+
+      The first capture put this block a long way below a 900px fold, which is
+      the same as no capture at all -- CLAUDE.md's own rule, learned on the
+      history panel two days ago.
+    */
+    await page.evaluate(
+      `(() => { const el = document.querySelector('.bsites');
+                if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
+    )
+    await page.waitForTimeout(400)
+    await shoot('sources-signed-in')
+
+    /*
       Project Settings, all four panes (#36).
 
       Every one, not a representative one. `verify:layouts` walked seven

@@ -45,6 +45,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import { artifactHandler } from '../handlers/artifact.ts'
 import { backupHandler } from '../handlers/backup.ts'
 import { briefingHandler } from '../handlers/briefing.ts'
+import { browserGatherHandler } from '../handlers/browser-gather.ts'
 import { buildShotsHandler } from '../handlers/build-shots.ts'
 import { calendarHandler } from '../handlers/calendar.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
@@ -345,6 +346,15 @@ export const buildPass = async (
       the same duty wearing a different table.
     */
     buildShotsHandler({ db, projectRef, serviceKey }),
+    /*
+      A page the office is signed in to, read and photographed (#135, #16).
+
+      Gather only. The unavailable adapter is what runs until somebody sets the
+      two Vault entries, which is deliberate: the degradation path is the
+      default path and gets exercised every day rather than only during an
+      outage.
+    */
+    browserGatherHandler({ db, projectRef, serviceKey }),
     /*
       Every dashboard project gets a channel, without anybody remembering (#187).
 
