@@ -92,7 +92,7 @@ interface Wanted {
   exists_yet: boolean
   days: number
 }
-interface Facts {
+export interface Facts {
   for_date: string
   timezone: string
   waiting_on_you: Waiting[]
@@ -101,6 +101,19 @@ interface Facts {
   diary: Diary[]
   noticed: Noticed[]
   wanted: Wanted[]
+  /**
+   * How much is being held back, and how old the oldest is (#272, 0469).
+   *
+   * Optional because a briefing assembled before 0469 has no such key, and a
+   * handler that threw on an older payload would take the whole briefing with
+   * it for a line that is an addition rather than the point.
+   */
+  pressure?: {
+    open_items: number
+    cap: number
+    suppressed: number
+    oldest_days: number
+  }
 }
 
 /** Local wall-clock time, in his zone, for a timestamp that is stored in UTC. */
@@ -131,9 +144,39 @@ export function briefingLines(f: Facts): string[] {
   */
   if (f.waiting_on_you.length > 0) {
     const overdue = f.waiting_on_you.filter((w) => w.overdue).length
+    /*
+      What the cap is hiding, and how long the oldest has sat (#272).
+
+      `needs_me` is CAPPED, so the sixth and seventh request are simply absent
+      from this list — the cap working as designed and failing as a product,
+      because being told about four of nine reads exactly like there being
+      four. And a request nobody set a date on ages invisibly: "past a real
+      deadline" counts only the ones with a deadline, so something eight days
+      old with no date is never late and never mentioned.
+
+      Both clauses are conditional. A line that appears every morning saying
+      "nothing is being held back" is a line he stops reading, which is the
+      same argument as the hourly sync that only speaks when something moved.
+    */
+    const p = f.pressure
+    const held =
+      p === undefined || p.suppressed <= 0
+        ? ''
+        : ` I am holding back ${count(p.suppressed, 'more', 'more')} so this stays readable.`
+    /*
+      Two days is not "waiting". Seven is, and it is the same threshold the
+      quiet-thread reader uses, so the office does not have two ideas of how
+      long is too long.
+    */
+    const aged =
+      p === undefined || p.oldest_days < 7
+        ? ''
+        : ` The oldest has been waiting ${String(Math.floor(p.oldest_days))} days.`
     lines.push(
       `${count(f.waiting_on_you.length, 'thing is', 'things are')} waiting on you` +
-        (overdue === 0 ? '.' : `, and ${String(overdue)} are past a real deadline.`),
+        (overdue === 0 ? '.' : `, and ${String(overdue)} are past a real deadline.`) +
+        held +
+        aged,
     )
     // Named, not counted. "Three decisions are waiting" tells him there is work
     // to do; it does not let him do any of it from the message.

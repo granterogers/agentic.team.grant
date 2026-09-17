@@ -466,5 +466,6 @@
   "0465_a_source_that_vanished_twice_is_archived_not_deleted.sql": "6a429c1fa8812eb04138ac2d0c9cc1c15dfe47c6f20012a53b064fd46c6b435b",
   "0466_and_a_source_that_comes_back_comes_back.sql": "1e253ad13fee13777ca1c85436406f75e9ed4925743a4232c01937e80a49f61e",
   "0467_a_thread_nobody_came_back_on.sql": "1cadcad69506b2934cbe52be296b0c9b4de619af7cdaaede844418bfd3b7266e",
-  "0468_a_thread_is_one_conversation_including_his_half_of_it.sql": "45f28915c16818b9af87b96a99b38cdc9289c8be4c3e866e1734fa2a96339534"
+  "0468_a_thread_is_one_conversation_including_his_half_of_it.sql": "45f28915c16818b9af87b96a99b38cdc9289c8be4c3e866e1734fa2a96339534",
+  "0469_the_briefing_says_how_long_the_oldest_has_waited.sql": "f752faf27a784623ce4d83cdbc9197568850e576c32097e4cdaf618eed631c89"
 }
