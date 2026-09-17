@@ -2328,6 +2328,38 @@ Each of these cost real time. They are here so they cost it once.
   precedence is that MAKING outranks ENUMERATING, because the second is
   answerable from the first's result and not the other way round.
 
+- **`create table if not exists` against a name that is taken does nothing and
+  says nothing.** #264's first draft called its table `events`; `public.events`
+  already exists with 2,641 rows as the ledger of what the office DID. The
+  migration applied against the existing table and failed on the first missing
+  column, which is the cheap version — the expensive one is widening a table
+  until the question it answers has no answer. Query
+  `information_schema.tables` for the NAME before writing the create, the same
+  rule as for a column.
+
+- **A suite that deliberately parks a job in `retrying` races the live
+  worker.** `verify:recovers` leaves one parked and asserts it, then dequeues
+  ANY job in its scope two steps later — and `recoverStalled` calls
+  `requeue_retrying` on every worker tick, so the parked job comes back as
+  `queued` and is taken instead of the one the step just made. The stub runs
+  against the wrong job, the output lands on the wrong job, and two checks then
+  describe a job nothing ran. #184's coupling one layer out: a suite taking its
+  OWN earlier work. Filed as #273 with the evidence; the whole gate reported
+  15/22 and five of the seven failures pass alone.
+
+- **The three fixed points of a `documents` fixture travel together.**
+  `content` with a `content_fingerprint`, the fingerprint a **sha256**, and
+  `fetched_at` iff content — three separate CHECK constraints, and a fixture
+  satisfying two of them fails on the third. Four runs of one suite were spent
+  discovering them one at a time. Read `pg_constraint` before writing the
+  insert.
+
+- **A resumable pause reason with no check is one nobody notices is
+  missing.** `dependency_wait` was left out of `app.resumable_now`, so the
+  first live fan-in had three specialists finish and the synthesis sat `paused`
+  for eighteen minutes with the answer never written. The suite had not asked.
+  Assert the LIST of reasons that can be woken, not an instance of it.
+
 ---
 
 ## Visual standard
