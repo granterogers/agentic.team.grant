@@ -246,7 +246,8 @@
     "verify:lately": "tsx scripts/verify/lately.ts",
     "slack:add-scope": "tsx scripts/slack/add-scope.ts",
     "verify:upload": "tsx scripts/verify/upload.ts",
-    "slack:archive-identity-probes": "tsx scripts/slack/archive-identity-probes.ts"
+    "slack:archive-identity-probes": "tsx scripts/slack/archive-identity-probes.ts",
+    "fontmetrics": "python3 scripts/fonts/base14-metrics.py"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
