@@ -721,6 +721,194 @@ console.log('\nwhat the index cannot speak for (#257)')
 }
 
 // ---------------------------------------------------------------------------
+// One document, one hit — and archived material is out of retrieval (#257)
+// ---------------------------------------------------------------------------
+console.log('\none document, one hit, and nothing archived (#257, ADR-0040)')
+
+{
+  /*
+    The defect, as it was found on Grant's real project.
+
+    Searching the Legacy Coaching Course for "client vision" returned five hits
+    that were three documents: every file appeared once as notebooklm and once
+    as notion, identical rank, adjacent rows -- because the office had WRITTEN
+    the notion copy and 0169's mirrors_document_id says so. Retrieval had never
+    been told. With a five-hit limit and an 8,000-character context block, that
+    spends up to half of a turn's evidence saying the same thing twice, and an
+    answer built on it cites one document as though it were two sources.
+  */
+  const MIRRORTOK = `mirrorword${run}`
+  const original = await insertDoc({
+    connector: 'notebooklm',
+    parent: `nb-${run}`,
+    ref: `orig-${run}`,
+    title: `Original about ${MIRRORTOK}`,
+    content: `The source of record. It concerns ${MIRRORTOK} and nothing else.`,
+    project: projectId,
+  })
+  const mirror = await insertDoc({
+    connector: 'notion',
+    parent: `nt-${run}`,
+    ref: `mirror-${run}`,
+    title: `Copy about ${MIRRORTOK}`,
+    content: `A copy the office wrote into Notion. It concerns ${MIRRORTOK}.`,
+    project: projectId,
+  })
+  await db.execute(`
+    update public.documents set mirrors_document_id = ${lit(original)}::uuid
+     where document_id = ${lit(mirror)}::uuid`)
+
+  const hits = await all(`
+    select document_id::text as id, connector
+      from app.search_documents(${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
+  record(
+    'a mirror the office wrote does not come back beside its original',
+    `${String(hits.length)} hit(s): ${hits.map((h) => String(h.connector)).join(', ')}`,
+    hits.length === 1 && String(hits[0]?.id) === original,
+  )
+
+  /*
+    The asymmetry, and it is the half that keeps this safe.
+
+    A mirror steps aside only when the thing it mirrors is visible in the same
+    scope. Archive the original and the mirror is the only copy of that
+    material there is -- hiding it to keep a rule tidy would lose it, which is
+    the opposite of what ADR-0040 asks for.
+  */
+  await db.execute(
+    `update public.documents set state = 'archived' where document_id = ${lit(original)}::uuid`,
+  )
+  const afterArchive = await all(`
+    select document_id::text as id from app.search_documents(${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
+  record(
+    'ADR-0040: the archived original leaves ordinary retrieval',
+    afterArchive.some((h) => String(h.id) === original) ? 'STILL THERE' : 'gone from search',
+    !afterArchive.some((h) => String(h.id) === original),
+  )
+  record(
+    'and its mirror becomes the copy that answers, rather than vanishing with it',
+    `${String(afterArchive.length)} hit(s)`,
+    afterArchive.length === 1 && String(afterArchive[0]?.id) === mirror,
+  )
+
+  /*
+    CONTROL: the archive filter has to be observable in BOTH directions.
+
+    A predicate that excluded everything would pass the check above, and a
+    found-nothing check that cannot come back positive is the shape CLAUDE.md
+    records reporting zero for a broken reason. Un-archive and the document
+    returns.
+  */
+  await db.execute(
+    `update public.documents set state = 'approved' where document_id = ${lit(original)}::uuid`,
+  )
+  const restored = await all(`
+    select document_id::text as id from app.search_documents(${lit(MIRRORTOK)}, ${lit(projectId)}::uuid, 10, 'any')`)
+  record(
+    'CONTROL: restoring it brings it back, so the filter is the state and not the row',
+    restored.some((h) => String(h.id) === original) ? 'back in search' : 'STILL HIDDEN',
+    restored.some((h) => String(h.id) === original) && restored.length === 1,
+  )
+
+  /*
+    And the provenance survives the archiving, which is the rest of ADR-0040:
+    *"preserving provenance/history and making restoration possible."* A policy
+    that hid the row would have made this unanswerable.
+  */
+  const kept = await one(`
+    select content is not null as has_content, content_fingerprint is not null as has_print,
+           mirrors_document_id is not null as linked
+      from public.documents where document_id = ${lit(mirror)}::uuid`)
+  record(
+    'archiving keeps the content, the fingerprint and the mirror link',
+    `content=${String(kept?.has_content)} print=${String(kept?.has_print)} link=${String(kept?.linked)}`,
+    kept?.has_content === true && kept?.has_print === true && kept?.linked === true,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// An upstream deletion reconciles, under ADR-0040 (#257)
+// ---------------------------------------------------------------------------
+console.log('\nwhat happens when a source vanishes from its listing (ADR-0040)')
+
+{
+  /*
+    Four passes over one notebook, in ONE statement that rolls back.
+
+    In one statement because each pass has to see the previous pass's writes,
+    and rolled back because this drives the real reconciler against real rows
+    #210's rule is to wrap the CALL and not the assertion, since a wrapper
+    cannot know a call was destructive until it already has been. The answers
+    are gathered in a temp table and SELECTED BEFORE the rollback: the
+    Management API runs the whole payload as one transaction, so a select
+    after the rollback finds neither the rows nor the table.
+  */
+  const parent = `nb-vanish-${run}`
+  const asJsonHere = (v: unknown): Record<string, unknown> =>
+    (typeof v === 'string' ? JSON.parse(v) : (v ?? {})) as Record<string, unknown>
+  const drive = await all(`
+    begin;
+      create temp table vanish (k text, v jsonb) on commit drop;
+      insert into public.documents
+        (project_id, connector, external_parent_ref, external_ref, title, content,
+         content_fingerprint, content_chars, fetched_at)
+      select ${lit(projectId)}::uuid, 'notebooklm', ${lit(parent)}, r.ref,
+             'Vanishing ' || r.ref, 'body ' || r.ref,
+             encode(sha256(('body ' || r.ref)::bytea), 'hex'), 6, app.now_utc()
+        from (values ('a'), ('b'), ('c'), ('d')) r(ref);
+      insert into vanish values
+        ('first',  app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c'])),
+        ('second', app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c'])),
+        ('back',   app.reconcile_vanished('notebooklm', ${lit(parent)}, array['a','b','c','d'])),
+        ('wipe',   app.reconcile_vanished('notebooklm', ${lit(parent)}, array[]::text[])),
+        ('states', (select jsonb_object_agg(external_ref, state) from public.documents
+                     where external_parent_ref = ${lit(parent)}));
+      select k, v from vanish;
+    rollback;
+  `)
+  const say = (k: string): Record<string, unknown> =>
+    asJsonHere(drive.find((r) => String(r.k) === k)?.v)
+
+  record(
+    'one absence marks a source and hides nothing',
+    `marked=${String(say('first').marked)} archived=${String(say('first').archived)}`,
+    say('first').marked === 1 && say('first').archived === 0,
+  )
+  record(
+    'a second absence archives it',
+    `archived=${String(say('second').archived)}`,
+    say('second').archived === 1,
+  )
+  record(
+    'and a source that comes back is restored, not left hidden for ever',
+    `restored=${String(say('back').restored)}`,
+    say('back').restored === 1,
+  )
+  record(
+    'the round trip converges: every source ends approved',
+    JSON.stringify(say('states')),
+    Object.values(say('states')).every((v) => v === 'approved'),
+  )
+  /*
+    The guard, and the reason it is not optional.
+
+    "Everything vanished between two hourly passes" is an auth failure or a
+    changed API far more often than it is Grant deleting a notebook, so a pass
+    that would archive more than half of what a parent holds does nothing at
+    all -- and SAYS so, because a sync that quietly declines to reconcile is
+    the same defect as one that quietly empties the cache.
+  */
+  const wipe = say('wipe')
+  record(
+    'a listing that lost everything is refused rather than obeyed',
+    String(wipe.error ?? '(no reason given)').slice(0, 90),
+    wipe.ok === false &&
+      wipe.refused === true &&
+      String(wipe.error ?? '').includes('likelier to be a failed listing'),
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Report, then clean up after itself
 // ---------------------------------------------------------------------------
 

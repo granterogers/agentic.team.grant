@@ -49,6 +49,9 @@ export interface SyncOutcome {
   readonly sourcesAdded: number
   readonly sourcesChanged: number
   readonly sourcesRemoved: number
+  readonly sourcesArchived: number
+  readonly sourcesRestored: number
+  readonly reconcileRefusals: readonly string[]
   readonly detail: string
 }
 
@@ -117,6 +120,10 @@ interface Counters {
   sourcesAdded: number
   sourcesChanged: number
   sourcesRemoved: number
+  sourcesArchived: number
+  sourcesRestored: number
+  /** Notebooks whose reconciliation refused, with the reason. */
+  reconcileRefusals: string[]
 }
 
 /**
@@ -297,26 +304,58 @@ export const upsertSource = async (
  *   3. Deleting is not reversible and keeping is. The cost of keeping a stale
  *      row is a stale row.
  *
- * So "removed" is *counted and reported* without being acted on. A real
- * deletion policy needs Grant's decision, and inventing one silently inside a
- * ten-minute cron is how a knowledge base quietly empties itself.
+ * It then said a real deletion policy needs Grant's decision. **He made it on
+ * 2026-09-17 — ADR-0040: archive and hide, keep provenance, make restoration
+ * possible** — so this now reconciles instead of only counting, and the three
+ * reasons above are answered rather than overruled:
+ *
+ *   - (2) and (3) fall away, because an archived document keeps its row, its
+ *     content, its fingerprint and every relation, and 0464 removes it from
+ *     ordinary retrieval rather than from existence. `hq_document_restore` and
+ *     `app.unarchive_document` bring it back as an ordinary action.
+ *   - (1) is answered by `app.reconcile_vanished`, not by optimism: a source
+ *     absent from ONE listing is marked and never hidden, a source absent from
+ *     two consecutive listings is archived, a source that reappears is
+ *     un-marked AND un-archived, and a pass that would archive more than half
+ *     of what a notebook holds refuses outright — because "everything vanished
+ *     between two hourly passes" is an auth failure far more often than it is
+ *     Grant deleting forty files.
+ *
+ * The refusal is reported rather than swallowed. A sync that quietly declines
+ * to reconcile is the same class of defect as one that quietly empties the
+ * cache, and only one of them is visible.
  */
-export const countRemoved = async (
+export interface Reconciled {
+  /** Absent for the first time: marked, not hidden. */
+  readonly marked: number
+  /** Absent again, so now out of ordinary retrieval. */
+  readonly archived: number
+  /** Seen again, and brought back out of the archive. */
+  readonly restored: number
+  /** The pass declined to act, and why. Null when it acted. */
+  readonly refused: string | null
+}
+
+export const reconcileVanished = async (
   db: SqlExecutor,
   remoteNotebookId: string,
   seenSourceIds: readonly string[],
-): Promise<number> => {
+): Promise<Reconciled> => {
   const list =
     seenSourceIds.length === 0
       ? `'{}'::text[]`
       : `array[${seenSourceIds.map((s) => lit(s)).join(', ')}]::text[]`
   const { rows } = await db.execute(`
-    select count(*)::int as n from public.documents
-    where connector = 'notebooklm'
-      and external_parent_ref = ${lit(remoteNotebookId)}
-      and not (external_ref = any (${list}))
+    select app.reconcile_vanished('notebooklm', ${lit(remoteNotebookId)}, ${list}) as r
   `)
-  return Number(rows[0]?.n ?? 0)
+  const raw = rows[0]?.r
+  const r = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as Record<string, unknown>
+  return {
+    marked: typeof r.marked === 'number' ? r.marked : 0,
+    archived: typeof r.archived === 'number' ? r.archived : 0,
+    restored: typeof r.restored === 'number' ? r.restored : 0,
+    refused: r.ok === false ? String(r.error ?? 'the pass declined to act') : null,
+  }
 }
 
 /** Derive and store budgets from a capability probe (§11, Phase 4). */
@@ -400,6 +439,9 @@ export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
     sourcesAdded: 0,
     sourcesChanged: 0,
     sourcesRemoved: 0,
+    sourcesArchived: 0,
+    sourcesRestored: 0,
+    reconcileRefusals: [],
   }
 
   const settle = async (state: 'complete' | 'failed', detail: string): Promise<SyncOutcome> => {
@@ -448,11 +490,15 @@ export const runSync = async (deps: SyncDeps): Promise<SyncOutcome> => {
         if (result === 'changed') counters.sourcesChanged += 1
       }
 
-      counters.sourcesRemoved += await countRemoved(
+      const reconciled = await reconcileVanished(
         db,
         notebook.id,
         sources.map((s) => s.remoteSourceId),
       )
+      counters.sourcesRemoved += reconciled.marked + reconciled.archived
+      counters.sourcesArchived += reconciled.archived
+      counters.sourcesRestored += reconciled.restored
+      if (reconciled.refused !== null) counters.reconcileRefusals.push(reconciled.refused)
     }
 
     return settle(

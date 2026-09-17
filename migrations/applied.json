@@ -461,5 +461,8 @@
   "0460_a_suite_that_spoke_as_grant_left_sixty_one_real_jobs.sql": "0be016a3b8d2b83c7d738d34445b548dae74251a9b92580c4807c713307a540f",
   "0461_a_replay_can_never_speak_to_grant.sql": "86d6c06e9802fef6d0896a4b686f3f44f9e59a2fcff322534aaa846cfb090331",
   "0462_the_invariant_has_to_survive_the_worker_writing_it_back.sql": "0bd2e9f5c12a907bfbfced1df7716520bab93a343896235fc91b6a30c85a46d6",
-  "0463_and_twenty_nine_more_from_the_transport_suite.sql": "a83db6c128a1a89dc4d46798d4bed5d186d8a06b636b897e15312434286b7a3e"
+  "0463_and_twenty_nine_more_from_the_transport_suite.sql": "a83db6c128a1a89dc4d46798d4bed5d186d8a06b636b897e15312434286b7a3e",
+  "0464_one_document_one_hit_and_archived_material_stays_out.sql": "b18d0038267176ef5de1bd30387564dfe191ab8538c96fde005aff8ab081678f",
+  "0465_a_source_that_vanished_twice_is_archived_not_deleted.sql": "6a429c1fa8812eb04138ac2d0c9cc1c15dfe47c6f20012a53b064fd46c6b435b",
+  "0466_and_a_source_that_comes_back_comes_back.sql": "1e253ad13fee13777ca1c85436406f75e9ed4925743a4232c01937e80a49f61e"
 }
