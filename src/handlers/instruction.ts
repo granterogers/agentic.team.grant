@@ -121,6 +121,7 @@ import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
+  awaiting,
   contextBlock,
   correspondence,
   coverageNote,
@@ -129,6 +130,7 @@ import {
   mailRefs,
   retrieve,
   sourceRefs,
+  waitingBlock,
 } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
@@ -2605,6 +2607,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const mailContext = mailBlock(mail)
 
       /*
+        And what has gone quiet on this project (#172).
+
+        Grant's hardest question — *"are there outstanding commitments I have
+        forgotten?"* — cannot be answered from bodies this office does not
+        fetch. What it CAN answer is which threads nobody has spoken in, and
+        which way round, which is the thing a person usually means when they
+        ask. Same derivation as the correspondence above, so it inherits
+        ADR-0037's isolation rather than restating it.
+
+        Unconditional and usually empty, for #257's reason: no "should I check
+        whether anything is outstanding" decision, because that is teaching
+        the model a list of things to try. The office brings what belongs to
+        the project and the model reads it or does not.
+      */
+      const quiet = confirmation !== null ? [] : await awaiting(deps.db, job.projectId)
+      const waitingContext = waitingBlock(quiet)
+
+      /*
         And what the index cannot speak for (#257).
 
         Grant asked about a document in the project's linked Google Notebook
@@ -3000,6 +3020,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   about how far all of it goes.
                 */
                 ...(mailContext === '' ? [] : [{ role: 'system' as const, content: mailContext }]),
+                ...(waitingContext === ''
+                  ? []
+                  : [{ role: 'system' as const, content: waitingContext }]),
                 /*
                   What the search could NOT see (#257).
 
@@ -3335,6 +3358,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             because that is the only place a model reads it.
           */
           ...(mailContext === '' ? [] : [mailContext]),
+          ...(waitingContext === '' ? [] : [waitingContext]),
           ...(projectList === '' ? [] : [projectList]),
         ],
         /*

@@ -567,6 +567,119 @@ console.log('\nand what it may conclude when it cannot read the mail (#172)')
   )
 }
 
+// ---------------------------------------------------------------------------
+// What has gone quiet, and which way round (#172)
+// ---------------------------------------------------------------------------
+console.log('\nthreads nobody has spoken in (#172)')
+
+{
+  /*
+    Four thread shapes in one rolled-back statement.
+
+    Grant's hardest question is *"are there outstanding commitments I have
+    forgotten?"*, and the honest half of it is thread SHAPE: who spoke last and
+    how long ago. There are no message bodies in this system, so anything more
+    would be a model guessing about his own business.
+
+    The answers are gathered into a temp table and selected BEFORE the
+    rollback, because the Management API runs the payload as one transaction
+    and a select after the rollback finds neither the rows nor the table.
+  */
+  const q = `awaiting-${run}`
+  const rows = ((
+    await db.execute(`
+    begin;
+      create temp table await_res (k text, v jsonb) on commit drop;
+      insert into public.projects (slug, name, status)
+        values (${lit(q)}, 'Awaiting proof', 'active');
+      insert into public.project_attachments
+        (project_id, connector, external_ref, display_name, role)
+      select project_id, 'upload', ${lit(`u-${run}`)}, 'Uploads', 'source'
+        from public.projects where slug = ${lit(q)};
+      insert into public.contacts (project_id, name, email)
+      select project_id, 'Ada Reply', ${lit(`ada-${run}@awaiting.test`)}
+        from public.projects where slug = ${lit(q)};
+      insert into public.mail_messages
+        (message_id, thread_id, subject, from_name, from_address, to_count, sent_at, excerpt, labels)
+      values
+        -- she asked, he answered, and nothing since: waiting on THEM
+        (${lit(`a0-${run}`)}, ${lit(`tA-${run}`)}, 'Proposal for the pilot', 'Ada Reply',
+         ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '25 days', '...', array['INBOX']),
+        (${lit(`a1-${run}`)}, ${lit(`tA-${run}`)}, 'Re: Proposal for the pilot', 'Grant',
+         ${lit(`grant-${run}@innergy.test`)}, 1, app.now_utc() - interval '20 days', '...', array['SENT']),
+        -- she asked and he never answered: waiting on HIM
+        (${lit(`b1-${run}`)}, ${lit(`tB-${run}`)}, 'Question about scope', 'Ada Reply',
+         ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '15 days', '...', array['INBOX']),
+        -- yesterday, so not quiet at all
+        (${lit(`c1-${run}`)}, ${lit(`tC-${run}`)}, 'Yesterday', 'Ada Reply',
+         ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '1 day', '...', array['INBOX']),
+        -- old, from the same contact, and a promotion
+        (${lit(`d1-${run}`)}, ${lit(`tD-${run}`)}, '50 percent off everything', 'Ada Reply',
+         ${lit(`ada-${run}@awaiting.test`)}, 1, app.now_utc() - interval '30 days', '...',
+         array['CATEGORY_PROMOTIONS']);
+      insert into await_res
+      select 'mine', app.mail_awaiting((select project_id from public.projects where slug = ${lit(q)}), 7, 10);
+      insert into await_res select 'elsewhere', app.mail_awaiting(gen_random_uuid(), 7, 10);
+      select k, v from await_res;
+    rollback;
+  `)
+  ).rows ?? []) as Record<string, unknown>[]
+  const got = (k: string): Record<string, unknown>[] => {
+    const raw = rows.find((r: Record<string, unknown>) => String(r.k) === k)?.v
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(v) ? (v as Record<string, unknown>[]) : []
+  }
+  const mine = got('mine')
+  const find = (waiting: string): Record<string, unknown> | undefined =>
+    mine.find((x) => String(x.waiting) === waiting)
+
+  record(
+    'a thread he answered and nobody came back on is waiting on THEM',
+    find('no reply to you') === undefined
+      ? 'not reported'
+      : `${String(find('no reply to you')?.days)} days, with ${String(find('no reply to you')?.with)}`,
+    find('no reply to you') !== undefined && Number(find('no reply to you')?.days) === 20,
+  )
+  record(
+    'a thread he never answered is waiting on HIM, and the two are never merged',
+    find('you have not replied') === undefined
+      ? 'not reported'
+      : `${String(find('you have not replied')?.days)} days`,
+    find('you have not replied') !== undefined,
+  )
+  /*
+    Who it is WITH is never Grant, even on a thread he spoke last in. The first
+    draft took the name off the last message and would have said "waiting on
+    Grant Rogers" on exactly the threads he is waiting on somebody else.
+  */
+  record(
+    'and it names the other person, not him, on a thread he spoke last in',
+    String(find('no reply to you')?.with ?? '(none)'),
+    String(find('no reply to you')?.with ?? '') === 'Ada Reply',
+  )
+  record(
+    'CONTROL: a thread from yesterday is not quiet',
+    `${String(mine.length)} reported`,
+    !mine.some((x) => String(x.subject) === 'Yesterday'),
+  )
+  /*
+    A newsletter nobody replied to is not a forgotten commitment, and an office
+    that said so every morning is one Grant stops reading. Gmail's own
+    CATEGORY_PROMOTIONS is the filter rather than a word list this repository
+    would have to maintain.
+  */
+  record(
+    'CONTROL: an old promotion from the same contact is not something he owes',
+    `${String(mine.length)} reported`,
+    !mine.some((x) => String(x.subject).includes('50 percent')),
+  )
+  record(
+    'CONTROL: another project is waiting on none of it',
+    `${String(got('elsewhere').length)} from elsewhere`,
+    got('elsewhere').length === 0,
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)

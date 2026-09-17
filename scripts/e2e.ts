@@ -220,6 +220,15 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     is the behaviour.
   */
   ['verify:unified', 'a linked source is findable without being named (#257)'],
+  /*
+    The whole chain for one request, on evidence rather than on prose.
+
+    #258's failure mode is a confident sentence with no file behind it, so this
+    reads the bytes back out of Storage and checks the PDF header — and its
+    negative control asserts that a project with nothing in it produces NO
+    file, which is the half a happy-path suite would call a pass.
+  */
+  ['verify:artifact', 'a request for a PDF produces a real, stored, linkable PDF (#258)'],
   [
     'verify:wrappers',
     'every RPC a client calls is reachable — PostgREST exposes only `public`, and a missing wrapper is invisible until called',

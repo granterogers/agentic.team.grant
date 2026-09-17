@@ -340,6 +340,86 @@ export async function correspondence(
  * part: a subject line and a hundred characters of snippet is not a thread, and
  * an answer that summarises what "the email says" from a snippet is inventing.
  */
+/** A thread on this project that nobody has spoken in for a while (#172). */
+export interface Waiting {
+  readonly subject: string
+  /** Who it is with. Never Grant, even on a thread he spoke last in. */
+  readonly with: string
+  readonly days: number
+  /** Which way round. The two need different things from him. */
+  readonly waiting: 'no reply to you' | 'you have not replied'
+}
+
+/**
+ * What this project is waiting on (#172).
+ *
+ * Grant's hardest question on that Issue is *"are there outstanding
+ * commitments I have forgotten?"*, and most of it cannot be answered here:
+ * `src/google/mail.ts` fetches `format=metadata`, so there are no message
+ * bodies in this system and a commitment extractor over subject lines would
+ * be a model guessing about his own business.
+ *
+ * What IS a fact is the shape of a thread — who spoke last, and how long ago.
+ * `app.mail_awaiting` derives it from ADR-0037's project association, so it
+ * inherits that decision's isolation and its six negative controls rather
+ * than restating them.
+ *
+ * Returns `[]` on any failure, deliberately. This is a helpful aside on a turn
+ * about something else; a reader that threw would take the answer with it.
+ */
+export async function awaiting(
+  db: SqlExecutor,
+  projectId: string | null,
+  days = 7,
+  limit = 3,
+): Promise<readonly Waiting[]> {
+  if (projectId === null) return []
+  try {
+    const { rows } = await db.execute(
+      `select app.mail_awaiting(${lit(projectId)}::uuid, ${String(days)}, ${String(limit)}) as w`,
+    )
+    const raw = rows[0]?.w
+    const list = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!Array.isArray(list)) return []
+    return (list as Record<string, unknown>[]).map((x) => ({
+      subject: String(x.subject ?? ''),
+      with: String(x.with ?? 'unknown'),
+      days: typeof x.days === 'number' ? x.days : 0,
+      waiting: x.waiting === 'no reply to you' ? 'no reply to you' : 'you have not replied',
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The waiting threads as a sentence the model can use, or nothing at all.
+ *
+ * Empty when there is nothing waiting, for the reason every caveat in this
+ * file is conditional: a line that appears on every turn is a line nobody
+ * reads, and this one is only worth its space when it has something to say.
+ *
+ * It states the SHAPE and refuses the conclusion. "Nobody has replied" is a
+ * fact about a thread; "you owe them something" is an inference about a body
+ * this office has never seen, and the difference is the whole reason the
+ * derivation stops where it does.
+ */
+export function waitingBlock(items: readonly Waiting[]): string {
+  if (items.length === 0) return ''
+  const lines = items.map(
+    (w) =>
+      `- "${w.subject}" with ${w.with}: ${w.waiting}, ${String(w.days)} day${
+        w.days === 1 ? '' : 's'
+      } now`,
+  )
+  return (
+    `Threads on this project that have gone quiet:\n${lines.join('\n')}\n\n` +
+    `This is the SHAPE of the thread — who wrote last and when — and nothing ` +
+    `about what was said, because the office holds no message bodies. You may ` +
+    `say a thread has gone quiet. You may NOT say what was promised in it.`
+  )
+}
+
 export function mailBlock(hits: readonly MailHit[]): string {
   if (hits.length === 0) return ''
   const lines = hits.map((h, i) => {
