@@ -71,7 +71,7 @@ import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
 import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { vaultExportHandler } from '../handlers/vault-export.ts'
-import type { Reviewer } from '../jobs/worker.ts'
+import type { Handler, Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
 import { ProviderRouter } from '../providers/router.ts'
@@ -132,6 +132,14 @@ export interface PassOptions {
   readonly notebook?: SyncHandlerDeps['adapter']
   /** Which Supabase project this is. Only the backup needs to name it. */
   readonly projectRef?: string
+  /**
+   * What time the office thinks it is (#133).
+   *
+   * Only `npm run replay` ever passes it, and only so a job that said "by
+   * Friday" resolves to the Friday it meant rather than the one a fortnight
+   * later. The office leaves it unset and reads the real clock.
+   */
+  readonly now?: () => Date
 }
 
 export interface PassResult {
@@ -166,7 +174,24 @@ export interface PassResult {
  * kinds the database enqueues. Any other way of listing the kinds would be a
  * second copy of this array, which is the drift the check is written against.
  */
-export type Pass = (() => Promise<PassResult>) & { readonly kinds: readonly string[] }
+export type Pass = (() => Promise<PassResult>) & {
+  readonly kinds: readonly string[]
+  /**
+   * The wired handlers, and the reviewer they run under (#133).
+   *
+   * `npm run replay` runs ONE named job against current code, out of band: no
+   * dequeue, no notifier, nothing delivered. It needs the real handler set to
+   * mean anything -- a replay against a second, script-local assembly would be
+   * measuring a wiring nobody runs, and the header above already records what
+   * two copies of one list cost.
+   *
+   * Exposed the same way `kinds` is, and for the same reason: a property on
+   * the returned function changes no existing caller, and the alternative is a
+   * copy of forty constructor calls in `scripts/`.
+   */
+  readonly handlers: readonly Handler[]
+  readonly review: Reviewer
+}
 
 export const buildPass = async (
   db: SqlExecutor,
@@ -240,7 +265,16 @@ export const buildPass = async (
     )
     slackTeamId = teamId
     const office = await SlackOffice.configured(db, slack)
-    channels.push(slackChannel(db, office, { teamId }))
+    /*
+      The project ref and the service key travel with it (#258).
+
+      Slack delivers a file as a signed LINK, because it holds `chat:write` and
+      not `files:write` and Grant chose a link over another scope. Read here
+      rather than in the notifier: §15 keeps credential lookup in the
+      composition root, and a channel that reached the vault itself would be a
+      channel that cannot be tested without one.
+    */
+    channels.push(slackChannel(db, office, { teamId, projectRef, serviceKey }))
 
     // Grant: *"create an additional channel in Slack where I see the
     // communications between the Chief of Staff and the rest of the members."*
@@ -466,7 +500,11 @@ export const buildPass = async (
     ...(cannotThink
       ? []
       : [
-          instructionHandler({ db, router: new ProviderRouter(db, orKey) }),
+          instructionHandler({
+            db,
+            router: new ProviderRouter(db, orKey),
+            ...(options.now === undefined ? {} : { now: options.now }),
+          }),
           // §22 A's first clause: a source arriving is read by Research. 0107's
           // trigger makes the job; without this handler it would park.
           sourceHandler({ db, router: new ProviderRouter(db, orKey) }),
@@ -544,5 +582,5 @@ export const buildPass = async (
   }
 
   // The registry, readable from outside. See the note on `Pass` above.
-  return Object.assign(pass, { kinds: handlers.map((h) => h.kind) })
+  return Object.assign(pass, { kinds: handlers.map((h) => h.kind), handlers, review })
 }

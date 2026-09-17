@@ -197,6 +197,51 @@ const NEVER: Record<string, string> = {
 const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   // Persistence and the shapes a client actually reaches.
   ['verify:schema', "the schema's own dangling references"],
+  /*
+    The instrument, before anything it measures.
+
+    `npm run replay` reports better/worse/unchanged against real history, and
+    every one of those verdicts is worth exactly what the judge making it is
+    worth. This repository has already shipped a version whose judge could not
+    detect a deliberately sabotaged run, and the only reason anybody found out
+    was running the control. Five pairs with a known direction, both ways
+    round, about a minute: cheap enough to keep, and the alternative is a
+    measurement that decays silently.
+  */
+  ['verify:judge', 'the comparative judge can still tell a good answer from a bad one (#133)'],
+  /*
+    The one criterion #257 is actually about.
+
+    Grant asked about a document in a linked Google Notebook and was told it
+    could not be found; only naming the connector retrieved it. This asks the
+    same question without naming it, end to end from the inbound command
+    through the real handler to the answer, and asserts the office knows what
+    only that document says. Everything else in this Issue is a mechanism; this
+    is the behaviour.
+  */
+  ['verify:unified', 'a linked source is findable without being named (#257)'],
+  /*
+    The whole chain for one request, on evidence rather than on prose.
+
+    #258's failure mode is a confident sentence with no file behind it, so this
+    reads the bytes back out of Storage and checks the PDF header — and its
+    negative control asserts that a project with nothing in it produces NO
+    file, which is the half a happy-path suite would call a pass.
+  */
+  ['verify:artifact', 'a request for a PDF produces a real, stored, linkable PDF (#258)'],
+  /*
+    The index itself, and the correspondence beside it.
+
+    Both were outside the gate while carrying the rules that decide what
+    reaches a model: which documents retrieval returns and which it hides
+    (0464, ADR-0040), how an upstream deletion reconciles (0465, 0466), and
+    which of Grant's mail a project may see at all (ADR-0037). CLAUDE.md's own
+    entry is that a suite outside the gates for a change is a suite that will
+    be red and unnoticed — `verify:arrangement` sat broken for a morning
+    exactly that way.
+  */
+  ['verify:knowledge', 'one document one hit, archived out of search, deletions reconcile (#257)'],
+  ['verify:mail', 'a project sees only its own correspondence, and what has gone quiet (#172)'],
   [
     'verify:wrappers',
     'every RPC a client calls is reachable — PostgREST exposes only `public`, and a missing wrapper is invisible until called',

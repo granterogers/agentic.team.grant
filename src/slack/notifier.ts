@@ -34,6 +34,7 @@
 import type { ResultContext } from '../channels/notify.ts'
 import { combinedNotifier } from '../channels/notify.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { signedUrl } from '../files/store.ts'
 import type { HandlerOutput, Job, Notifier, NotifyOutcome } from '../jobs/worker.ts'
 import type { SlackOffice } from './office.ts'
 
@@ -61,6 +62,17 @@ export interface Target {
 
 export interface NotifierOptions {
   readonly teamId: string
+  /**
+   * Enough to mint a signed link for a file the office made (#258).
+   *
+   * Slack cannot take bytes -- no `files:write`, the same scope wall as #270 --
+   * so a PDF is delivered here as a link to the object Storage already holds.
+   * Both are optional: without them the message says the file is in the
+   * project and that no link could be made, which is the honest degradation
+   * rather than silence.
+   */
+  readonly projectRef?: string
+  readonly serviceKey?: string
   /** Severity for the preference check. Results are routine unless told. */
   readonly severity?: 'trivial' | 'routine' | 'important' | 'urgent' | 'blocker'
   readonly subject?: string
@@ -287,6 +299,33 @@ export function slackChannel(
         return { delivered: false, note: 'suppressed by notification preferences' }
       }
 
+      /*
+        A link, minted here rather than by the handler (#258).
+
+        Ten minutes is the life of these URLs, and an output can be delivered
+        to two channels or retried tomorrow -- so a URL minted when the report
+        was written would be dead by the time it was sent. The path travels on
+        the output and each channel mints its own at the moment it sends.
+
+        A failure to mint is NOT a failure to deliver. The answer is worth
+        having without the link, and `resultBlocks` says plainly that the file
+        is in the project and could not be linked from here.
+      */
+      const attach = output.attachFile
+      const file =
+        attach === undefined
+          ? null
+          : {
+              filename: attach.filename,
+              url:
+                attach.storagePath === undefined ||
+                options.projectRef === undefined ||
+                options.serviceKey === undefined ||
+                options.serviceKey === ''
+                  ? null
+                  : await signedUrl(options.projectRef, options.serviceKey, attach.storagePath),
+            }
+
       const result = await office.deliver({
         dedupeKey: `job:${job.jobId}:result`,
         teamId: options.teamId,
@@ -312,6 +351,7 @@ export function slackChannel(
           correlationId: job.correlationId,
           actions: context.actions,
           projectUrl: context.projectUrl,
+          file,
         },
       })
 

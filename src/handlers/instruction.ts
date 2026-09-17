@@ -121,6 +121,7 @@ import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
+  awaiting,
   contextBlock,
   correspondence,
   coverageNote,
@@ -129,6 +130,7 @@ import {
   mailRefs,
   retrieve,
   sourceRefs,
+  waitingBlock,
 } from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
@@ -216,6 +218,21 @@ interface Decided {
 export interface InstructionDeps {
   readonly db: SqlExecutor
   readonly router: ProviderRouter
+  /**
+   * What time it is, injectable for a replay (#133).
+   *
+   * A job that said "by Friday" resolves to a different date a fortnight
+   * later, so replaying real history against current code has to freeze the
+   * clock to the original job's time or every dated request shows up as a
+   * change the code did not make.
+   *
+   * ONE place in this handler reads the clock -- `dueOn`, when a task's
+   * deadline is derivable from the words -- and that is the whole reason this
+   * is a function rather than a Date: the office reads the real clock on every
+   * job and a replay reads the one it is given. The default is the real clock,
+   * so every existing caller is unchanged and nothing has to know about this.
+   */
+  readonly now?: () => Date
 }
 
 interface Payload {
@@ -641,6 +658,7 @@ async function addTask(
   job: Job,
   asked: TaskRequest,
   said_by = '',
+  now: Date = new Date(),
 ): Promise<string> {
   if (asked.title === null) return NEEDS_A_TITLE
 
@@ -662,7 +680,7 @@ async function addTask(
     every phrase the resolver declines — this repository filed that as the
     reason the subtraction was removed, and it is still the reason.
   */
-  const when = dueOn(said_by === '' ? asked.title : said_by, new Date())
+  const when = dueOn(said_by === '' ? asked.title : said_by, now)
   const owner = assignedTo(said_by === '' ? asked.title : said_by)
 
   /*
@@ -2407,7 +2425,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const filed =
         asked !== null
-          ? await addTask(deps.db, job, asked, instruction)
+          ? await addTask(deps.db, job, asked, instruction, deps.now?.() ?? new Date())
           : namedLater === null
             ? null
             : await addTask(
@@ -2422,6 +2440,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   different question.
                 */
                 namedLater,
+                deps.now?.() ?? new Date(),
               )
 
       const confirmation =
@@ -2586,6 +2605,24 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const mail =
         confirmation !== null ? [] : await correspondence(deps.db, job.projectId, instruction)
       const mailContext = mailBlock(mail)
+
+      /*
+        And what has gone quiet on this project (#172).
+
+        Grant's hardest question — *"are there outstanding commitments I have
+        forgotten?"* — cannot be answered from bodies this office does not
+        fetch. What it CAN answer is which threads nobody has spoken in, and
+        which way round, which is the thing a person usually means when they
+        ask. Same derivation as the correspondence above, so it inherits
+        ADR-0037's isolation rather than restating it.
+
+        Unconditional and usually empty, for #257's reason: no "should I check
+        whether anything is outstanding" decision, because that is teaching
+        the model a list of things to try. The office brings what belongs to
+        the project and the model reads it or does not.
+      */
+      const quiet = confirmation !== null ? [] : await awaiting(deps.db, job.projectId)
+      const waitingContext = waitingBlock(quiet)
 
       /*
         And what the index cannot speak for (#257).
@@ -2983,6 +3020,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   about how far all of it goes.
                 */
                 ...(mailContext === '' ? [] : [{ role: 'system' as const, content: mailContext }]),
+                ...(waitingContext === ''
+                  ? []
+                  : [{ role: 'system' as const, content: waitingContext }]),
                 /*
                   What the search could NOT see (#257).
 
@@ -3318,6 +3358,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             because that is the only place a model reads it.
           */
           ...(mailContext === '' ? [] : [mailContext]),
+          ...(waitingContext === '' ? [] : [waitingContext]),
           ...(projectList === '' ? [] : [projectList]),
         ],
         /*

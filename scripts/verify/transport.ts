@@ -537,11 +537,40 @@ try {
     )
   }
   if (saidJob !== '') {
+    /*
+      Its attribution, too, and not only its state (#133, migration 0463).
+
+      `app.say_in_project` is the real writer on purpose, so the job it makes is
+      `requested_by` teamhq:grant -- which is what Grant looks like. Twenty-nine
+      of these had accumulated reading as things he asked, invisible to
+      `is_fixture` (generated from that same string) and to `app.harness_job`
+      (the project is real). `npm run replay` selected one as real history,
+      which is how they were found.
+
+      Corrected rather than named correctly at birth because the actor belongs
+      to the function under test: this suite is asserting what
+      `say_in_project` does with an addressee, and changing who appears to be
+      speaking would change the thing being asserted.
+    */
+    await db
+      .execute(
+        `update public.jobs set requested_by = 'verify:transport'
+          where job_id = ${lit(saidJob)}::uuid and not is_fixture`,
+      )
+      .catch(() => undefined)
     await db
       .execute(
         `update public.jobs set state = 'cancelled' where job_id = ${lit(saidJob)}::uuid and state = 'queued'`,
       )
       .catch(() => undefined)
+    const attributed = await one(
+      `select is_fixture as f from public.jobs where job_id = ${lit(saidJob)}::uuid`,
+    )
+    check(
+      'teardown — its job is no longer counted as something Grant asked',
+      attributed.f === true ? 'harness traffic' : 'STILL READS AS REAL',
+      attributed.f === true,
+    )
     const st = await one(
       `select state::text as s from public.jobs where job_id = ${lit(saidJob)}::uuid`,
     )

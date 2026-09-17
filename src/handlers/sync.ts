@@ -173,15 +173,60 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
             `${count(outcome.notebooksSeen, 'notebook', 'notebooks')}.` +
             // Counted, never deleted — `countRemoved` explains why a source
             // that vanished is a thing to notice rather than act on.
-            (outcome.sourcesRemoved === 0
+            /*
+              Reconciled now, under ADR-0040, rather than only counted.
+
+              The three states are said separately because they mean different
+              things to Grant: MISSING is a first absence and nothing has
+              changed yet; ARCHIVED is out of the office's answers but still on
+              record and restorable; BACK is something that returned and can be
+              answered from again. Collapsing them into "3 sources removed"
+              would report a provider hiccup and a real deletion in the same
+              words.
+            */
+            (outcome.sourcesArchived === 0
               ? ''
-              : ` ${count(outcome.sourcesRemoved, 'source', 'sources')} we had before ` +
-                'is no longer listed, which is noted rather than acted on.')
+              : ` ${count(outcome.sourcesArchived, 'source', 'sources')} missing for a second ` +
+                'time, so out of our answers now — still on record and restorable.') +
+            (outcome.sourcesRestored === 0
+              ? ''
+              : ` ${count(outcome.sourcesRestored, 'source', 'sources')} came back and ` +
+                'can be answered from again.') +
+            (outcome.sourcesRemoved - outcome.sourcesArchived <= 0
+              ? ''
+              : ` ${count(outcome.sourcesRemoved - outcome.sourcesArchived, 'source', 'sources')} ` +
+                'missing from this listing for the first time — marked, not hidden.') +
+            /*
+              A refusal is the loudest thing in this message, deliberately.
+
+              `app.reconcile_vanished` declines a pass that would archive more
+              than half of a notebook, because that is an auth failure far more
+              often than a deletion. A sync that quietly declined would be the
+              same defect as one that quietly emptied the cache, with nothing
+              to see.
+            */
+            (outcome.reconcileRefusals.length === 0
+              ? ''
+              : ` ${String(outcome.reconcileRefusals.length)} notebook(s) looked emptied rather ` +
+                'than edited, so nothing was archived there: ' +
+                `${outcome.reconcileRefusals[0] ?? ''}`)
 
       // Hourly, and almost always "nothing new". Announcing that is how a
       // channel stops being read — Marcus said it to Grant on two surfaces
       // every hour for a day before this line existed.
-      const announce = parts.length > 0
+      /*
+        Archiving is an event even when nothing new arrived.
+
+        `parts` counts additions and changes, and the hourly "nothing new" is
+        deliberately silent (#57). But material LEAVING the office's answers is
+        exactly the kind of thing Grant should hear about the first time, and
+        so is a refusal to reconcile.
+      */
+      const announce =
+        parts.length > 0 ||
+        outcome.sourcesArchived > 0 ||
+        outcome.sourcesRestored > 0 ||
+        outcome.reconcileRefusals.length > 0
       return {
         ...base,
         // Written by Marcus when it is going to reach anybody, and left as the
@@ -199,6 +244,9 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
                 `${String(outcome.sourcesAdded)} new source(s)`,
                 `${String(outcome.sourcesChanged)} source(s) changed`,
                 `${String(outcome.sourcesRemoved)} source(s) we held are no longer listed`,
+                `${String(outcome.sourcesArchived)} archived after a second absence (still on record)`,
+                `${String(outcome.sourcesRestored)} came back out of the archive`,
+                `${String(outcome.reconcileRefusals.length)} notebook(s) refused reconciliation as too big a change`,
               ],
               fallback: body,
               // #268: attributed, so the call lands under this job KIND rather than under (unattributed).

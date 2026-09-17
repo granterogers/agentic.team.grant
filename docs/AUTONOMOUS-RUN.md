@@ -18,7 +18,163 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-## THE MANDATE IN FORCE — the 8-hour completion run, 17 September 2026
+## THE MANDATE IN FORCE — the 12-hour capability run, 17 September 2026
+
+**This supersedes every mandate below.** The completion run merged as PR #274
+(`main` at `68b7958`): #273, #263, #264, #265, #262 closed, #272 down from 40
+to 15, #17 shipped, ADR-0039 written. This run starts from that.
+
+Grant, 2026-09-17, continuing:
+
+> *"Continue reducing the remaining capability backlog by implementing real,
+> user-reachable, production-quality capabilities, not merely satisfying tests
+> or adding architectural scaffolding."*
+
+**The recorded starting target is #133** — replay real history against a
+change — *"unless inspection of current repository state establishes a concrete
+reason not to."* After it, the highest-value unblocked work, with the sequence
+**reconstructed from the repository rather than taken from a list**:
+
+> *"Do not blindly follow this ordering… do not automatically prioritize #259
+> merely because it was previously described as the largest unstarted
+> capability. Unified knowledge, artifact generation and correspondence
+> intelligence may be more foundational."*
+
+Candidates named: #41, #257, #258, #172, #259, the rest of #272.
+
+**If compaction happens: reread `CLAUDE.md`, reread this file, continue.
+Do not ask Grant to repaste the prompt.**
+
+### GRANT'S DECISIONS — made 2026-09-17, do NOT ask again
+
+Three product questions were reserved for him across three runs. He answered
+all three. They are recorded here, on the issues, and (for the first) in an
+ADR, so a compaction cannot turn them back into open questions.
+
+| | His decision, in his words |
+|---|---|
+| **#257** upstream deletion | *"archive-and-hide from normal retrieval/search by default, while preserving provenance/history and making restoration possible. An upstream deletion must not silently destroy institutional history, but deleted/stale material must not contaminate ordinary retrieval."* → **ADR-0040** |
+| **#258** Slack artifact delivery | *"signed-link delivery, reusing the existing signed-URL infrastructure rather than requesting additional Slack file-upload scope, unless repository evidence proves this cannot satisfy the acceptance criteria."* |
+| **#261** paid computer runtime | *"Do not enable or purchase paid infrastructure. Continue proving the free/ephemeral-compute + persistent-state architecture first. Record precisely which acceptance criteria, if any, genuinely cannot be met without paid compute."* |
+
+The standing instruction that goes with them: **reserve something for Grant
+only when it needs expenditure, his own authentication, a destructive or
+irreversible action, a credential action, or a product direction that cannot
+reasonably be inferred.** Everything else is an ordinary engineering decision
+to make and state.
+
+### The chain this run works, and why that order
+
+Grant: *"Prefer work that most strengthens the central Agentic Team
+experience: understand project knowledge → coordinate agents → perform work →
+create real artifacts → preserve state → deliver results through the user's
+channel."* And explicitly: **do not prioritise #259 merely because it is
+large.**
+
+So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #259 and
+#261 after them:
+
+- **#133** first because it is the instrument. Everything below changes
+  behaviour, and there is currently no way to tell a change that improved the
+  office from one that damaged it.
+- **#257** next because it is the bottom of the chain: *project association ⇒
+  discoverable project knowledge*. #258 and #172 both stand on it — an artifact
+  is only as good as what was retrieved to make it, and mail is only project
+  intelligence if it lands in the same index.
+- **#258** then, because it is the first capability where the whole chain shows
+  up in one request: retrieve → generate → validate → store → deliver.
+- **#172** after, because it adds a SOURCE to an index that already works
+  rather than a Gmail-specific memory.
+- **#41** continuously, as a programme rather than a checkbox.
+
+### WHERE THIS RUN IS — updated as it goes
+
+| | |
+|---|---|
+| **started from** | `68b7958` (PR #274 merged) |
+| **branch** | `claude/phase-7-communications-kh8ow8`, restarted from main |
+| **migrations** | 463 |
+| **#133** | **DONE and closed** — `npm run replay` + `npm run verify:judge`, both controls proved |
+| **#257** | retrieval, reconciliation and the end-to-end criterion all done — `npm run verify:unified` 10/10 |
+| **#258** | Slack signed-link delivery built and tested; the remaining box is one LIVE Slack round trip |
+| **gate** | **24/24** on a clean tree at 1,290s, including `verify:judge` and `verify:unified` |
+| **#258** | Slack signed-link delivery + `verify:artifact` 11/11 end to end; open, one live Slack round trip left |
+| **#172** | `app.mail_awaiting` — what has gone quiet, both directions; `verify:mail` 30/30 |
+| **suites** | `verify:judge`, `verify:unified`, `verify:artifact`, `verify:knowledge`, `verify:mail` all added to the gate |
+| **next** | re-run the gate (27 entries now), then #272 debt / further #41 dimensions |
+
+**What is genuinely left on each open issue, so nobody re-derives it:**
+
+| issue | what remains |
+|---|---|
+| #258 | one LIVE Slack round trip. Everything below it is tested and the wire format asserted. Weigh it against the cost: `verify:slack` leaves a permanent channel in Grant's workspace, because Slack cannot delete one. |
+| #172 | "identify decisions and deadlines" and "prepare replies" (gmail.draft is enabled and unexercised). The commitments question is answered as far as metadata honestly allows — see the CLAUDE.md entry about the recipient COUNT. |
+| #260 | quota-blocked on NotebookLM. |
+| #259 | unstarted, deliberately deprioritised by Grant. |
+| #272 | 15 baseline entries; 9 want a product surface rather than a caller. |
+| #261 | free architecture; no acceptance criterion has yet been shown to REQUIRE paid compute. That test is the deliverable, not a bill. |
+| #16 / #135 | Cloudflare account + token (free tier), Grant's to create. |
+| #18, #213, #270 | human actions, recorded, not to be re-asked. |
+
+**#172, what inspection found.** Further along than the Issue reads:
+ADR-0037, migration 0432, `app.mail_for_project`, `mail_search`,
+`forget_mail_before` and a 180-day retention all exist, and the instruction
+handler already brings correspondence alongside documents. What is left is the
+question Grant singled out — *"are there outstanding commitments I have
+forgotten?"* — and it is **bounded by the cache**: `src/google/mail.ts` fetches
+`format=metadata`, so there are no message BODIES anywhere. A commitment
+extractor over subject lines and hundred-character snippets would be guessing,
+and the honest version is narrow. Say that on the Issue rather than building a
+plausible-looking thing that invents commitments.
+
+**#257, where it stands.** Every acceptance box is now met and evidenced:
+NotebookLM and Drive both feed one index through their own ingestion
+contracts (`verify:unified` proves two connectors answering one query);
+retrieval returns each document ONCE and excludes archived material (0464);
+upstream deletions reconcile under ADR-0040 with two strikes, a blast-radius
+refusal and a symmetric return path (0465, 0466); provenance is cited;
+isolation is proved in both directions. `verify:knowledge` 38/38,
+`verify:unified` 10/10, both in the gate.
+
+**What #133 shipped, and the two things that make it evidence rather than
+code:**
+
+- `npm run replay` re-asks real past requests against current code. The corpus
+  is chosen by four structural witnesses (not a fixture, not a harness job,
+  from a real channel, and the answer was ACTUALLY DELIVERED to a person),
+  because chasing probe names failed three times running.
+- `npm run verify:judge` calibrates the comparative judge against five
+  invented pairs with a known direction — **in the gate**, because a
+  measurement whose instrument decays silently is worse than none.
+- **Control 1:** `--degrade` sabotages every request and the run must come back
+  WORSE. It does (2 worse against 1 better), and the command exits non-zero if
+  it does not.
+- **Control 2:** an ordinary run must not manufacture a regression. It reports
+  NO DIRECTION with 0 worse.
+
+**Four defects found by building it**, all recorded in CLAUDE.md and fixed:
+61 + 29 harness jobs reading as things Grant asked (0460, 0463); a replay able
+to deliver through the children it spawned (0461, 0462); and a judge design
+that could not see a sabotaged run at all.
+
+### What inspection established about #133, before starting it
+
+`job_traces` does NOT carry what #133 assumed. It holds four kinds — `prompt`,
+`decision`, `degradation`, `plan` — and the `prompt` row is
+`{"kind": "...", "attempt": 1}`. **The prompt text, the retrieved documents and
+the model are not in it**, so "replay from the trace" cannot be done as
+written.
+
+What IS recoverable is better: `jobs.pinned_config.instruction` holds the
+request verbatim, on 482 real `office.instruction` jobs, with the project, the
+requester and the original `outputs.body` all joinable. So the replay reads
+CANONICAL STATE, not the trace, and the Issue is answered by a different route
+than the one it proposed. `app.now_utc()` is `now()` with no override, so the
+clock freeze has to happen where the handler reads the date, not in SQL.
+
+---
+
+## THE PREVIOUS MANDATE — the 8-hour completion run, 17 September 2026
 
 **This supersedes the capability campaign below as the ACTIVE mandate.** That
 one ran the dependency order and advanced nine issues; none was closed, which
