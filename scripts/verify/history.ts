@@ -766,15 +766,33 @@ try {
       snapshot fails for a reason that has nothing to do with the HTTP layer.
       The property worth asserting is that the two agree right now.
     */
-    const overHttp = await history(String(agree.jp ?? mine), 100)
     const r = await fetch(`${base}?section=conversation&id=${String(agree.jp ?? mine)}`, {
       headers: { Authorization: `Bearer ${hqToken}` },
     })
     const body = (await r.json().catch(() => ({}))) as { data?: Msg[] }
+    const overHttp = await history(String(agree.jp ?? mine), 100)
+    /*
+      Containment, not equality — and the HTTP read goes FIRST.
+
+      The gate caught this as "12 over HTTP vs 11 from the RPC". Nothing
+      disagreed: a turn arrived between the two reads, which is a live office
+      doing its job. Two counts taken a second apart are a race dressed as an
+      assertion, and the comment above this once claimed re-reading the RPC
+      had removed it.
+
+      What the check exists for is that the HTTP layer serves the same
+      conversation the RPC does. So the HTTP read is taken first and every
+      message the RPC then returns must be in it: a message that arrived in
+      between makes the HTTP answer SHORTER, never wrong, and anything the RPC
+      shows and HTTP does not is the defect this was written to catch.
+    */
+    const seen = new Set((body.data ?? []).map((m) => `${String(m.at)}|${String(m.body)}`))
+    const missing = overHttp.filter((m) => !seen.has(`${String(m.at)}|${String(m.body)}`))
     check(
       'the page can ask for a conversation over HTTP',
-      `http ${String(r.status)}, ${String((body.data ?? []).length)} over HTTP vs ${String(overHttp.length)} from the RPC`,
-      r.ok && Array.isArray(body.data) && (body.data ?? []).length === overHttp.length,
+      `http ${String(r.status)}, ${String((body.data ?? []).length)} over HTTP, ` +
+        `${String(overHttp.length)} from the RPC, ${String(missing.length)} the page cannot see`,
+      r.ok && Array.isArray(body.data) && missing.length === 0,
     )
 
     const bad = await fetch(`${base}?section=conversation&id=not-a-uuid`, {

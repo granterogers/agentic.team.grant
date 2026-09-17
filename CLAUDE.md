@@ -2614,6 +2614,41 @@ Each of these cost real time. They are here so they cost it once.
   not care which process produced it: read the row, not the return value of
   the path you happened to take.
 
+- **A plpgsql body is parsed, not executed, so a spliced reference to the
+  loop's own record variable survives CREATE and dies on first use.** 0474
+  narrowed the proposal round with `for t in select … where t.kind <> …` — `t`
+  does not exist while its own source query runs, and the function raised
+  `55000: record "t" is not assigned yet` the first time anything called it.
+  Two migrations applied cleanly over it. The columns belong to the SOURCE, so
+  they are named plainly; and the reason it was caught at all is that the
+  migration that fixed it DRIVES the function in a `do` block.
+
+- **Every proposal on Grant's Governance page was a suite's fixture, and the
+  reason was one missing caller.** `app.raise_proposals` turns recurring
+  impediments into things he can answer (#49) and **nothing had ever called
+  it** — so the only rows in `public.proposals` were the sixteen that suites
+  raised with `p_include_fixtures => true`, and the section headed *What it
+  wants* showed him nothing but test traffic. The fix is three-sided and all
+  three were needed: a duty that runs the round (0473), a reader that filters
+  harness names through one shared predicate `app.harness_label` (0473), and a
+  teardown that sweeps the CLASS rather than its own run's prefix. Ask what a
+  table actually HOLDS before believing a feature has ever produced anything.
+
+- **Not everything an agent could not do is something a person can grant.**
+  291 of 331 `not_capable` impediments are #185's coherence gate refusing an
+  answer — the gate working. As proposals they read "Finance Director cannot an
+  answer that matches its own evidence", seven times, and there is nothing for
+  Grant to approve. `raise_proposals` skips the kind (0474). The neighbouring
+  correction: a title built as `%s cannot %s` assumes `needed` is a verb
+  phrase, and half of them are nouns — `could not:` reads correctly for both.
+
+- **A suite testing a filter cannot name its subject the way the filter
+  matches — #45's rule, in its sharpest form yet.** Filtering harness-shaped
+  NEEDS out of the proposal round (0475) instantly stopped `verify:proposes`
+  from being able to raise `fixture-need-<run>` at all, and the suite died on
+  `array['undefined']::uuid[]`. Its subject reads like a real one now and
+  carries the run token, which is what teardown matches.
+
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`

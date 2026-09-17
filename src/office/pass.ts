@@ -66,6 +66,7 @@ import { notionAdoptHandler } from '../handlers/notion-adopt.ts'
 import { notionImportHandler } from '../handlers/notion-import.ts'
 import { notionSyncHandler } from '../handlers/notion-sync.ts'
 import { planHandler } from '../handlers/plan.ts'
+import { proposeHandler } from '../handlers/propose.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
@@ -435,6 +436,14 @@ export const buildPass = async (
     // The other corpus. Twenty pages shared with the integration and never
     // once read by anything outside a verification run.
     notionSyncHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
+    /*
+      What the office could not do, turned into something Grant can answer.
+
+      `app.raise_proposals` had no caller at all, so #49's loop ended in a
+      table nobody filled: every proposal on the Governance page was a suite's
+      fixture. The duty is daily and the handler is silent (0473).
+    */
+    proposeHandler(db),
     // "Use the Notion you already have" — a configuration change the office can
     // now make, rather than one that needed a terminal (0164).
     notionAdoptHandler({ db }),

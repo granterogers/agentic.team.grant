@@ -18,7 +18,88 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-## THE MANDATE IN FORCE — the 12-hour capability run, 17 September 2026
+## THE MANDATE IN FORCE — BACKLOG TO ZERO, 17–18 September 2026
+
+**This supersedes every mandate below it, including the capability run of the
+same day, whose work is merged and recorded further down.**
+
+Grant, 2026-09-17, verbatim on the objective:
+
+> *"Your mission is to drive the repository as close as safely and legitimately
+> possible to ZERO OPEN ACTIONABLE ENGINEERING ISSUES. Do not optimize for the
+> number zero. Optimize for a genuinely working, coherent, secure, usable
+> product. An honestly open future-roadmap issue is preferable to a falsely
+> closed or half-implemented capability."*
+
+His priority order when things conflict, in his words: **REAL WORKING PRODUCT →
+DATA / SECURITY INTEGRITY → REGRESSION SAFETY → ISSUE COMPLETION → TEST
+CLEANLINESS → DOCUMENTATION → ISSUE COUNT.**
+
+And the five lines he ended on:
+
+> *"DO NOT MANAGE THE BACKLOG — FINISH THE BACKLOG. DO NOT BUILD INVISIBLE
+> CAPABILITIES — MAKE THEM USABLE. DO NOT STOP WHEN ONE THING IS BLOCKED — MOVE
+> TO THE NEXT INDEPENDENT THING. DO NOT CLAIM SUCCESS — PROVE IT. DO NOT
+> OPTIMIZE FOR PASSING TESTS — OPTIMIZE FOR THE PRODUCT ACTUALLY WORKING."*
+
+### Where this run starts
+
+| | |
+|---|---|
+| **starting commit** | `86c451f` on `claude/phase-7-communications-kh8ow8` |
+| **migrations** | 472 applied |
+| **unit tests** | 1,683 across 84 files |
+| **gate** | 30 suites; last complete run 27/29 at `1243b83`, both failures harness defects since fixed; the confirming 30-suite run is in flight at this commit |
+| **open issues at the start** | **13** |
+
+### The complete open backlog, classified
+
+Grant's letters: **A** implement now · **B** verify and close · **C**
+dependency chain · **D** Grant action required · **E** intentional roadmap ·
+**F** obsolete / duplicate.
+
+| # | what it is | class | the reading |
+|---|---|---|---|
+| **276** | 25 gateway actions and sections with no control | **A** | the run's primary target. Two closed already (document approve/discard). `project_unarchive` needs a rule for what belongs on a recovery list before it needs a button — evidence on the Issue. |
+| **272** | 11 capabilities in `check:callers`' baseline | **A** | classify each as reachable-but-invisible, should-be-wired, or dead. The baseline should shrink. |
+| **270** | the Slack `channels:join` scope | **A**, was D | **Grant has already looked and the scope is not offered in his app.** §10 of the mandate forbids sending him back. Treat it as an engineering problem: read the manifest, find out why, and prefer redesigning the fixture lifecycle over making him accommodate the test. |
+| **258** | artifact generation and delivery | **A** | built and proved end to end (`verify:artifact` 12/12). What is left is one LIVE Slack round trip. |
+| **172** | Gmail as project intelligence | **A** | `mail_awaiting` shipped. What remains is "decisions and deadlines" and `gmail.draft`, both bounded by the metadata-only cache. |
+| **41** | deep end-to-end systems test | **A** | a programme, not a checkbox. Cancellation closed; each run adds a dimension. |
+| **260** | NotebookLM generated artifacts | **C/E** | quota-blocked at the provider. The page and the reader exist; the artifacts do not arrive. |
+| **259** | unified personal tasks | **E** | Grant deprioritised it explicitly in the previous mandate. |
+| **261** | persistent computer runtime | **E** | his decision stands: no paid infrastructure. Record which criteria genuinely need it. |
+| **135** | a browser tab in every project | **C** | depends on #16 and on #261's answer. |
+| **16** | browser-capable agents | **D** | needs a Cloudflare account and token (free tier), which only he can create. |
+| **18** | `github.read_token` still live | **D** | rotation is his. Do not ask again; it is recorded. |
+| **213** | rotate the Slack bot token and signing secret | **D** | same. |
+
+### Dependency order for this run
+
+1. **#276 and #272 together**, because they are the same question one layer
+   apart and several entries resolve each other.
+2. **#270**, because it is reclassified and nobody has yet read the manifest.
+3. **#258**'s live round trip, once #270's investigation says what a Slack test
+   may safely do.
+4. **#172**'s remaining half.
+5. **#41** continuously, as each of the above lands.
+6. **#260, #259, #261, #135** left honestly open with the reason recorded.
+
+### The three decisions already made, never to be asked again
+
+Recorded in full further down: **#257** upstream deletion is archive-and-hide
+(ADR-0040) · **#258** delivery is a signed link, not a Slack upload scope ·
+**#261** no paid infrastructure until the free architecture is proved.
+
+### Human-only actions, consolidated
+
+**#18** rotate `github.read_token` · **#213** rotate the Slack bot token and
+signing secret · **#16** create a Cloudflare account and API token. Nothing
+else in the backlog needs him, and none of these blocks any other work.
+
+---
+
+## THE PREVIOUS MANDATE — the 12-hour capability run, 17 September 2026
 
 **This supersedes every mandate below.** The completion run merged as PR #274
 (`main` at `68b7958`): #273, #263, #264, #265, #262 closed, #272 down from 40

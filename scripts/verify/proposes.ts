@@ -31,6 +31,7 @@
 
 import { readPlan } from '../../src/agents/plan.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { proposeHandler } from '../../src/handlers/propose.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -52,7 +53,21 @@ const one = async (sql: string): Promise<Record<string, unknown>> =>
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 const run = Math.random().toString(36).slice(2, 10)
-const NEED = `fixture-need-${run}`
+/*
+  Not a harness-shaped name, on purpose — #45's rule, applied to the thing
+  this suite actually tests.
+
+  0475 made the proposal round refuse a need whose NAME belongs to the harness,
+  because twelve probe impediments would otherwise have asked Grant to grant a
+  tool called `probe-need-j4je9xrc-missing_tool`. A suite testing a feature
+  that filters harness names cannot use one, or it passes for the wrong reason
+  — or, as happened here, stops being able to raise its subject at all.
+
+  So the need reads like a real one and carries the run token, which is what
+  teardown matches on. The impediments underneath are still fixtures by
+  generation (the jobs are `verify:` named), so nothing the office counts moves.
+*/
+const NEED = `speak fluent welsh ${run}`
 const WHO = 'growth-director'
 let projectId = ''
 const jobs: string[] = []
@@ -274,14 +289,24 @@ try {
   // =========================================================================
   console.log('\nClaire sends it, once (#49)')
 
-  const batch = (await one('select app.proposals_to_send(20) as r')).r as { id: string }[]
+  /*
+    Asked for a batch big enough to contain this run's row, not the top twenty.
+
+    The first version asked for 20 and went red the day the office held more
+    than twenty undelivered proposals: this run's subject, with four
+    occurrences, ranked below a real one with seventy-two. Nothing was broken —
+    the suite was asserting that its own fixture was popular. A cap is a
+    product behaviour, so the check reads past it rather than depending on
+    where the fixture happens to sort.
+  */
+  const batch = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
   check(
     'it is in the batch to send',
-    `${String(batch.length)} waiting`,
+    `${String(batch.length)} waiting, ours ${batch.some((b) => b.id === rows[0]?.id) ? 'among them' : 'ABSENT'}`,
     batch.some((b) => b.id === rows[0]?.id),
   )
   await db.execute(`select app.proposals_sent(array[${lit(String(rows[0]?.id))}]::uuid[])`)
-  const after = (await one('select app.proposals_to_send(20) as r')).r as { id: string }[]
+  const after = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
   check(
     'and once sent it is not sent again',
     `${String(after.length)} waiting`,
@@ -335,7 +360,18 @@ try {
   )
 } finally {
   console.log('')
-  await db.execute(`delete from public.proposals where needed like ${lit(`fixture-need-${run}%`)}`)
+  /*
+    This run's rows AND any harness row an older run left.
+
+    A prefix keyed to `${run}` only ever collected the current run, so
+    seventeen proposals named `fixture-need-…`, `verify-tool-…` and
+    `probe-need-…` accumulated over weeks — and every one of them was on
+    Grant's Governance page until 0473 filtered the reader. `app.harness_label`
+    is that filter's predicate, so teardown and page agree by construction
+    rather than by two lists kept in step.
+  */
+  await db.execute(`delete from public.proposals
+     where app.harness_label(needed) or needed like ${lit(`%${run}%`)}`)
   /*
     The impediments are NOT deleted, because they cannot be: §6 makes the
     ledger append-only and the trigger refuses. They are fixtures, so
@@ -359,7 +395,7 @@ try {
   const left = Number(
     (
       await one(
-        `select count(*)::int as n from public.proposals where needed like ${lit(`fixture-need-${run}%`)}`,
+        `select count(*)::int as n from public.proposals where needed like ${lit(`%${run}%`)}`,
       )
     ).n,
   )
@@ -374,7 +410,7 @@ try {
     (
       await one(`
         select count(*)::int as n from app.impediments_tally(30, 1, false)
-         where needed like ${lit(`fixture-need-${run}%`)}
+         where needed like ${lit(`%${run}%`)}
       `)
     ).n,
   )
@@ -384,6 +420,78 @@ try {
     left === 0 && counted === 0,
   )
 }
+
+// =========================================================================
+console.log('\nand a duty runs the pass, which nothing ever did (#49, #272)')
+
+/*
+  The gap this section exists for.
+
+  Everything above proves `raise_proposals` WORKS. Nothing proved anything
+  CALLED it — and nothing did: `check:callers` had it in the baseline, and the
+  consequence was not an idle function but sixteen fixture rows being the only
+  thing on Grant's Governance page, because the only callers were suites
+  raising with `p_include_fixtures => true` (0473).
+*/
+const duty = (await one(`
+  select job_kind, period_minutes, enabled
+    from public.responsibilities where slug = 'proposal-round'`)) as {
+  job_kind?: string
+  period_minutes?: number
+  enabled?: boolean
+}
+check(
+  'the office has a duty that turns impediments into proposals',
+  `${String(duty?.job_kind)} every ${String(duty?.period_minutes)} min, enabled=${String(duty?.enabled)}`,
+  duty?.job_kind === 'office.propose' && duty?.enabled === true,
+)
+
+/*
+  And the handler that duty needs, driven rather than read.
+
+  A responsibility whose job kind has no handler is 0133's defect: the job is
+  enqueued, `runJob` throws NoHandlerError, and the duty looks scheduled while
+  nothing happens. So this runs the real handler against the real database.
+  It is allowed to raise REAL proposals — that is the product behaviour, daily,
+  from tomorrow — and the assertion is about what it says, not about a count
+  that changes with the office's own history.
+*/
+const out = await proposeHandler(db).handle(
+  {
+    jobId: '00000000-0000-0000-0000-000000000000',
+    kind: 'office.propose',
+    correlationId: '00000000-0000-0000-0000-000000000000',
+    projectId: null,
+    idempotencyKey: `verify:proposes-${run}:duty`,
+    attempt: 1,
+  },
+  db,
+)
+check(
+  'the handler runs the pass and says what it found',
+  `${out.body.slice(0, 80)}`,
+  out.body.length > 10 && out.announce === false,
+)
+
+/*
+  The property that matters, asserted rather than counted.
+
+  Sixteen harness proposals were on the page for weeks. A count would go stale
+  the first time the office raises a real one; "no row the page shows Grant is
+  a harness row" survives every future run.
+*/
+const shown = (await one(`select app.hq_governance(40) as g`)).g as { proposals?: unknown }
+const parsed = typeof shown === 'string' ? (JSON.parse(shown) as { proposals?: unknown }) : shown
+const onPage = Array.isArray(parsed?.proposals)
+  ? (parsed.proposals as { title?: string }[]).map((p) => String(p.title ?? ''))
+  : []
+check(
+  'CONTROL: and no harness proposal reaches the page Grant reads',
+  onPage.length === 0
+    ? 'nothing open'
+    : `${String(onPage.length)}: ${onPage.slice(0, 2).join(' · ').slice(0, 70)}`,
+  !onPage.some((t) => /verify-|fixture-|probe-|gate-/.test(t)),
+)
 
 const failed = checks.filter((c) => !c).length
 console.log(`\n${String(checks.length - failed)}/${String(checks.length)} checks passed`)
