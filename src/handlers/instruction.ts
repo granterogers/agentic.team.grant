@@ -216,6 +216,21 @@ interface Decided {
 export interface InstructionDeps {
   readonly db: SqlExecutor
   readonly router: ProviderRouter
+  /**
+   * What time it is, injectable for a replay (#133).
+   *
+   * A job that said "by Friday" resolves to a different date a fortnight
+   * later, so replaying real history against current code has to freeze the
+   * clock to the original job's time or every dated request shows up as a
+   * change the code did not make.
+   *
+   * ONE place in this handler reads the clock -- `dueOn`, when a task's
+   * deadline is derivable from the words -- and that is the whole reason this
+   * is a function rather than a Date: the office reads the real clock on every
+   * job and a replay reads the one it is given. The default is the real clock,
+   * so every existing caller is unchanged and nothing has to know about this.
+   */
+  readonly now?: () => Date
 }
 
 interface Payload {
@@ -641,6 +656,7 @@ async function addTask(
   job: Job,
   asked: TaskRequest,
   said_by = '',
+  now: Date = new Date(),
 ): Promise<string> {
   if (asked.title === null) return NEEDS_A_TITLE
 
@@ -662,7 +678,7 @@ async function addTask(
     every phrase the resolver declines — this repository filed that as the
     reason the subtraction was removed, and it is still the reason.
   */
-  const when = dueOn(said_by === '' ? asked.title : said_by, new Date())
+  const when = dueOn(said_by === '' ? asked.title : said_by, now)
   const owner = assignedTo(said_by === '' ? asked.title : said_by)
 
   /*
@@ -2407,7 +2423,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
 
       const filed =
         asked !== null
-          ? await addTask(deps.db, job, asked, instruction)
+          ? await addTask(deps.db, job, asked, instruction, deps.now?.() ?? new Date())
           : namedLater === null
             ? null
             : await addTask(
@@ -2422,6 +2438,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   different question.
                 */
                 namedLater,
+                deps.now?.() ?? new Date(),
               )
 
       const confirmation =

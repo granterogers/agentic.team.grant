@@ -45,6 +45,48 @@ Candidates named: #41, #257, #258, #172, #259, the rest of #272.
 **If compaction happens: reread `CLAUDE.md`, reread this file, continue.
 Do not ask Grant to repaste the prompt.**
 
+### GRANT'S DECISIONS — made 2026-09-17, do NOT ask again
+
+Three product questions were reserved for him across three runs. He answered
+all three. They are recorded here, on the issues, and (for the first) in an
+ADR, so a compaction cannot turn them back into open questions.
+
+| | His decision, in his words |
+|---|---|
+| **#257** upstream deletion | *"archive-and-hide from normal retrieval/search by default, while preserving provenance/history and making restoration possible. An upstream deletion must not silently destroy institutional history, but deleted/stale material must not contaminate ordinary retrieval."* → **ADR-0040** |
+| **#258** Slack artifact delivery | *"signed-link delivery, reusing the existing signed-URL infrastructure rather than requesting additional Slack file-upload scope, unless repository evidence proves this cannot satisfy the acceptance criteria."* |
+| **#261** paid computer runtime | *"Do not enable or purchase paid infrastructure. Continue proving the free/ephemeral-compute + persistent-state architecture first. Record precisely which acceptance criteria, if any, genuinely cannot be met without paid compute."* |
+
+The standing instruction that goes with them: **reserve something for Grant
+only when it needs expenditure, his own authentication, a destructive or
+irreversible action, a credential action, or a product direction that cannot
+reasonably be inferred.** Everything else is an ordinary engineering decision
+to make and state.
+
+### The chain this run works, and why that order
+
+Grant: *"Prefer work that most strengthens the central Agentic Team
+experience: understand project knowledge → coordinate agents → perform work →
+create real artifacts → preserve state → deliver results through the user's
+channel."* And explicitly: **do not prioritise #259 merely because it is
+large.**
+
+So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #259 and
+#261 after them:
+
+- **#133** first because it is the instrument. Everything below changes
+  behaviour, and there is currently no way to tell a change that improved the
+  office from one that damaged it.
+- **#257** next because it is the bottom of the chain: *project association ⇒
+  discoverable project knowledge*. #258 and #172 both stand on it — an artifact
+  is only as good as what was retrieved to make it, and mail is only project
+  intelligence if it lands in the same index.
+- **#258** then, because it is the first capability where the whole chain shows
+  up in one request: retrieve → generate → validate → store → deliver.
+- **#172** after, because it adds a SOURCE to an index that already works
+  rather than a Gmail-specific memory.
+- **#41** continuously, as a programme rather than a checkbox.
+
 ### What inspection established about #133, before starting it
 
 `job_traces` does NOT carry what #133 assumed. It holds four kinds — `prompt`,
