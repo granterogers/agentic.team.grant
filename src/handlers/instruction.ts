@@ -121,8 +121,11 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
   contextBlock,
+  correspondence,
   coverageNote,
   coverageOf,
+  mailBlock,
+  mailRefs,
   retrieve,
   sourceRefs,
 } from '../knowledge/retrieval.ts'
@@ -2466,6 +2469,26 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const context = contextBlock(hits)
 
       /*
+        The correspondence, alongside the documents (#172, ADR-0037).
+
+        A separate block rather than more rows in `context`, because the two
+        are different kinds of evidence: a document is material the project was
+        given and a message is correspondence that mentions it, and a model
+        handed them in one undifferentiated list will cite a subject line the
+        way it cites a contract.
+
+        Project-scoped and unconditional. There is no "should I check the mail"
+        decision here on purpose — #257's non-goal is teaching the model a list
+        of connectors to try in turn, so the office brings what belongs to the
+        project and the model reads it or does not. It is empty for a job with
+        no project, and empty is the common case today because nothing matches
+        an inbox of travel and clinic mail.
+      */
+      const mail =
+        confirmation !== null ? [] : await correspondence(deps.db, job.projectId, instruction)
+      const mailContext = mailBlock(mail)
+
+      /*
         And what the index cannot speak for (#257).
 
         Grant asked about a document in the project's linked Google Notebook
@@ -2853,6 +2876,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
                 /*
+                  The correspondence (#172).
+
+                  After the documents and before the coverage note, which is
+                  where it belongs in the argument: this is more evidence of
+                  the same question, and the note that follows is a statement
+                  about how far all of it goes.
+                */
+                ...(mailContext === '' ? [] : [{ role: 'system' as const, content: mailContext }]),
+                /*
                   What the search could NOT see (#257).
 
                   Immediately after the documents, because it is a statement
@@ -3176,6 +3208,17 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         ],
         retrieved: [
           ...(context === '' ? [] : [context]),
+          /*
+            Correspondence is RETRIEVED, not the office's own prose (#172).
+
+            A subject line the office read out of the cache is material, the
+            same as a document — so it belongs in the list `established()`
+            counts, and a figure Grant quoted in an email he sent is his own
+            word rather than the office's guess. What it does NOT license is
+            summarising a thread, and `mailBlock` says so in the block itself
+            because that is the only place a model reads it.
+          */
+          ...(mailContext === '' ? [] : [mailContext]),
           ...(projectList === '' ? [] : [projectList]),
         ],
         /*
@@ -3202,6 +3245,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         consultedDomains: [
           ...(confirmation === null ? (['documents'] as const) : []),
           'projects' as const,
+          /*
+            Mail, but only when the office could actually read it (#172).
+
+            `coverage.blank` carries `mail` when the cache has gone stale on a
+            project that has correspondents, and a domain listed as consulted
+            is a domain the office may report an absence from. Listing it while
+            the reader is broken is exactly the lie #257 exists to stop, one
+            corpus over.
+          */
+          ...(confirmation === null && coverage !== null && !coverage.blank.includes('mail')
+            ? (['mail'] as const)
+            : []),
         ],
         /*
           Only the project list is held WHOLE. `retrieve()` returns the best
@@ -3239,7 +3294,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         body: answer,
         confidence: 'medium',
         evidence: 'inferred',
-        sources: sourceRefs(hits),
+        sources: [...sourceRefs(hits), ...mailRefs(mail)],
         contradictions: null,
         path: 'inference',
         model: completion.model,

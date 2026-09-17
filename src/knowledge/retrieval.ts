@@ -195,12 +195,31 @@ const SAID_AS: Readonly<Record<string, string>> = {
  */
 export function coverageNote(c: Coverage): string {
   if (c.blank.length === 0) return ''
-  const named = c.blank.map((x) => SAID_AS[x] ?? x)
+  /*
+    Mail is separated out, because it is not attached and the sentence would
+    lie if it said so (#172).
+
+    Every other entry in `blank` is a connector the project READS FROM with
+    nothing indexed. Mail is a cache the whole office shares that has stopped
+    being refreshed, so "your email is attached to this project and nothing
+    from it has been indexed" is wrong twice in one clause. Its own sentence,
+    and it survives alone: a project whose only gap is the mail still gets a
+    caveat.
+  */
+  const mailNote = c.blank.includes('mail')
+    ? 'The office has not been able to read the mail recently, so it can say ' +
+      'nothing at all about whether something is in your email — never that ' +
+      'there is nothing there. '
+    : ''
+  const connectors = c.blank.filter((x) => x !== 'mail')
+  if (connectors.length === 0) return mailNote.trimEnd()
+  const named = connectors.map((x) => SAID_AS[x] ?? x)
   const list =
     named.length === 1
       ? (named[0] ?? '')
       : `${named.slice(0, -1).join(', ')} and ${named[named.length - 1] ?? ''}`
   return (
+    mailNote +
     `What you searched is everything the office has INDEXED for this project ` +
     `(${String(c.documents)} document(s)). ${list} ${
       named.length === 1 ? 'is' : 'are'
@@ -211,4 +230,136 @@ export function coverageNote(c: Coverage): string {
       named.length === 1 ? 'has' : 'have'
     } not been read — never that the thing does not exist.`
   )
+}
+
+/*
+  The correspondence (#172, ADR-0037).
+
+  Kept in this module rather than a new one because it answers the same
+  question `retrieve` does — what does the office hold that bears on this — and
+  a second module would be a second place for the project scope to be
+  forgotten. It is a SEPARATE function rather than more rows from `retrieve`
+  because the two are not the same kind of evidence and must not arrive in one
+  undifferentiated list: a document is material the project was given, and a
+  message is correspondence that mentions it.
+*/
+
+/** One cached message the office may cite for this project. */
+export interface MailHit {
+  readonly messageId: string
+  readonly subject: string
+  readonly from: string
+  readonly sentAt: string
+  readonly excerpt: string
+  /** `contact` — the sender is on this project. `named` — an alias was in the subject. */
+  readonly why: string
+  /** The contact or the phrase that matched, so a mis-association is visible. */
+  readonly matched: string
+}
+
+/**
+ * The correspondence that belongs to a dashboard project.
+ *
+ * Returns `[]` for a job with no project and never reads the whole inbox,
+ * which is the isolation rule of ADR-0037 rather than a default: a question
+ * about one project may only see that project's mail, because a retrieval bug
+ * here leaks something between contexts rather than merely being wrong.
+ *
+ * Swallows a failure into `[]` for the same reason `retrieve` returns `[]` on
+ * no match — and `coverageOf` is what makes that honest, because a read that
+ * failed leaves mail in `blank` and the office says so.
+ */
+export async function correspondence(
+  db: SqlExecutor,
+  projectId: string | null,
+  query = '',
+  limit = 6,
+): Promise<readonly MailHit[]> {
+  if (projectId === null) return []
+  try {
+    /*
+      Both readers in one statement, because they answer half a question each.
+
+      `mail_for_project` says WHICH messages belong to this project and WHY,
+      and orders them by date. `mail_search` says which of them bear on the
+      question that was asked, and orders them by that. A question about
+      renewals wants the second and still needs the first's `why`, so the
+      relevant set is taken in the search's order and the tier is joined on.
+
+      One round trip rather than two, and the scope is stated twice on purpose:
+      the search is given the project as well, so a change to one reader cannot
+      quietly widen the other.
+    */
+    const { rows } = await db.execute(
+      `select app.mail_for_project(${lit(projectId)}::uuid, 100) as belongs,
+              app.mail_search(${lit(query)}, ${lit(projectId)}::uuid, ${String(limit)}) as matches`,
+    )
+    const asList = (raw: unknown): Record<string, unknown>[] => {
+      const v = typeof raw === 'string' ? JSON.parse(raw) : raw
+      return Array.isArray(v) ? (v as Record<string, unknown>[]) : []
+    }
+    const belongs = asList(rows[0]?.belongs)
+    if (belongs.length === 0) return []
+
+    const read = (x: Record<string, unknown>): MailHit => ({
+      excerpt: String(x.excerpt ?? ''),
+      from: String(x.from ?? 'unknown'),
+      matched: String(x.matched ?? ''),
+      messageId: String(x.message_id ?? ''),
+      sentAt: String(x.sent_at ?? ''),
+      subject: String(x.subject ?? '(no subject)'),
+      why: String(x.why ?? 'named'),
+    })
+    const byId = new Map(belongs.map((x) => [String(x.message_id ?? ''), read(x)]))
+
+    /*
+      The relevant ones first, then the newest to fill the room.
+
+      Never ONLY the search: "is there anything in my email about this project"
+      contains no word any message holds, and answering it with nothing when
+      six messages belong to the project would be the found-nothing failure
+      this repository keeps paying for.
+    */
+    const relevant = asList(rows[0]?.matches)
+      .map((x) => byId.get(String(x.message_id ?? '')))
+      .filter((h): h is MailHit => h !== undefined)
+    const seen = new Set(relevant.map((h) => h.messageId))
+    const rest = [...byId.values()].filter((h) => !seen.has(h.messageId))
+    return [...relevant, ...rest].slice(0, limit)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The correspondence, as a prompt fragment.
+ *
+ * Every line says WHY the message is here, because the two tiers are different
+ * strengths of evidence and a model handed them flat will cite the weaker one
+ * as confidently as the stronger. The instruction at the end is the important
+ * part: a subject line and a hundred characters of snippet is not a thread, and
+ * an answer that summarises what "the email says" from a snippet is inventing.
+ */
+export function mailBlock(hits: readonly MailHit[]): string {
+  if (hits.length === 0) return ''
+  const lines = hits.map((h, i) => {
+    const why =
+      h.why === 'contact'
+        ? `${h.matched} is a contact on this project`
+        : `the subject names "${h.matched}"`
+    return `[m${String(i + 1)}] ${h.subject} — from ${h.from}, ${h.sentAt.slice(0, 10)} (${why})\n${h.excerpt.trim()}`
+  })
+  return (
+    `Correspondence the office holds for this project:\n\n${lines.join('\n\n')}\n\n` +
+    `These are subject lines and short previews from the cached inbox — NOT the ` +
+    `bodies, which the office never fetches. You may say that a message exists, ` +
+    `who sent it and when, and you may quote the preview. You may NOT say what ` +
+    `the message went on to say, or summarise a thread, because you have not ` +
+    `read one.`
+  )
+}
+
+/** What goes in `outputs.sources` for the mail that was read. */
+export function mailRefs(hits: readonly MailHit[]): readonly string[] {
+  return hits.map((h) => `mail:${h.messageId} ${h.subject}`)
 }

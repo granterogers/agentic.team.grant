@@ -305,6 +305,268 @@ try {
   console.log('configuration restored.')
 }
 
+// ---------------------------------------------------------------------------
+// The correspondence belongs to a project (#172, ADR-0037)
+// ---------------------------------------------------------------------------
+
+/*
+  Driven inside one `begin ... rollback`, and it has to be.
+
+  `app.mail_for_project` deliberately refuses a fixture project -- #45's rule,
+  because the whole point is that a retired probe's alias may not claim a real
+  message -- so the subjects here must be named like real projects, and a real
+  project that gathers a job can never be deleted. A rollback is the only
+  teardown that leaves nothing, and 0416 is the entry in CLAUDE.md that says
+  why creating a real-looking project outside one is expensive.
+
+  Every assertion below is about a PROPERTY rather than a count, except where a
+  count is the property. The controls outnumber the happy cases on purpose:
+  this reader decides which of Grant's personal messages an agent may see, and
+  its expensive direction is showing one under the wrong project.
+
+  No backticks in this comment: it lives inside a template literal.
+*/
+console.log('\nthe correspondence, and which project it belongs to (#172)')
+
+{
+  const A = `Mail proof ${run}`
+  const B = `Mail proof rival ${run}`
+  const slugA = `mail-proof-${run}`
+  const slugB = `mail-proof-rival-${run}`
+  const msg = (n: string): string => `fixture-172-${run}-${n}`
+
+  const got = (await one(`
+    begin;
+    insert into public.projects (name, slug, status)
+    values (${lit(A)}, ${lit(slugA)}, 'active'), (${lit(B)}, ${lit(slugB)}, 'active');
+
+    insert into public.project_aliases (project_id, alias, source, confidence)
+    values
+      ((select project_id from public.projects where slug = ${lit(slugA)}),
+       'Harbour Lighting Rebuild', 'name', 1.0),
+      ((select project_id from public.projects where slug = ${lit(slugA)}),
+       'HLR', 'grant', 1.0),
+      ((select project_id from public.projects where slug = ${lit(slugB)}),
+       'Tidewater Ferry Study', 'name', 1.0);
+
+    insert into public.contacts (project_id, name, email)
+    values ((select project_id from public.projects where slug = ${lit(slugA)}),
+            'Priya Raman', 'priya@example.com');
+
+    insert into public.mail_messages
+      (message_id, thread_id, subject, from_name, from_address, to_count,
+       sent_at, excerpt, labels, has_attachments, unread, first_seen_at, last_seen_at)
+    values
+      -- 1. a contact on the project, subject naming nothing
+      (${lit(msg('contact'))}, ${lit(msg('contact'))}, 'Thursday', 'Priya Raman',
+       'priya@example.com', 1, app.now_utc(), 'Can we move it', '{}', false, false,
+       app.now_utc(), app.now_utc()),
+      -- 2. a stranger, but the alias is in the subject
+      (${lit(msg('named'))}, ${lit(msg('named'))}, 'Re: Harbour Lighting Rebuild costs',
+       'A Stranger', 'stranger@example.com', 1, app.now_utc(), 'see attached', '{}',
+       false, false, app.now_utc(), app.now_utc()),
+      -- 3. the alias in the EXCERPT only. Narrowing 1 of ADR-0037.
+      (${lit(msg('excerpt'))}, ${lit(msg('excerpt'))}, 'Fwd: your appointment',
+       'A Clinic', 'clinic@example.com', 1, app.now_utc(),
+       'nothing to do with the harbour lighting rebuild at all', '{}', false, false,
+       app.now_utc(), app.now_utc()),
+      -- 4. the short alias. Narrowing 2.
+      (${lit(msg('short'))}, ${lit(msg('short'))}, 'hlr', 'A Stranger',
+       'stranger@example.com', 1, app.now_utc(), 'x', '{}', false, false,
+       app.now_utc(), app.now_utc()),
+      -- 5. the alias inside a longer word, which is not the alias
+      (${lit(msg('partial'))}, ${lit(msg('partial'))}, 'Re: preharbour lighting rebuilding',
+       'A Stranger', 'stranger@example.com', 1, app.now_utc(), 'x', '{}', false, false,
+       app.now_utc(), app.now_utc()),
+      -- 6. the OTHER project's alias. The isolation case.
+      (${lit(msg('rival'))}, ${lit(msg('rival'))}, 'Tidewater Ferry Study draft',
+       'A Stranger', 'stranger@example.com', 1, app.now_utc(), 'x', '{}', false, false,
+       app.now_utc(), app.now_utc()),
+      -- 7. both tiers at once. Must appear once, as a contact.
+      (${lit(msg('both'))}, ${lit(msg('both'))}, 'Harbour Lighting Rebuild — Thursday',
+       'Priya Raman', 'priya@example.com', 1, app.now_utc(), 'x', '{}', false, false,
+       app.now_utc(), app.now_utc()),
+      -- 8. nothing at all
+      (${lit(msg('none'))}, ${lit(msg('none'))}, 'Save 20 percent on a tour',
+       'A Shop', 'shop@example.com', 1, app.now_utc(), 'x', '{}', false, false,
+       app.now_utc(), app.now_utc());
+
+    select
+      (select jsonb_agg(x ->> 'message_id')
+         from jsonb_array_elements(app.mail_for_project(
+           (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x) as mine,
+      (select jsonb_agg(x ->> 'message_id')
+         from jsonb_array_elements(app.mail_for_project(
+           (select project_id from public.projects where slug = ${lit(slugB)}), 50)) x) as theirs,
+      (select x ->> 'why'
+         from jsonb_array_elements(app.mail_for_project(
+           (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
+        where x ->> 'message_id' = ${lit(msg('both'))}) as both_why,
+      (select x ->> 'matched'
+         from jsonb_array_elements(app.mail_for_project(
+           (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
+        where x ->> 'message_id' = ${lit(msg('named'))}) as named_matched,
+      (select count(*)
+         from jsonb_array_elements(app.mail_for_project(
+           (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x
+        where x ->> 'message_id' = ${lit(msg('both'))}) as both_times,
+      (select jsonb_agg(x ->> 'message_id')
+         from jsonb_array_elements(app.mail_search('Tidewater',
+           (select project_id from public.projects where slug = ${lit(slugA)}), 50)) x) as leak,
+      (select jsonb_array_length(app.mail_search('Tidewater', null, 50))) as unscoped,
+      (select app.forget_mail_before(7) ->> 'error') as too_short;
+    rollback;
+  `)) as Record<string, unknown> | undefined
+
+  const ids = (v: unknown): string[] =>
+    v === null || v === undefined ? [] : (v as string[]).map(String)
+  const mine = ids(got?.mine)
+  const theirs = ids(got?.theirs)
+  const has = (n: string): boolean => mine.includes(msg(n))
+
+  record(
+    'a contact on the project makes their correspondence findable',
+    has('contact') ? 'found' : `NOT FOUND — ${mine.join(', ')}`,
+    has('contact'),
+  )
+  record(
+    'and an alias phrase in the subject does too, from a sender nobody knows',
+    `matched=${String(got?.named_matched)}`,
+    has('named') && got?.named_matched === 'Harbour Lighting Rebuild',
+  )
+  record(
+    'CONTROL: the same phrase in the EXCERPT claims nothing',
+    has('excerpt') ? 'LEAKED an unrelated message' : 'not claimed',
+    !has('excerpt'),
+  )
+  record(
+    'CONTROL: an alias under four characters claims nothing',
+    has('short') ? 'LEAKED on a three-letter alias' : 'not claimed',
+    !has('short'),
+  )
+  record(
+    'CONTROL: the phrase inside a longer word is not the phrase',
+    has('partial') ? 'LEAKED on a substring' : 'not claimed',
+    !has('partial'),
+  )
+  record(
+    'CONTROL: one project cannot see another project’s correspondence',
+    has('rival') ? 'LEAKED across projects' : 'not claimed',
+    !has('rival') && theirs.includes(msg('rival')),
+  )
+  record(
+    'CONTROL: a message matching nothing is claimed by nobody',
+    has('none') ? 'LEAKED an unrelated message' : 'not claimed',
+    !has('none'),
+  )
+  record(
+    'a message matching both tiers appears once, as the stronger one',
+    `${String(got?.both_times)}×, why=${String(got?.both_why)}`,
+    Number(got?.both_times) === 1 && got?.both_why === 'contact',
+  )
+  record(
+    'CONTROL: searching within a project cannot reach outside it',
+    ids(got?.leak).length === 0
+      ? `nothing, while the unscoped search finds ${String(got?.unscoped)}`
+      : `LEAKED ${ids(got?.leak).join(', ')}`,
+    ids(got?.leak).length === 0 && Number(got?.unscoped) > 0,
+  )
+  record(
+    'a retention shorter than a month is refused, and says why',
+    String(got?.too_short ?? '').slice(0, 48),
+    String(got?.too_short ?? '').includes('30 days'),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// And what the office may conclude when it cannot read the mail (#172, #257)
+// ---------------------------------------------------------------------------
+
+/*
+  The gap 0433 closes, and why it is narrow.
+
+  Google is refusing the stored refresh token as this is written, so the mail
+  cache is 40 hours old -- and the duty runs hourly and SUCCEEDS as a job every
+  time, because a refresh that cannot authenticate is a degradation and not a
+  failure. Nothing anywhere was saying the office had stopped reading the mail,
+  so "there is nothing in your email about that" was available to a model
+  looking at a corpus that stopped two days ago.
+
+  The narrowing is the interesting half and it needs both controls: mail counts
+  as a domain only for a project that has a CONTACT with an address, because
+  almost every project has a name of four characters or more and the wider rule
+  would put a caveat on every answer the office gives whenever Gmail is down.
+
+  No backticks in this comment: it lives inside a template literal.
+*/
+console.log('\nand what it may conclude when it cannot read the mail (#172)')
+
+{
+  const slug = `mail-blind-${run}`
+  const K = (k: string): string => `
+    insert into probe (k, v) select ${lit(k)}, app.project_knowledge(
+      (select project_id from public.projects where slug = ${lit(slug)}))::text;`
+  const cover = (await one(`
+    begin;
+    create temporary table probe (k text, v text) on commit drop;
+    insert into public.projects (name, slug, status)
+    values (${lit(`Mail blind ${run}`)}, ${lit(slug)}, 'active');
+
+    -- Nothing here yet: a project with no correspondents at all.
+    ${K('no_contact')}
+
+    insert into public.contacts (project_id, name, email)
+    values ((select project_id from public.projects where slug = ${lit(slug)}),
+            'Priya Raman', 'priya@example.com');
+
+    -- The cache as it is, which is stale.
+    ${K('stale')}
+
+    -- And a cache that was read a minute ago.
+    insert into public.mail_messages
+      (message_id, thread_id, subject, from_name, from_address, to_count,
+       sent_at, excerpt, labels, has_attachments, unread, first_seen_at, last_seen_at)
+    values (${lit(`fixture-blind-${run}`)}, ${lit(`fixture-blind-${run}`)}, 'Anything',
+            'Someone', 'someone@example.com', 1, app.now_utc(), 'x', '{}', false, false,
+            app.now_utc(), app.now_utc());
+
+    ${K('fresh')}
+
+    /*
+      Every reading in one row, because the helper returns the LAST
+      statement's first row and three separate selects gave back only the
+      third. A temp table dropped on commit is the cheapest way to hold a
+      before and an after inside one rollback.
+
+      No backticks in this comment: it lives inside a template literal.
+    */
+    select
+      (select (v::jsonb) ->> 'blank' from probe where k = 'no_contact') as no_contact,
+      (select (v::jsonb) ->> 'blank' from probe where k = 'stale') as stale,
+      (select (v::jsonb) ->> 'complete' from probe where k = 'stale') as stale_complete,
+      (select (v::jsonb) ->> 'blank' from probe where k = 'fresh') as fresh,
+      (select (v::jsonb) ->> 'complete' from probe where k = 'fresh') as fresh_complete;
+    rollback;
+  `)) as Record<string, unknown> | undefined
+
+  const has = (v: unknown): boolean => String(v ?? '').includes('mail')
+  record(
+    'a stale mail cache is named as a gap, so an absence cannot be reported from it',
+    `blank=${String(cover?.stale)} complete=${String(cover?.stale_complete)}`,
+    has(cover?.stale) && String(cover?.stale_complete) === 'false',
+  )
+  record(
+    'CONTROL: and a cache read a minute ago is not a gap',
+    `blank=${String(cover?.fresh)} complete=${String(cover?.fresh_complete)}`,
+    !has(cover?.fresh) && String(cover?.fresh_complete) === 'true',
+  )
+  record(
+    'CONTROL: a project with no correspondents is never told the mail is missing',
+    `blank=${String(cover?.no_contact)}`,
+    !has(cover?.no_contact),
+  )
+}
+
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
