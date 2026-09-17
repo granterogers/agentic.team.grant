@@ -65,6 +65,19 @@ export interface Paused {
   readonly until?: Date
   /** After this, waiting is not worth it. */
   readonly expiresAt?: Date
+  /**
+   * What this pause is waiting to have approved, as the step describes it.
+   *
+   * REQUIRED when the reason is `awaiting_approval`, and the database refuses
+   * the pause without it. #263: *"Do not let the resumed worker regenerate a
+   * materially different action after Grant approved the earlier one."*
+   *
+   * The step decides what is material, because only the step knows. A
+   * timestamp inside a draft changes on every regeneration and means nothing;
+   * the recipient means everything. Pass the parts that must not change —
+   * `fingerprint()` turns them into the sha256 the pause stores.
+   */
+  readonly binds?: unknown
 }
 
 /** What a step hands to the steps after it. Operational state, never prose. */
@@ -193,10 +206,105 @@ export async function runSteps(
   return { kind: 'done', outcomes }
 }
 
+/**
+ * A stable sha256 of what a step is promising to do.
+ *
+ * Keys are sorted, so two objects that differ only in property order agree.
+ * Deliberately NOT a deep normaliser: a step that wants an array ignored
+ * should not pass it. Guessing which fields are material is how a check
+ * either refuses every resume or waves through a changed recipient.
+ */
+export async function fingerprint(action: unknown): Promise<string> {
+  const stable = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(stable)
+    if (v !== null && typeof v === 'object') {
+      return Object.fromEntries(
+        Object.entries(v as Record<string, unknown>)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, x]) => [k, stable(x)]),
+      )
+    }
+    return v
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(stable(action)))
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+export interface BindingVerdict {
+  readonly matched: boolean
+  /** False means nothing was ever approved, which is a handler bug, not a change. */
+  readonly approvedAnything: boolean
+  readonly why: string
+}
+
+/**
+ * Is the action this step is about to take the one that was approved?
+ *
+ * Called by a step AFTER a resume, before it acts. A mismatch is not an error
+ * to throw: the job parks for a person, because an action that changed while
+ * it was waiting needs looking at rather than sending.
+ */
+export async function approvalStillBinds(
+  db: SqlExecutor,
+  jobId: string,
+  action: unknown,
+): Promise<BindingVerdict> {
+  const fp = await fingerprint(action)
+  const { rows } = await db.execute(
+    `select app.approval_binds(${lit(jobId)}::uuid, ${lit(fp)}) as r`,
+  )
+  const raw = rows[0]?.r
+  const v = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>
+  return {
+    approvedAnything: v.approved_anything === true,
+    matched: v.matched === true,
+    why: String(v.why ?? 'it matches what was approved'),
+  }
+}
+
 /** Has somebody asked for this job to stop? */
 export async function stopRequested(db: SqlExecutor, jobId: string): Promise<boolean> {
   const { rows } = await db.execute(`select app.stop_requested(${lit(jobId)}::uuid) as r`)
   return rows[0]?.r === true
+}
+
+/**
+ * The credential a step needs, or a pause that says which one is missing.
+ *
+ * #263 lists `credential_required` among the reasons a job must be able to
+ * wait for, and the distinction it draws is the useful one: a job that cannot
+ * proceed because a secret is absent has not FAILED, it is waiting for a
+ * person to supply something. Failing would burn attempts and land it in a
+ * table Grant does not read; pausing puts it where he looks, naming the
+ * secret.
+ *
+ * Returns the value when it is there, and a `Paused` when it is not, so a
+ * step reads as `const got = await credential(...); if ('reason' in got)
+ * return { pause: got }`.
+ */
+export async function credential(
+  db: SqlExecutor,
+  name: string,
+  whatFor: string,
+): Promise<{ value: string } | Paused> {
+  const { rows } = await db.execute(
+    `select decrypted_secret as v from vault.decrypted_secrets where name = ${lit(name)}`,
+  )
+  const value = String((rows[0] as { v?: string } | undefined)?.v ?? '').trim()
+  if (value !== '') return { value }
+  return {
+    detail: `${whatFor} needs ${name}, and the vault does not have it`,
+    reason: 'credential_required',
+    /*
+      Resumable. A person adding the secret is exactly the condition, and the
+      tick does not wake this reason — `resumable_now` lists only the four
+      that wait on something other than a person — so it sits until the
+      credential arrives and somebody resumes it.
+    */
+    resumable: true,
+    resumeWhen: `Add ${name} in Settings, then resume this job and it will carry on from here.`,
+  }
 }
 
 /** Ask for a job to stop. It ends after its current step. */
@@ -208,9 +316,11 @@ export async function requestStop(db: SqlExecutor, jobId: string, who: string): 
 export async function pauseJob(db: SqlExecutor, jobId: string, pause: Paused): Promise<void> {
   const when = (d: Date | undefined): string =>
     d === undefined ? 'null' : `${lit(d.toISOString())}::timestamptz`
+  const binds = pause.binds === undefined ? null : await fingerprint(pause.binds)
   await db.execute(
     `select app.pause_job(${lit(jobId)}::uuid, ${lit(pause.reason)}, ${lit(pause.detail)},
                           ${lit(pause.resumeWhen)}, ${String(pause.resumable ?? true)},
-                          ${when(pause.until)}, ${when(pause.expiresAt)})`,
+                          ${when(pause.until)}, ${when(pause.expiresAt)},
+                          ${binds === null ? 'null' : lit(binds)})`,
   )
 }

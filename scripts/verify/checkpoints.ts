@@ -298,9 +298,16 @@ section = 'pausing, and what may resume on a tick'
     ${SETUP}
     create temp table r (k text, v jsonb) on commit drop;
 
+    /*
+      The eighth argument is the fingerprint of what is being approved (0457).
+      An approval pause without one is refused now, deliberately: an approval
+      that binds to nothing cannot stop a resumed worker doing something else.
+      This section predates that and asserted the weaker contract.
+    */
     insert into r select 'pause', app.pause_job(${JOB}, 'awaiting_approval',
       'It wants to publish the report and nobody has said yes.',
-      'Grant approves it on the Governance page.', true, null, null);
+      'Grant approves it on the Governance page.', true, null, null,
+      ${lit('c'.repeat(64))});
 
     select (select state::text from public.jobs where job_id = ${JOB}) as state,
            (select waiting_on from public.jobs where job_id = ${JOB}) as waiting_on,
@@ -456,6 +463,104 @@ section = 'and a job cancelled from a pause leaves nothing half-written'
     'CONTROL: and a cancelled job is never offered to a tick, open pause or not',
     Number(got.still_open) === 1,
     `${String(got.still_open)} pause(s) left as history`,
+  )
+}
+
+// ===========================================================================
+console.log('\nan approval binds to the action it approved')
+// ===========================================================================
+
+{
+  /*
+    #263's approval requirement, which is a safety property and not a nicety:
+    a resumed worker must not carry out a materially different action under an
+    approval given for the earlier one.
+
+    Two fingerprints, one approved. The suite asserts three separate sentences,
+    because they need three different responses: this is what was approved,
+    this is NOT what was approved, and nothing was ever approved. Collapsing
+    the last two would make a handler bug look like the invariant firing.
+  */
+  const APPROVED = 'a'.repeat(64)
+  const CHANGED = 'b'.repeat(64)
+
+  /*
+    The pause and the comparison are separate STATEMENTS.
+
+    `approval_binds` is STABLE, so inside one statement it reads the snapshot
+    taken before `pause_job` inserted anything and reports that nothing was
+    ever approved — which is indistinguishable from the feature not working.
+    CLAUDE.md records this from verify:browser this morning; a scratch table
+    carries the writer's answer forward because only the last select returns.
+  */
+  const got = await one(`
+    begin;
+    ${SETUP}
+    create temp table t (k text primary key, v jsonb) on commit drop;
+    insert into t values ('paused', app.pause_job(${JOB}, 'awaiting_approval',
+      'send the announcement', 'Grant approves it on the Governance page',
+      true, null, null, ${lit(APPROVED)}));
+    insert into t values ('same', app.approval_binds(${JOB}, ${lit(APPROVED)}));
+    insert into t values ('different', app.approval_binds(${JOB}, ${lit(CHANGED)}));
+    select (select v from t where k = 'paused') as paused,
+           (select v from t where k = 'same') as same,
+           (select v from t where k = 'different') as different;
+    rollback;`)
+
+  ok(
+    'a pause can bind to the exact action',
+    asJson(got.paused).ok === true,
+    String(asJson(got.paused).error ?? 'bound'),
+  )
+  ok('the action that was approved is recognised', asJson(got.same).matched === true)
+  ok(
+    'and one that changed while it waited is refused, with a reason a person can read',
+    asJson(got.different).matched === false &&
+      String(asJson(got.different).why ?? '').includes('not what was approved'),
+    String(asJson(got.different).why ?? '(it matched)').slice(0, 80),
+  )
+  ok(
+    'and a changed action is told apart from nothing having been approved',
+    asJson(got.different).approved_anything === true,
+    'approved_anything stays true, so a handler bug does not read as the rule firing',
+  )
+
+  const never = await one(`
+    begin;
+    ${SETUP}
+    select app.approval_binds(${JOB}, ${lit(APPROVED)}) as v;
+    rollback;`)
+  ok(
+    'CONTROL: a job nobody approved anything for says exactly that',
+    asJson(never.v).matched === false && asJson(never.v).approved_anything === false,
+    String(asJson(never.v).why ?? '').slice(0, 60),
+  )
+
+  const naked = await one(`
+    begin;
+    ${SETUP}
+    select app.pause_job(${JOB}, 'awaiting_approval', 'send it', 'Grant approves',
+                         true, null, null, null) as v;
+    rollback;`)
+  ok(
+    'an approval pause with nothing to bind to is refused outright',
+    String(asJson(naked.v).error ?? '').includes('bind to the exact action'),
+    String(asJson(naked.v).error ?? '(it was accepted)').slice(0, 70),
+  )
+  /*
+    The control for that refusal. A constraint can be tightened until it
+    refuses everything, and every check above would go on reading green.
+  */
+  const other = await one(`
+    begin;
+    ${SETUP}
+    select app.pause_job(${JOB}, 'rate_limited', 'the provider said slow down',
+                         'It tries again shortly', true, null, null, null) as v;
+    rollback;`)
+  ok(
+    'CONTROL: and a pause that is not an approval still needs nothing — a rate limit binds to no action',
+    asJson(other.v).ok === true,
+    String(asJson(other.v).error ?? 'accepted'),
   )
 }
 
