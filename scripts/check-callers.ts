@@ -119,7 +119,46 @@ const scriptCode = execSync("find scripts -type f -name '*.ts' -print0 | xargs -
   maxBuffer: 256 * 1024 * 1024,
 }).toString()
 
+/*
+  OPERATOR COMMANDS are callers. Verification harnesses are not (#272).
+
+  `scripts/` was excluded wholesale, on the reasoning that a caller there is a
+  capability Grant does not have. That is right about `scripts/verify/` — a
+  suite naming a function is the thing this check exists to disbelieve — and
+  wrong about the rest of it: `npm run check:leaks`, `npm run eval` and
+  `npm run purge:fixtures` are commands Grant runs, several of them listed in
+  CLAUDE.md's own "Asking the office about itself", and a capability he can
+  invoke by a documented command is one he has.
+
+  Derived from `package.json` rather than judged, so it cannot drift: a script
+  is an operator command when an npm script runs it and that script is not a
+  `verify:*` suite, a `poc:*` proof or the gate that runs them all. The strict
+  half is untouched — a function reachable ONLY from a suite still fails, which
+  is the shape all five of the original examples had.
+*/
+const HARNESS = /^(verify:|poc:|gate$|e2e)/
+const operatorFiles = new Set<string>()
+for (const [name, cmd] of Object.entries(
+  JSON.parse(readFileSync('package.json', 'utf8')).scripts as Record<string, string>,
+)) {
+  if (HARNESS.test(name)) continue
+  for (const m of cmd.matchAll(/(scripts\/[\w./-]+\.ts)/g)) operatorFiles.add(m[1] as string)
+}
+const operatorCode = [...operatorFiles]
+  .filter((f) => existsSync(f))
+  .map((f) => readFileSync(f, 'utf8'))
+  .join('\n')
+
 const named = (haystack: string, name: string): boolean => haystack.includes(name)
+
+/*
+  What counts as REACHED, in one place.
+
+  Application code, plus operator commands. Kept as one string rather than two
+  tests because every call site below asks the same question, and two of them
+  diverging is how a check starts disagreeing with its own report.
+*/
+const reachable = `${appCode}\n${operatorCode}`
 
 /*
   A public wrapper is the mouth of the app function it wraps, so an app
@@ -129,7 +168,7 @@ const named = (haystack: string, name: string): boolean => haystack.includes(nam
   helper chain look reached through itself.
 */
 const publicBodies = new Map(fns.filter((f) => f.schema === 'public').map((f) => [f.name, f.body]))
-const reachedPublic = new Set([...publicBodies.keys()].filter((n) => named(appCode, n)))
+const reachedPublic = new Set([...publicBodies.keys()].filter((n) => named(reachable, n)))
 
 /*
   A public wrapper over a reachable app function is itself reachable, and this
@@ -152,7 +191,7 @@ const reachedPublic = new Set([...publicBodies.keys()].filter((n) => named(appCo
   the pair #72 was actually about.
 */
 const reachedApp = new Set(
-  fns.filter((f) => f.schema === 'app' && named(appCode, f.name)).map((f) => f.name),
+  fns.filter((f) => f.schema === 'app' && named(reachable, f.name)).map((f) => f.name),
 )
 
 type Verdict = { fn: string; why: string }
@@ -161,7 +200,7 @@ const onlyTests: Verdict[] = []
 
 for (const f of fns) {
   const full = `${f.schema}.${f.name}`
-  if (named(appCode, f.name)) continue
+  if (named(reachable, f.name)) continue
   // Named by a public wrapper application code reaches.
   if (
     f.schema === 'app' &&
