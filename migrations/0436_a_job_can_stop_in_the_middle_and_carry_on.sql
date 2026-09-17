@@ -382,10 +382,22 @@ $function$;
 /*
   The paused jobs a tick may safely start again.
 
-  Only `scheduled_wait`, `rate_limited` and `provider_unavailable`: the others
-  are waiting on a person or a credential and retrying them on a timer is how a
-  pause becomes a spin. Expired pauses are excluded rather than resumed --
-  waiting stopped being worth it, and something should say so.
+  Four reasons, and `not_before` is what keeps them from spinning.
+
+  `scheduled_wait`, `rate_limited` and `provider_unavailable` are waiting on a
+  clock. `dependency_wait` is waiting on another JOB, and it belongs here for
+  the same reason: the thing it waits for changes without anybody typing
+  anything, so nothing else would ever wake it.
+
+  It was left out of the first version and the first live fan-in paid for it —
+  three specialists finished, the synthesis sat `paused` for ever, and the
+  answer Grant was waiting for was never written. The suite had not asked,
+  which is the actual defect: a resumable reason with no check is a reason
+  nobody will notice is missing.
+
+  Everything else is waiting on a PERSON or a CREDENTIAL, and retrying those on
+  a timer is how a pause becomes a spin. Expired pauses are excluded rather
+  than resumed -- waiting stopped being worth it, and something should say so.
 */
 create or replace function app.resumable_now()
 returns jsonb
@@ -401,7 +413,8 @@ as $function$
     join public.job_pauses p on p.job_id = j.job_id and p.resumed_at is null
    where j.state = 'paused'
      and p.resumable
-     and p.reason in ('scheduled_wait', 'rate_limited', 'provider_unavailable')
+     and p.reason in ('scheduled_wait', 'rate_limited', 'provider_unavailable',
+                      'dependency_wait')
      and (p.expires_at is null or p.expires_at > app.now_utc())
      and (j.not_before is null or j.not_before <= app.now_utc());
 $function$;

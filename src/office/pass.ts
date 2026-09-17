@@ -66,6 +66,7 @@ import { planHandler } from '../handlers/plan.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
+import { synthesiseHandler } from '../handlers/synthesise.ts'
 import { vaultExportHandler } from '../handlers/vault-export.ts'
 import type { Reviewer } from '../jobs/worker.ts'
 import { drain } from '../jobs/worker.ts'
@@ -409,6 +410,15 @@ export const buildPass = async (
       router: cannotThink ? null : new ProviderRouter(db, orKey),
       serviceKey,
     }),
+    /*
+      And the job that waits for several specialists and answers (#262).
+
+      Registered beside the rest because a branch is an ordinary job and so is
+      this: no orchestrator, no scheduler, nothing running between ticks. It
+      wakes, asks whether the branches are in, and pauses itself when they are
+      not.
+    */
+    synthesiseHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
     // Registered though its duty is off: the handler being absent is what made
     // 0133 seed the duty disabled in the first place, and a handler nobody can
     // reach is a handler nobody finds out is broken. Switching the duty on is

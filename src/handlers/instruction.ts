@@ -1775,6 +1775,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           CLAUDE.md gives: a swallowed error on a write nobody reads back is
           indistinguishable from a feature that was never built.
       */
+      const branchesStarted: { agent: string; jobId: string }[] = []
       for (const other of who.alsoConvened) {
         const spawned = await deps.db
           .execute(`
@@ -1824,6 +1825,54 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               ${lit(`convened alongside ${who.slug}: ${who.reason}`.slice(0, 400))}, 0)
           `)
           .catch(() => undefined)
+        branchesStarted.push({ agent: other, jobId: row.id })
+      }
+
+      /*
+        And something that WAITS for them and answers (#262).
+
+        The office has fanned out for weeks — the loop above is real
+        concurrency, one child job each, each answering in their own name. What
+        it has never had is the other half: nothing waited for those children
+        and nothing drew them together, so Claire answered from her own reading
+        while three specialists were still working and their findings landed on
+        the dashboard separately.
+
+        Registered rather than re-created: `app.fan_in_over` takes the jobs that
+        already exist, which is why the loop above is untouched. Two or more,
+        because a fan-in over one branch is just that branch.
+
+        Never fatal. A group that could not be registered costs the synthesis
+        and leaves every specialist's own answer exactly where it already was.
+      */
+      if (branchesStarted.length >= 2) {
+        await deps.db
+          .execute(`
+            select app.fan_in_over(
+              ${lit(job.jobId)}::uuid,
+              ${lit(instruction.slice(0, 1_000))},
+              ${lit(
+                JSON.stringify(
+                  branchesStarted.map((b) => ({
+                    agent: b.agent,
+                    job_id: b.jobId,
+                    purpose: `what ${b.agent} makes of it`,
+                  })),
+                ),
+              )}::jsonb,
+              'office.synthesise',
+              app.now_utc() + interval '20 minutes')
+          `)
+          .catch(async (error: unknown) => {
+            await deps.db
+              .execute(`
+                select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                  'draw several answers together', ${lit(who.slug)},
+                  ${lit(`could not set up the fan-in: ${String((error as Error).message).slice(0, 140)}`)},
+                  ${lit(instruction.slice(0, 280))})`)
+              .catch(() => undefined)
+            return undefined
+          })
       }
 
       /*

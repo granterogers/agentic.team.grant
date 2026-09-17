@@ -375,6 +375,44 @@ section = 'pausing, and what may resume on a tick'
            (select state::text from public.jobs where job_id = ${JOB}) as state;
     rollback;`)
 
+  {
+    /*
+    Every resumable reason gets a check, because the first live fan-in found
+    the one that did not have one.
+
+    `dependency_wait` was left out of `resumable_now`, so a synthesis whose
+    three specialists had all finished sat paused for eighteen minutes and the
+    answer was never written. The suite had not asked. A reason that nothing
+    wakes is indistinguishable from a reason nobody uses, and the way to stop
+    that recurring is to assert the LIST rather than an instance of it.
+  */
+    const got = await one(`
+    begin;
+    ${SETUP}
+    create temp table r (k text, v jsonb) on commit drop;
+    insert into r select reason, app.pause_job(
+      (select job_id from public.jobs where idempotency_key = ${lit(`ckpt-${run}`)}),
+      reason, 'x', 'y', true, app.now_utc() - interval '1 minute', null)
+      from (values ('scheduled_wait'), ('rate_limited'), ('provider_unavailable'),
+                   ('dependency_wait')) w(reason)
+     where false;
+
+    select coalesce(jsonb_agg(w.reason order by w.reason), '[]'::jsonb) as wakeable
+      from (values ('scheduled_wait'), ('rate_limited'), ('provider_unavailable'),
+                   ('dependency_wait')) w(reason)
+     where exists (
+       select 1 from pg_get_functiondef('app.resumable_now()'::regprocedure) d(t)
+        where d.t like '%' || w.reason || '%');
+    rollback;`)
+
+    const wakeable = (asJson({ v: got.wakeable }).v ?? []) as string[]
+    ok(
+      'every reason that waits on something other than a person can be woken',
+      wakeable.length === 4,
+      wakeable.join(', '),
+    )
+  }
+
   ok(
     'a pause marked not-resumable refuses to be resumed automatically',
     String(got.refused ?? '').includes('needs a person') && got.state === 'paused',
