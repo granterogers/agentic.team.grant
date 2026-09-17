@@ -2371,6 +2371,77 @@ Each of these cost real time. They are here so they cost it once.
   re-enabling it — honest for a row minutes old with nothing depending on it,
   and not a thing to do twice. #210's rule applies to a DRIVE exactly as it
   applies to a suite: wrap the call, not the assertion.
+- **A suite can take its OWN earlier work, and the scope cannot stop it.**
+  #184's `requested_by` scope keeps other suites out. It does not stop
+  `verify:recovers` dequeuing the job IT parked in `retrying` two sections
+  earlier — the deployed worker calls `requeue_retrying` on every tick, so the
+  parked job comes back as `queued` and a later `mine()` takes it. The stub ran
+  against the wrong job, the output landed on the wrong job, and two checks
+  described a job nothing had run, while the dequeue check two lines above said
+  "dequeued". Fixed at BOTH ends, because either alone leaves the class open:
+  ask for a SPECIFIC job and settle anything else that arrives (a recurrence is
+  then one named line), and settle a deliberately-parked job the moment its
+  section has asserted it (which removes the race rather than detecting it).
+- **A function you are only patching must be spliced from its LIVE definition,
+  and this file already said so.** `app.pause_job` was rewritten from memory
+  for 0457 and lost four behaviours in one go: `waiting_on` took the reason
+  instead of the sentence a person reads, `state_reason` lost its prefix, the
+  already-paused early return went, and **the job kept its LEASE** — so every
+  paused job would have looked claimed until the lease expired. One suite check
+  caught it. `pg_get_functiondef`, then change the one thing.
+- **An `npm run` command Grant uses is a CALLER; a verify suite is not.**
+  `check:callers` excluded all of `scripts/`, reasoning that a caller there is
+  a capability he does not have. True of `scripts/verify/` and false of the
+  rest — `check:leaks`, `eval` and `purge:fixtures` are in CLAUDE.md's own
+  "Asking the office about itself". Eight baseline entries were reachable all
+  along. The distinction is derived from `package.json` (an npm script that is
+  not `verify:*`, `poc:*` or the gate), so it cannot drift, and the strict half
+  is untouched.
+- **Drop the WRAPPER first, and the check will tell you whether the function is
+  dead.** Four functions of a superseded task API looked unused and "looked"
+  is not evidence. The three public wrappers are certainly unused — PostgREST
+  is the only thing that can reach a wrapper — so those went first, and
+  `check:callers` then named `app.project_tasks` and `app.set_task_state` as
+  reached by nothing at all. That is proof produced by the check rather than by
+  reading, and it is the order to do it in.
+- **`drop function if exists` with the wrong argument list matches nothing and
+  says nothing.** `public.add_task` was dropped with six arguments and takes
+  nine, so the migration applied cleanly and removed nothing — the same shape
+  as 0350's Telegram branch that has never matched a row. Read
+  `pg_get_function_identity_arguments` rather than remembering.
+- **A word-boundary match cannot see inside a snake_case identifier, and that
+  hid a security defect for the life of the feature.** `app.guess_reach`
+  concatenated a tool's name and description and looked for `\mdelete\M`;
+  `_` is a word character to Postgres, so `delete_everything` is ONE word and
+  the destructive pattern could never match a name. **Every classification the
+  office ever made came from the DESCRIPTION** — the half a hostile MCP server
+  writes. `delete_contact` only looked right because its description happened
+  to say "Permanently remove a contact". Split separators before matching, and
+  apply 0304's asymmetry to authority: the NAME is evidence, the DESCRIPTION is
+  a claim, and a claim may only ever ESCALATE.
+- **A suite made only of refusals passes against a system that refuses
+  everything.** `verify:connectors` proved discovery grants nothing, offering
+  grants nothing and a disconnected provider grants nothing — and never once
+  proved that a granted tool WORKS. Same shape as the judge that marks every
+  answer poor scoring perfectly on a corpus of poor answers. Every negative
+  needs its positive.
+- **When there is no natural asymmetry, the test has to MAKE one.** #262's
+  "permissions never union" is unmeasurable across today's roster, because all
+  eight agents hold the same sixteen tools — a `staff_may_use` check would pass
+  on a system where everybody can do everything. A fixture tool granted to one
+  branch agent inside a rollback is what makes the question answerable.
+- **The office is its own controlled third party.** #265 asked for a
+  disposable MCP provider to discover against and the answer was already in the
+  repository: `supabase/functions/mcp` is a real MCP server with real tools and
+  a static bearer. A token minted for the run, used across the network and
+  revoked in teardown is a genuinely real integration test that costs nothing.
+- **A gateway section no page reads is the same defect as a capability no code
+  calls, and `check:callers` cannot see it.** The trigger framework (#264) and
+  the connector inventory (#265) were both built, verified and completely
+  invisible — sections on `hq-api` that nothing ever fetched. The check walks
+  DATABASE functions; a section is a key in an object. When a feature ends in a
+  gateway section, grep `web/studio` for `read('<name>')` before believing
+  anybody can see it.
 - **A resumable pause reason with no check is one nobody notices is
   missing.** `dependency_wait` was left out of `app.resumable_now`, so the
   first live fan-in had three specialists finish and the synthesis sat `paused`
