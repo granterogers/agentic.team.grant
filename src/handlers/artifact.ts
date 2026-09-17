@@ -40,14 +40,9 @@ import { type Block, type Report, renderReport } from '../artifacts/report.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
 import { validatePdf } from '../artifacts/validate.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
-import {
-  contextBlock,
-  correspondence,
-  mailBlock,
-  retrieve,
-  sourceRefs,
-} from '../knowledge/retrieval.ts'
+import { contextBlock, correspondence, mailBlock, retrieve } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { scrub } from '../text/scrub.ts'
 
@@ -239,43 +234,205 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         ).rows[0] as { pinned_config?: Record<string, unknown> } | undefined
       )?.pinned_config
       const brief = String(payload?.brief ?? payload?.instruction ?? '').trim()
+      /*
+        Captured once, because a closure loses the narrowing.
+
+        `job.projectId` is `string | null` and the guard above proves it is
+        not null — but the step closures below run later, so TypeScript has to
+        be told again. A const says it once rather than a non-null assertion
+        saying it four times.
+      */
+      const projectId: string = job.projectId
 
       /*
-        The material, through the unified retrieval layer (#258's last section).
+        Run as checkpointed steps (#263).
 
-        Grant does not say whether the source is in NotebookLM, Notion, Drive
-        or his mail, and should not have to: `retrieve` searches the project's
-        index whatever fed it, and `correspondence` adds the messages that
-        belong to the project. Two calls rather than one because a document and
-        an email are different kinds of evidence and #172 keeps them apart on
-        purpose.
+        Three of them, and the middle one is why: drafting spends a model call
+        over eight documents, and a worker restart, a deployment or a 150-second
+        wall clock between drafting and storing would otherwise buy it twice.
+        With a checkpoint the second attempt reads the draft back and goes
+        straight to rendering.
+
+        Each step declares what it does OUTSIDE the office before it does it,
+        because that declaration is what a later attempt reads:
+
+          gather  none  -- two reads
+          draft   none  -- a model call, expensive and repeatable
+          store   local -- writes bytes and a row, and BOTH are idempotent:
+                           the storage path is keyed on this job id with
+                           upsert, and `record_file_document` returns the
+                           existing row for a path it already has. Calling it
+                           `external` would park a job that is perfectly safe
+                           to retry, which is the cautious mistake rather than
+                           the free one.
+
+        Rendering is not a step. It is deterministic from the draft and takes
+        milliseconds, so checkpointing it would store a megabyte to save
+        nothing.
       */
-      const hits = await retrieve(db, brief, job.projectId, 8)
-      const mail = await correspondence(db, job.projectId, brief, 4)
-      if (hits.length === 0 && mail.length === 0) {
+      const run = await runSteps(db, job.jobId, 'artifact.report@1', [
+        {
+          name: 'gather',
+          run: async () => {
+            const found = await retrieve(db, brief, projectId, 8)
+            const post = await correspondence(db, projectId, brief, 4)
+            return {
+              outcome: {
+                /*
+                  References, not contents. The Issue asks for "safe tool
+                  inputs/outputs or references to them" and a document's text
+                  is the one thing here that is already stored elsewhere under
+                  its own id — copying it into a checkpoint would put the same
+                  bytes in two places and make the row enormous.
+                */
+                documents: found.map((h) => ({
+                  connector: h.connector,
+                  id: h.documentId,
+                  title: h.title,
+                })),
+                mail: post.map((m) => ({ id: m.messageId, subject: m.subject })),
+              },
+            }
+          },
+        },
+        {
+          name: 'draft',
+          run: async (done) => {
+            const documents = (done.gather?.documents ?? []) as {
+              connector: string
+              id: string
+              title: string
+            }[]
+            const mail = (done.gather?.mail ?? []) as { id: string; subject: string }[]
+            if (documents.length === 0 && mail.length === 0) {
+              return {
+                outcome: { nothing: true },
+              }
+            }
+            /*
+              Re-read by id rather than carrying the text through the
+              checkpoint. On a first run this is a second read of documents
+              `gather` just had, which is a few milliseconds against a model
+              call — and on a resume it is the only way the text is available
+              at all.
+            */
+            const hits = await retrieve(db, brief, projectId, 8)
+            const post = await correspondence(db, projectId, brief, 4)
+            const completion = await router.complete({
+              correlationId: job.correlationId,
+              jobId: job.jobId,
+              maxTokens: 6_000,
+              messages: [
+                { content: BRIEF, role: 'system' },
+                {
+                  content:
+                    `What was asked for: ${brief}\n\n` +
+                    `${contextBlock(hits, 40_000)}\n\n${mailBlock(post)}`,
+                  role: 'user',
+                },
+              ],
+            })
+            const read = readReport(completion.content)
+            return {
+              outcome: {
+                blocks: read?.blocks ?? [],
+                model: completion.model,
+                title: read?.title ?? '',
+                unreadable: read === null,
+              },
+            }
+          },
+        },
+        {
+          name: 'store',
+          effect: 'local',
+          run: async (done) => {
+            const draft = done.draft ?? {}
+            if (draft.nothing === true || draft.unreadable === true) {
+              return { outcome: { skipped: true } }
+            }
+            const sources = [
+              ...(
+                (done.gather?.documents ?? []) as { connector: string; id: string; title: string }[]
+              ).map((d) => ({ label: d.title, ref: `${d.connector}:${d.id}` })),
+              ...((done.gather?.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
+                label: m.subject,
+                ref: `mail:${m.id}`,
+              })),
+            ]
+            const report: Report = {
+              author: 'Agentic Team',
+              blocks: draft.blocks as Block[],
+              created: new Date(),
+              sources,
+              subtitle: brief.slice(0, 400),
+              title: String(draft.title ?? 'Report'),
+            }
+            const { bytes, problems } = renderReport(report)
+            const verdict = validatePdf(bytes, { layoutProblems: problems })
+            if (!verdict.ok) {
+              return { outcome: { failed: verdict.problems.slice(0, 2) } }
+            }
+            const kept = await storeArtifact(
+              db,
+              { projectRef: deps.projectRef, serviceKey: deps.serviceKey },
+              {
+                bytes,
+                extension: 'pdf',
+                jobId: job.jobId,
+                mime: 'application/pdf',
+                producedBy: String(payload?.by ?? 'chief-of-staff'),
+                projectId,
+                title: report.title,
+              },
+            )
+            if (!kept.ok) {
+              return { outcome: { pages: verdict.pages, stored: false, why: kept.error } }
+            }
+            return {
+              effectRef: `document:${kept.documentId ?? ''}`,
+              outcome: {
+                documentId: kept.documentId,
+                pages: verdict.pages,
+                sources: sources.length,
+                stored: true,
+                title: report.title,
+              },
+            }
+          },
+        },
+      ])
+
+      if (run.kind === 'paused') {
+        /*
+          A pause is an outcome, not a failure.
+
+          Returned as an ordinary answer so the attempt is not burned and the
+          job sits in `paused` with a reason a person can read, rather than
+          retrying into `failed` while it waits.
+        */
+        return {
+          ...base,
+          announce: false,
+          body:
+            `I stopped part way through the report, at "${run.at}": ${run.pause.detail} ` +
+            `${run.pause.resumeWhen}`,
+          evidence: 'verified',
+          path: 'deterministic_retrieval',
+        }
+      }
+
+      const gathered = run.outcomes.gather ?? {}
+      const drafted = run.outcomes.draft ?? {}
+      const kept = run.outcomes.store ?? {}
+
+      if (drafted.nothing === true) {
         return say(
           'I have nothing read in on this project to write a report FROM. Attach a ' +
             'source or point me at a document and I will start. I have not made a file.',
         )
       }
-
-      const completion = await router.complete({
-        correlationId: job.correlationId,
-        jobId: job.jobId,
-        maxTokens: 6_000,
-        messages: [
-          { content: BRIEF, role: 'system' },
-          {
-            content:
-              `What was asked for: ${brief}\n\n` +
-              `${contextBlock(hits, 40_000)}\n\n${mailBlock(mail)}`,
-            role: 'user',
-          },
-        ],
-      })
-
-      const drafted = readReport(completion.content)
-      if (drafted === null) {
+      if (drafted.unreadable === true) {
         /*
           A reply that could not be read is not an empty report.
 
@@ -288,48 +445,20 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           body:
             'I drafted the report and could not turn what came back into a document. ' +
             'Nothing was created and nothing was sent. Ask again and I will retry.',
-          model: completion.model,
+          model: String(drafted.model ?? '') || null,
         }
       }
-
-      const report: Report = {
-        author: 'Agentic Team',
-        blocks: drafted.blocks,
-        created: new Date(),
-        sources: [
-          ...hits.map((h) => ({ label: h.title, ref: `${h.connector}:${h.documentId}` })),
-          ...mail.map((m) => ({ label: m.subject, ref: `mail:${m.messageId}` })),
-        ],
-        subtitle: brief.slice(0, 400),
-        title: drafted.title,
-      }
-      const { bytes, problems } = renderReport(report)
-      const verdict = validatePdf(bytes, { layoutProblems: problems })
-      if (!verdict.ok) {
+      if (Array.isArray(kept.failed)) {
         return {
           ...base,
           body:
             'I wrote the report and the file it produced did not pass its own checks, so ' +
-            `I have not sent it: ${verdict.problems.slice(0, 2).join('; ')}. Nothing was ` +
+            `I have not sent it: ${(kept.failed as string[]).join('; ')}. Nothing was ` +
             'stored and nothing was delivered.',
-          model: completion.model,
+          model: String(drafted.model ?? '') || null,
         }
       }
-
-      const stored = await storeArtifact(
-        db,
-        { projectRef: deps.projectRef, serviceKey: deps.serviceKey },
-        {
-          bytes,
-          extension: 'pdf',
-          jobId: job.jobId,
-          mime: 'application/pdf',
-          producedBy: String(payload?.by ?? 'chief-of-staff'),
-          projectId: job.projectId,
-          title: report.title,
-        },
-      )
-      if (!stored.ok) {
+      if (kept.stored !== true) {
         /*
           Written, validated, and not kept. Said in exactly those words,
           because "I could not create the report" would be false and the
@@ -338,12 +467,39 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
         return {
           ...base,
           body:
-            `I wrote “${report.title}” — ${String(verdict.pages)} pages — and could ` +
-            `not store it: ${String(stored.error)}. It is not in the project and I have not ` +
-            'sent it, so ask again once that is fixed rather than assuming it is there.',
-          model: completion.model,
+            `I wrote “${String(drafted.title ?? 'the report')}” and could not store it: ` +
+            `${String(kept.why ?? 'storage refused it')}. It is not in the project and I ` +
+            'have not sent it, so ask again once that is fixed rather than assuming it is there.',
+          model: String(drafted.model ?? '') || null,
         }
       }
+
+      /*
+        Re-rendered for the delivery, because bytes do not go in a checkpoint.
+
+        On a first run this is the same milliseconds the step already spent; on
+        a RESUME it is what lets a job that stored the file yesterday still
+        attach it today without asking the model again. The alternative —
+        reading the object back out of Storage — is a network round trip to
+        recover something that is deterministic from the draft.
+      */
+      const finalReport: Report = {
+        author: 'Agentic Team',
+        blocks: drafted.blocks as Block[],
+        created: new Date(),
+        sources: [
+          ...((gathered.documents ?? []) as { connector: string; id: string; title: string }[]).map(
+            (d) => ({ label: d.title, ref: `${d.connector}:${d.id}` }),
+          ),
+          ...((gathered.mail ?? []) as { id: string; subject: string }[]).map((m) => ({
+            label: m.subject,
+            ref: `mail:${m.id}`,
+          })),
+        ],
+        subtitle: brief.slice(0, 400),
+        title: String(drafted.title ?? 'Report'),
+      }
+      const again = renderReport(finalReport)
 
       return {
         ...base,
@@ -355,18 +511,18 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           and a message about the file.
         */
         attachFile: {
-          bytes,
-          filename: filenameFor(report.title, 'pdf'),
+          bytes: again.bytes,
+          filename: filenameFor(finalReport.title, 'pdf'),
           mime: 'application/pdf',
         },
         body:
-          `${report.title} — ${String(verdict.pages)} pages, from ${String(
-            report.sources.length,
+          `${finalReport.title} — ${String(kept.pages)} pages, from ${String(
+            finalReport.sources.length,
           )} source(s). It is in the project’s documents as well, so you can open it ` +
           'from the dashboard or ask me to send it anywhere else.',
         evidence: 'verified',
-        model: completion.model,
-        sources: [...sourceRefs(hits), ...mail.map((m) => `mail:${m.messageId} ${m.subject}`)],
+        model: String(drafted.model ?? '') || null,
+        sources: finalReport.sources.map((x) => `${x.ref} ${x.label}`),
       }
     },
   }

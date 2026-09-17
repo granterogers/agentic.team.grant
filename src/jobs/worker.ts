@@ -417,6 +417,37 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
   // joining them. The whole crash-recovery story was a sweep to nowhere.
   await db.execute('select app.requeue_retrying()')
 
+  /*
+    And the jobs that stopped ON PURPOSE and are now free to go on (#263).
+
+    A pause is not a stall — nothing is holding a lease and recovery would not
+    look at it — so it needs its own line, and without one a job that paused
+    for a rate limit would wait for ever. `app.resumable_now` is deliberately
+    narrow: only a clock, a rate limit or a provider outage, because everything
+    else is waiting on a person and retrying those on a timer turns a pause
+    into a spin.
+
+    Here rather than in a duty for the same reason recovery is: a worker
+    starting is exactly when "something was interrupted" is most likely true,
+    and this costs one query.
+  */
+  const ready = (
+    await db.execute(
+      `select (x ->> 'job_id') as job_id, (x ->> 'reason') as reason
+         from jsonb_array_elements(app.resumable_now()) x`,
+    )
+  ).rows as { job_id: string; reason: string }[]
+  for (const paused of ready) {
+    await db
+      .execute(
+        `select app.resume_job('${paused.job_id}'::uuid,
+                               'the wait it was recorded against is over')`,
+      )
+      // One job that refuses to resume must not stop the others, and the
+      // refusal is already recorded on the pause row.
+      .catch(() => undefined)
+  }
+
   return rows.map((r) => ({
     jobId: String(r.job_id),
     fromState: String(r.from_state),

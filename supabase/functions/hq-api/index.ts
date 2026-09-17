@@ -253,6 +253,18 @@ const SECTIONS: Readonly<
   */
   project_artifacts: { fn: 'project_artifacts', arg: 'p_project' },
   /*
+    How far a job got, and why it stopped (#263).
+
+    Takes a JOB id rather than a project, which is why it is its own section
+    and not part of a project payload: the question is asked about one piece of
+    work, usually because it is taking longer than expected.
+
+    It returns the steps and the pause, and deliberately nothing about
+    reasoning — the Issue says "do not expose private reasoning traces" and the
+    function that serves this holds none.
+  */
+  job_progress: { fn: 'job_progress', arg: 'p_job' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the

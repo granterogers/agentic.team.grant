@@ -433,5 +433,6 @@
   "0432_correspondence_belongs_to_a_project_without_a_link_table.sql": "07f4bd21cd29c818628393b10302d9aec99530449b9645e61079a9b2e4cf680b",
   "0433_mail_is_a_domain_the_office_can_be_blind_to.sql": "b4e6cb06588bb66692ff3e0d552d98b883c6e5ef980e76c4c8de04aa4bb9b24e",
   "0434_searching_the_mail_with_a_question_rather_than_a_phrase.sql": "4f4eaa1baf5bd6164b4a3741563cfbd4be8770f0e4ce36fe0f3e00546cb3de42",
-  "0435_a_document_you_discard_is_actually_discarded.sql": "acfc8d64c09601fe1c5ff208796496c571915a077c8e9acb9d22c114cd9b7a30"
+  "0435_a_document_you_discard_is_actually_discarded.sql": "acfc8d64c09601fe1c5ff208796496c571915a077c8e9acb9d22c114cd9b7a30",
+  "0436_a_job_can_stop_in_the_middle_and_carry_on.sql": "93fbcaf0f7033d79d521997a4d85808c38c41363358185e2c8e9f17d3fb96914"
 }
