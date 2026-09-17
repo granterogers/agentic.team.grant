@@ -110,10 +110,41 @@ the git log. A unit is finished when it is committed AND its issue is updated.
   nothing serialises the branches, and a single-domain request cannot fan out.
   Plus a check on the branch ceiling that reads the setting rather than the
   number. verify:parallel 19/19 -> 29/29.
-- **NEXT:** #257's two named boxes (Drive rename/delete reconciliation, the
-  end-to-end Telegram regression), then #133 and #41. #260/#258/#172 each have
-  named remaining boxes in the table below; #135/#16/#261 wait on a credential
-  or a cost decision.
+- **#257 advanced** — a real defect: a file renamed at the SOURCE kept its old
+  title for ever, because `record_file_document` returned `already_there` and
+  touched nothing. 0459 remembers what the source last called it, so an
+  upstream rename applies unless Grant renamed it himself. Two boxes left and
+  one of them is a PRODUCT DECISION (below).
+
+### WHERE THIS RUN ENDED — start here after a compaction
+
+**Five issues closed: #273, #263, #264, #265, #262.** Nineteen open became
+fourteen. Every close carries its checklist box by box in a comment on the
+Issue itself; read that rather than reconstructing it.
+
+**The state of the signal.** `check:callers` is green at **15**, down from 40
+at #272's title. The gate was 15/22 when this run started and the three reds
+were: verify:recovers (fixed, #273), check:leaks (fixture debris, swept) and
+check:callers (mid-edit). `verify:routing-breadth` varies with the provider
+and now SAYS which kind of miss it had.
+
+**The next autonomous action, exactly.** Take #133 (*"Nothing replays real
+history against a change"*) — it is testing infrastructure that makes every
+other change safer, it is entirely local, and it needs no credential and no
+model. After that, #41.
+
+**Do NOT start these without Grant:**
+
+| | |
+|---|---|
+| #257's deletion policy | a file vanishing from Drive is not the same event as Grant wanting it gone. Delete / archive-and-keep-searchable / archive-and-hide have genuinely different consequences for a shared folder he does not control. One sentence from him settles it. |
+| #257's Telegram regression | needs `TELEGRAM_CHIEF_BOT_TOKEN` in the environment. This session resolves secrets from the Vault rather than materialising them, correctly. |
+| #135 / #16 | `browser.cloudflare_account` and `browser.cloudflare_token`. Free, needs a Cloudflare account in his name. |
+| #261 | the only genuinely paid question. Priced in the assessment; nothing enabled. |
+| #18, #213, #270 | the three human-blocked, recorded above. |
+
+**#259 is the largest unstarted capability** and is self-contained; it is the
+right thing to begin when the testing work above is done.
 
 ---
 
