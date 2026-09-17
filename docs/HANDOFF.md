@@ -9,6 +9,28 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## State as of 2026-09-17 (late) — the twelve-hour capability run
+>
+> Started from `68b7958`. Grant's three reserved product decisions are made and
+> recorded (#257 archive-and-hide, #258 signed links, #261 no paid compute);
+> **do not ask them again.**
+>
+> | | |
+> |---|---|
+> | Tests | **1,683 passing** · migrations **471** · gate **30 suites** |
+> | Closed | **#133** (`npm run replay` + `verify:judge`, both controls proved) · **#257** (one index, two connectors, `verify:unified` 10/10) |
+> | Advanced | #258 (signed-link delivery + `verify:artifact` 12/12; one live Slack round trip left) · #172 (`mail_awaiting`) · #41 (cancellation closed, `verify:stop` 13/13) · #276 (two of 27, `verify:review` 17/17) |
+> | New checks | **`check:pressable`** — a gateway action with no control is #72 one layer up; it found 27, now 25 |
+> | New suites | `verify:judge` · `verify:unified` · `verify:artifact` · `verify:stop` · `verify:review` |
+> | ADR | **0040** — an upstream deletion archives and hides; nothing is destroyed and restoration is a path |
+>
+> **The three worth remembering.** A judge that scores twice and subtracts
+> cannot see a sabotaged run — it compares now, asked both ways. A replay could
+> deliver to Grant through the children it spawned, and two migrations were
+> needed because the worker writes the announce decision back. And
+> `app.awaiting_review` had never returned a row in its life: it filtered a
+> state nothing writes, in front of two buttons nobody had.
+>
 > ## State as of 2026-09-17 — the twelve-hour backlog campaign
 >
 > Grant: *"please continue until all open issues are closed .. to my count

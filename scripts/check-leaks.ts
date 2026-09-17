@@ -274,6 +274,25 @@ const piles = await db.execute(`
     */
     (select count(*) from jsonb_array_elements((app.hq_team())->'staff') x
       where coalesce(x->>'slug', '') ~ '^(fixture|verify|probe)-') as harness_on_team,
+    /*
+      Harness tools in the registry, which reach every prompt (0472's evening).
+
+      No backticks in this comment: it lives inside a template literal, and one
+      here ends the string -- the trap this file already carries once, forty
+      lines above.
+
+      capabilityBrief is built from tool_permissions and is prepended to EVERY
+      answer. Three fixture tools left behind by teardowns that died on a 429
+      pushed it to 4,118 characters against the 4,000 ceiling that
+      verify:capability has asserted all along -- so harness debris was not
+      merely sitting in a table, it was in front of the model on every real
+      turn, and the suite that would have said so is not in the gate.
+
+      A property, not a count: no tool whose name is a harness name. The real
+      registry is twenty-six and will grow.
+    */
+    (select count(*) from public.tool_permissions
+      where tool ~ '^(verification|fixture|probe|verify)[._-]') as harness_tools,
     (select count(*) from public.staff where is_fixture and not active) as retired_fixture_staff
 `)
 const pile = (piles.rows[0] ?? {}) as Record<string, number>
@@ -299,6 +318,12 @@ if (Number(pile.retired_fixture_staff ?? 0) > 0) {
       'npm run purge:fixtures -- --go',
   )
 }
+if (Number(pile.harness_tools ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.harness_tools)} harness tool(s) in tool_permissions — they are in ` +
+      'capabilityBrief, which goes in front of every answer',
+  )
+}
 if (Number(pile.probe_providers ?? 0) > 0) {
   noisy.push(
     `${String(pile.probe_providers)} probe provider(s) in provider_health — a circuit ` +
@@ -309,6 +334,7 @@ console.log(
   `\n  lessons on the Governance page: ${String(pile.live_lessons)} · ` +
     `fixture tasks: ${String(pile.fixture_tasks)} · ` +
     `probe providers: ${String(pile.probe_providers)} · ` +
+    `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
 if (noisy.length > 0) {

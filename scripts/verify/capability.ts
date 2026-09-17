@@ -546,6 +546,60 @@ if (apiToken === '') {
   )
 
   /*
+    The ledger, from BOTH doors (0472).
+
+    `tool.granted` and `tool.revoked` were written only by the request path.
+    The team page's checkbox — `staff_tool_set`, the control Grant actually
+    uses — inserted or deleted the grant and recorded nothing, so half of every
+    capability change was missing from the audit trail, and the missing half is
+    the half a person performed by hand.
+
+    Counted ACROSS the press rather than read afterwards: a count that was
+    already non-zero proves nothing.
+  */
+  const eventsFor = async (kind: string): Promise<number> =>
+    Number(
+      (
+        (
+          await db.execute(
+            `select count(*)::int as n from public.events
+              where action_type = ${lit(kind)} and tool_used = ${lit(GRANT)}`,
+          )
+        ).rows[0] as { n: number }
+      ).n,
+    )
+  check(
+    'and taking it back is written down, in the words the request path uses',
+    `${String(await eventsFor('tool.revoked'))} tool.revoked row(s) naming it`,
+    (await eventsFor('tool.revoked')) > 0,
+  )
+
+  const grantedBefore = await eventsFor('tool.granted')
+  const ticked = await post('staff_tool_set', { p_slug: WHO, p_tool: GRANT, p_granted: true })
+  const grantedAfter = await eventsFor('tool.granted')
+  check(
+    'the TEAM PAGE checkbox is written down too, and it never was',
+    `http ${String(ticked.status)} — ${String(grantedBefore)} → ${String(grantedAfter)}`,
+    ticked.status === 200 && grantedAfter === grantedBefore + 1,
+  )
+
+  /*
+    CONTROL: an unchanged tick records nothing.
+
+    Ticking a box that is already ticked is not a grant, and a ledger that says
+    it is teaches whoever reads it to skim — the cost this repository has
+    already paid for report lines that state impossibilities.
+  */
+  const again = await post('staff_tool_set', { p_slug: WHO, p_tool: GRANT, p_granted: true })
+  const grantedTwice = await eventsFor('tool.granted')
+  check(
+    'CONTROL: ticking a box that is already ticked records nothing',
+    `http ${String(again.status)} — still ${String(grantedTwice)}`,
+    again.status === 200 && grantedTwice === grantedAfter,
+  )
+  await post('staff_tool_set', { p_slug: WHO, p_tool: GRANT, p_granted: false })
+
+  /*
     CONTROL. The three actions must be behind the token like every other write,
     and a suite that only ever sends a valid one cannot tell an endpoint that
     checks from an endpoint that does not.

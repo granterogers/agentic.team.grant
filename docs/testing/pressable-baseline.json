@@ -3,7 +3,7 @@
   "why": {
     "action:document_tag": "MISSING CONTROL, and the least urgent of the three: tagging is organisation rather than a decision Grant is blocked on.",
     "action:project_unarchive": "MISSING CONTROL. A project archived by mistake cannot be brought back from the product, only from SQL. Small and worth doing.",
-    "action:revoke_tool": "MISSING CONTROL. The Governance page approves and declines tool requests and cannot take a granted tool BACK, which is the half that matters after a mistake.",
+    "action:revoke_tool": "A SYNONYM, not a missing control. `app.revoke_tool` deletes the `staff_tools` row; so does the team page's tick box through `staff_tool_set`, which is the control Grant actually uses and the one his own approval confirmation points at. 0472 makes the checkbox the single writer and gives it the ledger event the request path always had, so the two cannot diverge. The gateway action stays for an agent-side or scripted revoke; a second button beside a working one would be furniture.",
     "action:register_connector": "MISSING CONTROL (#265). The Connections page lists providers and cannot add one.",
     "action:revoke_connector": "MISSING CONTROL (#265). Nor remove one.",
     "action:offer_connector_tool": "MISSING CONTROL (#265). A discovered MCP tool cannot be offered for approval from the page, so #265's inventory is read-only.",

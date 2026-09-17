@@ -106,7 +106,9 @@ So the dependency order is **#133 → #257 → #258 → #172 → #41**, with #25
 | **#276** | NEW — `check:pressable`, and the 27 gateway actions and sections with no control |
 | **migrations at close** | **470** |
 | **defect found last** | `verify:unified` read the output only when the suite itself ran the job, so a job the deployed worker answered correctly scored NO OUTPUT. The read is unconditional now — 10/10. |
-| **next** | #276's missing controls, starting with document approve/discard (#28's gate has no press) |
+| **#276** | two of the 27 closed — the review queue, `verify:review` 17/17, baseline 27 → 25 |
+| **migrations** | **471** |
+| **next** | #276 again: `project_unarchive`, then `revoke_tool`, then #265's three connector actions |
 
 **The most useful thing this stretch produced is a new class of check.**
 `check:callers` walks database functions and cannot see a gateway action, so

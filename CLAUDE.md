@@ -2583,6 +2583,28 @@ Each of these cost real time. They are here so they cost it once.
   for an agent holding the bearer token (#13) / a reader the page does not
   need, and an entry with no reason is an admission.
 
+- **Two doors onto one field, and only one of them writes the ledger.**
+  `app.approve_tool` and `app.revoke_tool` append `tool.granted` /
+  `tool.revoked`; `app.hq_staff_tool_set` — the TEAM PAGE's tick box, which is
+  the control Grant actually uses — inserted or deleted the same
+  `staff_tools` row and recorded nothing. 42 events of each on record, all of
+  them from the request path, and every capability change made by hand was
+  missing from the audit trail. The fix is not a second `append_event` beside
+  the first: the second writer DELEGATES (0472), so a future change to what
+  revoking means cannot land in one door and not the other. Before adding an
+  event to a writer, grep for the other function that writes the same field —
+  and ask which of them a person presses.
+
+- **A reader whose filter names a state nothing writes returns nothing, for
+  ever, and looks like an empty queue.** `app.awaiting_review` filtered
+  `state = 'review'` from 0176 until 0471 — and NOTHING in this repository has
+  ever written that state: a made document is inserted `draft`, and the four
+  values the constraint permits are not four values anybody uses. So #28's
+  review gate had a reader that could not match a row, in front of two gateway
+  actions nothing could press. The found-nothing shape again, and the question
+  that settles it in one query is what the table actually HOLDS
+  (`select state, origin, count(*) ...`), not what the constraint allows.
+
 - **A suite that reads its evidence only on the path it drove itself scores a
   correct answer as no answer.** `verify:unified` dequeued the job when it
   could and waited for the deployed worker when it could not — and the read of
