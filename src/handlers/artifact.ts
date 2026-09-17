@@ -535,9 +535,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             it. Slack cannot take bytes — no `files:write` — and mints a signed
             link from this instead.
           */
-          ...(typeof kept.path === 'string' && kept.path !== ''
-            ? { storagePath: kept.path }
-            : {}),
+          ...(typeof kept.path === 'string' && kept.path !== '' ? { storagePath: kept.path } : {}),
         },
         body:
           `${finalReport.title} — ${String(kept.pages)} pages, from ${String(
