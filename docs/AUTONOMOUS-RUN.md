@@ -18,7 +18,51 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-## THE MANDATE IN FORCE — the 8-hour completion run, 17 September 2026
+## THE MANDATE IN FORCE — the 12-hour capability run, 17 September 2026
+
+**This supersedes every mandate below.** The completion run merged as PR #274
+(`main` at `68b7958`): #273, #263, #264, #265, #262 closed, #272 down from 40
+to 15, #17 shipped, ADR-0039 written. This run starts from that.
+
+Grant, 2026-09-17, continuing:
+
+> *"Continue reducing the remaining capability backlog by implementing real,
+> user-reachable, production-quality capabilities, not merely satisfying tests
+> or adding architectural scaffolding."*
+
+**The recorded starting target is #133** — replay real history against a
+change — *"unless inspection of current repository state establishes a concrete
+reason not to."* After it, the highest-value unblocked work, with the sequence
+**reconstructed from the repository rather than taken from a list**:
+
+> *"Do not blindly follow this ordering… do not automatically prioritize #259
+> merely because it was previously described as the largest unstarted
+> capability. Unified knowledge, artifact generation and correspondence
+> intelligence may be more foundational."*
+
+Candidates named: #41, #257, #258, #172, #259, the rest of #272.
+
+**If compaction happens: reread `CLAUDE.md`, reread this file, continue.
+Do not ask Grant to repaste the prompt.**
+
+### What inspection established about #133, before starting it
+
+`job_traces` does NOT carry what #133 assumed. It holds four kinds — `prompt`,
+`decision`, `degradation`, `plan` — and the `prompt` row is
+`{"kind": "...", "attempt": 1}`. **The prompt text, the retrieved documents and
+the model are not in it**, so "replay from the trace" cannot be done as
+written.
+
+What IS recoverable is better: `jobs.pinned_config.instruction` holds the
+request verbatim, on 482 real `office.instruction` jobs, with the project, the
+requester and the original `outputs.body` all joinable. So the replay reads
+CANONICAL STATE, not the trace, and the Issue is answered by a different route
+than the one it proposed. `app.now_utc()` is `now()` with no override, so the
+clock freeze has to happen where the handler reads the date, not in SQL.
+
+---
+
+## THE PREVIOUS MANDATE — the 8-hour completion run, 17 September 2026
 
 **This supersedes the capability campaign below as the ACTIVE mandate.** That
 one ran the dependency order and advanced nine issues; none was closed, which
