@@ -2255,6 +2255,23 @@ Each of these cost real time. They are here so they cost it once.
   connector, and the note the model reads is empty when coverage is complete,
   because a caveat on every turn is one nobody reads.
 
+- **A renderer that calls `render()` from inside itself loses its own output.**
+  `needMade` mirrors `needHistory`, which is safe only because a real request
+  yields: the `await` lets the outer render finish before the redraw. With the
+  answer already in hand there is nothing to await, so the inner render
+  completed and the OUTER pass then overwrote the DOM with the markup it had
+  computed before the store was filled. The block rendered in no capture at
+  all, and nothing anywhere threw. When a lazy fetcher gains a synchronous
+  branch, the branch must return the value rather than redraw.
+
+- **A panel drawn only when a row exists is a panel the prototype must invent
+  for, and inventing it in the wrong place is a fabricated link.**
+  `needHistory` mocks on ANY failure, which is right for a story and wrong for
+  an artifact: a signed-in user whose request failed would have been shown
+  links that do not exist, which is the thing #260 forbids by name. The mock
+  belongs behind "there is no token", the state the page already announces
+  with its own strip — not behind "the request failed".
+
 ---
 
 ## Visual standard
