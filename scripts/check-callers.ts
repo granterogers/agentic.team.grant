@@ -20,7 +20,12 @@
  *
  * A function is REACHABLE if any of these is true:
  *
- *   - application code names it — `src/`, `web/`, `supabase/functions/`;
+ *   - application code names it — `src/`, `web/`, `supabase/functions/`, and
+ *     `.github/workflows/`, because a workflow step calling an RPC from inside
+ *     the runner is as real a caller as a handler is. #17's `app.ci_report` is
+ *     called by the CI job itself and by nothing in `src/` — deliberately, as
+ *     the office holds no actions:read scope and the run is the only thing
+ *     that knows what it cost;
  *   - another database function's body names it, because a helper called by
  *     one reachable function is reached;
  *   - a trigger, a default, a view or a constraint names it;
@@ -105,7 +110,8 @@ const sqlMentions = String(
   is a capability Grant does not have (CLAUDE.md's standing goal).
 */
 const appCode = execSync(
-  "find src web supabase/functions -type f \\( -name '*.ts' -o -name '*.js' -o -name '*.mjs' \\) -print0 | xargs -0 cat",
+  'find src web supabase/functions .github/workflows -type f ' +
+    "\\( -name '*.ts' -o -name '*.js' -o -name '*.mjs' -o -name '*.yml' \\) -print0 | xargs -0 cat",
   { maxBuffer: 256 * 1024 * 1024 },
 ).toString()
 

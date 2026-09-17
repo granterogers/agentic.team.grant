@@ -51,6 +51,7 @@ import { calendarHandler } from '../handlers/calendar.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { channelsHandler } from '../handlers/channels.ts'
+import { ciDispatchHandler } from '../handlers/ci-dispatch.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
 import { driveReadHandler } from '../handlers/drive-read.ts'
@@ -355,6 +356,13 @@ export const buildPass = async (
       outage.
     */
     browserGatherHandler({ db, projectRef, serviceKey }),
+    /*
+      Running a workflow on demand, under the month's minute ceiling (#17).
+
+      The ceiling lives in the database and `app.ci_reserve` is the only door,
+      so registering this handler cannot widen what the office may spend.
+    */
+    ciDispatchHandler({ db }),
     /*
       Every dashboard project gets a channel, without anybody remembering (#187).
 

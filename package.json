@@ -252,7 +252,8 @@
     "verify:parallel": "tsx scripts/verify/parallel.ts",
     "verify:triggers": "tsx scripts/verify/triggers.ts",
     "verify:connectors": "tsx scripts/verify/connectors.ts",
-    "verify:browser": "tsx scripts/verify/browser.ts"
+    "verify:browser": "tsx scripts/verify/browser.ts",
+    "verify:ci": "tsx scripts/verify/ci.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

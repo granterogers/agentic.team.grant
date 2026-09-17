@@ -306,6 +306,16 @@ const SECTIONS: Readonly<
   */
   browser_budget: { fn: 'browser_budget' },
   /*
+    Where this month's GitHub Actions minutes went (#17).
+
+    Global, like the ceiling. Grant's own words after the incident were that
+    1,800 of 2,000 minutes went to a cron nobody was watching, so the reason
+    for each run is on every row: a ledger that says only "ci" three hundred
+    times answers nothing in three months.
+  */
+  ci_lately: { fn: 'ci_lately', args: { p_limit: 20 } },
+  ci_budget: { fn: 'ci_budget' },
+  /*
     Search inside things (#37, migration 0308).
 
     The command bar already searches TITLES client-side, over the payload the

@@ -441,6 +441,18 @@ export const recoverStalled = async (db: SqlExecutor): Promise<readonly Recovere
   */
   await db.execute('select app.fire_pending_signals(20)').catch(() => undefined)
 
+  /*
+    And CI reservations nothing ever reported against (#17).
+
+    A dispatched workflow reserves its minutes up front so two dispatches
+    cannot both be told there is room. A run that was cancelled or died never
+    reports, so without this the reservation holds those minutes against the
+    month for ever and the ceiling tightens by itself. They settle as SPENT,
+    not released: a run that died still cost whatever it had used, and
+    over-counting is the cheap direction.
+  */
+  await db.execute('select app.ci_expire_stale()').catch(() => undefined)
+
   const ready = (
     await db.execute(
       `select (x ->> 'job_id') as job_id, (x ->> 'reason') as reason
