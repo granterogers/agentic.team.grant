@@ -114,7 +114,13 @@ import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
-import { contextBlock, retrieve, sourceRefs } from '../knowledge/retrieval.ts'
+import {
+  contextBlock,
+  coverageNote,
+  coverageOf,
+  retrieve,
+  sourceRefs,
+} from '../knowledge/retrieval.ts'
 import { NotebookActions } from '../notebook/actions.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { BOT_FOR_INBOUND } from '../telegram/roster.ts'
@@ -2403,6 +2409,23 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const context = contextBlock(hits)
 
       /*
+        And what the index cannot speak for (#257).
+
+        Grant asked about a document in the project's linked Google Notebook
+        and was told it could not be found. A search that finds nothing is
+        legitimate evidence for "there is nothing in our documents" — that is
+        what `consultedDomains` is for and it is right whenever the index
+        covers what is attached. It stops being right the moment a connector is
+        attached and unindexed, and nothing anywhere could tell the difference.
+
+        The note is EMPTY when coverage is complete, which is the common case:
+        a sentence saying "I searched all of it" on every turn is noise that
+        teaches a model to skim the block it sits in.
+      */
+      const coverage = confirmation !== null ? null : await coverageOf(deps.db, job.projectId)
+      const gapNote = coverage === null ? '' : coverageNote(coverage)
+
+      /*
         What the office has already settled (#129).
 
         Across EVERY project, deliberately: `retrieve()` searches within a
@@ -2773,6 +2796,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   ? []
                   : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
                 /*
+                  What the search could NOT see (#257).
+
+                  Immediately after the documents, because it is a statement
+                  about those documents: how far they go. Before the decisions
+                  and the colleague's draft, because it changes how an absence
+                  may be reported and both of those are about content.
+                */
+                ...(gapNote === '' ? [] : [{ role: 'system' as const, content: gapNote }]),
+                /*
                   What is already settled (#129).
 
                   Before the colleague's draft and after the documents: a
@@ -3121,6 +3153,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           documents on renewals" — a search is not a census.
         */
         completeDomains: ['projects' as const],
+        /*
+          NOT `documents`, and never — see the comment above. This line is
+          here to say that #257 did not change it: a search is not a census
+          whatever the coverage, and a connector being indexed makes an
+          absence REPORTABLE, not the collection COMPLETE. The two are
+          different permissions and conflating them is what `provenance.ts`
+          splits `consultedDomains` from `completeDomains` to prevent.
+        */
         answeredBefore: [
           ...turns.map((t) => t.answered ?? ''),
           ...memory.recalled.map((m) => m.answered),

@@ -184,6 +184,25 @@ export interface BlockerDraft {
    */
   readonly standingTool?: string | undefined
   readonly standingOption?: string | undefined
+  /**
+   * What answering with a particular option PERFORMS (#257).
+   *
+   * A job kind and one payload per thing, written HERE rather than read out of
+   * the option text — `approvalOptions` is free English and deriving work from
+   * it would be #130's parsing defect on a path that enqueues jobs.
+   *
+   * `handlers/drive.ts` is why this exists: it has offered "Add them to the
+   * project as source documents" since #62 and answering it could never work,
+   * because the page token advances whether or not Grant was asked and the
+   * files are gone from the next change list.
+   */
+  readonly onAnswer?:
+    | {
+        readonly option: string
+        readonly kind: string
+        readonly payloads: readonly Record<string, unknown>[]
+      }
+    | undefined
 }
 
 /**

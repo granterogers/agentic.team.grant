@@ -2226,6 +2226,35 @@ Each of these cost real time. They are here so they cost it once.
   a trigram instead, where a stable function is perfectly legal — and the
   column comment says WHY it is missing, so nobody adds it back.
 
+- **An approval option that cannot be acted on when it is answered is a dead
+  control with a friendly face.** `handlers/drive.ts` has offered *"Add them to
+  the project as source documents"* since #62, and
+  `app.drive_watch_checked` advances the page token whether or not Grant was
+  asked — so by the time he answers, those files are gone from the change list
+  and the next run has nothing to act on. It was never able to work.
+  `blockers.on_answer` carries what answering PERFORMS — a job kind and one
+  payload per thing, written by the handler — for the same reason
+  `standing_tool` carries what it GRANTS: reading work out of free-text options
+  would be #130's parsing defect on a path that enqueues jobs.
+
+- **`both` is a reserved word in Postgres** (`trim(both …)`), so a CTE called
+  `both` fails with a syntax error pointing at the CTE name and nothing else.
+
+- **The executor hands a jsonb column back as an OBJECT.**
+  `JSON.parse(String(x))` on it produces `"[object Object]" is not valid JSON`,
+  which reads like a corrupt payload and is a guessed shape. Accept either:
+  `typeof v === 'string' ? JSON.parse(v) : v`.
+
+- **A search that found nothing is only evidence of an absence when the index
+  covers what is ATTACHED.** #257's whole complaint: Grant asked about a
+  document in the project's linked Google Notebook and was told it could not be
+  found. `consultedDomains` lets the office say "there is nothing in our
+  documents" after an empty search, which is right — and becomes a lie the
+  moment a connector is attached with nothing indexed, and nothing anywhere
+  could tell the difference. `app.project_knowledge` NAMES every such
+  connector, and the note the model reads is empty when coverage is complete,
+  because a caveat on every turn is one nobody reads.
+
 ---
 
 ## Visual standard

@@ -534,6 +534,99 @@ await db.execute(`
 `)
 
 // ---------------------------------------------------------------------------
+// The index knows what it has NOT got (#257)
+// ---------------------------------------------------------------------------
+
+/*
+  Grant asked about a document in the project's linked Google Notebook and was
+  told it could not be found.
+
+  A search that finds nothing is legitimate evidence for "there is nothing in
+  our documents" — that is what `consultedDomains` is for and it is right
+  whenever the index covers what is attached. It stops being right the moment a
+  connector is attached with nothing indexed, and until 0427 nothing anywhere
+  could tell the difference.
+
+  So the property is not "the reader returns a number". It is that an attached
+  connector with no documents behind it is NAMED, and that a fully indexed
+  project says nothing at all — because a caveat on every turn is noise.
+*/
+console.log('\nwhat the index cannot speak for (#257)')
+
+{
+  // A connector attached to this suite's project with nothing behind it.
+  await db.execute(`
+    insert into public.project_attachments
+      (project_id, connector, external_ref, display_name, role, enabled)
+    values (${lit(projectId)}::uuid, 'drive', ${lit(`fixture-folder-${run}`)},
+            ${lit(`Fixture folder ${run}`)}, 'source', true)`)
+
+  /*
+    The executor hands a jsonb column back as an OBJECT, not a string.
+    `JSON.parse(String(x))` on it produces "[object Object]" and throws — the
+    same guessed shape that has caught a reader in this repository before.
+  */
+  const asJson = (v: unknown): Record<string, unknown> =>
+    typeof v === 'string'
+      ? (JSON.parse(v) as Record<string, unknown>)
+      : (v as Record<string, unknown>)
+
+  const gap = await one(`select app.project_knowledge(${lit(projectId)}::uuid) as k`)
+  const k = asJson(gap?.k) as {
+    blank?: string[]
+    complete?: boolean
+    documents?: number
+    sources?: { connector: string; blank: boolean }[]
+  }
+  record(
+    'a connector attached with nothing indexed is NAMED',
+    `blank: ${JSON.stringify(k.blank)}`,
+    Array.isArray(k.blank) && k.blank.includes('drive'),
+  )
+  record(
+    'and the index does not claim to be complete',
+    `complete: ${String(k.complete)}`,
+    k.complete === false,
+  )
+  record(
+    'while still reporting what it DOES hold, so the caveat is not the whole answer',
+    `${String(k.documents)} document(s) indexed`,
+    Number(k.documents) > 0,
+  )
+
+  /*
+    CONTROL. Remove the attachment and the same project reports complete.
+
+    Without this the checks above would pass against a function that always
+    said "incomplete", which is the safe-looking failure: an office that
+    caveats every answer is one whose caveats stop being read.
+  */
+  await db.execute(`
+    delete from public.project_attachments
+     where project_id = ${lit(projectId)}::uuid and external_ref = ${lit(`fixture-folder-${run}`)}`)
+  const back = await one(`select app.project_knowledge(${lit(projectId)}::uuid) as k`)
+  const b = asJson(back?.k) as { blank?: string[]; complete?: boolean }
+  record(
+    'CONTROL: with nothing attached-but-blank, it says so and names nobody',
+    `complete: ${String(b.complete)}, blank: ${JSON.stringify(b.blank)}`,
+    b.complete === true && Array.isArray(b.blank) && b.blank.length === 0,
+  )
+
+  /*
+    And a connector whose attachment is GONE but whose documents remain is not
+    a gap. §17 turns off a route, not what it already brought in — the property
+    the section above this file already proves for search, asserted here for
+    coverage so the two cannot disagree.
+  */
+  const kept = asJson(back?.k) as { sources?: { connector: string; blank: boolean }[] }
+  record(
+    'a connector that fed documents in still counts, attached or not',
+    `${String((kept.sources ?? []).length)} source(s) named`,
+    (kept.sources ?? []).some((x) => x.blank === false),
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Report, then clean up after itself
 // ---------------------------------------------------------------------------
 

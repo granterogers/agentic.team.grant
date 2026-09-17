@@ -195,11 +195,36 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         const policy = await mayAct(db, { projectId: f.project_id, tool: 'drive.ingest' })
 
         if (policy.verdict === 'proceed') {
+          /*
+            A child job per file, not a row per file (#257).
+
+            The first draft wrote the document here with `record_drive_document`
+            and no text, which would have put a Drive file in the index as a
+            TITLE — findable by name and useless for "the document about X",
+            which is the sentence #257 exists for.
+
+            `drive.read_file` already exports a Doc to text, downloads a PDF to
+            the files bucket and records the document itself — implemented for
+            #96 and, until now, **enqueued by nothing at all**. That is why the
+            index holds 60 NotebookLM documents, 23 Notion documents and zero
+            from Drive: #72's shape, the finished half with no caller.
+
+            So this enqueues it. One job per file so a single unreadable file
+            cannot stop the rest, and `p_announce => false` because Grant hears
+            from the Chief of Staff and this job already speaks for the batch.
+          */
           for (const file of arrived) {
             await db.execute(`
-              select app.record_drive_document(
-                ${lit(f.project_id)}::uuid, ${lit(f.folder_id)}, ${lit(file.id)},
-                ${lit(file.name)}, null, 'the office')
+              select app.enqueue_child(
+                ${lit(job.jobId)}::uuid, 'drive.read_file',
+                jsonb_build_object(
+                  'project_id', ${lit(f.project_id)},
+                  'folder_id', ${lit(f.folder_id)},
+                  'file_id', ${lit(file.id)},
+                  'title', ${lit(file.name)},
+                  'mime_type', ${lit(String(file.mimeType ?? 'application/octet-stream'))}
+                ),
+                interval '0', false)
             `)
           }
           took += arrived.length
@@ -259,6 +284,26 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           // rather than asked about (#15, migrations 0421 and 0422).
           standingTool: 'drive.ingest',
           standingOption: 'Add them from now on without asking me',
+          /*
+            And the first option now DOES something (#257).
+
+            It has been offered since #62 and could never work: the page token
+            advances whether or not Grant was asked, so by the time he answers
+            these files are no longer in the change list. The files he is being
+            asked about are named here, so answering reads exactly those and
+            nothing depends on the folder still reporting them.
+          */
+          onAnswer: {
+            option: 'Add them to the project as source documents',
+            kind: 'drive.read_file',
+            payloads: arrived.map((file) => ({
+              project_id: f.project_id,
+              folder_id: f.folder_id,
+              file_id: file.id,
+              title: file.name,
+              mime_type: String(file.mimeType ?? 'application/octet-stream'),
+            })),
+          },
           // The rest of the project carries on. This is a question, not a halt.
           workCanContinue: true,
         })
@@ -287,7 +332,8 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
       const said: string[] = []
       if (took > 0) {
         said.push(
-          `${count(took, 'new file', 'new files')} went into the project as ` +
+          `${count(took, 'new file', 'new files')} ${took === 1 ? 'is' : 'are'} being read ` +
+            'into the project as ' +
             `${took === 1 ? 'a source' : 'sources'}, because you said not to ask about that.`,
         )
       }

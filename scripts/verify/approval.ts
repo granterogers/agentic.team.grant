@@ -528,6 +528,106 @@ check(
 )
 
 // ===========================================================================
+// 4b. And answering can PERFORM the thing, not merely permit it (#257)
+// ===========================================================================
+
+console.log('\nanswering "add them" adds them')
+
+/*
+  The dead option, and why it was dead.
+
+  `handlers/drive.ts` has offered "Add them to the project as source documents"
+  since #62. `app.drive_watch_checked` advances the page token whether or not
+  Grant was asked, so by the time he answers those files are no longer in the
+  change list and the next run has nothing to act on. Answering it did nothing,
+  visibly, on a question he can see.
+
+  0428 puts what answering PERFORMS on the blocker — a kind and one payload per
+  thing, written by the handler rather than read out of the option text. Driven
+  here because reading the migration proves it parses.
+*/
+{
+  const DO_IT = 'Add them to the project as source documents'
+  const performed = await one(`
+    begin;
+    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (extensions.gen_random_uuid(), ${lit(projectId)}::uuid,
+            ${lit(`verify-approval-perform-${run}`)}, 'drive.watch',
+            ${lit(`teamhq:verify-approval-${run}`)});
+    insert into public.blockers
+      (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+       approval_options, originating_agent, work_can_continue, on_answer)
+    values (${lit(projectId)}::uuid,
+            (select job_id from public.jobs
+              where idempotency_key = ${lit(`verify-approval-perform-${run}`)}),
+            ${lit(`Two files have appeared (${run}). What would you like me to do?`)},
+            'Nothing has been opened or read yet.', 'Nothing happens until you say.',
+            array[${lit(DO_IT)}, 'Ignore these'], 'chief-of-staff', true,
+            jsonb_build_object('option', ${lit(DO_IT)}, 'kind', 'drive.read_file',
+              'payloads', jsonb_build_array(
+                jsonb_build_object('file_id', 'fixture-one', 'folder_id', 'fixture-folder'),
+                jsonb_build_object('file_id', 'fixture-two', 'folder_id', 'fixture-folder'))));
+    select app.hq_answer_blocker(
+      (select blocker_id from public.blockers
+        where requested_action = ${lit(`Two files have appeared (${run}). What would you like me to do?`)}),
+      ${lit(DO_IT)});
+    select
+      (select count(*)::int from public.jobs
+        where kind = 'drive.read_file'
+          and requested_by = ${lit(`teamhq:verify-approval-${run}`)}) as enqueued,
+      (select string_agg(pinned_config ->> 'file_id', ',' order by pinned_config ->> 'file_id')
+         from public.jobs
+        where kind = 'drive.read_file'
+          and requested_by = ${lit(`teamhq:verify-approval-${run}`)}) as files;
+    rollback;
+  `)
+  check(
+    'answering the option that promises work starts exactly that work',
+    `${String(performed.enqueued)} job(s): ${String(performed.files)}`,
+    Number(performed.enqueued) === 2 && String(performed.files) === 'fixture-one,fixture-two',
+  )
+
+  /*
+    CONTROL. Answering a DIFFERENT option starts nothing.
+
+    Without it the check above would pass against a blocker that enqueued its
+    payloads whatever Grant said, which is worse than the dead option it
+    replaces: work he declined, done anyway.
+  */
+  const ignored = await one(`
+    begin;
+    insert into public.jobs (correlation_id, project_id, idempotency_key, kind, requested_by)
+    values (extensions.gen_random_uuid(), ${lit(projectId)}::uuid,
+            ${lit(`verify-approval-ignore-${run}`)}, 'drive.watch',
+            ${lit(`teamhq:verify-ignore-${run}`)});
+    insert into public.blockers
+      (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+       approval_options, originating_agent, work_can_continue, on_answer)
+    values (${lit(projectId)}::uuid,
+            (select job_id from public.jobs
+              where idempotency_key = ${lit(`verify-approval-ignore-${run}`)}),
+            ${lit(`Ignore probe (${run})`)},
+            'Driving the control: answering a different option must start nothing.',
+            'Nothing happens at all, which is the point of this probe.',
+            array[${lit(DO_IT)}, 'Ignore these'], 'chief-of-staff', true,
+            jsonb_build_object('option', ${lit(DO_IT)}, 'kind', 'drive.read_file',
+              'payloads', jsonb_build_array(jsonb_build_object('file_id', 'fixture-one'))));
+    select app.hq_answer_blocker(
+      (select blocker_id from public.blockers
+        where requested_action = ${lit(`Ignore probe (${run})`)}), 'Ignore these');
+    select (select count(*)::int from public.jobs
+             where kind = 'drive.read_file'
+               and requested_by = ${lit(`teamhq:verify-ignore-${run}`)}) as enqueued;
+    rollback;
+  `)
+  check(
+    'CONTROL: answering a different option starts nothing',
+    `${String(ignored.enqueued)} job(s)`,
+    Number(ignored.enqueued) === 0,
+  )
+}
+
+// ===========================================================================
 // 5. A refusal is never silent
 // ===========================================================================
 

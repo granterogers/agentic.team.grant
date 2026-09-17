@@ -128,3 +128,87 @@ export function contextBlock(hits: readonly Hit[], budget = CONTEXT_CHARS): stri
 export function sourceRefs(hits: readonly Hit[]): readonly string[] {
   return hits.map((h) => `${h.connector}:${h.documentId} ${h.title}`)
 }
+
+/** What the index covers for a project, and what it does not (#257). */
+export interface Coverage {
+  /** Every attached connector with nothing indexed. */
+  readonly blank: readonly string[]
+  /** True only when every attached connector has fed something in. */
+  readonly complete: boolean
+  /** How many documents the project holds in total. */
+  readonly documents: number
+}
+
+/**
+ * Ask the index what it can and cannot speak for.
+ *
+ * #257's line, and the reason this exists rather than a boolean somewhere:
+ * *"Connector failure/staleness is represented honestly rather than becoming a
+ * false 'document does not exist' answer."*
+ *
+ * A search that found nothing is legitimate evidence for "there is nothing in
+ * our documents" — `provenance.ts` is built on exactly that, and it is right
+ * whenever the index covers what is attached. It stops being right the moment
+ * a connector is attached and unindexed, and until now nothing anywhere could
+ * tell the difference.
+ *
+ * An unreadable answer is treated as INCOMPLETE, never as complete: a reader
+ * that cannot say what it covers must not be allowed to imply it covers
+ * everything, which is the same direction `mayAct` leans for the same reason.
+ */
+export async function coverageOf(db: SqlExecutor, projectId: string | null): Promise<Coverage> {
+  if (projectId === null) return { blank: [], complete: true, documents: 0 }
+  try {
+    const { rows } = await db.execute(`select app.project_knowledge(${lit(projectId)}::uuid) as k`)
+    const raw = rows[0]?.k
+    const k = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+      blank?: unknown
+      complete?: unknown
+      documents?: unknown
+    }
+    return {
+      blank: Array.isArray(k.blank) ? k.blank.map((x) => String(x)) : [],
+      complete: k.complete === true,
+      documents: typeof k.documents === 'number' ? k.documents : 0,
+    }
+  } catch {
+    return { blank: [], complete: false, documents: 0 }
+  }
+}
+
+/** Connector names as a person would say them, for a sentence the model reads. */
+const SAID_AS: Readonly<Record<string, string>> = {
+  notebooklm: 'the Google Notebook',
+  drive: 'Google Drive',
+  notion: 'Notion',
+  github: 'GitHub',
+  upload: 'the files you uploaded',
+  mcp: 'the connected tool',
+}
+
+/**
+ * What the office may and may not conclude from having found nothing.
+ *
+ * Returns `''` when the index covers everything attached, because a sentence
+ * saying "I searched all of it" on every turn is noise that teaches a model to
+ * skim the block it sits in.
+ */
+export function coverageNote(c: Coverage): string {
+  if (c.blank.length === 0) return ''
+  const named = c.blank.map((x) => SAID_AS[x] ?? x)
+  const list =
+    named.length === 1
+      ? (named[0] ?? '')
+      : `${named.slice(0, -1).join(', ')} and ${named[named.length - 1] ?? ''}`
+  return (
+    `What you searched is everything the office has INDEXED for this project ` +
+    `(${String(c.documents)} document(s)). ${list} ${
+      named.length === 1 ? 'is' : 'are'
+    } attached to this project and nothing from ${
+      named.length === 1 ? 'it' : 'them'
+    } has been indexed yet. So if you found nothing, say that you found nothing ` +
+    `in what you can see AND that ${list} ${
+      named.length === 1 ? 'has' : 'have'
+    } not been read — never that the thing does not exist.`
+  )
+}
