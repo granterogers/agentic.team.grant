@@ -196,6 +196,36 @@ otherwise intact. Ten silent failures in all of history, most from early
 September. `app.office_health()` reports failures with a 24h window and the
 briefing carries them — the break was the briefing itself.
 
+### Batch 5 — the nightly backup could never finish again (IN PROGRESS)
+
+The backup that failed silently on 17 Sep is not a flake. Its own transition
+log is five ticks of `worker edge-… died holding this in running` and then
+`5 attempts exhausted`. Measured: `buildArchive` takes **148 seconds** for 119
+tables, 107,193 rows, 52 MB raw — on a fast machine with no function limit. An
+edge function does not get that long. **The last backup that completed was 16
+September**, and the archive grows every night.
+
+**0492 (code, no migration)** makes the archive a FOLDER: one gzipped object
+per table plus a manifest, each table a checkpointed `runSteps` step. A killed
+tick banks everything before it and the next attempt resumes. No tick holds
+more than one table.
+
+- the prefix is derived from the JOB, never the clock — a timestamped prefix
+  would give a resumed tick a different folder and nothing would ever finish,
+  which is this defect reintroduced one layer down;
+- the effect is `local`, not `external`: the key is deterministic and the
+  upload is an upsert, so repeating a step is harmless, where `external` would
+  park on the first interruption and defeat the whole change;
+- the manifest is written LAST, so its presence is what makes a folder a
+  complete backup rather than an interrupted one;
+- `readFolder` + `newestFolder` keep `backup:rehearse` — which is IN the
+  `verify:db` gate — working, preferring a folder and falling back to the
+  legacy single files still in the bucket.
+
+**Observed live:** attempt 1 banked **111 of 120 steps** before the function
+was killed, which is the mechanism working. Waiting on the lease to expire so
+recovery resumes it at step 112.
+
 ## BLOCKERS
 
 *(none)*

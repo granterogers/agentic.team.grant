@@ -170,6 +170,257 @@ export async function buildArchive(db: SqlExecutor, projectRef: string): Promise
   }
 }
 
+/*
+  ============================================================================
+  THE RESUMABLE BACKUP (0492)
+  ============================================================================
+
+  `buildArchive` above reads all 119 tables into memory, gzips one 52MB JSON
+  and uploads it. Measured on 18 September 2026: **148 seconds**, 107,193
+  rows. A Supabase edge function does not get that long, and the job's own
+  history says so exactly — five ticks, each `worker edge-… died holding this
+  in running`, then `5 attempts exhausted`. The last backup that finished was
+  **16 September**. It was never going to finish again, and it grows nightly.
+
+  So the archive becomes a FOLDER rather than a file: one gzipped object per
+  table plus a manifest. Each table is a checkpointed step, so a tick that is
+  killed resumes at the next table instead of starting over, and no tick ever
+  holds more than one table in memory.
+
+  Three properties this keeps that the single file had:
+
+  - **self-describing** — the manifest carries the schema, the migration list
+    and the row counts, so a restore does not need this repository at the
+    right commit;
+  - **no credentials** — the vault schema is excluded here exactly as it was
+    there;
+  - **checksums** — one per object, beside it, so a corrupted part is
+    detectable by whoever finds it.
+
+  And one it did not have: a partial backup is VISIBLE. A folder with 80 of
+  119 tables and no manifest is obviously incomplete, where a truncated single
+  file is not.
+
+  `buildArchive` stays for `scripts/backup/export-portable.ts`, which runs on a
+  real machine with no timeout and is how a one-file copy is taken by hand.
+*/
+
+/**
+ * Where one run's objects live.
+ *
+ * Derived from the JOB, never from the clock. A timestamped prefix would give
+ * a resumed tick a different folder from the one it was half way through, so
+ * every interruption would leave an orphan and nothing would ever complete —
+ * which is the defect this whole change exists to fix, reintroduced one layer
+ * down.
+ */
+export const backupPrefix = (jobId: string): string => `run-${jobId}`
+
+/** One table, gzipped, ready to put. */
+export interface TableDump {
+  readonly key: string
+  readonly bytes: Uint8Array
+  readonly sha256: string
+  readonly rows: number
+  readonly rawBytes: number
+}
+
+export async function dumpTable(
+  db: SqlExecutor,
+  prefix: string,
+  schema: string,
+  table: string,
+): Promise<TableDump> {
+  const result = await db.execute(`select * from "${schema}"."${table}"`)
+  const json = JSON.stringify({ table: `${schema}.${table}`, rows: [...result.rows] })
+  const bytes = await gzip(json)
+  return {
+    key: `${prefix}/${schema}.${table}.json.gz`,
+    bytes,
+    sha256: await sha256(bytes),
+    rows: result.rows.length,
+    rawBytes: json.length,
+  }
+}
+
+/**
+ * The manifest, written LAST.
+ *
+ * Last on purpose: its presence is what says the folder is a complete backup.
+ * A restore that finds tables and no manifest is looking at an interrupted
+ * run and should say so rather than restore three quarters of an office.
+ */
+export async function buildManifest(
+  db: SqlExecutor,
+  projectRef: string,
+  prefix: string,
+  counts: Record<string, number>,
+): Promise<TableDump> {
+  const schema = (
+    await db.execute(`
+      select table_schema || '.' || table_name as t, column_name, data_type, is_nullable
+        from information_schema.columns
+       where table_schema in ('public', 'app')
+       order by table_schema, table_name, ordinal_position
+    `)
+  ).rows
+  const migrations = (
+    await db.execute('select name from app.schema_migrations order by name')
+  ).rows.map((r) => String(r.name))
+
+  const json = JSON.stringify({
+    format: 'folder/1',
+    exported_at: new Date().toISOString(),
+    project_ref: projectRef,
+    note:
+      'Portable JSON export, one gzipped object per table beside this file. ' +
+      'NOT a pg_dump — restoring means applying the migrations from git, then ' +
+      'loading these rows. Contains no credentials: the vault schema is ' +
+      'deliberately excluded. This manifest is written LAST, so its presence ' +
+      'is what makes the folder a complete backup.',
+    credentials_not_included: CREDENTIALS_NOT_INCLUDED,
+    latest_migration: migrations[migrations.length - 1] ?? 'none',
+    migrations,
+    row_counts: counts,
+    tables: Object.keys(counts).length,
+    rows: Object.values(counts).reduce((a, b) => a + b, 0),
+    schema,
+  })
+  const bytes = await gzip(json)
+  return {
+    key: `${prefix}/manifest.json.gz`,
+    bytes,
+    sha256: await sha256(bytes),
+    rows: Object.values(counts).reduce((a, b) => a + b, 0),
+    rawBytes: json.length,
+  }
+}
+
+/**
+ * The newest COMPLETE folder backup, or null.
+ *
+ * Complete means the manifest is there. A folder with eighty of a hundred and
+ * nineteen tables and no manifest is an interrupted run, and restoring three
+ * quarters of an office while reporting success is the most dangerous thing
+ * this module could do.
+ *
+ * Sorted by the manifest's own upload time rather than by name: the prefix is
+ * derived from a job id (0492), which is a uuid and does not sort by date.
+ */
+export async function newestFolder(
+  ref: string,
+  serviceKey: string,
+): Promise<{ prefix: string; tables: readonly string[]; at: string } | null> {
+  const top = await listUnder(ref, serviceKey, '')
+  const folders = top.filter((o) => o.name.startsWith('run-') && !o.name.includes('.'))
+  let best: { prefix: string; tables: readonly string[]; at: string } | null = null
+  for (const f of folders) {
+    const inside = await listUnder(ref, serviceKey, f.name)
+    const manifest = inside.find((o) => o.name.endsWith('/manifest.json.gz'))
+    if (manifest === undefined) continue // interrupted run, not a backup
+    const at = String(manifest.created_at ?? '')
+    if (best === null || at.localeCompare(best.at) > 0) {
+      best = {
+        prefix: f.name,
+        at,
+        tables: inside
+          .filter((o) => o.name.endsWith('.json.gz') && !o.name.endsWith('/manifest.json.gz'))
+          .map((o) => o.name),
+      }
+    }
+  }
+  return best
+}
+
+/**
+ * Read a folder backup back into the shape the single file had.
+ *
+ * So the restore rehearsal — the half of §16 that makes the other half mean
+ * anything — keeps working across the format change (0492) with one new call
+ * rather than a rewrite. This runs on a real machine with no function
+ * timeout, so holding the whole thing in memory here is fine; that constraint
+ * only ever applied to the edge worker taking the backup.
+ *
+ * Every object's checksum is verified against the one stored beside it, which
+ * the single-file path also did. A corrupted part must be found here rather
+ * than by whoever is restoring at 3am.
+ */
+export async function readFolder(
+  ref: string,
+  serviceKey: string,
+  folder: { prefix: string; tables: readonly string[] },
+): Promise<{
+  data: Record<string, unknown[]>
+  row_counts: Record<string, number>
+  schema: { t: string; column_name: string }[]
+  latest_migration: string
+  corrupt: string[]
+}> {
+  const corrupt: string[] = []
+  const verified = async (key: string): Promise<Uint8Array | null> => {
+    const bytes = await downloadArchive(ref, serviceKey, key)
+    const stated = await downloadArchive(ref, serviceKey, `${key}.sha256`)
+      .then((b) => new TextDecoder().decode(b).trim().split(/\s+/)[0] ?? '')
+      .catch(() => '')
+    if (stated === '' || stated !== (await sha256(bytes))) {
+      corrupt.push(key)
+      return null
+    }
+    return bytes
+  }
+
+  const manifestBytes = await verified(`${folder.prefix}/manifest.json.gz`)
+  const manifest = (manifestBytes === null ? {} : await readArchive(manifestBytes)) as {
+    row_counts?: Record<string, number>
+    schema?: { t: string; column_name: string }[]
+    latest_migration?: string
+  }
+
+  const data: Record<string, unknown[]> = {}
+  for (const key of folder.tables) {
+    const bytes = await verified(key)
+    if (bytes === null) continue
+    const one = (await readArchive(bytes)) as { table?: string; rows?: unknown[] }
+    if (typeof one.table === 'string') data[one.table] = one.rows ?? []
+  }
+
+  return {
+    data,
+    row_counts: manifest.row_counts ?? {},
+    schema: manifest.schema ?? [],
+    latest_migration: String(manifest.latest_migration ?? 'unknown'),
+    corrupt,
+  }
+}
+
+/** Put one object, and its checksum beside it. */
+export async function putObject(ref: string, serviceKey: string, dump: TableDump): Promise<string> {
+  const base = `https://${ref}.supabase.co/storage/v1/object/${BUCKET}`
+  const put = async (path: string, body: Uint8Array | string, type: string): Promise<void> => {
+    const response = await fetch(`${base}/${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': type,
+        // Upsert, which is what makes a repeated step harmless: the key is
+        // derived from the job, so a resume overwrites the same object with
+        // the same content.
+        'x-upsert': 'true',
+      },
+      body: typeof body === 'string' ? body : (body as Uint8Array<ArrayBuffer>),
+    })
+    if (!response.ok) {
+      throw new Error(
+        `upload of ${path} failed: http ${String(response.status)} ` +
+          `${(await response.text()).slice(0, 160)}`,
+      )
+    }
+  }
+  await put(dump.key, dump.bytes, 'application/gzip')
+  await put(`${dump.key}.sha256`, `${dump.sha256}  ${dump.key}\n`, 'text/plain')
+  return dump.key
+}
+
 export const BUCKET = 'backups'
 
 interface StorageObject {
@@ -251,14 +502,31 @@ export async function listArchives(
   ref: string,
   serviceKey: string,
 ): Promise<readonly StorageObject[]> {
+  return await listUnder(ref, serviceKey, '')
+}
+
+/**
+ * One level of the bucket.
+ *
+ * Supabase Storage's list is NOT recursive: with an empty prefix it returns
+ * top-level objects and one entry per folder, and a folder entry has no `id`.
+ * So the folder backups 0492 writes are invisible to a bare list, which is
+ * why `newestFolder` below asks for each folder by name rather than filtering
+ * one flat answer.
+ */
+export async function listUnder(
+  ref: string,
+  serviceKey: string,
+  prefix: string,
+): Promise<readonly StorageObject[]> {
   const response = await fetch(`https://${ref}.supabase.co/storage/v1/object/list/${BUCKET}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prefix: '', limit: 200, sortBy: { column: 'name', order: 'desc' } }),
+    body: JSON.stringify({ prefix, limit: 500, sortBy: { column: 'name', order: 'desc' } }),
   })
   if (!response.ok) return []
   const all = (await response.json()) as StorageObject[]
-  return all.filter((o) => o.name.endsWith('.json.gz'))
+  return all.map((o) => ({ ...o, name: prefix === '' ? o.name : `${prefix}/${o.name}` }))
 }
 
 /**

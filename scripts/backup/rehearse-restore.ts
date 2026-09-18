@@ -42,7 +42,9 @@ import {
   checksum,
   downloadArchive,
   listArchives,
+  newestFolder,
   readArchive,
+  readFolder,
   tablesToBackUp,
 } from '../../src/backup/portable.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -81,43 +83,85 @@ if (serviceKey === '') {
   process.exit(2)
 }
 
-const archives = await listArchives(ref, serviceKey)
+/*
+  A FOLDER backup first, a legacy single file second (0492).
+
+  The nightly backup stopped being one 52MB object and became one gzipped
+  object per table plus a manifest, because the single build took 148 seconds
+  and an edge function does not get that long — the job's own history is five
+  ticks of `worker died holding this in running` and then `5 attempts
+  exhausted`, with the last complete backup on 16 September.
+
+  The fallback is not politeness: the single files already in the bucket are
+  real backups of a real office and this rehearsal is what says they can be
+  restored. It goes when they age out, not before.
+*/
+const folder = await newestFolder(ref, serviceKey)
+const legacy = (await listArchives(ref, serviceKey)).filter(
+  (o) => !o.name.includes('/') && o.name.endsWith('.json.gz'),
+)
 record(
   'there is a backup to restore from',
-  archives.length === 0 ? 'the bucket is empty' : `${String(archives.length)} archive(s)`,
-  archives.length > 0,
+  folder !== null
+    ? `folder ${folder.prefix}, ${String(folder.tables.length)} table object(s)`
+    : legacy.length === 0
+      ? 'the bucket is empty'
+      : `${String(legacy.length)} legacy archive(s), no folder backup yet`,
+  folder !== null || legacy.length > 0,
 )
-if (archives.length === 0) process.exit(1)
+if (folder === null && legacy.length === 0) process.exit(1)
 
-// Newest by name, which sorts correctly because the stamp is ISO without
-// separators. See `buildArchive`.
-const newest = [...archives].sort((a, b) => b.name.localeCompare(a.name))[0]
-if (newest === undefined) process.exit(1)
-
-const bytes = await downloadArchive(ref, serviceKey, newest.name)
-record(
-  'the newest one downloads',
-  `${newest.name}, ${String(Math.round(bytes.length / 1024))}KB`,
-  bytes.length > 0,
-)
-
-// The checksum stored beside it, not one recomputed from the same bytes twice.
-const stated = await downloadArchive(ref, serviceKey, `${newest.name}.sha256`)
-  .then((b) => new TextDecoder().decode(b).trim().split(/\s+/)[0] ?? '')
-  .catch(() => '')
-const actual = await checksum(bytes)
-record(
-  'it is the file that was written, byte for byte',
-  stated === '' ? 'no checksum was stored beside it' : `${actual.slice(0, 16)}…`,
-  stated !== '' && stated === actual,
-)
-
-const archive = (await readArchive(bytes)) as {
+let archive: {
   data?: Record<string, unknown[]>
   row_counts?: Record<string, number>
   schema?: { t: string; column_name: string }[]
   latest_migration?: string
 }
+
+if (folder !== null) {
+  const read = await readFolder(ref, serviceKey, folder)
+  record(
+    'every object in it is the one that was written, byte for byte',
+    read.corrupt.length === 0
+      ? `${String(folder.tables.length + 1)} object(s) checksum clean`
+      : `CORRUPT: ${read.corrupt.slice(0, 4).join(', ')}`,
+    read.corrupt.length === 0,
+  )
+  record(
+    'it decompresses into something with tables in it',
+    `${String(Object.keys(read.data).length)} table(s), taken at migration ${read.latest_migration}`,
+    Object.keys(read.data).length > 0,
+  )
+  archive = read
+} else {
+  // Newest by name, which sorts correctly because the legacy stamp is ISO
+  // without separators.
+  const newest = [...legacy].sort((a, b) => b.name.localeCompare(a.name))[0]
+  if (newest === undefined) process.exit(1)
+  const bytes = await downloadArchive(ref, serviceKey, newest.name)
+  record(
+    'the newest one downloads',
+    `${newest.name}, ${String(Math.round(bytes.length / 1024))}KB`,
+    bytes.length > 0,
+  )
+  const stated = await downloadArchive(ref, serviceKey, `${newest.name}.sha256`)
+    .then((b) => new TextDecoder().decode(b).trim().split(/\s+/)[0] ?? '')
+    .catch(() => '')
+  const actual = await checksum(bytes)
+  record(
+    'it is the file that was written, byte for byte',
+    stated === '' ? 'no checksum was stored beside it' : `${actual.slice(0, 16)}…`,
+    stated !== '' && stated === actual,
+  )
+  archive = (await readArchive(bytes)) as typeof archive
+  record(
+    'it decompresses into something with tables in it',
+    `${String(Object.keys(archive.data ?? {}).length)} table(s), taken at migration ` +
+      `${String(archive.latest_migration)}`,
+    Object.keys(archive.data ?? {}).length > 0,
+  )
+}
+
 const data = archive.data ?? {}
 const tables = Object.keys(data)
 record(

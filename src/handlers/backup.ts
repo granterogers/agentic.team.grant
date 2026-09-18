@@ -32,8 +32,17 @@
  * is a command he runs.
  */
 
-import { buildArchive, ensureBucket, listArchives, uploadArchive } from '../backup/portable.ts'
+import {
+  backupPrefix,
+  buildManifest,
+  dumpTable,
+  ensureBucket,
+  listArchives,
+  putObject,
+  tablesToBackUp,
+} from '../backup/portable.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { count } from '../text/plain.ts'
 
@@ -82,21 +91,98 @@ export function backupHandler(deps: BackupDeps): Handler {
         } satisfies HandlerOutput
       }
 
-      const bucket = await ensureBucket(projectRef, serviceKey)
-      const archive = await buildArchive(db, projectRef)
-      await uploadArchive(projectRef, serviceKey, archive)
-      const kept = await listArchives(projectRef, serviceKey)
+      /*
+        ONE STEP PER TABLE, so a killed tick resumes (0492).
 
-      const size = `${String(Math.round(archive.bytes.length / 1024))}KB`
-      const raw = `${String(Math.round(archive.rawBytes / 1024))}KB`
+        This used to build the whole 52MB archive in one call. Measured at 148
+        seconds on a fast machine; an edge function does not get that long, and
+        the job's own history says exactly that — five ticks each ending
+        `worker edge-… died holding this in running`, then `5 attempts
+        exhausted`. **The last backup that finished was 16 September.**
+
+        Now each table is dumped, uploaded and checkpointed on its own. A tick
+        that dies has still banked everything before it, and the next attempt
+        skips those steps. No tick holds more than one table in memory.
+
+        The effect is `local` rather than `external`, deliberately. `external`
+        means "a resume cannot tell whether this committed, so park" — right
+        for a message that may have been sent twice. Here the key is derived
+        from the JOB and the upload is an upsert, so repeating a step
+        overwrites the same object with the same bytes. Declaring `external`
+        would park the job on the first interruption, which is the one thing
+        this change exists to stop.
+      */
+      const bucket = await ensureBucket(projectRef, serviceKey)
+      const prefix = backupPrefix(job.jobId)
+      const tables = await tablesToBackUp(db)
+
+      const end = await runSteps(db, job.jobId, 'office.backup@1', [
+        ...tables.map((t) => ({
+          name: `table:${t.table_schema}.${t.table_name}`,
+          effect: 'local' as const,
+          run: async () => {
+            const dump = await dumpTable(db, prefix, t.table_schema, t.table_name)
+            await putObject(projectRef, serviceKey, dump)
+            return { outcome: { rows: dump.rows, bytes: dump.bytes.length }, effectRef: dump.key }
+          },
+        })),
+        {
+          /*
+            The manifest LAST, because its presence is what makes the folder a
+            complete backup rather than an interrupted one. A restore that
+            finds tables and no manifest should say so, not load three
+            quarters of an office.
+          */
+          name: 'manifest',
+          effect: 'local' as const,
+          run: async (done) => {
+            const counts: Record<string, number> = {}
+            for (const t of tables) {
+              const o = done[`table:${t.table_schema}.${t.table_name}`]
+              counts[`${t.table_schema}.${t.table_name}`] = Number(o?.rows ?? 0)
+            }
+            const m = await buildManifest(db, projectRef, prefix, counts)
+            await putObject(projectRef, serviceKey, m)
+            return { outcome: { rows: m.rows, tables: Object.keys(counts).length } }
+          },
+        },
+      ])
+
+      if (end.kind !== 'done') {
+        /*
+          Stopped or parked between tables. Say what was banked rather than
+          claiming a backup — an unnoticed absence of backups is the whole
+          failure mode, and a half-finished folder that reports success is the
+          most dangerous shape this handler has.
+        */
+        const banked = Object.keys(end.kind === 'stopped' ? end.outcomes : {}).length
+        return {
+          ...base,
+          body:
+            `The backup did not finish: ${end.kind} at ${end.at}. ` +
+            `${count(banked, 'table is', 'tables are')} already in ${bucket}/${prefix}, ` +
+            'and the next run carries on from there rather than starting again.',
+          announce: true,
+          severity: 'important',
+        } satisfies HandlerOutput
+      }
+
+      const rows = Object.entries(end.outcomes)
+        .filter(([k]) => k.startsWith('table:'))
+        .reduce((a, [, o]) => a + Number(o.rows ?? 0), 0)
+      const bytes = Object.entries(end.outcomes)
+        .filter(([k]) => k.startsWith('table:'))
+        .reduce((a, [, o]) => a + Number(o.bytes ?? 0), 0)
+      const kept = await listArchives(projectRef, serviceKey)
 
       return {
         ...base,
         body:
-          `Backed up ${count(archive.rows, 'row', 'rows')} across ` +
-          `${count(archive.tables, 'table', 'tables')} — ${raw} of data, ${size} compressed. ` +
-          `Up to and including migration ${archive.latestMigration}.\n\n` +
-          `${count(kept.length, 'copy is', 'copies are')} kept (${bucket}). ` +
+          `Backed up ${count(rows, 'row', 'rows')} across ` +
+          `${count(tables.length, 'table', 'tables')} — ` +
+          `${String(Math.round(bytes / 1024))}KB compressed, one object per table in ` +
+          `${bucket}/${prefix}.\n\n` +
+          `${count(kept.length, 'copy is', 'copies are')} kept. ` +
           'Nothing is ever deleted automatically.\n\n' +
           'It holds no credentials, and it lives in the same Supabase project it ' +
           'came from — so it survives losing the code or this machine, and not ' +
