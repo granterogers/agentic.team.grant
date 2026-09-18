@@ -129,6 +129,7 @@ import {
   correspondence,
   coverageNote,
   coverageOf,
+  type MailCoverage,
   mailBlock,
   mailRefs,
   retrieve,
@@ -2851,7 +2852,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const mail =
         confirmation !== null ? [] : await correspondence(deps.db, job.projectId, instruction)
-      const mailContext = mailBlock(mail)
+      /*
+        And WHY it is empty, when it is (#172, #257).
+
+        `mailBlock` used to return nothing at all for no hits, so the model was
+        told nothing about mail and any "there is nothing in your email" it
+        produced was a claim about a search it had never been shown. Every one
+        of Grant's projects associates zero of 206 cached messages today,
+        because `public.contacts` is empty and the contact tier is the strong
+        one — so this is the common case rather than an edge.
+      */
+      const mailCover =
+        job.projectId === null || confirmation !== null
+          ? null
+          : (((
+              await deps.db
+                .execute(`select app.mail_coverage(${lit(job.projectId)}::uuid) as c`)
+                .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+            ).rows[0]?.c as MailCoverage | undefined) ?? null)
+      const mailContext = mailBlock(mail, mailCover)
 
       /*
         And what has gone quiet on this project (#172).

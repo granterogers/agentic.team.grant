@@ -420,8 +420,59 @@ export function waitingBlock(items: readonly Waiting[]): string {
   )
 }
 
-export function mailBlock(hits: readonly MailHit[]): string {
-  if (hits.length === 0) return ''
+/** What the office can and cannot see in the inbox, for a project (#172). */
+export interface MailCoverage {
+  /** Messages the office holds at all, across every project. */
+  readonly cached: number
+  /** Contacts on THIS project — the strongest association tier. */
+  readonly contacts: number
+  /** Phrases that route to this project, the other tier. */
+  readonly aliases: number
+}
+
+/**
+ * Why an empty answer is empty (#172, #257).
+ *
+ * `mailBlock` returned '' when nothing matched, so the model was told NOTHING
+ * about mail and any absence it stated — *"there is nothing in your email
+ * about that"* — was a claim about a search whose shape it had never been
+ * given. #257's rule, in the one domain #257 did not cover: a search that
+ * found nothing is evidence of an absence only when the index covers what is
+ * attached.
+ *
+ * It matters most here because of a fact ADR-0037 records and nothing acted
+ * on: `public.contacts` holds **zero rows**, and a contact match is "the
+ * strongest statement of relevance the database holds". So the strong tier
+ * has never fired on real data, and every one of Grant's projects associates
+ * nothing out of 206 cached messages. An office that answers "nothing in your
+ * email" in that state is confidently wrong.
+ *
+ * Empty when coverage is complete, because a caveat on every turn is one
+ * nobody reads — the same rule `app.project_knowledge` follows.
+ */
+export function mailCoverageNote(coverage: MailCoverage | null): string {
+  if (coverage === null) return ''
+  // Nothing cached at all is a different fact from nothing matching, and it
+  // points at a different fix: connect or sync, rather than add a contact.
+  if (coverage.cached === 0) {
+    return (
+      'The office holds no cached mail at all, so it has not looked at any ' +
+      'correspondence. Say that you cannot see his email rather than that ' +
+      'there is nothing in it.'
+    )
+  }
+  if (coverage.contacts > 0 || coverage.aliases > 0) return ''
+  return (
+    `The office holds ${String(coverage.cached)} cached messages and can associate ` +
+    'NONE of them with this project: mail reaches a project through a contact on ' +
+    'it or a subject naming it, and this project has neither. So you may say you ' +
+    'cannot connect any of his correspondence to this project, and you may NOT ' +
+    'say there is nothing in his email about it — you have not established that.'
+  )
+}
+
+export function mailBlock(hits: readonly MailHit[], coverage: MailCoverage | null = null): string {
+  if (hits.length === 0) return mailCoverageNote(coverage)
   const lines = hits.map((h, i) => {
     const why =
       h.why === 'contact'
