@@ -77,6 +77,7 @@ import {
   artifactRequest,
   KIND_LABEL,
   notebookRequest,
+  pageRequest,
   type RequestedKind,
 } from '../agents/actions.ts'
 import {
@@ -146,6 +147,22 @@ import {
   VoiceNoteError,
 } from '../voice/inbound.ts'
 import { allowance, describe } from './meter.ts'
+
+/**
+ * The host, for saying out loud. Never the whole url.
+ *
+ * "Opening https://supplier.example.com/orders/october?token=..." in a Telegram
+ * message puts a query string — which can carry a token — into a channel, a
+ * notification and a screenshot. The host is what a person needs to know they
+ * are about to be read something from.
+ */
+function hostForSaying(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return 'that page'
+  }
+}
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
@@ -2375,6 +2392,79 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const isBranch = String(payload.handed_off_by ?? '') !== ''
       const wantsFile = job.projectId === null || isBranch ? null : artifactRequest(instruction)
+
+      /*
+        A request to READ A PAGE (#135, #16).
+
+        The browser tier had no door. `browser.gather` is a registered handler
+        with an adapter behind it, an append-only ledger, a project surface,
+        sessions in the Vault, a ten-minute budget and a Stop — and NOTHING
+        ever enqueued one, so none of it was reachable from any sentence Grant
+        could say. #72's defect at the top of the stack, and invisible to the
+        check written for #72: `check:callers` walks database functions, and a
+        job kind nobody enqueues is not a function.
+
+        After `wantsFile` and guarded on it, for the reason #258 states in
+        capitals two paragraphs up: whichever of the claims the sentence makes
+        first decides what he gets, and asking for a document about a page is
+        asking for a document. `pageRequest` declines that sentence on its own
+        anyway — it carries no reading verb — so this guard is belt and braces
+        rather than the thing doing the work, and the unit test asserts both
+        halves so the next change cannot quietly make them disagree.
+
+        Not on a branch, for #258's reason exactly: a branch carrying the
+        instruction verbatim would open the same page a second time, spend the
+        budget twice and file two documents for one request.
+      */
+      /*
+        Only when he ASKED for it to be read.
+
+        `pageRequest` also matches a BARE link, and a bare link has meant "add
+        this to the project's notebook" since `linkRequest` was written --
+        people paste a link at a colleague meaning "deal with this". That
+        default is good and nobody asked to change it, so the gather fires only
+        on `why: 'asked'`, which is the same field `linkRequest` now consults,
+        so the two paths cannot both claim one sentence.
+      */
+      const askedForPage =
+        job.projectId === null || isBranch || wantsFile !== null ? null : pageRequest(instruction)
+      const wantsPage = askedForPage?.why === 'asked' ? askedForPage : null
+      const reading =
+        wantsPage === null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.enqueue_child(
+                  ${lit(job.jobId)}::uuid, 'browser.gather',
+                  jsonb_build_object(
+                    'url', ${lit(wantsPage.url.slice(0, 2_000))},
+                    'because', ${lit(wantsPage.because.slice(0, 500))},
+                    'by', ${lit(who.slug)},
+                    'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                    'command_id', ${lit(String(payload.command_id ?? ''))}
+                  ),
+                  interval '0', true
+                )::text as id`)
+              .then(
+                () =>
+                  `Opening ${hostForSaying(wantsPage.url)} now — I will read it and keep what ` +
+                  'it says with this project. I only read; I do not press anything.',
+              )
+              .catch(async (error: unknown) => {
+                /*
+                  Recorded rather than swallowed. A write allowed to fail
+                  without failing the job has to say so somewhere, or it is
+                  indistinguishable from a feature nobody built — which is the
+                  defect this whole block exists to undo.
+                */
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'open a web page', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))}, null)`)
+                  .catch(() => undefined)
+                return null
+              })
       const writingFile =
         wantsFile === null
           ? null
@@ -2588,7 +2678,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
 
       const confirmation =
-        [linked, made, filed, noted, extracting, enumerating, writingFile]
+        [linked, made, filed, noted, extracting, enumerating, writingFile, reading]
           .filter((x) => x !== null)
           .join('\n\n') || null
 
@@ -2620,6 +2710,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (enumerating === null ? 0 : 1) +
         // And starting a report is a thing it did, not a thing it described (#258).
         (writingFile === null ? 0 : 1) +
+        // So is opening a page: the office spent a browser-minute and filed
+        // what the page said (#135).
+        (reading === null ? 0 : 1) +
         /*
           A task on Grant's own list is a thing this turn DID (#259).
 

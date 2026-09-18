@@ -81,6 +81,8 @@ const YOUTUBE = /(?:youtube\.com\/(?:watch\?|shorts\/|live\/)|youtu\.be\/)/i
 /** Trailing punctuation a person's sentence leaves stuck to a pasted URL. */
 const trim = (url: string): string => url.replace(/[.,;:!?)\]]+$/, '')
 
+import { pageRequest } from './actions.ts'
+
 export function classifyLink(raw: string): FoundLink {
   const url = trim(raw)
   const notebook = NOTEBOOK_ID.exec(url)
@@ -171,11 +173,30 @@ export function linkRequest(message: string): LinkRequest | null {
   // Order matters and this way round is deliberate. "Have a look at this and
   // add it" is an instruction with a pleasantry in front of it; a message that
   // only asks a question is not.
+  /*
+    An explicit request to READ it is not a request to FILE it (#135).
+
+    `DISCUSSING` was an enumeration — it wanted the literal "read this and" —
+    so "Read https://example.com/ and tell me what it says" matched nothing and
+    fell through to the default, and the office answered a request to read a
+    page with "putting it into the notebook and waiting for Google to read it".
+    Found by driving the real path end to end; no unit test here could see it,
+    because both halves were correct on their own.
+
+    `pageRequest` is the shared predicate rather than a widened pattern here,
+    for the reason #258 gives about the artifact matchers: two regexes deciding
+    the same thing by eye is how they come to disagree, and deference between
+    them is a cycle. A bare link is still `add_source`, which is what it has
+    always meant and what `why: 'bare'` preserves; ADDING still wins outright,
+    because "read this and add it to the notebook" is an instruction to add it.
+  */
+  const asksToRead = pageRequest(message)?.why === 'asked'
+
   const intent: LinkIntent = ADDING.test(text)
     ? links.every((l) => l.kind === 'notebooklm' || l.kind === 'notion')
       ? 'attach'
       : 'add_source'
-    : DISCUSSING.test(text)
+    : asksToRead || DISCUSSING.test(text)
       ? 'discuss'
       : // A bare link with no verb. People paste a link at a colleague meaning
         // "deal with this", and the destination rule below is what makes that

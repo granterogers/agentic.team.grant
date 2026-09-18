@@ -371,3 +371,91 @@ export function artifactRequest(text: string): ArtifactRequest | null {
   const said = text.trim()
   return asksForAFile(said) ? { brief: said, format: 'pdf' } : null
 }
+
+/**
+ * Asking the office to READ A PAGE (#135, #16).
+ *
+ * ## The capability had no door
+ *
+ * `browser.gather` is a registered handler with an adapter behind it, an
+ * append-only ledger, a project surface, sessions in the Vault, a budget and
+ * a Stop. **Nothing enqueued one.** Every other job kind reaches Grant through
+ * `app.enqueue_child` from this path or a duty; browsing reached him through
+ * nothing at all, so the whole tier — five migrations, two runtimes, a tab —
+ * was unreachable from any sentence he could say.
+ *
+ * #72's defect at the top of the stack, and invisible to the check written for
+ * it: `check:callers` walks database functions, and a job kind nobody enqueues
+ * is not a function.
+ *
+ * ## The rule, and why it is two signals rather than one
+ *
+ * A URL alone is not a request. Grant pastes links while talking about them —
+ * "we should probably move off https://example.com/pricing eventually" is a
+ * remark, and reading it would spend browser-minutes, file a document he did
+ * not ask for, and put a page in the project's knowledge that nobody chose.
+ *
+ * A reading verb alone is not one either: "read the Q3 report" is about a
+ * document this office already holds, and answering it by opening the internet
+ * would be absurd.
+ *
+ * So both, with one exception that is not a third rule but the same one: a
+ * message that is ESSENTIALLY JUST A URL is a request, because there is
+ * nothing else in it for it to be about. That is how a link gets shared.
+ */
+export interface PageRequest {
+  /** The address to open. Validated as http(s) here, guarded again by the runtime. */
+  readonly url: string
+  /** Why, in Grant's own words, for the ledger and the Browser tab. */
+  readonly because: string
+  /**
+   * Whether he ASKED for it to be read, or simply pasted it.
+   *
+   * The distinction decides which of two existing behaviours the sentence
+   * gets, so it cannot live in the caller. A bare link has meant "add this to
+   * the project's notebook" since `linkRequest` was written — people paste a
+   * link at a colleague meaning "deal with this" — and that is a good default
+   * nobody asked to change. An explicit "read this and tell me what it says"
+   * is a different request: he wants the words NOW, not a source indexed for
+   * later.
+   */
+  readonly why: 'asked' | 'bare'
+}
+
+/** The first http(s) address in a message, if there is one. */
+const FIRST_URL = /\bhttps?:\/\/[^\s<>"'`)\]]+/i
+
+/**
+ * Asking for a page to be opened.
+ *
+ * Deliberately not `fetch`, `scrape` or `crawl`: those are the words for doing
+ * it at scale, and this tier opens one page. A sentence asking to crawl a site
+ * should reach a person rather than quietly become a single read.
+ */
+const READ_IT =
+  /\b(read|open|look\s+at|have\s+a\s+look|check|take\s+a\s+look|see\s+what|what\s+does|summari[sz]e|pull\s+(up|in)|grab)\b/i
+
+export function pageRequest(text: string): PageRequest | null {
+  const said = text.trim()
+  if (said === '') return null
+
+  const found = FIRST_URL.exec(said)
+  if (found === null) return null
+  const url = found[0].replace(/[.,;:!?]+$/, '')
+
+  /*
+    A url that is not a web address is not this path's business. The runtime
+    refuses it again — the guard there is the one that matters, because a
+    gather url can also arrive from a document — but refusing it here means the
+    office says "that is not a page I can open" instead of queueing a job that
+    exists only to fail.
+  */
+  if (!/^https?:\/\//i.test(url)) return null
+
+  // A message that is essentially just the link. Punctuation and a word or two
+  // of framing ("this:", "have a look —") still count.
+  const rest = said.replace(found[0], '').replace(/[^a-z]/gi, '')
+  if (rest.length <= 12) return { because: said, url, why: 'bare' }
+
+  return READ_IT.test(said) ? { because: said, url, why: 'asked' } : null
+}
