@@ -36,7 +36,7 @@
  * parses to nothing is a failure rather than an empty PDF with a cover on it.
  */
 
-import { type Block, type Report, coverLine, renderReport } from '../artifacts/report.ts'
+import { type Block, coverLine, type Report, renderReport } from '../artifacts/report.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
 import { validatePdf } from '../artifacts/validate.ts'
 import type { SqlExecutor } from '../db/executor.ts'
