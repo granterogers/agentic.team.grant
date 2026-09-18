@@ -508,18 +508,59 @@ ok(
 process.stdout.write('       waiting for the worker')
 const deadline = Date.now() + 6 * 60 * 1000
 let decisions: { job_id: string; roster: string }[] = []
+/*
+  A THROTTLE IS NOT AN ANSWER, and inside a wait loop it is not a failure
+  either (#232, and CLAUDE.md's rule about the Management API).
+
+  This loop polled with `await db.execute(...)` bare. `ManagementApiExecutor`
+  already retries a 429 five times with backoff — 30 seconds — and when the
+  API stays throttled past that it THROWS, which killed the whole suite six
+  minutes in and reported `verify:routing-breadth` as RED in the release gate.
+  Reproduced on its own, away from gate load, so it is this loop rather than
+  passing pressure.
+
+  An infra failure entering a measurement as data is the thing CLAUDE.md warns
+  about; entering it as a CRASH is the same mistake louder. A throttle here
+  means "ask again", and the deadline is what stops that being unbounded.
+
+  It is counted, and the count is REPORTED rather than swallowed: a run that
+  spent its whole budget being throttled must not then blame the office for
+  not routing, which would be an environment failure wearing a product
+  defect's clothes.
+*/
+let throttled = 0
 while (Date.now() < deadline) {
-  decisions = (
-    await db.execute(`
-      select job_id::text as job_id, coalesce(array_to_string(roster, ','), '') as roster
-        from public.routing_decisions
-       where job_id = any(array[${jobIds.map((j) => `${lit(j)}::uuid`).join(',')}])`)
-  ).rows as { job_id: string; roster: string }[]
+  try {
+    decisions = (
+      await db.execute(`
+        select job_id::text as job_id, coalesce(array_to_string(roster, ','), '') as roster
+          from public.routing_decisions
+         where job_id = any(array[${jobIds.map((j) => `${lit(j)}::uuid`).join(',')}])`)
+    ).rows as { job_id: string; roster: string }[]
+  } catch (error) {
+    const why = String((error as Error).message)
+    if (!/Throttler|Too Many Requests|429/i.test(why)) throw error
+    throttled += 1
+    process.stdout.write('t')
+    await new Promise((r) => setTimeout(r, 20_000))
+    continue
+  }
   if (decisions.length >= jobIds.length) break
   process.stdout.write('.')
   await new Promise((r) => setTimeout(r, 15_000))
 }
 console.log('')
+if (decisions.length < jobIds.length && throttled > 0) {
+  console.error(
+    `\nCOULD NOT RUN: the Management API throttled ${String(throttled)} time(s) and the ` +
+      `worker's decisions never became readable (${String(decisions.length)} of ` +
+      `${String(jobIds.length)}). This is an environment failure, not a routing result — ` +
+      'the office is not being judged on it.',
+  )
+  // 2 rather than 1: a verdict was never reached, which is a different thing
+  // from a verdict that was bad.
+  process.exit(2)
+}
 
 /*
   An empty roster is not "nobody" — it is Claire.
