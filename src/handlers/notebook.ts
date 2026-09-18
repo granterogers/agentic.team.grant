@@ -46,6 +46,7 @@ import {
   type ArtifactListing,
   NotebookActionError,
   NotebookActions,
+  officeKind,
 } from '../notebook/actions.ts'
 import { nothingToDo, type Plan } from '../tools/plan.ts'
 import { allowance, deferUntil, describe, record, refused } from './meter.ts'
@@ -906,7 +907,7 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
             .execute(`
               select app.record_notebook_artifact(
                 ${lit(projectId)}::uuid, ${lit(notebook.id)}, ${lit(a.artifactId)},
-                ${lit(a.kind)}, ${lit(a.title ?? '')},
+                ${lit(officeKind(a.kind))}, ${lit(a.title ?? '')},
                 ${url === null ? 'null' : lit(url)}, ${lit(state)}, null)
             `)
             .then(() => {

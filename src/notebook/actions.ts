@@ -56,6 +56,48 @@ export const ARTIFACT_KINDS: readonly ArtifactKind[] = [
   'study_guide',
 ]
 
+/**
+ * The library's word for a kind, translated into the office's.
+ *
+ * ## Two vocabularies, found by listing a real notebook
+ *
+ * The provider answers `slide_deck` and `mind_map`; this office says `slides`
+ * and `mindmap`, and `ARTIFACT_KINDS`, the request matcher, the job payloads
+ * and the page's `KIND_SAID` all speak the second. Adoption stored the wire
+ * word verbatim, `public.artifacts.kind` has no CHECK to refuse it, and the
+ * page falls through to the raw string for a kind it has no English for — so
+ * a slide deck Grant made himself appeared on his Sources tab as
+ * **"slide_deck"**, and a mind map as **"mind_map"**.
+ *
+ * Nothing failed, which is why nothing caught it: the unknown-kind fallback
+ * exists precisely so a new type does not break enumeration, and it did its
+ * job over a type that is not new at all. Found by running a real listing —
+ * 4 of the 12 artifacts in Grant's four notebooks are these two kinds.
+ *
+ * 0311 is the migration about this exact shape: two words for one thing, and
+ * no reader able to tell them apart. The answer there was to speak one
+ * vocabulary and translate at the boundary, which is what this is.
+ *
+ * Unknown stays unknown rather than being guessed at. A kind nobody has
+ * mapped is a kind this office genuinely does not have a word for, and
+ * inventing one would put a wrong label on a real artifact.
+ */
+const FROM_LIBRARY: Readonly<Record<string, ArtifactKind>> = {
+  audio: 'audio',
+  flashcards: 'flashcards',
+  infographic: 'infographic',
+  mind_map: 'mindmap',
+  quiz: 'quiz',
+  report: 'report',
+  slide_deck: 'slides',
+  study_guide: 'study_guide',
+  video: 'video',
+}
+
+export function officeKind(libraryKind: string): string {
+  return FROM_LIBRARY[libraryKind] ?? libraryKind
+}
+
 /** One row of the notebook's artifact listing. */
 export interface ArtifactListing {
   readonly artifactId: string

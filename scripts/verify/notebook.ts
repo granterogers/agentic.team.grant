@@ -457,5 +457,60 @@ console.log('\nadopting what the notebook made (#260)')
   )
 }
 
+/*
+  ---------------------------------------------- one vocabulary for a kind ---
+
+  The provider answers `slide_deck` and `mind_map`; this office says `slides`
+  and `mindmap`, everywhere — `ARTIFACT_KINDS`, the request matcher, the job
+  payloads, the page's `KIND_SAID`. Adoption stored the wire word verbatim and
+  the page fell through to the raw string, so a slide deck Grant made himself
+  appeared on his Sources tab as "slide_deck". One row was already stored that
+  way when this was found (0498 corrected it).
+
+  Nothing failed, which is why nothing caught it: the unknown-kind fallback
+  exists so a NEW type cannot break enumeration, and it did its job over a
+  type that is not new.
+
+  Asserted as a PROPERTY rather than as a CHECK constraint, and the difference
+  is the whole point. A constraint restricting `kind` to the office's list
+  would turn a provider shipping an unmapped type into a LOST artifact, which
+  is worse than an ugly label. This catches the words we know the library uses
+  and permits one nobody has mapped — the distinction a constraint cannot make.
+*/
+console.log('\none vocabulary for an artifact kind')
+{
+  const wire = await one(`
+    select coalesce(string_agg(distinct kind, ', '), '') as kinds, count(*)::int as n
+      from public.artifacts
+     where kind in ('slide_deck', 'mind_map', 'studyguide', 'audio_overview')`)
+  ok(
+    'no stored artifact carries the library word instead of ours',
+    Number(wire.n) === 0,
+    Number(wire.n) === 0 ? 'none' : `${String(wire.n)} row(s): ${String(wire.kinds)}`,
+  )
+  /*
+    The control. The check above is a found-nothing check, and a found-nothing
+    check that has only ever reported zero is indistinguishable from one that
+    cannot report anything — so prove the same query SEES a wire word when one
+    is there, inside a rollback so nothing survives it.
+  */
+  const sees = await one(`
+    do $probe$
+    declare v_n int;
+    begin
+      insert into public.artifacts (project_id, notebook_ref, external_ref, kind, title, state)
+      select project_id, 'nb-probe', 'artifact-probe-vocab', 'slide_deck', 'probe', 'generating'
+        from public.projects limit 1;
+      select count(*) into v_n from public.artifacts where kind = 'slide_deck';
+      if v_n = 0 then raise exception 'the vocabulary check cannot see a wire word at all'; end if;
+      raise exception 'rolling the probe back';
+    exception when others then
+      if sqlerrm <> 'rolling the probe back' then raise; end if;
+    end
+    $probe$;
+    select 1 as done`)
+  ok('CONTROL: that query can see a wire word when there is one', sees.done !== undefined)
+}
+
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 if (fail > 0) process.exit(1)
