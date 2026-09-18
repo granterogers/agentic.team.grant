@@ -44,6 +44,7 @@
 
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { COMPARE, JUDGE_MODEL, makeComparer } from '../../src/eval/judge.ts'
+import { judgeIsUsable } from '../../src/eval/usable.ts'
 import { ProviderRouter } from '../../src/providers/router.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
@@ -127,9 +128,29 @@ interface Verdict {
  * as `reversed` rather than being credited for a lucky half.
  */
 const askBoth = async (compare: ReturnType<typeof makeComparer>, p: Pair): Promise<Verdict> => {
-  const first = await compare(p.ask, p.worse, p.good)
+  /*
+    ASKED ONCE, AND ASKED AGAIN IF IT DID NOT ANSWER.
+
+    A reasoning model can spend its whole budget thinking and return no
+    content: the gate run of 2026-09-18 recorded `finish_reason=length, 19375
+    tokens spent` on one pair, and the same model scored 5/5 on the same
+    corpus twenty minutes later. CLAUDE.md already records the small version of
+    this — a judge with 2,000 tokens spends them thinking — and the budget here
+    is already 16,000, so the answer is not a bigger budget.
+
+    One retry, because a truncation is a one-off and a model that genuinely
+    cannot answer will not answer twice either. The retry costs nothing on a
+    free model and it is what separates "wrong" from "did not reply".
+  */
+  const once = async (a: string, b: string): Promise<Awaited<ReturnType<typeof compare>>> => {
+    const got = await compare(p.ask, a, b)
+    if (got !== null) return got
+    await pause(3_000)
+    return await compare(p.ask, a, b)
+  }
+  const first = await once(p.worse, p.good)
   await pause(3_000)
-  const second = await compare(p.ask, p.good, p.worse)
+  const second = await once(p.good, p.worse)
   if (first === null || second === null) return { slug: p.slug, outcome: 'unreadable' }
 
   if (p.equivalent === true) {
@@ -198,9 +219,23 @@ const forModel =
 console.log('judge calibration — five pairs with a known direction, each asked both ways\n')
 
 const models = SURVEY
-  ? (
-      (await db.execute(`select model_id from public.usable_models where pricing_prompt = 0`))
-        .rows as { model_id: string }[]
+  ? /*
+        `pricing_prompt` is TEXT, not a number — OpenRouter sends it as a
+        decimal string and the column keeps it verbatim. Comparing it to 0
+        raised `operator does not exist: text = integer`, so the survey mode,
+        which is the ONLY way to choose a judge on evidence rather than on
+        preference, had never run. Found the first time the pinned judge went
+        red and somebody reached for it. One `information_schema` query settles
+        a column's type, and this file's own history is full of not doing that.
+      */
+    (
+      (
+        await db.execute(
+          `select model_id from public.usable_models
+            where coalesce(nullif(pricing_prompt, ''), '0')::numeric = 0
+            order by model_priority nulls last, model_id`,
+        )
+      ).rows as { model_id: string }[]
     ).map((r) => r.model_id)
   : [JUDGE_MODEL]
 
@@ -245,17 +280,43 @@ const pinned = table.find((t) => t.model === JUDGE_MODEL)
   So the pinned judge must get at least 4, and a judge that cannot call the
   tie is named in the output rather than silently accepted.
 */
+/*
+  Scored over what the instrument ANSWERED, not over what it was asked.
+
+  An unreadable pair is the instrument abstaining, and the same argument
+  already applies to a position flip: the file's own header calls six of the
+  sixteen combinations unscoreable. Counting a truncated reply as a wrong
+  answer is what turned a judge that scores 5/5 into a gate failure saying it
+  "CANNOT discriminate", which is a false statement about the product — and a
+  gate that cries wolf is one somebody starts overriding.
+
+  So: the floor applies to the pairs that came back, and a judge that abstains
+  on MOST of them fails for that reason instead, with those words. A model
+  answering two pairs out of five is not a judge whatever it scores on the two.
+*/
 const floor = 4
 console.log('')
 if (pinned === undefined) {
   console.error('judge calibration FAILED — the pinned judge was never scored')
   process.exit(1)
 }
-const ok = pinned.correct >= floor
+const answered = PAIRS.length - pinned.unreadable
+const ok = judgeIsUsable({
+  pairs: PAIRS.length,
+  correct: pinned.correct,
+  unreadable: pinned.unreadable,
+  floor,
+})
 console.log(
   ok
-    ? `the pinned judge (${JUDGE_MODEL}) discriminates: ${String(pinned.correct)}/${String(PAIRS.length)}`
-    : `the pinned judge (${JUDGE_MODEL}) CANNOT discriminate: ${String(pinned.correct)}/${String(PAIRS.length)}. ` +
+    ? `the pinned judge (${JUDGE_MODEL}) discriminates: ${String(pinned.correct)}/${String(answered)} ` +
+        `answered${pinned.unreadable === 0 ? '' : ` (${String(pinned.unreadable)} abstained)`}`
+    : answered < floor
+      ? `the pinned judge (${JUDGE_MODEL}) DID NOT ANSWER ${String(pinned.unreadable)} of ` +
+        `${String(PAIRS.length)} pairs, so it was never scored. That is a model that ` +
+        'spends its budget reasoning, not one that judges badly — try the survey.'
+      : `the pinned judge (${JUDGE_MODEL}) CANNOT discriminate: ${String(pinned.correct)}/` +
+        `${String(answered)} answered. ` +
         'Any better/worse verdict from npm run replay is currently worth nothing.',
 )
 if (SURVEY) {
