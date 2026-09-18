@@ -258,6 +258,118 @@ const stepsFor = (ran: string[]) => [
   )
 }
 
+/*
+  --- 6. and the progress BESIDE the button (#263, #276) ----------------------
+
+  `app.job_progress` has been a gateway section since the resumption work and
+  nothing in the page read it, so the one screen in the product with a Stop
+  button showed no progress at all. Stop with nothing beside it asks Grant to
+  decide whether to kill something without telling him how far it has got,
+  which is the decision the reading exists to inform — so the two belong in one
+  suite and this section is here rather than in a file of its own.
+
+  Read over HTTP, because the defect was never in the SQL: the function worked
+  and nothing could reach it.
+*/
+{
+  const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
+  const bearer = String(
+    (
+      await one(
+        `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
+      )
+    ).v ?? '',
+  )
+  const jobId = await makeJob('queued')
+  await db.execute(`update public.jobs set state = 'running' where job_id = ${lit(jobId)}::uuid`)
+  /*
+    One finished step and one still in flight, written directly rather than by
+    running a handler: this section is about the READER, and driving the
+    checkpoint machinery again would be re-testing section 3.
+
+    `finished_at` is what marks a step done — there is no state column, and
+    section 3's comment records that assumption costing a run.
+  */
+  /*
+    `unrepeatable` is DERIVED, not stored: the column is `effect_kind`, and
+    `job_progress` computes `effect_kind = 'external'`. The first draft of this
+    section inserted a column that does not exist, which is the guessed-column
+    trap CLAUDE.md opens with — one `information_schema` query settles it.
+  */
+  await db.execute(`
+    insert into public.job_steps (job_id, step, ordinal, began_at, finished_at,
+                                  effect_kind, effect_ref, schema_version, code_version)
+    values (${lit(jobId)}::uuid, 'gathered', 0, app.now_utc(), app.now_utc(),
+            'local', null, 1, 'verify:stop'),
+           (${lit(jobId)}::uuid, 'told slack', 1, app.now_utc(), null,
+            'external', 'slack:C0FAKE', 1, 'verify:stop')`)
+
+  const r = await fetch(
+    `https://${ref}.supabase.co/functions/v1/hq-api?section=job_progress&id=${jobId}`,
+    { headers: { Authorization: `Bearer ${bearer}` } },
+  )
+  const body = (await r.json()) as { data?: Record<string, unknown>; error?: string }
+  const got = body.data ?? {}
+  const rows = Array.isArray(got.steps) ? (got.steps as Record<string, unknown>[]) : []
+  check(
+    'how far a running job has got is reachable from the page, not only from SQL',
+    r.ok ? `${String(rows.length)} step(s), state ${String(got.state)}` : String(body.error),
+    r.ok && rows.length === 2 && String(got.state) === 'running',
+  )
+  check(
+    'and it says which are finished and which one it is on',
+    rows.map((x) => `${String(x.step)}=${x.done === true ? 'done' : 'now'}`).join(' · '),
+    rows.filter((x) => x.done === true).length === 1 &&
+      rows.filter((x) => x.done !== true).length === 1,
+  )
+  /*
+    The unrepeatable mark, which is the one field a person cannot infer: it
+    means the step already had an effect outside the office, so resuming would
+    repeat it. A line that showed the steps and not that would be the
+    reassuring half of the truth.
+  */
+  check(
+    'and marks the step that already had an effect outside the office',
+    JSON.stringify(rows.map((x) => x.unrepeatable)),
+    rows.find((x) => String(x.step) === 'told slack')?.unrepeatable === true &&
+      rows.find((x) => String(x.step) === 'gathered')?.unrepeatable === false,
+  )
+  const page = readFileSync('web/studio/app.js', 'utf8')
+  /*
+    Both halves. The progress line is drawn ONLY for a job that is running and
+    only for a writer, so `verify:wired` walks the Active Jobs screen with a
+    finished queue and nothing to see — the blind spot CLAUDE.md records twice.
+  */
+  check(
+    'and the studio asks for it, beside the Stop button',
+    /read\('job_progress'/.test(page) && /class="jsteps"/.test(page) ? 'present' : 'MISSING',
+    /read\('job_progress'/.test(page) && /class="jsteps"/.test(page),
+  )
+  check(
+    'CONTROL: and only for a job that is actually running',
+    /r\.state === 'working' && r\.blocked === undefined && canWrite\(\)/.test(page)
+      ? 'guarded'
+      : 'ASKED FOR EVERY ROW',
+    /r\.state === 'working' && r\.blocked === undefined && canWrite\(\)/.test(page),
+  )
+  /*
+    NO TEARDOWN, and that is the rule rather than an omission. `job_steps` is
+    append-only — `app.job_steps_are_written_once` refuses a DELETE with "a
+    step that happened cannot be unhappened" — so the rows stay, and the thing
+    that makes that safe is whose job they belong to. Asserted, not assumed:
+    two suites in this repository have had a header claiming their traffic was
+    invisible and been wrong about it.
+  */
+  const belongs = await one(`
+    select j.is_fixture, j.requested_by
+      from public.jobs j where j.job_id = ${lit(jobId)}::uuid`)
+  check(
+    'the steps this section wrote belong to a fixture job, so they stay out of the readings',
+    `${String(belongs.requested_by)} · is_fixture=${String(belongs.is_fixture)}`,
+    belongs.is_fixture === true,
+  )
+}
+
 // --- hygiene and teardown ---------------------------------------------------
 console.log('')
 const mine = await one(`

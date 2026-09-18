@@ -184,6 +184,15 @@ let browserLeft = null
   work, and the list is empty in the ordinary case anyway.
 */
 let recoverable
+/*
+  How far a running job has got (#263, #276).
+
+  Keyed by job id. `app.job_progress` has been a gateway section since the
+  resumption work and nothing read it, so the one place in the product with a
+  Stop button showed no progress at all — Stop with nothing beside it asks
+  Grant to decide whether to kill something without telling him how far it is.
+*/
+const progress = {}
 const maps = {}
 const placed = {}
 
@@ -3498,6 +3507,7 @@ function activeJobs(p) {
 
   const job = (r) => {
     const c = crewBy(r.who)
+    if (r.state === 'working' && r.blocked === undefined && canWrite()) void needProgress(r.id)
     /*
       A job's leading edge is its OWNER's colour, not its state's. State is
       already said twice — by the group it sits in and by the blocker line — and
@@ -3512,6 +3522,7 @@ function activeJobs(p) {
         <b>${esc(r.ask)}</b>
         <span class="t-meta">${esc(c.name)} · asked ${when.stamp(r.askedAt, r.asked)}${
           r.context ? ` · about ${esc(r.context.title)}` : ''}</span>
+        ${steps(r)}
         ${r.blocked === undefined ? '' :
           `<span class="blocker">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -3528,6 +3539,65 @@ function activeJobs(p) {
         `<button class="btn quiet" data-stop-job="${esc(r.id)}"
           title="Ask it to stop at its next checkpoint">Stop</button>`}
     </article>`
+  }
+
+  /*
+    HOW FAR IT HAS GOT (#263, #276).
+
+    Beside Stop, because that is the decision the line informs: a job four
+    steps into five is one to leave alone and a job that has been on step one
+    for twenty minutes is one to stop. The section existed and nothing read it.
+
+    Named steps, not a percentage. The office does not know how many steps a
+    job will take — a handler decides as it goes — so a bar would be a number
+    invented to fill a shape, which is the thing this repository keeps paying
+    for. What it CAN say honestly is which steps are finished and what it is
+    on now.
+
+    An unrepeatable step is marked, because that is what it means to a resume:
+    it has already had an effect outside the database and running it again
+    would repeat it.
+  */
+  const steps = (r) => {
+    const got = progress[r.id]
+    if (!got || !Array.isArray(got.steps) || got.steps.length === 0) return ''
+    const done = got.steps.filter((x) => x.done === true)
+    const now = got.steps.find((x) => x.done !== true)
+    return `<span class="jsteps">
+      ${got.steps
+        .map(
+          /*
+            Three states, not two. The first draft gave every unfinished step
+            the "now" treatment, so a job on step three of four showed TWO
+            highlighted chips and the line said "on drafted" about one of them
+            — the picture and the sentence disagreeing on the same row. Only
+            the first unfinished step is being worked on; the ones after it
+            have not started.
+          */
+          (x) => `<span class="jstep ${
+            x.done === true ? 'was' : x === now ? 'now' : 'next'
+          }"
+                        title="${esc(
+                          x.unrepeatable === true
+                            ? `${String(x.step)} — already had an effect outside the office`
+                            : String(x.step),
+                        )}">${esc(x.step)}${x.unrepeatable === true ? ' *' : ''}</span>`,
+        )
+        .join('')}
+      <span class="t-meta">${
+        now === undefined
+          ? `${done.length} step${done.length === 1 ? '' : 's'} done`
+          : `${done.length} of ${got.steps.length} done · on ${esc(String(now.step))}`
+      }${
+        // `paused` is an OBJECT — reason, detail, resume_when, resumable — and
+        // an escaper over it prints "object Object", which is a trap this
+        // repository has already shipped once, on the Governance page. The
+        // reason is the word a person needs; the rest is for a resume.
+        got.paused && typeof got.paused === 'object'
+          ? ` · paused: ${esc(String(got.paused.reason ?? 'waiting'))}`
+          : ''
+      }</span>
+    </span>`
   }
 
   const group = (name, note, list) => list.length === 0 ? '' : `
@@ -12019,6 +12089,25 @@ async function needRecoverable() {
   render()
 }
 
+/*
+  Asked per job, once, and re-asked by `refresh()` clearing the store.
+
+  Only for a job that is RUNNING: a finished job's steps are history and the
+  Outputs tab is where its result lives, so fetching them would be one request
+  per completed row for something nobody is waiting on.
+*/
+async function needProgress(jobId) {
+  if (progress[jobId] !== undefined) return
+  progress[jobId] = null
+  try {
+    const got = await read('job_progress', jobId)
+    progress[jobId] = got && typeof got === 'object' ? got : null
+  } catch {
+    progress[jobId] = null
+  }
+  render()
+}
+
 async function needMade(slug) {
   if (notebookMade[slug] !== undefined) return
   const p = byId(slug)
@@ -12277,6 +12366,13 @@ async function refresh() {
   // task is a write, so the task list is behind for exactly the same reason.
   latest.lately = null
   latest.tasks = null
+  /*
+    And every running job's step list, for the same reason: the press that
+    triggered this refresh may well have been Stop, and a memoised progress
+    line saying "on step three" beside a job that has just stopped is a
+    reading that contradicts the row it sits in.
+  */
+  for (const k of Object.keys(progress)) delete progress[k]
   await Promise.all([
     hydrate(API, (() => {
       try {
@@ -12760,6 +12856,11 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
     reviewing,
     providers: config.PROVIDERS,
     projects: PROJECTS,
+    // A running job's steps (#263, #276). The line is drawn only for a job
+    // that is actually running AND only for a writer, so a capture without
+    // this shows the Stop button with nothing beside it — which is the state
+    // the change was made to end.
+    progress,
     render,
   }
 }

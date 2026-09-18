@@ -430,6 +430,86 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(500)
     await shoot('active-jobs')
 
+    /*
+      AND THE PROGRESS BESIDE THE STOP BUTTON (#263, #276).
+
+      Through the capture door for the same two reasons as the review queue:
+      the line is drawn only for a job that is RUNNING and only for a writer,
+      and a prototype job has no real step list. The token is a local-only
+      stand-in and both it and the rows come straight back out.
+    */
+    /*
+      TWO passes, and then the token again, and the first two runs needed all
+      of it.
+
+      Setting the token does not redraw, so `[data-stop-job]` matched nothing
+      — Stop is drawn only for a writer — and the seed loop ran over an empty
+      list. That is pass one. Pass two revealed the second reason: a signed-in
+      render asks the real gateway for each running job's steps, the capture's
+      token is a local-only stand-in, and a 401 makes `token.clear()` fire and
+      the page sign itself out from under the seed. So the token is written
+      again after seeding, and `progress` is filled before that render, which
+      is what stops the fetch happening at all.
+
+      The `waitForSelector` at the end is the point of the exercise: a capture
+      that quietly photographs the screen it came from is worse than no
+      capture, and both of those runs produced a PNG that looked plausible.
+    */
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      if (w === undefined) throw new Error('the capture door is not open')
+      localStorage.setItem('hq.token', 'local-capture-only')
+      w.render()
+    })()`)
+    await page.waitForSelector('[data-stop-job]', { timeout: 5000 })
+    /*
+      AND WAIT FOR THAT RENDER'S OWN FETCH TO LAND BEFORE SEEDING.
+
+      Run three of this capture: `waitForSelector('.jsteps')` PASSED and the
+      PNG still had no chips. The signed-in render asks the gateway for the
+      running job's steps; the reply is a 401; the catch writes `null` over
+      whatever is in the store and redraws — and it arrives AFTER the seed,
+      so the chips appear, the wait succeeds, and they are gone again a moment
+      later. A selector that is satisfied and then unsatisfied is the one thing
+      a wait cannot tell you about, which is why the image is the judge.
+
+      Once the catch has written its null, `needProgress` never asks again, so
+      everything after this point is stable.
+    */
+    await page.waitForTimeout(1500)
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      const running = document.querySelectorAll('[data-stop-job]')
+      if (running.length === 0) throw new Error('no running job to show progress for')
+      for (const b of running) {
+        w.progress[b.dataset.stopJob] = {
+          state: 'running',
+          steps: [
+            { step: 'read the brief', ordinal: 0, done: true, unrepeatable: false },
+            { step: 'gathered the sources', ordinal: 1, done: true, unrepeatable: false },
+            { step: 'drafted', ordinal: 2, done: false, unrepeatable: false },
+            { step: 'told slack', ordinal: 3, done: false, unrepeatable: true },
+          ],
+          paused: null,
+        }
+      }
+      localStorage.setItem('hq.token', 'local-capture-only')
+      w.render()
+    })()`)
+    await page.waitForSelector('.jsteps', { timeout: 5000 })
+    await page.evaluate(
+      `(() => { const el = document.querySelector('.jsteps');
+                if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
+    )
+    await page.waitForTimeout(300)
+    await shoot('job-progress')
+    await page.evaluate(`(() => {
+      localStorage.removeItem('hq.token')
+      for (const k of Object.keys(window.__shots.progress)) delete window.__shots.progress[k]
+      window.__shots.render()
+    })()`)
+    await page.waitForTimeout(300)
+
     await page.locator('[role="tab"][data-sub="outputs"]').click()
     await page.waitForTimeout(500)
     await shoot('team')

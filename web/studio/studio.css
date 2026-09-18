@@ -5477,6 +5477,36 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   background: var(--surface); color: var(--ink); max-inline-size: 200px;
 }
 
+/*
+  How far a running job has got (#263, #276).
+
+  Named steps rather than a bar. The office does not know how many steps a job
+  will take, so a percentage would be a number invented to fill a shape — and
+  a chip row degrades honestly: three steps is three chips and eleven is a
+  wrapped block, where a bar would claim a denominator nobody has.
+
+  Small caps at 11px is the same treatment as the state pills elsewhere, and
+  the floor for type is 12px only where the text is PROSE; these are labels.
+  Kept at 12px anyway rather than arguing with the rule.
+*/
+.jsteps { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 3px; }
+.jstep {
+  padding: 2px 7px; border-radius: 6px; font: 500 12px/1.35 var(--text);
+  border: 1px solid var(--edge); color: var(--ink-2); background: var(--sunken);
+}
+/* The one it is on, in the project's own colour, so the eye lands on the
+   present rather than on the history. */
+.jstep.now {
+  border-color: color-mix(in srgb, var(--hue) 55%, var(--edge));
+  background: color-mix(in srgb, var(--hue) 14%, transparent);
+  color: var(--ink);
+}
+.jstep.was { opacity: .72; }
+/* Not started. Quieter than a finished one, because "done" is a fact and
+   "later" is a plan, and a row where everything is equally loud says nothing
+   about where the job has got to. */
+.jstep.next { opacity: .5; border-style: dashed; }
+
 /* What arrived since you last looked (#122). It is a fact on the card's fact
    row rather than a badge in a corner: a badge says "something", and the row
    already has room for the one thing that answers "what". */
@@ -6494,4 +6524,10 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .docorg .btn { white-space: nowrap; }
   .docacts > .btn { justify-self: start; }
 }
+}
+
+/* The step chips wrap on a phone and the row they sit in is already narrow. */
+@media (max-width: 860px) {
+  .jsteps { gap: 4px; }
+  .jstep { padding: 2px 6px; }
 }
