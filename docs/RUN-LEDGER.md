@@ -122,3 +122,27 @@ verify:drive 54/54, twelve new. Sabotage proved landed: 9 of 12 red with
 **Position:** next is **#259 Personal Tasks**, then #277's measured
 prompt loop, #41, RC1 re-qualification and the tag, then the wow-factor
 design phase.
+
+### #259 — the rest of CRUD and finding one (bfb8ba7, migration 0504)
+
+Title, notes, priority, due date and project were WRITE-ONCE: `my_task_add`
+took them and `my_task_set` did not. Plus search and sort, a subtask
+count, and the gateway's new `also` descriptor for optional section
+extras.
+
+The cache was keyed on the bucket name, so a search would have returned
+the unsearched list from cache — and the capture harness seeds that
+store, so the key rule is EXPORTED on `window.__shots` rather than
+restated.
+
+Sabotage (`where true`) turned exactly ONE of 57 checks red — the
+negative control. Every positive check stayed green, correctly.
+
+verify:mytasks 57/57 · verify:wired 77/21/0 · 1,859 tests · all checks 0.
+
+**The Vikunja box is WITHDRAWN by Grant's settled decision, not
+outstanding.** ADR-0041's provider boundary stays drawn.
+
+**Position:** next is **#277** (measured prompt loop), then **#41**, then
+RC1 qualification → fast-forward merge → tag v1.0.0-rc.1 → deploy/verify,
+then the wow-factor design phase with all remaining time.
