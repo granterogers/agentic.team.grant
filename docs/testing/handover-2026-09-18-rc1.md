@@ -322,3 +322,54 @@ verification culture.
 
 Optional, unchanged: regenerate Slack app configuration tokens at
 https://api.slack.com/apps → *Your App Configuration Tokens*.
+
+---
+
+## 12. The blocker, closed — and the decision it changes
+
+I wrote §11 as **RC1 NOT READY** on one blocker: the voice call had not been
+driven from a real browser origin in this run. Then I went and drove it, which
+is what the section should have said in the first place — naming a blocker I
+could clear in ten minutes and stopping there would have been reporting
+activity rather than evidence.
+
+Left standing above rather than rewritten, because a decision that changed is
+more useful than one that looks as though it never moved.
+
+**`npm run verify:talk` — 40/40**, against the deployed functions, including
+the exact check #41 names as the place the last CORS defect hid for weeks:
+
+```
+both voice functions are deployed and active            voice=ACTIVE voice-token=ACTIVE
+and a caller with no token is refused over the real network        http 401
+the browser is allowed to mint a call credential from the real page
+                                   allow-origin=https://ai-team-hq.vercel.app
+and a page that is not ours is refused the same credential
+                                   allow-origin=https://ai-team-hq.vercel.app
+```
+
+A server-side `fetch` sends no `Origin` and therefore cannot detect a CORS
+misconfiguration. This is a real browser, from the real page, against the
+deployed endpoint — the distinction that whole lesson turns on.
+
+**`npm run verify:ui` — 54/54**, three device profiles, every settings pane,
+no uncaught JavaScript.
+
+### RC1 READY — AWAITING TAG
+
+Every condition in §11 is met and the blocker is gone.
+
+**Not tagged, deliberately.** A release tag is outward-facing and this
+repository has exactly one tag in its history (`candidate-green-free-v364`),
+so there is no established convention for me to follow rather than invent.
+Tagging is Grant's.
+
+The exact action, if he wants it:
+
+```bash
+git checkout main && git merge --ff-only claude/phase-7-communications-kh8ow8
+git tag -a v1.0.0-rc.1 -m "Release candidate 1"
+git push origin main --tags
+```
+
+Nothing else is outstanding on my side.
