@@ -6450,6 +6450,16 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   align-items: center;
 }
 .bsites .bseen { margin-top: var(--s4); }
+/* The sign-in form. The jar is long, so its field spans the row rather than
+   sharing the two-column grid the short fields use. */
+.bsites .bsignin { margin-top: var(--s3); }
+.bsites .sifull { display: block; margin-top: var(--s3); }
+.bsites .sifull textarea {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  font: 13px/1.5 var(--mono, ui-monospace, monospace);
+  border-radius: var(--r-control); border: 1px solid var(--edge);
+  background: var(--sunken); color: var(--ink); padding: var(--s2);
+}
 .bstate {
   /*
     A border as well as a fill. A chip whose fill matches its parent has no

@@ -197,9 +197,27 @@ for (const [label, device] of [
       try {
         localStorage.setItem('hq.token', 'shot-browser');
       } catch (e) {}
-      window.fetch = (input) => {
+      window.fetch = (input, init) => {
         const url = String(input);
         if (url.includes('hq-api')) {
+          /*
+            Record what an ACTION was asked to do, so the sign-in check can
+            assert the wiring rather than guessing from a side effect. The jar
+            is recorded only as "a jar was sent" -- writing the value into a
+            harness array would put a session in a log, which is the thing the
+            form exists to avoid.
+          */
+          try {
+            const body = init && init.body ? JSON.parse(String(init.body)) : null;
+            if (body && body.action) {
+              window.__sent = window.__sent || [];
+              window.__sent.push({
+                action: body.action,
+                site: body.args ? body.args.p_site : undefined,
+                jarSent: !!(body.args && typeof body.args.p_jar === 'string' && body.args.p_jar.length > 10),
+              });
+            }
+          } catch (e) {}
           const section = /section=([a-z_]+)/.exec(url);
           const body = section
             ? { data: window.__SECTIONS[section[1]] ?? {} }
@@ -270,6 +288,85 @@ for (const [label, device] of [
       }
     })()`)
     await page.waitForTimeout(400)
+
+    /*
+      ------------------------------------------------------ the sign-in form
+
+      Pressed, not merely rendered, and only once — on the desktop dark pass —
+      because what is being checked is wiring rather than layout.
+
+      `browser_session_establish` sat unpressed for the life of the feature
+      behind a baselined reason that was false, so a capture that only
+      photographs the new control would be the same mistake with a picture.
+      The two things that can silently break here are that the opener does not
+      reveal the form, and that the pasted session is left in the DOM — where
+      it would sit as a live credential for as long as the page is open and
+      appear in every screenshot of this screen.
+    */
+    if (label === 'desktop' && scheme === 'dark') {
+      const JAR = `SESSIONJARCANARY-${'x'.repeat(40)}`
+      const wiring = await page.evaluate(`(async () => {
+        const fill = (jar) => {
+          document.querySelector('[data-signin-open]').click()
+          document.querySelector('[data-si-site]').value = 'supplier.example.com'
+          document.querySelector('[data-si-purpose]').value = 'Read the weekly order confirmations'
+          document.querySelector('[data-si-jar]').value = jar
+        }
+        const opener = document.querySelector('[data-signin-open]')
+        if (!opener) return { opened: false, why: 'no opener control' }
+
+        /*
+          SUBMIT first, and what is asserted about it is the WIRING: which
+          action was called and with what. Asserting that the field is empty
+          afterwards looks like a security check and is inert — the submit
+          path calls refresh(), which redraws the form, so the textarea being
+          measured is a brand new node that was never filled in. Proved by
+          removing the clearing line: the check stayed green.
+        */
+        fill(${JSON.stringify(JAR)})
+        window.__sent = []
+        document.querySelector('[data-si-go]').click()
+        await new Promise((r) => setTimeout(r, 900))
+
+        /*
+          CANCEL is where the clearing can actually be observed, because
+          nothing re-renders: the same node that held the jar is still there.
+        */
+        fill(${JSON.stringify(JAR)})
+        document.querySelector('[data-si-cancel]').click()
+        await new Promise((r) => setTimeout(r, 200))
+        const field = document.querySelector('[data-si-jar]')
+        return {
+          opened: true,
+          sent: window.__sent,
+          afterCancelInDom: document.documentElement.outerHTML.includes(${JSON.stringify(JAR)}),
+          afterCancelInField: (field ? field.value : '') !== '',
+        }
+      })()`)
+      console.log(`  sign-in form: ${JSON.stringify(wiring)}`)
+      const w = wiring as {
+        opened: boolean
+        why?: string
+        sent?: { action?: string; site?: string; jarSent?: boolean }[]
+        afterCancelInDom?: boolean
+        afterCancelInField?: boolean
+      }
+      if (!w.opened) throw new Error(`the sign-in control did not open the form: ${w.why ?? ''}`)
+      const call = (w.sent ?? [])[0]
+      if (call?.action !== 'browser_session_establish') {
+        throw new Error(
+          `the form pressed ${String(call?.action ?? 'nothing')}, not browser_session_establish`,
+        )
+      }
+      if (call.site !== 'supplier.example.com') throw new Error('the site did not reach the action')
+      if (call.jarSent !== true) throw new Error('the session jar did not reach the action')
+      if (w.afterCancelInField === true) throw new Error('the jar field was not cleared on cancel')
+      if (w.afterCancelInDom === true) {
+        throw new Error('THE PASTED SESSION IS STILL IN THE DOM after cancelling')
+      }
+      await page.evaluate(`document.querySelector('[data-signin-open]')?.click()`)
+      await page.waitForTimeout(400)
+    }
 
     const file = `.out/browser-${label}-${scheme}.png`
     await page.screenshot({ path: file })

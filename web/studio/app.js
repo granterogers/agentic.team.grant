@@ -9735,6 +9735,100 @@ function drawShell() {
     something that has not happened yet, which is the whole failure this
     repository keeps finding.
   */
+  /*
+    Open the sign-in form, prefilled when the row knows the site (#135).
+
+    Delegated over the CONTAINER rather than bound per button: the sessions
+    list redraws whenever `needSites` answers, and a listener on each button
+    would work exactly once — which this file has already paid for three times
+    in one afternoon in the icon picker.
+  */
+  for (const b of root.querySelectorAll('[data-signin-open]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const form = $('[data-signin-form]', root)
+      if (!form) return
+      form.hidden = false
+      const site = $('[data-si-site]', root)
+      const purpose = $('[data-si-purpose]', root)
+      if (site) site.value = b.dataset.site ?? ''
+      if (purpose && (b.dataset.purpose ?? '') !== '') purpose.value = b.dataset.purpose
+      // Focus the field that is still empty, which is the site on a fresh
+      // form and the jar on a re-sign-in.
+      const jar = $('[data-si-jar]', root)
+      if ((b.dataset.site ?? '') === '') site?.focus()
+      else jar?.focus()
+    })
+  }
+
+  $('[data-si-cancel]', root)?.addEventListener('click', () => {
+    const form = $('[data-signin-form]', root)
+    const jar = $('[data-si-jar]', root)
+    /*
+      Clear the jar on cancel as well as on success. A pasted session left in
+      a hidden textarea is a credential sitting in the DOM for as long as the
+      page is open, and every screenshot of this screen would contain it.
+    */
+    if (jar) jar.value = ''
+    if (form) form.hidden = true
+  })
+
+  $('[data-si-go]', root)?.addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    const val = (sel) => String($(sel, root)?.value ?? '').trim()
+    const site = val('[data-si-site]').toLowerCase()
+    const purpose = val('[data-si-purpose]')
+    const jarField = $('[data-si-jar]', root)
+    const jar = String(jarField?.value ?? '').trim()
+
+    /*
+      Say what is wrong BEFORE spending a round trip, and say it in the words
+      the database would use, so the two cannot drift into disagreeing. The
+      RPC refuses all three of these by name; these messages exist so a person
+      is not taught to press a button that will be refused.
+    */
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(site)) {
+      say(b, 'Give me a host, like supplier.example.com.', 'warn')
+      return
+    }
+    if (purpose.length < 12) {
+      say(b, 'Say what the session is for, in a sentence — nobody can audit “research”.', 'warn')
+      return
+    }
+    if (jar === '') {
+      say(b, 'Paste the signed-in browser state.', 'warn')
+      return
+    }
+
+    const done = await attempt(
+      b,
+      'Storing…',
+      () => act('browser_session_establish', {
+        p_project: state.project,
+        p_site: site,
+        p_purpose: purpose,
+        p_jar: jar,
+      }),
+      (r) =>
+        r?.error
+          ? String(r.error)
+          : `The office is signed in to ${site}. It reads and photographs there; it does not press anything.`,
+    )
+    /*
+      Cleared whatever happened, including on a refusal. The value is a live
+      session; leaving it in the field so the person can correct a typo in the
+      SITE would mean keeping a credential on screen to fix something else.
+    */
+    if (jarField) jarField.value = ''
+    if (done) {
+      const form = $('[data-signin-form]', root)
+      if (form) form.hidden = true
+      delete browserSites[state.project]
+      delete browserSeen[state.project]
+      await refresh()
+    }
+  })
+
   for (const b of root.querySelectorAll('[data-stop-job]')) {
     b.addEventListener('click', async (e) => {
       e.stopPropagation()
@@ -12452,7 +12546,13 @@ function signedInSites(p) {
           canWrite() && b.session_id && b.has_credential
             ? `<button class="btn small quiet" data-forget-site="${esc(b.session_id)}"
                  data-name="${esc(b.site ?? 'that site')}">Forget it</button>`
-            : ''
+            : canWrite()
+              ? // No credential: the one thing to do here is give it one, and
+                // until now the row said "Needs a sign-in" and offered nothing.
+                `<button class="btn small" data-signin-open
+                   data-site="${esc(b.site ?? '')}"
+                   data-purpose="${esc(b.purpose ?? '')}">Sign in again</button>`
+              : ''
         }
         <span class="t-meta" data-said></span>
       </li>`,
@@ -12508,7 +12608,69 @@ function signedInSites(p) {
       )
       .join('')}</ul>`
     }
+    ${
+      canWrite()
+        ? `<div class="tabhead"><span></span>
+             <button class="btn" data-signin-open data-site="">Sign in to a site</button></div>`
+        : ''
+    }
+    ${signInForm()}
   </section>`
+}
+
+/*
+  SIGNING A SITE IN (#135, #16).
+
+  `browser_session_establish` has existed at the gateway since the browser work
+  and nothing has ever pressed it. It sat in the pressable baseline with a
+  reason that turned out to be FALSE -- "blocked behind the Cloudflare account,
+  because nothing can sign in until it exists". Nothing about this path needs
+  Cloudflare: Grant signs in HIMSELF in his own browser, exports the session,
+  and pastes it here; the runtime that later USES the jar sends it as a cookie
+  header, which the fetch runtime does perfectly well. So the Sources panel
+  listed the sites the office was signed in to and offered no way to sign one
+  in, for the life of the feature.
+
+  That is the second baselined entry in two days whose stated reason was
+  wrong, and it is the more expensive kind: a documented excuse stops the next
+  person looking.
+
+  ## The rules this form obeys
+
+  The office NEVER types a password, and this form never asks for one. What is
+  pasted is a SESSION, which is a different risk from a credential and the only
+  one #135 is willing to hold.
+
+  The jar is a credential all the same, so: the field is never given a value
+  from the page, it is cleared the moment the action returns, nothing about it
+  is put in a data attribute, and the only place it is written is
+  app.store_secret inside one SQL function. The page learns the session id and
+  the site back, and nothing else.
+
+  No backticks in any comment in this function: template literal.
+*/
+function signInForm() {
+  if (!canWrite()) return ''
+  return `<div class="taskform bsignin" data-signin-form hidden>
+    <div class="hirerow">
+      <label>The site
+        <input data-si-site placeholder="supplier.example.com" autocomplete="off"></label>
+      <label>What it is for
+        <input data-si-purpose placeholder="Read the weekly order confirmations" autocomplete="off"></label>
+    </div>
+    <label class="sifull">The signed-in browser state
+      <textarea data-si-jar rows="4" autocomplete="off" spellcheck="false"
+        placeholder="Paste the exported storage state here"></textarea></label>
+    <p class="t-meta">Sign in yourself, in your own browser, then export the session
+      and paste it. The office never types a password and never asks for one. What
+      you paste goes straight into the vault and is never shown again — not here,
+      not in a log, not in a screenshot.</p>
+    <span class="hireact">
+      <span class="t-meta" data-said></span>
+      <button class="btn primary" data-si-go>Sign it in</button>
+      <button class="btn quiet" data-si-cancel>Cancel</button>
+    </span>
+  </div>`
 }
 
 /** The five states a session can be in, said in words rather than in enum. */
