@@ -384,5 +384,96 @@ await db.execute(`delete from public.projects where project_id = ${lit(pid)}::uu
   ok('and puts the touch trigger back', String(trig.state ?? '') === 'O', String(trig.state))
 }
 
+/*
+  A suite's failure is not the office failing (0491).
+
+  `public.failure_signatures` feeds `app.recurring_failures`, which the
+  noticing pass turns into a suggestion weighted 75 and
+  `app.morning_briefing_facts` puts in the message Grant reads every day. Every
+  row in it was harness traffic — 138 of them saying `office.instruction` had
+  failed, which is how his own messages are answered and which had zero real
+  failures in the same period.
+
+  Asserted as a PROPERTY, never a count: "nothing a reader shows Grant belongs
+  to a harness job" survives the next suite run; a number does not, which is
+  precisely how this class keeps coming back.
+*/
+{
+  /*
+    Asked of the TABLE, not of `app.recurring_failures`.
+
+    The first version asked the reader — which 0491 had just taught to exclude
+    harness signatures — so injecting one left the check GREEN. Inert by
+    construction, and only the sabotage found it. The writer's property is
+    that nothing harness ever gets INTO the table; the reader's property is
+    tested separately below, by putting one in on purpose.
+  */
+  const polluted = await all(`
+    select f.job_kind from public.failure_signatures f
+     where f.last_job_id is not null and app.harness_job(f.last_job_id)
+  `)
+  ok(
+    'no failure signature in the table belongs to a harness job',
+    polluted.length === 0,
+    polluted.map((r) => String(r.job_kind)).join(', '),
+  )
+
+  /*
+    And the control, because an empty table would satisfy the line above for
+    the wrong reason — the found-nothing shape this repository has been caught
+    building three times. A real failure must still be counted and must still
+    recur, or 0491 simply switched #132 off.
+  */
+  const real = await one(`
+    select job_id::text as id from public.jobs
+     where not app.harness_job(job_id) order by created_at desc limit 1
+  `)
+  const kind = `noticeproof.${run.replace(/[^a-z0-9]/g, '')}`
+  for (let i = 0; i < 3; i++) {
+    await db.execute(
+      `select app.failure_seen(${lit(kind)}, 'drive', 'sub', ${lit(String(real.id))}::uuid)`,
+    )
+  }
+  const seen = await all(
+    `select 1 from app.recurring_failures(3, 14) f where f.job_kind = ${lit(kind)}`,
+  )
+  ok('and a REAL repeated failure still surfaces', seen.length === 1)
+  /*
+    And the reader's own half: a harness signature put in ON PURPOSE must not
+    come back out. Belt and braces with the writer, because a path that writes
+    around the front door would otherwise reach Grant — and because a check
+    that only asks the table cannot tell whether the reader is doing anything.
+  */
+  /*
+    `failure_signatures_kind_format` allows only lower-case dotted segments —
+    no hyphen — so this is `noticeproofharness`, not `noticeproof-harness`.
+    Read from `pg_constraint` after the first run was refused, which is the
+    cheap way round: the constraint is the product being right.
+  */
+  const fixKind = `noticeproofharness.${run.replace(/[^a-z0-9]/g, '')}`
+  await db.execute(`
+    insert into public.failure_signatures
+      (job_kind, error_class, subject, seen, first_seen, last_seen, last_job_id)
+    select ${lit(fixKind)}, 'unknown', '', 9, app.now_utc(), app.now_utc(), job_id
+      from public.jobs where app.harness_job(job_id) order by created_at desc limit 1
+  `)
+  const planted = await all(
+    `select 1 from public.failure_signatures where job_kind = ${lit(fixKind)}`,
+  )
+  ok('the harness signature really was planted', planted.length === 1)
+  const leaked = await all(
+    `select 1 from app.recurring_failures(3, 14) f where f.job_kind = ${lit(fixKind)}`,
+  )
+  ok('and the reader refuses to hand it to Grant', leaked.length === 0)
+
+  await db.execute(
+    `delete from public.failure_signatures where job_kind in (${lit(kind)}, ${lit(fixKind)})`,
+  )
+  const swept = await all(
+    `select 1 from public.failure_signatures where job_kind in (${lit(kind)}, ${lit(fixKind)})`,
+  )
+  ok('and the controls leave nothing behind', swept.length === 0)
+}
+
 console.log(`\n${pass}/${pass + fail} checks passed`)
 process.exit(fail === 0 ? 0 : 1)

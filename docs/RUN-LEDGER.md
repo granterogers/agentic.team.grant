@@ -164,6 +164,38 @@ Then the fixed version was still inert for the two handlers that assign
 `sayAs` to a variable first. **All six handlers sabotaged in turn, all six now
 red, green when restored.**
 
+### Batch 4 — every failure the office recognises was a suite's
+
+Following the chain from the backup that failed silently at 22:19 on 17 Sep,
+the question was: which link is broken? Answer: the briefing (batch 3), and
+then a second one underneath it.
+
+`public.failure_signatures` (#132) feeds `app.recurring_failures`, which the
+noticing pass turns into a suggestion weighted **75** and
+`app.morning_briefing_facts` puts in the message Grant reads every day.
+**Every row in that table was harness traffic** — 138 of them saying
+`office.instruction` had failed, which is how his own messages are answered
+and which had 14 complete, 6 cancelled and **zero real failures** in the same
+period. Including `research.explodes`, a suite whose entire job kind is to
+fail on purpose.
+
+**0491** fixes both ends of the pipe rather than adding a flag to an aggregate
+(0303's frozen-copy trap): the writer refuses a harness job, the reader
+excludes a signature whose last job is harness, and the debris is swept. The
+control in the drive proves a REAL repeated failure still surfaces — otherwise
+the migration would simply have switched #132 off.
+
+**The regression caught itself being inert again.** `verify:notice`'s first
+version asked `app.recurring_failures` — the reader 0491 had just taught to
+filter — so planting a harness signature left it GREEN. It asks the TABLE now,
+and the reader's half is tested separately by planting one on purpose.
+**33/33, red on the sabotage, green restored.**
+
+Also confirmed, and worth NOT building: the failure-visibility chain is
+otherwise intact. Ten silent failures in all of history, most from early
+September. `app.office_health()` reports failures with a 24h window and the
+briefing carries them — the break was the briefing itself.
+
 ## BLOCKERS
 
 *(none)*
