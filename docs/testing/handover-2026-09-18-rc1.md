@@ -210,3 +210,115 @@ of four findings off a capture were wrong and two would have been "fixed".
 "is the default layout right" needs a capture taken against real data and this
 run did not produce one.
 
+---
+
+## 10. TESTED · INFERRED · NOT TESTED
+
+### TESTED — driven, with the output read
+
+- the browser gather tier against the real internet, eleven shapes, 30/30;
+- a Telegram message through to a filed project document, 10/10;
+- a real PDF into a real Slack channel, the link fetched back and its bytes
+  compared to storage, 17/17;
+- three pages of a generated PDF, rendered and looked at;
+- a real NotebookLM listing: 12 artifacts, 4 notebooks, link capability per
+  kind;
+- the human-action bridge in both directions with its control, 46/46;
+- #172's five questions, asked of the real office on a real project;
+- 36 of 37 gate suites; the 37th green on its own once it survives a throttle;
+- 1,803 unit tests; 499 migrations, every one of the five new ones driving its
+  own function inside a rollback;
+- five real private addresses refused, with a public control;
+- 184 captures, opened and judged.
+
+### INFERRED — sound reasoning, no run behind it
+
+- **the redirect SSRF fix in production.** Proved with a fetch that models the
+  chase; this sandbox's egress proxy answers 403 before any redirect is
+  chased, so the live path could not be walked. The reasoning is `fetch`'s
+  documented `redirect: 'follow'` behaviour, which is not in doubt — but it is
+  inference, and the file says so.
+- **the throttle-tolerant wait loop.** The proving run saw no throttle at all,
+  so the patient path was not exercised; only its predicate is pinned.
+- **zero evidence blocks means the gate has nothing to catch.** Consistent
+  with the Gmail answers being honest, but it is equally consistent with a
+  gate that has stopped firing. I did not distinguish them.
+- **the deployed worker runs what was committed.** Deploys probe themselves
+  and passed; no separate confirmation that the new instruction path is the
+  one serving Grant's next real message.
+
+### NOT TESTED — named rather than omitted
+
+- **a gather behind a real login.** Needs a session Grant establishes himself
+  on a site he uses. Everything under it is proved.
+- **Vikunja, and any iPhone round trip.** No provider exists; hosting is his
+  decision.
+- **mail bodies, and therefore "decisions made by email".** Structural: the
+  office fetches metadata only, by design.
+- **`gmail.draft`.** Enabled and never exercised.
+- **the voice call from a real browser origin.** #41 names this as the place
+  the last CORS defect lived; it was not driven this run.
+- **the My Tasks default panel layout against real data.** The only capture
+  available is against an empty server, and retuning defaults on that evidence
+  is the #85 mistake.
+- **`npm run verify:ui`, `verify:talk`, `verify:controls` in this run.** They
+  are in the gate and ran there; I did not re-drive them separately after the
+  last studio change.
+
+---
+
+## 11. The RC1 decision
+
+### RC1 NOT READY — one blocker, and it is not a defect
+
+Everything RC1 asks for is in place except one thing, and I will not tag
+around it.
+
+**What is satisfied:**
+
+- no known release-blocking correctness defect: every defect found this run is
+  fixed, regressed and pushed;
+- no silent data-loss defect found;
+- no provenance-critical defect: the two answers that looked like fabrication
+  were correct, and the one real provenance gap — "nothing in your email" —
+  is fixed;
+- no isolation or security regression: an SSRF and a cookie-jar leak were
+  CLOSED this run;
+- core journeys exercised, listed above;
+- worker and queue functioning: 0 waiting, oldest 0m;
+- required gates green — 37/37 on substance;
+- clean tree, everything pushed and deployed;
+- TESTED / INFERRED / NOT TESTED distinguished, above.
+
+**The blocker:**
+
+> **The voice call has not been driven from a real browser origin in this run.**
+
+#41 names this by name as the place the last CORS defect lived for weeks while
+every server-side probe passed, because a server-side `fetch` sends no
+`Origin`. It is the one core journey in §14 that this run did not exercise and
+cannot honestly claim. Tagging RC1 with the interface Grant speaks to
+unverified would be exactly the "green because the probe passed" failure the
+repository already paid for.
+
+It is an hour of work, not a design problem: `verify:talk` exists and drives a
+real browser. It did run inside the gate. What I have not done is read its
+output against the deployed origin since today's deploys.
+
+**Recommended:** run `npm run verify:talk` and `npm run verify:ui` against the
+current deployment, read both, and if they are green tag **v1.0.0-rc.1**. On
+this evidence I expect them to pass; expecting is not the same as having
+looked, and that distinction is the whole reason this project has a
+verification culture.
+
+### The five external actions, in one place
+
+1. **#18** — rotate `github.read_token` at https://github.com/settings/tokens
+2. **#213** — rotate the Slack bot token and signing secret at
+   https://api.slack.com/apps
+3. **#172** — decide whether the office may cache mail BODIES
+4. **#259** — decide where Vikunja is hosted, or that it is not
+5. **#261** — decide whether a computer runtime is worth paid compute
+
+Optional, unchanged: regenerate Slack app configuration tokens at
+https://api.slack.com/apps → *Your App Configuration Tokens*.
