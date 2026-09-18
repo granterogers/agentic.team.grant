@@ -95,6 +95,7 @@ import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.t
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
+import { personalTaskRequest } from '../agents/mine.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -2399,9 +2400,86 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 return null
               })
 
+      /*
+        WHOSE WORK IS IT (#259, ADR-0041).
+
+        Before the task path and before the extraction, because it is the same
+        precedence question those two already answer between themselves:
+        whichever reading claims the sentence first decides what Grant gets,
+        and "remind me on Friday to ring the venue" is not a job for the office
+        however many verbs it contains.
+
+        `personalTaskRequest` is grammatical rather than lexical — it asks who
+        performs the verb — and it is deliberately narrow, because the two
+        errors are not comparable. A miss costs a to-do he adds himself and the
+        office still answers. A false positive costs him the WORK: he asked for
+        something, it went on his own list, and nothing happened. The one
+        overlap, "I need you to…", is excluded by name and has its own test.
+
+        The task is written here rather than as a child job: there is nothing
+        to think about, the row is one insert, and a child job would mean he
+        gets "I will add that" now and the task some seconds later.
+      */
+      // A request for a FILE is not a to-do, and it is decided above.
+      const forGrant = wantsFile !== null ? null : personalTaskRequest(instruction)
+      const noted =
+        forGrant === null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.my_task_add(
+                  p_title => ${lit(forGrant.title.slice(0, 200))},
+                  p_due_on => ${forGrant.due === null ? 'null' : `${lit(forGrant.due)}::date`},
+                  /*
+                    The project he is IN, if any. #259: a personal task may
+                    belong to an Agentic Team project, and one added from a
+                    project's chat plainly does. Looked up here rather than
+                    carried in TypeScript because the writer takes a slug and
+                    the job carries a uuid, and a second argument on the writer
+                    for the convenience of one caller is how a function ends up
+                    with eight.
+                  */
+                  p_project => ${
+                    job.projectId === null
+                      ? 'null'
+                      : `(select slug from public.projects where project_id = ${lit(job.projectId)}::uuid)`
+                  }
+                ) as t`)
+              .then((r) => {
+                const answer = (r.rows[0] as { t?: unknown })?.t
+                const got = (typeof answer === 'string' ? JSON.parse(answer) : answer) as {
+                  ok?: boolean
+                }
+                /*
+                  An offer may only promise what the press can perform. If the
+                  insert was refused, say nothing about a task — the sentence
+                  below would be a claim with no row behind it, which is the
+                  fabrication the coherence gate exists to catch and which is
+                  cheaper to simply not make.
+                */
+                if (got?.ok !== true) return null
+                return forGrant.due === null
+                  ? `That is on your list — "${forGrant.title}", no date on it yet.`
+                  : `That is on your list for ${forGrant.due} — "${forGrant.title}".`
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'add a personal task', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
       // A plural extraction is not a single task. `pullOut` having claimed the
-      // sentence, `taskRequest` must not also file one from the same words.
-      const asked = pullOut !== null ? null : taskRequest(instruction, classifyIntent(instruction))
+      // sentence, `taskRequest` must not also file one from the same words —
+      // and neither must it file one the personal-task path has already taken.
+      const asked =
+        pullOut !== null || noted !== null
+          ? null
+          : taskRequest(instruction, classifyIntent(instruction))
 
       /*
         And the ANSWER to "what should it be called?", which is the other half.
@@ -2466,7 +2544,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
 
       const confirmation =
-        [linked, made, filed, extracting, enumerating, writingFile]
+        [linked, made, filed, noted, extracting, enumerating, writingFile]
           .filter((x) => x !== null)
           .join('\n\n') || null
 
@@ -2498,6 +2576,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (enumerating === null ? 0 : 1) +
         // And starting a report is a thing it did, not a thing it described (#258).
         (writingFile === null ? 0 : 1) +
+        /*
+          A task on Grant's own list is a thing this turn DID (#259).
+
+          Counted for the reason the comment above gives: `acted` had existed
+          for months with nothing setting it, so the check that reads it could
+          never fire and "Task created for you, due Friday" passed every gate
+          with `public.tasks` untouched. A personal task that is not counted
+          would reopen exactly that hole.
+        */
+        (noted === null ? 0 : 1) +
         who.alsoConvened.length
 
       // The same retrieval the office uses, so an instruction answered in

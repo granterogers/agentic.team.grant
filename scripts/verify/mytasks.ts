@@ -28,6 +28,8 @@
 
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { dequeue, runJob } from '../../src/jobs/worker.ts'
+import { buildPass } from '../../src/office/pass.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -49,6 +51,7 @@ const check = (what: string, outcome: string, passed: boolean): void => {
 }
 
 const run = Math.random().toString(36).slice(2, 10)
+const WORKER = `verify-mytasks-${run}`
 console.log('my tasks, and the boundary that keeps them mine (#259) —\n')
 
 const bearer = String(
@@ -330,6 +333,114 @@ check(
   !has(await bucket('done'), mineId),
 )
 
+// --- and the office knows whose work it is ----------------------------------
+
+/*
+  #259's definition of success, driven through the REAL inbound path.
+
+  > A user can say "Remind me tomorrow to review the new dashboard." One
+  > canonical Personal Task is created and appears in My Tasks.
+
+  The negative control is the half that matters: the same office, the same
+  path, a sentence that is plainly the office's work, and NO task. A false
+  positive costs Grant the work — he asked for something, it went on his own
+  list, and nothing happened — which is why the recogniser is grammatical and
+  narrow and why this asserts both directions rather than one.
+
+  Run in process with the real handler set, because the deployed worker takes
+  a minute a tick and this is a routing decision rather than a delivery.
+*/
+{
+  const pass = await buildPass(db, WORKER, {
+    max: 1,
+    canTranscribe: false,
+    canSubprocess: false,
+    projectRef: ref,
+  })
+
+  /*
+    The dedupe key has a SHAPE — `channel:kind:ref`, with lower-case letters
+    and underscores in the middle segment. `inbound_dedupe_key_shaped` refuses
+    a hyphen there, which the first run of this section met; and a slash-slash
+    comment INSIDE the SQL template literal is SQL, which the second run met.
+  */
+  const ask = async (what: string, tag: string): Promise<string> => {
+    const command = await one(`
+      insert into public.inbound_commands
+        (origin_channel, origin_ref, actor, instruction, dedupe_key)
+      values ('teamhq', ${lit(`mytasks-${run}-${tag}`)}, ${lit(`verify-mytasks-${run}`)},
+              ${lit(what)}, ${lit(`teamhq:my_tasks:${run}-${tag}`)})
+      returning command_id::text as id`)
+    const got = await one(
+      `select app.enqueue_inbound(${lit(String(command.id))}::uuid) ->> 'job_id' as id`,
+    )
+    return String(got.id ?? '')
+  }
+
+  /** Take a NAMED job and settle anything else that arrives (#273). */
+  const work = async (jobId: string): Promise<void> => {
+    for (let i = 0; i < 8; i += 1) {
+      const got = await dequeue(db, WORKER, false, false, undefined, `teamhq:verify-mytasks-${run}`)
+      if (got === null) {
+        await new Promise((r) => setTimeout(r, 1_000))
+        continue
+      }
+      if (got.jobId !== jobId) {
+        await db.execute(`
+          update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+            state_reason = 'not this suite''s job' where job_id = ${lit(got.jobId)}::uuid`)
+        continue
+      }
+      await runJob(db, got, pass.handlers, pass.review)
+      return
+    }
+  }
+
+  const reminder = await ask(`Remind me tomorrow to ring the printers ${run}`, 'mine')
+  await work(reminder)
+  /*
+    Scoped to THIS sentence, not to the run.
+
+    The earlier sections of this suite already made two personal tasks carrying
+    the run token — one of them the recurrence follow-up — so counting by run
+    counted them and reported 3. The test was wrong, not the router: sixth time
+    today, and the rule holds every time.
+  */
+  const madeMine = await one(`
+    select count(*)::int as n, coalesce(max(title), '') as title
+      from public.tasks
+     where assigned_to_human and title ilike ${lit(`%printers ${run}%`)}`)
+  check(
+    '"Remind me tomorrow to…" becomes a task on Grant’s own list',
+    `${String(madeMine.n)} · ${String(madeMine.title)}`,
+    Number(madeMine.n) === 1 && String(madeMine.title).includes('printers'),
+  )
+  check(
+    'and the framing is out of the title, so the list is scannable',
+    String(madeMine.title),
+    !/remind me/i.test(String(madeMine.title)),
+  )
+  const dated = await one(`
+    select coalesce(due_on::text, '') as d from public.tasks
+     where assigned_to_human and title ilike ${lit(`%printers ${run}%`)} limit 1`)
+  check(
+    'and tomorrow is a date, not a word left in the sentence',
+    String(dated.d),
+    String(dated.d) === new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+  )
+
+  const theirsJob = await ask(`I need you to look into the ${run} rollout numbers`, 'theirs')
+  await work(theirsJob)
+  const madeTheirs = await one(`
+    select count(*)::int as n from public.tasks
+     where assigned_to_human and title ilike ${lit(`%rollout numbers%`)}`)
+  check(
+    'CONTROL: "I need YOU to…" is a delegation and makes no personal task',
+    `${String(madeTheirs.n)} personal task(s) from a delegation`,
+    Number(madeTheirs.n) === 0,
+  )
+}
+
 // --- the controls the page has to have --------------------------------------
 
 {
@@ -380,7 +491,12 @@ console.log('')
 await db.execute(`
   delete from public.tasks
    where project_id = ${lit(projectId)}::uuid
-      or title like ${lit(`%${run}`)};
+      or title like ${lit(`%${run}%`)}
+      or title ilike '%rollout numbers%';
+  update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+    state_reason = 'verify:mytasks teardown'
+   where requested_by = ${lit(`teamhq:verify-mytasks-${run}`)}
+     and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.events where project_id = ${lit(projectId)}::uuid;`)
 let gone = 'not attempted'
 try {
@@ -391,7 +507,8 @@ try {
 }
 const left = await one(`
   select (select count(*)::int from public.projects where slug = ${lit(slug)}) as projects,
-         (select count(*)::int from public.tasks where title like ${lit(`%${run}`)}) as tasks`)
+         (select count(*)::int from public.tasks
+           where title like ${lit(`%${run}%`)}) as tasks`)
 check(
   'teardown — no project and no task of this run is left',
   `${gone}, ${String(left.projects)} project(s), ${String(left.tasks)} task(s)`,
