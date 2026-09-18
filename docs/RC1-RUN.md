@@ -92,3 +92,25 @@ jar reaches the Vault, the runtime sends it, an expired jar reads as
 signedOut rather than as an outage.
 
 Next: #261, then #258.
+
+- **#16 and #135 CLOSED** (`14922f8`). The headline finding: the browser tier
+  had no door — nothing ever enqueued a `browser.gather`. `pageRequest` is the
+  entry point, shared with `linkRequest` so neither claims the other's
+  sentence. `verify:browse-asked` 10/10 end to end.
+- **#261** documented and left open as roadmap: a terminal and a durable
+  filesystem need compute the £0 constraint forbids, costed on the issue.
+  Also flagged: `browser_actions.verb` permits `download` and no adapter
+  implements it — 0298's registry-claim shape, latent.
+- **#258 CLOSED** (`d9c5517`). `verify:artifact-slack` 17/17 LIVE — a real
+  channel, a real PDF, the link fetched back as application/pdf with the bytes
+  compared to what was stored. Rendering the PDF found two repetitions:
+  the opening sentence printed on the cover AND at the top of page two, and
+  the author printed twice on the cover. `coverTakes` gives one answer to
+  "did the cover already say this".
+
+Backlog: 10 -> 7 open (#213, #172, #41, #18, #259, #260, #261).
+
+### Position
+
+Next: #259 Personal Tasks, then #260 NotebookLM, then #172 Gmail, then #41 as
+the spine, then RC1 qualification and the visual pass.
