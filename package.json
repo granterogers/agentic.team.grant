@@ -153,6 +153,7 @@
     "verify:knowledge": "tsx scripts/verify/knowledge.ts",
     "verify:unified": "tsx scripts/verify/unified.ts",
     "verify:artifact": "tsx scripts/verify/artifact.ts",
+    "verify:artifact-slack": "tsx scripts/verify/artifact-slack.ts",
     "verify:stop": "tsx scripts/verify/stop.ts",
     "verify:review": "tsx scripts/verify/review.ts",
     "verify:organising": "tsx scripts/verify/organising.ts",

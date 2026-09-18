@@ -394,6 +394,28 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               outcome: {
                 documentId: kept.documentId,
                 pages: verdict.pages,
+                /*
+                  AND WHERE THE BYTES ARE (#258).
+
+                  The step's outcome is the only thing the composing code below
+                  can read — a checkpointed step is re-read from the ledger on a
+                  resume, so anything not in here is gone. `storeArtifact`
+                  returns `path` and this outcome did not carry it, so
+                  `kept.path` was `undefined` at the point `attachFile` is
+                  built, the `storagePath` spread produced nothing, and Slack's
+                  notifier took its honest-degradation branch EVERY TIME:
+                  *"I could not make a link to it from here."*
+
+                  Both halves were right alone. The notifier mints a link from a
+                  path, the store returns one, and nothing carried it between
+                  them — which is the shape this repository keeps paying for,
+                  and the unit tests were green throughout because they hand
+                  `storagePath` to the renderer directly.
+
+                  Found by asking for a report in a real Slack channel and
+                  reading what landed in the room.
+                */
+                path: kept.path,
                 sources: sources.length,
                 stored: true,
                 title: report.title,

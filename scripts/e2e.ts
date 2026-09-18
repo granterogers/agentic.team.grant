@@ -245,6 +245,16 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['verify:organising', 'tags and collections are Grant’s to set, not only an agent’s (#276)'],
   ['verify:recovery', 'archiving, disconnecting and signing in all have a way back (#276)'],
   /*
+    The one claim #258 refused to make from unit tests: a real question in a
+    real Slack channel, and the link that arrives FETCHED. It found that
+    `storagePath` never reached the message — so every artifact ever produced
+    took the honest-degradation branch — and that one request made two reports.
+  */
+  [
+    'verify:artifact-slack',
+    'a generated PDF reaches a real Slack channel as a link that works (#258)',
+  ],
+  /*
     The index itself, and the correspondence beside it.
 
     Both were outside the gate while carrying the rules that decide what

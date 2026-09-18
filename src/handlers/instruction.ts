@@ -2307,7 +2307,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         model call over eight documents and this turn has to answer him now.
         The child's answer carries the file.
       */
-      const wantsFile = job.projectId === null ? null : artifactRequest(instruction)
+      /*
+        AND NOT ON A BRANCH (#258).
+
+        `alsoConvened` hands each additional specialist a CHILD carrying the
+        instruction verbatim, so a second reader of "write me a PDF report"
+        starts a second `artifact.report` — and the first live Slack round trip
+        produced exactly that: two near-identical PDFs in one project from one
+        sentence, finishing seconds apart. CLAUDE.md names the cost by name: an
+        answer citing two of them as separate sources is the provenance defect
+        this office keeps paying for, manufactured here.
+
+        A file is ONE deliverable for one request. A branch is a contribution to
+        it, not a second copy of it, so a branch answers in prose and the lead's
+        report is the artifact. `handed_off_by` is set only by the hand-off
+        enqueue, so it is the exact thing that distinguishes the two — and a
+        request Grant ADDRESSES to a specialist directly carries `addressed_to`
+        without it and is untouched.
+
+        The same guard, in the same shape, as `pullOut` two paragraphs below:
+        whichever of the three claims the sentence first decides what he gets.
+      */
+      const isBranch = String(payload.handed_off_by ?? '') !== ''
+      const wantsFile = job.projectId === null || isBranch ? null : artifactRequest(instruction)
       const writingFile =
         wantsFile === null
           ? null

@@ -279,7 +279,43 @@ const keyRow = await one(`
   select coalesce(decrypted_secret, '') as v from vault.decrypted_secrets
    where name = 'supabase.service_role_key'`)
 const serviceKey = String(keyRow.v ?? '')
-const storagePath = `${projectId}/made/${String(child.id ?? '')}.pdf`
+/*
+  THE PATH THE DELIVERY WILL ACTUALLY USE, not one rebuilt from the job id.
+
+  This suite's own header has always claimed it checks `attachFile.storagePath`,
+  and it did not: it composed `<project>/made/<job>.pdf` from values it already
+  had and proved that a URL mints for THAT. Which it does — the object is
+  there. What nothing checked is whether the path reaches the code that mints
+  the link, and it did not: the checkpointed step returned
+  `documentId, pages, sources, stored, title` and no `path`, so `kept.path` was
+  undefined where `attachFile` is built, the `storagePath` spread produced
+  nothing, and **Slack's notifier took its honest-degradation branch on every
+  artifact ever produced** — "I could not make a link to it from here".
+
+  Found by asking for a report in a real Slack channel and reading the room
+  (`npm run verify:artifact-slack`). A comment claiming a property is worth
+  nothing without a check, and this is the Nth instance in this repository.
+
+  `job_steps.outcome` is where a checkpointed step's answer lives, and it is
+  the same value the composing code reads — so asserting on it is asserting at
+  the layer where the decision is made.
+*/
+const stored = await one(`
+  select coalesce(outcome ->> 'path', '') as path,
+         coalesce(outcome ->> 'stored', '') as stored
+    from public.job_steps
+   where job_id = ${lit(String(child.id ?? ''))}::uuid and outcome ? 'stored'
+   order by ordinal desc limit 1`)
+check(
+  'the step that stored the file reports WHERE, so the delivery can link to it',
+  String(stored.path) === '' ? 'NO PATH IN THE OUTCOME' : String(stored.path),
+  String(stored.stored) === 'true' && String(stored.path).includes('/made/'),
+)
+
+const storagePath =
+  String(stored.path) === ''
+    ? `${projectId}/made/${String(child.id ?? '')}.pdf`
+    : String(stored.path)
 let bytes = 0
 let mintable = false
 let header = ''
