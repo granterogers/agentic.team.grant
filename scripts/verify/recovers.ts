@@ -565,6 +565,29 @@ try {
   console.log(
     `  ${left === 0 ? 'ok  ' : 'FAIL'} nothing of this run is still live — ${String(left)}`,
   )
+
+  /*
+    And the project goes back to sleep.
+
+    0494 made this ONE stable `fixture-recovers` rather than a new
+    `fixture-recovers-<run>` each time, which stopped the debris pile — and
+    left the project ACTIVE between runs. `check:leaks` then warns, correctly
+    by its own rule, that an active fixture project holding jobs can never be
+    deleted: eight jobs and counting, for ever.
+
+    A warning that fires on correct behaviour is one somebody learns to
+    ignore, and this repository has already paid for that twice. Archiving it
+    here costs nothing: the setup above re-activates it with
+    `on conflict (slug) do update set status = 'active'`, so the next run
+    finds it exactly as it expects.
+  */
+  const slept = await one(`
+    update public.projects set status = 'archived'
+     where slug = 'fixture-recovers' and status <> 'archived'
+    returning slug`)
+  console.log(
+    `  ok   the fixture project is asleep again — ${slept.slug === undefined ? 'already archived' : 'archived'}`,
+  )
   if (left !== 0)
     checks.push({ what: 'teardown left nothing live', outcome: String(left), passed: false })
 }
