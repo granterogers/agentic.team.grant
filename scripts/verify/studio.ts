@@ -105,6 +105,19 @@ await mkdir(OUT, { recursive: true })
   console.log(`cleared ${String(cleared)} previous capture(s) from ${OUT}`)
 }
 
+/*
+  Screens the run could not photograph, named at the end.
+
+  A capture that cannot be taken is a real result and must be listed rather
+  than quietly omitted — #41 says so about unrunnable checks and it is just as
+  true of an unrenderable screen. Silence here is how twelve screens stopped
+  being watched.
+*/
+const missed: string[] = []
+{
+  // (block kept so the declaration above sits at module scope)
+}
+
 const browser = await chromium.launch()
 const shots: string[] = []
 
@@ -445,6 +458,31 @@ for (const [size, opts] of SIZES) {
       localStorage.setItem('hq.token', 'local-capture-only')
       w.render()
     })()`)
+    /*
+      LET THE REAL REQUEST FINISH BEFORE INSTALLING THE FIXTURE.
+
+      Writing the token and re-rendering starts `needMine('today')`, which
+      fetches against a server that is not there. That request was still in
+      flight when the fixture was written, and when it failed it set the
+      bucket to [] and re-rendered — CLOBBERING the three rows and then the
+      editor that depends on them. The harness reported
+      `{"rows":0,"editing":"mt-3","details":0,"signedIn":true}`: the store
+      empty, the row asked to open, and not one Details button in the DOM.
+
+      Three of four passes looked like that and one caught the fixture before
+      the response landed, which is the signature of a race rather than a
+      missing control. Anything set before an in-flight read resolves is
+      something that read can undo.
+    */
+    await page
+      .waitForFunction(
+        `(() => {
+          const w = window.__shots
+          return w && w.mine && w.mine.lists && w.mine.lists['today'] !== null
+        })()`,
+        { timeout: 8000 },
+      )
+      .catch(() => undefined)
     await page.waitForTimeout(300)
     await page.evaluate(`(() => {
       const w = window.__shots
@@ -478,9 +516,52 @@ for (const [size, opts] of SIZES) {
       window.__shots.mine.editing = 'mt-3'
       window.__shots.render()
     })()`)
-    await page.waitForSelector('.myedit', { timeout: 5000 })
-    await page.waitForTimeout(300)
-    await shoot('my-tasks-details')
+    /*
+      TOLERANT, AND LOUD ABOUT IT.
+
+      This waited hard and the whole capture run died here — twelve later
+      screens never rendered because one editor did not. A capture harness
+      that takes the rest of the product down over a single selector is worse
+      than one that reports the gap: a screen with no capture is a screen
+      nobody is watching, and this was making twelve of them.
+
+      The editor is drawn only for a writer AND only for a row in the current
+      bucket. When it does not appear, what is wrong is one of those two, and
+      the run says which rather than throwing a bare TimeoutError.
+    */
+    const editorShowed = await page
+      .waitForSelector('.myedit', { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false)
+    if (editorShowed) {
+      await page.waitForTimeout(300)
+      await shoot('my-tasks-details')
+    } else {
+      const why = await page.evaluate(`(() => {
+        const w = window.__shots
+        return {
+          rows: (w && w.mine && w.mine.lists && w.mine.lists[w.mine.bucket] || []).length,
+          editing: w && w.mine ? w.mine.editing : null,
+          details: document.querySelectorAll('[data-my-open]').length,
+          /*
+            Measured against something that EXISTS. The first version asked
+            for a protostrip class, which is nowhere in the product, so it
+            answered true on every run and the field proved nothing -- the
+            inert-detector shape, in the diagnostic written to explain an
+            inert screen. The add form is drawn only for a writer, so its
+            presence is the real answer.
+
+            No backticks in this comment: template literal.
+          */
+          writer: document.querySelector('[data-my-add]') !== null,
+          tasksInDom: document.querySelectorAll('.ptask').length,
+        }
+      })()`)
+      console.error(
+        `  NOT CAPTURED  my-tasks-details — the row editor never appeared: ${JSON.stringify(why)}`,
+      )
+      missed.push('my-tasks-details')
+    }
     await page.evaluate(`(() => {
       const w = window.__shots
       localStorage.removeItem('hq.token')
@@ -1044,3 +1125,10 @@ for (const [size, opts] of SIZES) {
 await browser.close()
 server.close()
 console.log(shots.join('\n'))
+
+if (missed.length > 0) {
+  console.error(
+    `\n${String(missed.length)} screen(s) could not be captured: ${missed.join(', ')}.\n` +
+      'Listed rather than omitted — a screen with no capture is a screen nobody is watching.',
+  )
+}

@@ -206,7 +206,7 @@ const progress = {}
   re-fetching on every tab press is seven round trips for something that has
   not changed. The counts come back in ONE call beside them.
 */
-const mine = { bucket: 'today', lists: {}, counts: null, editing: null }
+const mine = { bucket: 'today', lists: {}, counts: null, editing: null, trouble: {} }
 /*
   Declared HERE, beside the other stores, not next to the function that fills
   it three thousand lines below. A hoisted function reached during module
@@ -7782,9 +7782,23 @@ function tasksView() {
   const list =
     rows === undefined || rows === null
       ? '<p class="t-lead">Looking…</p>'
-      : rows.length === 0
-        ? `<p class="t-lead">${esc(emptyFor(mine.bucket))}</p>`
-        : `<ul class="ptasks">${rows.map(myRow).join('')}</ul>`
+      : rows.length > 0
+        ? // Rows beat everything. The first version of this put the trouble
+          // check ABOVE the rows, so a bucket that HAD three tasks rendered
+          // the "could not load" line instead of the tasks — a stale failure
+          // flag hiding real content, which is worse than the false absence
+          // it was written to prevent. Caught by a capture reporting
+          // rows 3, writer true, and ZERO task elements in the DOM.
+          `<ul class="ptasks">${rows.map(myRow).join('')}</ul>`
+        : mine.trouble[mine.bucket] === true
+          ? // Empty AND the read failed: not an empty list, a list that could
+            // not be read. Saying "nothing due today" here would be a claim
+            // about his own tasks that nothing established.
+            `<p class="t-lead">I could not load this list just now, so this is
+               not &ldquo;nothing to do&rdquo; &mdash; it is &ldquo;I could not
+               look&rdquo;. The counts above came from a different request and
+               may well be right.</p>`
+          : `<p class="t-lead">${esc(emptyFor(mine.bucket))}</p>`
 
   /*
     And what the TEAM is doing, under a rule of its own.
@@ -12993,11 +13007,41 @@ async function needMine(bucket) {
       settles(read('my_tasks', bucket)),
       mine.counts === null ? settles(read('my_task_counts')) : Promise.resolve(mine.counts),
     ])
-    mine.lists[bucket] = Array.isArray(rows) ? rows : []
+    /*
+      `settles` answers null for a request that failed without throwing, so
+      "not an array" is the same news as the catch below and must not become
+      an empty list either — that is how a failed read became "nothing due
+      today" in the first place.
+    */
+    if (Array.isArray(rows)) {
+      mine.lists[bucket] = rows
+      delete mine.trouble[bucket]
+    } else {
+      mine.lists[bucket] = []
+      mine.trouble[bucket] = true
+    }
     if (counts !== null && typeof counts === 'object') mine.counts = counts
   } catch {
-    // An empty bucket rather than an error. #119's strip is what says the
-    // office is unreachable, and saying it twice on one screen is noise.
+    /*
+      A FAILED READ IS NOT AN EMPTY LIST.
+
+      This used to set an empty bucket, reasoning that #119's strip already
+      says the office is unreachable and saying it twice is noise. That is
+      sound for a TOTAL outage and wrong for a partial one: the counts and the
+      list are two requests, so the counts can arrive while the list does not
+      — and the screen then reads
+
+          Today 3        (the tab)
+          Nothing due today and no reminders.   (the body)
+
+      with no strip, because the office IS reachable. Caught in a capture,
+      where the two sat an inch apart contradicting each other.
+
+      "Nothing due today" is a CLAIM about his own tasks. The same rule as the
+      inbox: you may say you could not look; you may not say there is nothing
+      there.
+    */
+    mine.trouble[bucket] = true
     mine.lists[bucket] = []
   }
   render()
