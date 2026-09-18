@@ -93,8 +93,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
     // resolved through `google_service_scopes`, which returns empty for
     // anything it does not recognise. An unknown service therefore asks for no
     // permission rather than asking for someone else's.
-    const service = url.searchParams.get('service') ?? 'calendar'
-    const scopes = String(await rpc('google_service_scopes', { p_slug: service }))
+    /*
+      THE DEFAULT IS EVERYTHING THE OFFICE ACTUALLY USES (#172, migration 0485).
+
+      It used to be `'calendar'`, and the Connect Google button in Settings
+      links to the bare `/start` — so the one control in the product for
+      reconnecting Google asked for two Calendar scopes and nothing else, while
+      `src/google/mail.ts`, `src/google/drive.ts` and `src/google/calendar.ts`
+      all authenticate with the SAME `google.refresh_token` and each callback
+      REPLACES it. Pressing it reconnected Calendar and left Gmail and Drive
+      dead, which is precisely the state the office was in — and it would have
+      looked like it had worked.
+
+      Found by probing the link before sending Grant to press it.
+
+      `google_scopes_in_use` is derived, not a list: the union over offered
+      services that have an enabled `tool_permissions` row under the same name.
+      So a fourth service is covered the day it is switched on, and `youtube`
+      — offered, no tool — is not asked for, because over-asking on a consent
+      screen is its own defect.
+
+      The per-service door is untouched and so is its safety property: an
+      unknown slug still resolves to the empty string and asks for nothing.
+      Only an absent parameter or the literal `all` gets the union.
+    */
+    const service = url.searchParams.get('service') ?? 'all'
+    const scopes =
+      service === 'all'
+        ? String(await rpc('google_scopes_in_use', {}))
+        : String(await rpc('google_service_scopes', { p_slug: service }))
     if (scopes === '') {
       return page(
         'Unknown service',
@@ -184,10 +211,34 @@ Deno.serve(async (request: Request): Promise<Response> => {
       p_scopes: tokens.scope ?? '',
     })
 
+    /*
+      What Google actually granted, said back in words.
+
+      From `tokens.scope`, which is Google's own answer rather than what was
+      asked for — those differ when a person unticks something on the consent
+      screen, and the office should say what it HAS rather than what it wanted.
+    */
+    const granted = (tokens.scope ?? '').split(' ').filter((x) => x !== '')
+    const families = [
+      granted.some((s) => s.includes('gmail')) ? 'Gmail' : '',
+      granted.some((s) => s.includes('calendar')) ? 'Calendar' : '',
+      granted.some((s) => s.includes('drive')) ? 'Drive' : '',
+    ].filter((x) => x !== '')
+    const connected =
+      families.length === 0
+        ? 'Nothing was granted — try again and leave the permissions ticked.'
+        : `${families.join(', ')} can be used now.`
+
     return page(
       'Connected',
-      '<h1>Google is connected</h1><p>Calendar can be switched on from Settings now.</p>' +
-        '<p>You can close this tab.</p>',
+      /*
+        Naming what was connected, rather than one service the page happened to
+        be written about. The old wording said "Calendar can be switched on"
+        after a consent that may have covered Gmail and Drive too — a sentence
+        that is narrower than the truth is how somebody concludes the other two
+        did not work and presses it again.
+      */
+      `<h1>Google is connected</h1><p>${connected}</p>` + '<p>You can close this tab.</p>',
     )
   }
 
