@@ -313,6 +313,38 @@ and deliberately left alone rather than renamed.
 And I hit the backtick-in-a-comment-in-a-template-literal trap while writing
 the mail fix — two comments below one that says not to.
 
+### Batch 9 — #135/#16: the office could not open a page that needed no browser
+
+`runtimeFor` resolves two Vault entries, finds neither, and hands back
+`UnavailableBrowserAdapter`. So with no Cloudflare credential the office could
+not open **any** page — including a plain public one that never needed a
+browser.
+
+The credential is a real blocker for a login or a JavaScript-rendered page. It
+is not a blocker for fetching HTML and reading it, which is most of the
+reference material a project cites. `FetchedBrowser` costs nothing, needs
+nothing, and is honest about its three limits rather than returning an empty
+read: **no screenshot** (refused in words), **no JavaScript** (a shell is
+reported as a limit, never as "the page says nothing" — #257's false absence
+through a new door), **no signing in** (an expired jar comes back through the
+same `looksSignedOut` both runtimes share).
+
+It also carries a guard the Cloudflare runtime does not need: a gather URL can
+come from a document, so it is not trusted. `file://` and every private range
+are refused — the one that matters is `169.254.169.254`, which answers with
+cloud credentials and which no blocklist of hostnames would catch.
+
+**The real network found a defect twelve unit tests missed.** The first floor
+refused anything under 400 characters of text, and rejected **example.com** — a
+complete server-rendered page of 144 characters — as "probably JavaScript". A
+guard that refuses a good page teaches the office to distrust a runtime that
+was right. The discriminator is markup WEIGHT, not text length: little text
+*and* a great deal of page around it.
+
+Live, with no credential of any kind: public page **ok=true, 144 chars**; a 404
+refused with its status; cloud metadata refused as private. Twelve tests,
+**three sabotages each red** (guard off, shell through, screenshot faked).
+
 ## BLOCKERS
 
 *(none)*

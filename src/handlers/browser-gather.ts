@@ -34,8 +34,9 @@
  * append-only ledger the Browser tab reads.
  */
 
-import { type BrowserAdapter, UnavailableBrowserAdapter } from '../browser/adapter.ts'
+import type { BrowserAdapter } from '../browser/adapter.ts'
 import { CloudflareBrowser } from '../browser/cloudflare.ts'
+import { FetchedBrowser } from '../browser/fetched.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { filePath, putFile } from '../files/store.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
@@ -334,9 +335,31 @@ async function runtimeFor(db: SqlExecutor): Promise<BrowserAdapter> {
   const account = (row?.account ?? '').trim()
   const token = (row?.token ?? '').trim()
   if (account === '' || token === '') {
-    return new UnavailableBrowserAdapter(
-      'no browser runtime credential is set, so the office cannot open a page',
-    )
+    /*
+      No credential does not mean no capability.
+
+      This used to hand back `UnavailableBrowserAdapter`, so the office could
+      not open ANY page — including a plain public one that never needed a
+      browser. The Cloudflare account is a real blocker for a site that wants
+      a login or draws itself in JavaScript; it is not a blocker for fetching
+      HTML and reading it, which is most of the reference material a project
+      cites.
+
+      `FetchedBrowser` costs nothing, needs nothing, and is honest about its
+      three limits — no screenshot, no JavaScript, no signing in — rather than
+      returning an empty read and calling it an answer. It is strictly worse
+      than the real runtime at everything except existing, so the moment a
+      credential appears the branch above takes over and this becomes the
+      degradation path. Which is the point `adapter.ts` already makes: a
+      degradation path is only trustworthy because it is the one that runs
+      every day until then.
+
+      `UnavailableBrowserAdapter` is no longer reachable from here and the
+      import is gone: nothing between "there is no credential" and "there is a
+      browser" is now silent. A caller that genuinely needs a real browser
+      asks for `shot`, and `FetchedBrowser` refuses that in words.
+    */
+    return new FetchedBrowser()
   }
   return new CloudflareBrowser({ accountId: account, apiToken: token })
 }
