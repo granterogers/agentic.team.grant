@@ -159,3 +159,54 @@ Four observations, two of which are worth acting on eventually:
 
 Nothing paid was added. £0/month holds.
 
+## 9. The visual pass
+
+`npm run shots` — **184 captures**, desktop and phone, both schemes, zero
+screens missed. Opened and judged rather than counted.
+
+### It could not run at all when this started
+
+The capture died on one selector — the My Tasks row editor — and took **twelve
+later screens with it**. A harness that stops the whole product being
+photographed is worse than one that names the screen it could not reach, so it
+reports a gap now and carries on. That change is what made the rest of this
+section possible.
+
+### Two product defects came out of the screen it could not reach
+
+1. **"Nothing due today" printed under a tab reading "Today 3"**, an inch
+   apart, with no unreachable-office strip because the office WAS reachable.
+   The counts and the list are two requests; `needMine`'s catch turned a
+   failed list read into an empty one. Fixed — and `settles` answering null
+   is treated as the same news.
+2. **Then my own fix hid real content**: the trouble check sat above the rows,
+   so a bucket with three tasks rendered "could not load". Rows beat
+   everything now. Found by the harness reporting `rows 3, writer true,
+   tasksInDom 0`.
+
+### What the measurements say about the home board
+
+Read with `npm run space` rather than off the PNG, because three of four
+findings taken off a capture have historically been wrong:
+
+```
+panel Waiting on you   220px · header 17% ·   0px below · 105px spare
+panel Projects         420px · header  9% · 123px below · fade on (opacity 1)
+panel Tasks            420px · header  9% ·   0px below · 329px spare
+```
+
+My eye said the Projects panel was "clipping a card and looking broken". The
+measure disagrees in the way that matters: the #108 fade IS on at opacity 1,
+so the clip is affordanced rather than accidental. That is the finding
+corrected, not confirmed.
+
+The Tasks panel being 78% empty is a **capture artefact** and is deliberately
+NOT being acted on: with no server behind it the panel sits in "Reading what
+is open…", and in production it holds content. Retuning default panel heights
+on that evidence would be the mistake CLAUDE.md records about #85, where three
+of four findings off a capture were wrong and two would have been "fixed".
+
+**Recorded rather than changed**, with the reason, because the honest answer to
+"is the default layout right" needs a capture taken against real data and this
+run did not produce one.
+
