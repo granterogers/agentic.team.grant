@@ -211,9 +211,51 @@ const stripFraming = (said: string): string =>
  * Null is the ordinary answer and the safe one: everything the office already
  * did with an instruction, it still does.
  */
+/**
+ * "Remind me WHY we decided X" is a question, not a reminder.
+ *
+ * Found by attacking the office with a false premise. Asked *"Remind me why we
+ * decided to drop the Tuesday cohort"* — a decision that never happened — it
+ * created a **personal task on Grant's real list** called "Why we decided to
+ * drop the cohort", due in four days, and answered:
+ *
+ *     That is on your list for 2026-09-22.
+ *     [evidence: verified · confidence: high]
+ *
+ * Verified and high confidence, because by then the task genuinely existed:
+ * the office had made it. The false premise went unchallenged and the answer
+ * looked authoritative, which is the worst available combination — a
+ * fabrication laundered through a row the office created itself.
+ *
+ * The expensive direction here is the false POSITIVE, unusually. Missing a
+ * real reminder costs him retyping one sentence; inventing a task from a
+ * question puts something he never asked for on the list he is supposed to
+ * trust, AND swallows the question.
+ *
+ * ## Why only these four words
+ *
+ * `why`, `what`, `who` and `whether` after "remind me" are almost never a
+ * reminder framing — they ask to be TOLD something now.
+ *
+ * `when` and `where` are deliberately NOT in the list: *"remind me when the
+ * deadline approaches"* is a perfectly good reminder and means the opposite of
+ * *"remind me when the deadline is"*. Guessing between them would trade a
+ * defect for a coin flip, so they keep today's behaviour.
+ *
+ * ADJACENCY is what separates them, not the presence of "to" somewhere in the
+ * sentence. The first version used a negative lookahead for "to" across the
+ * whole string and was defeated by its own example: *"remind me why we
+ * decided TO DROP the cohort"* contains one, so the guard did not fire on the
+ * very sentence it was written for. The question word has to follow "remind
+ * me" directly — which also leaves *"remind me to ask what the price is"*
+ * alone, because there "to" comes first.
+ */
+const REMIND_ME_A_QUESTION = /\bremind\s+me\s+(?:again\s+)?(?:why|what|who|whether)\b/i
+
 export function personalTaskRequest(text: string, now: Date = new Date()): PersonalTask | null {
   const said = text.trim()
   if (said === '') return null
+  if (REMIND_ME_A_QUESTION.test(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
   const commit = I_MUST.test(said)
   if (!remind && !commit) return null
