@@ -100,7 +100,51 @@ if (actions.length < 10 || sections.length < 10) {
   process.exit(1)
 }
 
-const pressed = (name: string): boolean => page.includes(`'${name}'`) || page.includes(`"${name}"`)
+/*
+  Named, in either of the two ways the product names a section.
+
+  This was quoted-only — `'lately'`, `"lately"` — and `web/studio/data.js`
+  fetches the studio's PRIMARY payload as
+  `fetch(`${endpoint}?section=studio`)`, inside a template literal, with no
+  quotes anywhere near the word. So `section:studio` was reported as named by
+  nothing, went into the baseline, and was given the reason *"SUPERSEDED by the
+  per-project reader the page actually calls"*.
+
+  That reason is false. It is the single most-used section in the product, and
+  a baseline entry with a false reason is worse than no entry at all: it is a
+  documented excuse that stops the next person looking. `pulse`, `workspace`
+  and `conversation` are fetched the same way and were only caught because
+  they happen to be quoted somewhere else too.
+
+  The URL form is matched with a boundary after the name so `section=cost` is
+  not satisfied by `section=cost_per_outcome`.
+*/
+const pressed = (name: string): boolean =>
+  page.includes(`'${name}'`) ||
+  page.includes(`"${name}"`) ||
+  new RegExp(`section=${name}(?![a-z_])`).test(page)
+
+/*
+  And the control for the line above.
+
+  A found-nothing check needs something that must come back positive, and the
+  byte-count control at the top only proves the find read some files. This
+  proves the MATCHER works in both of its forms — and it is here rather than in
+  a test because the thing it has to be right about is this run's copy of
+  `web/`, not a fixture.
+*/
+for (const [form, probe] of [
+  ['quoted', 'lately'],
+  ['url', 'studio'],
+] as const) {
+  if (!pressed(probe)) {
+    console.error(
+      `check:pressable FAILED — the ${form} form stopped matching: nothing in web/ ` +
+        `names \`${probe}\`, which cannot be true. The matcher is broken, not the product.`,
+    )
+    process.exit(1)
+  }
+}
 
 const coldActions = actions.filter((a) => !pressed(a))
 const coldSections = sections.filter((s) => !pressed(s))
