@@ -81,18 +81,60 @@ not rediscovered.
 
 ## CURRENT TASK
 
-Reconciliation complete. Starting **#276** — drive the pressable baseline down
-by exercising each entry, not by rendering controls.
+Batch 1 done and deployed. Next: **#276**'s pressable baseline (15, each with a
+stated reason) and the rest of #272's eight.
 
 ## COMPLETED THIS RUN
 
-*(nothing yet — appended as each batch verifies)*
+### Batch 1 — #272/#49: the office could not tell Grant what it cannot do
+
+`check:callers` was at **10**, not the 40 in #272's title — it has already been
+driven down. Triaging the survivors found the one the check exists to find.
+
+**`app.proposals_to_send` and `app.proposals_sent` had never had a production
+caller.** 0295 built them so Claire tells Grant ONCE what the office cannot do;
+without a caller the office raised proposals correctly and said nothing, so the
+only way he learned it was stuck was by opening the Governance page. Same class
+as the morning's Slack rotation defect: a mechanism that exists, is correct, and
+never speaks.
+
+- **0489** — `proposals.delivered_by_job`, `proposals_sent(ids, job)` and
+  `app.proposals_undeliver()`. Marking a batch delivered *before* the delivery
+  is confirmed loses it for ever, and what is lost is the message saying the
+  office is stuck. The claim is now checkable and recoverable; the sweep can
+  only ever put a proposal BACK.
+- **`src/handlers/propose.ts`** — sweeps, raises, then speaks. Silent when
+  nothing is undelivered (a daily count is narration), announces when there is
+  (the request itself). Router passed in `pass.ts`.
+- **0490** — and the defect 0489 introduced. Its sweep said
+  `delete … where app.harness_label(needed)`; the two harness proposals on
+  Grant's page say *"speak fluent welsh q7mjvwn5"* and that pattern is
+  separator-anchored, so **it deleted nothing and reported success** — the exact
+  trap CLAUDE.md records, committed by the session quoting it. No pattern over
+  the wording can work: `verify:proposes` names its subject to read real on
+  purpose (#45). `app.harness_proposal` DERIVES it from the provenance of the
+  impediments instead, the way 0355 derived `app.harness_job`, and the three
+  readers ask it.
+
+**Evidence.** 0489 and 0490 each drive their functions for real inside a
+rollback, including the control that the derivation discriminates rather than
+refusing everything. Six unit tests in `tests/handlers/propose-speaks.test.ts`,
+**three sabotages each watched go red** (never speak · mark without naming the
+job · sweep after sending) and green when restored. The whole round driven
+against the real database in process — announced, named the gap, marked against
+its own job, was not re-offered, and came back when the job did not deliver.
+Not through the worker, deliberately: that would have sent Grant a real message
+about a gap the drive invented.
+
+`public.proposals` is now **0 rows** — the Welsh debris is gone from the
+Governance page. `check:callers` **10 → 8**. Worker deployed.
 
 ## BLOCKERS
 
-*(none yet)*
+*(none)*
 
 ## NEXT ACTION
 
-Read `docs/testing/pressable-baseline.json`, run `check:pressable` and
-`check:callers`, and triage both against what Grant can actually reach.
+#276: the 15 pressable entries. `section:staff` and `section:studio` are
+documented SUPERSEDED, which makes them dead gateway sections rather than
+baseline entries — check for consumers, then delete rather than excuse.

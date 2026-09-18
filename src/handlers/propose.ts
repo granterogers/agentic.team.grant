@@ -12,27 +12,56 @@
  * Grant sixteen rows of test traffic and zero real ones. 0473 swept those and
  * filtered the reader; this is the half that makes real ones appear.
  *
- * ## Quiet on purpose
+ * ## And it tells him, ONCE (0489)
  *
- * `announce` is false. The proposals land where he already reads them, and
- * eleven things the office cannot do arriving on his phone is exactly the
- * narration he has asked twice not to receive. The daily cadence is for the
- * same reason: a proposal is a standing request, not news.
+ * The first version of this handler was silent — `announce: false`, on the
+ * reasoning that the proposals land where he already reads them. That was
+ * half right and it left the loop unfinished: `app.proposals_to_send` and
+ * `app.proposals_sent` were built by 0295 for exactly this, **and neither had
+ * ever had a production caller.** So the office raised proposals correctly
+ * and then said nothing, and the only way Grant learned it was stuck was by
+ * opening the Governance page and noticing.
+ *
+ * The distinction that makes both true: a DAILY COUNT is narration and he has
+ * asked twice not to receive it; a NEW thing the office cannot do, said once,
+ * is the request itself. So the round is silent when there is nothing
+ * undelivered, and speaks when there is. `delivered_at` is what makes "once"
+ * mean once.
+ *
+ * ## Why marking sent is not the last step
+ *
+ * Marking a batch delivered and then failing to deliver it loses it for ever:
+ * the next pass skips it, and what is lost is precisely the message saying
+ * the office is stuck. 0489 records WHICH job claimed each proposal, and
+ * `app.proposals_undeliver` puts back anything whose job finished without a
+ * sent delivery. The sweep runs FIRST here, so a failure yesterday is
+ * recovered today.
  *
  * ## What it does NOT do
  *
- * It does not deliver, decide, or act. `raise_proposals` refuses to rewrite a
- * proposal Grant has answered, and a declined one stays silent for three
- * months — both are the RPC's rules, not this handler's, and it must stay that
- * way: a handler that re-raised a decline would be arguing with him once a
- * day.
+ * It does not decide or act. `raise_proposals` refuses to rewrite a proposal
+ * Grant has answered, and a declined one stays silent for three months — both
+ * are the RPC's rules, not this handler's, and it must stay that way: a
+ * handler that re-raised a decline would be arguing with him once a day.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 import { count } from '../text/plain.ts'
+import { sayAs } from '../text/voice.ts'
 
-export function proposeHandler(db: SqlExecutor): Handler {
+/** One proposal, as `app.proposals_to_send` returns it. */
+interface Waiting {
+  readonly id: string
+  readonly who: string
+  readonly needed: string
+  readonly title: string
+  readonly remedy: string
+}
+
+export function proposeHandler(db: SqlExecutor, router: ProviderRouter | null = null): Handler {
   return {
     kind: 'office.propose',
     handle: async (job: Job): Promise<HandlerOutput> => {
@@ -45,6 +74,16 @@ export function proposeHandler(db: SqlExecutor): Handler {
         model: null,
         announce: false,
       }
+
+      /*
+        FIRST: put back anything a previous round claimed to have told him
+        about and did not (0489). A failure yesterday is recovered today, and
+        the sweep can only ever restore a proposal, never hide one.
+      */
+      const restored = Number(
+        ((await db.execute(`select app.proposals_undeliver() as n`)).rows[0] as { n?: number })
+          ?.n ?? 0,
+      )
 
       /*
         Thirty days and three occurrences, which are `raise_proposals`'s own
@@ -87,8 +126,95 @@ export function proposeHandler(db: SqlExecutor): Handler {
               ? ''
               : `, ${String(silent)} left alone because you have already said no`) +
             `. ${count(open, 'proposal', 'proposals')} open on the Governance page.`
+      const withRestored =
+        restored === 0
+          ? body
+          : `${body} ${count(restored, 'proposal', 'proposals')} put back: a previous round said ` +
+            'it had told you and the message never arrived.'
 
-      return { ...base, body } satisfies HandlerOutput
+      /*
+        And the half that speaks (0489).
+
+        Five, because `proposals_to_send` ranks by how often each has actually
+        bitten and a list longer than that is one nobody reads to the end. The
+        rest keep their turn on the next round.
+      */
+      const waiting = asWaiting(
+        (await db.execute(`select app.proposals_to_send(5) as r`)).rows[0] as { r?: unknown },
+      )
+      if (waiting.length === 0) return { ...base, body: withRestored } satisfies HandlerOutput
+
+      const lines = waiting.map((w) => `${w.who} could not ${w.needed} — ${w.remedy}`)
+      const said = await sayAs(db, router, 'chief-of-staff', {
+        purpose:
+          'Tell Grant what the team has run into that it cannot do, and that each one ' +
+          'is waiting for a yes or no from him on the Governance page. Do not argue for ' +
+          'any of them and do not invent a cost. Keep the list as given.',
+        facts: [
+          `there ${waiting.length === 1 ? 'is' : 'are'} ${count(waiting.length, 'thing', 'things')} the team could not do`,
+          ...lines,
+          'each one is waiting for him to approve or decline it on the Governance page',
+        ],
+        fallback:
+          `${count(waiting.length, 'thing', 'things')} the team could not do, waiting for you ` +
+          `on the Governance page:\n\n${lines.map((l) => `- ${l}`).join('\n')}`,
+        // #268: attributed, so the call lands under this job KIND.
+        job: { jobId: job.jobId, correlationId: job.correlationId },
+        words: 90,
+      })
+
+      /*
+        Marked sent BEFORE delivery, and that is safe only because of the
+        sweep at the top of this handler: `proposals_undeliver` puts back
+        anything whose job finished without a `sent` delivery, so the claim is
+        recoverable rather than final. Without that half this line would be
+        the defect it exists to prevent.
+      */
+      await db.execute(
+        `select app.proposals_sent(array[${waiting
+          .map((w) => `'${w.id.replace(/'/g, "''")}'::uuid`)
+          .join(', ')}], '${job.jobId.replace(/'/g, "''")}'::uuid) as n`,
+      )
+
+      return {
+        ...base,
+        body: said,
+        // The one time this round is worth an interruption: something the
+        // office cannot do, said once, is the request itself rather than
+        // narration about it.
+        announce: true,
+        severity: 'routine',
+        // The model wrote it, so the record says so. CLAUDE.md's fifth
+        // instance of a handler claiming determinism over a model call, found
+        // this morning in the Slack rotation handler.
+        path: await howComposed(db, job.jobId),
+      } satisfies HandlerOutput
     },
   }
+}
+
+/**
+ * The batch, defensively.
+ *
+ * The executor hands a jsonb column back as an OBJECT, not a string —
+ * CLAUDE.md records `JSON.parse(String(x))` producing
+ * `"[object Object]" is not valid JSON` on exactly this shape — so both are
+ * accepted. Anything missing an id is dropped rather than sent as
+ * `undefined`, because a malformed row must not be able to mark a real
+ * proposal delivered.
+ */
+const asWaiting = (row: { r?: unknown } | undefined): Waiting[] => {
+  const raw = row?.r
+  const list = typeof raw === 'string' ? JSON.parse(raw) : (raw ?? [])
+  if (!Array.isArray(list)) return []
+  return list
+    .map((x) => x as Partial<Waiting>)
+    .filter((x) => typeof x.id === 'string' && x.id !== '')
+    .map((x) => ({
+      id: String(x.id),
+      who: String(x.who ?? 'somebody'),
+      needed: String(x.needed ?? 'something'),
+      title: String(x.title ?? ''),
+      remedy: String(x.remedy ?? 'no remedy recorded'),
+    }))
 }

@@ -442,9 +442,15 @@ export const buildPass = async (
 
       `app.raise_proposals` had no caller at all, so #49's loop ended in a
       table nobody filled: every proposal on the Governance page was a suite's
-      fixture. The duty is daily and the handler is silent (0473).
+      fixture. The duty is daily (0473).
+
+      The router is passed since 0489, when the round gained the other half of
+      #49's loop: Claire SAYS what the office cannot do, once, rather than
+      leaving it on a page he has to go and look at. Without a router `sayAs`
+      falls back to its template, which is a worse sentence and still the
+      whole message — the fallback is never silence.
     */
-    proposeHandler(db),
+    proposeHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     choresHandler(db),
     // "Use the Notion you already have" — a configuration change the office can
     // now make, rather than one that needed a terminal (0164).
