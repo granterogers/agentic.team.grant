@@ -2827,6 +2827,39 @@ Each of these cost real time. They are here so they cost it once.
   null. Four guesses, all refused on the first run, all settled by one
   `information_schema` query.
 
+- **The instrument was wrong three times before the product was wrong once.**
+  #277's harness scored a textbook SUCCESS as the defect on its first run —
+  the office had said *"I'm setting aside the request for a numbered list
+  because your standing instructions forbid lists"*, which is the clause doing
+  exactly its job, and the scorer called it spurious because `brokeAForm` was
+  false. It then missed three more real acknowledgements in a row, each in a
+  shape nobody had listed: *"in prose rather than a list because your
+  instruction forbids lists"*, *"because MY standing instructions prohibit
+  lists"* (no "you" anywhere), and *"I can't use bullet points as per your
+  standing instruction"* (no contrast word). **Two of the three missed shapes
+  fell on the CANDIDATE's side of an A/B**, which is the one way an instrument
+  can be wrong that nobody notices: it would have produced a verdict in the
+  direction of its own blind spot. Read the answers, not the tally — and when
+  a detector needs a third widening, ask whether the DIRECTION of the result
+  has survived every version, because that is more robust than any single
+  number.
+- **A prompt A/B needs both defects counted or it optimises into the other
+  one.** #277 is the office apologising for a rule it KEPT; #231 is the office
+  dropping one in SILENCE. Either alone is trivially optimisable and
+  optimising either alone is a regression — delete the clause and `spurious`
+  goes to zero along with the feature; make it shout and `silent` goes to zero
+  and Grant gets an apology every turn. The candidate that "states the ordinary
+  case first" took `spurious` from 0 to 0 and `silent` from 1 to 2–3 across
+  five runs, never better. Rejected, and the baseline retained — which is why
+  the clause was extracted to `say-what-you-dropped.ts` as a named constant
+  rather than edited in place: the freeze is a string, not an intention.
+- **`finish_reason=length` with an empty body is the reasoning budget, not the
+  model.** Three cases came back blank with ~1,100 tokens spent before any
+  content, at `maxTokens: 900`. Recorded once already about the judge and paid
+  for again here; raising it to 2,400 fixed all three. An empty body scores as
+  "said nothing", which in this harness would have quietly IMPROVED the number
+  under test.
+
 ---
 
 ## Visual standard

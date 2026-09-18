@@ -1784,6 +1784,135 @@ export const formRules = (rules: readonly string[]): readonly FormRule[] => {
 }
 
 /**
+ * Did this answer actually break one of Grant's form rules?
+ *
+ * Extracted from `setAsideUnsaid` so the measurement in
+ * `verify:form-rules` can ask the question WITHOUT the acknowledgement half
+ * (#277). The two halves answer different things and were fused: "a rule was
+ * broken" is a fact about the text, and "and nobody said so" is a judgement
+ * about the apology. #277's defect is the office apologising for breaking a
+ * rule it KEPT, which the fused function can never see, because it returns
+ * null the moment nothing is broken.
+ *
+ * Shared rather than restated in the harness. A second copy of "what counts
+ * as a list" would drift, and a drifted copy would report the product as
+ * defective on a change to either.
+ */
+export const brokeAForm = (body: string, rules: readonly string[]): string | null => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return null
+  for (const rule of formRules(rules)) {
+    const broke =
+      rule.kind === 'one-paragraph'
+        ? /\n\s*\n/.test(text.trim()) || LIST_LINE.test(text)
+        : rule.kind === 'no-lists'
+          ? LIST_LINE.test(text)
+          : wordsIn(text) > (rule.words ?? 220)
+    if (broke) return rule.said
+  }
+  return null
+}
+
+/**
+ * Does this answer NARRATE having set a form rule aside? (#277)
+ *
+ * The other half of the pair, and the one nothing could previously see. The
+ * prompt asks the office to say in one clause which constraint it dropped, and
+ * Grant caught it saying *"I'm setting aside the bullet-point rule so I can
+ * keep this answer as a single short paragraph as required"* — on an answer
+ * that broke no rule at all. That sentence is not a lie about the world, so no
+ * coherence gate can see it; it is a lie about the ANSWER, and it makes a
+ * standing preference look like a constant negotiation.
+ *
+ * Deliberately narrower than `setAsideUnsaid`'s `admits`. That one is looking
+ * for ANY acknowledgement beside a real breach and may be generous, because a
+ * false positive there only means the office is not nagged. This one decides
+ * whether a good answer gets reported as defective, so it requires a
+ * first-person setting-aside VERB and a form noun in the same sentence:
+ * "you asked" or "normally" alone are ordinary English.
+ */
+const SET_ASIDE_VERB =
+  /\b(?:setting\s+aside|set\s+aside|setting\s+this\s+aside|breaking|bending|ignoring|overriding|going\s+against|departing\s+from|stepping\s+outside|(?:i|I)\s*(?:'|\u2019)?m?\s*(?:am\s+)?(?:going\s+to\s+)?(?:have\s+to\s+)?(?:break|bend|ignore|override|set\s+aside))\b/i
+const FORM_NOUN =
+  /\b(?:rule|constraint|instruction|instructions|preference|guideline|paragraph|prose|bullet|bullets|list|lists|length|limit|words?\s+limit)\b/i
+
+/**
+ * The OTHER way the office names the conflict, missed by the first draft.
+ *
+ * #277's first measured run scored this as a silent drop:
+ *
+ *   *"I'm providing the onboarding steps in prose rather than a numbered list
+ *   because your instruction forbids lists"*
+ *
+ * That is the clause working perfectly — Grant asked for a list, his standing
+ * rule forbids lists, the office kept the rule, declined the REQUEST, and said
+ * which in one clause. It just never uses the words "set aside": it conforms
+ * and explains, which is the commoner and better-mannered shape.
+ *
+ * So the detector answers *did it name the conflict*, either way round. A
+ * choice between two forms, with Grant's own instruction given as the reason,
+ * in one sentence. The reason clause is what keeps it narrow: "in prose rather
+ * than a list" alone is a description of the answer, and only "because you
+ * asked me not to" makes it an acknowledgement.
+ */
+/*
+  `but` and a bare `though` were in this list for one run and came out again:
+  both are ordinary connectives and pairing either with a form noun would have
+  matched half the answers in the corpus. The five that survive all mark a
+  choice BETWEEN two forms, which is the thing being acknowledged.
+*/
+const CONTRAST =
+  /\b(?:instead\s+of|rather\s+than|in\s+place\s+of|despite|even\s+though|although)\b/i
+/*
+  What separates naming a CONSTRAINT from describing a shape.
+
+  "in one paragraph instead of three" is a sentence about the answer.
+  "in prose rather than a list because your instruction forbids lists" names
+  the thing that decided it. The difference is not the contrast word — both
+  have one — it is whether a rule, an instruction, a preference or a limit is
+  named as the reason.
+
+  Deliberately NOT requiring the word "you". A second corrected run had the
+  office say *"because MY standing instructions prohibit lists"* and *"despite
+  the 60-word limit"*, neither of which addresses Grant, and both of which are
+  the acknowledgement this measures — and both fell on the CANDIDATE's side, so
+  an instrument that missed them would have been biased towards the verdict it
+  happened to produce.
+*/
+const CONSTRAINT =
+  /\b(?:instruction|instructions|rule|rules|preference|limit|cap|guideline|standing)\b|\byou\s+(?:asked|said|told|want|wanted|prefer|instructed)\b/i
+/*
+  The third shape, and the last: "I can't do X because your rule says so."
+
+  No contrast word — the office simply states what it is unable to do and
+  names why. `setAsideUnsaid`'s own `admits` pattern has carried `cannot` and
+  `can't` since #231 for the same question, so this is two detectors agreeing
+  rather than a pattern fitted to a run. It still needs a CONSTRAINT beside it:
+  "I can't find the list" names no rule and is not an acknowledgement.
+*/
+const INABILITY =
+  /\b(?:cannot|can(?:no|')?t|can\u2019t|unable\s+to|not\s+able\s+to|won't|will\s+not)\b/i
+
+export const narratesSetAside = (body: string): boolean => {
+  const text = String(body ?? '')
+  if (text.trim() === '') return false
+  /*
+    Sentence by sentence, so a set-aside verb in one place and a form noun a
+    paragraph away do not combine into a narration that is not there. The same
+    scoping `setAsideUnsaid` uses, for the same reason.
+  */
+  return text
+    .split(/(?<=[.!?])\s+|\n/)
+    .some(
+      (line) =>
+        FORM_NOUN.test(line) &&
+        (SET_ASIDE_VERB.test(line) ||
+          (CONTRAST.test(line) && CONSTRAINT.test(line)) ||
+          (INABILITY.test(line) && CONSTRAINT.test(line))),
+    )
+}
+
+/**
  * The rule the answer broke in silence, or null.
  *
  * Returns the rule in Grant's words, so the caller can put them in the retry

@@ -117,6 +117,7 @@ import {
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
+import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
 import { nameSubjects } from '../agents/subject.ts'
 import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../agents/tasks.ts'
 import { readTeaching } from '../agents/teaching.ts'
@@ -3158,10 +3159,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       what a gate that fails into silence costs, and this is
                       the version that keeps answering.
                     */
-                    'If you cannot satisfy everything he has asked for at once — his own ' +
-                    'standing instructions included — do the most useful thing and say in ' +
-                    'one clause which constraint you set aside and why. Never drop one ' +
-                    'silently.\n\n' +
+                    // Extracted to `say-what-you-dropped.ts` so #277 can MEASURE
+                    // a candidate against it rather than argue about it.
+                    `${SET_ASIDE_LINE}\n\n` +
                     (turns.length === 0
                       ? ''
                       : 'You are mid-conversation. The turns before this one follow; the last ' +
