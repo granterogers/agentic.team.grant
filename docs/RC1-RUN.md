@@ -114,3 +114,21 @@ Backlog: 10 -> 7 open (#213, #172, #41, #18, #259, #260, #261).
 
 Next: #259 Personal Tasks, then #260 NotebookLM, then #172 Gmail, then #41 as
 the spine, then RC1 qualification and the visual pass.
+
+- **#259** human-action bridge built (0496 + 0497, `ff8b065`). A blocked job
+  now puts the action on Grant's own list; ticking it resolves the blocker and
+  lets the job go; answering elsewhere clears the task. `verify:mytasks`
+  46/46. 0497 had to make 0496's own header true — it claimed
+  `hq_answer_blocker` delegates and it did not. ISSUE STAYS OPEN for the
+  Vikunja box, which needs a paid server and is Grant's decision.
+- **#260 CLOSED** (`1396b50`). The NotebookLM account is off quota, so the
+  live listing finally ran: 12 artifacts across 4 notebooks. Measured the
+  provider per kind — audio and slide_deck give a URL, **mind_map does not**.
+  The listing found a live defect: the provider says `slide_deck`/`mind_map`
+  and the office says `slides`/`mindmap`, so a slide deck Grant made appeared
+  on his Sources tab as "slide_deck". 0498 corrects the stored row;
+  `officeKind` translates at the boundary.
+
+Backlog: 10 -> 5 open (#213, #172, #41, #18, #259, #261 — of which #213/#18
+are Grant's credential rotations and #259/#261 are blocked on his call).
+Genuinely actionable: **#172 Gmail, #41 the spine.**
