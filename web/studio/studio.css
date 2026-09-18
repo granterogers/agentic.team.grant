@@ -4279,6 +4279,82 @@ body.docked { padding-right: min(380px, 100vw); }
 .ptick:hover::before { border-color: var(--good); background: color-mix(in srgb, var(--good) 18%, transparent); }
 .ptick[disabled] { cursor: default; opacity: .5; }
 
+/* --- My tasks (#259) -------------------------------------------------------
+   Grant's own list, on the screen the rail already called Tasks. Built from
+   `.ptask` rather than beside it: the row is the same shape and a second row
+   class would be two places for the overdue tint to drift. */
+
+/* Adding one is the first thing on the screen and not behind a button — #259
+   asks for fast creation, and a task app where adding one takes a click to
+   open a form is a task app people stop using. */
+.myadd {
+  display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center;
+  max-inline-size: 880px; margin-block-end: var(--s4);
+}
+.myadd input[data-my-title] { flex: 1 1 22ch; }
+.myadd input, .myadd select {
+  min-block-size: 44px; font-size: 16px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: 10px;
+  background: var(--surface); color: var(--ink);
+}
+.myadd > .t-meta { flex-basis: 100%; }
+
+.mybuckets {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; border-radius: 12px;
+  background: color-mix(in srgb, var(--sunken) 62%, transparent);
+  border: 1px solid var(--edge);
+  max-inline-size: 880px; margin-block-end: var(--s4);
+}
+.mybucket {
+  min-block-size: 38px; padding: 0 var(--s3); border-radius: 9px;
+  font: 500 13.5px/1 var(--text); color: var(--ink-2); border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.mybucket:hover { color: var(--ink); background: color-mix(in srgb, var(--ground) 55%, transparent); }
+.mybucket.on {
+  background: var(--surface); border-color: var(--edge); color: var(--ink);
+  font-weight: 600; box-shadow: var(--lift-1);
+}
+/* The count is a fact about the tab, not a badge demanding attention: the same
+   weight as the word, one step quieter. */
+.mybucket .n { font: 600 12px/1 var(--text); color: var(--ink-3); }
+.mybucket.on .n { color: var(--hue); }
+
+/* A finished task stays legible. Struck-through and faded to nothing is the
+   pattern every to-do list copies and it makes the Done tab unreadable, which
+   is the tab you open to check what you did. */
+.ptask.was .ptbody b { color: var(--ink-2); text-decoration: line-through;
+  text-decoration-color: var(--ink-3); }
+.ptick.on::before { border-color: var(--good); background: var(--good); }
+
+/* Details, on the row rather than in a sheet. A modal to add the word
+   "errand" is the ceremony that stops people labelling anything. */
+/* Pushed to the end of the row, not left sitting wherever the title happens
+   to stop. In the capture it landed at a different x on every row, which reads
+   as an accident rather than as a control. `.ptbody` has to GROW for that to
+   work — it is `min-width: 0` for truncation and that is not the same thing. */
+/* `1 1 0`, not `1 1 auto`. With an auto basis the body's flex-basis is its
+   CONTENT width, so on a phone it is wider than what is left beside the 44px
+   tick, the row wraps, and the tick sits alone on a line above the title —
+   which the capture showed and which reads as broken rather than as tight. */
+.ptask .ptbody { flex: 1 1 0; }
+.mydetail { flex: none; align-self: flex-start; margin-inline-start: auto; }
+.myedit {
+  display: flex; flex-wrap: wrap; gap: var(--s3) var(--s4); align-items: flex-end;
+  margin-block-start: var(--s3); padding-block-start: var(--s3);
+  border-block-start: 1px solid var(--edge);
+}
+.myedit label { display: grid; gap: 4px; }
+.myedit input, .myedit select {
+  min-block-size: 44px; font-size: 16px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: 9px;
+  background: var(--surface); color: var(--ink); max-inline-size: 22ch;
+}
+.myedit > .t-meta[data-said] { flex-basis: 100%; }
+
+.myteam { margin-block-start: var(--s6); max-inline-size: 880px; }
+.myteam .ptasks { margin-block-start: var(--s2); }
+
 /* ==========================================================================
    The way back (#118)
    ==========================================================================
@@ -6530,4 +6606,47 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 @media (max-width: 860px) {
   .jsteps { gap: 4px; }
   .jstep { padding: 2px 6px; }
+}
+
+/*
+  My tasks, on a phone. At the END, where a phone override has to be.
+
+  The composer is a column there: at 390px a title field, a date, a project
+  select and a button in one row leaves the title about 60px wide, which is
+  the one-character-per-line defect this stylesheet shipped in the document
+  sheet and only found by opening a capture.
+*/
+@media (max-width: 860px) {
+  /*
+    ONE LINE at rest on a phone.
+
+    Four stacked controls is 340px of composer before a single task is
+    visible — #267's measure exists for exactly that question, and a screen
+    whose first real content is below the fold is a screen nobody scrolls. The
+    date and the project appear when the field is in use, which is the only
+    moment they are wanted, and CSS does it so there is no state to get wrong.
+  */
+  .myadd { display: grid; grid-template-columns: 1fr auto; gap: var(--s2); }
+  .myadd input, .myadd select { inline-size: 100%; max-inline-size: 100%; }
+  .myadd input[data-my-due], .myadd select[data-my-project] {
+    grid-column: 1 / -1; display: none;
+  }
+  .myadd:focus-within input[data-my-due],
+  .myadd:focus-within select[data-my-project],
+  .myadd input[data-my-title]:not(:placeholder-shown) ~ input[data-my-due],
+  .myadd input[data-my-title]:not(:placeholder-shown) ~ select[data-my-project] {
+    display: block;
+  }
+  .mybuckets { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .mybuckets::-webkit-scrollbar { display: none; }
+  .mybucket { flex: 0 0 auto; }
+  /* One field per line. Four labelled controls in a wrapping row at 390px puts
+     two of them at about 60px each, which is the document sheet's defect
+     again — the one no check could see and only a capture found. */
+  .myedit { display: grid; gap: var(--s3); }
+  .myedit input, .myedit select { max-inline-size: 100%; inline-size: 100%; }
+  /* Details drops to its own line rather than squeezing the title; the tick
+     and the body stay side by side because the body can now shrink. */
+  .ptask { flex-wrap: wrap; }
+  .mydetail { margin-inline-start: 44px; flex-basis: 100%; margin-inline-end: auto; }
 }

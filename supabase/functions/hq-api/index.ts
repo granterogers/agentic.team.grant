@@ -60,6 +60,20 @@ const SECTIONS: Readonly<
        * could not express itself.
        */
       textArg?: { param: string; arg: string }
+      /**
+       * A word from a SHORT KNOWN LIST, read from a query parameter (#259).
+       *
+       * Not `textArg`, because a bucket is not free text: there are seven of
+       * them and an eighth is a typo. And not a default in the RPC either —
+       * CLAUDE.md records what it costs when a default value is also a
+       * legitimate value, because nothing downstream can then tell "we decided
+       * this" from "we did not know", and a misspelt bucket would quietly
+       * serve the ordinary list.
+       *
+       * Refused here, by name, so the caller is told which word it did not
+       * recognise rather than being shown something plausible.
+       */
+      oneOf?: { param: string; arg: string; values: readonly string[] }
       /** Whether `?project=<uuid>` narrows this section. Search only. */
       scoped?: boolean
       /**
@@ -284,6 +298,26 @@ const SECTIONS: Readonly<
     you are trying to find is one you are not inside.
   */
   archived: { fn: 'recoverable_projects' },
+  /*
+    MY TASKS (#259, ADR-0041).
+
+    Grant's own to-do list, which is the same table as the office's project
+    tasks with `assigned_to_human` true — the audit in ADR-0041 found that
+    column already modelled, never once set, and read by nothing.
+
+    Two sections rather than one: the list takes a bucket, and the counts come
+    back in a single round trip because the page draws seven tabs and seven
+    calls would be seven HTTPS hops to the Management API.
+  */
+  my_tasks: {
+    fn: 'my_tasks',
+    oneOf: {
+      param: 'id',
+      arg: 'p_bucket',
+      values: ['today', 'overdue', 'upcoming', 'inbox', 'unscheduled', 'done', 'all'],
+    },
+  },
+  my_task_counts: { fn: 'my_tasks_counts' },
   /*
     How far a job got, and why it stopped (#263).
 
@@ -970,6 +1004,13 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   automation_remove: { fn: 'remove_automation', required: ['p_automation'] },
   project_archive: { fn: 'archive_project', required: ['p_slug'] },
   project_unarchive: { fn: 'unarchive_project', required: ['p_slug'] },
+  /*
+    And the two writes it needs (#259). Completing and reopening go through
+    `task_state`, which already exists and already does both for either kind of
+    task — ADR-0041's "one set of writers".
+  */
+  my_task_add: { fn: 'my_task_add', required: ['p_title'] },
+  my_task_set: { fn: 'my_task_set', required: ['p_task_id'] },
 }
 
 /**
@@ -1380,6 +1421,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
     args = { ...args, [section.arg]: id }
   }
+  /*
+    A word from a known list (#259).
+
+    Before `textArg`, because it is the stricter of the two and the ordering
+    says so. An unknown value is named rather than defaulted: the whole reason
+    this exists instead of a default in the RPC is that a default which is also
+    a legitimate answer makes a typo indistinguishable from a choice.
+  */
+  if (section.oneOf !== undefined) {
+    const { param, arg, values } = section.oneOf
+    const value = (url.searchParams.get(param) ?? '').trim().toLowerCase()
+    if (!values.includes(value)) {
+      return json(
+        { error: `that section needs ${param} to be one of: ${values.join(', ')}`, section: name },
+        400,
+      )
+    }
+    args = { ...args, [arg]: value }
+  }
+
   /*
     A text argument, for search.
 

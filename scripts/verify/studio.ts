@@ -422,6 +422,87 @@ for (const [size, opts] of SIZES) {
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
 
+    /*
+      MY TASKS (#259), which had never been captured at all.
+
+      The global Tasks screen has existed since #123 and no capture run has
+      ever opened it — a screen with no capture is a screen nobody is watching,
+      and this file's own history is the argument. #259 replaced it with My
+      Tasks, so the first picture of it is also the first picture of the thing
+      it became.
+
+      Through the door for the usual two reasons: the composer, the buckets and
+      the row editor are drawn only for a writer, and the list only for rows
+      that exist. The token is written, the page redrawn so the controls are
+      there, THEN the store is filled — the order #263's capture had to learn
+      twice.
+    */
+    await page.locator('[data-go="tasks"]').click()
+    await page.waitForTimeout(400)
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      if (w === undefined) throw new Error('the capture door is not open')
+      localStorage.setItem('hq.token', 'local-capture-only')
+      w.render()
+    })()`)
+    await page.waitForTimeout(300)
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      const day = 86400000
+      const on = (n) => new Date(Date.now() + n * day).toISOString().slice(0, 10)
+      w.mine.counts = { today: 3, overdue: 1, upcoming: 4, inbox: 2,
+                        unscheduled: 2, done: 11, all: 17 }
+      w.mine.bucket = 'today'
+      w.mine.lists.today = [
+        { id: 'mt-1', title: 'Ring the venue about the September cohort',
+          state: 'todo', due_on: on(-2), labels: ['errand'], overdue: true,
+          project: { slug: 'legacy-coaching-course', name: 'Legacy Coaching Course' },
+          repeats: null, for_job: null },
+        { id: 'mt-2', title: 'Authorize Google Drive so the office can read it',
+          state: 'todo', due_on: on(0), labels: [], overdue: false,
+          project: null, repeats: null, for_job: 'job-1' },
+        { id: 'mt-3', title: 'Send Priya the revised figures',
+          state: 'todo', due_on: on(0), labels: ['admin', 'waiting'], overdue: false,
+          project: { slug: 'ai-learning', name: 'AI Learning' },
+          repeats: { every: '7 days', from: 'due' }, for_job: null },
+      ]
+      w.render()
+    })()`)
+    await page.waitForSelector('.mybuckets', { timeout: 5000 })
+    await page.waitForTimeout(400)
+    await shoot('my-tasks')
+
+    // And one row open, because the editor is where labels, reminders and
+    // recurrence live and it is drawn for exactly one row at a time.
+    await page.evaluate(`(() => {
+      window.__shots.mine.editing = 'mt-3'
+      window.__shots.render()
+    })()`)
+    await page.waitForSelector('.myedit', { timeout: 5000 })
+    await page.waitForTimeout(300)
+    await shoot('my-tasks-details')
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      localStorage.removeItem('hq.token')
+      w.mine.editing = null
+      w.mine.counts = null
+      for (const k of Object.keys(w.mine.lists)) delete w.mine.lists[k]
+      w.render()
+    })()`)
+    await page.waitForTimeout(300)
+    /*
+      And back into the project, HOME first.
+
+      `.project[data-open=…]` is a card on the portfolio, and the Tasks screen
+      is not the portfolio — the first run of this block waited thirty seconds
+      for a card that was two screens away. The wordmark is the way home and
+      #216 exists because there was not one.
+    */
+    await page.locator('[data-go="portfolio"]').first().click()
+    await page.waitForTimeout(500)
+    await page.locator('.project[data-open="legacy-coaching-course"]').click()
+    await page.waitForTimeout(600)
+
     await page.locator('[data-tab="team"]').click()
     await page.waitForTimeout(600)
     await shoot('team-board')

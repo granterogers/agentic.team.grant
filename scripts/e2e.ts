@@ -255,6 +255,13 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'a generated PDF reaches a real Slack channel as a link that works (#258)',
   ],
   /*
+    And the boundary that keeps Grant's own list his (#259). One table holds
+    both kinds of task, and ADR-0041 names the failure as asymmetric: a missing
+    personal task is an annoyance, the office's work in his personal list is
+    what stops him trusting it. Every reader is asserted in both directions.
+  */
+  ['verify:mytasks', 'my tasks are mine, and the team’s work is not in them (#259)'],
+  /*
     The index itself, and the correspondence beside it.
 
     Both were outside the gate while carrying the rules that decide what

@@ -193,6 +193,27 @@ let recoverable
   Grant to decide whether to kill something without telling him how far it is.
 */
 const progress = {}
+
+/*
+  MY TASKS (#259, ADR-0041).
+
+  Grant's own list, which is the same table as the office's project tasks with
+  `assigned_to_human` true — a column that had been modelled since #11, had
+  never once been set, and was read by nothing.
+
+  Keyed by bucket, because the seven views are seven filters over one list and
+  re-fetching on every tab press is seven round trips for something that has
+  not changed. The counts come back in ONE call beside them.
+*/
+const mine = { bucket: 'today', lists: {}, counts: null, editing: null }
+/*
+  Declared HERE, beside the other stores, not next to the function that fills
+  it three thousand lines below. A hoisted function reached during module
+  evaluation that names a `const` declared later throws "cannot access before
+  initialization", the studio prints "could not draw this screen", and the
+  NEXT draw works — one console line, no failing check, months old. CLAUDE.md
+  records exactly that, about `ageTimer`.
+*/
 const maps = {}
 const placed = {}
 
@@ -7617,43 +7638,45 @@ const railShut = () => {
   and the Chief of Staff must agree about what is next, and two orderings is how
   they stop agreeing.
 */
+/** The seven views #259 names, in the order a person works through them. */
+const MY_BUCKETS = [
+  ['today', 'Today'],
+  ['overdue', 'Overdue'],
+  ['upcoming', 'Upcoming'],
+  ['inbox', 'Inbox'],
+  ['unscheduled', 'Unscheduled'],
+  ['done', 'Done'],
+  ['all', 'All'],
+]
+
+/*
+  MY TASKS (#259, ADR-0041).
+
+  Grant's own list. It is the same table as the office's project tasks with
+  `assigned_to_human` true — the audit in ADR-0041 found that column modelled
+  since #11, never once set, and read by nothing anywhere.
+
+  #259's third invariant is that there is only ONE personal-task interface and
+  that a canonical task is never shown twice, so the team's cross-project work
+  is a clearly separate section at the bottom of this screen rather than mixed
+  in: 0483 makes the portfolio reader exclude personal tasks and the project
+  reader mark them, so the two lists cannot overlap by construction rather than
+  by this renderer being careful.
+
+  The bucket is state, not a route. A person moves between Today and Overdue
+  the way they move between filters, and putting seven buckets in the URL would
+  make the back button undo a filter change.
+*/
 function tasksView() {
+  if (canWrite()) void needMine(mine.bucket)
+  const rows = mine.lists[mine.bucket]
+  const counts = mine.counts ?? {}
+  const c = (k) => Number(counts[k] ?? 0)
+
   const payload = latest.tasks
-  const rows = Array.isArray(payload?.tasks) ? payload.tasks : []
-  const counts = payload?.counts ?? {}
-  const n = (k) => Number(counts[k] ?? 0)
+  const theirs = Array.isArray(payload?.tasks) ? payload.tasks : []
 
-  if (payload === null) {
-    return `<main class="main"><div class="head"><div>
-      <h1 class="t-display">Tasks</h1>
-      <p class="t-lead" style="margin:var(--s2) 0 0">Looking…</p>
-    </div></div></main>`
-  }
-
-  /*
-    Nothing to do reads as nothing to do, not as a broken page (#123).
-
-    And it says how to start, because `tasks` has been an empty table since #11
-    — a complete write path with nothing calling it — so the likeliest reason
-    this screen is empty is that nobody has ever added one.
-  */
-  if (rows.length === 0) {
-    return `<main class="main"><div class="head"><div>
-        <h1 class="t-display">Tasks</h1>
-        <p class="t-lead" style="margin:var(--s2) 0 0">
-          Nothing open, here or on any project. Add one from a project, or ask
-          the team for something and it will land here.</p>
-      </div></div></main>`
-  }
-
-  const next = rows[0]
-  const say = (t) => {
-    if (t.overdue === true) return { word: 'Overdue', tone: 'bad' }
-    if (t.waiting === true) return { word: 'Waiting', tone: 'warn' }
-    if (t.stale === true) return { word: 'Not moved', tone: 'warn' }
-    return { word: t.state === 'doing' ? 'In hand' : 'To do', tone: '' }
-  }
-  const when = (t) =>
+  const dueWords = (t) =>
     t.due_on === null || t.due_on === undefined
       ? ''
       : new Date(`${t.due_on}T00:00:00Z`).toLocaleDateString([], {
@@ -7661,64 +7684,210 @@ function tasksView() {
           month: 'short',
         })
 
-  const row = (t) => {
-    const s = say(t)
-    return `<li class="ptask${t.overdue === true ? ' od' : ''}">
-      <button class="ptick" data-tick="${esc(t.id)}" title="Mark done"
-        aria-label="Mark &ldquo;${esc(t.title)}&rdquo; done"></button>
+  const tabs = `<div class="mybuckets" role="tablist" aria-label="Which of my tasks">
+    ${MY_BUCKETS.map(
+      ([id, name]) => `<button role="tab" class="mybucket${mine.bucket === id ? ' on' : ''}"
+             aria-selected="${mine.bucket === id}" data-bucket="${esc(id)}">
+        ${esc(name)}${c(id) === 0 ? '' : ` <span class="n">${String(c(id))}</span>`}
+      </button>`,
+    ).join('')}
+  </div>`
+
+  /*
+    Adding one is the first thing on the screen, not behind a button.
+
+    #259's native experience asks for "fast creation", and a task app where
+    adding one takes a click to open a form is a task app people stop using.
+    The project is optional BECAUSE the inbox is the bucket with no project —
+    the whole first bucket depends on that being sayable.
+
+    (No backticks in this comment: it lives inside a template literal.)
+  */
+  const composer = !canWrite()
+    ? ''
+    : `<form class="myadd" data-my-add data-saidwrap>
+        <input data-my-title placeholder="What do you need to do?"
+               aria-label="A new task" required>
+        <input data-my-due type="date" aria-label="When it is due">
+        <select data-my-project aria-label="Which project, if any">
+          <option value="">No project</option>
+          ${PROJECTS.map((x) => `<option value="${esc(x.slug)}">${esc(x.name)}</option>`).join('')}
+        </select>
+        <button class="btn primary" type="submit">Add</button>
+        <span class="t-meta" data-said></span>
+      </form>`
+
+  const myRow = (t) => {
+    const done = t.state === 'done'
+    const labels = Array.isArray(t.labels) ? t.labels : []
+    return `<li class="ptask${t.overdue === true ? ' od' : ''}${done ? ' was' : ''}">
+      <button class="ptick${done ? ' on' : ''}" data-my-tick="${esc(t.id)}"
+        data-done="${done}"
+        aria-label="${done ? 'Reopen' : 'Mark done'} &ldquo;${esc(t.title)}&rdquo;"></button>
       <div class="ptbody">
         <b>${esc(t.title)}</b>
         <span class="t-meta">
-          ${s.tone === '' ? '' : `<em class="pt-${s.tone}">${esc(s.word)}</em> · `}
+          ${t.overdue === true ? '<em class="pt-bad">Overdue</em> · ' : ''}
           ${t.project === null || t.project === undefined
             ? 'No project'
-            : esc(String(t.project_name ?? t.project))}
-          ${t.owner_name === null || t.owner_name === undefined ? '' : ` · ${esc(String(t.owner_name))}`}
-          ${when(t) === '' ? '' : ` · due ${esc(when(t))}`}
-          ${t.suggested === true ? ' · <em>suggested</em>' : ''}
+            : esc(String(t.project.name ?? ''))}
+          ${dueWords(t) === '' ? '' : ` · due ${esc(dueWords(t))}`}
+          ${t.repeats === null || t.repeats === undefined ? '' : ' · repeats'}
+          ${t.for_job === null || t.for_job === undefined ? '' : ' · the team is waiting on this'}
         </span>
-        ${t.blocked_on === null || t.blocked_on === undefined
+        ${labels.length === 0
           ? ''
-          : `<span class="t-meta">Blocked on ${esc(String(t.blocked_on))}</span>`}
+          : `<span class="dchips">${labels
+              .map((l) => `<span class="dchip">${esc(l)}</span>`)
+              .join('')}</span>`}
+        ${done || !canWrite() ? '' : myEditor(t)}
       </div>
+      ${done || !canWrite()
+        ? ''
+        : `<button class="btn small quiet mydetail" data-my-open="${esc(t.id)}"
+             aria-expanded="${mine.editing === t.id}">${
+               mine.editing === t.id ? 'Close' : 'Details'
+             }</button>`}
     </li>`
   }
 
-  const tally = [
-    n('overdue') === 0 ? '' : `${String(n('overdue'))} overdue`,
-    n('waiting') === 0 ? '' : `${String(n('waiting'))} waiting`,
-    n('stale') === 0 ? '' : `${String(n('stale'))} not moved in a fortnight`,
-    n('unowned') === 0 ? '' : `${String(n('unowned'))} with nobody on them`,
-  ].filter((x) => x !== '')
+  const list =
+    rows === undefined || rows === null
+      ? '<p class="t-lead">Looking…</p>'
+      : rows.length === 0
+        ? `<p class="t-lead">${esc(emptyFor(mine.bucket))}</p>`
+        : `<ul class="ptasks">${rows.map(myRow).join('')}</ul>`
+
+  /*
+    And what the TEAM is doing, under a rule of its own.
+
+    Separate and second, because #259's second invariant is that these are
+    different kinds of thing: one is work Grant owes somebody and the other is
+    work the office owes him. Reading them as one list is what makes a personal
+    task manager stop being one.
+  */
+  const teamRow = (t) => `<li class="ptask">
+    <div class="ptbody">
+      <b>${esc(t.title)}</b>
+      <span class="t-meta">${
+        t.project === null || t.project === undefined
+          ? 'No project'
+          : esc(String(t.project_name ?? t.project))
+      }${t.owner_name === null || t.owner_name === undefined ? '' : ` · ${esc(String(t.owner_name))}`}${
+        t.overdue === true ? ' · overdue' : ''
+      }</span>
+    </div>
+  </li>`
 
   return `<main class="main">
     <div class="head">
       <div>
-        <h1 class="t-display">Tasks</h1>
+        <h1 class="t-display">My tasks</h1>
         <p class="t-lead" style="margin:var(--s2) 0 0">${
-          String(n('open'))
-        } open across everything.${tally.length === 0 ? '' : ` ${esc(tally.join(', '))}.`}</p>
+          !canWrite()
+            ? 'Sign in to see your own list.'
+            : c('overdue') > 0
+              ? `${String(c('overdue'))} overdue, ${String(c('today'))} for today.`
+              : c('today') > 0
+                ? `${String(c('today'))} for today, and nothing overdue.`
+                : 'Nothing overdue and nothing due today.'
+        }</p>
       </div>
     </div>
 
-    <!--
-      The answer, before the list. One row, named, because that is the question
-      the issue is about and a list is not an answer to it.
-    -->
-    <section class="pnext">
-      <span class="t-label">Next</span>
-      <b>${esc(next.title)}</b>
-      <span class="t-meta">${
-        next.project === null || next.project === undefined
-          ? 'No project'
-          : esc(String(next.project_name ?? next.project))
-      }${when(next) === '' ? '' : ` · due ${esc(when(next))}`}${
-        next.overdue === true ? ' · overdue' : ''
-      }</span>
-    </section>
+    ${composer}
+    ${tabs}
+    ${list}
 
-    <ul class="ptasks">${rows.map(row).join('')}</ul>
+    ${theirs.length === 0
+      ? ''
+      : `<section class="myteam">
+          <h2 class="t-label">What the team is working on</h2>
+          <p class="t-meta" style="margin:0 0 var(--s3)">Not yours to do — the office's own
+            work, across every project. Open a project to follow one.</p>
+          <ul class="ptasks">${theirs.slice(0, 8).map(teamRow).join('')}</ul>
+        </section>`}
   </main>`
+}
+
+/*
+  The three fields the quick-add cannot ask for (#259).
+
+  Labels, a reminder and a repeat are what turn a list into a task manager, and
+  they are also what nobody wants in the way while typing "ring the venue". So
+  they live behind Details, one row open at a time — not in a sheet, because a
+  modal to add the word "errand" is the kind of ceremony that stops people
+  labelling anything.
+
+  A reminder is a TIME and the due date is a DATE. `datetime-local` gives a
+  local wall-clock string with no zone; it is sent as-is and Postgres reads it
+  in the database's zone, which for a one-person office in one place is the
+  right answer and is stated here so nobody has to rediscover it.
+*/
+function myEditor(t) {
+  if (mine.editing !== t.id) return ''
+  const labels = Array.isArray(t.labels) ? t.labels : []
+  const every = t.repeats === null || t.repeats === undefined ? '' : String(t.repeats.every ?? '')
+  const from = t.repeats === null || t.repeats === undefined ? 'due' : String(t.repeats.from ?? 'due')
+  // Postgres renders an interval as "7 days" or "1 mon"; the select's values
+  // are what it PARSES, and the comparison below is against what it renders.
+  const repeat = /7 day/.test(every)
+    ? '7 days'
+    : /1 mon/.test(every)
+      ? '1 month'
+      : /1 day/.test(every)
+        ? '1 day'
+        : ''
+  return `<form class="myedit" data-my-save="${esc(t.id)}" data-saidwrap>
+    <label class="t-meta">Labels
+      <input data-my-labels value="${esc(labels.join(', '))}"
+             placeholder="errand, admin" aria-label="Labels, separated by commas"></label>
+    <label class="t-meta">Remind me
+      <input data-my-remind type="datetime-local"
+             aria-label="When to remind me"></label>
+    <label class="t-meta">Repeat
+      <select data-my-repeat aria-label="How often this repeats">
+        <option value=""${repeat === '' ? ' selected' : ''}>Never</option>
+        <option value="1 day"${repeat === '1 day' ? ' selected' : ''}>Every day</option>
+        <option value="7 days"${repeat === '7 days' ? ' selected' : ''}>Every week</option>
+        <option value="1 month"${repeat === '1 month' ? ' selected' : ''}>Every month</option>
+      </select></label>
+    <label class="t-meta">Counting from
+      <select data-my-repeat-from aria-label="What the repeat counts from">
+        <option value="due"${from === 'due' ? ' selected' : ''}>The due date</option>
+        <option value="done"${from === 'done' ? ' selected' : ''}>When I last did it</option>
+      </select></label>
+    <button class="btn small primary" type="submit">Save</button>
+    <span class="t-meta" data-said></span>
+  </form>`
+}
+
+/*
+  What an empty bucket MEANS, which is different for each of them.
+
+  "No tasks" under Today and under Done are opposite pieces of news, and a
+  single empty state that says the same thing in both places is the card with
+  nothing in it this repository keeps shipping.
+*/
+function emptyFor(bucket) {
+  switch (bucket) {
+    case 'today':
+      return 'Nothing due today and no reminders. '
+        + 'Anything overdue is in the next tab along.'
+    case 'overdue':
+      return 'Nothing overdue.'
+    case 'upcoming':
+      return 'Nothing scheduled beyond today.'
+    case 'inbox':
+      return 'The inbox is empty — nothing unsorted and without a date.'
+    case 'unscheduled':
+      return 'Everything open has a date on it.'
+    case 'done':
+      return 'Nothing finished yet.'
+    default:
+      return 'No tasks of your own yet. Add one above, or say '
+        + '"remind me on Friday to…" and it will land here.'
+  }
 }
 
 /*
@@ -8406,6 +8575,134 @@ function drawShell() {
         act('task_state', { p_task_id: b.dataset.tick, p_state: 'done' }),
       )
       await refresh()
+    })
+  }
+
+  /*
+    MY TASKS — the buckets, the composer and the tick (#259).
+
+    The bucket is a local switch, so it does not go through `attempt`: nothing
+    is written and nothing can be refused. It fetches on demand and the store
+    remembers, so moving between Today and Overdue twice is two requests rather
+    than four.
+  */
+  for (const b of root.querySelectorAll('[data-bucket]')) {
+    b.addEventListener('click', () => {
+      mine.bucket = b.dataset.bucket
+      void needMine(mine.bucket)
+      render()
+    })
+  }
+
+  const add = $('[data-my-add]', root)
+  add?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const title = String($('[data-my-title]', add)?.value ?? '').trim()
+    if (title === '') { say(add, 'A task needs a title.', 'warn'); return }
+    const due = String($('[data-my-due]', add)?.value ?? '')
+    const project = String($('[data-my-project]', add)?.value ?? '')
+    const done = await attempt(
+      add.querySelector('button[type="submit"]'),
+      'Adding…',
+      async () =>
+        await act('my_task_add', {
+          p_title: title,
+          // An empty date input is the empty string, and the RPC takes a DATE.
+          // Passing '' would be a cast error reported to Grant as "the action
+          // failed", which is the gateway's worst sentence.
+          ...(due === '' ? {} : { p_due_on: due }),
+          ...(project === '' ? {} : { p_project: project }),
+        }),
+      'Added.',
+    )
+    if (done?.ok === true) {
+      const t = $('[data-my-title]', add)
+      if (t) t.value = ''
+      const d = $('[data-my-due]', add)
+      if (d) d.value = ''
+      forgetMine()
+      void needMine(mine.bucket)
+      render()
+      // The field again, so a second task is one keystroke away rather than a
+      // click. `render()` replaces the node, so this has to come after it.
+      $('[data-my-title]')?.focus()
+    }
+  })
+
+  for (const b of root.querySelectorAll('[data-my-open]')) {
+    b.addEventListener('click', () => {
+      mine.editing = mine.editing === b.dataset.myOpen ? null : b.dataset.myOpen
+      render()
+    })
+  }
+
+  for (const f of root.querySelectorAll('[data-my-save]')) {
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const id = f.dataset.mySave
+      const labels = String($('[data-my-labels]', f)?.value ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter((x) => x !== '')
+      const remind = String($('[data-my-remind]', f)?.value ?? '')
+      const every = String($('[data-my-repeat]', f)?.value ?? '')
+      const from = String($('[data-my-repeat-from]', f)?.value ?? 'due')
+      /*
+        Empty means REMOVE here, and the RPC is told so explicitly.
+
+        `my_task_set` treats a null argument as "leave it alone", which is what
+        a partial update needs — so clearing the labels box has to be a
+        different request from not touching it, and `p_clear` is how the office
+        already says that (`hq_task_update` takes the same list).
+      */
+      const clear = [
+        ...(labels.length === 0 ? ['labels'] : []),
+        ...(remind === '' ? ['remind_at'] : []),
+        ...(every === '' ? ['repeat'] : []),
+      ]
+      const ok = await attempt(
+        f.querySelector('button[type="submit"]'),
+        'Saving…',
+        async () =>
+          await act('my_task_set', {
+            p_task_id: id,
+            ...(labels.length === 0 ? {} : { p_labels: labels }),
+            ...(remind === '' ? {} : { p_remind_at: remind }),
+            ...(every === '' ? {} : { p_repeat_every: every, p_repeat_from: from }),
+            p_clear: clear,
+          }),
+        'Saved.',
+      )
+      if (ok?.ok === true) {
+        mine.editing = null
+        forgetMine()
+        void needMine(mine.bucket)
+        render()
+      }
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-my-tick]')) {
+    b.addEventListener('click', async () => {
+      // Reopening as well as finishing. A tick that can only go one way turns
+      // a mis-click into a row Grant has to find in the Done tab and cannot
+      // put back — and `hq_task_state` has always taken either.
+      const was = b.dataset.done === 'true'
+      const ok = await attempt(
+        b,
+        was ? 'Reopening…' : 'Marking done…',
+        async () =>
+          await act('task_state', {
+            p_task_id: b.dataset.myTick,
+            p_state: was ? 'todo' : 'done',
+          }),
+        was ? 'Reopened.' : 'Done.',
+      )
+      if (ok !== null) {
+        forgetMine()
+        void needMine(mine.bucket)
+        render()
+      }
     })
   }
 
@@ -12336,6 +12633,30 @@ function readLocalPlacement(slug) {
   }
 }
 
+async function needMine(bucket) {
+  if (mine.lists[bucket] !== undefined) return
+  mine.lists[bucket] = null
+  try {
+    const [rows, counts] = await Promise.all([
+      settles(read('my_tasks', bucket)),
+      mine.counts === null ? settles(read('my_task_counts')) : Promise.resolve(mine.counts),
+    ])
+    mine.lists[bucket] = Array.isArray(rows) ? rows : []
+    if (counts !== null && typeof counts === 'object') mine.counts = counts
+  } catch {
+    // An empty bucket rather than an error. #119's strip is what says the
+    // office is unreachable, and saying it twice on one screen is noise.
+    mine.lists[bucket] = []
+  }
+  render()
+}
+
+/** Everything about my tasks is stale after a write, including the counts. */
+function forgetMine() {
+  for (const k of Object.keys(mine.lists)) delete mine.lists[k]
+  mine.counts = null
+}
+
 async function needTasks() {
   if (latest.tasks !== null) return
   try {
@@ -12861,6 +13182,13 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
     // this shows the Stop button with nothing beside it — which is the state
     // the change was made to end.
     progress,
+    /*
+      My Tasks (#259). The composer, the buckets and the editor are drawn only
+      for a writer, and the list only for rows that exist — so a capture
+      without this photographs "Sign in to see your own list", which is the one
+      state the screen has that nobody needs a picture of.
+    */
+    mine,
     render,
   }
 }
