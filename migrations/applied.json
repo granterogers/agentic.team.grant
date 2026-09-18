@@ -493,5 +493,7 @@
   "0492_a_filter_that_ignores_its_own_include_parameter.sql": "9a0e30779feeaf8fead986e354d3ef01a39f9582b75823f5c742539983ed3c9c",
   "0493_a_config_key_that_looks_like_a_relation.sql": "78efe56fef184f620c0d907c1c0beef63273fb37f4a2678aec60702e8a25ebbe",
   "0494_ten_fixture_projects_in_grants_switcher.sql": "cc2eb964d12e8cb40a0e9340d41912eb26feed51da960e3daa44da7ab45da448",
-  "0495_the_browser_tab_says_what_it_is_doing_right_now.sql": "88600140791d6ba038387b3d0c92835fee518255e55ad47a62623fd397a3a6c5"
+  "0495_the_browser_tab_says_what_it_is_doing_right_now.sql": "88600140791d6ba038387b3d0c92835fee518255e55ad47a62623fd397a3a6c5",
+  "0496_a_blocked_job_puts_the_job_on_grants_own_list.sql": "95c5759448b9c0197bd808d73e73263c8ce61fffa5524ba00334698133e2fea9",
+  "0497_two_doors_one_definition_of_letting_a_job_go.sql": "8d4be0fe338cd4eabf01b1b9a9f34529f7c8b787121b4123fab6645ad23b2dea"
 }

@@ -610,6 +610,164 @@ check(
   )
 }
 
+/*
+  ------------------------------------------------- the human-action bridge ---
+
+  #259's remaining acceptance criterion: a blocked Agent Job creates a linked
+  but SEPARATE Personal Task, and completing it satisfies the dependency so the
+  job can resume.
+
+  0496 drives this in both directions inside the migration, which proves it
+  once, on the day it was written. A migration runs once; this runs on every
+  gate, which is the difference between "it worked" and "it works".
+
+  Everything here is a REAL blocker on a REAL job, because the bridge's whole
+  point is the row reaching the list Grant actually looks at, and
+  `app.my_tasks` excludes fixtures by design — a fixture subject would pass
+  every check below by being unseeable, which is #45's question asked about
+  the specific reader.
+*/
+console.log('\nthe human-action bridge (#259)')
+
+const blocked = await one(`
+  insert into public.jobs (kind, state, project_id, requested_by, correlation_id,
+                           idempotency_key, pinned_config)
+  values ('office.instruction', 'waiting_user', ${lit(projectId)}::uuid,
+          ${lit(`teamhq:verify-mytasks-${run}`)}, gen_random_uuid(),
+          ${lit(`mytasks-bridge-${run}`)}, '{}'::jsonb)
+  returning job_id::text as id`)
+
+const blocker = await one(`
+  insert into public.blockers
+    (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+     approval_options, originating_agent, work_can_continue)
+  values (${lit(projectId)}::uuid, ${lit(String(blocked.id))}::uuid,
+          ${lit(`Authorize Google Drive ${run}`)},
+          'The office cannot read the folder until you sign in once.',
+          'The weekly digest will have nothing in it.',
+          array['I have done it', 'Not now']::text[], 'marcus', false)
+  returning blocker_id::text as id`)
+
+const made = await one(`
+  select task_id::text as id, title, assigned_to_human as human, satisfies_answer as answer,
+         job_id::text as job
+    from public.tasks where satisfies_blocker = ${lit(String(blocker.id))}::uuid`)
+check(
+  'a job blocked on a human action puts that action on HIS list',
+  made.id === undefined ? 'NOTHING REACHED THE LIST' : String(made.title),
+  made.human === true && String(made.title).includes(run),
+)
+check(
+  'and the task is linked to the job rather than being a loose note',
+  String(made.job ?? '(none)').slice(0, 8),
+  String(made.job) === String(blocked.id),
+)
+/*
+  The answer completing it will send, stored rather than decided at the moment
+  he ticks the box — so the choice is visible and arguable. `hq_answer_blocker`
+  refuses an answer outside `approval_options`, so a wrong one here would be a
+  task that can never clear its own blocker.
+*/
+check(
+  'and it says which answer ticking it will send',
+  String(made.answer ?? '(none)'),
+  String(made.answer) === 'I have done it',
+)
+
+/*
+  It must be SEPARATE, which invariant 2 turns on: the personal task is a
+  human action, and the agent job is still the agent's. Two rows, one link.
+*/
+const separate = await one(`
+  select (select count(*)::int from public.jobs where job_id = ${lit(String(blocked.id))}::uuid) as jobs,
+         (select count(*)::int from public.tasks where satisfies_blocker = ${lit(String(blocker.id))}::uuid) as tasks`)
+check(
+  'the job and the task are separate rows, linked rather than merged',
+  `${String(separate.jobs)} job, ${String(separate.tasks)} task`,
+  Number(separate.jobs) === 1 && Number(separate.tasks) === 1,
+)
+
+const onList = await one(`
+  select count(*)::int as n from jsonb_array_elements(app.my_tasks('all', 200)) x
+   where x ->> 'title' = ${lit(`Authorize Google Drive ${run}`)}
+     and x ->> 'for_job' is not null`)
+check(
+  'it appears in My Tasks, saying the team is waiting on it',
+  `${String(onList.n)} row(s) with for_job set`,
+  Number(onList.n) === 1,
+)
+
+// Ticking it.
+await db.execute(`
+  update public.tasks set state = 'done', done_at = app.now_utc()
+   where task_id = ${lit(String(made.id))}::uuid`)
+const afterTick = await one(`
+  select (select state::text from public.blockers where blocker_id = ${lit(String(blocker.id))}::uuid) as blocker,
+         (select state::text from public.jobs where job_id = ${lit(String(blocked.id))}::uuid) as job`)
+check(
+  'ticking it resolves the blocker',
+  String(afterTick.blocker ?? '(none)'),
+  String(afterTick.blocker) === 'resolved',
+)
+check(
+  'and the agent job is let go, so it can resume',
+  String(afterTick.job ?? '(none)'),
+  String(afterTick.job) === 'queued',
+)
+
+/*
+  The other direction. Answering in the office must clear his list, or
+  "Authorize Google Drive" sits there for ever with nothing left to do — a
+  task that cannot be completed by doing anything, which teaches him to stop
+  reading the list.
+*/
+const second = await one(`
+  insert into public.jobs (kind, state, project_id, requested_by, correlation_id,
+                           idempotency_key, pinned_config)
+  values ('office.instruction', 'waiting_user', ${lit(projectId)}::uuid,
+          ${lit(`teamhq:verify-mytasks-${run}`)}, gen_random_uuid(),
+          ${lit(`mytasks-bridge-2-${run}`)}, '{}'::jsonb)
+  returning job_id::text as id`)
+const secondBlocker = await one(`
+  insert into public.blockers
+    (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+     approval_options, originating_agent, work_can_continue)
+  values (${lit(projectId)}::uuid, ${lit(String(second.id))}::uuid,
+          ${lit(`Rotate the key ${run}`)}, 'The stored key expired.', 'Nothing runs.',
+          array['Done', 'Not now']::text[], 'marcus', false)
+  returning blocker_id::text as id`)
+await db.execute(`select app.hq_answer_blocker(${lit(String(secondBlocker.id))}::uuid, 'Done')`)
+const cleared = await one(`
+  select state from public.tasks where satisfies_blocker = ${lit(String(secondBlocker.id))}::uuid`)
+check(
+  'answering it anywhere else clears it off his list too',
+  String(cleared.state ?? '(no task)'),
+  String(cleared.state) === 'done',
+)
+
+/*
+  THE CONTROL. A blocker raised while work CONTINUES is a question, not an
+  action — it belongs on the Governance page. Putting every question on his
+  to-do list is how a to-do list stops being read, and without this check the
+  suite would pass against a version that does exactly that.
+*/
+const question = await one(`
+  insert into public.blockers
+    (project_id, job_id, requested_action, why_needed, consequences_of_delay,
+     approval_options, originating_agent, work_can_continue)
+  values (${lit(projectId)}::uuid, ${lit(String(second.id))}::uuid,
+          ${lit(`A question that stops nothing ${run}`)}, 'Curiosity.', 'None.',
+          array['Go ahead', 'Not now']::text[], 'marcus', true)
+  returning blocker_id::text as id`)
+const noTask = await one(`
+  select count(*)::int as n from public.tasks
+   where satisfies_blocker = ${lit(String(question.id))}::uuid`)
+check(
+  'CONTROL: a question that stops nothing does NOT reach his to-do list',
+  `${String(noTask.n)} task(s)`,
+  Number(noTask.n) === 0,
+)
+
 // --- teardown ---------------------------------------------------------------
 
 console.log('')
@@ -622,16 +780,39 @@ await db.execute(`
     state_reason = 'verify:mytasks teardown'
    where requested_by = ${lit(`teamhq:verify-mytasks-${run}`)}
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
+  delete from public.blockers where project_id = ${lit(projectId)}::uuid;
   delete from public.events where project_id = ${lit(projectId)}::uuid;`)
+/*
+  `app.project_delete` REFUSES rather than throwing, and this teardown called
+  that success.
+
+  It reported "deleted, 1 project(s)" — the claim and the count in the same
+  line, disagreeing. A refusal for the wrong reason looks exactly like the rule
+  working, and here the rule was working: the bridge section above leaves two
+  jobs on the project, a job can never be deleted (ADR-0022), so the project
+  cannot be either.
+
+  So: read what the function SAID, and archive when it will not go. Out of
+  Grant's project list either way, which is what a teardown is for.
+*/
 let gone = 'not attempted'
 try {
-  await db.execute(`select app.project_delete(${lit(slug)})`)
-  gone = 'deleted'
+  const said = await one(`select app.project_delete(${lit(slug)}) as r`)
+  const r = (typeof said.r === 'string' ? JSON.parse(said.r) : (said.r ?? {})) as {
+    error?: string
+    ok?: boolean
+  }
+  gone = r.error === undefined ? 'deleted' : `refused (${r.error.slice(0, 60)})`
 } catch (e) {
-  gone = `REFUSED: ${String(e).slice(0, 80)}`
+  gone = `THREW: ${String(e).slice(0, 80)}`
+}
+if (gone !== 'deleted') {
+  await db.execute(`update public.projects set status = 'archived' where slug = ${lit(slug)}`)
+  gone = `${gone} — archived`
 }
 const left = await one(`
-  select (select count(*)::int from public.projects where slug = ${lit(slug)}) as projects,
+  select (select count(*)::int from public.projects
+           where slug = ${lit(slug)} and status <> 'archived') as projects,
          (select count(*)::int from public.tasks
            where title like ${lit(`%${run}%`)}) as tasks`)
 check(
