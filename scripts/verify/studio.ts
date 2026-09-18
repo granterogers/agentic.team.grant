@@ -499,6 +499,63 @@ for (const [size, opts] of SIZES) {
     })()`)
     await page.waitForTimeout(300)
 
+    /*
+      TAGS AND COLLECTIONS, on an open document (#276).
+
+      Same argument as the review queue, and the same door. `docActions` and
+      `docOrganising` are drawn only for a document that HAS an id and only for
+      a writer — a prototype document has neither — so without this the block
+      ships unlooked-at, and this file's own history is full of things that
+      compiled, rendered and were wrong: a class that does not exist, an
+      ellipsis with no `white-space`, a chip with no border on a same-coloured
+      card. All three were found by opening the PNG.
+    */
+    await page.evaluate(`(() => {
+      const w = window.__shots
+      if (w === undefined) throw new Error('the capture door is not open')
+      localStorage.setItem('hq.token', 'local-capture-only')
+      const p = w.projects.find((x) => x.slug === 'legacy-coaching-course')
+      if (p === undefined) throw new Error('no project to open a document in')
+      const docs = p.documents ?? []
+      if (docs.length < 2) throw new Error('not enough documents to photograph')
+      docs[0].id = '00000000-0000-4000-8000-000000000001'
+      docs[0].tags = ['pricing', 'week 4', 'for review']
+      docs[0].collections = ['Board pack']
+      docs[1].id = '00000000-0000-4000-8000-000000000002'
+      docs[1].tags = ['week 4']
+      docs[1].collections = ['Board pack', 'Programme notes']
+      w.render()
+    })()`)
+    await page.waitForTimeout(400)
+    await page.locator('[data-doc="0"]').click()
+    await page.waitForSelector('.docorg', { timeout: 5000 })
+    /*
+      Scrolled to the block, because on a phone the sheet is taller than the
+      screen and the organising rows are below the fold — CLAUDE.md: a panel
+      below the fold in every capture is a panel nobody has judged. The first
+      run of this capture photographed only the title and the four write
+      actions, which is how the phone defect above was found rather than the
+      thing the shot was taken for.
+    */
+    await page.evaluate(
+      `(() => { const el = document.querySelector('.docorg');
+                if (el !== null) el.scrollIntoView({ block: 'center' }); })()`,
+    )
+    await page.waitForTimeout(500)
+    await shoot('document-tags-and-collections')
+    await page.evaluate(`(() => {
+      localStorage.removeItem('hq.token')
+      const p = window.__shots.projects.find((x) => x.slug === 'legacy-coaching-course')
+      for (const d of p.documents ?? []) {
+        delete d.id
+        delete d.tags
+        delete d.collections
+      }
+      window.__shots.render()
+    })()`)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(400)
+
     // The talk action on a document, and where it lands.
     await page.locator('[data-doc="0"]').scrollIntoViewIfNeeded()
     await page.waitForTimeout(200)

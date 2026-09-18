@@ -455,6 +455,17 @@ function automationsPane(p, state) {
  * and inventing the missing half here would put the rule in the page.
  */
 function labelsPane(p, people) {
+  // Every collection this project's documents name, with how many are in each.
+  // Derived from the documents rather than fetched: the names ARE the
+  // membership, so a second reader would be a second thing to keep in step.
+  const counts = new Map()
+  for (const d of p.documents ?? []) {
+    for (const c of d.collections ?? []) counts.set(c, (counts.get(c) ?? 0) + 1)
+  }
+  const collections = [...counts.entries()]
+    .map(([name, n]) => ({ name, n }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   const labels = people.labels()
   return `
     <p class="t-lead setlead">The words you sort things by. Labels are yours to
@@ -491,20 +502,38 @@ function labelsPane(p, people) {
     </div>
 
     <!--
-      Collections are named here and not LISTED here, and that is deliberate
-      rather than unfinished. The studio payload does not carry them — a
-      project's documents arrive with a title, a kind and a state, and nothing
-      about which collection each is in — so a chip row built from what the
-      page holds would have said "None yet" under a project that has one.
+      Collections, LISTED now (#276, migration 0479).
 
-      A card with nothing in it has no overflow, no small type and no bad
-      contrast, and this file's own history is full of them. A true sentence
-      beats a list that is wrong.
+      This block used to say, truthfully, that it could not list them: the
+      studio payload carried a title, a kind and a state per document and
+      nothing about which collection each was in, so a chip row built from what
+      the page holds would have said "None yet" under a project that has one.
+      0479 added the names to app.studio_documents, because a tag control
+      cannot be built on a reader that does not know what is already set — and
+      the list falls out of the same change.
+
+      Read-only here on purpose. A collection is made by filing a document into
+      one and unmade by taking the last one out, so the press belongs on the
+      document, which is where you are when you decide. A Remove here would
+      have to mean "take every document out of this", which is a different and
+      much larger action wearing the same word.
 
       No backticks in this comment. Template literal.
     -->
     <div class="setlabels">
       <span class="t-label">Collections</span>
+      <div class="setlabelrow">
+        ${
+          collections.length === 0
+            ? '<span class="t-meta">None yet.</span>'
+            : collections
+                .map(
+                  (c) =>
+                    `<span class="chip">${esc(c.name)} <span class="t-meta">${c.n}</span></span>`,
+                )
+                .join('')
+        }
+      </div>
       <span class="t-meta">A collection is made by filing a document into one, and unmade
         by taking the last document out. Both are in <b>Documents</b>, on the document
         itself — which is where you are when you decide.</span>

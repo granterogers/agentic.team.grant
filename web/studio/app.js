@@ -6051,7 +6051,7 @@ function connectionsTab() {
           this form has no box for one on purpose.</p>
         <div class="provfields">
           <!--
-            provin, not in. The class `in` is styled nowhere in this
+            provin, not in. A class called just in is styled nowhere in this
             stylesheet — the icon search measured 13.3px on its first capture
             for exactly that reason, and anything under 16px makes iOS Safari
             zoom the page on focus.
@@ -10983,6 +10983,91 @@ function docActions(doc) {
     </span>`
     }
     <span class="t-meta" data-said></span>
+  </div>
+  ${docOrganising(doc)}`
+}
+
+/**
+ * Tags and collections, on the document itself (#276).
+ *
+ * `app.tag_document`, `app.put_in_collection` and `app.take_out_of_collection`
+ * have been bound at the gateway since the document work and nothing in the
+ * page named any of them, so the two ways of organising a library were things
+ * an agent could do and Grant could not. Project Settings already told him
+ * both were here — "on the document itself, which is where you are when you
+ * decide" — and they were not.
+ *
+ * Separate from `docActions` rather than six more controls in the same row:
+ * that row is four write actions on THIS document, and these two are about
+ * where it sits among the others. The chips are the state, so a press that
+ * adds a tag is visible as a tag rather than as a sentence about one.
+ *
+ * `doc.tags` and `doc.collections` come from `app.studio_documents` (0479). A
+ * prototype document has neither and no id, so `docActions` has already
+ * returned above and this is never reached for one.
+ */
+function docOrganising(doc) {
+  const tags = Array.isArray(doc.tags) ? doc.tags : []
+  const inCollections = Array.isArray(doc.collections) ? doc.collections : []
+  const here = byId(state.project)
+  // Every collection this project already has, so filing into an existing one
+  // is a choice rather than a spelling test. Section 31: an avoidable request
+  // for manual input is a design failure.
+  const known = [...new Set((here.documents ?? []).flatMap((d) => d.collections ?? []))]
+    .filter((n) => !inCollections.includes(n))
+    .sort()
+
+  const chip = (name, attr, label) =>
+    `<span class="dchip">${esc(name)}
+       <button class="chipx" ${attr}="${esc(doc.id)}" data-name="${esc(name)}"
+               aria-label="${esc(label)}">&times;</button></span>`
+
+  return `<div class="docorg">
+    <div class="docorgrow" data-saidwrap>
+      <span class="t-label">Tags</span>
+      <div class="dchips">
+        ${
+          tags.length === 0
+            ? '<span class="t-meta">None yet.</span>'
+            : tags.map((t) => chip(t, 'data-doc-untag', `Remove the tag ${t}`)).join('')
+        }
+      </div>
+      <span class="docact">
+        <input data-doc-tag-new placeholder="A word" aria-label="A tag for this document"
+               list="doc-tags-known">
+        <datalist id="doc-tags-known">
+          ${[...new Set((here.documents ?? []).flatMap((d) => d.tags ?? []))]
+            .filter((t) => !tags.includes(t))
+            .sort()
+            .map((t) => `<option value="${esc(t)}"></option>`)
+            .join('')}
+        </datalist>
+        <button class="btn small" data-doc-tag="${esc(doc.id)}">Tag it</button>
+      </span>
+      <span class="t-meta" data-said></span>
+    </div>
+
+    <div class="docorgrow" data-saidwrap>
+      <span class="t-label">Collections</span>
+      <div class="dchips">
+        ${
+          inCollections.length === 0
+            ? '<span class="t-meta">Not filed anywhere.</span>'
+            : inCollections
+                .map((c) => chip(c, 'data-doc-uncollect', `Take it out of ${c}`))
+                .join('')
+        }
+      </div>
+      <span class="docact">
+        <input data-doc-collection-new placeholder="A collection"
+               aria-label="File this document into a collection" list="doc-collections-known">
+        <datalist id="doc-collections-known">
+          ${known.map((n) => `<option value="${esc(n)}"></option>`).join('')}
+        </datalist>
+        <button class="btn small" data-doc-collect="${esc(doc.id)}">File it</button>
+      </span>
+      <span class="t-meta" data-said></span>
+    </div>
   </div>`
 }
 
@@ -11093,6 +11178,84 @@ function wireDocActions(v, doc, shut) {
       b.setAttribute('aria-pressed', String(now))
       b.classList.toggle('primary', now)
       b.classList.toggle('quiet', !now)
+      await refresh()
+    }
+  })
+
+  /*
+    TAGS AND COLLECTIONS (#276).
+
+    DELEGATED on the viewer, not bound per chip. `docorg()` replaces its own
+    markup after every press, so a listener on each chip would work exactly
+    once — the trap CLAUDE.md records three times in one afternoon, and the
+    one the control audit cannot see, because it presses each control from a
+    fresh render.
+
+    The chips are redrawn from `doc` rather than from a reload: the RPCs answer
+    with the new state, so the row is correct the moment the press returns and
+    does not wait on a round trip to the whole project. `refresh()` still runs,
+    for the other surfaces that count documents.
+  */
+  const redrawOrg = () => {
+    const box = $('.docorg', v)
+    if (box !== null) box.outerHTML = docOrganising(doc)
+  }
+
+  /*
+    On the SHEET, not on the viewer. `#viewer` is one persistent element that
+    every open reuses, so a listener bound to it survives the next document and
+    the one after — `openDoc` already adds one per open for the backdrop, where
+    the cost is calling `shut` twice. Here the cost would be the same press
+    sent three times. `.docsheet` is rebuilt by every `openDoc`, and `.docorg`
+    lives inside it, so a listener here is exactly one per open and still
+    outlives the redraw.
+  */
+  const sheetEl = $('.docsheet', v)
+  sheetEl?.addEventListener('click', async (e) => {
+    const b = e.target.closest?.(
+      '[data-doc-tag], [data-doc-untag], [data-doc-collect], [data-doc-uncollect]')
+    if (b === null || b === undefined || !sheetEl.contains(b)) return
+
+    if (b.hasAttribute('data-doc-tag') || b.hasAttribute('data-doc-untag')) {
+      const adding = b.hasAttribute('data-doc-tag')
+      const box = $('[data-doc-tag-new]', v)
+      const tag = adding ? String(box?.value ?? '').trim() : String(b.dataset.name ?? '')
+      if (tag === '') { say(b, 'A tag needs a word.', 'warn'); return }
+      const done = await attempt(b, adding ? 'Tagging…' : 'Removing…',
+        async () => await act('document_tag',
+          { p_document: doc.id, p_tag: tag, p_on: adding }),
+        adding ? `Tagged ${tag}.` : `${tag} removed.`)
+      if (done) {
+        // The RPC answers with the whole array, which is the one reading that
+        // cannot disagree with the database. `tags` comes back lower-cased and
+        // de-duplicated, so echoing what was typed would be a different word.
+        doc.tags = Array.isArray(done.tags) ? done.tags : doc.tags
+        if (box) box.value = ''
+        redrawOrg()
+        await refresh()
+      }
+      return
+    }
+
+    const filing = b.hasAttribute('data-doc-collect')
+    const box = $('[data-doc-collection-new]', v)
+    const name = filing ? String(box?.value ?? '').trim() : String(b.dataset.name ?? '')
+    if (name === '') { say(b, 'A collection needs a name.', 'warn'); return }
+    const done = await attempt(b, filing ? 'Filing…' : 'Taking it out…',
+      async () => await act(filing ? 'collection_put' : 'collection_take',
+        { p_document: doc.id, p_collection_name: name }),
+      filing ? `Filed in ${name}.` : `Taken out of ${name}.`)
+    if (done) {
+      // `put_in_collection` answers with the collection's id and
+      // `take_out_of_collection` with a note, so neither carries the list.
+      // Kept locally and then reconciled by the reload, which is the only
+      // thing that can see a collection created by the press.
+      const was = Array.isArray(doc.collections) ? doc.collections : []
+      doc.collections = filing
+        ? [...new Set([...was, name])].sort()
+        : was.filter((c) => c.toLowerCase() !== name.toLowerCase())
+      if (box) box.value = ''
+      redrawOrg()
       await refresh()
     }
   })
@@ -12391,5 +12554,19 @@ live()
   Nothing in the product reads this object.
 */
 if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
-  globalThis.__shots = { browserSites, browserSeen, reviewing, providers: config.PROVIDERS, render }
+  /*
+    `projects` joins them for the document sheet's tags and collections (#276).
+    Those controls are drawn only for a REAL document — a prototype one has no
+    id, so offering to tag it would be a control that resolves and cannot work
+    — and only for a writer. Both conditions are unsatisfiable in a capture
+    without a door, and the block would then ship unlooked-at.
+  */
+  globalThis.__shots = {
+    browserSites,
+    browserSeen,
+    reviewing,
+    providers: config.PROVIDERS,
+    projects: PROJECTS,
+    render,
+  }
 }

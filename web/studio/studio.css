@@ -5415,6 +5415,39 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   max-inline-size: 240px;
 }
 
+/*
+  Tags and collections, under the four write actions (#276).
+
+  A block of its own rather than six more controls in `.docacts`: that row is
+  things you do TO this document and these two are about where it sits among
+  the others, and a row of ten controls is the opposite of what #25 spent a
+  morning establishing.
+
+  `.dchip`, not `.chip`. The cover's chip is glass over artwork — a
+  backdrop-filter, a white inner edge and a shadow sized for a photograph — and
+  on the sheet's flat surface it reads as a floating label rather than as a
+  word belonging to the document. Grep before inventing a class name; reusing
+  one is the other half of the same rule.
+*/
+.docorg { display: grid; gap: var(--s3); padding-block-end: var(--s4); }
+.docorgrow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+/* Wide enough for the longer of the two words, so the chips of both rows
+   start in the same column. At 8ch "Collections" pushed its own row 33px
+   further right than "Tags" and the two read as unrelated blocks. */
+.docorgrow > .t-label { min-inline-size: 13ch; }
+.dchips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dchip {
+  display: inline-flex; align-items: center;
+  padding: 3px 4px 3px 10px; border-radius: 8px;
+  border: 1px solid var(--edge); background: var(--sunken);
+  color: var(--ink); font: 500 13px/1.4 var(--text);
+}
+.docorg input {
+  min-block-size: 44px; font-size: 16px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: 9px;
+  background: var(--surface); color: var(--ink); max-inline-size: 200px;
+}
+
 /* What arrived since you last looked (#122). It is a fact on the card's fact
    row rather than a badge in a corner: a badge says "something", and the row
    already has room for the one thing that answers "what". */
@@ -6373,4 +6406,63 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .provfields { flex-direction: column; align-items: stretch; }
   .provfields .btn { min-height: 44px; }
   .provtools .btn { min-height: 44px; padding: 0 14px; }
+}
+
+/*
+  Phone, at the END of the stylesheet. A media query adds no specificity, so
+  where it is written decides whether it works — CLAUDE.md records this being
+  paid for twice.
+*/
+@media (max-width: 860px) {
+  .docorgrow { align-items: flex-start; }
+  .docorgrow > .t-label { min-inline-size: 100%; }
+  .docorg input { max-inline-size: 100%; flex: 1 1 10ch; }
+}
+
+/*
+  THE DOCUMENT SHEET ON A PHONE (#276, found by capturing it).
+
+  `.docacts` has been a wrapping flex ROW since #152 and had never been
+  photographed — a screen with no capture is a screen nobody is watching, and
+  this repository has paid for that sentence before. At 390px the input takes
+  its 240px and the button beside it is squeezed to about 50px, so Rename and
+  Replaced by rendered ONE CHARACTER PER LINE, hard against the right edge and
+  over the sheet's own padding. Exactly #67's shape: not overflow of the page,
+  not low contrast, not small type and not a dead control, so nothing was ever
+  going to report it.
+
+  A column of full-width pairs is the phone layout the row wants to be. The
+  button keeps its words on one line and takes only the width they need; the
+  field takes the rest, with `min-inline-size: 0` because a flex item's
+  automatic minimum is its content and an input's content is wider than the
+  screen.
+
+  At the END of the stylesheet, where a phone override has to be: a media query
+  adds no specificity and `.docacts input` is declared three hundred lines
+  above.
+*/
+@media (max-width: 860px) {
+  /*
+    A GRID, not a narrower row. The first fix kept the field and its button
+    side by side and let the field shrink — and the capture showed both buttons
+    still hanging past the sheet's right edge, because `flex: 0 0 auto` on the
+    button means the row can only shrink as far as the field's own minimum and
+    then overflows in silence. A single-column grid cannot do that: every child
+    is one column wide, so nothing can be wider than the sheet however long its
+    label is. Judged from the PNG both times, which is the only thing that
+    could have told the two apart.
+  */
+  .docacts { display: grid; gap: var(--s2); justify-items: stretch; }
+  .docact { display: grid; gap: 6px; inline-size: 100%; max-inline-size: 100%; }
+  .docorgrow { display: grid; gap: var(--s2); }
+  .docorgrow > .t-label { min-inline-size: 0; }
+  .docacts input,
+  .docacts select,
+  .docorg input {
+    inline-size: 100%; max-inline-size: 100%; min-inline-size: 0;
+  }
+  .docacts .btn,
+  .docorg .btn { white-space: nowrap; }
+  .docacts > .btn { justify-self: start; }
+}
 }
