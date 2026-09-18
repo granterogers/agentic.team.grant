@@ -44,21 +44,48 @@ const rpc = async (fn: string, args: Record<string, unknown> = {}): Promise<unkn
   return await response.json()
 }
 
-const page = (title: string, body: string, status = 200): Response =>
-  new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
-<style>:root{color-scheme:light dark}body{font:15px/1.6 -apple-system,BlinkMacSystemFont,
-"Segoe UI",system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;
-background:#0f1115;color:#e8eaed;padding:24px;text-align:center}
-.card{max-width:420px;background:#171a21;border:1px solid #262a33;border-radius:14px;padding:28px}
-h1{font-size:18px;margin:0 0 8px}p{color:#9aa3b2;margin:0 0 6px;font-size:14px}
-a{color:#4f7cff}</style></head><body><div class="card">${body}</div></body></html>`,
-    {
-      status,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
-    },
-  )
+/*
+  BACK INTO THE APP, rather than a page from here (0486).
+
+  `page()` below sets `content-type: text/html` and Supabase rewrites it to
+  `text/plain` with `nosniff` — the shared `*.supabase.co` functions domain
+  refuses to serve HTML, which is an ordinary anti-phishing measure on a host
+  thousands of projects share. The control that settles it: `hq-api` returns
+  `application/json` through the same gateway untouched.
+
+  So every page this function has produced since it was written has been a wall
+  of raw markup. Grant met it this morning, after a consent that had WORKED,
+  and reasonably concluded something was broken.
+
+  A header cannot win an argument with the host. The studio is on our own
+  domain and may serve what it likes, so consent ends there — which is the
+  better product anyway: the old page was a dead end with no way back, which is
+  what #216 exists about.
+*/
+const backToApp = async (
+  outcome: string,
+  extra: Record<string, string> = {},
+): Promise<Response | null> => {
+  const base = String(await rpc('app_base_url', {}).catch(() => ''))
+  if (base === '' || !base.startsWith('https://')) return null
+  const to = new URL(base)
+  to.searchParams.set('google', outcome)
+  for (const [k, v] of Object.entries(extra)) if (v !== '') to.searchParams.set(k, v)
+  return new Response(null, { status: 302, headers: { location: to.toString() } })
+}
+
+/*
+  And the fallback, which is PLAIN TEXT on purpose.
+
+  If there is no app to return to, a person still has to be told what happened.
+  Serving markup the host will flatten is how this defect happened; serving a
+  sentence works everywhere and cannot be rewritten into nonsense.
+*/
+const plainly = (body: string, status = 200): Response =>
+  new Response(`${body}\n`, {
+    status,
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+  })
 
 Deno.serve(async (request: Request): Promise<Response> => {
   const url = new URL(request.url)
@@ -71,11 +98,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   if (config.client_id === undefined || config.client_id === '') {
-    return page(
-      'Not configured',
-      '<h1>No client id yet</h1><p>Add the Google client id on the web front end first.</p>',
-      400,
-    )
+    return plainly('No client id yet. Add the Google client id in Settings first.', 400)
   }
 
   // --- start ---------------------------------------------------------------
@@ -123,12 +146,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
         ? String(await rpc('google_scopes_in_use', {}))
         : String(await rpc('google_service_scopes', { p_slug: service }))
     if (scopes === '') {
-      return page(
-        'Unknown service',
-        `<h1>No such service</h1><p>Nothing here is called ${service.replace(
-          /[^a-z0-9_-]/gi,
-          '',
-        )}, or it is switched off.</p>`,
+      return plainly(
+        `No such service: nothing here is called ${service.replace(/[^a-z0-9_-]/gi, '')}, ` +
+          'or it is switched off.',
         400,
       )
     }
@@ -152,17 +172,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (path === '/callback') {
     const error = url.searchParams.get('error')
     if (error !== null) {
-      return page('Refused', `<h1>Google said no</h1><p>${error}</p>`, 400)
+      return (
+        (await backToApp('refused', { why: error.slice(0, 160) })) ??
+        plainly(`Google said no: ${error}`, 400)
+      )
     }
     const code = url.searchParams.get('code') ?? ''
-    if (code === '') return page('Nothing to exchange', '<h1>No code came back</h1>', 400)
+    if (code === '') return plainly('No code came back from Google.', 400)
 
     if (config.has_secret !== true) {
-      return page(
-        'Not configured',
-        '<h1>No client secret</h1><p>Paste it on the web front end and try again.</p>',
-        400,
-      )
+      return plainly('No client secret. Paste it in Settings and try again.', 400)
     }
 
     // The secret is read HERE, with the service key, and never leaves this
@@ -171,7 +190,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       | string
       | null
     if (secretRows === null) {
-      return page('Not configured', '<h1>The client secret is missing</h1>', 400)
+      return plainly('The client secret is missing.', 400)
     }
 
     const exchange = await fetch('https://oauth2.googleapis.com/token', {
@@ -197,12 +216,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
       // Named precisely: "no refresh token" and "Google refused" need
       // different things done about them, and the second most common cause of
       // the first is a redirect URI that does not match to the character.
-      return page(
-        'Not connected',
-        `<h1>Could not finish</h1><p>${
-          tokens.error_description ?? tokens.error ?? 'Google returned no refresh token.'
-        }</p><p>Check the redirect URI matches the Cloud console exactly.</p>`,
-        400,
+      const why = tokens.error_description ?? tokens.error ?? 'Google returned no refresh token.'
+      return (
+        (await backToApp('failed', { why: why.slice(0, 160) })) ??
+        plainly(
+          `Could not finish connecting Google. ${why}\n` +
+            'Check the redirect URI matches the Cloud console exactly.',
+          400,
+        )
       )
     }
 
@@ -229,18 +250,18 @@ Deno.serve(async (request: Request): Promise<Response> => {
         ? 'Nothing was granted — try again and leave the permissions ticked.'
         : `${families.join(', ')} can be used now.`
 
-    return page(
-      'Connected',
-      /*
-        Naming what was connected, rather than one service the page happened to
-        be written about. The old wording said "Calendar can be switched on"
-        after a consent that may have covered Gmail and Drive too — a sentence
-        that is narrower than the truth is how somebody concludes the other two
-        did not work and presses it again.
-      */
-      `<h1>Google is connected</h1><p>${connected}</p>` + '<p>You can close this tab.</p>',
+    /*
+      Naming what was connected, rather than one service the page happened to
+      be written about. The old wording said "Calendar can be switched on"
+      after a consent that may have covered Gmail and Drive too — a sentence
+      narrower than the truth is how somebody concludes the rest failed and
+      presses it again.
+    */
+    return (
+      (await backToApp('connected', { with: families.join(',') })) ??
+      plainly(`Google is connected. ${connected} You can close this tab.`)
     )
   }
 
-  return page('Not found', '<h1>Nothing here</h1>', 404)
+  return plainly('Nothing here.', 404)
 })

@@ -994,6 +994,38 @@ for (const [size, opts] of SIZES) {
     await page.waitForTimeout(700)
     await shoot('document')
 
+    /*
+      Coming back from Google (0486). LAST, because it is a fresh navigation.
+
+      Supabase will not serve HTML from the shared functions domain, so the
+      OAuth callback redirects here with the outcome in the query string and
+      the studio says it. That banner is drawn on exactly one condition — a
+      parameter no other capture carries — so without this it is a surface
+      nobody has ever looked at, which is how the unreadable page it replaces
+      survived for as long as it did.
+
+      Asserted as well as photographed: the banner is the whole point of the
+      redirect, and a capture cannot tell the difference between a banner that
+      is missing and a capture taken before it drew.
+    */
+    await page.goto(
+      `http://127.0.0.1:${String(PORT)}/?google=connected&with=Gmail,Calendar,Drive`,
+      { waitUntil: 'networkidle', timeout: 30_000 },
+    )
+    await page.waitForTimeout(900)
+    const saidBack = await page.evaluate(`(() => {
+      const el = document.querySelector('.saidback')
+      if (el === null) return 'NO BANNER'
+      const r = el.getBoundingClientRect()
+      if (r.width * r.height < 400) return 'BANNER HAS NO BOX'
+      if (location.search !== '') return 'THE QUERY STRING WAS NOT CLEARED'
+      return el.textContent ?? ''
+    })()`)
+    if (typeof saidBack !== 'string' || !saidBack.includes('Gmail, Calendar, Drive')) {
+      console.error(`  ${size}/${scheme} came back from Google badly: ${String(saidBack)}`)
+    }
+    await shoot('back-from-google')
+
     // Anything thrown while doing all that is a defect, not a note.
     if (errors.length > 0) {
       console.error(`  ${size}/${scheme} threw: ${errors.join(' · ')}`)

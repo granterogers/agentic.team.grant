@@ -218,6 +218,15 @@ const maps = {}
 const placed = {}
 
 /*
+  What to say about the trip to Google, until the screen is left (0486).
+
+  Declared here for the reason the comment above gives: `connectionsTab` is a
+  hoisted function reading it, and a `let` three thousand lines below the
+  function that names it is the `ageTimer` trap.
+*/
+let googleSaid = null
+
+/*
   How much has arrived on each project since he last opened it (#122).
 
   A plain object rather than part of `latest`, for the same reason `maps` is:
@@ -6094,6 +6103,24 @@ function connectionsTab() {
         bad === 0 ? 'All of them well.' : `${bad} want looking at.`}</p>
       <button class="btn" data-connect-open>+ Connect something</button>
     </div>
+    <!--
+      What the trip to Google said (0486).
+
+      The consent flow ends on our own domain now, because the functions host
+      flattens HTML to plain text and every page that function has produced has
+      been a wall of raw markup. So the outcome arrives as a query parameter and
+      is said HERE, once, above the cards.
+
+      It is words and nothing else. Whether Google is actually connected is the
+      card underneath, which reads connection health from the office.
+    -->
+    ${
+      googleSaid === null
+        ? ''
+        : `<p class="saidback${googleSaid.tone === 'good' ? '' : ' warn'}">${esc(
+            googleSaid.text,
+          )}</p>`
+    }
     <!--
       The picker (#92).
 
@@ -12105,6 +12132,64 @@ clock()
   link to a real project would land on the portfolio, because at the moment it
   is read the real project does not exist yet.
 */
+/*
+  What the OAuth callback sends back, and what to say about it (0486).
+
+  Read once, said once, and then taken out of the address bar. Never trusted
+  for anything but WORDS: the office decides whether Google is connected by
+  reading `connection_health`, which the Connections tab shows underneath this
+  — a query parameter is something anybody can type.
+*/
+function cameBackFromGoogle() {
+  if (typeof location === 'undefined') return false
+  let said
+  try {
+    said = new URLSearchParams(location.search)
+  } catch {
+    return false
+  }
+  const outcome = said.get('google')
+  if (outcome === null) return false
+
+  const withWhat = (said.get('with') ?? '').split(',').filter((x) => x !== '')
+  const why = (said.get('why') ?? '').slice(0, 160)
+  state.setting = 'connections'
+  googleSaid =
+    outcome === 'connected'
+      ? {
+          tone: 'good',
+          text:
+            withWhat.length === 0
+              ? 'Google is connected.'
+              : `Google is connected — ${withWhat.join(', ')}. The office will pick them up ` +
+                'within the hour.',
+        }
+      : {
+          tone: 'warn',
+          text:
+            outcome === 'refused'
+              ? `Google did not grant it${why === '' ? '' : ` — ${why}`}. Nothing changed.`
+              : `That did not finish${why === '' ? '' : ` — ${why}`}. Nothing changed, so ` +
+                'trying again is safe.',
+        }
+  /*
+    The address is cleaned HERE and the sheet is opened by the CALLER, after
+    the first paint — Settings is a page rather than a route (#158), so it
+    reads a shell that `render()` has to have drawn.
+
+    A reload should not re-announce a connection made ten minutes ago, and a
+    URL carrying `?google=connected` is one that gets bookmarked and pasted.
+  */
+  try {
+    const clean = new URL(location.href)
+    for (const k of ['google', 'with', 'why']) clean.searchParams.delete(k)
+    history.replaceState({}, '', clean.pathname + clean.search)
+  } catch {
+    /* A page opened from a file has no history to write to. The banner still shows. */
+  }
+  return true
+}
+
 let wantedPath = typeof location === 'undefined' ? '/' : location.pathname
 if (goToPath(wantedPath)) wantedPath = null
 
@@ -12124,7 +12209,31 @@ if (typeof window !== 'undefined') {
   })
 }
 
+/*
+  COMING BACK FROM GOOGLE (0486), read BEFORE the first paint.
+
+  Two reasons it has to be here rather than where the office's payload lands.
+  `keepUrl()` rewrites the address from the state on every render, so a query
+  parameter not read before the first one is gone. And `live()` returns early
+  when there is no token — so on a browser that was signed out, or whose token
+  had expired while he was away at Google, the callback would have said
+  nothing at all.
+
+  It is words and nothing else. Whether Google is connected is read from
+  `connection_health`, which is the card underneath.
+*/
+const backFromGoogle = cameBackFromGoogle()
+
 render()
+
+/*
+  Settings is a page rather than a route (#158), so it opens after the paint
+  rather than through the router — the sheet reads a shell that has to exist.
+*/
+if (backFromGoogle) {
+  settingsSheet()
+  sheet($('#settings'), true)
+}
 
 /*
   And then the real office, if it will have us (#68, ADR-0019).

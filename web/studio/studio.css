@@ -2227,6 +2227,25 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
 }
 .setbody { display: grid; gap: var(--s4); align-content: start; }
 
+/*
+  What the trip to Google said, on the way back in (0486).
+
+  A border as well as a fill: the Connections tab puts cards on `--sunken` in
+  places, and a fill alone stops being a shape the moment it matches what it
+  sits on. CLAUDE.md records that exact defect on the governance chips.
+*/
+.saidback {
+  margin: 0; padding: var(--s3) var(--s4);
+  border-radius: var(--r-card);
+  border: 1px solid var(--ok, #3f7d52);
+  background: color-mix(in srgb, var(--ok, #3f7d52) 12%, transparent);
+  color: var(--ink-1);
+}
+.saidback.warn {
+  border-color: var(--warn, #8a6a1f);
+  background: color-mix(in srgb, var(--warn, #8a6a1f) 14%, transparent);
+}
+
 /* Team */
 /*
   Wide enough for the longest role, which is "COMMUNICATIONS".
