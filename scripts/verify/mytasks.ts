@@ -76,9 +76,23 @@ const press = async (action: string, args: Record<string, unknown>): Promise<unk
   if (!r.ok) throw new Error(body.error ?? `http ${String(r.status)}`)
   return body.result
 }
-const ask = async (section: string, id?: string): Promise<unknown> => {
+const ask = async (
+  section: string,
+  id?: string,
+  extra: Record<string, string> = {},
+): Promise<unknown> => {
+  /*
+    `extra` is the search and the sort (#259, migration 0504), and it goes
+    through the DEPLOYED gateway rather than straight to the RPC on purpose.
+    `also` is a new descriptor field and the half most likely to be wrong is
+    the gateway's, not the function's: the RPC is driven inside 0504 itself.
+  */
+  const more = Object.entries(extra)
+    .filter(([, v]) => v !== '')
+    .map(([k, v]) => `&${k}=${encodeURIComponent(v)}`)
+    .join('')
   const r = await fetch(
-    `${ENDPOINT}?section=${section}${id === undefined ? '' : `&id=${encodeURIComponent(id)}`}`,
+    `${ENDPOINT}?section=${section}${id === undefined ? '' : `&id=${encodeURIComponent(id)}`}${more}`,
     { headers: { Authorization: `Bearer ${bearer}` } },
   )
   const body = (await r.json()) as { data?: unknown; error?: string }
@@ -594,19 +608,37 @@ check(
     /data-my-tick=/.test(page) && /was \? 'todo' : 'done'/.test(page) ? 'present' : 'ONE WAY ONLY',
     /data-my-tick=/.test(page) && /was \? 'todo' : 'done'/.test(page),
   )
+  /*
+    The binding is a multi-line object because the bucket is a one-of rather
+    than a uuid, so this asks for the things that matter on their own lines
+    rather than for a shape a formatter can change.
+
+    The page half was `read\('my_tasks', bucket\)` — an exact call, and a
+    wording lock. #259's search passes a third argument, so the call became
+    `read('my_tasks', bucket, { q, sort })` and this went red over a correct
+    change: the sixth instance of that class in this repository. The property
+    is that the page asks the SECTION for the bucket, whatever else it also
+    passes.
+
+    And each part is reported on its own, because "NOT REACHABLE" about three
+    conditions points somewhere and two thirds of the time somewhere is wrong.
+  */
+  const bound = /my_tasks: \{/.test(gateway)
+  const buckets = /values: \['today'/.test(gateway)
+  const readsIt = /read\(\s*'my_tasks',\s*bucket\b/.test(page)
   check(
     'and the buckets are read as sections, not rebuilt in the page',
-    // The binding is a multi-line object because the bucket is a one-of rather
-    // than a uuid, so the check asks for the two things that matter on their
-    // own lines rather than for a shape that a formatter can change.
-    /my_tasks: \{/.test(gateway) &&
-      /values: \['today'/.test(gateway) &&
-      /read\('my_tasks', bucket\)/.test(page)
-      ? 'bound and read'
-      : 'NOT REACHABLE',
-    /my_tasks: \{/.test(gateway) &&
-      /values: \['today'/.test(gateway) &&
-      /read\('my_tasks', bucket\)/.test(page),
+    `section ${bound ? 'bound' : 'MISSING'} · list ${buckets ? 'present' : 'MISSING'} · page ${
+      readsIt ? 'reads it' : 'DOES NOT READ IT'
+    }`,
+    bound && buckets && readsIt,
+  )
+  check(
+    'and the search and the sort reach the same section rather than a second one',
+    /also: \[/.test(gateway) && /p_query/.test(gateway) && /q: mine.query/.test(page)
+      ? 'one section, three parameters'
+      : 'MISSING',
+    /also: \[/.test(gateway) && /p_query/.test(gateway) && /q: mine\.query/.test(page),
   )
 }
 
@@ -820,6 +852,125 @@ check(
   `${gone}, ${String(left.projects)} project(s), ${String(left.tasks)} task(s)`,
   Number(left.projects) === 0 && Number(left.tasks) === 0,
 )
+
+/*
+  -------------------------------------- finding one, and changing your mind
+
+  #259 asks for search/filter/sort and for priority, notes and due dates as
+  first-class. Migration 0504 found that most of it existed and could not be
+  reached: `my_task_add` already took detail, priority, project and labels and
+  the quick-add sent three of seven, `my_tasks` already RETURNED detail and
+  priority, and `my_task_set` took labels, reminder and repeat and nothing
+  else. So a task's title, notes, importance, due date and project were
+  write-once — the U of CRUD, half absent.
+
+  Driven through the DEPLOYED gateway, because the new half most likely to be
+  wrong is the section descriptor rather than the function. The RPC is already
+  driven inside 0504, which raises rather than returning false.
+*/
+{
+  const made = (await press('my_task_add', {
+    p_title: `Chase the pricing sheet ${run}`,
+    p_detail: 'Ask about the tiering.',
+  })) as { ok?: boolean; id?: string }
+  const id = String(made.id ?? '')
+  check(
+    'a task to change our mind about exists',
+    `ok=${String(made.ok)}`,
+    made.ok === true && id !== '',
+  )
+
+  const changed = (await press('my_task_set', {
+    p_task_id: id,
+    p_title: `Chase the RENAMED sheet ${run}`,
+    p_detail: 'Ask about the tiering and the onboarding.',
+    p_priority: 20,
+  })) as { ok?: boolean; title?: string; priority?: number; detail?: string }
+  check(
+    'the title, the notes and the importance can all be changed afterwards',
+    `${String(changed.title)} / p${String(changed.priority)}`,
+    changed.ok === true &&
+      String(changed.title).includes('RENAMED') &&
+      Number(changed.priority) === 20 &&
+      String(changed.detail).includes('onboarding'),
+  )
+
+  const blank = (await press('my_task_set', { p_task_id: id, p_title: '   ' })) as {
+    ok?: boolean
+    error?: string
+  }
+  check(
+    'and a title cannot be emptied, which is said rather than silently ignored',
+    String(blank.error ?? '(accepted!)'),
+    blank.ok === false && String(blank.error ?? '').includes('needs a title'),
+  )
+
+  const nowhere = (await press('my_task_set', {
+    p_task_id: id,
+    p_project: `no-such-${run}`,
+  })) as { ok?: boolean; error?: string }
+  check(
+    'an unknown project is refused by NAME, not silently left where it was',
+    String(nowhere.error ?? '(accepted!)').slice(0, 60),
+    nowhere.ok === false && String(nowhere.error ?? '').includes('no active project'),
+  )
+
+  const found = (await ask('my_tasks', 'all', { q: 'RENAMED sheet' })) as Row[]
+  check(
+    'the search finds it by title, through the gateway',
+    `${String(found.length)} found`,
+    found.some((r) => String(r.id) === id),
+  )
+  const byNotes = (await ask('my_tasks', 'all', { q: 'onboarding' })) as Row[]
+  check(
+    'and by what is in its NOTES, which is where half of what you wrote lives',
+    `${String(byNotes.length)} found`,
+    byNotes.some((r) => String(r.id) === id),
+  )
+  /*
+    The control. A search that matched everything would pass both checks above
+    and would be the "found-nothing check that cannot report anything" with the
+    sign flipped — it looks like a working search and narrows nothing.
+  */
+  const nothing = (await ask('my_tasks', 'all', { q: `zzz-nothing-${run}` })) as Row[]
+  check(
+    'CONTROL: a query nothing matches returns nothing, so the search narrows',
+    `${String(nothing.length)} found`,
+    nothing.length === 0,
+  )
+  /*
+    And the other control, which is the one a search bolted onto a bucketed
+    list gets wrong: it must NARROW the bucket rather than replace it.
+  */
+  const inDone = (await ask('my_tasks', 'done', { q: 'RENAMED sheet' })) as Row[]
+  check(
+    'CONTROL: the search narrows the bucket rather than ignoring it',
+    `${String(inDone.length)} in Done`,
+    inDone.every((r) => String(r.id) !== id),
+  )
+
+  const sorted = (await ask('my_tasks', 'all', { sort: 'title' })) as Row[]
+  const titles = sorted.map((r) => String(r.title).toLowerCase())
+  check(
+    'sorting by name really reorders the list',
+    `${String(titles.length)} row(s)`,
+    titles.length < 2 || titles.every((t, i) => i === 0 || (titles[i - 1] ?? '') <= t),
+  )
+  let badSort = ''
+  try {
+    await ask('my_tasks', 'all', { sort: 'sideways' })
+    badSort = '(accepted!)'
+  } catch (error) {
+    badSort = String((error as Error).message)
+  }
+  check(
+    'an order nobody defined is refused by name rather than quietly ignored',
+    badSort.slice(0, 60),
+    badSort.includes('must be one of'),
+  )
+
+  await db.execute(`delete from public.tasks where task_id = ${lit(id)}::uuid`)
+}
 
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)

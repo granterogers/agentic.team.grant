@@ -2800,6 +2800,33 @@ Each of these cost real time. They are here so they cost it once.
   its absence always names which of three reasons applies — and drives the
   three constraints rather than reading the migration.
 
+- **Adding a search box to a list cached under its BUCKET NAME is silent and
+  convincing.** `mine.lists` was keyed on `'today'`; #259's search would have
+  typed a query, hit the cache, and handed back the unsearched list — which
+  reads exactly like a search that matches everything. Keyed on the whole
+  request (bucket, query, sort) instead. The second half is the part that
+  actually bit: **the capture harness seeds that store directly**, so the
+  moment the key changed it was writing to a name the renderer no longer read
+  — `rows: 3` in the diagnostic and `tasksInDom: 0` on the screen. The fix is
+  not to restate the rule in the harness but to EXPORT it (`window.__shots`
+  carries `mineKey`), because a key computed in two places is the "row list
+  built twice" defect with a cache attached.
+- **A positive check cannot detect a filter that matches everything — only its
+  control can.** Sabotaging `app.my_tasks`'s search to `where true` turned
+  **one** of 57 checks red: "a query nothing matches returns nothing". Every
+  *"the search finds it"* check stayed green, correctly, because a search that
+  returns the whole table does find it. If the only checks on a narrowing
+  feature are positive ones, the suite passes against a feature that narrows
+  nothing.
+- **`tasks.priority` is an integer where LOWER is more important and 100 is
+  ordinary** — the live rows are 20 and 100, and `my_task_add` floors at 1. A
+  first draft of `my_task_set` validated 1..5, which is a different scale with
+  the same name: 0311's two-words-for-one-thing, in a column. And `tasks` has
+  `added_by` not `requested_by`, `state` starts at `todo` not `open`, and
+  `detail` is NOT NULL defaulting to `''` so clearing it is `''` and never
+  null. Four guesses, all refused on the first run, all settled by one
+  `information_schema` query.
+
 ---
 
 ## Visual standard

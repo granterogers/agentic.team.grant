@@ -206,7 +206,28 @@ const progress = {}
   re-fetching on every tab press is seven round trips for something that has
   not changed. The counts come back in ONE call beside them.
 */
-const mine = { bucket: 'today', lists: {}, counts: null, editing: null, trouble: {} }
+const mine = {
+  bucket: 'today',
+  lists: {},
+  counts: null,
+  editing: null,
+  trouble: {},
+  /*
+    What is typed in the search box and which order the list is in (#259).
+
+    Both live here rather than in the DOM because `render()` rebuilds the
+    screen and anything held only in an input is gone at the next draw — the
+    same reason `mine.editing` is a field. And both are part of the CACHE KEY
+    below: a bucket cached under its own name would hand back the unsearched
+    list the moment you typed, which looks exactly like a search that matches
+    everything.
+  */
+  query: '',
+  sort: 'smart',
+}
+
+/** What identifies one fetched list: the bucket AND how it was asked for. */
+const mineKey = () => `${mine.bucket}|${mine.query}|${mine.sort}`
 /*
   Declared HERE, beside the other stores, not next to the function that fills
   it three thousand lines below. A hoisted function reached during module
@@ -7729,7 +7750,7 @@ const MY_BUCKETS = [
 */
 function tasksView() {
   if (canWrite()) void needMine(mine.bucket)
-  const rows = mine.lists[mine.bucket]
+  const rows = mine.lists[mineKey()]
   const counts = mine.counts ?? {}
   const c = (k) => Number(counts[k] ?? 0)
 
@@ -7743,6 +7764,45 @@ function tasksView() {
           day: 'numeric',
           month: 'short',
         })
+
+  /*
+    Finding one, and choosing the order (#259, migration 0504).
+
+    Above the buckets rather than inside one, because a search narrows
+    WHICHEVER bucket you are in: "what am I late on about the pricing" is a
+    real question and a search that threw away Overdue could not answer it.
+
+    The box is a form so Return submits it and so the phone keyboard shows a
+    Search key; it is not live-as-you-type, because every keystroke is a round
+    trip to the office and a list that reshuffles under your thumb on a phone
+    is worse than one you ask for.
+
+    No backticks in this comment: template literal.
+  */
+  const find = !canWrite()
+    ? ''
+    : `<form class="myfind" data-my-find>
+        <input data-my-query type="search" value="${esc(mine.query)}"
+               placeholder="Find a task" aria-label="Find a task by title, notes or label">
+        <select data-my-sort aria-label="What order to show them in">
+          ${[
+            ['smart', 'Soonest first'],
+            ['priority', 'Most important first'],
+            ['title', 'By name'],
+            ['created', 'Newest first'],
+          ]
+            .map(
+              ([v, name]) =>
+                `<option value="${v}"${mine.sort === v ? ' selected' : ''}>${esc(name)}</option>`,
+            )
+            .join('')}
+        </select>
+        ${
+          mine.query === ''
+            ? ''
+            : `<button class="btn small quiet" type="button" data-my-clear>Clear</button>`
+        }
+      </form>`
 
   const tabs = `<div class="mybuckets" role="tablist" aria-label="Which of my tasks">
     ${MY_BUCKETS.map(
@@ -7822,7 +7882,7 @@ function tasksView() {
           // it was written to prevent. Caught by a capture reporting
           // rows 3, writer true, and ZERO task elements in the DOM.
           `<ul class="ptasks">${rows.map(myRow).join('')}</ul>`
-        : mine.trouble[mine.bucket] === true
+        : mine.trouble[mineKey()] === true
           ? // Empty AND the read failed: not an empty list, a list that could
             // not be read. Saying "nothing due today" here would be a claim
             // about his own tasks that nothing established.
@@ -7830,7 +7890,15 @@ function tasksView() {
                not &ldquo;nothing to do&rdquo; &mdash; it is &ldquo;I could not
                look&rdquo;. The counts above came from a different request and
                may well be right.</p>`
-          : `<p class="t-lead">${esc(emptyFor(mine.bucket))}</p>`
+          : mine.query !== ''
+            ? /*
+                A search that found nothing is not an empty bucket, and saying
+                "nothing due today" here would answer a question nobody asked.
+                #257's rule on the smallest possible surface.
+              */
+              `<p class="t-lead">Nothing in this list matches
+                 &ldquo;${esc(mine.query)}&rdquo;. Try All, or clear the search.</p>`
+            : `<p class="t-lead">${esc(emptyFor(mine.bucket))}</p>`
 
   /*
     And what the TEAM is doing, under a rule of its own.
@@ -7870,6 +7938,7 @@ function tasksView() {
     </div>
 
     ${composer}
+    ${find}
     ${tabs}
     ${list}
 
@@ -7912,7 +7981,59 @@ function myEditor(t) {
       : /1 day/.test(every)
         ? '1 day'
         : ''
+  /*
+    Title, notes, priority, due date and project (#259, migration 0504).
+
+    These were all WRITE-ONCE until 0504: `my_task_add` took them and
+    `my_task_set` did not, so a task's name, its notes, how important it is and
+    when it is due were fixed at the moment you typed them. Not a missing
+    feature so much as a missing letter — the U of CRUD, half absent, on the
+    one screen whose whole job is that you change your mind.
+
+    Priority is the vocabulary the column already uses: a number where LOWER is
+    more important and 100 is ordinary. Offered as four named steps rather than
+    a number box, because "20" is not a thing anybody means; the values are the
+    column's and the words are a person's.
+
+    No backticks in this comment: template literal.
+  */
+  const priority = Number(t.priority ?? 100)
+  const step = priority <= 10 ? 10 : priority <= 20 ? 20 : priority <= 50 ? 50 : 100
+  const due = t.due_on === null || t.due_on === undefined ? '' : String(t.due_on).slice(0, 10)
+  const slug = t.project === null || t.project === undefined ? '' : String(t.project.slug ?? '')
+
   return `<form class="myedit" data-my-save="${esc(t.id)}" data-saidwrap>
+    <label class="t-meta">Title
+      <input data-my-title-edit value="${esc(t.title ?? '')}"
+             aria-label="What this task is called" required></label>
+    <label class="t-meta">Notes
+      <textarea data-my-detail rows="2" placeholder="Anything you want to remember"
+                aria-label="Notes on this task">${esc(t.detail ?? '')}</textarea></label>
+    <label class="t-meta">Due
+      <input data-my-due-edit type="date" value="${esc(due)}"
+             aria-label="When this is due"></label>
+    <label class="t-meta">Importance
+      <select data-my-priority aria-label="How important this is">
+        ${[
+          [10, 'Urgent'],
+          [20, 'Important'],
+          [50, 'Normal'],
+          [100, 'Whenever'],
+        ]
+          .map(
+            ([v, name]) =>
+              `<option value="${String(v)}"${step === v ? ' selected' : ''}>${esc(name)}</option>`,
+          )
+          .join('')}
+      </select></label>
+    <label class="t-meta">Project
+      <select data-my-project-edit aria-label="Which project this belongs to">
+        <option value=""${slug === '' ? ' selected' : ''}>No project</option>
+        ${PROJECTS.map(
+          (x) =>
+            `<option value="${esc(x.slug)}"${slug === x.slug ? ' selected' : ''}>${esc(x.name)}</option>`,
+        ).join('')}
+      </select></label>
     <label class="t-meta">Labels
       <input data-my-labels value="${esc(labels.join(', '))}"
              placeholder="errand, admin" aria-label="Labels, separated by commas"></label>
@@ -8703,6 +8824,39 @@ function drawShell() {
     }
   })
 
+  /*
+    Searching and sorting (#259).
+
+    A form, so Return submits it — and `render()` replaces the input, so the
+    value is read BEFORE the redraw and the focus is put back afterwards. A
+    search box that loses the caret every time you press Return is one nobody
+    uses twice.
+  */
+  const finder = $('[data-my-find]', root)
+  finder?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    mine.query = String($('[data-my-query]', finder)?.value ?? '').trim()
+    void needMine(mine.bucket)
+    render()
+    const box = $('[data-my-query]')
+    if (box !== null && box !== undefined) {
+      box.focus()
+      // The caret at the end rather than selecting the whole thing, so
+      // refining a search is typing rather than retyping.
+      box.setSelectionRange(box.value.length, box.value.length)
+    }
+  })
+  $('[data-my-sort]', root)?.addEventListener('change', (e) => {
+    mine.sort = String(e.target.value ?? 'smart')
+    void needMine(mine.bucket)
+    render()
+  })
+  $('[data-my-clear]', root)?.addEventListener('click', () => {
+    mine.query = ''
+    void needMine(mine.bucket)
+    render()
+  })
+
   for (const b of root.querySelectorAll('[data-my-open]')) {
     b.addEventListener('click', () => {
       mine.editing = mine.editing === b.dataset.myOpen ? null : b.dataset.myOpen
@@ -8721,6 +8875,19 @@ function drawShell() {
       const remind = String($('[data-my-remind]', f)?.value ?? '')
       const every = String($('[data-my-repeat]', f)?.value ?? '')
       const from = String($('[data-my-repeat-from]', f)?.value ?? 'due')
+      // The five that were write-once until 0504.
+      const title = String($('[data-my-title-edit]', f)?.value ?? '').trim()
+      const detail = String($('[data-my-detail]', f)?.value ?? '').trim()
+      const dueOn = String($('[data-my-due-edit]', f)?.value ?? '')
+      const priority = String($('[data-my-priority]', f)?.value ?? '')
+      const proj = String($('[data-my-project-edit]', f)?.value ?? '')
+      if (title === '') {
+        // Said here as well as refused by the RPC. A form that posts and comes
+        // back with an error for something the browser could see is a round
+        // trip Grant waits for.
+        say(f, 'A task needs a title.', 'warn')
+        return
+      }
       /*
         Empty means REMOVE here, and the RPC is told so explicitly.
 
@@ -8733,6 +8900,9 @@ function drawShell() {
         ...(labels.length === 0 ? ['labels'] : []),
         ...(remind === '' ? ['remind_at'] : []),
         ...(every === '' ? ['repeat'] : []),
+        ...(detail === '' ? ['detail'] : []),
+        ...(dueOn === '' ? ['due_on'] : []),
+        ...(proj === '' ? ['project'] : []),
       ]
       const ok = await attempt(
         f.querySelector('button[type="submit"]'),
@@ -8743,6 +8913,11 @@ function drawShell() {
             ...(labels.length === 0 ? {} : { p_labels: labels }),
             ...(remind === '' ? {} : { p_remind_at: remind }),
             ...(every === '' ? {} : { p_repeat_every: every, p_repeat_from: from }),
+            p_title: title,
+            ...(detail === '' ? {} : { p_detail: detail }),
+            ...(dueOn === '' ? {} : { p_due_on: dueOn }),
+            ...(priority === '' ? {} : { p_priority: Number(priority) }),
+            ...(proj === '' ? {} : { p_project: proj }),
             p_clear: clear,
           }),
         'Saved.',
@@ -13032,11 +13207,21 @@ function readLocalPlacement(slug) {
 }
 
 async function needMine(bucket) {
-  if (mine.lists[bucket] !== undefined) return
-  mine.lists[bucket] = null
+  /*
+    Keyed on the whole request, not on the bucket (#259).
+
+    Adding a search box to a cache keyed on the bucket name would have been
+    silent and convincing: type anything, get the unsearched list back from
+    the cache, and read it as a search that matches everything. The counts
+    stay keyed on nothing, because they are about the buckets rather than
+    about the query.
+  */
+  const key = mineKey()
+  if (mine.lists[key] !== undefined) return
+  mine.lists[key] = null
   try {
     const [rows, counts] = await Promise.all([
-      settles(read('my_tasks', bucket)),
+      settles(read('my_tasks', bucket, { q: mine.query, sort: mine.sort })),
       mine.counts === null ? settles(read('my_task_counts')) : Promise.resolve(mine.counts),
     ])
     /*
@@ -13046,11 +13231,11 @@ async function needMine(bucket) {
       today" in the first place.
     */
     if (Array.isArray(rows)) {
-      mine.lists[bucket] = rows
-      delete mine.trouble[bucket]
+      mine.lists[key] = rows
+      delete mine.trouble[key]
     } else {
-      mine.lists[bucket] = []
-      mine.trouble[bucket] = true
+      mine.lists[key] = []
+      mine.trouble[key] = true
     }
     if (counts !== null && typeof counts === 'object') mine.counts = counts
   } catch {
@@ -13073,8 +13258,8 @@ async function needMine(bucket) {
       inbox: you may say you could not look; you may not say there is nothing
       there.
     */
-    mine.trouble[bucket] = true
-    mine.lists[bucket] = []
+    mine.trouble[key] = true
+    mine.lists[key] = []
   }
   render()
 }
@@ -13617,6 +13802,21 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
       state the screen has that nobody needs a picture of.
     */
     mine,
+    /*
+      The rule the store keys its lists by, EXPORTED rather than restated
+      (#259, migration 0504).
+
+      `mine.lists` used to be keyed on the bucket name and is now keyed on the
+      whole request — bucket, search and sort — because a cache keyed on the
+      bucket hands back the unsearched list the moment you type. The capture
+      harness seeds that store directly, and the moment the key changed it was
+      writing to a name the renderer no longer reads: `rows: 3` in the
+      diagnostic and `tasksInDom: 0` on the screen, which is exactly the
+      "a list built twice will disagree" defect CLAUDE.md records.
+
+      So the harness asks the product what its key is. One rule, one place.
+    */
+    mineKey,
     render,
   }
 }

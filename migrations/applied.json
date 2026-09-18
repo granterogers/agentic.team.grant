@@ -501,5 +501,6 @@
   "0500_the_office_may_hold_what_the_message_actually_said.sql": "0e8e4e68b5c72d083fb32deb1ab277c0070f1750493ea209baf0f873abeaf392",
   "0501_grant_can_see_how_much_of_his_mail_the_office_is_holding.sql": "42e4c9a9833e27497b3d42772c28bff3663a4d932ee976160483fd4f60556f79",
   "0502_the_disclosure_lands_on_the_page_grant_actually_opens.sql": "22498083e3d347e676b32cedd94554aa071b0c7a5f6e762f6115e0ffee9477aa",
-  "0503_a_file_grant_deleted_in_drive_stops_being_an_answer.sql": "e0ef298908d1ba6c62ad1506b4ccbe5e72cd1ec114ca4e51cc2c9526c3cfd2d9"
+  "0503_a_file_grant_deleted_in_drive_stops_being_an_answer.sql": "e0ef298908d1ba6c62ad1506b4ccbe5e72cd1ec114ca4e51cc2c9526c3cfd2d9",
+  "0504_a_task_you_cannot_change_your_mind_about.sql": "085132be5ab62c8c6db4bbf335aa2e9b999bff0b1cc81282f5592d691c74e457"
 }

@@ -478,7 +478,7 @@ for (const [size, opts] of SIZES) {
       .waitForFunction(
         `(() => {
           const w = window.__shots
-          return w && w.mine && w.mine.lists && w.mine.lists['today'] !== null
+          return w && w.mine && w.mine.lists && w.mine.lists[w.mineKey()] !== null
         })()`,
         { timeout: 8000 },
       )
@@ -491,7 +491,10 @@ for (const [size, opts] of SIZES) {
       w.mine.counts = { today: 3, overdue: 1, upcoming: 4, inbox: 2,
                         unscheduled: 2, done: 11, all: 17 }
       w.mine.bucket = 'today'
-      w.mine.lists.today = [
+      w.mine.query = ''
+      w.mine.sort = 'smart'
+      // Keyed by the PRODUCT's own rule, never by a copy of it.
+      w.mine.lists[w.mineKey()] = [
         { id: 'mt-1', title: 'Ring the venue about the September cohort',
           state: 'todo', due_on: on(-2), labels: ['errand'], overdue: true,
           project: { slug: 'legacy-coaching-course', name: 'Legacy Coaching Course' },
@@ -540,7 +543,7 @@ for (const [size, opts] of SIZES) {
       const why = await page.evaluate(`(() => {
         const w = window.__shots
         return {
-          rows: (w && w.mine && w.mine.lists && w.mine.lists[w.mine.bucket] || []).length,
+          rows: (w && w.mine && w.mine.lists && w.mine.lists[w.mineKey()] || []).length,
           editing: w && w.mine ? w.mine.editing : null,
           details: document.querySelectorAll('[data-my-open]').length,
           /*

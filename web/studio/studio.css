@@ -4388,6 +4388,34 @@ body.docked { padding-right: min(380px, 100vw); }
   background: var(--surface); color: var(--ink); max-inline-size: 22ch;
 }
 .myedit > .t-meta[data-said] { flex-basis: 100%; }
+/* A textarea is the one field here that is not a line, so it does not take
+   the 44px line-height rule the inputs do — and it gets the whole row, because
+   notes wrapped into a 22ch column are a column of two words. */
+.myedit textarea {
+  flex: 1 1 100%; min-block-size: 64px; font: 400 16px/1.45 var(--text);
+  padding: var(--s2) var(--s3); border: 1px solid var(--edge); border-radius: 9px;
+  background: var(--surface); color: var(--ink); resize: vertical;
+}
+.myedit label:has(textarea) { flex: 1 1 100%; }
+/* The title is the widest thing in the editor and was inheriting the 22ch cap
+   the short fields want, so a real task name was truncated inside its own
+   edit box. */
+.myedit input[data-my-title-edit] { max-inline-size: none; inline-size: 100%; }
+.myedit label:has(input[data-my-title-edit]) { flex: 1 1 100%; }
+
+/* Finding one (#259). Sits between the composer and the buckets, and matches
+   the composer's geometry so the top of the screen reads as one block of
+   controls rather than three unrelated bars. */
+.myfind {
+  display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center;
+  max-inline-size: 880px; margin-block-end: var(--s3);
+}
+.myfind input[data-my-query] { flex: 1 1 18ch; }
+.myfind input, .myfind select {
+  min-block-size: 44px; font-size: 16px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: 10px;
+  background: var(--surface); color: var(--ink);
+}
 
 .myteam { margin-block-start: var(--s6); max-inline-size: 880px; }
 .myteam .ptasks { margin-block-start: var(--s2); }
@@ -6718,4 +6746,18 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
      and the body stay side by side because the body can now shrink. */
   .ptask { flex-wrap: wrap; }
   .mydetail { margin-inline-start: 44px; flex-basis: 100%; margin-inline-end: auto; }
+
+  /* The find bar is ONE row on a phone, not two.
+
+     At 390px its `1 1 18ch` box plus the sort select overflowed the line and
+     wrapped, so search and sort cost about 150px of the screen — and the
+     capture showed the first task barely peeping above the fold, under a
+     composer, a search box and a sort menu. Secondary controls must not
+     outrank the list they are for.
+
+     A grid rather than a narrower basis, so the select takes exactly what it
+     needs and the box takes the rest whatever the sort label says. */
+  .myfind { display: grid; grid-template-columns: 1fr auto; gap: var(--s2); }
+  .myfind input, .myfind select { inline-size: 100%; max-inline-size: 100%; }
+  .myfind [data-my-clear] { grid-column: 1 / -1; justify-self: start; }
 }

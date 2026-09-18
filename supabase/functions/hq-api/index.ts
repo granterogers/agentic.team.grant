@@ -74,6 +74,25 @@ const SECTIONS: Readonly<
        * recognise rather than being shown something plausible.
        */
       oneOf?: { param: string; arg: string; values: readonly string[] }
+      /**
+       * OPTIONAL extras, each either a word list or free text (#259).
+       *
+       * `oneOf` and `textArg` are both REQUIRED when present — a section that
+       * declares a bucket refuses a request without one, and a search section
+       * refuses an empty query. Both are right for what they were written for
+       * and neither can express "and you may also narrow this".
+       *
+       * My Tasks needs exactly that: a bucket it insists on, plus a search box
+       * that is usually empty and a sort that usually is not given. Adding a
+       * second `oneOf` field and a second `textArg` field would be two more
+       * singular slots for the third case to outgrow, so this is a LIST and
+       * each entry says which kind it is by whether it carries `values`.
+       *
+       * Absent means absent: the argument is not sent at all, so the RPC's own
+       * default decides. That is the one place a default is right, because the
+       * parameter being missing is not a typo — it is the ordinary request.
+       */
+      also?: readonly { param: string; arg: string; values?: readonly string[] }[]
       /** Whether `?project=<uuid>` narrows this section. Search only. */
       scoped?: boolean
       /**
@@ -316,6 +335,16 @@ const SECTIONS: Readonly<
       arg: 'p_bucket',
       values: ['today', 'overdue', 'upcoming', 'inbox', 'unscheduled', 'done', 'all'],
     },
+    /*
+      Search and sort (#259, migration 0504). Both optional, and the search
+      NARROWS the bucket rather than replacing it — "what am I late on about
+      the pricing" is a question, and a search that discarded "overdue" could
+      not answer it.
+    */
+    also: [
+      { arg: 'p_query', param: 'q' },
+      { arg: 'p_sort', param: 'sort', values: ['smart', 'priority', 'title', 'created'] },
+    ],
   },
   my_task_counts: { fn: 'my_tasks_counts' },
   /*
@@ -1447,6 +1476,36 @@ Deno.serve(async (request: Request): Promise<Response> => {
       )
     }
     args = { ...args, [arg]: value }
+  }
+
+  /*
+    And the optional extras (#259), after the required ones.
+
+    An unrecognised word in a LIST is refused by name, exactly as `oneOf` does
+    and for the same reason — a typo must not be answerable with something
+    plausible. A missing parameter is not refused, because missing is the
+    ordinary case and is what `also` exists for.
+  */
+  for (const extra of section.also ?? []) {
+    const raw = url.searchParams.get(extra.param)
+    if (raw === null || raw.trim() === '') continue
+    if (extra.values === undefined) {
+      // Free text. Capped for the same cost reason `textArg` is capped; it
+      // reaches Postgres as an RPC parameter and is never interpolated.
+      args = { ...args, [extra.arg]: raw.slice(0, 200) }
+      continue
+    }
+    const value = raw.trim().toLowerCase()
+    if (!extra.values.includes(value)) {
+      return json(
+        {
+          error: `${extra.param} must be one of: ${extra.values.join(', ')}`,
+          section: name,
+        },
+        400,
+      )
+    }
+    args = { ...args, [extra.arg]: value }
   }
 
   /*
