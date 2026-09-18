@@ -55,3 +55,40 @@ be rediscovered.
 
 - **reconcile** — HEAD `e269057`, clean, == origin/main. Ledger's next action
   was the browser cluster; the brief makes that Priority 1 too.
+
+- **browser cluster, batch 1** (`198b984`) — SSRF: the private-address guard
+  ran once and `fetch` chased every redirect. Fixed with manual redirects, a
+  shared `whyRefused` per hop, a 5-hop cap, and a jar that only goes to its
+  own host. 4 regressions + 3 sabotages.
+- **batch 2** (`9c65e6b`) — `browser_lately` has returned `shot_path` since the
+  ledger existed and nothing rendered it; #16's "a recent screenshot" was
+  unmet only on screen. Gateway signs it; the tab draws it. `check:tokens`
+  added to the gate after `var(--shadow-1)` (no such token) passed every
+  existing check — found 6 more live undefined tokens.
+- **batch 3** (`b264337`) — `web.telegram.org` returned ok:true with TWELVE
+  characters of text: a small shell walked past `looksLikeAShell`, which
+  wanted little text AND heavy markup. `BARELY_ANYTHING = 80` absolute floor,
+  chosen from four measured pages. `verify:browse-live` 30/30 against the real
+  internet, including the handler chain.
+- **batch 4** (`aa9bf7f`) — 0495 `app.browser_now`: the tab had no present
+  tense and no Stop on it. `npm run shot:browser` renders four states; it
+  found the capture photographing the wrong screen, a thumbnail wrapping into
+  the verb column, and a CSS fix that was dead on arrival behind
+  `.bsites .brow`.
+- **batch 5** (`9271ba3`) — `browser_session_establish` was unpressed behind a
+  baselined reason that was FALSE ("blocked behind Cloudflare"). Nothing about
+  pasting a session Grant exported needs Cloudflare. Form built; baseline
+  14 -> 13. Its first check was inert (submit re-renders the form) and a
+  sabotage proved it; rebuilt against submit-wiring and cancel-clearing.
+
+Deployed: hq-api v596, studio live.
+
+### Position
+
+#16 and #135 acceptance is met except for one thing that is Grant's: no
+gather has been performed BEHIND A REAL LOGIN, because that needs a session
+he establishes himself on a real site. Everything under it is proved — the
+jar reaches the Vault, the runtime sends it, an expired jar reads as
+signedOut rather than as an outage.
+
+Next: #261, then #258.
