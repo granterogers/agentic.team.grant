@@ -1,9 +1,104 @@
-# RUN LEDGER — 8-hour autonomous completion run, 18 September 2026
+# RUN LEDGER
 
-**This file is the survival mechanism for this run.** After a compaction:
-read `CLAUDE.md`, then this file, then `git log`, then the live issues, and
-**continue**. Compaction is not permission to stop, restart, re-plan or ask
-Grant what to do next.
+**This file is the survival mechanism for the current run.** After a
+compaction: read `CLAUDE.md`, then this file, then the latest handover in
+`docs/testing/`, then `git log`, then the live issues, and **continue**.
+Compaction is not permission to stop, restart, re-plan or ask Grant what to do
+next.
+
+---
+
+# CURRENT RUN — 6.5-hour completion & evolution run, 18 September 2026
+
+## §0 reconciliation, done first and the answer was reassuring
+
+The external observation that `main` did not carry
+`docs/testing/handover-2026-09-18-run.md` was correct and the cause was not
+lost work:
+
+| | |
+|---|---|
+| local HEAD | `954ea0b`, clean tree, **0 unpushed** |
+| `origin/claude/phase-7-communications-kh8ow8` | `954ea0b` — identical |
+| `origin/main` | `927073c` — **14 commits behind** |
+
+Nothing was local-only. The previous run's 14 commits were all pushed to the
+branch; `main` had simply not been fast-forwarded since the one merge earlier
+that day. Gate re-run green before merging (lint 0 · typecheck 0 · **1,747
+tests** · secrets 0 · migrations 493 · templates clean), then `main` was
+fast-forwarded to `954ea0b` and pushed. §18's requirement is satisfied and
+verified: `RUN-LEDGER.md` and all three handovers are on the default branch.
+
+**Starting HEAD for this run: `954ea0b`.**
+
+## The mission
+
+> *"Make the actual Agentic Team demonstrably work, reduce the remaining real
+> product backlog, aggressively discover weaknesses through real use, and begin
+> laying the foundations for an Agentic Team that can continuously test, learn
+> and improve itself."*
+
+Two operating principles, the second new:
+
+- **Reality is a stronger oracle than code inspection.**
+- **The office should eventually become capable of discovering how to improve
+  the office.**
+
+## The verification rule this run inherits
+
+`CHECK + CONTROL + REAL EXECUTION`. **Do not trust a green check without
+knowing what its control proves.** The previous run shipped three inert-green
+checks, and twelve browser unit tests missed a failure the real network found
+in one call. Hunt specifically for: inert tests · identical control/test
+observations · mocks that cannot fail · fixture assumptions · assertions that
+restate the implementation · success without state change · queued-but-never-
+completed · generated-but-never-delivered · rendered-but-inoperable controls ·
+failure handlers that themselves fail.
+
+And two explicit prohibitions from this brief, both of which the previous run
+broke once each: **do not commit known-unverified work because of an external
+throttle** — record the blocker and move on — and **do not push a known-red
+tree**.
+
+## Live issues at the start of this run: 10
+
+| # | title | plan |
+|---|---|---|
+| **41** | deep end-to-end systems test | **the spine** — act like Grant, invent real and awkward requests |
+| **258** | first-class artifact generation | drive to a delivered, rendered, inspected PDF |
+| **135 / 16 / 261** | browser + computer cluster | one capability; exercise the eleven cases the brief names |
+| **172** | Gmail project intelligence | preserve epistemic honesty; close if acceptance is met |
+| **259** | unified personal tasks | exercise every state; close if acceptance is met |
+| **260** | NotebookLM artifacts | verify what the API actually exposes before designing |
+| **213 / 18** | credential rotations | **external to Grant.** Documented, skipped, not rediscovered. |
+
+## Team Evolution — the new foundation
+
+A governed, cost-aware, measurable capability whose loop is
+OBSERVE → QUESTION → HYPOTHESISE → RESEARCH → SIMULATE → TEST → PROPOSE →
+EXPERIMENT → INDEPENDENTLY EVALUATE → PROMOTE/REJECT → MEASURE → LEARN.
+
+Hard constraints: **not a second agent platform** — it orchestrates the office
+that exists; **not its own judge** — production → observations → lab →
+candidate → independent evaluation → held-out + adversarial regression →
+promote/reject/rollback; **cost-aware** — deterministic code → free model →
+mid-tier → frontier, escalating only when justified.
+
+## CURRENT TASK
+
+Reconciliation complete. Starting the #41 spine: real use, acting as Grant.
+
+## COMPLETED THIS RUN
+
+*(appended as each batch verifies)*
+
+## BLOCKERS
+
+*(none)*
+
+---
+
+# PREVIOUS RUN — 8-hour autonomous completion run, 18 September 2026
 
 ## The mission, in Grant's words
 
