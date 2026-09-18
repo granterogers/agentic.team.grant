@@ -78,12 +78,32 @@ await db.execute(`
          state_reason = 'verify:recovers debris from an earlier run'
    where requested_by = ${lit(MINE)} and state not in ('complete', 'cancelled', 'failed')`)
 
+/*
+  ONE project, reused, rather than one per run.
+
+  This created `fixture-recovers-<run>` every time. Each run hangs four jobs
+  on it, a job can never be deleted, so `app.project_delete` refuses the
+  project for ever — **ten permanent active fixture projects accumulated in
+  two days**, one per gate run, all of them in Grant's project switcher. That
+  is CLAUDE.md's twenty-five-project pile rebuilding itself, by a suite whose
+  teardown cancelled its jobs and never looked at what it had created.
+
+  A stable slug fixes it at the cause rather than sweeping the symptom: the
+  suite's scoping is `requested_by = MINE`, which carries the run token, so
+  reusing one project across runs cannot confuse it. `on conflict` makes the
+  setup idempotent, and the attachment insert is guarded the same way because
+  ADR-0014's trigger runs on the second visit too.
+
+  The existing ten are archived by 0494 — they hold jobs, so archiving is the
+  only honest thing available.
+*/
 const projectId = String(
   (
     await one(`
       with created as (
         insert into public.projects (slug, name, status)
-        values (${lit(`fixture-recovers-${run}`)}, 'Fixture: recovers', 'active')
+        values ('fixture-recovers', 'Fixture: recovers', 'active')
+        on conflict (slug) do update set status = 'active'
         returning project_id
       ),
       -- ADR-0014: an active project reads from and writes to somewhere real,
@@ -93,6 +113,7 @@ const projectId = String(
           (project_id, connector, external_ref, display_name, role)
         select project_id, 'upload', 'fixture', 'Verification fixture', 'source'
           from created
+        on conflict do nothing
         returning project_id
       )
       select project_id::text as id from created`)

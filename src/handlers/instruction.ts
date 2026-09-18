@@ -149,6 +149,54 @@ import { allowance, describe } from './meter.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/**
+ * The dashboard projects, as one sentence of canonical state (#231, ADR-0024).
+ *
+ * ## Why a RESERVED project is not one of Grant's projects
+ *
+ * Asked *"what projects do we have open at the moment?"* the office answered
+ * *"Here are the five open projects: 1. Unnamed, 2. AI Team HQ Test, …"*. He
+ * has four. The fifth is `unnamed`, the reserved bucket ADR-0024 created so a
+ * Telegram message naming no project lands somewhere rather than nowhere — he
+ * confirmed that one project and nothing else.
+ *
+ * `projects.reserved_reason` exists to mark exactly that, is correctly set on
+ * that row, and **was read by nothing anywhere in the product**. A column
+ * recording a distinction no reader honours is the dial-with-no-reader
+ * defect, and here it put a wrong count in a sentence about the office's own
+ * spine.
+ *
+ * It is named rather than hidden: *"what has ended up in the unnamed
+ * project?"* is a fair question and an answer that cannot see the row cannot
+ * field it.
+ *
+ * ## Stated as a FACT, not as an order
+ *
+ * The first version ended *"…so do not count it as a project or offer it as
+ * one unless he asks about it directly."* Driving the same three questions
+ * before and after, the count went right and **two of three answers got
+ * worse** — *"What projects do we have open?"* came back *"I have nothing on
+ * it here"* from a prompt listing all four. A negative imperative sitting next
+ * to the data it is about invites a model to over-obey it.
+ *
+ * A sentence the model must obey is one it can over-obey. A sentence it
+ * merely has to read is not.
+ */
+export function projectSpine(
+  rows: readonly { readonly name: string; readonly reserved: boolean }[],
+): string {
+  const open = rows.filter((p) => !p.reserved).map((p) => p.name)
+  const held = rows.filter((p) => p.reserved).map((p) => p.name)
+  if (open.length === 0 && held.length === 0) return ''
+  return (
+    `The dashboard projects open right now, ${String(open.length)} of them: ${open.join(', ')}.` +
+    (held.length === 0
+      ? ''
+      : ` There is also a reserved place called ${held.join(', ')}, where anything that names ` +
+        'no project lands. It is not one of his projects and is not included in that count.')
+  )
+}
+
 /** Who is answering, and everything that makes them sound like themselves. */
 interface Speaker {
   readonly slug: string
@@ -2863,17 +2911,37 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         briefing, and `localBrief` already carries what Grant has said about
         the project in hand.
       */
-      const projectsNow = await deps.db
+      /*
+        A RESERVED project is not one of Grant's projects.
+
+        Asked *"what projects do we have open at the moment?"* the office
+        answered *"Here are the five open projects: 1. Unnamed, 2. AI Team HQ
+        Test, …"*. He has four. The fifth is `unnamed`, the reserved bucket
+        ADR-0024 created so that a Telegram message naming no project lands
+        somewhere instead of nowhere — he confirmed that one project and
+        nothing else.
+
+        `projects.reserved_reason` exists precisely to mark it, is correctly
+        set on that row, and **was read by nothing anywhere in the product**.
+        A column that records a distinction no reader honours is the
+        dial-with-no-reader defect, and here it produced a wrong count in a
+        sentence about the office's own spine.
+
+        Not excluded, because "what is sitting in the unnamed bucket" is a
+        fair question and an answer that cannot see the row cannot field it.
+        Named instead, so the model can say four and a catch-all rather than
+        five.
+      */
+      const openNow = await deps.db
         .execute(`
-          select slug, name from public.projects
+          select slug, name, reserved_reason is not null as reserved
+            from public.projects
            where status = 'active' and not is_fixture
-           order by updated_at desc limit 25`)
-        .then((r) => (r.rows as { slug: string; name: string }[]).map((p) => p.name))
-        .catch(() => [] as string[])
-      const projectList =
-        projectsNow.length === 0
-          ? ''
-          : `The dashboard projects open right now, ${String(projectsNow.length)} of them: ${projectsNow.join(', ')}.`
+           order by reserved, updated_at desc limit 25`)
+        .then((r) => r.rows as { slug: string; name: string; reserved: boolean }[])
+        .catch(() => [] as { slug: string; name: string; reserved: boolean }[])
+      const projectList = projectSpine(openNow)
+
       // Asked once per answer rather than described in the prompt as a
       // constant: a connector switched off an hour ago must change what she
       // says she can do.

@@ -491,5 +491,6 @@
   "0490_a_proposal_is_harness_traffic_when_its_evidence_is.sql": "59fd68da594d772d08103cf16057cf786ab09b7c1dd018c6b902dba41d647668",
   "0491_every_failure_the_office_recognises_is_a_suites.sql": "0edfd2e71a7748f2d74888af70c390dfc2be4948b7e689fa757f2e06daafdb81",
   "0492_a_filter_that_ignores_its_own_include_parameter.sql": "9a0e30779feeaf8fead986e354d3ef01a39f9582b75823f5c742539983ed3c9c",
-  "0493_a_config_key_that_looks_like_a_relation.sql": "78efe56fef184f620c0d907c1c0beef63273fb37f4a2678aec60702e8a25ebbe"
+  "0493_a_config_key_that_looks_like_a_relation.sql": "78efe56fef184f620c0d907c1c0beef63273fb37f4a2678aec60702e8a25ebbe",
+  "0494_ten_fixture_projects_in_grants_switcher.sql": "cc2eb964d12e8cb40a0e9340d41912eb26feed51da960e3daa44da7ab45da448"
 }

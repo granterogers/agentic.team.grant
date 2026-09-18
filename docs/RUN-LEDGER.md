@@ -90,7 +90,53 @@ Reconciliation complete. Starting the #41 spine: real use, acting as Grant.
 
 ## COMPLETED THIS RUN
 
-*(appended as each batch verifies)*
+### Batch 1 — #41: acting like Grant found two defects in his own project list
+
+Drove eight requests a person would plausibly type through the REAL handler —
+real routing, real retrieval, real model, real gates — in process, so the
+worker could not post eight test messages to Slack. Enqueued through
+`app.enqueue_inbound` with a `verify-act-…` actor so `is_fixture` generates
+true, and cancelled the instant they were queued.
+
+**The harness was wrong first.** Its first version handed the handler a
+fabricated `Job` with the instruction in `pinnedConfig`; the handler re-reads
+`pinned_config` from the row by id, correctly, so all eight answers came back
+about a `verify:transport` fixture. Validate the test before believing the
+finding — for the fourth time this week.
+
+**What the office does WELL**, worth recording because a defect list is not a
+verdict: *"That is not what I meant at all."* → *"Sorry — let me not guess at
+that. What were you after?"*, deterministic and verified. *"Ring the client"* →
+honestly cannot, and offers an email or a task instead. *"Did you send that
+email yesterday?"* → *"I have no record of it, so I didn't send it."*
+
+**Defect 1 — a reserved bucket counted as one of his projects.** *"What
+projects do we have open?"* → *"Here are the five open projects: 1. Unnamed,
+…"*. He has four. `unnamed` is ADR-0024's reserved place where a message
+naming no project lands, `projects.reserved_reason` marks it, and **nothing in
+`src/`, `supabase/` or `web/` read that column.** Fixed in `projectSpine`,
+which names the bucket rather than hiding it, because "what has ended up in
+the unnamed project?" is a fair question.
+
+**And the first fix made two of three answers worse**, which only real
+execution could show: it ended *"…so do not count it as a project or offer it
+as one"*, and *"What projects do we have open?"* then came back *"I have
+nothing on it here"* from a prompt listing all four. A negative imperative
+beside the data it is about invites over-obedience. Restated as a fact; all
+three correct. **A sentence the model must obey is one it can over-obey.**
+
+**Defect 2 — ten fixture projects in his switcher.** `verify:recovers` created
+`fixture-recovers-<run>` every run, hung four jobs on it, and tore down only
+the jobs — and a job can never be deleted, so each project is PERMANENT. One
+per gate run, nineteen active projects where he has four. Fixed at the cause
+(one stable reused project) and swept: **19 active → 5**, his four plus the
+reserved bucket. `app.stuck_fixture_projects()` names the class that
+`check:leaks` cannot, because it sweeps what it can DELETE and this is about
+what it cannot.
+
+Evidence: 6 unit tests on `projectSpine` with **two sabotages each red**;
+`verify:recovers` 19/19 with no new project; 0494 drives its reader with a
+control that must see a planted row; **1,753 tests**.
 
 ## BLOCKERS
 
