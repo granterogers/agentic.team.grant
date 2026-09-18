@@ -47,6 +47,7 @@
  * guessed at the outage, which is the opposite of what happened.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { type NotebookAdapter, UnavailableNotebookAdapter } from '../notebook/adapter.ts'
@@ -229,6 +230,20 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
         outcome.reconcileRefusals.length > 0
       return {
         ...base,
+        /*
+          Read from the record (0489). This return spends a model whenever
+          `announce` is true, and `base` claims `deterministic_retrieval` —
+          which `enforce_deterministic_claim` refuses on any correlation that
+          recorded an inference, so the output was discarded and the job
+          FAILED. `office.sync` did exactly that twice, most recently 08:02 on
+          18 September.
+
+          Overridden here rather than in `base`: the OTHER returns in this
+          handler are templated and the exemption is true for them, and losing
+          it everywhere would send routine hourly output through quality
+          review for nothing.
+        */
+        path: await howComposed(db, job.jobId),
         // Written by Marcus when it is going to reach anybody, and left as the
         // template when it is not — there is no point spending a model call on
         // a sentence nobody will read.

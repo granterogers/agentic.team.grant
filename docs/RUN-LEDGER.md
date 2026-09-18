@@ -129,12 +129,51 @@ about a gap the drive invented.
 `public.proposals` is now **0 rows** — the Welsh debris is gone from the
 Governance page. `check:callers` **10 → 8**. Worker deployed.
 
+### Batch 2 — #276: the pressable check could not see the studio's own payload
+
+`section:studio` was in the baseline with the reason *"SUPERSEDED by the
+per-project reader the page actually calls"*. False: `data.js:510` fetches
+`?section=studio` and it is the studio's PRIMARY payload. `pressed()` matched a
+quoted name only, so the URL form was invisible. **A baseline entry with a
+false reason is worse than no entry.** Matcher fixed, one control per form,
+sabotage proved it goes red. Baseline **15 → 14**.
+
+### Batch 3 — the failure-visibility class, and it was live
+
+§5's rule applied to this morning's Slack defect: **instance or class?** Class.
+Five handlers hardcoded `path: 'deterministic_retrieval'` on a return that
+spends a model, so `enforce_deterministic_claim` threw the answer away and
+failed the job. Confirmed against `public.jobs`, not inferred:
+
+| kind | failures | latest |
+|---|---|---|
+| `office.slack_rotate` | 10 | 07:13 18 Sep (fixed this morning) |
+| `briefing.morning` | 2 | **04:00 18 Sep — Grant got no briefing** |
+| `office.capacity_report` | 2 | 15:00 17 Sep |
+| `office.sync` | 2 | 08:02 18 Sep |
+
+All four remaining handlers now ask `howComposed`, overridden per return so the
+templated branches keep the exemption.
+
+**The regression caught itself being inert twice**, which is the part worth
+keeping: `tests/handlers/determinism-claims.test.ts` first scanned return
+blocks by jumping to the end of each match, so the enclosing
+`return { kind, handle }` swallowed the file and it found **zero** blocks
+containing `sayAs` — green, and green under sabotage. Its control caught that.
+Then the fixed version was still inert for the two handlers that assign
+`sayAs` to a variable first. **All six handlers sabotaged in turn, all six now
+red, green when restored.**
+
 ## BLOCKERS
 
 *(none)*
 
 ## NEXT ACTION
 
-#276: the 15 pressable entries. `section:staff` and `section:studio` are
-documented SUPERSEDED, which makes them dead gateway sections rather than
-baseline entries — check for consumers, then delete rather than excuse.
+#41/§4: audit the rest of the failure chain — `failure → handler → provenance
+→ output gate → delivery → visible notification` — for the other shapes it can
+break in. Then #258.
+
+(Superseded: #276: the 15 pressable entries. `section:staff` and `section:studio` are
+documented SUPERSEDED — the studio half turned out to be a false reason and is
+now fixed.)

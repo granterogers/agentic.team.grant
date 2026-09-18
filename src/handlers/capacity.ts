@@ -26,6 +26,7 @@
  * daily report is a thing you scroll back to rather than something that buzzes.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import type { ProviderRouter } from '../providers/router.ts'
@@ -247,7 +248,21 @@ export function capacityHandler(
         evidence: 'verified',
         sources: [`job:${job.jobId}`],
         contradictions: null,
-        path: 'deterministic_retrieval',
+        /*
+          Read from the record, never asserted (0489).
+
+          This return spends a model — `sayAs` above — and claimed
+          `deterministic_retrieval`, which `enforce_deterministic_claim`
+          refuses on any correlation that recorded an inference. The output was
+          thrown away and the JOB FAILED, every time.
+
+          A class, not an instance. Confirmed against `public.jobs`:
+          `office.slack_rotate` x10, `briefing.morning` x2 (one of them 04:00
+          on 18 September, so Grant got no briefing that morning and was never
+          told why), `office.capacity_report` x2, `office.sync` x2.
+          `howComposed` is the one definition, in `agents/provenance.ts`.
+        */
+        path: await howComposed(db, job.jobId),
         model: null,
       } satisfies HandlerOutput
     },

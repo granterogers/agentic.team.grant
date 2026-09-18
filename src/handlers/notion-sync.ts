@@ -50,6 +50,7 @@
  * makes this safe to switch on unattended.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -178,6 +179,20 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
       const announce = parts.length > 0 || result.skipped.length > 0
       return {
         ...base,
+        /*
+          Read from the record (0489). This return spends a model whenever
+          `announce` is true, and `base` claims `deterministic_retrieval` —
+          which `enforce_deterministic_claim` refuses on any correlation that
+          recorded an inference, so the output was discarded and the job
+          FAILED. `office.sync` did exactly that twice, most recently 08:02 on
+          18 September.
+
+          Overridden here rather than in `base`: the OTHER returns in this
+          handler are templated and the exemption is true for them, and losing
+          it everywhere would send routine hourly output through quality
+          review for nothing.
+        */
+        path: await howComposed(db, job.jobId),
         body: announce
           ? await sayAs(db, router, 'operations-director', {
               purpose:

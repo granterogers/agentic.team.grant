@@ -43,6 +43,7 @@
  * nothing — a duty re-attempted after a crash must not brief him twice.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import type { ProviderRouter } from '../providers/router.ts'
@@ -414,7 +415,21 @@ export function briefingHandler(db: SqlExecutor, router: ProviderRouter | null =
         evidence: 'verified',
         sources: [`job:${job.jobId}`],
         contradictions: null,
-        path: 'deterministic_retrieval',
+        /*
+          Read from the record, never asserted (0489).
+
+          This return spends a model — `sayAs` above — and claimed
+          `deterministic_retrieval`, which `enforce_deterministic_claim`
+          refuses on any correlation that recorded an inference. So the output
+          was thrown away and the job FAILED, every time this branch ran.
+
+          It is a class, not an instance: the same shape killed
+          `office.slack_rotate` ten times, `briefing.morning` twice (including
+          at 04:00 on 18 September — Grant simply got no briefing that
+          morning), `office.capacity_report` twice and `office.sync` twice.
+          `howComposed` is the one definition, in `agents/provenance.ts`.
+        */
+        path: await howComposed(db, job.jobId),
         model: null,
       } satisfies HandlerOutput
     },
