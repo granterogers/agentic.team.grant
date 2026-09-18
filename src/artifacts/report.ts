@@ -83,6 +83,65 @@ export type Block =
     }
   | { readonly kind: 'pagebreak' }
 
+/**
+ * The line under the title on the cover — taken from the DOCUMENT, never from
+ * the request that asked for it.
+ *
+ * Both call sites in `handlers/artifact.ts` passed `brief.slice(0, 400)`, so
+ * the cover of every report the office has produced printed Grant's own
+ * instruction back at him:
+ *
+ *     Legacy Coaching Course – Module Status Report
+ *     2026-09-17
+ *     ──────────
+ *     Write me a PDF report on the coaching course modules, from what we hold.
+ *
+ * …and then two thirds of an empty page, because that was the only body
+ * content on it. A request is not a subtitle. It is the thing the document
+ * answers, and printing it on the cover is the paper equivalent of a reply
+ * that opens by repeating the question.
+ *
+ * Found by OPENING the PDF. `validatePdf` checks the structure — header,
+ * trailer, xref offsets, page count — and every one of those was correct;
+ * CLAUDE.md already records that a structural check cannot see a collision,
+ * and it cannot see this either.
+ *
+ * The document's own opening sentence is the honest line: it says what the
+ * report found rather than what was asked. An empty string when there is no
+ * prose to take it from, which the cover already handles — it is laid out to
+ * leave deliberate space, not to need filling.
+ */
+export function coverLine(blocks: readonly Block[]): string {
+  const first = blocks.find(
+    (b): b is Extract<Block, { kind: 'paragraph' }> =>
+      b.kind === 'paragraph' && b.text.trim() !== '',
+  )
+  if (first === undefined) return ''
+  const text = first.text.trim().replace(/\s+/g, ' ')
+  /*
+    One clause, and cut at a WORD.
+
+    A whole paragraph under a 30pt title is a second paragraph, not a
+    subtitle, and the cover has room for about two lines. A semicolon counts
+    as an end here because a model writing prose joins two perfectly good
+    cover lines with one — the real sentence this was found on runs 214
+    characters to its first full stop.
+
+    Cutting at 197 characters produced *"…the coaching focus and client
+    enga…"* on the rendered cover. CLAUDE.md: a length cap that cuts mid-word
+    is the clipped content a layout is checked for, arriving through the
+    guard instead. Worse, the first version of the test asserted the LENGTH
+    and the ellipsis, and both were true of that. The test was satisfied by a
+    bad output — so it asserts the word boundary now.
+  */
+  const stop = text.search(/[.!?;](\s|$)/)
+  const one = (stop === -1 ? text : text.slice(0, stop + 1)).replace(/;$/, '')
+  if (one.length <= 200) return one
+  const cut = one.slice(0, 199)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${(lastSpace === -1 ? cut : cut.slice(0, lastSpace)).trimEnd()}…`
+}
+
 /** Where a fact in the report came from, which #258 requires on every artifact. */
 export interface Citation {
   readonly label: string
