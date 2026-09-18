@@ -364,6 +364,14 @@ const SECTIONS: Readonly<
   */
   browser_lately: { fn: 'browser_lately', arg: 'p_project', args: { p_limit: 30 } },
   /*
+    The present tense (#135).
+
+    Everything else on the Browser tab is past tense — sites it has a session
+    for, and pages it already read. Grant asked to SEE the browser, and what it
+    is doing this second appeared nowhere on the surface built to show it.
+  */
+  browser_now: { fn: 'browser_now', arg: 'p_project' },
+  /*
     What is left of today's ten free browser-minutes (#16).
 
     Global rather than project-scoped, because the cap is. Shown beside the

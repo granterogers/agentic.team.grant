@@ -2002,7 +2002,11 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
    The thumbnail is the last column and the one fixed width in the row: a
    picture that reflows with the text makes eight rows of them read as a
    jumble rather than as a column you can scan down. */
-.brow { grid-template-columns: 96px minmax(0, 1fr) auto 76px; align-items: center; }
+/* The live list and the sessions list are different questions, and ran
+   together in the first capture: the "Signed in to" label sat hard against the
+   bottom of the last Right Now row and read as its caption. */
+.bsites .t-label + .nbrows { margin-top: 6px; }
+.bsites .nbrows + .t-label { margin-top: var(--s4); display: block; }
 .bshot { display: block; width: 76px; height: 48px; border-radius: 6px;
          overflow: hidden; border: 1px solid var(--edge);
          background: var(--sunken); box-shadow: var(--lift-1);
@@ -2011,11 +2015,6 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
              display: block; }
 .bshot:hover, .bshot:focus-visible { transform: scale(1.04); box-shadow: var(--lift-2); }
 @media (prefers-reduced-motion: reduce) { .bshot { transition: none; } }
-/* The phone stacks the row, so a fixed last column would strand the picture
-   in a 76px gutter beside wrapped text. */
-@media (max-width: 560px) {
-  .brow { grid-template-columns: minmax(0, 1fr) 76px; }
-}
 
 /* Documents, as a gallery rather than a shelf: a section has room to wrap. */
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: var(--s4); }
@@ -6434,7 +6433,22 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   thing a person scans for down the column.
 */
 .bsites .nbrow { grid-template-columns: 116px minmax(0, 1fr) minmax(0, 1.4fr) auto; }
-.bsites .brow { grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1fr) auto; }
+/*
+  FIVE columns, because the row gained a fifth child: the thumbnail.
+
+  Written as a bare `.brow` four hundred lines up first, which was DEAD on
+  arrival — `.bsites .brow` here is two classes and wins on specificity, so the
+  new rule never applied and the picture wrapped onto a second row, landing
+  76px wide in the 72px verb column under the word "read". The capture showed
+  it; reading the CSS back would not have, because the rule I had just written
+  said exactly the right thing. Measure the computed box (this one reported
+  "72px 472px 472px 60px" for a five-column rule) rather than trusting the
+  declaration you can see.
+*/
+.bsites .brow {
+  grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1fr) auto 76px;
+  align-items: center;
+}
 .bsites .bseen { margin-top: var(--s4); }
 .bstate {
   /*
@@ -6451,9 +6465,16 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 .bstate.b-needs_sign_in, .bstate.b-signed_out { color: var(--ink-2); }
 .bstate.b-revoked { color: var(--ink-3); }
 
-/* And on a phone the same stack the notebook rows take, for the same reason. */
+/* And on a phone the same stack the notebook rows take, for the same reason.
+   The browsing row keeps its picture BESIDE the stacked text rather than
+   under it: a 76px thumbnail as a fifth stacked row pushes three rows of
+   history off a 390px screen, and a column of them down the right edge is
+   what makes the list scannable at all. */
 @media (max-width: 860px) {
-  .bsites .nbrow, .bsites .brow { grid-template-columns: 1fr; gap: 2px; }
+  .bsites .nbrow { grid-template-columns: 1fr; gap: 2px; }
+  .bsites .brow { grid-template-columns: minmax(0, 1fr) 76px; gap: 2px var(--s3); }
+  .bsites .brow > :not(.bshot) { grid-column: 1; }
+  .bsites .brow > .bshot { grid-column: 2; grid-row: 1 / span 5; align-self: center; }
 }
 
 /*

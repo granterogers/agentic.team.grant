@@ -266,6 +266,7 @@
     "verify:connectors": "tsx scripts/verify/connectors.ts",
     "verify:browser": "tsx scripts/verify/browser.ts",
     "verify:browse-live": "tsx scripts/verify/browse-live.ts",
+    "shot:browser": "tsx scripts/verify/browser-shot.ts",
     "verify:ci": "tsx scripts/verify/ci.ts"
   },
   "devDependencies": {
