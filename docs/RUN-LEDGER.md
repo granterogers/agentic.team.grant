@@ -39,3 +39,12 @@ update this file -> begin the next priority immediately.
 ## Log
 
 (appended as the run proceeds)
+
+- **reconciled**: HEAD 94caed2 == remote branch; main was at e269057, 25
+  behind; 7 issues live exactly as the brief said.
+- **MERGED to main**: `22c389f`, fast-forward, pushed, 0 difference. Gate read
+  with real exit codes: lint/typecheck/migrations/secrets/templates/callers/
+  pressable/tokens/icons all 0, 1,814 tests.
+- **Tag held deliberately** until the new product work (#172 bodies, Drive,
+  #259, #261, #277) is built and re-qualified — the tag should mark the
+  finished state, not the state before the work the brief asks for.
