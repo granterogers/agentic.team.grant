@@ -299,18 +299,69 @@ try {
     product behaviour, so the check reads past it rather than depending on
     where the fixture happens to sort.
   */
+  /*
+    THIS SUITE'S PROPOSAL MUST NOT BE IN THE BATCH, and the assertion used to
+    be the opposite.
+
+    `proposals_to_send` is the batch the chief of staff actually sends, and
+    since 0489 the round SPEAKS — so a proposal reaching that batch reaches
+    Grant's phone. This suite's subject is evidenced entirely by fixture jobs,
+    which is what #45 requires of a suite testing a filter, so the office is
+    right to refuse it and the old check was asserting against a safety rule.
+
+    0492 found that the reader had no harness filter at all — 0490's splice
+    loop replaced a string in two of three functions and only checked that it
+    had hit ONE — so for a few hours between those two migrations a suite
+    could have made the office tell Grant about a gap it invented. This is the
+    regression for that.
+  */
   const batch = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
   check(
-    'it is in the batch to send',
-    `${String(batch.length)} waiting, ours ${batch.some((b) => b.id === rows[0]?.id) ? 'among them' : 'ABSENT'}`,
-    batch.some((b) => b.id === rows[0]?.id),
+    'a harness proposal never reaches the batch Claire sends',
+    `${String(batch.length)} waiting, ours ${batch.some((b) => b.id === rows[0]?.id) ? 'AMONG THEM' : 'absent'}`,
+    !batch.some((b) => b.id === rows[0]?.id),
   )
-  await db.execute(`select app.proposals_sent(array[${lit(String(rows[0]?.id))}]::uuid[])`)
+
+  /*
+    And the control, because the line above is satisfied by a reader that
+    returns nothing at all — the found-nothing shape this repository has been
+    caught building three times. A proposal with REAL provenance must still be
+    offered, and be marked once, and not be offered again.
+
+    Written directly rather than raised, because raising one needs impediments
+    on a real job and `job_impediments` can never be deleted. It is removed at
+    the end of the block.
+  */
+  const realOne = (
+    await one(`
+    insert into public.proposals (staff_slug, kind, needed, title, remedy, argument, times_seen)
+    values ('growth-director', 'not_capable', ${lit(`realproof-${run}`)},
+            'real proof', 'real proof', 'real proof', 3)
+    returning proposal_id::text as id
+  `)
+  ).id as string
+  const withReal = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
+  check(
+    'CONTROL: a proposal with real provenance IS offered',
+    withReal.some((b) => b.id === realOne) ? 'offered' : 'NOT OFFERED — the reader is inert',
+    withReal.some((b) => b.id === realOne),
+  )
+  await db.execute(`select app.proposals_sent(array[${lit(realOne)}]::uuid[])`)
   const after = (await one('select app.proposals_to_send(500) as r')).r as { id: string }[]
   check(
     'and once sent it is not sent again',
     `${String(after.length)} waiting`,
-    !after.some((b) => b.id === rows[0]?.id),
+    !after.some((b) => b.id === realOne),
+  )
+  await db.execute(`delete from public.proposals where proposal_id = ${lit(realOne)}::uuid`)
+  const sweptReal = (
+    await one(`select count(*)::int as n from public.proposals
+                where needed = ${lit(`realproof-${run}`)}`)
+  ).n
+  check(
+    'and the control leaves nothing behind',
+    `${String(sweptReal)} left`,
+    Number(sweptReal) === 0,
   )
 
   // =========================================================================

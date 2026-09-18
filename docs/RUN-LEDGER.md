@@ -249,9 +249,55 @@ printed the same line twice. Both fixed. The reads are batched eight at a
 time — 240 sequential round trips took over fifteen minutes with nothing
 printed, in a script that is IN the `verify:db` gate.
 
+### Batch 6 — #258: every report printed Grant's request on its cover
+
+§6 says render and inspect the PDFs. Nothing did. Pulled the newest out of
+Storage and opened it: the body is genuinely good — heading hierarchy, a
+captioned table, running header, page numbers — and page one carried exactly
+one piece of content, *"Write me a PDF report on the coaching course modules,
+from what we hold."*, above two thirds of an empty page.
+
+Both call sites passed `subtitle: brief.slice(0, 400)`. `validatePdf` was green
+over it and correctly so: it checks structure, and a structural check cannot
+see this. `coverLine` takes the document's own opening clause instead.
+
+Then the fix had the defect CLAUDE.md warns about and **my test passed on it**:
+a 197-character cap rendered *"…client enga…"* onto the cover, and the test
+asserted the LENGTH and the ELLIPSIS, both true of that. Cuts at a word now,
+and the test asserts the word boundary. Rendered, looked at, fixed, rendered
+again.
+
+Also: I read `npm run lint`'s tail instead of its exit code and pushed a red
+tree, which is the trap CLAUDE.md records twice. Fixed in the next commit.
+
+### Batch 7 — the gate found a defect in batch 1, and the drive found another
+
+`npm run gate` (for #41) went red on `verify:proposes`, and it was right.
+
+**0490's filter ignored `p_include_fixtures`** — the parameter that has meant
+"count the harness traffic too" since 0297. The tally honours it; my splice
+put an unconditional predicate in the same WHERE clause. So the suite whose
+job is to drive the raise path got nothing. CLAUDE.md's *"loosening a
+constraint does not loosen the function that pre-checks it"*, in reverse.
+
+And while driving the fix, its last assertion caught something worse:
+**`proposals_to_send` had no harness filter at all.** 0490's splice loop
+replaced a string in three functions and asserted only that it hit ONE — the
+reader never contained that string, so it took no predicate and the loop
+reported success on two out of three. Between 0489 and 0492 a suite could have
+made the office tell Grant about a gap it invented.
+
+**A splice loop must assert per TARGET, not in total.**
+
+0492 fixes both. `verify:proposes`'s "it is in the batch to send" is inverted —
+it was asserting against a safety rule — with a real-provenance control so the
+reader cannot pass by returning nothing.
+
 ## BLOCKERS
 
-*(none)*
+The Supabase Management API is returning 429 while the gate runs against it.
+`verify:proposes` re-run is pending on that clearing; the migration itself is
+applied and its drive passed.
 
 ## NEXT ACTION
 
