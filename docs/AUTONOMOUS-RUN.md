@@ -47,9 +47,9 @@ handover report.
 | | |
 |---|---|
 | **started at** | `dc765a4` |
-| **current** | `ebbd3ec` |
+| **current** | `99feefe` |
 | **migrations** | 481 applied |
-| **`check:pressable`** | **27 → 16** |
+| **`check:pressable`** | **27 → 15** |
 | **`check:callers`** | 10 |
 
 Done so far, each proved by driving the press through the DEPLOYED gateway and
@@ -68,15 +68,37 @@ each detector deliberately broken and watched go red:
    project whose sources were disconnected could never come back.
    `npm run verify:recovery` 25/25.
 
+3. **`job_progress`, beside the Stop button** — the one screen with a Stop
+   control showed no progress at all. Named steps rather than a bar, because
+   the office does not know how many steps a job will take. `check:pressable`
+   **27 → 15**, and every survivor now carries an explicit justification, the
+   two CI readers with a measurement (`public.ci_runs` holds zero rows).
+   **Priority A is at its honest floor.**
+4. **Priority B (#41) — the deep pass.** All 34 gate suites against the
+   deployed stack: 31/34. Found `office.propose` **queued for eight hours**
+   because the deployed worker predated its handler (a migration is not a
+   deploy); found `verify:judge` accusing a working judge, and its survey mode
+   — the only way to pick a judge on evidence — dead on a type error. Report:
+   `docs/testing/e2e-2026-09-18.md`.
+5. **Priority C (#258) — the live Slack round trip.** A real question in a real
+   Slack channel, the deployed worker answering, and the link FETCHED. Found
+   that **`storagePath` had never reached a Slack message**, so every artifact
+   ever produced took the honest-degradation branch; and that **one request
+   made two reports**, because the hand-off child read the same instruction.
+   `npm run verify:artifact-slack`, 17/17, in the gate.
+
 ### Next, in order
 
-- The rest of Priority A. What is left in the baseline is **eight deliberate
-  entries** (an agent-side action, a synonym, a reader an operator uses) and
-  **three MISSING READERS**: `job_progress` (pairs with the Stop control and
-  is the strongest candidate), `ci_lately` and `ci_budget` (#17 — GitHub
-  Actions are OFF, so check whether either table holds anything before
-  building a panel for it).
-- Then B, C, D, E, F, G, H in that order.
+- **D — #172**, Gmail project intelligence joined to unified knowledge.
+- **E — #261**, the agent computer, as vertical slices.
+- **F — #259**, personal tasks.
+- **G**, the self-learning loop — evidence-based, versioned, reversible.
+- **H**, premium visual beautification with a screenshot loop.
+
+Still open on the priorities already worked: #41's §8 chaos list (100MB file,
+clock skew, two workers on one job) and the routing-breadth pattern where
+twelve of thirteen misses were decided by the literal matcher before the
+semantic layer was consulted; #258's images, DOCX and slides.
 
 ---
 
