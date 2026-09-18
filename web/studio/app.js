@@ -12426,6 +12426,29 @@ function signedInSites(p) {
             : esc(`did not work — ${a.detail ?? 'no reason given'}`)
         }</span>
         <span class="t-meta">${esc(when.words(a.at))}</span>
+        <!--
+          THE PHOTOGRAPH (#16).
+
+          The acceptance list asks for a recent screenshot, and the reader has
+          returned one since the ledger existed: nothing rendered it, so the
+          picture sat in the payload for the life of the feature. It is the
+          only honest way to show what a headless agent saw — a line of text
+          saying "read" is the office's word for it, and a photograph is not.
+
+          The link is signed by the gateway and lives ten minutes, which is
+          why it is not stored anywhere in the page: a stale one would 404
+          silently and read as a screenshot that failed to arrive.
+
+          No backticks in this comment: template literal.
+        -->
+        ${
+          a.shot_url
+            ? `<a class="bshot" href="${esc(a.shot_url)}" target="_blank" rel="noreferrer noopener"
+                 title="What the office saw on this page">
+                 <img src="${esc(a.shot_url)}" alt="A screenshot of ${esc(a.url ?? 'the page')}, taken when the office read it" loading="lazy">
+               </a>`
+            : ''
+        }
       </li>`,
       )
       .join('')}</ul>`

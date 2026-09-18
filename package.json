@@ -254,6 +254,7 @@
     "check:icons": "tsx scripts/check-icons.ts",
     "check:callers": "tsx scripts/check-callers.ts",
     "check:pressable": "tsx scripts/check-pressable.ts",
+    "check:tokens": "tsx scripts/check-tokens.ts",
     "verify:lately": "tsx scripts/verify/lately.ts",
     "slack:add-scope": "tsx scripts/slack/add-scope.ts",
     "verify:upload": "tsx scripts/verify/upload.ts",

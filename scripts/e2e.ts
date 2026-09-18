@@ -367,6 +367,20 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:pressable',
     'no gateway action ships without a control that presses it — the same defect as #72, one layer up',
   ],
+  /*
+    And the same question again, in the stylesheet.
+
+    CSS resolves an undefined custom property to nothing and carries on, so a
+    mistyped token is invisible to every other check here: not overflow, not
+    low contrast, not small type, not a dead control, and a square card is a
+    design somebody could have chosen. #124's density commit opened a block
+    above the base radius tokens and 44 rules reading `var(--r-card)` computed
+    to 0 in the default density, deployed, for a day.
+  */
+  [
+    'check:tokens',
+    'every bare var() names a token :root actually declares — #124 shipped square corners for a day',
+  ],
 ]
 
 type Result = {

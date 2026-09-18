@@ -1579,8 +1579,17 @@ Deno.serve(async (request: Request): Promise<Response> => {
     expired before anyone else could use it. The page fetches a fresh one every
     time a document is opened, so a longer life buys nothing.
   */
-  if (name === 'document' && typeof data?.path === 'string' && data.path !== '') {
-    const signed = await fetch(`${DB_URL}/storage/v1/object/sign/files/${data.path}`, {
+  /**
+   * One path, one ten-minute link, or null when it could not be signed.
+   *
+   * Extracted so the browsing ledger below can reuse it rather than growing a
+   * second copy of the same twelve lines. Never throws: a link that could not
+   * be minted degrades to the text, and a section failing entirely because a
+   * thumbnail could not be signed would be a worse product than one missing a
+   * thumbnail.
+   */
+  const signPath = async (path: string): Promise<string | null> => {
+    const signed = await fetch(`${DB_URL}/storage/v1/object/sign/files/${path}`, {
       method: 'POST',
       headers: {
         apikey: SERVICE_KEY,
@@ -1589,14 +1598,43 @@ Deno.serve(async (request: Request): Promise<Response> => {
       },
       body: JSON.stringify({ expiresIn: 600 }),
     })
-    if (signed.ok) {
-      const { signedURL } = (await signed.json()) as { signedURL?: string }
-      if (signedURL) data.url = `${DB_URL}/storage/v1${signedURL}`
-    } else {
-      // Not fatal: the reader falls back to the text, which is usually there.
-      console.error(`hq-api document: could not sign (${String(signed.status)})`)
+    if (!signed.ok) {
+      console.error(`hq-api ${name}: could not sign (${String(signed.status)})`)
+      return null
     }
+    const { signedURL } = (await signed.json()) as { signedURL?: string }
+    return signedURL ? `${DB_URL}/storage/v1${signedURL}` : null
+  }
+
+  if (name === 'document' && typeof data?.path === 'string' && data.path !== '') {
+    const url = await signPath(data.path)
+    // Not fatal: the reader falls back to the text, which is usually there.
+    if (url !== null) data.url = url
     data.path = undefined
+  }
+
+  /*
+    The screenshot of a page the office opened (#16, #135).
+
+    `app.browser_lately` has returned `shot_path` since the browsing ledger
+    existed and NOTHING has ever rendered it — #16 asks for "a recent
+    screenshot" on the Browser tab and the picture was sitting in the payload
+    the whole time, useless, because the `files` bucket is private and a raw
+    path 404s from a browser. The same defect class as a payload that gains a
+    key two of its three readers never learn about.
+
+    Signed here rather than in the page, for the reason the document branch
+    gives: signing needs the service key and the service key must never exist
+    in the browser. The raw path is dropped afterwards, so the page gets a
+    link it can follow and learns nothing about how storage is laid out.
+  */
+  if (name === 'browser_lately' && Array.isArray(data)) {
+    for (const row of data as { shot_path?: unknown; shot_url?: string | null }[]) {
+      if (typeof row.shot_path === 'string' && row.shot_path !== '') {
+        row.shot_url = await signPath(row.shot_path)
+      }
+      row.shot_path = undefined
+    }
   }
 
   return json({ section: name, data })
