@@ -69,3 +69,36 @@ lint 0 · tsc 0 · 1823 tests 0 · secrets/templates/migrations(499)/tokens 0.
 #261: prove the narrowed browser requirement end to end against the
 live suites and close/update the issue. Then #172 Gmail bodies, which
 reuses `isUntrusted` unchanged.
+
+### #261 — closed (narrowed and proved)
+
+`verify:browser` 34/34 · `verify:browse-live` 30/30 against the real
+internet · `verify:browse-asked` 10/10 · `tests/browser/**` 46/46. Every
+checklist item in the issue answered TESTED except SSRF-by-redirect
+(INFERRED — the sandbox proxy 403s before a redirect is chased) and
+screenshots/JS/sign-in through the office's own runtime, which need two
+Vault entries only Grant can set (`browser.cloudflare_account`,
+`browser.cloudflare_token`). The persistent-computer half is withdrawn,
+not done — recorded in the closing comment so nobody re-derives it from
+the title.
+
+### #172 — Gmail bodies (ead1c96, ADR-0038, migrations 0500–0502)
+
+Grant's written authorisation reopened ADR-0037. `format=full`, four
+narrowings shipped with the permission, absence as a column not a null,
+the injection fence landed first, and a disclosure line in Settings →
+Connections.
+
+Proved against real Gmail through the deployed worker (v564): 30
+messages, 16 withheld as bulk, 14 held. The quoted-chain stripper was
+wrong TWICE and neither version announced itself; once correct the
+average stored body fell from 7,354 characters to 1,006. Both traps are
+now in CLAUDE.md.
+
+verify:mail 43/43 · verify:knowledge 38/38 · 1,857 unit tests · lint,
+tsc, secrets, templates, migrations (502), tokens, callers, icons all 0.
+
+**Position:** next priority is **Google Drive** — optional one-way
+indexed knowledge source with stable source identity, incremental
+refresh, tombstoning and no duplication. Then #259 Personal Tasks, #277
+the measured prompt loop, #41, then RC1 re-qualification and the tag.
