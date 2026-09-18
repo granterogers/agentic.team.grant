@@ -477,5 +477,7 @@
   "0476_the_loop_variable_cannot_filter_its_own_query.sql": "b6e8d1641bb9f918ae9ef33b775ce7c95a6aaff67fa5dc153e05033499ad16fd",
   "0477_a_channel_it_cannot_have_asked_for_seven_hundred_times.sql": "e9e3821dde894e0ff041fecb3959e93f4b9de213af41ff2a4c262dc9277bff23",
   "0478_a_provider_you_can_see_and_cannot_act_on.sql": "293d8b9fe379fc6edb64ae78f51446d5c0ef10b8c9622898f6d1a537b7f4f8cf",
-  "0479_the_gallery_could_not_show_what_it_let_you_set.sql": "658c213f15e4bada787f1f03d84f6ffbf8bb310a1ac61f008a15e3d45e47b90b"
+  "0479_the_gallery_could_not_show_what_it_let_you_set.sql": "658c213f15e4bada787f1f03d84f6ffbf8bb310a1ac61f008a15e3d45e47b90b",
+  "0480_archiving_a_project_had_no_way_back.sql": "4f04a576ef7d2e98d0748b3783bded7fe6f958803997dc17431fc9676884c3ad",
+  "0481_a_project_with_nothing_attached_could_never_come_back.sql": "8fbcdfcc3e32af972262bd400e32693f30c6da82322145a6bfb1a24e873ca509"
 }

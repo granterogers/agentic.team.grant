@@ -242,6 +242,8 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['verify:review', 'Grant can let a made document into the project, or keep it out (#28)'],
   ['verify:proposes', 'what the office could not do becomes something Grant can answer (#49)'],
   ['verify:connectors', 'an outside provider can be added, offered and disconnected (#265)'],
+  ['verify:organising', 'tags and collections are Grant’s to set, not only an agent’s (#276)'],
+  ['verify:recovery', 'archiving, disconnecting and signing in all have a way back (#276)'],
   /*
     The index itself, and the correspondence beside it.
 

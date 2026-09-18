@@ -2052,6 +2052,35 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
   border-radius: 0 0 8px 8px; color: var(--ink-3); font-weight: 500;
 }
 
+/*
+  Archived projects, under the list (#276).
+
+  Below All projects and behind its own rule, because these are not places you
+  go — they are places you can bring back. The name is muted and the button is
+  not, which is the opposite treatment to the rows above, where the whole row
+  is the target.
+
+  `.swarchrow` is a grid rather than a flex row so a long project name
+  truncates instead of squeezing the button to one character per line, which is
+  what `.docacts` was doing on a phone in this same commit's sibling.
+*/
+.switchmenu .swarch {
+  margin-top: 4px; padding: 8px 10px 4px; border-top: 1px solid var(--edge);
+  display: grid; gap: 4px;
+}
+.swarchrow {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+}
+.swarchname {
+  font: 500 13px/1.3 var(--text); color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* All three, or the ellipsis has nothing to do — CLAUDE.md records a rule with
+   two of them splitting a tool name mid-token. */
+.switchmenu .swarch .btn {
+  width: auto; min-height: 36px; padding: 0 10px; white-space: nowrap;
+}
+
 /* --- glass, applied ---------------------------------------------------------
    Grant: "transparency affects everything... like the console of Star Trek."
 

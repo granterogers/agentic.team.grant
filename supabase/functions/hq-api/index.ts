@@ -266,6 +266,25 @@ const SECTIONS: Readonly<
   */
   review: { fn: 'awaiting_review', arg: 'p_project' },
   /*
+    THE WAY BACK FROM ARCHIVING (#276, migration 0480).
+
+    `project_unarchive` was a gateway action nothing could press, so a
+    dashboard project archived by mistake could only be recovered from SQL —
+    and Project Settings gives Grant the button that archives one.
+
+    The reader is not "every archived project". 926 of them are archived and
+    not one holds a document, a task or a contact: they are suite subjects
+    whose teardown could not delete them, and a list of those is the
+    harness-traffic-as-failure defect on the surface built for recovering from
+    a mistake. `recoverable_projects` asks whether the project HELD something,
+    which is derived rather than named and therefore cannot go stale the way
+    a list of prefixes does.
+
+    No argument: it is global, like the governance sections, because a project
+    you are trying to find is one you are not inside.
+  */
+  archived: { fn: 'recoverable_projects' },
+  /*
     How far a job got, and why it stopped (#263).
 
     Takes a JOB id rather than a project, which is why it is its own section

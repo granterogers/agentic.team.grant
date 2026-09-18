@@ -1,9 +1,7 @@
 {
   "note": "Gateway actions and read sections that nothing in web/ names (#72, one layer up). Created 2026-09-17 after `stop_job` was found unpressed since the browser work — the action existed, the database function worked, and Grant could not stop a running job. `check:pressable` fails on a NEW entry and on a baseline entry that has become pressed, so this file may only shrink. Each entry below is one of three things: a missing control, something deliberately for an agent holding the bearer token (#13), or a reader the page genuinely does not need. The `why` map says which, and an entry with no reason is an admission rather than a decision.",
   "why": {
-    "action:project_unarchive": "MISSING CONTROL. A project archived by mistake cannot be brought back from the product, only from SQL. Small and worth doing.",
     "action:revoke_tool": "A SYNONYM, not a missing control. `app.revoke_tool` deletes the `staff_tools` row; so does the team page's tick box through `staff_tool_set`, which is the control Grant actually uses and the one his own approval confirmation points at. 0472 makes the checkbox the single writer and gives it the ledger event the request path always had, so the two cannot diverge. The gateway action stays for an agent-side or scripted revoke; a second button beside a working one would be furniture.",
-    "action:reattach": "MISSING CONTROL. Re-pointing a project at a different source is a real recovery action with no button.",
     "action:say": "FOR AN AGENT. `app.say_in_project` is how something that is not a person puts a message into a project; the page has the composer, which is a different and better thing for a person.",
     "action:grant_standing": "FOR AN AGENT, and deliberately hard to reach: a standing authorization is granted by answering a blocker, where the offer states exactly what it grants (ADR-0018). A general button for it would be an approval detached from the thing approved.",
     "action:set_google_secret": "REACHED ANOTHER WAY. The Settings page posts the Google credential through its own form; this binding exists so the same value can be set without a browser.",
@@ -18,15 +16,11 @@
     "section:ci_lately": "MISSING READER (#17). CI runs and their minute cost are invisible in the product.",
     "section:ci_budget": "MISSING READER (#17). The monthly ceiling is enforced in the database and shown nowhere.",
     "section:relations": "NOT NEEDED BY THE PAGE today. The project map draws its own edges; `relations_of` is the API answer to the same question.",
-    "action:browser_session_establish": "MISSING CONTROL (#135), and blocked behind a credential rather than behind work: the Sources panel shows which sites the office is signed in to and offers no way to sign it in, because nothing can sign in until the Cloudflare account exists. Wire the control when the credential does.",
-    "action:browser_session_forget": "MISSING CONTROL (#135). Forgetting a session needs no credential and is the half worth having first: a stored cookie jar Grant cannot revoke from the product is the wrong way round for anything holding a login."
+    "action:browser_session_establish": "MISSING CONTROL (#135), and blocked behind a credential rather than behind work: the Sources panel shows which sites the office is signed in to and offers no way to sign it in, because nothing can sign in until the Cloudflare account exists. Wire the control when the credential does."
   },
   "unpressed": [
     "action:browser_session_establish",
-    "action:browser_session_forget",
     "action:grant_standing",
-    "action:project_unarchive",
-    "action:reattach",
     "action:revoke_tool",
     "action:say",
     "action:set_google_secret",

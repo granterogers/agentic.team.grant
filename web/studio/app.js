@@ -175,6 +175,15 @@ const reviewing = {}
 const browserSites = {}
 const browserSeen = {}
 let browserLeft = null
+/*
+  Archived projects worth bringing back (#276, migration 0480).
+
+  undefined = never asked, null = the ask is in flight or it failed, an array
+  means it answered. Never mocked: an invented row here would offer to
+  un-archive a project that does not exist, which is the press that cannot
+  work, and the list is empty in the ordinary case anyway.
+*/
+let recoverable
 const maps = {}
 const placed = {}
 
@@ -1640,6 +1649,8 @@ function rail() {
   const inProject = state.view === 'project'
   const p = inProject ? byId(state.project) : null
   const counts = inProject ? sectionCounts(p) : {}
+  // Asked once per page, and only for a writer: a reader has nothing to press.
+  if (canWrite()) void needRecoverable()
 
   /*
     The toggle is a SIBLING of the rail, not a child of it (#76).
@@ -1743,6 +1754,40 @@ function rail() {
             <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/></svg>
           All projects
         </button>
+        <!--
+          THE WAY BACK, where you notice it is missing (#276).
+
+          Archiving a project offers an undo for ten minutes and this is the
+          other half: the project you archived last week and have just gone
+          looking for. It is here rather than in Settings because the switcher
+          is where you find out a project is not in the list.
+
+          Drawn only when there is something on it, which today is never: 926
+          projects in this database are archived and not one holds a document,
+          a task or a contact, because archiving is what a suite teardown does
+          when it cannot delete. The reader asks whether the project HELD
+          something rather than what it is called, so the first row it ever
+          shows Grant will be one of his.
+
+          No backticks in this comment: template literal.
+        -->
+        ${
+          !canWrite() || !Array.isArray(recoverable) || recoverable.length === 0
+            ? ''
+            : `<div class="swarch" data-saidwrap>
+          <span class="t-label">Archived</span>
+          ${recoverable
+            .map(
+              (x) => `<span class="swarchrow">
+              <span class="swarchname">${esc(x.name)}</span>
+              <button class="btn small quiet" data-unarchive="${esc(x.slug)}"
+                      data-name="${esc(x.name)}">Bring it back</button>
+            </span>`,
+            )
+            .join('')}
+          <span class="t-meta" data-said></span>
+        </div>`
+        }
       </div>
     </div>
 
@@ -3604,12 +3649,29 @@ function sources(p) {
 
             No backticks in this comment: template literal.
           -->
+          <!--
+            And the way back (#276). A disconnected connector draws Reconnect
+            rather than Disconnect, because the row already says it is blocked
+            and offering to disconnect it again is furniture. The reattach
+            action has been at the gateway since 118 as the exact inverse of
+            detach, and
+            nothing named it: a source Grant switched off by mistake could only
+            be switched back on from SQL.
+
+            Not quiet, unlike its opposite: on a row the page has already drawn
+            as blocked, the one action that clears it is the point of the row.
+
+            No backticks in this comment: template literal.
+          -->
           ${canWrite() && x.id
             ? x.kind === 'reference'
               ? `<button class="btn small quiet" data-unref="${esc(x.id)}"
                    data-name="${esc(x.name)}">Remove</button>`
-              : `<button class="btn small quiet" data-detach="${esc(x.id)}"
-                   data-name="${esc(x.name)}">Disconnect</button>`
+              : x.health === 'blocked'
+                ? `<button class="btn small" data-reattach="${esc(x.id)}"
+                     data-name="${esc(x.name)}">Reconnect</button>`
+                : `<button class="btn small quiet" data-detach="${esc(x.id)}"
+                     data-name="${esc(x.name)}">Disconnect</button>`
             : ''}
         </span>
       </article>`).join('')}</div>
@@ -8473,6 +8535,97 @@ function drawShell() {
     })
   }
 
+  /*
+    Bringing an archived project back (#276).
+
+    Confirmed, even though nothing is destroyed: un-archiving restarts a
+    project Grant deliberately put away, and the sentence says the one thing
+    the RPC will NOT do — the automations it stopped stay stopped, and
+    `unarchive_project` names them in `still_off` so the confirmation after the
+    press can too. A duty that starts running again unasked is a worse surprise
+    than one that does not.
+  */
+  for (const b of root.querySelectorAll('[data-unarchive]')) {
+    b.addEventListener('click', async () => {
+      if (!sure(`Bring ${b.dataset.name} back? Anything it had running stays stopped.`)) return
+      const done = await attempt(
+        b,
+        'Bringing it back…',
+        () => act('project_unarchive', { p_slug: b.dataset.unarchive }),
+        (r) => {
+          const off = Array.isArray(r?.still_off) ? r.still_off.length : 0
+          return off === 0
+            ? `${b.dataset.name} is back.`
+            : `${b.dataset.name} is back. ${off} automation${off === 1 ? '' : 's'} stayed off.`
+        },
+      )
+      if (done) {
+        // The list is memoised and the project has just left it.
+        recoverable = undefined
+        await refresh()
+      }
+    })
+  }
+
+  /*
+    Reconnecting one (#276, #118).
+
+    No confirmation: this is the recovery, not the risk. Grant's standing rule
+    is that a DESTRUCTIVE action asks first, and asking before undoing one
+    teaches people to click through the dialog that matters.
+
+    `p_reason` is left off, which clears `disabled_reason` — the column's own
+    CHECK is `enabled or disabled_reason is not null`, so re-enabling and
+    clearing the reason have to be the same statement, and `hq_reattach`
+    already does both.
+  */
+  for (const b of root.querySelectorAll('[data-reattach]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Reconnecting…',
+        () => act('reattach', { p_attachment_id: b.dataset.reattach }),
+        `${b.dataset.name ?? 'It'} is connected again.`,
+      )
+      if (done) await refresh()
+    })
+  }
+
+  /*
+    Forgetting a signed-in site (#135, #276).
+
+    Confirmed, because it is irreversible in the way that matters: the Vault
+    row goes, and signing in again is a sign-in rather than an undo. The
+    sentence says what survives — the office keeps what it already read — so
+    the confirmation neither overstates nor understates it, which is the same
+    argument the Disconnect wording makes.
+  */
+  for (const b of root.querySelectorAll('[data-forget-site]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !sure(
+          `Forget the sign-in for ${b.dataset.name}? The office will not be able ` +
+            'to open it again until you sign it in. Nothing it already read is removed.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        'Forgetting…',
+        () => act('browser_session_forget', { p_session: b.dataset.forgetSite }),
+        (r) => String(r?.note ?? 'Forgotten.'),
+      )
+      if (done) {
+        // The block is drawn from a per-project store, not from the payload
+        // `refresh()` reloads, so the row would still say "Signed in" until
+        // something else asked. Dropped and re-asked instead.
+        delete browserSites[b.dataset.projectSlug ?? state.project]
+        await refresh()
+      }
+    })
+  }
+
   // Project → dashboard. The cover art is the shared element: it grows and
   // moves to the hero slot, and the browser pairs them by view-transition-name.
   for (const b of root.querySelectorAll('[data-open]')) {
@@ -11753,6 +11906,25 @@ function signedInSites(p) {
         <span class="t-meta">${
           b.last_alive_at ? `Last worked ${esc(when.words(b.last_alive_at))}` : 'Not used yet'
         }</span>
+        <!--
+          FORGET IT (#135, #276).
+
+          A stored cookie jar Grant cannot revoke from the product is the wrong
+          way round for anything holding a login, and until now the only way to
+          take one back was SQL. Offered only while the session HOLDS a
+          credential: once it is forgotten there is nothing left to forget, and
+          a button that would answer "there is no session by that id" is the
+          dead control this whole sweep is about.
+
+          No backticks in this comment: template literal.
+        -->
+        ${
+          canWrite() && b.session_id && b.has_credential
+            ? `<button class="btn small quiet" data-forget-site="${esc(b.session_id)}"
+                 data-name="${esc(b.site ?? 'that site')}">Forget it</button>`
+            : ''
+        }
+        <span class="t-meta" data-said></span>
       </li>`,
       )
       .join('')}</ul>
@@ -11822,6 +11994,27 @@ async function needSites(slug) {
   } catch {
     browserSites[slug] = []
     browserSeen[slug] = []
+  }
+  render()
+}
+
+/*
+  Asked once, and only for a writer (#276).
+
+  The reader is global, so this is not keyed by project — a project you are
+  trying to find is one you are not inside. It always awaits a fetch before
+  redrawing, which is what keeps it safe to call from inside `render()`: the
+  outer pass finishes first. A synchronous branch here would overwrite its own
+  output, which CLAUDE.md records happening to `needMade`.
+*/
+async function needRecoverable() {
+  if (recoverable !== undefined) return
+  recoverable = null
+  try {
+    const rows = await read('archived')
+    recoverable = Array.isArray(rows) ? rows : []
+  } catch {
+    recoverable = []
   }
   render()
 }
