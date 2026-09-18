@@ -293,11 +293,29 @@ made the office tell Grant about a gap it invented.
 it was asserting against a safety rule — with a real-provenance control so the
 reader cannot pass by returning nothing.
 
+### Batch 8 — the gate finished 32/36, and all four reds are now green
+
+`npm run gate` — 36 suites, 2,399 seconds. **32 passed.** Every one of the four
+failures was real, and three of the four were defects in a CHECK rather than in
+the product, which is this run's recurring shape.
+
+| suite | what it was |
+|---|---|
+| `verify:proposes` | **product** — 0492's two defects, above. Now **26/26**, including the debt: it was committed unverified under a 429 and re-run as the first thing after the gate. |
+| `verify:schema` | **a key I named.** `app.app_base_url -> app.base_url` — the checker reads a schema-qualified name in a function body and cannot tell a relation from a dotted string. `system_config` keys all use a DOMAIN prefix; `app.` is a schema. 0493 renames it `web.base_url`. Now **3/3**, and the live OAuth redirect still resolves through it. |
+| `verify:knowledge` | **green on re-run** — 38/38. Transient. |
+| `verify:mail` | **the test.** It probed "the cache as it is, which is stale" — true while Google's token was dead, false from the morning it was reconnected. The check and its control printed the IDENTICAL reading, which is the inert signature. Staleness is constructed inside the rollback now, and the two readings differ: `blank=["mail"] complete=false` against `blank=[] complete=true`. **30/30.** |
+
+0493 also closes the CLASS: a trigger refuses any NEW config key whose prefix
+is a live schema name. `vault.naming` is the same shape, unreferenced so far,
+and deliberately left alone rather than renamed.
+
+And I hit the backtick-in-a-comment-in-a-template-literal trap while writing
+the mail fix — two comments below one that says not to.
+
 ## BLOCKERS
 
-The Supabase Management API is returning 429 while the gate runs against it.
-`verify:proposes` re-run is pending on that clearing; the migration itself is
-applied and its drive passed.
+*(none)*
 
 ## NEXT ACTION
 

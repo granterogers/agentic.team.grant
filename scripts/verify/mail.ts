@@ -519,7 +519,27 @@ console.log('\nand what it may conclude when it cannot read the mail (#172)')
     values ((select project_id from public.projects where slug = ${lit(slug)}),
             'Priya Raman', 'priya@example.com');
 
-    -- The cache as it is, which is stale.
+    /*
+      MADE stale, rather than assumed to be.
+
+      This used to probe the cache "as it is, which is stale" — true for as
+      long as Google's refresh token was dead, and false from the morning it
+      was reconnected. The sync then ran, last seen moved to 30 minutes ago,
+      and this check went red with its control green and both printing the
+      IDENTICAL reading, which is the inert signature.
+
+      A check that fails for a routine environmental reason is one people
+      learn to ignore, and the real defect it is meant to catch hides behind
+      it. So the condition is constructed: every row is backdated inside this
+      transaction, which is rolled back. The mail_messages table carries no
+      trigger that would undo it — checked, because CLAUDE.md records a
+      backdate silently reverted by the projects touch trigger.
+
+      No backticks in this comment: it lives inside a template literal, and
+      the first draft of it broke the file exactly two comments below one
+      saying so.
+    */
+    update public.mail_messages set last_seen_at = app.now_utc() - interval '90 days';
     ${K('stale')}
 
     -- And a cache that was read a minute ago.
