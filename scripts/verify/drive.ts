@@ -422,5 +422,221 @@ await db.execute(`delete from public.projects where slug like ${lit(`driveproof%
   )
 }
 
+/*
+  --------------------------------------- a file Grant deleted in Drive (0503)
+
+  The run mandate narrows Drive to a one-way knowledge source and names what
+  that has to include: changes and deletions must update the index. Deletions
+  did not — `changesIn` discarded every `removed` and `trashed` change, with a
+  comment saying a file leaving is not something to ask Grant about. True of
+  ASKING, and false of the INDEX: the office would go on answering from a
+  document he deleted weeks ago, with nothing able to notice.
+
+  Almost nothing new was needed. `app.reconcile_vanished` has been a complete
+  connector-agnostic tombstoner since 0465, with a blast-radius guard and a
+  two-strike rule; what was missing was a caller and a folder listing. So what
+  this section proves is that the WIRING is real and correctly bounded, and
+  that both directions work — a file that leaves, and a file that comes back.
+
+  One rolled-back statement, results into a temp table, selected before the
+  rollback. The same shape the rest of this suite uses.
+*/
+{
+  const g = `drive-gone-${run}`
+  const rows = ((
+    await db.execute(`
+    begin;
+      create temp table gone_res (k text, v jsonb) on commit drop;
+      insert into public.projects (slug, name, status)
+        values (${lit(g)}, 'Drive tombstone proof', 'active');
+      insert into public.project_attachments
+        (project_id, connector, external_ref, display_name, role)
+      select project_id, 'drive', ${lit(`folder-${run}`)}, 'A watched folder', 'source'
+        from public.projects where slug = ${lit(g)};
+      insert into public.drive_watch (attachment_id, folder_id, page_token, primed, failures)
+      select attachment_id, ${lit(`folder-${run}`)}, 'tok-1', true, 0
+        from public.project_attachments
+       where connector = 'drive' and external_ref = ${lit(`folder-${run}`)};
+      insert into public.documents
+        (project_id, connector, external_parent_ref, external_ref, title, doc_type,
+         content, content_fingerprint, content_chars, fetched_at, origin, added_by, state)
+      select project_id, 'drive', ${lit(`folder-${run}`)}, x.ref, x.t, 'file',
+             x.t, encode(extensions.digest(x.t, 'sha256'), 'hex'), length(x.t),
+             app.now_utc(), 'source', 'chief-of-staff', 'approved'
+        from public.projects p,
+             /*
+               Six, not three, and the reason is the guard.
+
+               The first draft used three documents and removed two of them,
+               which is 67% of the corpus — over the 50% the blast-radius guard
+               may act on, so it correctly REFUSED and the archive check failed
+               against a mechanism that works. Validate the test before
+               believing the finding, which is the most-used rule in CLAUDE.md
+               and was needed here within a minute of writing this section.
+
+               Four bystanders keep the two departures at 33%.
+             */
+             (values (${lit(`f-stays-${run}`)}, 'The one that stays'),
+                     (${lit(`f-stays2-${run}`)}, 'Another that stays'),
+                     (${lit(`f-stays3-${run}`)}, 'A third that stays'),
+                     (${lit(`f-stays4-${run}`)}, 'A fourth that stays'),
+                     (${lit(`f-goes-${run}`)}, 'The one Grant deletes'),
+                     (${lit(`f-back-${run}`)}, 'The one that comes back')) as x(ref, t)
+       where p.slug = ${lit(g)};
+
+      -- Due, because the office holds documents for this folder and has never
+      -- listed it. The EXISTS in drive_folders_to_check is what this proves.
+      insert into gone_res
+      select 'due', jsonb_agg(jsonb_build_object('folder', folder_id, 'due', reconcile_due))
+        from app.drive_folders_to_check(0) where folder_id = ${lit(`folder-${run}`)};
+
+      -- Pass one: two of the three are still there. Marked, never hidden.
+      insert into gone_res
+      select 'pass1', jsonb_build_array(app.drive_reconcile(
+        (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
+        ${lit(`folder-${run}`)},
+        array[${lit(`f-stays-${run}`)}, ${lit(`f-stays2-${run}`)}, ${lit(`f-stays3-${run}`)}, ${lit(`f-stays4-${run}`)}]::text[]));
+      insert into gone_res
+      select 'after1', jsonb_agg(jsonb_build_object(
+        'ref', external_ref, 'state', state, 'missing', missing_since is not null))
+        from public.documents where external_parent_ref = ${lit(`folder-${run}`)};
+
+      -- Pass two: still absent. Strike two archives it.
+      insert into gone_res
+      select 'pass2', jsonb_build_array(app.drive_reconcile(
+        (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
+        ${lit(`folder-${run}`)},
+        array[${lit(`f-stays-${run}`)}, ${lit(`f-stays2-${run}`)}, ${lit(`f-stays3-${run}`)}, ${lit(`f-stays4-${run}`)}]::text[]));
+      insert into gone_res
+      select 'after2', jsonb_agg(jsonb_build_object(
+        'ref', external_ref, 'state', state, 'missing', missing_since is not null))
+        from public.documents where external_parent_ref = ${lit(`folder-${run}`)};
+
+      -- And back from the dead. Converging is symmetric or it is not
+      -- converging, which 0465 learned by driving it.
+      insert into gone_res
+      select 'pass3', jsonb_build_array(app.drive_reconcile(
+        (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
+        ${lit(`folder-${run}`)},
+        array[${lit(`f-stays-${run}`)}, ${lit(`f-stays2-${run}`)}, ${lit(`f-stays3-${run}`)}, ${lit(`f-stays4-${run}`)}, ${lit(`f-back-${run}`)}]::text[]));
+      insert into gone_res
+      select 'after3', jsonb_agg(jsonb_build_object(
+        'ref', external_ref, 'state', state, 'missing', missing_since is not null))
+        from public.documents where external_parent_ref = ${lit(`folder-${run}`)};
+
+      -- A listing that FAILED is not an empty folder.
+      insert into gone_res
+      select 'failed', jsonb_build_array(app.drive_reconcile(
+        (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
+        ${lit(`folder-${run}`)}, array[]::text[], 'drive 503: unavailable'));
+      insert into gone_res
+      select 'afterfail', jsonb_agg(jsonb_build_object('ref', external_ref, 'state', state))
+        from public.documents where external_parent_ref = ${lit(`folder-${run}`)};
+
+      -- The blast-radius guard, on an honest but empty listing.
+      insert into gone_res
+      select 'wipe', jsonb_build_array(app.drive_reconcile(
+        (select attachment_id from public.drive_watch where folder_id = ${lit(`folder-${run}`)}),
+        ${lit(`folder-${run}`)}, array[]::text[]));
+      insert into gone_res
+      select 'note', jsonb_build_array(jsonb_build_object(
+        'note', (select last_reconcile_note from public.drive_watch
+                  where folder_id = ${lit(`folder-${run}`)}),
+        'at', (select last_reconciled_at is not null from public.drive_watch
+                where folder_id = ${lit(`folder-${run}`)})));
+
+      -- And no longer due, now that it has been listed today.
+      insert into gone_res
+      select 'due2', jsonb_agg(jsonb_build_object('due', reconcile_due))
+        from app.drive_folders_to_check(0) where folder_id = ${lit(`folder-${run}`)};
+
+      select k, v from gone_res;
+    rollback;
+  `)
+  ).rows ?? []) as Record<string, unknown>[]
+
+  const got = (k: string): Record<string, unknown>[] => {
+    const raw = rows.find((r: Record<string, unknown>) => String(r.k) === k)?.v
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(v) ? (v as Record<string, unknown>[]) : []
+  }
+  const doc = (k: string, ref: string): Record<string, unknown> | undefined =>
+    got(k).find((x) => String(x.ref) === `${ref}-${run}`)
+  const verdict = (k: string): Record<string, unknown> => got(k)[0] ?? {}
+
+  ok(
+    'a folder the office holds documents for is due a listing',
+    got('due')[0]?.due === true,
+    JSON.stringify(got('due')),
+  )
+  ok(
+    'strike one MARKS an absent file and does not hide it',
+    doc('after1', 'f-goes')?.missing === true && doc('after1', 'f-goes')?.state === 'approved',
+    JSON.stringify(doc('after1', 'f-goes')),
+  )
+  ok(
+    'strike two archives it, so it stops being an answer',
+    doc('after2', 'f-goes')?.state === 'archived',
+    JSON.stringify(doc('after2', 'f-goes')),
+  )
+  ok(
+    'CONTROL: the file that never left is untouched throughout',
+    doc('after2', 'f-stays')?.state === 'approved' && doc('after2', 'f-stays')?.missing === false,
+    JSON.stringify(doc('after2', 'f-stays')),
+  )
+  /*
+    The symmetric half, which is the one 0465 shipped without and had to be
+    told about by driving it: a source that came BACK stayed archived for ever.
+  */
+  ok(
+    'CONTROL: the returning file really was archived first, so the next check means something',
+    doc('after2', 'f-back')?.state === 'archived',
+    JSON.stringify(doc('after2', 'f-back')),
+  )
+  ok(
+    'a file that comes back is answerable again',
+    doc('after3', 'f-back')?.state === 'approved' && doc('after3', 'f-back')?.missing === false,
+    JSON.stringify(doc('after3', 'f-back')),
+  )
+  ok(
+    'and the one that did not come back stays archived',
+    doc('after3', 'f-goes')?.state === 'archived',
+    JSON.stringify(doc('after3', 'f-goes')),
+  )
+  ok(
+    'a FAILED listing changes nothing, rather than deleting the folder',
+    verdict('failed').ok === false &&
+      got('afterfail').every(
+        (d) => String(d.state) !== 'archived' || String(d.ref).includes('goes'),
+      ),
+    JSON.stringify(verdict('failed')),
+  )
+  ok(
+    'and it says so in the record, so a quiet failure is visible',
+    String(verdict('note').note ?? '').includes('could not list') ||
+      String(verdict('note').note ?? '').includes('more than'),
+    String(verdict('note').note ?? '(none)').slice(0, 70),
+  )
+  /*
+    The blast-radius guard. An honest listing that comes back empty is far
+    likelier to be a broken request than a folder somebody emptied, and acting
+    on it would archive a whole project's Drive corpus in one pass.
+  */
+  ok(
+    'an empty listing is REFUSED rather than acted on',
+    verdict('wipe').ok === false && verdict('wipe').refused === true,
+    String(verdict('wipe').error ?? '(no error)').slice(0, 80),
+  )
+  ok(
+    'the timestamp is stamped even on a refusal, so it is not retried every pass',
+    verdict('note').at === true,
+  )
+  ok(
+    'and the folder is no longer due today',
+    got('due2').length === 0 || got('due2')[0]?.due === false,
+    JSON.stringify(got('due2')),
+  )
+}
+
 console.log(`\n${pass}/${pass + fail} checks passed`)
 process.exit(fail === 0 ? 0 : 1)

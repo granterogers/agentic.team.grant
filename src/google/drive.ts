@@ -315,3 +315,83 @@ export function describeKind(mime: string): string {
   if (mime.includes('sheet') || mime.includes('excel')) return 'spreadsheet'
   return 'file'
 }
+
+/**
+ * Everything in a folder, right now — the backstop the changes feed cannot be.
+ *
+ * ## Why this exists beside `changesIn`, which argues against listing
+ *
+ * The header of this file is emphatic that a folder LISTING is the wrong tool
+ * for change detection, and it is right: a renamed file reads as one deletion
+ * and one arrival, and two hundred files cost two hundred rows every ten
+ * minutes to notice nothing. None of that is retracted.
+ *
+ * It is the wrong tool for a different question. **A changes feed cannot tell
+ * you what is still there.** A `removed` change carries no file object at all,
+ * so there is nothing to attribute to a folder; a page token that expires or a
+ * pass that errors loses events permanently; and a file trashed while the
+ * office was not watching never produces a change anybody sees. So the office
+ * would go on answering from a document Grant deleted from Drive weeks ago,
+ * with nothing anywhere able to notice — which is the false-presence twin of
+ * the false-absence failure `verify:browse-live`'s text floor exists for.
+ *
+ * `app.reconcile_vanished` already solves the whole problem for NotebookLM,
+ * connector-agnostically, with a blast-radius guard and a two-strike rule. It
+ * needs one thing this file could not previously give it: the list of ids that
+ * ARE there. That is all this function is.
+ *
+ * ## The cost, and how it is bounded
+ *
+ * It is paid at most once a day per folder, by the caller, and only for a
+ * folder the office actually holds indexed documents for. The changes feed
+ * keeps doing the fast work every pass; this answers the slow question that
+ * the fast one structurally cannot.
+ */
+export async function listFolder(
+  access: GoogleAccess,
+  folderId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ readonly ids: readonly string[]; readonly error: string | null }> {
+  const ids: string[] = []
+  let token: string | null = null
+
+  // The same bound as `changesIn`, for the same reason: a page loop against a
+  // remote API is an infinite loop waiting for a bug at the other end. Twenty
+  // pages of 200 is 4,000 files, which is a folder nobody should be watching.
+  for (let page = 0; page < 20; page++) {
+    const q = `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`
+    const url =
+      `${API}/files?q=${encodeURIComponent(q)}` +
+      `&fields=${encodeURIComponent('nextPageToken,files(id)')}&pageSize=200` +
+      (token === null ? '' : `&pageToken=${encodeURIComponent(token)}`)
+
+    const r: Response = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${access.accessToken}` },
+    })
+    if (!r.ok) {
+      /*
+        A partial listing is worse than none.
+
+        `reconcile_vanished` reads absence from this list, so half a folder
+        would say half its files had been deleted — and the blast-radius guard
+        would refuse it, which is the guard working and is still a pass spent
+        reporting a failure as a refusal. The ids gathered so far are dropped
+        deliberately.
+      */
+      return { error: `drive ${String(r.status)}: ${(await r.text()).slice(0, 200)}`, ids: [] }
+    }
+    const body = (await r.json()) as {
+      files?: { id?: string }[]
+      nextPageToken?: string
+    }
+    for (const f of body.files ?? []) if (f.id !== undefined) ids.push(f.id)
+    token = body.nextPageToken ?? null
+    if (token === null) return { error: null, ids }
+  }
+  /*
+    Ran out of pages with more to come. Reported as an error rather than as a
+    short list, because a truncated listing handed to `reconcile_vanished`
+    would say every file past page twenty had been deleted.
+  */
+  return { error: 'the folder has more files than this can list in one pass', ids: [] }
+}

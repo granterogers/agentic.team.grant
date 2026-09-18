@@ -32,7 +32,7 @@
 
 import { mayAct, recordRefusal } from '../agents/approval.ts'
 import type { SqlExecutor } from '../db/executor.ts'
-import { changesIn, describeKind, driveAccess, startToken } from '../google/drive.ts'
+import { changesIn, describeKind, driveAccess, listFolder, startToken } from '../google/drive.ts'
 import { raiseBlocker } from '../inference/record.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { count } from '../text/plain.ts'
@@ -46,6 +46,8 @@ interface Watched {
   folder_id: string
   page_token: string | null
   primed: boolean
+  /** Whether today's listing backstop is owed for this folder (0503). */
+  reconcile_due: boolean
 }
 
 export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fetch): Handler {
@@ -103,6 +105,13 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
       // to say the wrong one.
       let took = 0
       let refused = 0
+      /*
+        Counted apart from `took`, because "I brought eleven new files in" and
+        "I re-read eleven files Grant had already filed" are different
+        sentences and the report must not be able to say the wrong one — the
+        same distinction `took` was split from `asked` for.
+      */
+      let refreshedFiles = 0
 
       for (const f of folders) {
         looked += 1
@@ -147,6 +156,67 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
           ).rows.map((r) => String((r as { external_ref?: string }).external_ref ?? '')),
         )
         const arrived = changes.files.filter((file) => !ours.has(file.id))
+
+        /*
+          A file the office ALREADY holds, changed in Drive, is a refresh and
+          not a question.
+
+          The filter above is right about arrivals and was silently dropping
+          this case: Grant said yes to this file once, edited it in Drive, and
+          the office went on answering from the version it read that day. It is
+          the run mandate's "changes must update the index", and asking him
+          again about a file he has already filed would be the worse of the two
+          available bugs.
+
+          Enqueued rather than read inline, so it goes through the same
+          `drive.read_file` handler as the first import and cannot drift from
+          it. `record_drive_document` fingerprints the text, so a change to a
+          file's name or its sharing settings — which Drive reports as a change
+          — costs one read and records `unchanged`.
+        */
+        const changed = changes.files.filter((file) => ours.has(file.id))
+        for (const file of changed) {
+          await db.execute(`
+            select app.enqueue_child(
+              ${lit(job.jobId)}::uuid, 'drive.read_file',
+              jsonb_build_object(
+                'project_id', ${lit(f.project_id)},
+                'folder_id', ${lit(f.folder_id)},
+                'file_id', ${lit(file.id)},
+                'title', ${lit(file.name)},
+                'mime_type', ${lit(String(file.mimeType ?? 'application/octet-stream'))}
+              ),
+              interval '0', false)
+          `)
+        }
+        refreshedFiles += changed.length
+
+        /*
+          And the deletions, which the changes feed structurally cannot report
+          (0503).
+
+          A `removed` change carries no file object, so there is nothing to
+          attribute to a folder; an expired page token loses events; a file
+          trashed while nothing was watching produces no change at all. So once
+          a day, for a folder the office actually holds documents for, the
+          folder is LISTED and `app.reconcile_vanished` — 0465's mechanism,
+          with its blast-radius guard and two-strike rule — is given the ids
+          that are still there.
+
+          A failed listing is passed through as an error rather than as an
+          empty list. Handing `{}` to the reconciler would say every document
+          in the folder had been deleted, and relying on the guard to catch the
+          caller's own mistake is how a guard becomes the only thing between a
+          failed request and a wiped corpus.
+        */
+        if (f.reconcile_due) {
+          const listed = await listFolder(access, f.folder_id, fetchImpl)
+          await db.execute(`
+            select app.drive_reconcile(${lit(f.attachment_id)}::uuid, ${lit(f.folder_id)},
+              array[${listed.ids.map((i) => lit(i)).join(', ')}]::text[],
+              ${listed.error === null ? 'null' : lit(listed.error)})
+          `)
+        }
 
         if (arrived.length === 0) {
           await db.execute(`
@@ -315,7 +385,7 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
         `)
       }
 
-      if (asked === 0 && took === 0 && refused === 0) {
+      if (asked === 0 && took === 0 && refused === 0 && refreshedFiles === 0) {
         return quiet(
           `Looked at ${count(looked, 'Drive folder', 'Drive folders')}. Nothing new.`,
           looked,
@@ -350,11 +420,24 @@ export function driveWatchHandler(db: SqlExecutor, fetchImpl: typeof fetch = fet
             'left what arrived alone and written down that I could not take it in.',
         )
       }
+      if (refreshedFiles > 0) {
+        /*
+          Said, and deliberately not announced on its own below. Re-reading a
+          file Grant already filed is the office keeping its own index honest,
+          not news — and a message every ten minutes saying "I re-read a file
+          you edited" is the hourly repetition `announce` exists to stop.
+        */
+        said.push(
+          `${count(refreshedFiles, 'file', 'files')} you had already filed ` +
+            `${refreshedFiles === 1 ? 'has' : 'have'} changed in Drive, so ` +
+            `${refreshedFiles === 1 ? 'it is' : 'they are'} being read again.`,
+        )
+      }
 
       return {
         body: said.join(' '),
         shape: 'nothing_happened',
-        facts: { changed: took > 0, looked_at: looked },
+        facts: { changed: took > 0 || refreshedFiles > 0, looked_at: looked },
         /*
           A blocker speaks for itself, and this job saying the same thing
           seconds later is the duplication the instruction handler already had
