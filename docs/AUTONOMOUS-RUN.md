@@ -47,8 +47,8 @@ handover report.
 | | |
 |---|---|
 | **started at** | `dc765a4` |
-| **current** | `99feefe` |
-| **migrations** | 481 applied |
+| **current** | `46a1e97` |
+| **migrations** | 484 applied |
 | **`check:pressable`** | **27 → 15** |
 | **`check:callers`** | 10 |
 
@@ -87,13 +87,36 @@ each detector deliberately broken and watched go red:
    made two reports**, because the hand-off child read the same instruction.
    `npm run verify:artifact-slack`, 17/17, in the gate.
 
+6. **Priority D (#172) — blocked on a credential, and said so.** Google's
+   refresh token is dead (`invalid_grant`, re-checked 07:26 on the 18th), so
+   Gmail and Calendar return nothing and `gmail.draft` cannot be exercised at
+   all. Inspection also found `tool_permissions.gmail.draft` naming
+   `src/google/mail.ts`, which has no draft function — 0298's defect, currently
+   harmless only because the row is disabled. Reported on the Issue and paged.
+   **Grant: Team HQ → Settings → Connections → Google → Reconnect.**
+7. **Priority F (#259) — My Tasks, built.** ADR-0041: a Personal Task is a
+   `tasks` row with `assigned_to_human`, a column modelled since #11, never
+   once set, read by nothing. 0482 adds labels, a reminder, recurrence and the
+   seven buckets; 0483 stops the two existing readers showing one row in two
+   lists; 0484 is the human-action bridge, fed by `connection_health` rather
+   than by `blockers` (all five open blockers are approvals, not errands).
+   Routing: "remind me Friday to…" is his, "I need you to…" is the office's,
+   decided grammatically. `verify:mytasks` **37/37**, in the gate.
+
 ### Next, in order
 
-- **D — #172**, Gmail project intelligence joined to unified knowledge.
-- **E — #261**, the agent computer, as vertical slices.
-- **F — #259**, personal tasks.
+- **E — #261**, the agent computer, as vertical slices. Note that
+  `browser_session_establish` is blocked behind the Cloudflare account, so
+  check what is independent of it first.
 - **G**, the self-learning loop — evidence-based, versioned, reversible.
 - **H**, premium visual beautification with a screenshot loop.
+- **#259's remainder**: the Vikunja provider. Deliberately not started —
+  #261's standing decision is no paid infrastructure and a Vikunja server is
+  infrastructure, so the hosting question is Grant's. ADR-0041 designs the
+  boundary.
+- **#172's remainder**: `gmail.draft` behind #131's dry run, once Google is
+  reconnected. Do not build it before then — this run found two capabilities
+  that passed every unit test and had never worked in production.
 
 Still open on the priorities already worked: #41's §8 chaos list (100MB file,
 clock skew, two workers on one job) and the routing-breadth pattern where
