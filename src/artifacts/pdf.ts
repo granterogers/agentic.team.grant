@@ -209,6 +209,21 @@ export class Page {
 
   private readonly raw: { at: number; value: string }[] = []
 
+  /**
+   * Every string this page will draw, in the order it draws them.
+   *
+   * For assertions about WORDS rather than bytes. A test that wanted to know
+   * whether the cover repeats the opening paragraph would otherwise have to
+   * decode the content stream — which means re-implementing the encoder in the
+   * test, and a test that re-implements the thing under test agrees with it by
+   * construction.
+   *
+   * Reading only: it returns a copy and the page keeps its own.
+   */
+  said(): string {
+    return this.raw.map((r) => r.value).join('\n')
+  }
+
   /** The finished content stream, as bytes. */
   stream(): Uint8Array {
     const parts: Uint8Array[] = []

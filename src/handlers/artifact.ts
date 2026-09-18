@@ -36,7 +36,7 @@
  * parses to nothing is a failure rather than an empty PDF with a cover on it.
  */
 
-import { type Block, coverLine, type Report, renderReport } from '../artifacts/report.ts'
+import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
 import { validatePdf } from '../artifacts/validate.ts'
 import type { SqlExecutor } from '../db/executor.ts'
@@ -368,7 +368,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
               // The document's own opening, not the request that asked for it.
               // See `coverLine`: every report so far printed Grant's
               // instruction on its cover above two thirds of an empty page.
-              subtitle: coverLine(draft.blocks as Block[]),
+              subtitle: coverTakes(draft.blocks as Block[]).line,
               title: String(draft.title ?? 'Report'),
             }
             const { bytes, problems } = renderReport(report)
@@ -535,7 +535,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
           })),
         ],
         // As above — the cover says what the report found, never what was asked.
-        subtitle: coverLine(drafted.blocks as Block[]),
+        subtitle: coverTakes(drafted.blocks as Block[]).line,
         title: String(drafted.title ?? 'Report'),
       }
       const again = renderReport(finalReport)
