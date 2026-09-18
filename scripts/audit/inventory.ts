@@ -150,10 +150,38 @@ await check(
   },
 )
 
+/*
+  Read from the VAULT, through the registry — not from an environment variable.
+
+  This asked `env('TELEGRAM_CHIEF_BOT_TOKEN')`, which is not where the token
+  lives and is not where the office looks for it. Grant's standing rule is
+  that secrets live in the Supabase Vault, "never in a flat environment
+  variable"; `public.telegram_bots.token_ref` is the id every reader resolves,
+  so this asks the same question they do.
+
+  An unset variable made `getMe` a request with no token at all, which
+  Telegram answers "Not Found" — so a working bot was reported DEAD from
+  whatever shell happened to lack the variable, and `Telegram / chief bot
+  token` is exactly the row that spent four days lying to Grant. That row was
+  written by a disconnect (0487) rather than by this; both had the same
+  shape, and one of them is still here.
+*/
 await check('Telegram', 'chief bot token', '✅ phone number', '—', async () => {
-  const r = (await (
-    await fetch(`https://api.telegram.org/bot${env('TELEGRAM_CHIEF_BOT_TOKEN')}/getMe`)
-  ).json()) as { ok?: boolean; result?: { username?: string }; description?: string }
+  const token = String(
+    (
+      await db.execute(
+        `select app.resolve_secret(b.token_ref) as t
+           from public.telegram_bots b
+          where b.staff_slug = 'chief-of-staff'`,
+      )
+    ).rows[0]?.t ?? '',
+  )
+  if (token === '') return { ok: false, detail: 'no chief bot token in the vault' }
+  const r = (await (await fetch(`https://api.telegram.org/bot${token}/getMe`)).json()) as {
+    ok?: boolean
+    result?: { username?: string }
+    description?: string
+  }
   return {
     ok: r.ok === true,
     detail: r.ok === true ? `@${String(r.result?.username)}` : String(r.description),

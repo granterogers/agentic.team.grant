@@ -484,5 +484,6 @@
   "0483_the_teams_work_and_grants_own_are_not_one_list.sql": "a2f0a6c6398a91a14aabcb3ffcfb5a9a40dea17d20d98c064f5659a821297812",
   "0484_a_credential_grant_has_to_fix_belongs_on_his_list.sql": "d982ecb7eca76e780d022e06b9cbb3d1f442ceffbdbc13730e524930c00bac79",
   "0485_the_connect_google_button_asked_for_a_third_of_what_it_needs.sql": "cce122e1f233607bcd60b5de545d4f9c8ce36d44f69629fb1ab326e39c689e71",
-  "0486_the_oauth_pages_have_never_rendered.sql": "0d1d044fe66eb3b0c3056556c104f8082e9b76f100103527193e11f245e254bf"
+  "0486_the_oauth_pages_have_never_rendered.sql": "0d1d044fe66eb3b0c3056556c104f8082e9b76f100103527193e11f245e254bf",
+  "0487_the_telegram_disconnect_removed_nothing_and_said_it_had.sql": "915a30ea13f57253e48d02cdac78584c0fc91d94cada70fc7471421788039823"
 }
