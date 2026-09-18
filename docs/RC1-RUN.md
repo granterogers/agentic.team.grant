@@ -132,3 +132,25 @@ the spine, then RC1 qualification and the visual pass.
 Backlog: 10 -> 5 open (#213, #172, #41, #18, #259, #261 — of which #213/#18
 are Grant's credential rotations and #259/#261 are blocked on his call).
 Genuinely actionable: **#172 Gmail, #41 the spine.**
+
+- **#172** (`05e0119`, migration 0499). Measured the live state: 206 cached
+  messages, 167 threads, **zero contacts**, and **zero mail associated with
+  any of Grant's five projects** — so the strongest tier has never fired.
+  `mailBlock` returned '' on no hits, so the model was told nothing and any
+  "nothing in your email" was a claim about a search it had never been shown.
+  `app.mail_coverage` + `mailCoverageNote` fix it, saying a different thing
+  for "no cache" and "cannot associate".
+
+  **The five questions, asked of the real office on a real project:**
+  four answers sound, and two that looked like fabrication were CORRECT —
+  "Jordan", the beta date and the dashboard redesign are all in a real Notion
+  document on that project, and "Whats App Audio From Ben" is a real notebook
+  source. I nearly filed a false P0; validating the finding first is what
+  stopped it.
+
+  One small real observation, deliberately NOT fixed: the office announced
+  "setting aside the bullet-point rule" on an answer that broke no rule. That
+  is `setAsideUnsaid` working (it REQUIRES acknowledgement) with a spurious
+  trigger. §25 says a prompt change must be measured baseline -> candidate ->
+  held-out, and a plausible edit here could easily make things worse — the
+  last session's projectSpine fix made 2 of 3 answers worse. Recorded.
