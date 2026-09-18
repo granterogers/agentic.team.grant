@@ -15,6 +15,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  BARELY_ANYTHING,
   FetchedBrowser,
   isPrivateHost,
   looksLikeAShell,
@@ -64,11 +65,19 @@ describe('the fetched browser', () => {
     expect(r.ok).toBe(false)
     expect(r.detail).toContain('JavaScript')
     /*
-      The assertion that matters. `ok: false` alone would let a caller record
-      a failure; what must never happen is `ok: true` with empty text, which a
-      handler would write down as "we looked and there was nothing".
+      The assertion that matters, stated as the PROPERTY rather than as the
+      sentence. It was `toContain('nothing here is evidence')` and went red the
+      day the detail split into two findings — this fixture is 7 characters, so
+      it takes the "not enough to be evidence" branch, and the guard was
+      working perfectly. A literal-string assertion is a wording lock, which
+      this repository has now paid for seven times.
+
+      What must never happen is `ok: true` with empty text, which a handler
+      would write down as "we looked and there was nothing".
     */
-    expect(r.detail).toContain('nothing here is evidence')
+    expect(r.ok).toBe(false)
+    expect(r.text).toBeNull()
+    expect(r.detail).toMatch(/evidence/)
   })
 
   it('and a page just over the floor is still read', async () => {
@@ -273,5 +282,62 @@ describe('a redirect is a new address, and is judged as one', () => {
     expect(sendsJarTo('example.com', 'evil.net')).toBe(false)
     // The suffix trap: notexample.com must not read as a subdomain.
     expect(sendsJarTo('example.com', 'notexample.com')).toBe(false)
+  })
+})
+
+/*
+  The shapes below are MEASURED, not invented, and that is the point.
+
+  `looksLikeAShell` required little text AND a lot of markup, so it caught a
+  heavy single-page app and missed a light one. Driven against the real
+  network, `web.telegram.org` — 1,587 bytes of html, one script, 12 characters
+  of text — came back ok:true, and the office would have reported "the page
+  says nothing" about a page it never rendered. Twelve unit tests missed it
+  because every fixture body was either comfortably real or comfortably huge.
+
+  The four rows are the live measurements the floor was chosen from. Keeping
+  them as the fixtures means the next person to move the floor has to move it
+  past a real page.
+*/
+describe('a page with nothing on it is not evidence, however small its markup', () => {
+  const MEASURED = [
+    { chars: 144, html: 559, name: 'example.com', shell: false },
+    { chars: 1534, html: 6_637, name: 'iana.org/help/example-domains', shell: false },
+    { chars: 4305, html: 526_419, name: 'vercel.com (a shell ratio, real text)', shell: false },
+    { chars: 12, html: 1_587, name: 'web.telegram.org', shell: true },
+  ]
+
+  it.each(MEASURED)('$name', ({ chars, html, shell }) => {
+    expect(looksLikeAShell('x'.repeat(chars), 'y'.repeat(html))).toBe(shell)
+  })
+
+  it('still catches the heavy shell the markup-weight rule was written for', () => {
+    expect(looksLikeAShell('x'.repeat(200), 'y'.repeat(60_000))).toBe(true)
+  })
+
+  it('keeps real margin under the smallest honest page anybody has found', () => {
+    // 144 is example.com. A floor at or above it would refuse a good page,
+    // which is what the FIRST version of this guard did.
+    expect(BARELY_ANYTHING).toBeLessThan(144)
+  })
+
+  it('says which of the two findings it made, rather than one sentence for both', async () => {
+    const tiny = await new FetchedBrowser({
+      fetchImpl: () =>
+        Promise.resolve(new Response('<html><body>hi</body></html>', { status: 200 })),
+    }).gather({ url: 'https://example.com/a', verbs: ['read'] })
+    expect(tiny.ok).toBe(false)
+    expect(tiny.detail).toContain('not enough to be evidence')
+
+    const heavy = await new FetchedBrowser({
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(`<html><body>${'x'.repeat(200)}${'<i></i>'.repeat(9_000)}</body></html>`, {
+            status: 200,
+          }),
+        ),
+    }).gather({ url: 'https://example.com/a', verbs: ['read'] })
+    expect(heavy.ok).toBe(false)
+    expect(heavy.detail).toContain('KB of markup')
   })
 })

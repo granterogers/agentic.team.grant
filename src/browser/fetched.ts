@@ -74,8 +74,38 @@ export const TOO_THIN = 400
 /** Above this much markup, `TOO_THIN` text means a shell rather than a short page. */
 export const SHELL_BYTES = 8_000
 
+/**
+ * Below this much text, the page is not evidence of anything at all.
+ *
+ * The markup-weight rule above catches a BIG shell. Driven against the real
+ * network it missed a small one: `web.telegram.org` ships 1,587 bytes of HTML
+ * and one script tag, renders 12 characters of text, and came back `ok: true`
+ * — so the office would have reported "the page says nothing" about a page it
+ * had not rendered, which is the false absence the whole guard exists to stop,
+ * arriving through the door the guard left open.
+ *
+ * Twelve characters cannot support a claim whatever the markup around them
+ * weighs, so this floor is absolute and deliberately far below the smallest
+ * honest page anybody has found: example.com renders 144. The measured gap
+ * between the two kinds is not close —
+ *
+ *     example.com                144 chars from     559 bytes   ratio 0.258
+ *     iana.org/help/example     1534 chars from   6,637 bytes   ratio 0.231
+ *     web.telegram.org            12 chars from   1,587 bytes   ratio 0.008
+ *     vercel.com                4305 chars from 526,419 bytes   ratio 0.008
+ *
+ * — and 80 sits in the empty middle of it with 64 characters of margin under
+ * the smallest real page. A ratio test would separate these four more sharply
+ * still and is deliberately NOT used: vercel.com has the ratio of a shell and
+ * 4,305 characters of perfectly real text, and refusing that would be the
+ * expensive direction. A missed shell is one unhelpful answer; a false refusal
+ * is every good answer about a page somebody wanted read.
+ */
+export const BARELY_ANYTHING = 80
+
 export function looksLikeAShell(text: string, html: string): boolean {
-  return text.trim().length < TOO_THIN && html.length > SHELL_BYTES
+  const n = text.trim().length
+  return n < BARELY_ANYTHING || (n < TOO_THIN && html.length > SHELL_BYTES)
 }
 
 /** The default ceiling, well under every free runtime's. */
@@ -264,12 +294,25 @@ export class FetchedBrowser implements BrowserAdapter {
       return done({ detail: `the site answered http ${String(status)}`, title: titleOf(html) })
     }
     if (looksLikeAShell(text, html)) {
+      /*
+        Two different sentences, because they are two different findings and a
+        report line that states the wrong cause is worse than a bare one. A
+        heavy shell is evidence the page draws itself in JavaScript. Eighty
+        characters from a small page might be that, or a holding page, or a
+        redirect stub — what can honestly be said is only that there is not
+        enough here to go on.
+      */
+      const n = text.trim().length
       return done({
         detail:
-          `only ${String(text.trim().length)} characters of text came back from ` +
-          `${String(Math.round(html.length / 1024))}KB of markup, which means the page draws ` +
-          'itself in JavaScript. This runtime does not run any, so nothing here is ' +
-          'evidence of what the page says.',
+          n < BARELY_ANYTHING
+            ? `only ${String(n)} characters of text came back, which is not enough to be ` +
+              'evidence of what the page says. It most likely draws itself in JavaScript, ' +
+              'which this runtime does not run.'
+            : `only ${String(n)} characters of text came back from ` +
+              `${String(Math.round(html.length / 1024))}KB of markup, which means the page draws ` +
+              'itself in JavaScript. This runtime does not run any, so nothing here is ' +
+              'evidence of what the page says.',
         title: titleOf(html),
       })
     }

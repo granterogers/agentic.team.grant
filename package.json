@@ -265,6 +265,7 @@
     "verify:triggers": "tsx scripts/verify/triggers.ts",
     "verify:connectors": "tsx scripts/verify/connectors.ts",
     "verify:browser": "tsx scripts/verify/browser.ts",
+    "verify:browse-live": "tsx scripts/verify/browse-live.ts",
     "verify:ci": "tsx scripts/verify/ci.ts"
   },
   "devDependencies": {
