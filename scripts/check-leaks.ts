@@ -337,6 +337,40 @@ console.log(
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
+/*
+  And what this sweep can NEVER remove (0494).
+
+  `check:leaks` is built around what it can delete, and reports a project a
+  suite should have torn down. An active fixture project that has gathered a
+  JOB is a different animal: a job can never be deleted, so
+  `app.project_delete` refuses that project for ever. It cannot be swept, it
+  cannot be failed on usefully, and it sits in Grant's switcher.
+
+  Ten of them reached him — one per gate run of `verify:recovers`, over two
+  days, before anybody looked. So the sweep now NAMES them. A warning rather
+  than a failure, deliberately: failing on something nobody can fix is how a
+  check gets ignored, and the fix belongs in the suite that created it.
+
+  This is also the caller `app.stuck_fixture_projects()` needs. It was
+  committed without one, and `check:callers` caught it before the merge —
+  which is the defect that function's own migration was written about, one
+  layer up.
+*/
+const stuck = (await db.execute('select * from app.stuck_fixture_projects()')).rows as {
+  slug: string
+  jobs: number
+  age: string
+}[]
+if (stuck.length > 0) {
+  console.log(
+    `\n  ${String(stuck.length)} active fixture project(s) hold a job and can therefore ` +
+      'never be deleted — archive them and fix the suite that made them:',
+  )
+  for (const p of stuck) {
+    console.log(`    ${p.slug} — ${String(p.jobs)} job(s), ${String(p.age).split('.')[0]} old`)
+  }
+}
+
 if (noisy.length > 0) {
   console.error(`\ncheck:leaks FAILED — harness traffic on a table Grant reads:`)
   for (const n of noisy) console.error(`  ${n}`)
