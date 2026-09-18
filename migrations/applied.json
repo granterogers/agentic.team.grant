@@ -481,5 +481,6 @@
   "0480_archiving_a_project_had_no_way_back.sql": "4f04a576ef7d2e98d0748b3783bded7fe6f958803997dc17431fc9676884c3ad",
   "0481_a_project_with_nothing_attached_could_never_come_back.sql": "8fbcdfcc3e32af972262bd400e32693f30c6da82322145a6bfb1a24e873ca509",
   "0482_personal_tasks_are_the_rows_the_office_already_had.sql": "5ba03e31c4a869790761c8aaf0c832b11311dcf2956c1a014211262a35581ccb",
-  "0483_the_teams_work_and_grants_own_are_not_one_list.sql": "a2f0a6c6398a91a14aabcb3ffcfb5a9a40dea17d20d98c064f5659a821297812"
+  "0483_the_teams_work_and_grants_own_are_not_one_list.sql": "a2f0a6c6398a91a14aabcb3ffcfb5a9a40dea17d20d98c064f5659a821297812",
+  "0484_a_credential_grant_has_to_fix_belongs_on_his_list.sql": "d982ecb7eca76e780d022e06b9cbb3d1f442ceffbdbc13730e524930c00bac79"
 }

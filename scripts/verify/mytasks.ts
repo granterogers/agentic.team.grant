@@ -441,6 +441,131 @@ check(
   )
 }
 
+// --- the human-action bridge ------------------------------------------------
+
+/*
+  #259's bridge, with the source the Issue's example implies.
+
+  > An Agent Job blocked on human action may create a LINKED but SEPARATE
+  > Personal Task… `Authorize Google Drive` for the user.
+
+  Not `blockers`: all five open ones today are APPROVALS (`Go ahead / Not
+  now`), which are decisions on the Governance page rather than errands, and
+  building the bridge there would be a mechanism with nothing feeding it.
+  `connection_health` already records what the bridge needs — that the office
+  cannot do a thing, WHO has to, and WHAT they have to do — and two of its rows
+  need Grant today while appearing nowhere he looks.
+
+  Driven in both directions. Raising is the visible half; CLEARING is the one
+  that quietly never works, and a to-do list that fills up and never empties is
+  one he stops reading.
+*/
+{
+  const probe = `Chore probe ${run}`
+  const key = `credential:${probe.toLowerCase()}:token`
+  await db.execute(`
+    insert into public.connection_health
+      (service, credential, state, detail, owner, action, checked_at)
+    values (${lit(probe)}, 'token', 'dead', 'refused, by this suite',
+            '✅ grant', 'Settings → somewhere on the web front end', app.now_utc())`)
+
+  const raised = JSON.parse(
+    String((await one(`select app.chores_for_credentials()::text as v`)).v),
+  ) as { raised?: number }
+  const open = await one(`
+    select count(*)::int as n, coalesce(max(title), '') as title,
+           coalesce(max(detail), '') as detail
+      from public.tasks where chore_key = ${lit(key)} and state <> 'done'`)
+  check(
+    'a credential the office cannot fix lands on Grant’s own list',
+    `raised ${String(raised.raised)} · ${String(open.title)}`,
+    Number(open.n) === 1 && String(open.title).includes(probe),
+  )
+  check(
+    'and it says what to do, in the office’s own words rather than "fix it"',
+    String(open.detail).slice(0, 70),
+    String(open.detail).includes('Settings'),
+  )
+  check(
+    'and it is on MY list, not in the team’s work',
+    has(
+      await bucket('all'),
+      String(
+        (
+          await one(`
+      select task_id::text as id from public.tasks
+       where chore_key = ${lit(key)} and state <> 'done'`)
+        ).id,
+      ),
+    )
+      ? 'in My Tasks'
+      : 'NOT IN MY TASKS',
+    has(
+      await bucket('all'),
+      String(
+        (
+          await one(`select task_id::text as id from public.tasks
+                      where chore_key = ${lit(key)} and state <> 'done'`)
+        ).id,
+      ),
+    ),
+  )
+
+  await db.execute(`select app.chores_for_credentials()`)
+  const twice = await one(`
+    select count(*)::int as n from public.tasks
+     where chore_key = ${lit(key)} and state <> 'done'`)
+  check(
+    'CONTROL: an hourly pass raises it once, not once an hour',
+    `${String(twice.n)} open after two passes`,
+    Number(twice.n) === 1,
+  )
+
+  /*
+    Parked is a decision, not a chore. Grant asked on 6 September for Groq,
+    OpenAI and OpenRouter to be left alone, and a chore he has already declined
+    is the fastest way to make him stop reading the list.
+
+    The probe's ACTION is a real instruction on purpose. The first version said
+    "parked at Grant's request" in both the owner and the action, so either
+    guard alone excluded it and the check could pass without the owner rule
+    working at all — a control that can pass for the wrong reason, which this
+    file has several entries about. Only the owner can exclude this one.
+  */
+  await db.execute(`
+    insert into public.connection_health
+      (service, credential, state, detail, owner, action, checked_at)
+    values (${lit(`Parked probe ${run}`)}, 'token', 'dead', 'refused, by this suite',
+            '⏸ parked', 'Settings → somewhere on the web front end', app.now_utc())`)
+  await db.execute(`select app.chores_for_credentials()`)
+  const parked = await one(`
+    select count(*)::int as n from public.tasks
+     where chore_key = ${lit(`credential:parked probe ${run}:token`)}`)
+  check(
+    'CONTROL: a credential he has parked is not a chore',
+    `${String(parked.n)} chore(s) for a parked credential`,
+    Number(parked.n) === 0,
+  )
+
+  await db.execute(`
+    update public.connection_health set state = 'ok'
+     where service = ${lit(probe)} and credential = 'token'`)
+  await db.execute(`select app.chores_for_credentials()`)
+  const cleared = await one(`
+    select count(*)::int as n from public.tasks
+     where chore_key = ${lit(key)} and state <> 'done'`)
+  check(
+    'and it takes itself off the list when the credential works again',
+    `${String(cleared.n)} still open`,
+    Number(cleared.n) === 0,
+  )
+
+  await db.execute(`
+    delete from public.tasks where chore_key like ${lit(`credential:%probe ${run}:%`)};
+    delete from public.connection_health
+     where service in (${lit(probe)}, ${lit(`Parked probe ${run}`)})`)
+}
+
 // --- the controls the page has to have --------------------------------------
 
 {

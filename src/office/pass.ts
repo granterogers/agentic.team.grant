@@ -51,6 +51,7 @@ import { calendarHandler } from '../handlers/calendar.ts'
 import { calendarTasksHandler } from '../handlers/calendar-tasks.ts'
 import { capacityHandler, fireDueDuties } from '../handlers/capacity.ts'
 import { channelsHandler } from '../handlers/channels.ts'
+import { choresHandler } from '../handlers/chores.ts'
 import { ciDispatchHandler } from '../handlers/ci-dispatch.ts'
 import { collectHandler } from '../handlers/collect.ts'
 import { driveWatchHandler } from '../handlers/drive.ts'
@@ -444,6 +445,7 @@ export const buildPass = async (
       fixture. The duty is daily and the handler is silent (0473).
     */
     proposeHandler(db),
+    choresHandler(db),
     // "Use the Notion you already have" — a configuration change the office can
     // now make, rather than one that needed a terminal (0164).
     notionAdoptHandler({ db }),
