@@ -18,6 +18,68 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+## THE MANDATE IN FORCE — 12-HOUR AUTONOMOUS COMPLETION RUN, 18 September 2026
+
+**This supersedes the backlog-to-zero mandate below it, which it continues
+rather than replaces: the priority order, the classification scheme and the
+five closing imperatives all still hold.**
+
+Grant's priorities for this run, in his order:
+
+| | |
+|---|---|
+| **A** | **#276 — drive the `check:pressable` baseline toward zero.** Retain only entries with an explicit architectural justification. *"A control that renders but has never been pressed is not verified."* |
+| **B** | **#41 — deep end-to-end proof against the DEPLOYED stack.** |
+| **C** | **#258 — artifact generation**: request → retrieve project knowledge → research → compose → generate → validate → store → deliver, PDF over Telegram. *"Do not settle for dumping model text onto white pages."* |
+| **D** | **#172 — Gmail project intelligence** joined to unified knowledge, tenant isolation, provenance and the redaction rules preserved. |
+| **E** | **#261 — the agent computer as VERTICAL SLICES**, not parallel architecture. |
+| **F** | **#259 — personal tasks.** |
+| **G** | **the self-learning loop** — evidence-based, versioned, reversible, governed. |
+| **H** | **premium visual beautification**, with a screenshot-driven loop. |
+
+The verification ladder he named, lowest to highest: static → unit →
+integration → database → browser → deployed browser → a real, safe end-to-end
+fixture. And: commit and push regularly, do not stop early, finish with a
+handover report.
+
+### Where THIS run stands
+
+| | |
+|---|---|
+| **started at** | `dc765a4` |
+| **current** | `ebbd3ec` |
+| **migrations** | 481 applied |
+| **`check:pressable`** | **27 → 16** |
+| **`check:callers`** | 10 |
+
+Done so far, each proved by driving the press through the DEPLOYED gateway and
+each detector deliberately broken and watched go red:
+
+1. **Tags and collections** (`document_tag`, `collection_put`,
+   `collection_take`) — 0479 taught `studio_documents` to carry both, the
+   document sheet grew a `.docorg` block, Project Settings lists the
+   collections it used to only describe. `npm run verify:organising` 25/25.
+   Capturing it found a phone defect in `.docacts` that had been live since
+   #152 and that no check could see.
+2. **The three ways back** (`project_unarchive`, `reattach`,
+   `browser_session_forget`) — 0480 makes archiving undoable and adds
+   `app.recoverable_projects`; **0481 fixes a real defect**: un-archiving
+   raised ADR-0014's deferred constraint at commit instead of refusing, so any
+   project whose sources were disconnected could never come back.
+   `npm run verify:recovery` 25/25.
+
+### Next, in order
+
+- The rest of Priority A. What is left in the baseline is **eight deliberate
+  entries** (an agent-side action, a synonym, a reader an operator uses) and
+  **three MISSING READERS**: `job_progress` (pairs with the Stop control and
+  is the strongest candidate), `ci_lately` and `ci_budget` (#17 — GitHub
+  Actions are OFF, so check whether either table holds anything before
+  building a panel for it).
+- Then B, C, D, E, F, G, H in that order.
+
+---
+
 ## THE MANDATE IN FORCE — BACKLOG TO ZERO, 17–18 September 2026
 
 **This supersedes every mandate below it, including the capability run of the
