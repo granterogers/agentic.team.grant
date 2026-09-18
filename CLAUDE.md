@@ -2642,6 +2642,18 @@ Each of these cost real time. They are here so they cost it once.
   error through the same fetch seam the file already uses, with a control that
   proves the real client still reaches the room.
 
+- **A settings pane fetches when it OPENS, so a capture cannot fake being
+  signed in there.** The review queue's capture works by writing a local-only
+  token and re-rendering; the same trick on the Connections tab draws nothing,
+  because `render()` does not rebuild a pane whose `canWrite()` was already
+  answered, and re-selecting the tab makes it hydrate against a server that is
+  a static file server — so the page correctly shows an office it could not
+  ask. The three provider controls are therefore absent from every sandbox
+  capture by construction, and the honest place to prove them is
+  `verify:connectors`, which presses all three through the deployed gateway.
+  Do not leave a capture that photographs the tab you came FROM: wait for the
+  section, never for a fixed pause.
+
 - **A plpgsql body is parsed, not executed, so a spliced reference to the
   loop's own record variable survives CREATE and dies on first use.** 0474
   narrowed the proposal round with `for t in select … where t.kind <> …` — `t`

@@ -6343,3 +6343,34 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .revbody { flex: 1 0 100%; }
   .revrow .btn { flex: 1 1 0; min-height: 44px; justify-content: center; }
 }
+
+/*
+  Adding an outside provider (#265, #276).
+
+  16px on the inputs and 44px of height, stated rather than inherited: `.in`
+  is styled nowhere in this stylesheet and the icon search already measured
+  13.3px for that reason, which makes iOS Safari zoom the page on focus.
+*/
+.provadd { margin-top: var(--s4); display: grid; gap: 6px; }
+.provfields { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+.provin {
+  flex: 1 1 220px; min-width: 0; min-height: 44px; padding: 0 var(--s3);
+  border: 1px solid var(--edge); border-radius: var(--r-control);
+  background: var(--ground); color: var(--ink); font: inherit; font-size: 16px;
+}
+.provin::placeholder { color: var(--ink-3); }
+.prov .btn { justify-self: start; margin-top: 4px; }
+/* The offer sits on the tool's own row, so it must not stretch it. */
+.provtools .btn { min-height: 28px; padding: 0 10px; font-size: 12.5px; }
+
+/*
+  Phone: the add-a-provider fields stack, and the offer button on a tool row
+  gets its thumb-sized target back. At the END of the file, for the reason
+  every other phone rule here is: a media query adds no specificity, and
+  source order is what decides.
+*/
+@media (max-width: 860px) {
+  .provfields { flex-direction: column; align-items: stretch; }
+  .provfields .btn { min-height: 44px; }
+  .provtools .btn { min-height: 44px; padding: 0 14px; }
+}

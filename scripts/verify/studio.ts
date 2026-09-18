@@ -174,7 +174,16 @@ for (const [size, opts] of SIZES) {
     if (size === 'desktop') {
       await page.locator('[data-settings]').click()
       await page.waitForTimeout(400)
-      for (const tab of ['models', 'behaviour', 'governance'] as const) {
+      /*
+        Connections at desktop too, for the provider grid #276 gave controls.
+
+        The list was models / behaviour / governance, so the only desktop
+        capture of Connections came from the cross-screen wall and the
+        providers section — which is below the fold — was in no desktop image
+        at all. A panel below the fold in every capture is a panel nobody has
+        judged, and these three controls change what the office can reach.
+      */
+      for (const tab of ['models', 'behaviour', 'governance', 'connections'] as const) {
         await page.locator(`[data-setting="${tab}"]`).click()
         await page.waitForTimeout(450)
         await shoot(`settings-${tab}`)
@@ -201,6 +210,29 @@ for (const [size, opts] of SIZES) {
           only irreversible controls on the page. A capture set that cannot see
           the buttons cannot judge them.
         */
+        /*
+          The providers, which are below the fold on every screen size.
+
+          A panel below the fold in every capture is a panel nobody has judged
+          — this file paid for that on the history panel — and #276 put three
+          controls down there.
+
+          What this capture CANNOT show is those three: they are drawn only for
+          a writer, and the prototype holds no token. Signing in locally was
+          tried and is worse than useless here, because the settings pane
+          fetches when it opens and there is no office behind this server, so
+          the tab renders as an office that could not be asked. The controls
+          are proved instead by `npm run verify:connectors`, which presses all
+          three through the deployed gateway.
+        */
+        if (tab === 'connections') {
+          await page.evaluate(
+            `(() => { const el = document.querySelector('.provsec');
+                      if (el !== null) el.scrollIntoView({ block: 'start' }); })()`,
+          )
+          await page.waitForTimeout(350)
+          await shoot('settings-providers')
+        }
         if (tab === 'governance' && scrolled) {
           await page.evaluate(`(() => {
             const el = document.querySelector('#settings .setbody')
@@ -597,6 +629,27 @@ for (const [size, opts] of SIZES) {
       await page.locator('[data-setting="connections"]').click()
       await page.waitForTimeout(500)
       await shoot('settings-connections')
+      /*
+        And the providers, which are below the fold on every screen size.
+
+        A panel below the fold in every capture is a panel nobody has judged —
+        this file already paid for that on the history panel — and the three
+        controls #276 added (add a provider, offer a tool, stop using one) all
+        live down there.
+      */
+      /*
+        And the providers, below the fold (#265, #276).
+
+        The three controls #276 added are drawn only for a writer, so they are
+        absent here for the same reason every other write control is absent
+        from a prototype capture. `verify:connectors` presses them.
+      */
+      await page.evaluate(
+        `(() => { const el = document.querySelector('.provsec');
+                  if (el !== null) el.scrollIntoView({ block: 'start' }); })()`,
+      )
+      await page.waitForTimeout(350)
+      await shoot('settings-providers')
       await page.locator('[data-setting="governance"]').click()
       await page.waitForTimeout(500)
       await shoot('settings-governance')

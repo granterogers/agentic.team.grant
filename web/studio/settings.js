@@ -685,20 +685,40 @@ export const MCP = { loaded: false, url: '', tools: [], clients: [], recent: [],
   them: nothing is registered yet, and a design that can only be seen once
   somebody connects something is a design nobody has judged.
 */
+/*
+  The keys are `mcp_inventory`'s own, not a prototype vocabulary.
+
+  The first version of this fallback said `healthy` and `detail` and `enabled`;
+  the payload says `last_probe_ok`, `last_probe_detail` and `usable`. With no
+  provider registered the grid was empty, so nothing ever rendered from the
+  real shape and the disagreement was invisible — which is exactly the trap
+  CLAUDE.md records about the autonomy levels: the prototype and the product
+  held two vocabularies for one thing, and only the prototype is what a capture
+  sees.
+*/
 const FALLBACK_PROVIDERS = [
   {
+    id: '00000000-0000-4000-8000-0000000000a1',
     name: 'weather-mcp', display_name: 'Weather MCP', endpoint: 'https://example.test/mcp',
-    healthy: true, discovered: 6, offered: 2, usable: 1, last_probe: '2026-09-17T09:30:00Z',
+    last_probe_ok: true, discovered: 6, offered: 2, usable: 1,
+    last_probe_at: '2026-09-17T09:30:00Z',
     tools: [
-      { name: 'get_forecast', reach: 'read', enabled: true },
-      { name: 'set_alert', reach: 'write', enabled: false },
+      { id: '00000000-0000-4000-8000-0000000000b1', name: 'get_forecast', reach: 'read',
+        offered_as: 'weather.forecast', usable: true, gone: false },
+      { id: '00000000-0000-4000-8000-0000000000b2', name: 'set_alert', reach: 'write',
+        offered_as: null, usable: false, gone: false },
     ],
   },
   {
+    id: '00000000-0000-4000-8000-0000000000a2',
     name: 'crm-mcp', display_name: 'A CRM', endpoint: 'https://example.test/crm',
-    healthy: false, discovered: 11, offered: 0, usable: 0, last_probe: '2026-09-16T22:02:00Z',
-    detail: 'it did not answer',
-    tools: [{ name: 'delete_contact', reach: 'destructive', enabled: false }],
+    last_probe_ok: false, discovered: 11, offered: 0, usable: 0,
+    last_probe_at: '2026-09-16T22:02:00Z',
+    last_probe_detail: 'it did not answer',
+    tools: [
+      { id: '00000000-0000-4000-8000-0000000000b3', name: 'delete_contact',
+        reach: 'destructive', offered_as: null, usable: false, gone: false },
+    ],
   },
 ]
 

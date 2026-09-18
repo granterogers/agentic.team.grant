@@ -673,5 +673,146 @@ section = 'a hostile provider'
   )
 }
 
+// ---------------------------------------------------------------------------
+console.log('\nand the three presses a person has (#276)')
+section = 'the presses'
+// ---------------------------------------------------------------------------
+
+/*
+  Registering, offering and revoking, through the DEPLOYED gateway.
+
+  #265 built the inventory and #276 found that nothing in the page could act on
+  it: connecting a provider meant SQL. Two of the three presses could not even
+  exist, because `mcp_inventory` returned no identifiers — 0478 added them.
+
+  Over HTTP rather than in SQL, because the defect being closed is that the
+  PAGE could not do this, and an offer may only promise what the press can
+  perform. The subject is named like debris and removed at the end.
+*/
+{
+  const bearer = String(
+    (
+      await one(
+        `select decrypted_secret as v from vault.decrypted_secrets where name = 'hq.api_token'`,
+      )
+    ).v ?? '',
+  )
+  const gateway = `https://${REF}.supabase.co/functions/v1/hq-api`
+  const press = async (
+    action: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    const r = await fetch(gateway, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, args }),
+    })
+    const body = (await r.json()) as { result?: unknown; error?: string }
+    if (!r.ok) throw new Error(body.error ?? `http ${String(r.status)}`)
+    return (body.result ?? {}) as Record<string, unknown>
+  }
+  const inventory = async (): Promise<Record<string, unknown> | undefined> => {
+    const r = await fetch(`${gateway}?section=connectors`, {
+      headers: { Authorization: `Bearer ${bearer}` },
+    })
+    const body = (await r.json()) as { data?: Record<string, unknown>[] }
+    return (body.data ?? []).find((p) => String(p.name) === `press${run}`)
+  }
+
+  const registered = await press('register_connector', {
+    p_name: `press${run}`,
+    p_endpoint: 'https://example.invalid/mcp',
+    p_display_name: `zz verify press ${run}`,
+  })
+  const seen = await inventory()
+  ok(
+    'Add a provider, through the gateway the page uses',
+    registered.error === undefined && seen !== undefined,
+    seen === undefined ? JSON.stringify(registered) : `#${String(seen.name)} is in the inventory`,
+  )
+  ok(
+    'and it grants nothing by existing',
+    Number(seen?.usable ?? -1) === 0 && Number(seen?.offered ?? -1) === 0,
+    `offered=${String(seen?.offered)} usable=${String(seen?.usable)}`,
+  )
+
+  /*
+    The ids a press needs, which the payload did not carry until 0478. Asserted
+    on their own line: without them Revoke and Offer are controls that cannot
+    be drawn, which is the shape of the defect this section closes.
+  */
+  ok(
+    'the inventory carries the ids the presses need',
+    typeof seen?.id === 'string' && String(seen?.id).length === 36,
+    String(seen?.id ?? 'NO ID'),
+  )
+
+  // A tool to offer. Recorded in SQL because discovery needs a live provider,
+  // and the endpoint above is deliberately unreachable.
+  await db.execute(`
+    select app.record_mcp_tools(
+      (select provider_id from public.mcp_providers where name = ${lit(`press${run}`)}),
+      jsonb_build_array(jsonb_build_object(
+        'name', 'look_up_weather',
+        'description', 'Return the forecast for a place.',
+        'input_schema', jsonb_build_object('type', 'object'))))`)
+  const withTool = await inventory()
+  const tool = ((withTool?.tools ?? []) as Record<string, unknown>[])[0]
+  ok(
+    'a discovered tool arrives with an id and no offer',
+    typeof tool?.id === 'string' && tool?.offered_as === null,
+    `${String(tool?.name)} — offered_as=${String(tool?.offered_as)}`,
+  )
+
+  const offered = await press('offer_connector_tool', { p_discovered: String(tool?.id) })
+  const afterOffer = await inventory()
+  ok(
+    'Offer it, and the tool is waiting for an approval rather than granted',
+    offered.error === undefined &&
+      Number(afterOffer?.offered ?? -1) === 1 &&
+      Number(afterOffer?.usable ?? -1) === 0,
+    `offered=${String(afterOffer?.offered)} usable=${String(afterOffer?.usable)}`,
+  )
+
+  const revoked = await press('revoke_connector', {
+    p_provider: String(seen?.id),
+    p_why: 'verify:connectors teardown',
+  })
+  const afterRevoke = await inventory()
+  ok(
+    'Stop using this, and the provider is revoked',
+    revoked.error === undefined && afterRevoke?.revoked_at !== null,
+    `revoked_at=${String(afterRevoke?.revoked_at ?? 'still live')}`,
+  )
+
+  /*
+    CONTROL: and the tool it delivered stops being usable.
+
+    A revoke that left a granted tool working would be the worst possible
+    version of this press — the office would go on reaching a provider Grant
+    had just disconnected.
+  */
+  ok(
+    'CONTROL: and nothing it delivered is usable afterwards',
+    Number(afterRevoke?.usable ?? -1) === 0,
+    `usable=${String(afterRevoke?.usable)}`,
+  )
+
+  await db.execute(`
+    delete from public.mcp_discovered_tools
+     where provider_id in (select provider_id from public.mcp_providers
+                            where name = ${lit(`press${run}`)});
+    delete from public.tool_permissions where delivered_by = ${lit(`mcp:press${run}`)};
+    delete from public.mcp_providers where name = ${lit(`press${run}`)};`)
+  const left = Number(
+    (
+      await one(
+        `select count(*)::int as n from public.mcp_providers where name = ${lit(`press${run}`)}`,
+      )
+    ).n,
+  )
+  ok('teardown — the probe provider is gone', left === 0, `${String(left)} left`)
+}
+
 console.log(`\n${String(pass)}/${String(pass + fail)} checks passed`)
 if (fail > 0) process.exit(1)

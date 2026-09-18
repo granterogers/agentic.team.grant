@@ -5997,10 +5997,10 @@ function connectionsTab() {
         ? `<p class="t-meta">None registered. A provider is somewhere the office can
              discover capabilities from — discovering them grants nothing on its own.</p>`
         : `<div class="provgrid">${(config.PROVIDERS?.rows ?? []).map((p) => `
-          <article class="prov ${p.healthy ? 'well' : 'unwell'}">
+          <article class="prov ${p.last_probe_ok ? 'well' : 'unwell'}">
             <b>${esc(p.display_name || p.name || '')}</b>
-            <span class="stage s-${p.healthy ? 'approved' : 'review'}">${
-              p.healthy ? 'answering' : esc(p.detail ?? 'not answering')
+            <span class="stage s-${p.last_probe_ok ? 'approved' : 'review'}">${
+              p.last_probe_ok ? 'answering' : esc(p.last_probe_detail ?? 'not answering')
             }</span>
             <span class="t-meta">${esc(String(p.discovered ?? 0))} discovered ·
               ${esc(String(p.offered ?? 0))} offered ·
@@ -6010,9 +6010,60 @@ function connectionsTab() {
               : `<ul class="provtools">${(p.tools ?? []).slice(0, 4).map((t) => `<li>
                   <code>${esc(t.name ?? '')}</code>
                   <span class="reach r-${esc(t.reach ?? 'unknown')}">${esc(t.reach ?? 'unknown')}</span>
-                  <span class="t-meta">${t.enabled ? 'granted' : 'not granted'}</span>
+                  <span class="t-meta">${
+                    t.gone ? 'gone from the provider'
+                      : t.usable ? 'granted'
+                      : t.offered_as ? 'offered, waiting on you'
+                      : 'not offered'
+                  }</span>
+                  <!--
+                    Offering is not granting, and the wording has to keep them
+                    apart: this puts the tool in front of Grant as a request he
+                    can approve on the Governance page. ADR-0018 is the whole
+                    reason the two are separate verbs.
+                  -->
+                  ${t.gone || t.offered_as || !canWrite() ? '' :
+                    `<button class="btn quiet" data-offer-tool="${esc(t.id ?? '')}"
+                       data-offer-name="${esc(t.name ?? '')}">Offer it</button>`}
                 </li>`).join('')}</ul>`}
+            ${!canWrite() ? '' :
+              `<button class="btn quiet" data-revoke-provider="${esc(p.id ?? '')}"
+                 data-provider-name="${esc(p.display_name || p.name || '')}">Stop using this
+               </button>`}
           </article>`).join('')}</div>`}
+      <!--
+        Registering one, which until now needed SQL (#265, #276).
+
+        Name and endpoint only. A provider that needs a token is NOT
+        registerable from here and the note says so plainly rather than
+        offering a box that would put a credential in a plaintext form field —
+        0359's lesson, and the reason register_mcp_provider takes a vault
+        reference rather than a secret.
+
+        Registering discovers nothing and grants nothing. The office probes
+        the endpoint, lists what it advertises, and every tool still has to be
+        offered and then approved.
+      -->
+      ${!canWrite() ? '' : `<div class="provadd">
+        <span class="t-label">Add a provider</span>
+        <p class="t-meta">The office will ask it what it can do. Nothing is granted by
+          asking. A provider that needs a token has to be connected another way —
+          this form has no box for one on purpose.</p>
+        <div class="provfields">
+          <!--
+            provin, not in. The class `in` is styled nowhere in this
+            stylesheet — the icon search measured 13.3px on its first capture
+            for exactly that reason, and anything under 16px makes iOS Safari
+            zoom the page on focus.
+          -->
+          <input class="provin" data-prov-name aria-label="Provider short name"
+            placeholder="short name, e.g. weather-mcp" />
+          <input class="provin" data-prov-endpoint aria-label="Provider endpoint"
+            placeholder="https://…/mcp" />
+          <button class="btn" data-register-provider>Add it</button>
+        </div>
+        <span class="t-meta" data-said></span>
+      </div>`}
     </section>
     <!--
       How to connect a client to this office (#91).
@@ -9169,6 +9220,89 @@ function drawShell() {
     The store entry is dropped before the refresh so the queue is re-read
     rather than redrawn from the answer to a question asked before the press.
   */
+  /*
+    Outside providers: add one, offer a tool it advertises, stop using it
+    (#265, #276).
+
+    The inventory has been readable since #265 and nothing could act on it, so
+    connecting the office to a new MCP server meant SQL. Three presses, and
+    the vocabulary between them is the point: REGISTERING asks a provider what
+    it can do, OFFERING puts one of those tools in front of Grant as a
+    request, and only APPROVING it on the Governance page grants anything.
+    ADR-0018 keeps those three apart and so does this.
+  */
+  for (const b of root.querySelectorAll('[data-register-provider]')) {
+    b.addEventListener('click', async () => {
+      const wrap = b.closest('.provadd')
+      const name = (wrap?.querySelector('[data-prov-name]')?.value ?? '').trim()
+      const endpoint = (wrap?.querySelector('[data-prov-endpoint]')?.value ?? '').trim()
+      if (name === '' || endpoint === '') {
+        say(b, 'Both a short name and an endpoint, please.', 'warn')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Asking it…',
+        () => act('register_connector', { p_name: name, p_endpoint: endpoint }),
+        (r) =>
+          r?.error
+            ? String(r.error)
+            : `Registered. Nothing is granted yet — the office will list what it advertises.`,
+      )
+      if (done) {
+        config.PROVIDERS.loaded = false
+        await refresh()
+      }
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-offer-tool]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Offering…',
+        () => act('offer_connector_tool', { p_discovered: b.dataset.offerTool }),
+        (r) =>
+          r?.error
+            ? String(r.error)
+            : `Offered — ${b.dataset.offerName} is waiting for your approval under Governance.`,
+      )
+      if (done) {
+        config.PROVIDERS.loaded = false
+        await refresh()
+      }
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-revoke-provider]')) {
+    b.addEventListener('click', async () => {
+      /*
+        Confirmed, and the sentence says what actually happens: the provider
+        stops being asked and every tool it delivered stops working. Nothing
+        about the office's own history changes, which is why this is reversible
+        by registering it again rather than destructive.
+      */
+      if (
+        !sure(
+          `Stop using ${b.dataset.providerName}? The office will not ask it anything ` +
+            'again, and any tool it delivered stops working. You can add it back later.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        'Disconnecting…',
+        () => act('revoke_connector', { p_provider: b.dataset.revokeProvider }),
+        (r) => (r?.error ? String(r.error) : `${b.dataset.providerName} is disconnected.`),
+      )
+      if (done) {
+        config.PROVIDERS.loaded = false
+        await refresh()
+      }
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-doc-approve]')) {
     b.addEventListener('click', async (e) => {
       e.stopPropagation()
@@ -12239,6 +12373,11 @@ live()
   But a screen with no capture is a screen nobody is watching, and this
   repository lost a week of visual work to exactly that once.
 
+  The provider grid (#265, #276) is here for a third reason: its three
+  controls — add a provider, offer a tool, stop using one — are drawn only for
+  a writer, and no provider is registered, so a capture without this shows an
+  empty section and none of the three.
+
   The review queue (#276) is here for the same reason and it is the stronger
   case: the block draws only when the office has MADE something nobody has
   decided about, and it carries two buttons that change the project. The
@@ -12252,5 +12391,5 @@ live()
   Nothing in the product reads this object.
 */
 if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
-  globalThis.__shots = { browserSites, browserSeen, reviewing, render }
+  globalThis.__shots = { browserSites, browserSeen, reviewing, providers: config.PROVIDERS, render }
 }
