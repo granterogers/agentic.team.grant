@@ -2695,6 +2695,85 @@ Each of these cost real time. They are here so they cost it once.
   for eighteen minutes with the answer never written. The suite had not asked.
   Assert the LIST of reasons that can be woken, not an instance of it.
 
+- **A SABOTAGE THAT DID NOT APPLY IS NOT A PASSING CONTROL.** Twice in one run
+  a sabotage silently failed — a regex that never matched because the
+  declaration sat mid-line, and a shell heredoc that broke on quoting — and
+  both times "the check did not fire" was the SABOTAGE failing rather than the
+  check working. The second one would have recorded a detector as proven
+  against #124's exact defect when it had never been shown it. **Print
+  something from the sabotage that proves it landed** (`grep -c`, a `changed:
+  True`) before believing what the check then says.
+- **A security check that cannot fail is worse than no security check, and a
+  re-render is how one gets that way.** A check asserted a pasted session jar
+  was cleared after SUBMITTING. It cannot fail: submitting calls `refresh()`,
+  which redraws the form, so the textarea being measured is a brand new node
+  that was never filled in. Removing the clearing line left it green. Assert
+  on the path where nothing re-renders — here, cancelling — and #197's rule is
+  the general form: anything you need to know about "before" has to have been
+  recorded before.
+- **A BASELINED REASON IS A CLAIM ABOUT THE PRODUCT, and two in two days were
+  false.** `section:studio` said SUPERSEDED and was fetched as the primary
+  payload. `action:browser_session_establish` said "blocked behind the
+  Cloudflare account" — and nothing about pasting a session Grant exported
+  himself needs Cloudflare, so the Sources panel listed signed-in sites and
+  offered no way to sign one in, for the life of the feature, behind an
+  excuse. A documented excuse is worse than a bare gap: it stops the next
+  person looking. Check a baseline entry's REASON the way you would check any
+  other assertion.
+- **An empty list is not the same as a list you could not read, and the UI
+  gets this wrong in the direction that lies.** `needMine`'s catch turned a
+  failed read into an empty bucket, so the screen printed *"Nothing due
+  today"* under a tab reading *"Today 3"* — the counts and the list are two
+  requests and only one had failed, with no unreachable strip because the
+  office WAS reachable. `mailBlock` did the same thing by returning '' on no
+  hits, so *"there is nothing in your email"* was a claim about a search the
+  model had never been shown. **You may say you could not look; you may not
+  say there is nothing there.** #257's rule is not about retrieval — it is
+  about every reader.
+- **And the fix for that can hide real content, so order the branches by what
+  is TRUE rather than by what is new.** The trouble flag was checked ABOVE the
+  rows, so a bucket holding three tasks rendered "could not load". Rows beat
+  everything; the flag only decides what an EMPTY list means. Found by a
+  capture reporting `rows 3, writer true, tasksInDom 0` — the store full and
+  not one row in the DOM.
+- **A capture harness that throws takes every later screen with it.** One
+  unreachable selector killed twelve captures, and a screen with no capture is
+  a screen nobody is watching — so the harness had been quietly un-watching
+  most of the product. Report the gap and carry on; list what could not be
+  captured, because an unrenderable screen is exactly the result #41 says must
+  be named rather than omitted.
+- **Anything set before an in-flight read resolves is something that read can
+  undo.** A capture wrote a fixture while `needMine` was still fetching; the
+  response landed afterwards, cleared the bucket and re-rendered. Three of
+  four passes looked broken and one caught the fixture first — **that split is
+  the signature of a race**, not of a missing control.
+- **A job kind nobody enqueues is invisible to `check:callers`.** The whole
+  browser tier — adapter, ledger, tab, sessions, budget, Stop — was unreachable
+  from any sentence Grant could say, because nothing ever created a
+  `browser.gather`. The check walks DATABASE functions and a job kind is not
+  one. When a capability ends in a job kind, grep for the `enqueue_child` that
+  starts it, and ask "how would he begin this" rather than "does this work".
+- **A provider's vocabulary is not this office's.** NotebookLM answers
+  `slide_deck` and `mind_map`; the office says `slides` and `mindmap`.
+  Adoption stored the wire word and the page fell through to it, so a slide
+  deck Grant made appeared on his Sources tab as **"slide_deck"**. Nothing
+  failed — the unknown-kind fallback did its job over a type that is not new.
+  Translate at the adapter boundary, once. And do NOT add a CHECK to enforce
+  it: a constraint would turn a genuinely new provider type into a LOST
+  artifact, which is worse than an ugly label. Assert the property instead —
+  no stored value is a word the library is KNOWN to use.
+- **A throttle is not an answer, and inside a wait loop it is not a failure
+  either.** `ManagementApiExecutor` retries a 429 five times with backoff and
+  then throws; a poll loop calling it bare died six minutes in and put a RED
+  against the office's routing in the release gate for something the office
+  did not do. Catch it, keep waiting inside the existing deadline, COUNT the
+  retries, and if the budget is spent being throttled say "could not run"
+  rather than reporting a verdict that was never reached.
+- **Read the exit code — and `$?` after a pipe is the PIPE's.** Three times in
+  one run `npm run x | tail` reported 0 while `x` exited 1, once making a
+  failing 37-suite gate look green. Redirect to a file and test `$?`, or test
+  `${PIPESTATUS[0]}`.
+
 ---
 
 ## Visual standard
