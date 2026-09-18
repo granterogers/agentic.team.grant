@@ -9,6 +9,32 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## State as of 2026-09-18 — GRANT HUMAN BETA, the first session
+>
+> **The first session driven entirely by Grant using the product.** Two reports
+> from him, four defects, two of them live for days and both invisible to every
+> gate here. Full write-up:
+> `docs/testing/handover-2026-09-18-beta.md`.
+>
+> | | |
+> |---|---|
+> | Tests | **1,716 passing** · migrations **488** |
+> | Fixed | **0486** the OAuth pages have never rendered · **0487** Telegram was never disconnected and the dashboard said it was · **0488** the same guard for Slack · **0489** the branch that speaks up was the branch the gate silenced |
+> | Deployed | `google-oauth` v377 · `hq-api` v586 · studio · `worker` |
+>
+> **The three worth remembering.** Supabase will not serve HTML from the shared
+> functions domain — it rewrites `text/html` to `text/plain` with `nosniff` —
+> so every page the OAuth function ever produced arrived as raw markup, and no
+> suite here opens a page served by an edge function. A disconnect whose
+> `delete` matched nothing still marked the dashboard `missing` and returned
+> `ok: true`, so a live, working credential read as gone for four days. And the
+> Slack rotation handler claimed `deterministic_retrieval` on the one branch
+> that calls a model, so **the branch that exists to speak up was the branch
+> the coherence gate silenced** — ten failures, nobody told, the token expired.
+>
+> Corrections to the entry below: Google is reconnected, and the Telegram chief
+> bot token was never missing.
+>
 > ## State as of 2026-09-17 (late) — the twelve-hour capability run
 >
 > Started from `68b7958`. Grant's three reserved product decisions are made and

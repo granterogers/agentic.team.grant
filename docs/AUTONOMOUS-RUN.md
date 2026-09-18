@@ -18,6 +18,38 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+## WHERE THE WORK IS NOW — beta, 18 September 2026
+
+**The completion run below is FINISHED.** What replaces it is CLAUDE.md's
+standing rule: **real usage is the primary source of behavioural findings.**
+The first beta session is written up at
+`docs/testing/handover-2026-09-18-beta.md` — two reports from Grant, four
+defects, migrations 0486–0489, all deployed.
+
+Do not start another synthetic campaign. When Grant reports something:
+investigate the canonical evidence before theorising, classify it in his
+words, fix it at the right abstraction, convert it into a permanent
+regression, and say which gates you ran.
+
+**Still open, in the order worth taking them:**
+
+1. **Slack config-token rotation** fails with `internal_error` from Slack's own
+   `tooling.tokens.rotate`. 0489 made the office able to SAY so; the cause is
+   still open, and the likeliest answer is regenerating the pair by hand.
+2. **E — #261**, the agent computer, in vertical slices. Check what is
+   independent of the Cloudflare credential first.
+3. **G**, the self-learning loop.
+4. **H**, the visual campaign.
+5. **The routing pattern**: eleven of thirteen misses are decided by the
+   literal trigram matcher before the semantic layer is consulted
+   (`docs/testing/e2e-2026-09-18.md`).
+
+**Two corrections to everything below**, which is now stale on both: Google is
+reconnected, and the Telegram chief bot token was never missing — the office
+was wrong about it for four days, which is what 0487 is.
+
+---
+
 ## THE MANDATE IN FORCE — 12-HOUR AUTONOMOUS COMPLETION RUN, 18 September 2026
 
 **This supersedes the backlog-to-zero mandate below it, which it continues
