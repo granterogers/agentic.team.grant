@@ -178,3 +178,51 @@ export const PROVENANCE_NOTE =
   'of the record. Facts Grant states ARE usable; your own earlier replies are not a ' +
   'source. If you have not been shown something, say you have no record of it, and ' +
   'never fill the gap with plausible detail.'
+
+/**
+ * How an answer was COMPOSED — read from the record, never asserted.
+ *
+ * `enforce_deterministic_claim` refuses `deterministic_retrieval` on any
+ * correlation that spent a model call, and it is right to: a claim of
+ * determinism is a claim that nothing was invented, and a handler cannot know
+ * that about a sentence a model wrote.
+ *
+ * ## Why this lives here rather than beside one of its callers
+ *
+ * It was a private helper in `handlers/instruction.ts`, whose own comment said
+ * *"one function, every caller, so the next confirmation added cannot be the
+ * fifth"*. The fifth was in another file.
+ *
+ * `handlers/slack-rotation.ts` built one `base` object with
+ * `path: 'deterministic_retrieval'` and spread it into all five of its
+ * returns. Four of those are templated and the claim is true. The fifth — the
+ * only branch that matters — calls `sayAs`, which asks a model to explain the
+ * failure to Grant. So **the moment Slack's token renewal actually failed, the
+ * office spent an inference, claimed it had not, and the gate threw the answer
+ * away.** Ten such jobs failed between 16 and 18 September, the config token
+ * expired unannounced, and the first anybody knew was a chore appearing on
+ * Grant's own task list two days later.
+ *
+ * That is the worst shape this defect has: the branch that is supposed to
+ * speak up is the branch that spends the model, so the check silences exactly
+ * the message it exists to protect.
+ *
+ * Unreadable means assume a model was called. The expensive direction is
+ * claiming an exemption the record cannot support, which fails the job and
+ * loses the answer; the cheap direction is one unnecessary review.
+ */
+export const howComposed = async (
+  db: { execute: (sql: string) => Promise<{ readonly rows: readonly Record<string, unknown>[] }> },
+  jobId: string,
+): Promise<'deterministic_retrieval' | 'inference'> =>
+  await db
+    .execute(`
+      select count(*)::int as n from public.inference_usage u
+       where u.correlation_id = (select correlation_id from public.jobs
+                                  where job_id = '${jobId.replace(/'/g, "''")}'::uuid)`)
+    .then((r) =>
+      Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0) === 0
+        ? ('deterministic_retrieval' as const)
+        : ('inference' as const),
+    )
+    .catch(() => 'inference' as const)

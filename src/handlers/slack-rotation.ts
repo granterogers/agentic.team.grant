@@ -39,6 +39,7 @@
  * recoverable problem into a locked-out app.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import type { ProviderRouter } from '../providers/router.ts'
@@ -134,33 +135,54 @@ export function slackRotationHandler(deps: SlackRotationDeps): Handler {
       )
 
       if (outcome.kind === 'failed') {
+        /*
+          THE ONE BRANCH THAT SPENDS A MODEL, and it claimed it had not.
+
+          `base` carries `path: 'deterministic_retrieval'` and is spread into
+          all five returns. Four of them are templated and the claim is true.
+          This one asks `sayAs` to explain the failure to Grant — so the moment
+          renewal actually failed, the handler spent an inference, claimed
+          determinism, and `enforce_deterministic_claim` correctly refused the
+          output and failed the job.
+
+          Ten of them failed that way between 16 and 18 September. The config
+          token expired with nobody told, because the branch that exists to
+          speak up is the branch the check silenced. Grant found out when a
+          chore appeared on his own task list.
+
+          `howComposed` reads the record instead of asserting: if anything
+          spent a model against this correlation, this is inference, and the
+          answer goes through review rather than being thrown away.
+        */
+        const body = await sayAs(db, router, 'operations-director', {
+          purpose:
+            'Tell Grant the Slack tokens could not be renewed, and what that ' +
+            'means for him. This one is worth his attention — say what he ' +
+            'has to do, if anything, and keep the link exactly as given.',
+          facts: [
+            `the renewal failed with: ${outcome.error}`,
+            outcome.needsHuman
+              ? 'the refresh token itself is dead, so retrying cannot fix it'
+              : 'the token we already hold still works until it expires, and this will retry',
+            outcome.needsHuman
+              ? 'a human must regenerate the pair at https://api.slack.com/apps under Your App Configuration Tokens'
+              : 'no action is needed from Grant yet',
+          ],
+          fallback:
+            `Could not renew the Slack tokens: ${outcome.error}\n\n` +
+            (outcome.needsHuman
+              ? 'The refresh token itself is dead, so no retry will fix it. Regenerate ' +
+                'the pair at https://api.slack.com/apps → Your App Configuration Tokens.'
+              : 'The token we hold still works until it expires, and this will be ' +
+                'tried again shortly.'),
+          // #268: attributed, so the call lands under this job KIND.
+          job: { jobId: job.jobId, correlationId: job.correlationId },
+          words: 60,
+        })
         return {
           ...base,
-          body: await sayAs(db, router, 'operations-director', {
-            purpose:
-              'Tell Grant the Slack tokens could not be renewed, and what that ' +
-              'means for him. This one is worth his attention — say what he ' +
-              'has to do, if anything, and keep the link exactly as given.',
-            facts: [
-              `the renewal failed with: ${outcome.error}`,
-              outcome.needsHuman
-                ? 'the refresh token itself is dead, so retrying cannot fix it'
-                : 'the token we already hold still works until it expires, and this will retry',
-              outcome.needsHuman
-                ? 'a human must regenerate the pair at https://api.slack.com/apps under Your App Configuration Tokens'
-                : 'no action is needed from Grant yet',
-            ],
-            fallback:
-              `Could not renew the Slack tokens: ${outcome.error}\n\n` +
-              (outcome.needsHuman
-                ? 'The refresh token itself is dead, so no retry will fix it. Regenerate ' +
-                  'the pair at https://api.slack.com/apps → Your App Configuration Tokens.'
-                : 'The token we hold still works until it expires, and this will be ' +
-                  'tried again shortly.'),
-            // #268: attributed, so the call lands under this job KIND.
-            job: { jobId: job.jobId, correlationId: job.correlationId },
-            words: 60,
-          }),
+          body,
+          path: await howComposed(db, job.jobId),
           confidence: 'high',
           announce: true,
           severity: outcome.needsHuman ? 'important' : 'routine',

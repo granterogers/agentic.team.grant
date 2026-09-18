@@ -111,6 +111,7 @@ import {
   complete,
   consulted,
   established,
+  howComposed as howComposedFrom,
   PROVENANCE_NOTE,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
@@ -302,21 +303,16 @@ interface Payload {
  * claiming an exemption the record cannot support, which fails the job; the
  * cheap direction is one unnecessary review.
  */
-const howComposed = async (
-  db: SqlExecutor,
-  jobId: string,
-): Promise<'deterministic_retrieval' | 'inference'> =>
-  await db
-    .execute(`
-      select count(*)::int as n from public.inference_usage u
-       where u.correlation_id = (select correlation_id from public.jobs
-                                  where job_id = ${lit(jobId)}::uuid)`)
-    .then((r) =>
-      Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0) === 0
-        ? ('deterministic_retrieval' as const)
-        : ('inference' as const),
-    )
-    .catch(() => 'inference' as const)
+/*
+  Moved to `agents/provenance.ts` and re-exported here (0489).
+
+  Its own comment promised "one function, every caller, so the next
+  confirmation added cannot be the fifth". The fifth turned out to be in
+  `handlers/slack-rotation.ts`, in a different file, where a private const
+  could never reach it. The definition is shared now; this name stays so the
+  four call sites below read as they did.
+*/
+const howComposed = howComposedFrom
 
 /*
   Exported for #26's tests.
