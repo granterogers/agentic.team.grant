@@ -102,3 +102,23 @@ tsc, secrets, templates, migrations (502), tokens, callers, icons all 0.
 indexed knowledge source with stable source identity, incremental
 refresh, tombstoning and no duplication. Then #259 Personal Tasks, #277
 the measured prompt loop, #41, then RC1 re-qualification and the tag.
+
+### Drive — one-way indexing, deletions included (30e9bc6, migration 0503)
+
+Inspection found that stable identity, no-duplication and fingerprinted
+refresh were already built (`app.record_drive_document`), and that
+`app.reconcile_vanished` has been a complete connector-agnostic
+tombstoner since 0465. What was missing was a caller and a folder
+listing.
+
+Two real gaps closed: a file Grant EDITS in Drive now refreshes (it was
+excluded as "not an arrival" and silently never re-read), and a file he
+DELETES now reaches the index via a once-a-day listing backstop, because
+a changes feed structurally cannot report what is still there.
+
+verify:drive 54/54, twelve new. Sabotage proved landed: 9 of 12 red with
+`drive_reconcile` neutered, green again on restore. Worker v566.
+
+**Position:** next is **#259 Personal Tasks**, then #277's measured
+prompt loop, #41, RC1 re-qualification and the tag, then the wow-factor
+design phase.
