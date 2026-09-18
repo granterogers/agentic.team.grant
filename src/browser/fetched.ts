@@ -81,6 +81,60 @@ export function looksLikeAShell(text: string, html: string): boolean {
 /** The default ceiling, well under every free runtime's. */
 export const FETCH_TIMEOUT_MS = 20_000
 
+/**
+ * How many redirects are followed before the chain is treated as a refusal.
+ *
+ * Five is generous for a real site and short enough that a loop ends in
+ * milliseconds rather than at the timeout, where it would be reported as
+ * "the page timed out" and send somebody looking at the network.
+ */
+export const MAX_HOPS = 5
+
+/**
+ * Why this address may not be fetched, or null when it may be.
+ *
+ * Extracted from the body of `gather` for one reason, and it is the whole
+ * point of this function existing: **the guard has to run on every hop, not
+ * only on the url the caller passed.** It did not. `fetch` was called with
+ * `redirect: 'follow'`, so a perfectly ordinary public url that answers 302
+ * to `http://169.254.169.254/latest/meta-data/` was chased by the runtime
+ * with nothing checking the destination, and the cloud instance metadata came
+ * back as `ok: true` with the credentials in `text` — which the gather
+ * handler then files as a project document, because a page the office read is
+ * a source.
+ *
+ * Proved with a fetch that models the chase: `reached private address: true`,
+ * `ok: true`, 600 characters of body. It could NOT be proved end to end
+ * against the real network from the build sandbox, whose egress proxy answers
+ * 403 before any redirect is chased — which is a property of the sandbox and
+ * not of production, where the worker fetches directly.
+ *
+ * One predicate, called from both places, so the first hop and the fifth are
+ * judged by identical code rather than by two readings of the same rule.
+ */
+export function whyRefused(target: URL): string | null {
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') {
+    return `${target.protocol} is not a web address`
+  }
+  if (isPrivateHost(target.hostname)) return 'that address is inside a private network'
+  return null
+}
+
+/**
+ * Whether the cookie jar may be presented to this host.
+ *
+ * The second half of the same defect. A jar resolved for `supplier.example.com`
+ * was being sent as a header on whatever the redirect chain arrived at, so a
+ * site that redirects offsite could collect Grant's session cookie for another
+ * site. A jar goes to the host it was established for, or a subdomain of it,
+ * and nowhere else — and because the header is set per hop rather than once,
+ * coming back onto the original host later in a chain still works.
+ */
+export function sendsJarTo(origin: string, host: string): boolean {
+  const h = host.toLowerCase()
+  return h === origin || h.endsWith(`.${origin}`)
+}
+
 const cookieHeader = (cookies: readonly Cookie[] | undefined): string =>
   (cookies ?? []).map((c) => `${c.name}=${c.value}`).join('; ')
 
@@ -137,12 +191,8 @@ export class FetchedBrowser implements BrowserAdapter {
     } catch {
       return done({ detail: 'that is not a url' })
     }
-    if (target.protocol !== 'https:' && target.protocol !== 'http:') {
-      return done({ detail: `refused: ${target.protocol} is not a web address` })
-    }
-    if (isPrivateHost(target.hostname)) {
-      return done({ detail: 'refused: that address is inside a private network' })
-    }
+    const refused = whyRefused(target)
+    if (refused !== null) return done({ detail: `refused: ${refused}` })
 
     if (await request.stopped?.()) {
       return done({ detail: 'stopped before it started', ok: false, stopped: true })
@@ -153,24 +203,48 @@ export class FetchedBrowser implements BrowserAdapter {
       () => control.abort(),
       Math.min(request.timeoutMs ?? FETCH_TIMEOUT_MS, FETCH_TIMEOUT_MS),
     )
+    const origin = target.hostname.toLowerCase()
     let status = 0
     let html = ''
     try {
-      const jar = cookieHeader(request.cookies)
-      const response = await this.fetchImpl(target.toString(), {
-        headers: {
-          accept: 'text/html,application/xhtml+xml',
-          // Named honestly. A runtime that lies about what it is makes every
-          // rate limit and every block impossible for a site owner to reason
-          // about, and #16 is about being legible.
-          'user-agent': 'AgenticTeam/1.0 (+https://ai-team-hq.vercel.app)',
-          ...(jar === '' ? {} : { cookie: jar }),
-        },
-        redirect: 'follow',
-        signal: control.signal,
-      })
-      status = response.status
-      html = await response.text()
+      let hop = target
+      for (let n = 0; ; n++) {
+        if (n > MAX_HOPS)
+          return done({ detail: `refused: more than ${String(MAX_HOPS)} redirects` })
+        const response = await this.fetchImpl(hop.toString(), {
+          headers: {
+            accept: 'text/html,application/xhtml+xml',
+            // Named honestly. A runtime that lies about what it is makes every
+            // rate limit and every block impossible for a site owner to reason
+            // about, and #16 is about being legible.
+            'user-agent': 'AgenticTeam/1.0 (+https://ai-team-hq.vercel.app)',
+            ...(sendsJarTo(origin, hop.hostname) && cookieHeader(request.cookies) !== ''
+              ? { cookie: cookieHeader(request.cookies) }
+              : {}),
+          },
+          redirect: 'manual',
+          signal: control.signal,
+        })
+        const location =
+          response.status >= 300 && response.status < 400 ? response.headers.get('location') : null
+        if (location === null) {
+          status = response.status
+          html = await response.text()
+          break
+        }
+        let next: URL
+        try {
+          next = new URL(location, hop)
+        } catch {
+          return done({ detail: 'the site redirected somewhere that is not a url' })
+        }
+        const refusal = whyRefused(next)
+        if (refusal !== null) return done({ detail: `refused after a redirect: ${refusal}` })
+        if (await request.stopped?.()) {
+          return done({ detail: 'stopped part way through', stopped: true })
+        }
+        hop = next
+      }
     } catch (error) {
       const why = (error as Error).name === 'AbortError' ? 'timed out' : 'could not be reached'
       return done({ detail: `the page ${why}` })

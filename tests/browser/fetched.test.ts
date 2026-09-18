@@ -13,13 +13,16 @@
  * about a page it could not render is the false-absence defect #257 exists
  * about, arriving through a new door.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   FetchedBrowser,
   isPrivateHost,
   looksLikeAShell,
+  MAX_HOPS,
   SHELL_BYTES,
+  sendsJarTo,
   TOO_THIN,
+  whyRefused,
 } from '../../src/browser/fetched.ts'
 
 const page = (body: string, status = 200): typeof fetch =>
@@ -171,5 +174,104 @@ describe('the fetched browser', () => {
       verbs: ['read'],
     })
     expect(JSON.stringify(r)).not.toContain('SUPERSECRETVALUE')
+  })
+})
+
+/*
+  The guard ran ONCE, on the url the caller passed, and then `fetch` chased
+  every redirect itself.
+
+  So an ordinary public address answering 302 to the cloud metadata endpoint
+  walked straight past it, and the instance credentials came back as `ok:
+  true` with the body in `text` — which the gather handler files as a project
+  document, because a page the office read is a source. The unit tests above
+  could not see it: every one of them fetches a url that answers directly.
+
+  These four are the property and its controls, in both directions. Refusing
+  a redirect is easy to get right by refusing all of them, so the second case
+  is the one that stops the fix being a regression.
+*/
+describe('a redirect is a new address, and is judged as one', () => {
+  const hops: string[] = []
+  const jarFor: Record<string, string | null> = {}
+
+  /** A network whose every entry in `plan` answers 302 to the value. */
+  const net =
+    (plan: Record<string, string>): typeof fetch =>
+    (input, init) => {
+      const url = new URL(String(input))
+      hops.push(url.host)
+      jarFor[url.host] = new Headers(init?.headers).get('cookie')
+      const to = plan[url.host + url.pathname]
+      return Promise.resolve(
+        to === undefined
+          ? new Response(`<html><body>${'x'.repeat(600)}</body></html>`, { status: 200 })
+          : new Response(null, { headers: { location: to }, status: 302 }),
+      )
+    }
+
+  beforeEach(() => {
+    hops.length = 0
+    for (const k of Object.keys(jarFor)) delete jarFor[k]
+  })
+
+  it('refuses a public page that redirects to the cloud metadata address', async () => {
+    const r = await new FetchedBrowser({
+      fetchImpl: net({ 'pub.example.com/go': 'http://169.254.169.254/latest/meta-data/' }),
+    }).gather({ url: 'https://pub.example.com/go', verbs: ['read'] })
+
+    expect(r.ok).toBe(false)
+    expect(r.detail).toContain('private network')
+    // The address was never reached at all, rather than reached and discarded.
+    expect(hops).not.toContain('169.254.169.254')
+  })
+
+  it('still follows an ordinary redirect, so the refusal is about the destination', async () => {
+    const r = await new FetchedBrowser({
+      fetchImpl: net({ 'pub.example.com/go': 'https://pub.example.com/there' }),
+    }).gather({ url: 'https://pub.example.com/go', verbs: ['read'] })
+
+    expect(r.ok).toBe(true)
+    expect(r.text?.length ?? 0).toBeGreaterThan(400)
+    expect(hops).toHaveLength(2)
+  })
+
+  it('does not hand the cookie jar to a host the chain redirected to', async () => {
+    await new FetchedBrowser({
+      fetchImpl: net({ 'supplier.example.com/a': 'https://evil.example.net/collect' }),
+    }).gather({
+      cookies: [{ domain: 'supplier.example.com', name: 'sid', value: 'SUPERSECRETVALUE' }],
+      url: 'https://supplier.example.com/a',
+      verbs: ['read'],
+    })
+
+    expect(jarFor['supplier.example.com']).toContain('sid=')
+    expect(jarFor['evil.example.net']).toBeNull()
+  })
+
+  it('ends a redirect loop as a refusal rather than as a timeout', async () => {
+    const r = await new FetchedBrowser({
+      fetchImpl: net({ 'pub.example.com/go': 'https://pub.example.com/go' }),
+    }).gather({ url: 'https://pub.example.com/go', verbs: ['read'] })
+
+    expect(r.ok).toBe(false)
+    // "timed out" would send somebody looking at the network for a fault that
+    // is in the page's own redirect chain.
+    expect(r.detail).toContain('redirects')
+    expect(hops.length).toBe(MAX_HOPS + 1)
+  })
+
+  it('judges the first hop and a later hop with the same predicate', () => {
+    expect(whyRefused(new URL('http://169.254.169.254/'))).toContain('private network')
+    expect(whyRefused(new URL('file:///etc/passwd'))).toContain('not a web address')
+    expect(whyRefused(new URL('https://example.com/a'))).toBeNull()
+  })
+
+  it('sends a jar to its own host and its subdomains, and nowhere else', () => {
+    expect(sendsJarTo('example.com', 'example.com')).toBe(true)
+    expect(sendsJarTo('example.com', 'shop.example.com')).toBe(true)
+    expect(sendsJarTo('example.com', 'evil.net')).toBe(false)
+    // The suffix trap: notexample.com must not read as a subdomain.
+    expect(sendsJarTo('example.com', 'notexample.com')).toBe(false)
   })
 })
