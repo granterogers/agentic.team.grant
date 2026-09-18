@@ -376,12 +376,33 @@ export async function readFolder(
     latest_migration?: string
   }
 
+  /*
+    Eight at a time.
+
+    One object per table means 240 round trips where the single file needed
+    two, and the first run of this took over fifteen minutes with nothing
+    printed — `backup:rehearse` is in the `verify:db` gate, so that is a
+    regression in a thing people wait for. Sequential was never a requirement;
+    it was just the shape the single file left behind.
+
+    Eight rather than all of them at once: Storage is on the same free project
+    the office runs on, and a burst of 240 concurrent requests is a good way
+    to discover a rate limit during a restore rehearsal.
+  */
   const data: Record<string, unknown[]> = {}
-  for (const key of folder.tables) {
-    const bytes = await verified(key)
-    if (bytes === null) continue
-    const one = (await readArchive(bytes)) as { table?: string; rows?: unknown[] }
-    if (typeof one.table === 'string') data[one.table] = one.rows ?? []
+  const BATCH = 8
+  for (let i = 0; i < folder.tables.length; i += BATCH) {
+    const slice = folder.tables.slice(i, i + BATCH)
+    const got = await Promise.all(
+      slice.map(async (key) => {
+        const bytes = await verified(key)
+        if (bytes === null) return null
+        return (await readArchive(bytes)) as { table?: string; rows?: unknown[] }
+      }),
+    )
+    for (const one of got) {
+      if (one !== null && typeof one.table === 'string') data[one.table] = one.rows ?? []
+    }
   }
 
   return {

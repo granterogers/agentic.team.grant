@@ -162,13 +162,15 @@ if (folder !== null) {
   )
 }
 
+/*
+  Both branches above already said this, each in its own words — the folder one
+  counts objects and the legacy one counts a file. Saying it a third time here
+  printed the line TWICE in the first real run, which is the report-line defect
+  CLAUDE.md records: a reader who sees an impossible line learns to skim the
+  whole report.
+*/
 const data = archive.data ?? {}
 const tables = Object.keys(data)
-record(
-  'it decompresses into something with tables in it',
-  `${String(tables.length)} table(s), taken at migration ${String(archive.latest_migration)}`,
-  tables.length > 0,
-)
 
 /*
   Two different questions, which the first version of this check confused.

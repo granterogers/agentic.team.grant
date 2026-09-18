@@ -222,9 +222,32 @@ more than one table.
   `verify:db` gate — working, preferring a folder and falling back to the
   legacy single files still in the bucket.
 
-**Observed live:** attempt 1 banked **111 of 120 steps** before the function
-was killed, which is the mechanism working. Waiting on the lease to expire so
-recovery resumes it at step 112.
+**PROVED END TO END.** Attempt 1 banked **111 of 120 steps** before the
+function was killed; the lease expired, `app.recover_stalled_jobs` moved it to
+`retrying`, and **attempt 2 finished all 120**. The office's own report:
+
+> Backed up **107,255 rows across 119 tables** — 9627KB compressed, one object
+> per table in `backups/run-9d15a37f-…`
+
+Then `npm run backup:rehearse` against that folder:
+
+```
+✅ there is a backup to restore from — folder run-9d15a37f-…, 119 table object(s)
+✅ every object in it is the one that was written, byte for byte — 120 object(s) checksum clean
+✅ the next backup would contain every table in the database — 119 table(s), none skipped
+✅ the rows load back into a database — 107255 of 107255 row(s) restored into restore_rehearsal
+✅ and every table came back with the number of rows the archive claims — 94 table(s), every count matched
+```
+
+**The first backup to complete since 16 September, and the first restore ever
+rehearsed from one.**
+
+Two defects of my own, found by running it rather than reading it:
+`ensureBucket` answers with what it DID, so the first message told Grant his
+backup was in `already private/run-…`, which is not a place; and the rehearsal
+printed the same line twice. Both fixed. The reads are batched eight at a
+time — 240 sequential round trips took over fifteen minutes with nothing
+printed, in a script that is IN the `verify:db` gate.
 
 ## BLOCKERS
 

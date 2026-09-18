@@ -33,6 +33,7 @@
  */
 
 import {
+  BUCKET,
   backupPrefix,
   buildManifest,
   dumpTable,
@@ -112,7 +113,15 @@ export function backupHandler(deps: BackupDeps): Handler {
         would park the job on the first interruption, which is the one thing
         this change exists to stop.
       */
-      const bucket = await ensureBucket(projectRef, serviceKey)
+      /*
+        `ensureBucket` answers with what it DID — "already private", or
+        "created private" — not with a name. The first version of the folder
+        message interpolated it as a path and told Grant his backup was in
+        `already private/run-…`, which is not a place. The bucket's name is
+        the constant.
+      */
+      const bucketState = await ensureBucket(projectRef, serviceKey)
+      const bucket = BUCKET
       const prefix = backupPrefix(job.jobId)
       const tables = await tablesToBackUp(db)
 
@@ -182,7 +191,7 @@ export function backupHandler(deps: BackupDeps): Handler {
           `${count(tables.length, 'table', 'tables')} — ` +
           `${String(Math.round(bytes / 1024))}KB compressed, one object per table in ` +
           `${bucket}/${prefix}.\n\n` +
-          `${count(kept.length, 'copy is', 'copies are')} kept. ` +
+          `${count(kept.length, 'copy is', 'copies are')} kept (${bucketState}). ` +
           'Nothing is ever deleted automatically.\n\n' +
           'It holds no credentials, and it lives in the same Supabase project it ' +
           'came from — so it survives losing the code or this machine, and not ' +
