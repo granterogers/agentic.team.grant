@@ -146,3 +146,28 @@ outstanding.** ADR-0041's provider boundary stays drawn.
 **Position:** next is **#277** (measured prompt loop), then **#41**, then
 RC1 qualification → fast-forward merge → tag v1.0.0-rc.1 → deploy/verify,
 then the wow-factor design phase with all remaining time.
+
+### #277 — measured, candidate REJECTED (51cb4ad)
+
+The clause was inline in a 200-line prompt and could only be argued about.
+Extracted to `say-what-you-dropped.ts` as a named constant with the
+candidate beside it. Two mechanical detectors (`brokeAForm`,
+`narratesSetAside`) count BOTH defects, because either alone is trivially
+optimisable into the other.
+
+**spurious 0 in every arm of every run** — 80 opportunities, zero. The
+candidate never improved it and worsened `silent` (1 → 2-3). Baseline
+retained, live, untouched.
+
+The instrument was wrong three times before the product was wrong once,
+and two of its three blind spots fell on the candidate's side. The
+direction held across all three versions, which is what makes the verdict
+worth anything.
+
+#277 left OPEN: an observed defect that did not reproduce is an open
+question. `npm run verify:form-rules [--both]`, not in the gate.
+
+**Position:** RC1 qualification now — full gate with real exit codes,
+then (authorised) fast-forward merge → main → annotated tag
+v1.0.0-rc.1 → push → verify remote SHA → deploy/verify → release smoke.
+Then the wow-factor design phase with all remaining time.
