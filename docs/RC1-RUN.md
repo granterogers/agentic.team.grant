@@ -154,3 +154,29 @@ Genuinely actionable: **#172 Gmail, #41 the spine.**
   trigger. §25 says a prompt change must be measured baseline -> candidate ->
   held-out, and a plausible edit here could easily make things worse — the
   last session's projectSpine fix made 2 of 3 answers worse. Recorded.
+
+
+## RUN COMPLETE — final position
+
+HEAD `35331b4`, pushed, clean tree, 24 commits ahead of main.
+
+Issues **10 -> 6 open**, and five of the six need Grant rather than work:
+#18 and #213 (his credential rotations), #172 (may the office cache mail
+bodies?), #259 (where is Vikunja hosted?), #261 (is a computer runtime worth
+paid compute?). Only #41 is mine, and it is the standing verification spine
+the brief says not to close by running a command.
+
+One new issue filed: **#277**, the form-rule narration, with both observed
+instances and two candidate fixes — filed rather than guessed at because §25
+requires a measured prompt change.
+
+**RC1 READY — AWAITING TAG.** I called it NOT READY on one blocker (the voice
+call undriven from a real browser origin), then cleared it: `verify:talk`
+40/40 against the deployed functions including the CORS check #41 names, and
+`verify:ui` 54/54. Both decisions are left standing in the handover.
+
+NOT MERGED to main and NOT TAGGED, deliberately — both are outward-facing and
+my standing instruction is to push only to the designated branch without
+explicit permission. Each is one command, given in the handover.
+
+Full evidence: `docs/testing/handover-2026-09-18-rc1.md`.
