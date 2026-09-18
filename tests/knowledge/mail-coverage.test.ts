@@ -67,6 +67,9 @@ describe('an empty inbox answer says WHICH kind of empty it is', () => {
     const hit = {
       excerpt: 'The renewal is due at the end of the month.',
       from: 'ben@hartleyco.com',
+      body: null,
+      bodyTruncated: false,
+      withheld: null,
       matched: 'ben@hartleyco.com',
       messageId: 'm1',
       sentAt: '2026-09-10T09:00:00Z',

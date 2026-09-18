@@ -84,9 +84,32 @@ export function mailHandler(db: SqlExecutor): Handler {
         // A cache that could not be pruned is a cache, not an outage.
       }
 
+      /*
+        And the bodies, earlier (#172, ADR-0038, migration 0500).
+
+        Deliberately a second call rather than a second parameter on the first:
+        the office should remember that a conversation HAPPENED for twice as
+        long as it remembers what was in it, and one number cannot express two
+        retentions. Same swallow, same reason — a retention sweep must never
+        turn a successful refresh into a failed job.
+      */
+      let forgotten = 0
+      try {
+        const { rows } = await db.execute(`select app.forget_mail_bodies_before(90) as r`)
+        const raw = rows[0]?.r
+        const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { forgotten?: unknown }
+        forgotten = typeof r?.forgotten === 'number' ? r.forgotten : 0
+      } catch {
+        // As above.
+      }
+
       return {
         body: `Mail refreshed: ${outcome.note}${
           pruned === 0 ? '' : `, and ${String(pruned)} older than 180 days forgotten`
+        }${
+          forgotten === 0
+            ? ''
+            : `, and the words of ${String(forgotten)} older than 90 days forgotten`
         }.`,
         confidence: 'high',
         evidence: 'verified',

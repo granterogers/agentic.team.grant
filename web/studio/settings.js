@@ -286,6 +286,20 @@ const FALLBACK_SPEND = {
 */
 
 export const CONNECTIONS = [...FALLBACK_CONNECTIONS]
+
+/**
+ * How much of Grant's correspondence the office is holding the WORDS of.
+ *
+ * #172 and ADR-0038. He authorised body caching; this is what that produced,
+ * on the pane where he can disconnect Google. An authorisation with nothing
+ * showing its effect is a setting with no reader.
+ *
+ * A mutable object rather than a `replace`d array because it is one row, and
+ * the payload can legitimately be absent — an older gateway, or a read that
+ * failed. `held` null means the office could not say, which is a different
+ * fact from zero and the pane renders it as a different sentence.
+ */
+export const MAIL_BODIES = { bulk: 0, held: null, messages: 0, unread: 0 }
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
 export const STANDING = [...FALLBACK_STANDING]
 export const DECISIONS = [...FALLBACK_DECISIONS]
@@ -418,6 +432,18 @@ export async function hydrateSettings(read) {
       })
       .catch(() => undefined)
     replace(CONNECTIONS, d.connections ?? [])
+    /*
+      Three places have to learn a new key and two of them fail SILENTLY.
+      CLAUDE.md records 0420: the Governance page rendered "0 open" over
+      fourteen rows because the store and the hydrator did not carry
+      `requests`, and `?? []` is indistinguishable from an office with nothing
+      to report. So the absent case here is `null`, not zero.
+    */
+    const bodies = d.mail_bodies ?? null
+    MAIL_BODIES.held = typeof bodies?.with_body === 'number' ? bodies.with_body : null
+    MAIL_BODIES.messages = typeof bodies?.messages === 'number' ? bodies.messages : 0
+    MAIL_BODIES.bulk = typeof bodies?.withheld_as_bulk === 'number' ? bodies.withheld_as_bulk : 0
+    MAIL_BODIES.unread = typeof bodies?.never_looked === 'number' ? bodies.never_looked : 0
     replace(CHANNELS, d.channels ?? [])
 
     /*

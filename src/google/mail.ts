@@ -11,13 +11,25 @@
  * cache, keep answering when Google is unreachable (§18 case 3) — and two
  * different shapes for two Google readers would be two sets of bugs.
  *
- * ## Two requests per message, and why not three
+ * ## Two requests per message, and what the second one now asks for
  *
- * `messages.list` returns ids only, so each message needs a `messages.get` to
- * get headers. `format=metadata` with named headers is used rather than `full`:
- * it returns the headers and the snippet and NOT the body, so the body is never
- * transferred, never held in memory here, and cannot end up in the row by
- * accident. Cheaper and safer for the same reason.
+ * `messages.list` returns ids only, so each message needs a `messages.get`.
+ *
+ * That call used to ask for `format=metadata`, so the body was never
+ * transferred at all — ADR-0037's decision, made unasked, and the right one to
+ * make that way. **#172 and ADR-0038 reverse it on Grant's explicit written
+ * authorisation**, because every attempt at "what decisions have been made by
+ * email" and "are there outstanding commitments I have forgotten" had ended at
+ * the same wall: a subject line and a hundred-character snippet cannot support
+ * either without a model guessing about his own business.
+ *
+ * The reversal is narrow rather than total, and `body.ts` holds all of it:
+ * bulk mail is refused BEFORE it is decoded, the quoted reply chain is
+ * stripped so a ten-message thread is not stored ten times, a letter over
+ * 30,000 characters is refused, and a body is forgotten at 90 days while the
+ * fact that the message existed survives to 180. What is stored is fenced as
+ * untrusted at every reader, because a message body is the cheapest injection
+ * surface in the product: anybody can send Grant an email.
  *
  * ## Why the cap is low
  *
@@ -29,6 +41,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import { count } from '../text/plain.ts'
 import { type GoogleAccess, googleAccess, recordGoogleHealth } from './auth.ts'
+import { heldBody, type Part } from './body.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 const nullable = (v: string | null | undefined): string =>
@@ -49,11 +62,7 @@ interface GmailMessage {
   labelIds?: string[]
   snippet?: string
   internalDate?: string
-  payload?: {
-    headers?: { name?: string; value?: string }[]
-    parts?: { filename?: string }[]
-    filename?: string
-  }
+  payload?: Part & { headers?: { name?: string; value?: string }[] }
 }
 
 /** `"Jane Smith" <jane@example.com>` → name and address, separately. */
@@ -160,12 +169,18 @@ export async function refreshMail(
   let stored = 0
   for (const id of ids) {
     const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`)
-    // `metadata`, not `full`. The body is never transferred, so it cannot end
-    // up in a row by accident — see the header.
-    url.searchParams.set('format', 'metadata')
-    for (const h of ['From', 'To', 'Cc', 'Subject', 'Date']) {
-      url.searchParams.append('metadataHeaders', h)
-    }
+    /*
+      `full`, not `metadata` — changed by #172 and ADR-0038, on Grant's explicit
+      authorisation. The body comes back as a MIME tree of base64url leaves and
+      `heldBody` decides, in this order, whether any of it is stored: bulk mail
+      is refused before it is decoded, the quoted reply chain is stripped, and
+      a letter over 30,000 characters is refused as too large.
+
+      `metadataHeaders` is deliberately NOT sent with it: `full` returns every
+      header anyway, and a narrowing parameter Gmail ignores is a comment that
+      looks like a control.
+    */
+    url.searchParams.set('format', 'full')
     const response = await fetchImpl(url.toString(), {
       headers: { Authorization: `Bearer ${granted.accessToken}` },
     })
@@ -176,6 +191,7 @@ export async function refreshMail(
 
     const from = parseFrom(header(m, 'From'))
     const labels = m.labelIds ?? []
+    const held = heldBody(m.payload, labels, m.payload?.headers ?? [])
     const sentAt =
       m.internalDate === undefined || m.internalDate === ''
         ? null
@@ -184,7 +200,8 @@ export async function refreshMail(
     await db.execute(`
       insert into public.mail_messages
         (message_id, thread_id, subject, from_name, from_address, to_count,
-         sent_at, excerpt, labels, has_attachments, unread, last_seen_at, vanished_at)
+         sent_at, excerpt, labels, has_attachments, unread, last_seen_at, vanished_at,
+         body, body_at, body_withheld)
       values (
         ${lit(m.id)}, ${lit(String(m.threadId ?? m.id))},
         ${nullable(header(m, 'Subject').slice(0, 400))},
@@ -195,7 +212,10 @@ export async function refreshMail(
         array[${labels.map((l) => lit(l)).join(', ')}]::text[],
         ${labels.includes('HAS_ATTACHMENT') ? 'true' : 'false'},
         ${labels.includes('UNREAD') ? 'true' : 'false'},
-        app.now_utc(), null
+        app.now_utc(), null,
+        ${held.body === null ? 'null' : lit(held.body)},
+        ${held.body === null ? 'null' : 'app.now_utc()'},
+        ${held.withheld === null ? 'null' : lit(held.withheld)}
       )
       on conflict (message_id) do update
         set subject = excluded.subject,
@@ -203,7 +223,19 @@ export async function refreshMail(
             unread = excluded.unread,
             last_seen_at = app.now_utc(),
             -- A message that came back was not deleted after all.
-            vanished_at = null
+            vanished_at = null,
+            /*
+              A re-read REPLACES the body rather than merging with it, because
+              a message is immutable and a second read of the same id is the
+              same letter. The one case that matters is a body the office aged
+              out at 90 days seeing its message again inside the 48-hour
+              window, which cannot happen — and if the window were ever widened
+              past the retention, restoring the body is the honest answer
+              anyway.
+            */
+            body = excluded.body,
+            body_at = excluded.body_at,
+            body_withheld = excluded.body_withheld
     `)
     seenIds.push(m.id)
     stored += 1

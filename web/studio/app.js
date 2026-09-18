@@ -6123,6 +6123,38 @@ function connectionsTab() {
           )}</p>`
     }
     <!--
+      What the office is holding of his mail (number 172, ADR-0038).
+
+      Grant authorised message bodies in writing and this is the disclosure
+      that has to ship with the permission: one sentence, on the pane where he
+      would go to disconnect Google, saying how many messages the office is
+      currently holding the WORDS of rather than only the subject line.
+
+      Three states and never a number for the first, because they are three
+      different facts. Could not ask, holds nothing, holds some. A zero printed
+      where the answer is unknown is the defect this whole block exists to
+      avoid.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${(() => {
+      const m = config.MAIL_BODIES
+      if (m.held === null) {
+        return `<p class="t-meta" data-mailheld>The office could not say how much of your
+          mail it is holding.</p>`
+      }
+      if (m.held === 0) {
+        return `<p class="t-meta" data-mailheld>Of ${m.messages} cached messages the office
+          holds the words of <b>none</b> — only subject lines and previews.${
+            m.bulk === 0 ? '' : ` ${m.bulk} withheld as bulk.`
+          }</p>`
+      }
+      return `<p class="t-meta" data-mailheld>The office is holding the words of
+        <b>${m.held}</b> of ${m.messages} cached messages, forgotten after 90 days.${
+          m.bulk === 0 ? '' : ` ${m.bulk} withheld as bulk.`
+        }</p>`
+    })()}
+    <!--
       The picker (#92).
 
       This button had no attribute and no handler at all — the front door to

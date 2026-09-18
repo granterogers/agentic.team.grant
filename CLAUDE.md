@@ -2774,6 +2774,32 @@ Each of these cost real time. They are here so they cost it once.
   failing 37-suite gate look green. Redirect to a file and test `$?`, or test
   `${PIPESTATUS[0]}`.
 
+- **A regex refuted TWICE by the same real inbox, and neither wrong version
+  announced itself.** #172's quoted-chain stripper was
+  `^\s*On .{6,140}wrote:\s*$` — a whole line, which every fixture in the test
+  file satisfied. Thirty live messages said five held bodies contained the
+  attribution and **zero of them had it at the start of a line**, because
+  HTML-derived text leaves it mid-line. Loosening it to a word boundary was
+  the obvious fix, it shipped, and the next live run produced *the identical
+  five*: `.` does not match a newline and a plain-text attribution WRAPS, so
+  the address ends one line and `wrote:` begins the next. Both wrong versions
+  compiled, passed thirty unit tests, and stored **86% more of Grant's
+  correspondence than the office needed** — 7,354 characters a message against
+  1,006 once it worked. What settled it each time was one query counting how
+  often the matcher fires against real rows (`count(*) filter (where body ~
+  'On [^newline]{6,140}wrote:')` beside the same pattern with newlines
+  allowed): 0 against 5. **A regex that matches nothing is invisible; measure
+  how often it FIRES, never whether it looks right.**
+- **An assertion that enforces a posture goes red the day the posture is
+  authorised to change, and deleting it is the wrong repair.** `verify:mail`
+  asserted that `mail_messages` had no column a body could be stored in —
+  correct under ADR-0037, and red the moment Grant authorised bodies. The fix
+  is not to remove it: that would leave the most personal corpus the office
+  holds with one fewer invariant than before. The replacement asserts what the
+  NEW posture requires — a body never exists without the time it was taken, and
+  its absence always names which of three reasons applies — and drives the
+  three constraints rather than reading the migration.
+
 ---
 
 ## Visual standard

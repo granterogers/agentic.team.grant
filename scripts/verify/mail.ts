@@ -242,19 +242,81 @@ try {
       row?.has_attachments === true,
   )
 
-  // The point of `format=metadata`. A body cannot be stored because it is never
-  // fetched — this asserts the column set has nowhere to put one.
-  const bodyColumn = await db.execute(`
+  /*
+    This check used to assert the OPPOSITE, and its replacement is the point.
+
+    Under ADR-0037 the office fetched `format=metadata` and this asserted that
+    `mail_messages` had nowhere to put a body — a correct check for a correct
+    posture. #172 and ADR-0038 reverse the posture on Grant's explicit written
+    authorisation, so the old assertion went red over a change he asked for.
+
+    Deleting it would leave the most personal corpus the office holds with one
+    fewer invariant than it had before. The invariant that replaces it is not
+    "there is no body" but **"a body never exists without the three facts that
+    make it accountable"**: when it was taken, and — when there is none — which
+    of the three reasons applies. Those are 0500's constraints, and this drives
+    them rather than reading them, because a migration that applies cleanly is
+    not a constraint that holds.
+  */
+  const held = await db.execute(`
     select column_name from information_schema.columns
-     where table_name = 'mail_messages' and column_name in ('body', 'html', 'text', 'payload')
+     where table_name = 'mail_messages' and column_name in ('body', 'body_at', 'body_withheld')
   `)
   record(
-    'there is no column a message body could be stored in',
-    bodyColumn.rows.length === 0
-      ? 'none'
-      : `FOUND: ${bodyColumn.rows.map((r) => r.column_name).join(', ')}`,
-    bodyColumn.rows.length === 0,
+    'the body columns exist, all three of them (ADR-0038)',
+    held.rows
+      .map((r) => String(r.column_name))
+      .sort()
+      .join(', '),
+    held.rows.length === 3,
   )
+
+  const refuse = async (what: string, sql: string, expect: string): Promise<void> => {
+    let said = ''
+    try {
+      await db.execute(`begin; ${sql} rollback;`)
+      said = '(accepted, which it must not be)'
+    } catch (error) {
+      said = String((error as Error).message)
+    }
+    record(what, said.slice(0, 68), said.includes(expect))
+  }
+  const draft = (cols: string, vals: string): string => `
+    insert into public.mail_messages
+      (message_id, thread_id, to_count, has_attachments, unread,
+       first_seen_at, last_seen_at, labels, ${cols})
+    values (${lit(`c-${run}`)}, ${lit(`c-${run}`)}, 1, false, false,
+       app.now_utc(), app.now_utc(), array[]::text[], ${vals});`
+
+  await refuse(
+    'a body with no time on it is refused — provenance travels with the words',
+    draft('body', `'the words'`),
+    'mail_body_and_its_time',
+  )
+  await refuse(
+    'a body AND a withheld reason together is refused — they contradict',
+    draft('body, body_at, body_withheld', `'the words', app.now_utc(), 'bulk'`),
+    'mail_withheld_or_held_never_both',
+  )
+  await refuse(
+    'a withheld reason nobody has defined is refused, so the vocabulary cannot drift',
+    draft('body_withheld', `'because I said so'`),
+    'mail_withheld_says_which',
+  )
+  /*
+    The control for the three above. A constraint set can be tightened until it
+    refuses everything, and every refusal check goes on passing while the
+    feature Grant authorised is unreachable — which would look exactly like
+    ADR-0037 never having been reversed.
+  */
+  let accepted = false
+  try {
+    await db.execute(`begin; ${draft('body, body_at', `'the words', app.now_utc()`)} rollback;`)
+    accepted = true
+  } catch {
+    accepted = false
+  }
+  record('CONTROL: a proper body with its time is accepted', String(accepted), accepted)
 
   // --- upsert and sweep ------------------------------------------------------
   const again = await refreshMail(db, { fetchImpl: fakeGoogle(two) })
@@ -697,6 +759,141 @@ console.log('\nthreads nobody has spoken in (#172)')
     'CONTROL: another project is waiting on none of it',
     `${String(got('elsewhere').length)} from elsewhere`,
     got('elsewhere').length === 0,
+  )
+}
+
+/*
+  ---------------------------------------------------------------- the bodies
+
+  #172 and ADR-0038. Grant authorised the office to cache message bodies, so
+  0500 added `body`, `body_at` and `body_withheld` and both readers carry them.
+  The parsing half is proved in `tests/google/body.test.ts` without a network;
+  what CANNOT be proved there is the part that lives in the database — the
+  paired-nullability constraints, whether the body actually reaches a reader,
+  whether it reaches the WRONG project, and whether the retention forgets it.
+
+  One rolled-back statement, results gathered into a temp table and selected
+  before the rollback, the same shape as the section above and for the same
+  reason.
+*/
+{
+  const b = `bodies-${run}`
+  const rows = ((
+    await db.execute(`
+    begin;
+      create temp table body_res (k text, v jsonb) on commit drop;
+      insert into public.projects (slug, name, status)
+        values (${lit(b)}, 'Body proof', 'active');
+      insert into public.project_attachments
+        (project_id, connector, external_ref, display_name, role)
+      select project_id, 'upload', ${lit(`ub-${run}`)}, 'Uploads', 'source'
+        from public.projects where slug = ${lit(b)};
+      insert into public.contacts (project_id, name, email)
+      select project_id, 'Elena Marchetti', ${lit(`elena-${run}@bodies.test`)}
+        from public.projects where slug = ${lit(b)};
+      insert into public.mail_messages
+        (message_id, thread_id, subject, from_name, from_address, to_count, sent_at,
+         excerpt, labels, body, body_at, body_withheld)
+      values
+        -- a letter the office holds the words of
+        (${lit(`h1-${run}`)}, ${lit(`th1-${run}`)}, 'Module four schedule', 'Elena Marchetti',
+         ${lit(`elena-${run}@bodies.test`)}, 1, app.now_utc() - interval '2 days',
+         'Confirming the recording slot', array['INBOX'],
+         'Confirming the recording slot for module four on the 24th, and we agreed the fee stays at 2,400.',
+         app.now_utc(), null),
+        -- bulk: the fact it arrived, and deliberately not the marketing
+        (${lit(`h2-${run}`)}, ${lit(`th2-${run}`)}, 'Module four offers', 'Elena Marchetti',
+         ${lit(`elena-${run}@bodies.test`)}, 1, app.now_utc() - interval '3 days',
+         'Fifty percent off', array['CATEGORY_PROMOTIONS'], null, null, 'bulk'),
+        -- a body old enough for the 90-day sweep to forget
+        (${lit(`h3-${run}`)}, ${lit(`th3-${run}`)}, 'Module four last year', 'Elena Marchetti',
+         ${lit(`elena-${run}@bodies.test`)}, 1, app.now_utc() - interval '120 days',
+         'Last year', array['INBOX'], 'The words of a very old letter.',
+         app.now_utc() - interval '120 days', null);
+      insert into body_res
+      select 'mine', app.mail_for_project((select project_id from public.projects where slug = ${lit(b)}), 20);
+      insert into body_res select 'elsewhere', app.mail_for_project(gen_random_uuid(), 20);
+      insert into body_res
+      select 'found', app.mail_search('what did we agree about the fee',
+               (select project_id from public.projects where slug = ${lit(b)}), 10);
+      insert into body_res select 'swept', jsonb_build_array(app.forget_mail_bodies_before(90));
+      insert into body_res select 'floor', jsonb_build_array(app.forget_mail_bodies_before(1));
+      insert into body_res
+      select 'after', app.mail_for_project((select project_id from public.projects where slug = ${lit(b)}), 20);
+      select k, v from body_res;
+    rollback;
+  `)
+  ).rows ?? []) as Record<string, unknown>[]
+  const got = (k: string): Record<string, unknown>[] => {
+    const raw = rows.find((r: Record<string, unknown>) => String(r.k) === k)?.v
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(v) ? (v as Record<string, unknown>[]) : []
+  }
+  const mine = got('mine')
+  const one = (id: string, from = mine): Record<string, unknown> | undefined =>
+    from.find((x) => String(x.message_id) === `${id}-${run}`)
+
+  record(
+    'the reader carries the words of a message it holds',
+    String(one('h1')?.body ?? '(none)').slice(0, 44),
+    String(one('h1')?.body ?? '').includes('we agreed the fee stays at 2,400'),
+  )
+  record(
+    'and says nothing was withheld about it',
+    String(one('h1')?.body_withheld ?? 'null'),
+    one('h1')?.body_withheld === null,
+  )
+  /*
+    Bulk is the narrowing that makes the permission proportionate, and the
+    reader has to say WHY rather than returning a null a caller reads as "not
+    fetched yet". 0304's asymmetry: absence is not one fact.
+  */
+  record(
+    'bulk mail is held without its words, and says so',
+    `body ${String(one('h2')?.body ?? 'null')}, withheld ${String(one('h2')?.body_withheld)}`,
+    one('h2')?.body === null && one('h2')?.body_withheld === 'bulk',
+  )
+  record(
+    'a body makes a message findable by what it SAID, not only its subject',
+    `${String(got('found').length)} found`,
+    got('found').some((x) => String(x.message_id) === `h1-${run}`),
+  )
+  /*
+    The control that matters most. ADR-0037's isolation is the whole reason a
+    body is safe to hold at all: a retrieval bug here leaks something between
+    contexts rather than merely being wrong, and a body is thirty times more of
+    it than a snippet was.
+  */
+  record(
+    'CONTROL: another project sees none of it, bodies included',
+    `${String(got('elsewhere').length)} from elsewhere`,
+    got('elsewhere').length === 0,
+  )
+  record(
+    'the 90-day sweep forgets an old body and reports the number',
+    JSON.stringify(got('swept')[0] ?? {}).slice(0, 70),
+    Number((got('swept')[0] as { forgotten?: unknown })?.forgotten ?? 0) >= 1,
+  )
+  record(
+    'and the message itself survives it — the office remembers the conversation happened',
+    `${String(got('after').length)} still associated`,
+    one('h3', got('after')) !== undefined && one('h3', got('after'))?.body === null,
+  )
+  record(
+    'CONTROL: the recent body is NOT swept by the same call',
+    String(one('h1', got('after'))?.body ?? '(gone)').slice(0, 40),
+    String(one('h1', got('after'))?.body ?? '').includes('module four on the 24th'),
+  )
+  /*
+    A floor that refuses, asserted on the MESSAGE. A refusal for the wrong
+    reason looks exactly like the rule working, which this repository has paid
+    for more than once.
+  */
+  record(
+    'a retention under seven days is refused, and says why',
+    String((got('floor')[0] as { error?: unknown })?.error ?? '(no error)').slice(0, 60),
+    (got('floor')[0] as { ok?: unknown })?.ok === false &&
+      String((got('floor')[0] as { error?: unknown })?.error ?? '').includes('mid-conversation'),
   )
 }
 
