@@ -163,11 +163,49 @@ it became a filed defect.
 - The 24-hour failure window still shows 8 pre-fix `office.notion_sync`
   failures; they age out rather than indicating anything live.
 
+## The conversational corpus — run, cleaned, and one real defect fixed
+
+**Four sessions had never been run at all**: `laundering` (5 turns of
+provenance attack), `partial-evidence`, `across-desks`, and `still-useful`
+(the controls). A corpus written and never run is the weakest evidence there
+is. All four now run, 13 of 14 turns green, and **every adversarial
+provenance turn passed** — a supposition must not become the price, a total is
+not knowable from a handful of retrieved matches, a fact stated in one project
+must not become another's, and all three controls proving the office is not
+simply refusing everything.
+
+**Nine of the report's twenty-three failures were weather.** The whole
+`roster` session failed on 15 September inside one OpenRouter outage and had
+been scored as behavioural failure ever since. `weather()` (35f3e8c) is a
+fourth verdict beside #250's `unfinished`, deliberately narrow — the coherence
+gate refusing MUST stay a failure — with four of its six tests negative
+controls.
+
+**Re-running roster then exposed a real defect the outage had hidden.**
+*"Thanks, that is helpful."* was answered by the **strategy director**: no
+intent rule matched it, so `pickRoster`'s unrecognised branch consulted the
+trigram subject matcher, which always finds something. Fixed in
+`classifyIntent` (85ebc2f) where `recognised` already separates a deliberate
+remark from noise, by stripping the acknowledgement and counting what
+survives. Worker deployed; roster re-run **9/9, zero failures**.
+
+**723/737, failing turns 23 -> 13.**
+
+## Remaining session failures, grouped (13)
+
+| n | shape | first read |
+|---|---|---|
+| 5 | "no task was created" | CLAUDE.md records this class as a HARNESS expectation that was wrong three times — the office legitimately asks for a title first. Read the answers before believing them. |
+| 3 | running / cancelled / failed | stale recordings; two are covered by the new fourth verdict on re-run. The `cancelled` one (laundering turn 0) is unexplained and worth a look. |
+| 2 | "says it cannot see it, briefly … no absence stated" | the honest-absence detector, which CLAUDE.md already records as a wording lock that once scored 3/6 while nothing had been invented |
+| 2 | N specialists convened | routing breadth on genuinely multi-desk instructions |
+
 ## NEXT ACTION
 
-Continue the #41 deep acceptance attack: adversarial provenance under
-conversational bait, multi-step realistic histories across subsystems, and
-the cross-channel/recovery interactions the gate does not exercise.
+Work the 13 remaining session failures in that order, reading the office's
+actual answer before believing any expectation — then continue to the
+cross-channel, recovery and chaos interactions (#41 §8) that no suite
+exercises.
 
 ---
 
