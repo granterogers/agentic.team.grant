@@ -254,6 +254,27 @@ export const claimsGrantSaid = (body: string): string | null => {
     /\b(?:that\s+is|that's|thats)\s+(?:the\s+)?[a-z ]{0,30}\byou\s+(?:told|gave|mentioned|said)\b[^.!?]{0,40}/i,
     /\bas\s+you\s+(?:said|mentioned|put\s+it)\b[^.!?]{0,60}/i,
     /\bearlier\s+you\s+\w+\b[^.!?]{0,60}/i,
+    /*
+      The NOMINALISED form, which is how a fluent model invents one.
+
+      Every pattern above wants a speech verb — told, said, asked, mentioned.
+      Asked *"Do I have a standing rule about how you format answers?"*, with
+      nothing about formatting anywhere in the conversation and no matching row
+      in `preference_instructions`, the office answered:
+
+          I am following your latest directive to keep each reply to a single
+          short paragraph, under four sentences. Earlier notes about bullet
+          points or one-line replies are just preferences.
+
+      Two inventions about what Grant had instructed, in direct answer to a
+      question about what Grant had instructed, and not one verb between them.
+      The gate for this exact class was silent.
+
+      Only nouns that MEAN an instruction. "your project", "your budget", "your
+      team" are things of his the office may talk about freely, and a list that
+      swept those in would fire on most honest sentences.
+    */
+    /\byour\s+(?:\w+\s+){0,2}?(?:directive|directives|instruction|instructions|rule|rules|note|notes|preference|preferences|steer|guidance|brief|remit)\b[^.!?]{0,60}/i,
   ]
   for (const re of claims) {
     const hit = re.exec(text)
@@ -267,6 +288,15 @@ export const claimsGrantSaid = (body: string): string | null => {
     */
     const sentence = text.slice(Math.max(0, hit.index - 60), hit.index + hit[0].length + 40)
     if (/\?/.test(sentence)) continue
+    /*
+      And a DENIAL is not a claim, for the reason `claimsToHaveMade` records:
+      an answer saying nothing was instructed must not be blocked for saying
+      that nothing was instructed. "I have no record of your instructions
+      about formatting" is the honest sentence this whole file exists to make
+      possible.
+    */
+    if (/\b(?:no|not|n't|never|nothing|none)\b[^.!?]{0,40}$/i.test(text.slice(0, hit.index)))
+      continue
     return hit[0].trim().slice(0, 80)
   }
   return null
