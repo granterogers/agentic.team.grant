@@ -5713,7 +5713,14 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   inset-inline-start: 0;
   translate: var(--x) var(--y);
   inline-size: 208px;
-  min-block-size: 64px;
+  /* 86 because `CARD.h` in plane.js is 86, and the two must agree.
+     That constant is what the layout reserves per row and what the edge
+     geometry treats as the card's vertical centre — so a card the CSS lets
+     render at 64 while the arithmetic believes 86 hangs its connectors 11px
+     below where they belong, and a grid of mixed 64s and 86s is ragged.
+     A uniform floor makes every card the same height whether its name wraps
+     or not, and the name is clamped at two lines so it cannot exceed it. */
+  min-block-size: 86px;
   display: grid;
   grid-template-columns: 22px 1fr;
   grid-template-rows: auto auto;
@@ -5737,7 +5744,16 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
 .mapglyph svg { inline-size: 20px; block-size: 20px; display: block; }
 .mapname {
   font-size: 14px; font-weight: 550; color: var(--ink);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Two lines, not one. Eight of sixteen cards on Grant's real project were
+     cut at one line — see the CARD comment in plane.js for why the card is not
+     simply wider. `line-clamp` keeps the ellipsis for the genuinely long ones
+     rather than letting a card grow without limit. */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.25;
 }
 .mapstate {
   font-size: 12px; color: var(--ink-2);

@@ -69,8 +69,27 @@
   default view is the designed size. The cards lose 28px of width they were
   not using: two lines of short text and a 20px glyph.
 */
-export const CARD = { w: 208, h: 64 }
-const GAP = { x: 268, y: 88 }
+/*
+  The HEIGHT grew, and the width deliberately did not.
+
+  At one line of 14px, eight of the sixteen cards visible on Grant's real
+  project were cut: "Conduct first five int…", "WS01 — Legacy Ope…", "Journey
+  VS Destinati…". A map whose whole job is to show what a project is made of,
+  with half its labels unreadable.
+
+  Widening the card is what the eye reaches for and the arithmetic above
+  forbids: 236 takes the default fit to 0.82, which takes the 14px name to
+  11.5px, under the 12px floor `verify:ui` enforces. That trade was made once
+  already and is not being unmade.
+
+  So the name wraps to two lines instead, and the card grows to hold them. The
+  fit is computed from WIDTH, so a taller card costs nothing at the default
+  zoom — it makes the field taller and the port already scrolls. `GAP.y` grows
+  with it: at 86 tall in an 88 gap the cards would have touched, which is the
+  layout defect this fix would otherwise have introduced.
+*/
+export const CARD = { w: 208, h: 86 }
+const GAP = { x: 268, y: 112 }
 
 /** Which column a kind sits in when nobody has moved it. */
 const COLUMN = { service: 0, reference: 0, agent: 1, task: 2, document: 3 }
