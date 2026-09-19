@@ -566,7 +566,30 @@ export const claimsToHaveMade = (body: string): string | null => {
       office describing the world correctly. Without this the check accuses it
       of having done the one thing it is explicitly saying it did not do.
     */
-    if (/\bby (?:you|grant|him|her|them|someone|somebody|the team)\b/i.test(sentence)) continue
+    /*
+      The "by" must attach to the MAKING, not to any word in the sentence.
+
+      This exemption is right — "that task was created last week by you, before
+      I was involved" is the office describing the world — and as written it
+      matched a bare `by you` anywhere, which the office's own confirmation
+      phrasing contains:
+
+          Task "Book interview room (once candidates confirm)" CREATED, OWNED
+          BY YOU, with no due date set.
+
+      Nothing was created. The job completed, Grant was told a task existed,
+      and the gate built for exactly that sentence was disabled by the two
+      words it uses to say who the task is FOR. Ownership is not authorship.
+
+      Found by re-running `out-of-bounds` and checking `public.tasks` — no row
+      by that name, as a project task or a personal one.
+    */
+    if (
+      /\b(?:created|added|filed|logged|made|set\s+up|drafted|saved|scheduled|booked)\s+(?:\w+\s+){0,3}?by\s+(?:you|grant|him|her|them|someone|somebody|the\s+team)\b/i.test(
+        sentence,
+      )
+    )
+      continue
     if (/\byou (?:created|added|filed|logged|made|set up|drafted|saved)\b/i.test(sentence)) continue
     return phrase.slice(0, 80)
   }

@@ -243,3 +243,54 @@ describe('#248 — the fluent fabrication, and the honest denial', () => {
     }
   })
 })
+
+/**
+ * "owned by you" is not "created by you" (#237).
+ *
+ * The office said, and the job COMPLETED, so Grant was told it was done:
+ *
+ *     Task "Book interview room (once candidates confirm)" created, owned by
+ *     you, with no due date set.
+ *
+ * `public.tasks` holds no such row — not as a project task, not as a personal
+ * one. It was checked directly rather than inferred from the harness's count.
+ *
+ * The gate matched the claim and then DISCARDED it, because of the exemption
+ * for somebody else having made the thing:
+ *
+ *     if (/\bby (?:you|grant|him|her|them|...)\b/i.test(sentence)) continue
+ *
+ * That exemption is correct — *"that task was created last week by you, before
+ * I was involved"* is the office describing the world — and it matched a bare
+ * `by you` ANYWHERE in the sentence. The office's own confirmation phrasing
+ * says who the task is FOR in exactly those two words, so the gate built for
+ * this sentence was switched off by it.
+ *
+ * **Ownership is not authorship.** The `by` has to attach to the making.
+ */
+describe('#237 — an exemption that the claim itself could trigger', () => {
+  it('catches a creation claim that also says who owns it', () => {
+    expect(
+      claimsToHaveMade(
+        'Task “Book interview room (once candidates confirm)” created, owned by you, ' +
+          'with no due date set.',
+      ),
+    ).not.toBeNull()
+    expect(claimsToHaveMade('I have added the task, assigned to you.')).not.toBeNull()
+  })
+
+  it('CONTROL: somebody else having made it is still a report, not a claim', () => {
+    /*
+      The exemption this narrows exists for these, and they must keep working
+      — otherwise the office cannot describe its own project history without
+      being accused of having written it.
+    */
+    for (const body of [
+      'That task was created last week by you, before I was involved.',
+      'The note was added by someone on the team.',
+      'That entry was logged by Grant in August.',
+    ]) {
+      expect(claimsToHaveMade(body), body).toBeNull()
+    }
+  })
+})
