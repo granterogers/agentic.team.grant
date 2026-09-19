@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 /**
  * Run a session, or score what has been run.
  *
@@ -73,8 +74,43 @@ if (argv.includes('--report')) {
         `${r.fails.length === 0 ? '' : `\n         FAILED: ${r.fails.join(' | ')}`}`,
     )
   }
+  /*
+    Say which failures are STALE, because five of twenty-three once were.
+
+    This report scores stored recordings, so a turn recorded before a fix keeps
+    its failure until somebody re-runs that exact session — and nothing said
+    so. In one run that hid two answers the absence detector had already been
+    widened for (its comment quotes one of them verbatim as the case it was
+    written against) and a nine-turn session that had failed inside a provider
+    outage four days earlier. Each cost a re-run to discover it was already
+    fixed.
+
+    #226 records the same shape one layer out: a result keyed to the suite
+    rather than to the COMMIT cannot tell a fixed defect from a live one.
+
+    Reported, never filtered. A stale failure might still be real, and hiding
+    it would be the opposite mistake.
+  */
+  const head = ((): string => {
+    try {
+      return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .trim()
+    } catch {
+      return ''
+    }
+  })()
+  const stale = rows.filter(
+    (r) => r.fails.length > 0 && (r.inconclusive ?? []).length === 0 && r.commit !== head,
+  )
+
   console.log(
     `\n${String(pass)}/${String(pass + fail)} expectations held across ${String(rows.length)} turns` +
+      (head === '' || stale.length === 0
+        ? ''
+        : `\n${String(stale.length)} failing turn(s) were recorded against an older commit and have ` +
+          `NOT been re-run on ${head} — re-run those sessions before believing them:\n  ` +
+          [...new Set(stale.map((r) => r.session))].join(' · ')) +
       (unsettled === 0
         ? ''
         : `\n${String(unsettled)} turn(s) never settled inside the wait and were not scored — ` +

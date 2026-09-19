@@ -55,6 +55,7 @@
  */
 
 import { existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
@@ -325,6 +326,24 @@ export interface TurnResult {
   fixture: boolean
   passes: string[]
   fails: string[]
+  /*
+    The commit this turn was recorded against (#226, applied to the corpus).
+
+    `--report` scores STORED recordings, so a turn recorded before a fix keeps
+    its failure for ever and the report keeps showing it. Five of the twenty-
+    three failures in one run were exactly that: two answers the absence
+    detector had ALREADY been widened for — its own comment quotes one of them
+    verbatim as the case it was written against — plus a whole session that
+    failed inside a provider outage four days earlier.
+
+    Chasing those cost several re-runs each, and every one of them ended in
+    "this was fixed already". #226 records the same shape one layer out: a
+    suite result keyed to the suite rather than to the COMMIT cannot tell a
+    fixed defect from a live one.
+
+    Optional, so every record already in `.out/sessions.jsonl` still parses.
+  */
+  commit?: string
   /*
     Turns that never settled inside the wait (#250).
 
@@ -803,7 +822,25 @@ export const tidy = async (jobIds: readonly string[]): Promise<void> => {
   */
 }
 
+/**
+ * The commit the working tree is on, or '' when git cannot say.
+ *
+ * Read once. A turn takes minutes and the tree does not move underneath it,
+ * and shelling out per turn would be a hundred and sixty processes for one
+ * answer.
+ */
+const HEAD = ((): string => {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    return ''
+  }
+})()
+
 export const remember = async (r: TurnResult): Promise<void> => {
+  if (r.commit === undefined && HEAD !== '') r.commit = HEAD
   await mkdir('.out', { recursive: true })
   await appendFile(RECORD, `${JSON.stringify(r)}\n`)
 }
