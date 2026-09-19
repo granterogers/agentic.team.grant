@@ -89,6 +89,47 @@ export const MARKS = {
     svg: svg(`<rect x="2.8" y="6.6" width="12.4" height="10.8" rx="2.6"/>
               <path d="M15.2 10.6l6-3.2v9.2l-6-3.2z"/>`),
   },
+
+  /*
+    ------------------------------------------- capabilities, not companies --
+
+    The three below are not services and must never look like one. A signed-in
+    browser, an MCP client and a direct upload are things this office DOES;
+    there is no vendor, no trademark and nothing to identify nominatively — and
+    the header above is emphatic that inventing a provider logo is the failure
+    this file exists to avoid.
+
+    They get a glyph anyway, because the alternative measured worse. The live
+    Connections page draws seven cards and four of them are companies with
+    marks, so these three rendered as empty space beside a 22px logo: a row
+    that alternates mark, mark, nothing, mark, nothing reads as three cards
+    that failed to load rather than three of a different kind.
+
+    So: plainly generic shapes — a window, a plug, an arrow into a tray —
+    deliberately unlike any mark above, and NO tint. The tint is the brand's
+    own hue and is used for the connected halo; giving a capability one would
+    be the first step towards it looking like a company.
+  */
+  browser: {
+    name: 'Signed-in browser',
+    tint: 'currentColor',
+    svg: svg(`<rect x="2.8" y="4.4" width="18.4" height="15.2" rx="2.4"/>
+              <path d="M2.8 9.2h18.4"/>
+              <circle cx="6.2" cy="6.8" r=".9"/><circle cx="9" cy="6.8" r=".9"/>`),
+  },
+  mcp: {
+    name: 'MCP client',
+    tint: 'currentColor',
+    svg: svg(`<path d="M9 3.4v5.2M15 3.4v5.2"/>
+              <rect x="6.4" y="8.6" width="11.2" height="6.2" rx="2"/>
+              <path d="M12 14.8v5.8"/>`),
+  },
+  upload: {
+    name: 'Direct upload',
+    tint: 'currentColor',
+    svg: svg(`<path d="M12 15.4V4.2"/><path d="M7.8 8.4 12 4.2l4.2 4.2"/>
+              <path d="M4.2 15.6v2.6a1.8 1.8 0 001.8 1.8h12a1.8 1.8 0 001.8-1.8v-2.6"/>`),
+  },
 }
 
 export const mark = (key) => MARKS[key] ?? { name: key, tint: 'currentColor', svg: '' }

@@ -69,3 +69,64 @@ if (orphans.length > 0) {
 }
 
 console.log('every default names a mark the page can draw.')
+
+/*
+  --------------------------------------- and the SERVICE marks, same question
+
+  Different table, identical shape: `app.hq_studio_settings` draws a card per
+  row of `knowledge_connectors`, and `web/studio/logos/marks.js` decides
+  whether that card gets a glyph. A connector added without one renders as
+  empty space beside a 22px mark — three cards did, and a row that alternates
+  mark, nothing, mark reads as cards that failed to load rather than cards of
+  a different kind.
+
+  Reported and not failed, deliberately, and the reason is the marks file's
+  own argument: a provider that has no honest mark should NOT get an invented
+  one, so "missing" is sometimes the right answer and a hard failure would
+  push somebody into drawing a fake logo to get green. What is not acceptable
+  is missing it by accident, and a named list is what prevents that.
+*/
+const marksSrc = readFileSync('web/studio/logos/marks.js', 'utf8')
+/*
+  Read as the KEYS of the exported object, at one indent, which is how every
+  entry in that file is written. Parsing it as a module would be better and is
+  not available here: it is browser JavaScript with no build step.
+*/
+const marked = new Set(
+  [...marksSrc.matchAll(/^ {2}([a-z][a-z0-9_]*): \{$/gm)].map((m) => String(m[1])),
+)
+const live = (
+  await db.execute(
+    `select connector from public.knowledge_connectors
+      where connector not like 'fixture\\_%' order by connector`,
+  )
+).rows as { connector: string }[]
+const bare = live.filter((c) => !marked.has(c.connector))
+
+console.log(
+  `\ncheck:icons — ${String(marked.size)} service mark(s), ` +
+    `${String(live.length)} live connector(s), ` +
+    `${String(bare.length)} of them with no glyph`,
+)
+if (bare.length > 0) {
+  console.log(
+    `  no glyph: ${bare.map((c) => c.connector).join(', ')} — either add one to ` +
+      'web/studio/logos/marks.js, or leave it and know that its card draws ' +
+      'empty space where every other card has a mark. Never invent a logo for ' +
+      'a provider that has none; a capability may have a generic glyph.',
+  )
+}
+
+/*
+  The control. A regex over a source file is exactly the kind of check that
+  goes quietly blind — a formatter change to that object's indentation would
+  make `marked` empty, every connector would look bare, and the line above
+  would report it as a finding rather than as its own failure.
+*/
+if (marked.size < 5) {
+  console.error(
+    `\ncheck:icons FAILED — only ${String(marked.size)} service mark(s) parsed out of ` +
+      'marks.js, which is the reader being broken rather than the file being empty.',
+  )
+  process.exit(1)
+}
