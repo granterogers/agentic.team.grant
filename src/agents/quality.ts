@@ -335,6 +335,53 @@ export const claimsToHaveSent = (body: string): string | null => {
     /\bI(?:'ve|\s+have)?\s+(?:just\s+)?(?:posted|sent|messaged|emailed|e-mailed|pinged|notified|forwarded)\b[^.!?]{0,60}/i,
     /\b(?:a|the)\s+(?:slack\s+message|message|email|note)\s+(?:is|has)\s+(?:going|gone|been)\s+(?:out|sent)\b[^.!?]{0,60}/i,
     /\bI\s+(?:have\s+)?(?:asked|contacted|reached\s+out\s+to)\s+(?:the\s+)?(?:team|everyone|them|him|her|\w+)\s+(?:on|in|via|over)\s+(?:slack|telegram|email)\b[^.!?]{0,60}/i,
+    /*
+      The PASSIVE, which is how the claim arrives when it is not first person.
+
+      Every pattern above wants an "I", or the narrow "a message has gone out".
+      Measured against the office's own phrasing, these three walk through:
+
+          The team have been asked, on Slack, about what is blocking onboarding
+          A note went out to the supplier this morning
+          The supplier has been emailed about the revised quote
+
+      Same defect as the fluent fabrication and the nominalised instruction
+      found earlier in this run, and the third sibling to have it: these gates
+      were built from the terse examples that were caught, and a model writing
+      naturally uses the passive.
+
+      Safe to widen HERE, and only here, for the reason this function's own
+      docstring gives: an agent answering an instruction has no outbound path
+      at all, so a claim that somebody was contacted is false at the moment it
+      is written, by construction. There is nothing it could be true of, which
+      is why `claimsToHaveRead` must stay narrow and this need not.
+
+      Future tense is still left alone — `promisesToReachOut` owns that, and a
+      plan is not a claim.
+    */
+    /*
+      A CHANNEL is required, and that is the whole discrimination.
+
+      The first draft matched a bare passive and fired on two sentences it must
+      never touch:
+
+        "Emma has been asked to look at the margin."  — #128's hand-off, which
+        is REAL. Convening a specialist IS asking the team, and CLAUDE.md is
+        explicit that refusing this pushes the office towards saying less about
+        what it actually does.
+
+        "You have been asked about this before."  — the office addressing
+        Grant, claiming nothing about anybody outside.
+
+      What the office cannot do is reach somebody OUTSIDE, so the claim has to
+      name the outside: either a channel word, or a verb that IS a channel.
+      `emailed`, `messaged` and `pinged` carry it; `asked`, `contacted` and
+      `notified` do not, and need one stated within the sentence.
+    */
+    /\b(?:has|have|was|were)\s+been\s+(?:emailed|e-mailed|messaged|pinged)\b[^.!?]{0,60}/i,
+    /\b(?:has|have|was|were)\s+been\s+(?:asked|contacted|notified)\b[^.!?]{0,60}?\b(?:on|in|via|over|by)\s+(?:slack|telegram|email|whatsapp|text)\b/i,
+    /\b(?:has|have|was|were)\s+been\s+(?:asked|contacted|notified)\b[^.!?]{0,20}?,\s*(?:on|via|over)\s+(?:slack|telegram|email)\b/i,
+    /\b(?:a|the)\s+(?:\w+\s+){0,2}?(?:note|message|email|question|request)\s+(?:went|has\s+gone|was\s+sent)\s+(?:out\s+)?to\b[^.!?]{0,60}/i,
   ]
   for (const re of claims) {
     const hit = re.exec(text)
