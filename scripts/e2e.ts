@@ -403,6 +403,25 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:reachable',
     'every registered job kind has something that can start it — #66 and #265 were both unreachable',
   ],
+  /*
+    A cheap integration through the DEPLOYED gateway, which is where this one
+    hid.
+
+    `verify:upload` has asserted since #126 that a file Grant drops records as
+    `origin = 'yours'`, and it had been failing on exactly that — 0459 rebuilt
+    `record_file_document` for an unrelated rename fix and hardcoded a
+    connector, which a trigger then turned into `origin = 'source'`. A file off
+    his desktop announced itself as having come from a connector, which is the
+    confusion 0414 exists to prevent and 0169 says lets an agent cite its own
+    output as a source.
+
+    Nobody knew because the suite is not in this list, the same way
+    `verify:capability` was red for a week. It costs about a minute, drives the
+    real HTTP path rather than the database, spends no external budget, and
+    covers two of the areas the specification names — a critical cheap
+    integration, and persistence.
+  */
+  ['verify:upload', 'a dropped file, through the deployed gateway, with its provenance intact'],
 ]
 
 type Result = {
