@@ -96,7 +96,7 @@ import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.t
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
-import { personalTaskRequest } from '../agents/mine.ts'
+import { personalTaskChange, personalTaskRequest } from '../agents/mine.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import {
@@ -2609,6 +2609,72 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 return null
               })
 
+      /*
+        CHANGING ONE, which the conversation could never do (#259, 0516).
+
+        "Remind me Friday to ring the venue" worked and *"Actually make that
+        Monday"* did nothing at all — a task could be created by talking and
+        only ever changed on the screen. Grant's brief names it: follow-ups
+        changing due date, priority, project or wording.
+
+        Only when nothing NEW was filed: a sentence that is itself a task is
+        not a change to the last one, and `personalTaskChange` refuses those
+        for the same reason one layer down.
+
+        The subject is `app.my_task_recent` — the newest open personal task in
+        the last half hour — and never a title match, because a fuzzy match is
+        one bad guess away from editing a row he did not mean. The confirmation
+        NAMES what changed, which is the honest alternative to guessing well.
+      */
+      const change = noted !== null || wantsFile !== null ? null : personalTaskChange(instruction)
+      const changed =
+        change === null
+          ? null
+          : await deps.db
+              .execute('select app.my_task_recent() as t')
+              .then(async (r) => {
+                const raw = (r.rows[0] as { t?: unknown })?.t
+                const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  id?: string
+                  title?: string
+                } | null
+                /*
+                  Nothing to point at is said out loud rather than guessed.
+                  #259: never claim a task was changed unless canonical state
+                  proves it — and there is no state here to prove anything.
+                */
+                if (subject?.id === undefined) {
+                  return (
+                    'I am not sure which task you mean — nothing has gone on your list ' +
+                    'in the last half hour. Tell me the name and I will change it.'
+                  )
+                }
+                const set = await deps.db.execute(`
+                  select app.my_task_set(
+                    ${lit(subject.id)},
+                    ${change.title === null ? 'p_title => null' : `p_title => ${lit(change.title.slice(0, 200))}`},
+                    p_due_on => ${change.due === null ? 'null' : `${lit(change.due)}::date`},
+                    p_priority => ${change.priority === null ? 'null' : String(change.priority)}
+                  ) as r`)
+                const out = (set.rows[0] as { r?: unknown })?.r
+                const got = (typeof out === 'string' ? JSON.parse(out) : out) as { ok?: boolean }
+                if (got?.ok !== true) return null
+                const name = change.title ?? String(subject.title ?? 'that task')
+                return change.due === null
+                  ? `Changed — "${name}", ${change.matched.join(' and ')}.`
+                  : `Changed — "${name}" is now due ${change.due}.`
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'change a personal task', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
       // A plural extraction is not a single task. `pullOut` having claimed the
       // sentence, `taskRequest` must not also file one from the same words —
       // and neither must it file one the personal-task path has already taken.
@@ -2680,7 +2746,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
 
       const confirmation =
-        [linked, made, filed, noted, extracting, enumerating, writingFile, reading]
+        [linked, made, filed, noted, changed, extracting, enumerating, writingFile, reading]
           .filter((x) => x !== null)
           .join('\n\n') || null
 
@@ -2725,6 +2791,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           would reopen exactly that hole.
         */
         (noted === null ? 0 : 1) +
+        /*
+          And changing one is a thing this turn DID, for exactly the reason
+          above: a confirmation the office writes about a row it moved has to
+          be counted, or the gate that checks "did this turn act" cannot see
+          it and the sentence becomes unbacked narration (0516).
+        */
+        (changed === null ? 0 : 1) +
         who.alsoConvened.length
 
       // The same retrieval the office uses, so an instruction answered in

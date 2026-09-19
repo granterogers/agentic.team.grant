@@ -340,3 +340,158 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
     because: remind ? 'reminder' : 'commitment',
   }
 }
+
+/* ------------------------------------------------------- changing your mind */
+
+/**
+ * What a follow-up asks to CHANGE about the task just made (#259).
+ *
+ * "Remind me Friday to ring the venue" worked. *"Actually make that Monday"*
+ * did nothing at all — the office had no way to change a personal task from a
+ * conversation, only from the screen. Grant's brief for this run names it:
+ * *"follow-ups changing due date, priority, project or wording"*.
+ *
+ * ## Both halves are required, and that is the safety
+ *
+ * A REFERENT — that, it, the task, that one — **and** a CHANGE. Either alone is
+ * dangerous in a different direction:
+ *
+ * - A change with no referent is an ordinary sentence. "Friday is going to be
+ *   busy" would move a task nobody mentioned.
+ * - A referent with no change is a remark. "That is fine" would rewrite
+ *   something to nothing.
+ *
+ * The referent also has to be BARE. "Make that pricing document urgent" names
+ * a subject, so it is not this — it is work for the office, and stealing it
+ * would be the delegation-captured-as-a-personal-task failure that
+ * `A_TASK_FOR_SOMEBODY_ELSE` exists to prevent one rule along.
+ *
+ * ## What it deliberately cannot do
+ *
+ * Choose WHICH task. This returns the change and nothing else; the handler
+ * resolves the subject as the most recent open personal task and SAYS which
+ * one it changed. A recogniser that also guessed the target from a fuzzy title
+ * match would be one bad match away from editing the wrong row, and the whole
+ * point of a to-do list is that it says what you put in it.
+ */
+export interface PersonalTaskChange {
+  /** An ISO date, when the follow-up moved it. */
+  readonly due: string | null
+  /** 10 urgent · 20 important · 50 normal · 100 whenever, matching the column. */
+  readonly priority: number | null
+  /** A new title, when the follow-up renamed it. */
+  readonly title: string | null
+  /** Which words matched, so a caller can say why and a test can assert it. */
+  readonly matched: readonly string[]
+}
+
+/*
+  A bare referent. `\b(that|it|this)\b` NOT followed by a noun — "make that
+  Friday" yes, "make that document urgent" no. `one` is included because "move
+  that one to Monday" is how people actually say it.
+*/
+/*
+  The date vocabulary, as one pattern. The same words `stripFraming` takes out
+  of a title, kept here so the residue test and the title strip cannot come to
+  disagree about what counts as a date.
+*/
+const WHEN_WORDS =
+  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
+
+const BARE_REFERENT =
+  /\b(?:that|this|it|that\s+one|the\s+task|the\s+reminder)\b(?!\s+[a-z]{3,}(?:\s|$))|\b(?:that|this|it)\b\s*$/i
+
+/* Explicitly changing the subject of the previous turn, in the ways people do. */
+const CHANGING = /\b(?:actually|instead|rather|make|move|change|push|bump|call|set|sorry|no)\b/i
+
+/*
+  Ordered least-greedy FIRST, and the loop takes the first match.
+
+  The original had `priorit(y|ise|ize)` in the "important" row, so "change it to
+  LOW priority" matched `priority` and came back as 20 — the opposite of what
+  was asked. A list of patterns where an earlier one can swallow a later one's
+  phrase is a list whose order is load-bearing, so the specific two-word
+  phrases are checked before the single words that appear inside them.
+*/
+const URGENCY: ReadonlyArray<readonly [RegExp, number]> = [
+  [/\b(?:whenever|low\s+priority|no\s+rush|not\s+urgent|deprioriti[sz]e)\b/i, 100],
+  [/\b(?:normal|medium|ordinary)\s+priority\b/i, 50],
+  [/\b(?:urgent|top\s+priority|drop\s+everything|asap)\b/i, 10],
+  [/\b(?:important|high\s+priority|priorit(?:y|ise|ize))\b/i, 20],
+]
+
+/** "call it X" / "rename it to X" — the only rename shape worth recognising. */
+const RENAME = /\b(?:call\s+it|rename\s+it\s+to|make\s+it\s+called)\s+(.{2,120}?)\s*$/i
+
+export function personalTaskChange(
+  text: string,
+  now: Date = new Date(),
+): PersonalTaskChange | null {
+  const said = text.trim()
+  if (said === '') return null
+  /*
+    A sentence that is itself a new task is not a change to the last one. This
+    order matters: "actually, remind me Monday to ring them" carries both a
+    referent-ish word and a date, and it is plainly a NEW task.
+  */
+  if (personalTaskRequest(said, now) !== null) return null
+  if (!CHANGING.test(said)) return null
+
+  const matched: string[] = []
+  /*
+    The CHANGE is read first, and then the referent is tested against what is
+    LEFT.
+
+    Asking for a bare referent up front cannot work: "make that Monday" and
+    "make that urgent" both have a word after `that`, and a lookahead cannot
+    tell Monday from a subject without knowing what a change looks like. So
+    each recognised change is removed and the residue is what decides — the
+    strip-and-count method this file already uses for titles, and the reason
+    "make that pricing document urgent" is still refused: with `urgent` gone
+    the residue is "make that pricing document", and `that` is not bare.
+  */
+  let residue = said
+
+  const due = whenFor(said, now)
+  if (due !== null) {
+    matched.push('a new date')
+    residue = residue.replace(WHEN_WORDS, ' ')
+  }
+
+  let priority: number | null = null
+  for (const [re, n] of URGENCY) {
+    if (re.test(said)) {
+      priority = n
+      matched.push('how important it is')
+      residue = residue.replace(re, ' ')
+      break
+    }
+  }
+
+  const rename = RENAME.exec(said)
+  const title = rename === null ? null : (rename[1] ?? '').replace(/[\s.!?]+$/, '')
+  if (title !== null && title !== '') {
+    matched.push('a new name')
+    residue = residue.replace(RENAME, (_m, p1: string) => String(_m).replace(p1, ' '))
+  }
+
+  /*
+    And the changing words come out too, for the same reason the date did.
+
+    "Move it to Friday INSTEAD" left "Move it instead", and `it` followed by a
+    word is not bare — so a perfectly ordinary follow-up was refused by the
+    guard rather than by the product. Every word in `CHANGING` is framing, so
+    none of them can be the subject the guard is protecting against.
+  */
+  residue = residue.replace(new RegExp(CHANGING.source, 'gi'), ' ')
+  if (!BARE_REFERENT.test(residue)) return null
+
+  /*
+    Nothing recognised is nothing to do. Returning an empty change would make
+    the handler say it had changed something when it had not — the claim the
+    coherence gate exists to catch, arriving from the one place that could
+    make it true by accident.
+  */
+  if (matched.length === 0) return null
+  return { due, priority, title: title === '' ? null : title, matched }
+}

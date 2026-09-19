@@ -1193,6 +1193,99 @@ console.log('\nreminders (#259, migration 0512)')
 }
 
 // ===========================================================================
+// Changing one by talking (#259, migration 0516)
+// ===========================================================================
+
+console.log('\n"actually make that Monday" (#259, migration 0516)')
+{
+  /*
+    End to end through the DEPLOYED worker, because the defect was that the
+    conversation had no path to a change at all — the RPC was fine and nothing
+    called it. A test that called `my_task_set` would have proved the half that
+    was never in doubt.
+  */
+  const first = (await press('my_task_add', {
+    p_title: `Ring the caterers ${run}`,
+    p_due_on: new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10),
+  })) as { id?: string }
+  const subject = String(first.id ?? '')
+
+  const say = async (text: string): Promise<string> => {
+    const jobId = String(
+      (
+        await one(`
+          insert into public.jobs
+            (correlation_id, project_id, idempotency_key, kind, requested_by, state, announce,
+             pinned_config)
+          values (extensions.gen_random_uuid(), null,
+                  ${lit(`verify-mytasks-chg-${run}-${Math.random().toString(36).slice(2, 8)}`)},
+                  'office.instruction', ${lit(`teamhq:verify-${run}`)}, 'queued', false,
+                  jsonb_build_object('instruction', ${lit(text)}))
+          returning job_id::text as id`)
+      ).id ?? '',
+    )
+    for (let i = 0; i < 40; i += 1) {
+      const row = await one(`
+        select j.state, coalesce(o.body, '') as body
+          from public.jobs j left join public.outputs o on o.job_id = j.job_id
+         where j.job_id = ${lit(jobId)}::uuid`)
+      if (['complete', 'failed', 'cancelled'].includes(String(row.state))) {
+        await db.execute(
+          `update public.jobs set project_id = null where job_id = ${lit(jobId)}::uuid`,
+        )
+        return String(row.body ?? '')
+      }
+      await new Promise((r) => setTimeout(r, 3_000))
+    }
+    return ''
+  }
+
+  const monday = await say('Actually make that Monday')
+  const moved = await one(`
+    select due_on::text as due, title from public.tasks where task_id = ${lit(subject)}::uuid`)
+  check(
+    'a follow-up moves the task the office just made',
+    `${String(moved.due ?? 'no date')} — the office said: ${monday.slice(0, 60)}`,
+    String(moved.due ?? '') !== new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10) &&
+      String(moved.due ?? '') !== '',
+  )
+  check(
+    'and it says WHICH task it changed, rather than "done"',
+    monday.slice(0, 80) || 'IT SAID NOTHING',
+    monday.includes(`Ring the caterers ${run}`),
+  )
+
+  const urgent = await say('Make that urgent')
+  const now = await one(`
+    select priority from public.tasks where task_id = ${lit(subject)}::uuid`)
+  check(
+    'and a second follow-up changes how important it is',
+    `priority ${String(now.priority)} — ${urgent.slice(0, 50)}`,
+    Number(now.priority) === 10,
+  )
+
+  /*
+    CONTROL: the same words with a SUBJECT in them are the office's work and
+    must not touch his list. This is the direction that costs — a delegation
+    captured as a change to a personal task is work that never happens AND a
+    row he did not ask to move.
+  */
+  const before = String(
+    (await one(`select title from public.tasks where task_id = ${lit(subject)}::uuid`)).title ?? '',
+  )
+  await say('Make that pricing document urgent')
+  const unchanged = await one(`
+    select title, priority from public.tasks where task_id = ${lit(subject)}::uuid`)
+  check(
+    'CONTROL: "make that PRICING DOCUMENT urgent" leaves his task alone',
+    `${String(unchanged.title)} — priority ${String(unchanged.priority)}`,
+    String(unchanged.title) === before,
+  )
+
+  await db.execute(`delete from public.tasks where task_id = ${lit(subject)}::uuid`)
+}
+
+// ===========================================================================
 // The provider seam, driven as a fake provider (#259, migration 0513)
 // ===========================================================================
 
