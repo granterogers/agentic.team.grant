@@ -352,6 +352,31 @@ const recorded = async (): Promise<TurnResult[]> => {
  * result rather than an error: a turn that never lands is exactly the failure
  * Grant would experience, and the report needs to say so rather than crash.
  */
+/**
+ * Every task in this session's projects, oldest first.
+ *
+ * One query used for both the before and the after reading, so a `noWrite`
+ * delta cannot be computed from two subtly different counts — which is the
+ * "a list built twice will disagree" defect with a subtraction on the end.
+ *
+ * Titles as well as the count, because the teardown deletes the rows: a
+ * record that says "1 task" and nothing else cannot be checked afterwards,
+ * and this harness's claim is that its evidence is canonical rather than
+ * reported. The titles survive in `.out/sessions.jsonl` long after the
+ * fixture project is swept.
+ */
+const countTasks = async (
+  projects: ReadonlyMap<string, string>,
+): Promise<{ title: string; slug: string }[]> => {
+  const ids = [...projects.values()]
+  if (ids.length === 0) return []
+  return (await all(`
+    select t.title, coalesce(p.slug, '') as slug from public.tasks t
+      left join public.projects p on p.project_id = t.project_id
+     where t.project_id = any(array[${ids.map((i) => `${lit(i)}::uuid`).join(',')}])
+     order by t.created_at`)) as { title: string; slug: string }[]
+}
+
 export const askOnce = async (
   session: Session,
   index: number,
@@ -363,6 +388,26 @@ export const askOnce = async (
 ): Promise<TurnResult> => {
   const key = `teamhq:sess_${session.name.replace(/[^a-z0-9]/g, '_')}:${chat}-${String(index)}`
   const projectId = turn.inProject === undefined ? null : (projects.get(turn.inProject) ?? null)
+
+  /*
+    How many tasks the session held BEFORE this turn ran.
+
+    `noWrite` used to assert that the session's CUMULATIVE task count was
+    zero, which made it impossible to pass after any turn had legitimately
+    created one. `the-application` is the proof: turn 1, "Square away a task
+    on alpha to bottom out the match funding by the tenth", correctly creates
+    a task; turn 2, "Run past me whether fifteen percent is even normal for
+    this kind of bid", correctly creates nothing — and failed, reporting
+    "no task was created (1)" about the task the previous turn had made.
+
+    The product was right and the harness was wrong, which CLAUDE.md records
+    as true about half the time on a first run. A `noWrite` turn placed after
+    a writing turn could NEVER pass, by construction.
+
+    Counted before rather than derived after, because #197's rule is that
+    anything you need to know about "before" has to have been recorded before.
+  */
+  const before = await countTasks(projects)
 
   const jobId = String(
     (
@@ -523,23 +568,7 @@ export const askOnce = async (
     every "no write happened" assertion depend on what else the office did
     tonight. Scoped by the projects this session created.
   */
-  const ids = [...projects.values()]
-  /*
-    Titles as well as the count, because the teardown deletes the rows.
-
-    A record that says "1 task" and nothing else cannot be checked afterwards,
-    and this harness's whole claim is that its evidence is canonical rather
-    than reported. The titles survive in `.out/sessions.jsonl` long after the
-    fixture project is swept.
-  */
-  const tasks =
-    ids.length === 0
-      ? []
-      : await all(`
-          select t.title, coalesce(p.slug, '') as slug from public.tasks t
-            left join public.projects p on p.project_id = t.project_id
-           where t.project_id = any(array[${ids.map((i) => `${lit(i)}::uuid`).join(',')}])
-           order by t.created_at`)
+  const tasks = await countTasks(projects)
   const taskCount = tasks.length
 
   /*
@@ -656,7 +685,16 @@ export const askOnce = async (
           : elsewhere.map((t) => `${String(t.title)} -> ${String(t.slug)}`).join(', '),
       )
     }
-    if (e.noWrite === true) judge('no task was created', taskCount === 0, String(taskCount))
+    if (e.noWrite === true) {
+      // The DELTA, not the total. See `before` at the top of this function.
+      judge(
+        'this turn created no task',
+        taskCount === before.length,
+        taskCount === before.length
+          ? String(taskCount)
+          : `${String(taskCount - before.length)} new (${String(before.length)} -> ${String(taskCount)})`,
+      )
+    }
     for (const s of e.says ?? []) judge(`says ${JSON.stringify(s)}`, searchable.includes(plain(s)))
     if ((e.saysAny ?? []).length > 0) {
       /*
