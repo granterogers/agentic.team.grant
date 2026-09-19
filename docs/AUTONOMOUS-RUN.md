@@ -18,6 +18,116 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
+# ⭐ CURRENT MISSION — DEEP ACCEPTANCE & COMPLETION RUN
+
+**Started 19 September 2026. Minimum TWELVE HOURS of continuous autonomous
+work.** This block is the first thing a compacted session must read. Everything
+below it is history; this is the live instruction.
+
+## The mission, in one sentence
+
+Move the repository from RC1-qualified toward **genuinely proven** completion by
+finding what the existing tests, harnesses, assumptions and previous agents have
+**failed to see** — then fixing real defects and leaving hard evidence.
+
+**The 37/37 short gate is the STARTING CONDITION, not the objective.** The
+governing question for the whole run is:
+
+> **WHAT DOES THE CURRENT GREEN GATE NOT KNOW TO TEST?**
+
+## Verified starting state (checked, not assumed)
+
+| | |
+|---|---|
+| branch | `claude/phase-7-communications-kh8ow8` |
+| branch head at start | **`7e6ec13`** |
+| `main` at start | **`35c9004`** |
+| tag `v1.0.0-rc.1` | **NOT on the remote** — `git ls-remote` returns nothing |
+| working tree at start | clean |
+| open issues at start | #279, #278, #277, #259, #213, #172, #41, #18 |
+
+## The time contract
+
+Work continuously for **at least twelve hours**. Do NOT stop after one issue,
+one green gate, one deployment, one milestone, or because the repository
+"looks done". Do not ask Grant routine implementation questions.
+
+**A human-blocked item does not end the run.** Record the exact human action
+and carry on with everything else. #279 (tag push), #18 and #213 (credential
+rotations) are all in that category already.
+
+## Priorities
+
+1. **#41 — deep whole-system acceptance. This is the dominant mission.**
+   Realistic multi-step histories, subsystem *interactions*, adversarial and
+   fake-human scenarios, provenance under bait. Trace the full chain: input →
+   interpretation → routing → delegation → persistence → output → side effect
+   → recovery/audit. Seek unknown unknowns. Close it only on real evidence
+   and never by weakening its acceptance criteria.
+2. **Live operational state is part of the test suite.** The previous run found
+   a Notion sync failing every two hours while 36/37 suites were green. Inspect
+   queue health, duties, failures, retries, leases, connector health, delivery
+   state, provenance records, fixture debris and deployed versions regularly.
+   **Any recurring silent failure is P0 until understood.**
+3. **#172** Gmail project intelligence — remaining scope, with the send
+   boundary intact.
+4. **#259** Personal Tasks — verify rather than repeat; find what actually
+   remains. Never make Vikunja canonical; never build a second task system.
+5. **#278** phone project map — a measured real defect; solve the interaction
+   problem without lowering the zoom floor or hurting desktop.
+6. **#277** form-rule narration — baseline → candidate → held-out → adversarial
+   → measure → KEEP/REJECT. Leaving the baseline is an acceptable outcome.
+7. **#279 / #213 / #18** release and credential mechanics — verify the block
+   once, leave exact human instructions, do not burn the run retrying.
+
+## Evidence discipline — the rule that outranks the others
+
+**Never convert an observation into a defect until the INSTRUMENT is proved to
+be measuring the intended state.** This repository has produced false findings
+from loading-state screenshots, inert sabotage, harness races and wrong data
+sources — four times in the last two days alone.
+
+For each meaningful finding: observe → reproduce → **prove the harness valid**
+→ root cause (not symptom) → smallest general fix → regression witness that
+would have failed before → **sabotage the witness so you know it can go red**
+→ targeted verification → broader verification → live-state inspection where
+the defect has an operational dimension.
+
+**A green test never demonstrated capable of going red is weak evidence.**
+
+## Safety boundaries — non-negotiable
+
+- **Never send, post or transmit a message to another human on Grant's behalf.**
+  Draft it and present it. This holds even where a connector permits sending.
+- **Never print, reconstruct or paste a secret value.** Not in logs, commits,
+  reports, test output or chat.
+- Never weaken a test, acceptance criterion, provenance check or security
+  boundary to turn red into green.
+- Confirm before any destructive action.
+- Fixture/harness data must never reach the real UI or user-visible state.
+- A model-backed result must never be labelled deterministic retrieval.
+- Personal Tasks stay distinct from Agent Jobs; Supabase stays canonical.
+
+## Work completed this run
+
+- (nothing yet — the run has just begun)
+
+## Evidence collected this run
+
+- Starting state verified against the remote rather than taken from the prompt.
+
+## Discoveries still unresolved
+
+- (none yet)
+
+## NEXT ACTION
+
+Inspect live operational state (queue, duties, failures, connector health,
+fixture debris, deployed versions) and compare it against what the suites
+claim, then begin the #41 deep acceptance attack.
+
+---
+
 ## WHERE THE WORK IS NOW — beta, 18 September 2026
 
 **The completion run below is FINISHED.** What replaces it is CLAUDE.md's
