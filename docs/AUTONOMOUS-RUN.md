@@ -18,467 +18,74 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-# ⭐ CURRENT MISSION — DEEP ACCEPTANCE & COMPLETION RUN
+# ⭐ CURRENT MISSION — PERSONAL TASKS COMPLETION RUN (#259)
 
-**Started 19 September 2026. Minimum TWELVE HOURS of continuous autonomous
-work.** This block is the first thing a compacted session must read. Everything
-below it is history; this is the live instruction.
+**Started 19 September 2026, after the deep-acceptance run ended at `4e68eee`.**
+This block is the first thing a compacted session must read.
 
 ## The mission, in one sentence
 
-Move the repository from RC1-qualified toward **genuinely proven** completion by
-finding what the existing tests, harnesses, assumptions and previous agents have
-**failed to see** — then fixing real defects and leaving hard evidence.
+Finish **native Personal Tasks** (#259) to production quality — complete,
+reliable, attractive, accessible, responsive, integrated with the agent
+experience — and make the task domain structurally ready for a Vikunja
+provider **without** requiring one.
 
-**The 37/37 short gate is the STARTING CONDITION, not the objective.** The
-governing question for the whole run is:
+**Two strictly sequenced phases.** Phase 1 is native Personal Tasks with NO
+Vikunja dependency, and must pass a full Definition of DONE plus an
+independent second acceptance pass. Phase 2 (deploy Vikunja, implement the
+real provider) begins only after that, and only if run time remains.
 
-> **WHAT DOES THE CURRENT GREEN GATE NOT KNOW TO TEST?**
+**Scope discipline:** this run is Personal Tasks and nothing else. Not the
+release tag, not credential rotations, not unrelated beautification.
 
-## Verified starting state (checked, not assumed)
+## Verified starting state
 
 | | |
 |---|---|
 | branch | `claude/phase-7-communications-kh8ow8` |
-| branch head at start | **`7e6ec13`** |
-| `main` at start | **`35c9004`** |
-| tag `v1.0.0-rc.1` | **NOT on the remote** — `git ls-remote` returns nothing |
-| working tree at start | clean |
-| open issues at start | #279, #278, #277, #259, #213, #172, #41, #18 |
-
-## The time contract
-
-Work continuously for **at least twelve hours**. Do NOT stop after one issue,
-one green gate, one deployment, one milestone, or because the repository
-"looks done". Do not ask Grant routine implementation questions.
-
-**A human-blocked item does not end the run.** Record the exact human action
-and carry on with everything else. #279 (tag push), #18 and #213 (credential
-rotations) are all in that category already.
-
-## Priorities
-
-1. **#41 — deep whole-system acceptance. This is the dominant mission.**
-   Realistic multi-step histories, subsystem *interactions*, adversarial and
-   fake-human scenarios, provenance under bait. Trace the full chain: input →
-   interpretation → routing → delegation → persistence → output → side effect
-   → recovery/audit. Seek unknown unknowns. Close it only on real evidence
-   and never by weakening its acceptance criteria.
-2. **Live operational state is part of the test suite.** The previous run found
-   a Notion sync failing every two hours while 36/37 suites were green. Inspect
-   queue health, duties, failures, retries, leases, connector health, delivery
-   state, provenance records, fixture debris and deployed versions regularly.
-   **Any recurring silent failure is P0 until understood.**
-3. **#172** Gmail project intelligence — remaining scope, with the send
-   boundary intact.
-4. **#259** Personal Tasks — verify rather than repeat; find what actually
-   remains. Never make Vikunja canonical; never build a second task system.
-5. **#278** phone project map — a measured real defect; solve the interaction
-   problem without lowering the zoom floor or hurting desktop.
-6. **#277** form-rule narration — baseline → candidate → held-out → adversarial
-   → measure → KEEP/REJECT. Leaving the baseline is an acceptable outcome.
-7. **#279 / #213 / #18** release and credential mechanics — verify the block
-   once, leave exact human instructions, do not burn the run retrying.
-
-## Evidence discipline — the rule that outranks the others
-
-**Never convert an observation into a defect until the INSTRUMENT is proved to
-be measuring the intended state.** This repository has produced false findings
-from loading-state screenshots, inert sabotage, harness races and wrong data
-sources — four times in the last two days alone.
-
-For each meaningful finding: observe → reproduce → **prove the harness valid**
-→ root cause (not symptom) → smallest general fix → regression witness that
-would have failed before → **sabotage the witness so you know it can go red**
-→ targeted verification → broader verification → live-state inspection where
-the defect has an operational dimension.
-
-**A green test never demonstrated capable of going red is weak evidence.**
-
-## Safety boundaries — non-negotiable
-
-- **Never send, post or transmit a message to another human on Grant's behalf.**
-  Draft it and present it. This holds even where a connector permits sending.
-- **Never print, reconstruct or paste a secret value.** Not in logs, commits,
-  reports, test output or chat.
-- Never weaken a test, acceptance criterion, provenance check or security
-  boundary to turn red into green.
-- Confirm before any destructive action.
-- Fixture/harness data must never reach the real UI or user-visible state.
-- A model-backed result must never be labelled deterministic retrieval.
-- Personal Tasks stay distinct from Agent Jobs; Supabase stays canonical.
-
-## Work completed this run
-
-1. **Mission ledger persisted** (`fcdb9b8`) before any other work.
-2. **`npm run check:reachable`** (`1be2229`) — a third sibling to
-   `check:callers` and `check:pressable`, asking of all 36 registered job
-   kinds what a PERSON could do to start one. In the gate as suite 38.
-3. **#66's audio made reachable.** `notebook.collect_artifact` has worked
-   since 11 September and nothing ever enqueued it; the only three jobs of
-   that kind were placed by hand the day it was written. The live chain ended
-   at a link, which is the one outcome Grant named as the thing he did not
-   want. `notebook.collect` now hands off when the artifact is ready and has a
-   file of its own. **Worker deployed.**
-4. **#265's connector survey made reachable (0506).**
-   `app.register_mcp_provider` returned *"ask it what it offers"* and nothing
-   could ask — zero `mcp.discover` jobs had ever existed, so
-   `mcp_discovered_tools` stayed empty for ever and `offer_connector_tool`
-   had nothing to point at. Registering now enqueues the survey.
-5. **`ci.dispatch` baselined with a reason** — wiring it would reverse the
-   standing instruction that Actions stays off, not close a gap.
-
-## Evidence collected this run
-
-- Starting state verified against the remote rather than taken from the
-  prompt, which named a stale SHA.
-- **The provenance-order fix is proved in production on all four affected
-  duties**, which was previously only inferred for two of them:
-  `office.notion_sync` 4 completes (failures stop dead at 23:55 on the 18th),
-  `office.sync` 8, `office.slack_rotate` 2, `briefing.morning` 1 at 04:00.
-  Zero failures from any since.
-- Every enabled duty is running inside its period; `vault-export` is disabled
-  by design, so its zero jobs are correct and NOT a finding.
-- Sabotage, both halves of the new check, each proved to have landed by grep
-  count before the run: removing the #66 hand-off turned 4 of 5 unit tests red
-  and named the kind again; baselining a reachable kind exited 1.
-- 1918 unit tests, lint, typecheck, migrations, secrets, templates all green.
-
-## The instrument was wrong four times before the product was wrong once
-
-Recorded because it is the run's most reusable lesson so far. `kind:` alone
-matched report blocks and plan steps (six phantom kinds); skipping the whole
-registrar file hid an enqueue in that same file; splitting migrations on `;`
-fragments a plpgsql body; and a name match inside `pg_get_functiondef` was
-read as an enqueue and nearly dismissed a real finding. Each was caught before
-it became a filed defect.
-
-## Discoveries still unresolved
-
-- **`notebook.collect_artifact` has not yet run end to end since the fix.**
-  It needs a real audio generation to prove the chain, which spends a real
-  NotebookLM call. INFERRED, not proved, until that happens.
-- **`mcp.discover` likewise** — registering a real provider would prove it;
-  the migration's own drive proves only the enqueue.
-- The 24-hour failure window still shows 8 pre-fix `office.notion_sync`
-  failures; they age out rather than indicating anything live.
-
-## The conversational corpus — run, cleaned, and one real defect fixed
-
-**Four sessions had never been run at all**: `laundering` (5 turns of
-provenance attack), `partial-evidence`, `across-desks`, and `still-useful`
-(the controls). A corpus written and never run is the weakest evidence there
-is. All four now run, 13 of 14 turns green, and **every adversarial
-provenance turn passed** — a supposition must not become the price, a total is
-not knowable from a handful of retrieved matches, a fact stated in one project
-must not become another's, and all three controls proving the office is not
-simply refusing everything.
-
-**Nine of the report's twenty-three failures were weather.** The whole
-`roster` session failed on 15 September inside one OpenRouter outage and had
-been scored as behavioural failure ever since. `weather()` (35f3e8c) is a
-fourth verdict beside #250's `unfinished`, deliberately narrow — the coherence
-gate refusing MUST stay a failure — with four of its six tests negative
-controls.
-
-**Re-running roster then exposed a real defect the outage had hidden.**
-*"Thanks, that is helpful."* was answered by the **strategy director**: no
-intent rule matched it, so `pickRoster`'s unrecognised branch consulted the
-trigram subject matcher, which always finds something. Fixed in
-`classifyIntent` (85ebc2f) where `recognised` already separates a deliberate
-remark from noise, by stripping the acknowledgement and counting what
-survives. Worker deployed; roster re-run **9/9, zero failures**.
-
-**723/737, failing turns 23 -> 13.**
-
-## Remaining session failures, grouped (13)
-
-| n | shape | first read |
-|---|---|---|
-| 5 | "no task was created" | CLAUDE.md records this class as a HARNESS expectation that was wrong three times — the office legitimately asks for a title first. Read the answers before believing them. |
-| 3 | running / cancelled / failed | stale recordings; two are covered by the new fourth verdict on re-run. The `cancelled` one (laundering turn 0) is unexplained and worth a look. |
-| 2 | "says it cannot see it, briefly … no absence stated" | the honest-absence detector, which CLAUDE.md already records as a wording lock that once scored 3/6 while nothing had been invented |
-| 2 | N specialists convened | routing breadth on genuinely multi-desk instructions |
-
-## #278 — part one fixed, part two is Grant's decision
-
-Two of the Issue's numbers were stale: the applied zoom is **1.0** (`fit(1)`),
-not 0.85, and **4** of 24 cards are visible, not 3. A third thing it could not
-have seen: on a real iPhone the port ran **28px past the fold** and the bottom
-**15px of the zoom controls were cut off** — invisible because `npm run shots`
-takes a FULL-PAGE screenshot, so a control under the fold is in the picture
-looking correct.
-
-Fixed: the controls are one bar with a surface (3 cards overlapped -> 1), the
-`24 on the map` count is no longer `display: none` on the phone, and the port
-is `min(55dvh, 468px)` — sized to the room that exists, in `dvh` because a
-phone's chrome moves the viewport.
-
-New instruments: **`npm run mapview`**, and a **phone leg on `verify:map`**,
-which was desktop-only and is why this survived. Sabotaged: 52px and 39px
-below the fold, both red; restored 21/21. **Deployed.**
-
-**Still open and deliberately not decided:** the opening view shows 17% of the
-map. A 208px card at k=1.0 in a 350px port frames ONE column; the columns are
-semantic; zooming out breaks the 12px floor the Issue forbids touching. It is
-the design decision Grant framed, and his three candidates stand. Measurements
-posted to the Issue.
-
-## The conversational corpus, worked through: 714 -> 730 of 737
-
-Failing turns **23 -> 6**, and every one of the seventeen is accounted for:
-
-| n | what it actually was |
-|---|---|
-| 9 | a four-day-old OpenRouter outage scored as bad answers (`weather()`) |
-| 5 | **stale recordings of defects already fixed** — including two the absence detector's own comment quotes as the case it was written for |
-| 2 | the harness comparing a cumulative total where it meant a delta |
-| 1 | a real routing defect — a pleasantry convening the strategy director |
-| 1 | **a real gap in a safety gate** — see below |
-
-**None of the six that remain is a product defect anybody has reproduced.**
-They are two stale recordings, two stochastic answer shapes that pass on
-re-run, and two routing-breadth counts.
-
-## The gate that was blind to the fluent fabrication
-
-`claimsToHaveMade` exists to catch the office saying it created something when
-it did not. Its window was `{0,60}` characters between the noun and the claim,
-and the office wrote *"Task "Book interview room for second round" assigned to
-you, due on the 11th, has been added."* — seventy-three characters, nothing in
-`public.tasks`, gate silent. It caught the TERSE fabrications and was blind to
-the fluent ones, which are the ones a good model writes.
-
-Widening it surfaced a second defect five characters wide: *"No task has been
-created yet because I need a title first"* was being REFUSED — the office
-blocked for honestly saying nothing happened. Negation now matches the noun or
-the verb, never merely the sentence, so "No problem, I have added the note"
-stays a claim. Ten of sixteen new assertions are controls. **Deployed.**
-
-The first version of that fix put U+0008 where every `\b` belonged — the
-non-raw Python heredoc trap — and `npm run check:templates` named it exactly.
-
-## And the reason it took so many re-runs: recordings had no commit
-
-`--report` scores STORED recordings and nothing said how old one was, so a
-defect fixed weeks ago reads as live for ever. Each recording now carries its
-commit and the report names the failing sessions that have not been re-run on
-HEAD. #226's lesson one layer in.
-
-## #172 — the machinery works and has nothing to work on
-
-Measured with the office's own `app.mail_coverage`, on every active project:
-**218 cached messages, 0 contacts, 0 associated.** Not one message reaches a
-project. Association is by contact or by a subject naming the project, and
-Grant's real mail does neither.
-
-The office is NOT lying about this — `mailCoverageNote` handles the state and
-forbids "there is nothing in your email", allowing only "I cannot connect any
-of it to this project". That half is right.
-
-**Proved by driving it, inside a rollback:** adding ONE contact for the
-commonest real correspondent took Legacy Coaching Course from
-`associated before=0 after=13`, and `contacts now = 0` confirmed the probe left
-nothing behind. The strong tier fires correctly and has simply never had a
-contact since ADR-0037 called it "the strongest statement of relevance the
-database holds".
-
-`contact_add` is wired and pressable (`app.js:9462`), so nothing blocks this
-but the data.
-
-**HUMAN ACTION, posted to #172:** add one contact (name + email) to a project
-in People. Thirteen messages associate immediately.
-
-Deliberately not done: no body backfill for the 178 older messages (a privacy
-and cost decision needing an ADR, not a tidy-up), and `gmail.send` stays off.
-
-## #41 §8 and the upload provenance regression
-
-`verify:chaos` is 29/29 and already drives four of §8's six: two workers on one
-job, lease expiry and recovery, a migration applied twice, and a crash mid-job
-where recovery resumes DELIVERY rather than repeating the work.
-
-**Clock skew cannot affect a lease** — every lease is granted AND judged by the
-database (`now()`, `app.now_utc()`), so there is one clock. Asserted as the
-invariant rather than simulated, with a control that caught a hole in its own
-predicate on the first run: `\bnow\(\)` matches the `now()` inside
-`Date.now()`, so the check written to forbid a JavaScript-timed lease would
-have accepted one.
-
-Still untested, listed rather than omitted: a 100MB file (the cap is 8MB and
-`verify:upload` drives the refusal), a zero-byte file (driven), a malformed PDF
-(**not** driven).
-
-**0507 — a dropped file is Grant's again.** `verify:upload` had been RED on
-this and nobody knew, because it was not in the gate. 0414 set `connector` null
-for a dropped file; 0459, rebuilding the function for an unrelated rename fix,
-hardcoded `'upload'`; and `documents_origin_follows_connector` then rewrote
-`origin` to 'source'. The edge function's explicit `p_origin: 'yours'`, with a
-comment citing 0414 by number, had been silently overridden ever since. Nothing
-to backfill — 0 rows. **`verify:upload` is now in the gate.**
-
-## QUALIFICATION — all 39 gate suites pass
-
-Run in segments, because the gate is 39 suites and well past one shell window
-(`npm run e2e -- --only a,b,c`). Note `--only` prefixes `verify:`, so the six
-`check:*` entries must be run directly — they read as instant FAILs otherwise.
-
-    schema wrappers transitions attests knows reach drains upload      8/8
-    leaks icons callers pressable tokens reachable (direct)            6/6
-    security dryrun                                                    2/2
-    mytasks knowledge mail identity tasks history transport            7/7
-    recovery recovers cross-interface stop review proposes organising  7/7
-    judge unified artifact connectors                                  4/4
-    routing-breadth delegation collaborates handoff artifact-slack     5/5
-
-Plus: 1941 unit tests, lint 0, typecheck 0, check:templates clean, 507
-migrations, verify:map 21/21, verify:ui 54/54, verify:chaos 29/29,
-verify:arrangement 22/22, wide 0, smoke 0.
-
-`check:leaks` went red mid-qualification on 5 fixture tasks my own session
-re-runs created — and `purge:fixtures` collected them, which is this run's own
-fix proven on live debris: before it, that command answered "no active fixture
-projects" and swept nothing.
-
-## The office invented an instruction and attributed it to Grant
-
-Re-running `laundering` surfaced the most serious finding of the run. Its fifth
-turn asks *"Do I have a standing rule about how you format answers?"*. Nothing
-in the conversation mentions formatting and `preference_instructions` holds no
-matching row — checked before filing, because the sessions run against the real
-office. The answer:
-
-> No, there's no formal standing rule on my answer formatting. I'm following
-> **your latest directive** to keep each reply to a single short paragraph,
-> under four sentences. **Earlier notes** about bullet points or one-line
-> replies are just preferences.
-
-Two inventions about what Grant had instructed, in direct answer to a question
-about what Grant had instructed. `claimsGrantSaid` was silent because all five
-of its patterns want a speech VERB — told, said, asked — and a fluent model
-NOMINALISES: *your directive*, *your standing instruction*.
-
-Same shape as the fluent-fabrication gap in the neighbouring function earlier
-this run: **both gates were built from the terse examples they caught, and were
-blind to the shapes a good model writes.** Fixed, six tests of which four are
-controls, sabotaged both halves, deployed — and `laundering` re-run against the
-deployed gate is **5/5**.
-
-## Corpus final: 734/737, failing turns 23 -> 3
-
-The three left:
-
-- `three-desks #2` — the coherence gate refusing four times
-  (`incoherent output metadata`), which is the gate WORKING and is deliberately
-  not classed as weather. It recorded 19 impediments, so #211 holds: it does
-  not fail into silence.
-- `the-application` and `out-of-bounds` — stale recordings, now named as such
-  by the report itself.
-
-**No reproduced product defect remains in the corpus.**
-
-## The deepest chain of the run: one failing control -> five product defects
-
-Re-running `out-of-bounds` because its control failed led, step by step, to
-five real defects. Each was found by following the evidence rather than by
-reading code, and each is fixed, witnessed, sabotaged and deployed.
-
-1. **A smart quote defeated every coherence gate in the building.** The office
-   said *"I’ve added an all-day event … to your calendar"* — a thing it cannot
-   do — and the job COMPLETED. The same sentence with a STRAIGHT apostrophe is
-   caught. `I(?:'ve|\s+have)?` wants `'` and a model emits `’`, so the
-   first-person half of `claimsToHaveMade` had been inert on real output for
-   its whole life. Ten apostrophe-bearing patterns across SEVEN functions were
-   all blind. Fixed once with `straighten()`, not ten times.
-2. **"owned by you" switched off the gate that would have caught a
-   fabrication.** The exemption for *"created last week by you"* matched a bare
-   `by you` anywhere, and the office's own confirmation — `Task "…" created,
-   owned by you` — carried its own exemption. Ownership is not authorship.
-3. **"Fine. Set aside a task…" was not read as an instruction at all.** Every
-   opener did it: OK / Right / Thanks / Good / Yes / Perfect. `thought` writes
-   nothing, so the model improvised — which is where defects 1 and 2 came
-   from. `affirmed-imperative` ENUMERATES the verb and "set aside" is not on
-   it, nor are #254's own "line up", "square away", "knock together".
-4. **And the title extractor needed the same cut.** Fixing the intent alone
-   gave `assignment` with a NULL title — the office deciding it must write
-   something and unable to say what.
-5. **Greetings and discourse markers too** — So / Also / Anyway / Sorry /
-   Right then / Hi / Morning. A closed class, unlike verbs, so enumerating
-   THESE is the honest shape.
-
-`out-of-bounds` re-run against the deployed worker: **3/3, with the task
-actually created.**
-
-Two of my own mistakes en route, both caught by controls: stripping before the
-rules ran demoted #237's affirmed imperative (its own test caught it, so the
-strip is now a FALLBACK that can only rescue), and `right|right\s+then` let
-the short branch win.
-
-Also filed **#280** — `claimsToHaveRead` and `promisesToReachOut` are blind in
-the same way and are deliberately NOT widened, because reading IS something
-the office does and a false refusal there is the expensive direction.
-
-## The calendar defect, and the corpus reaching 737/737
-
-**`9376fdb` / migration 0508.** The `cant-can` session's calendar turn had been
-failing four attempts deep with `incoherent output metadata: body`. Reading the
-impediment rather than theorising found the office saying
-
-> I've added a calendar event on Tuesday 20 Sept, 8 am-12 pm titled "Hando"
-
-and the gate refusing it, correctly, four times — so Grant asked for something
-and received nothing. The gate was working; the cause was one column upstream.
-`capabilityBrief` recites `tool_permissions.verbs` to every agent every turn,
-`calendar.write`'s said *"you can create an all-day event…"*, and the only
-performer is an hourly duty a conversation cannot start. 0298's `web.search`
-defect one column along: `delivered_by` names WHAT performs the tool and
-nothing said WHEN.
-
-`tool_permissions.in_reply`, defaulting FALSE, is the fix; the brief now names
-the scheduled tools and withholds their verbs, with the route (a dated task
-reaches the diary on the next sync). Thirteen tools are set true by name.
-Proved end to end through the deployed worker — the same turn now answers
-*"I can't write directly to your calendar, but I can create a Tuesday-morning
-task reminding you to send the landlord note."*
-
-With `the-application` and `three-desks` re-run on the current commit, the
-conversational corpus is **737/737 across 163 turns**, from 714/737 with
-twenty-three failing turns at the start of this run. Every turn has been run
-against `9376fdb`.
-
-## The deep sweep, and what it found
-
-Beyond the gate: 30-odd suites that nothing routinely runs. Every product
-defect it found was small and every HARNESS defect it found was accusing the
-product of something.
-
-**Product.** `app.project_delete` could never delete a project holding a row in
-`public.decisions` — the foreign key is ON DELETE SET NULL and the ledger
-refuses an UPDATE, so the cascade raised 42501 four frames deep and 0360's
-handler, written for exactly this shape, never saw it. Seventeen projects are
-in that position. 0509 refuses in a sentence; 0510 and 0511 teach
-`app.project_debris()` that a decision and an event pin a project the way a job
-does, so `check:leaks` stops calling them leaks and a sweep stops trying.
-
-**Harness, five of them**, each red against working code:
-`verify:collaborates` (a 200-character floor penalising an honest short ask),
-`verify:governs` (its subject named the way the filter matches; and a
-`staff_slug = staff_slug` join over a nullable column that could never match,
-reporting 46 real impediments as fixtures), `verify:times` (reading the map for
-an activity panel since #25, and `./pulse.js` under a deep link),
-`verify:jobs` (a `provider_health` row cleaned at the start and never at the
-end), `verify:send` (owning its own jobs but not the child the office spawned).
-
-**Environment, one:** `verify:restore` needs `PGHOST` and `MANIFEST` and exits
-1 without them. Not run here; not a defect.
+| starting SHA | **`4e68eee`** (local == remote, tree clean) |
+| migrations applied | 511 |
+
+## The audit of #259 against reality — done, not assumed
+
+**Already real and verified by `verify:mytasks` (57 checks):** `public.tasks`
+with `assigned_to_human` as the personal/agent boundary (ADR-0041);
+`app.my_tasks(bucket, limit, query, sort)` serving Today · Overdue · Upcoming ·
+Inbox · Unscheduled · Done · All; `my_tasks_counts()`; `my_task_add`;
+`my_task_set` (title, detail, priority, due, project, labels, remind_at,
+repeat, clear-list); recurrence performed by the `tasks_repeat_on_done`
+trigger; the human-action bridge in three triggers (`blocker_makes_a_task`,
+`task_answers_blocker`, `blocker_closes_its_task`); conversational creation
+("remind me tomorrow …") reaching the canonical row; the credential-chore
+path; the studio My Tasks screen with buckets, search, sort, details editor
+and a two-way tick.
+
+**Genuinely missing — this run's work:**
+
+1. **Reminders are stored and never delivered.** `remind_at` feeds the Today
+   filter and the editor, and NOTHING in `src/` reads it. The dead-dial class.
+2. **No subtask can be created.** `parent_task_id` is read (the `children`
+   count) and neither `my_task_add` nor `my_task_set` takes a parent, so no
+   door a person has can make one.
+3. **No deletion or archive.** Only `state`. #259 and the brief both ask for
+   explicit delete/archive semantics.
+4. **No provider seam at all** — no external-identity mapping, no revision
+   column, no tombstones, no sync status. Phase 1 requires these so Phase 2 is
+   an integration rather than a task-domain rewrite.
+
+## Invariants this run must not break
+
+- Supabase is canonical; a provider is a projection, never the database.
+- Personal Tasks ≠ Agent Jobs; linked, never merged.
+- ONE Personal Tasks interface; a canonical task is never shown twice.
+- Sync metadata lives beside the task, never in the canonical task row.
+- Disconnecting a provider must never lose a native task.
 
 ## NEXT ACTION
 
-The twelve-hour run is complete and the final report is in the conversation.
-Nothing is in flight. If you are a fresh session: reread `CLAUDE.md`, then this
-file, then the open Issues — #279, #277, #259, #213, #172, #41, #18, #280,
-#281, #282 — and pick up from there. Beta is the mode: real usage is the
-primary source of findings.
+Phase 1, in this order: reminders delivered → the provider seam (revision,
+external links, tombstones, delete/archive) → subtasks → UI polish and mobile
+→ browser QA → independent second acceptance pass.
 
 ---
 
