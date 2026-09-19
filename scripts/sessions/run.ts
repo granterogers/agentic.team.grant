@@ -59,6 +59,30 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 
+/**
+ * Did this job fail because the office could not THINK, rather than badly?
+ *
+ * Exported so it can be shown the real failure strings in a unit test. A
+ * predicate that decides what counts as a product failure and has never been
+ * shown a string it must REFUSE is the found-nothing shape: it would read as
+ * working whether it matched everything or nothing.
+ *
+ * The two halves it must separate, taken from every session job ever recorded:
+ *
+ *   weather      37 x "handler threw: provider openrouter is unavailable: its
+ *                      circuit breaker is open"
+ *   the office    9 x "incoherent output metadata: body" — the coherence gate
+ *                      refusing an answer the office could not stand behind,
+ *                      which is a behavioural outcome and must stay a FAILURE
+ *
+ * Narrow on purpose, and the asymmetry is what makes narrow safe: too narrow
+ * and an outage still reads as a failure, which is exactly today's behaviour
+ * and costs nothing new; too broad and a real product failure is hidden, which
+ * is unrecoverable.
+ */
+export const weather = (reason: string): boolean =>
+  /provider \S+ is unavailable|circuit breaker is open/i.test(reason)
+
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
   console.error('SUPABASE_ACCESS_TOKEN is not set')
@@ -395,6 +419,7 @@ export const askOnce = async (
       async () =>
         await one(`
           select j.state::text as state, j.announce, app.harness_job(j.job_id) as fixture,
+               coalesce(j.state_reason, '') as why,
                  coalesce(j.recipient_agent, '') as agent,
                  coalesce(p.slug, '') as project_slug,
                  coalesce(r.intent_class, '') as intent,
@@ -444,6 +469,7 @@ export const askOnce = async (
       async () =>
         await one(`
         select j.state::text as state, j.announce, app.harness_job(j.job_id) as fixture,
+               coalesce(j.state_reason, '') as why,
                coalesce(j.recipient_agent, '') as agent,
                coalesce(p.slug, '') as project_slug,
                coalesce(r.intent_class, '') as intent,
@@ -458,6 +484,37 @@ export const askOnce = async (
     )
     unfinished = LIVE.includes(String(row.state))
   }
+
+  /*
+    A fourth verdict: the office could not THINK (#250's shape, one step on).
+
+    `unfinished` separates "nothing has decided yet" from "it answered badly".
+    This separates a third thing that was being counted as the second: a job
+    that reached `failed` because the PROVIDER was down.
+
+    Measured, not imagined. Across every session job ever recorded the failure
+    reasons are: 37 x "provider openrouter is unavailable: its circuit breaker
+    is open", 9 x "incoherent output metadata", and 2 from a provenance defect
+    since fixed. The whole `roster` session — all nine turns, including both of
+    its controls — failed on 15 September inside one OpenRouter outage, and
+    `npm run session -- --report` has been scoring those nine as the office
+    answering badly ever since. Nine of the report's twenty-three failures were
+    four-day-old weather.
+
+    That is the shape CLAUDE.md keeps recording and keeps paying for: a
+    measurement that cries wolf is one Grant learns to ignore, and this one had
+    39% noise in its failure column.
+
+    DELIBERATELY NARROW, and the asymmetry is what makes that safe. Too narrow
+    and an outage still reads as a failure, which is exactly today's behaviour
+    and costs nothing new. Too broad and a real product failure is hidden,
+    which is unrecoverable. So it matches a provider being unavailable and
+    nothing else — "incoherent output metadata" stays a FAILURE, because the
+    office producing an answer it cannot stand behind is a behavioural outcome
+    and not weather.
+  */
+  const why = String(row.why ?? '')
+  const couldNotThink = String(row.state) === 'failed' && weather(why)
 
   /*
     Tasks are counted for the SESSION, not globally.
@@ -538,7 +595,15 @@ export const askOnce = async (
     answered nothing. A suite that can report a green turn for a job Grant
     received nothing from is measuring the wrong thing.
   */
-  if (unfinished) {
+  if (couldNotThink) {
+    /*
+      Not judged, and counted apart — the same treatment as `unfinished` and
+      for the same reason. An expectation about an answer the office was
+      never able to form is an assertion about nothing, and a green one would
+      be worse than a red one.
+    */
+    inconclusive.push(`could not think — ${why.slice(0, 80)}`)
+  } else if (unfinished) {
     /*
       Not judged either way. The turn is reported as unfinished and every
       expectation below it is skipped, because an expectation about an answer
@@ -552,13 +617,13 @@ export const askOnce = async (
 
   const e = turn.expect
   /*
-    `!unfinished`, because an expectation about an answer that does not exist
+    `!unfinished && !couldNotThink`, because an expectation about an answer that does not exist
     yet is an assertion about nothing - and a GREEN one would be worse than a
     red one. #250's own turn is the case: `recipient_agent` is written before
     the answer, so "answered by the finance director" held for a job that had
     not finished, which is how a harness reports a turn it never saw.
   */
-  if (e !== undefined && !unfinished) {
+  if (e !== undefined && !unfinished && !couldNotThink) {
     if (e.agent !== undefined)
       judge(`answered by ${e.agent}`, row.agent === e.agent, String(row.agent) || 'nobody')
     if (e.notAgent !== undefined)
