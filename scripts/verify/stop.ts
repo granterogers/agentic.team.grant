@@ -281,7 +281,34 @@ const stepsFor = (ran: string[]) => [
     ).v ?? '',
   )
   const jobId = await makeJob('queued')
-  await db.execute(`update public.jobs set state = 'running' where job_id = ${lit(jobId)}::uuid`)
+  /*
+    A LEASE, and it is not decoration.
+
+    The first version set `state = 'running'` and nothing else, and the check
+    below failed reporting `state queued` — which reads like the gateway
+    section returning the wrong thing. It is not. `job_state_transitions` says
+    what happened, to the millisecond:
+
+        23:52:58.890  queued   -> running
+        23:53:00.357  running  -> retrying   "recovery: worker (unleased) died
+                                              holding this in running"
+        23:53:00.368  retrying -> queued     "requeued after retry"
+
+    One and a half seconds. A running job with no lease is, to
+    `app.recover_stalled_jobs()`, a job whose worker died — and it is right
+    about that. The suite was manufacturing a state the office exists to clean
+    up, and then failing because the office cleaned it up.
+
+    So this gives the job what a genuinely running one has. That removes the
+    race rather than detecting it, which is the repair #273's class taught:
+    a retry loop here would just make the same wrong assertion intermittently.
+  */
+  await db.execute(`
+    update public.jobs
+       set state = 'running',
+           leased_by = ${lit(MINE)},
+           leased_until = app.now_utc() + interval '5 minutes'
+     where job_id = ${lit(jobId)}::uuid`)
   /*
     One finished step and one still in flight, written directly rather than by
     running a handler: this section is about the READER, and driving the

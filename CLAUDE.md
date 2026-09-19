@@ -2860,6 +2860,33 @@ Each of these cost real time. They are here so they cost it once.
   "said nothing", which in this harness would have quietly IMPROVED the number
   under test.
 
+- **Five fixture connectors were on Grant's Connections page for two days, and
+  nothing was counting them.** `app.hq_studio_settings` builds that list
+  straight from `knowledge_connectors` with no fixture filter, so twelve cards
+  included five named **"Fixture connector"** — left by crashed runs of
+  `verify:knowledge`, whose teardown keys on its own run token and therefore
+  could never collect an earlier run's. The fix is three-sided because any two
+  alone leave it open: the reader filters the CLASS, the rows are swept by
+  class AND age, and `check:leaks` gains a counter. It already counted probe
+  providers, fixture tasks, harness tools and retired specialists and had no
+  idea this table existed — **a debris class with no witness is one that comes
+  back**, and this is the fifth table to prove it.
+- **A `where` goes where the grammar puts it, not where the table name is.**
+  The splice inserted the filter straight after
+  `from public.knowledge_connectors k`, which is where the eye goes — and the
+  next line is `left join lateral`, so the function became
+  `from … where … left join …` and Postgres answered
+  `syntax error at or near "left"`, naming a keyword three lines from the
+  anchor. Splice after the JOIN.
+- **A sabotage refused by a CHECK constraint is not a sabotage — sixth
+  instance, and this one nearly recorded a vacuous control as evidence.** The
+  row inserted to prove `check:leaks` could see connector debris violated
+  `knowledge_connectors_disabled_has_reason`, so nothing was inserted, the
+  check reported zero, and that zero was about to be written up as "the witness
+  works". The insert's own result said `0 rows` and the proof line printed it,
+  which is the only reason it was caught. **Print something from the sabotage
+  that proves it landed, and read that line before reading the check's.**
+
 ---
 
 ## Visual standard

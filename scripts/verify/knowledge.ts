@@ -915,8 +915,14 @@ console.log('\nwhat happens when a source vanishes from its listing (ADR-0040)')
 console.log('\n| check | outcome | |')
 console.log('|---|---|---|')
 for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '✅' : '❌'} |`)
-const failed = checks.filter((c) => !c.passed)
-console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`)
+/*
+  The tally is computed AFTER the teardown, at the bottom of the file.
+
+  It used to sit here, above it — so the teardown's own assertion was recorded,
+  printed, and could never fail the suite. A check that cannot fail is not a
+  check, and this one was added precisely because nothing was watching the
+  connector pile.
+*/
 
 // A suite that leaves fixtures behind is a suite that poisons the next run's
 // counts — and one that leaves a DISABLED connector behind has changed real
@@ -926,6 +932,52 @@ await db.execute(`
   delete from public.knowledge_connectors where connector = ${lit(`fixture_${run}`)};
   delete from public.projects where project_id in (${lit(projectId)}::uuid, ${lit(otherId)}::uuid);
 `)
+
+/*
+  And every OTHER run's connector, because a crashed run never reaches the line
+  above (0505).
+
+  Five rows named "Fixture connector" accumulated here between 17 September
+  06:04 and 17:10 and sat on Grant's Connections page for two days -- five of
+  twelve cards. Every one was left by a run of THIS suite that died before its
+  teardown, and the teardown keyed on its own run token could never collect
+  them. Sweeping the CLASS is what the proposals teardown had to learn for the
+  same reason.
+
+  Bounded by AGE rather than by name, so a run happening concurrently is not
+  robbed of its own fixture mid-assertion -- the same reasoning 0419 uses about
+  what separates a test subject from a real one.
+*/
+const swept = await db.execute(`
+  delete from public.knowledge_connectors
+   where connector like 'fixture\\_%'
+     and created_at < now() - interval '30 minutes'
+  returning connector`)
+if (swept.rows.length > 0) {
+  console.log(`swept ${String(swept.rows.length)} connector(s) an earlier crashed run left behind`)
+}
+
+/*
+  Asserted, not assumed. A teardown that matches nothing looks exactly like one
+  that worked, and this pile existed because nothing was looking.
+*/
+const stillThere = Number(
+  (
+    (
+      await db.execute(
+        `select count(*)::int as n from public.knowledge_connectors
+          where connector like 'fixture\\_%'`,
+      )
+    ).rows[0] as { n: number }
+  ).n,
+)
+record(
+  'teardown — no fixture connector of any run is left on the Connections page',
+  `${String(stillThere)} left`,
+  stillThere === 0,
+)
 console.log('fixtures removed.')
 
+const failed = checks.filter((c) => !c.passed)
+console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 if (failed.length > 0) process.exit(1)

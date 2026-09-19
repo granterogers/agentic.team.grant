@@ -259,6 +259,24 @@ const piles = await db.execute(`
          or coalesce(x->>'learned_by', '') like 'verify%') as harness_lessons,
     (select count(*) from public.provider_health where provider like 'probe\\_%') as probe_providers,
     /*
+      Fixture CONNECTORS, which had no witness at all until 0505.
+
+      The studio settings payload builds Grant's Connections page straight from
+      this table, and five rows named "Fixture connector" sat on it for two
+      days -- five of twelve cards -- left by crashed runs of the connectors
+      suite. Nothing counted them, which is why nobody knew.
+
+      The reader filters them now, so this is no longer a defect Grant can SEE;
+      it is a pile that grows quietly, which is the other half of the same
+      problem and the reason this line exists rather than only the filter.
+
+      No backticks in this comment: it is a SQL comment inside a template
+      literal, and one here ends the string. Written wrongly on the first try,
+      having recorded the trap an hour earlier.
+    */
+    (select count(*) from public.knowledge_connectors
+      where connector like 'fixture\\_%') as fixture_connectors,
+    /*
       The roster Grant looks at, asked the way he sees it (#269).
 
       Counted on hq_team's OUTPUT rather than on public.staff, for the same
@@ -330,10 +348,18 @@ if (Number(pile.probe_providers ?? 0) > 0) {
       'breaker suite is not clearing up after itself',
   )
 }
+if (Number(pile.fixture_connectors ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.fixture_connectors)} fixture connector(s) in knowledge_connectors — ` +
+      'the reader hides them from Grant (0505) and the pile still grows; ' +
+      'verify:connectors is not tearing down',
+  )
+}
 console.log(
   `\n  lessons on the Governance page: ${String(pile.live_lessons)} · ` +
     `fixture tasks: ${String(pile.fixture_tasks)} · ` +
     `probe providers: ${String(pile.probe_providers)} · ` +
+    `fixture connectors: ${String(pile.fixture_connectors)} · ` +
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
