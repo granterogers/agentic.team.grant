@@ -41,7 +41,37 @@ import { classifyIntent, withoutOpeningAffirmation } from '../../src/agents/inte
 import { taskRequest } from '../../src/agents/tasks.ts'
 
 const ask = (s: string) => taskRequest(s, classifyIntent(s))
-const OPENERS = ['Fine. ', 'OK. ', 'Right. ', 'Thanks. ', 'Good. ', 'Yes. ', 'Perfect. ']
+/*
+  Not only agreements. Every one of these was measured reading the same
+  instruction as a passing remark — greetings and discourse markers, which are
+  a genuinely CLOSED class. That is what makes enumerating them legitimate
+  where enumerating verbs was not: a new verb arrives with every feature and
+  nobody invents a new way to say hello.
+
+  The stacked pairs are here because people write them: "OK, so…".
+*/
+const OPENERS = [
+  'Fine. ',
+  'OK. ',
+  'Right. ',
+  'Thanks. ',
+  'Good. ',
+  'Yes. ',
+  'Perfect. ',
+  'So, ',
+  'Also, ',
+  'Anyway, ',
+  'Sorry, ',
+  'Actually, ',
+  'Right then, ',
+  'Hi. ',
+  'Morning. ',
+  'Good morning. ',
+  'Thank you. ',
+  'One more thing. ',
+  'OK, so ',
+  'Right, anyway ',
+]
 
 describe('#254 — an instruction behind a word of agreement', () => {
   it('is an assignment whatever the opener, and keeps its title', () => {
@@ -83,12 +113,32 @@ describe('#254 — an instruction behind a word of agreement', () => {
     }
   })
 
+  it('CONTROL: a bare greeting or marker is still a remark', () => {
+    // The openers must not become instructions merely by being recognised.
+    for (const s of ['Hi.', 'Morning.', 'Right then.', 'Anyway.']) {
+      expect(classifyIntent(s).intent, s).toBe('thought')
+    }
+  })
+
+  it('CONTROL: the longest opener wins, or a two-word one half-strips', () => {
+    /*
+      Alternation is first-match-wins. With `right|right\s+then` the short
+      branch took "Right then, set aside a task" down to "then, Set aside…",
+      which is still unrecognised — the rescue silently doing nothing for the
+      one opener that needed two words.
+    */
+    expect(withoutOpeningAffirmation('Right then, set aside a task')).toBe('set aside a task')
+    expect(withoutOpeningAffirmation('Good morning. Set aside a task')).toBe('Set aside a task')
+  })
+
   it('CONTROL: an agreement in front of a NON-instruction stays cheap', () => {
     // Stripping a word must not turn "Fine, whatever" into a confident
     // reading of "whatever".
     expect(classifyIntent('Fine, whatever.').confident).toBe(false)
     expect(ask('OK. I will think about it.')).toBeNull()
     expect(classifyIntent('Right. What does that cost?').intent).toBe('question')
+    expect(classifyIntent('Sorry, I cannot make it.').intent).toBe('thought')
+    expect(classifyIntent('So, what does that cost?').intent).toBe('question')
   })
 
   it('the cut is one definition, used by the classifier and the title alike', () => {

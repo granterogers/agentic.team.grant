@@ -422,7 +422,17 @@ export const onlyAnAcknowledgement = (said: string): boolean => {
 }
 
 /**
- * The opening word of agreement, removed, so what follows can be read.
+ * The content-free opening, removed, so what follows can be read.
+ *
+ * Not only agreements. Measured against the same instruction, every one of
+ * these was read as a passing remark and wrote nothing:
+ *
+ *     So, / Also, / Anyway, / Sorry, / Right then, / Hi. / Morning.
+ *
+ * They are greetings and discourse markers — a genuinely CLOSED class, which
+ * is what makes enumerating them legitimate where enumerating verbs was not.
+ * A new verb arrives with every feature; nobody invents a new way to say
+ * hello.
  *
  * Exported because `taskRequest` needs the identical cut: classifying the
  * remainder correctly and then handing the TITLE extractor the original text
@@ -435,13 +445,39 @@ export const onlyAnAcknowledgement = (said: string): boolean => {
  * Returns the text unchanged when there is no affirmation, so a caller can
  * compare and tell whether anything was taken.
  */
-export const withoutOpeningAffirmation = (text: string): string =>
-  text
-    .replace(
-      /^(?:yes|yeah|yep|yup|ok|okay|right|sure|fine|good|great|perfect|thanks|thank you|understood|agreed|noted|correct)\b[\s,.!;:—–-]+(?=\S)/i,
-      '',
-    )
-    .trim()
+/*
+  LONGEST FIRST, because alternation is first-match-wins.
+
+  With `right|right\s+then` the short branch wins on "Right then, set aside a
+  task", the separator class eats the space, and what is left is
+  "then, Set aside…" — still unrecognised, and the rescue silently did nothing
+  for the one opener that needed two words. Every multi-word form therefore
+  precedes its own prefix.
+*/
+const OPENER =
+  '(?:right\\s+then|good\\s+morning|good\\s+afternoon|thank\\s+you|one\\s+more\\s+thing|' +
+  'quick\\s+one|while\\s+I\\s+remember|when\\s+you\\s+get\\s+a\\s+(?:sec|second|moment|chance)|' +
+  'yes|yeah|yep|yup|ok|okay|okey|right|sure|fine|good|great|perfect|lovely|brilliant|' +
+  'thanks|cheers|understood|agreed|noted|correct|' +
+  'so|also|anyway|actually|besides|incidentally|sorry|' +
+  'hi|hey|hello|morning|afternoon|evening)'
+
+export const withoutOpeningAffirmation = (text: string): string => {
+  /*
+    Up to two of them, because people stack them: "OK, so…", "Right, anyway…".
+
+    Bounded at two so this cannot eat its way into the sentence — a third
+    opener is vanishingly rare and an unbounded loop on a closed class is the
+    kind of thing that turns a rescue into a corruption.
+  */
+  let out = text
+  for (let i = 0; i < 2; i += 1) {
+    const cut = out.replace(new RegExp(`^${OPENER}\\b[\\s,.!;:—–-]+(?=\\S)`, 'i'), '').trim()
+    if (cut === out) break
+    out = cut
+  }
+  return out
+}
 
 export const classifyIntent = (instruction: string): Classification => {
   const text = instruction.trim()
