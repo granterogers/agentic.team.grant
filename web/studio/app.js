@@ -8081,7 +8081,20 @@ function tasksView() {
               ? `${String(c('overdue'))} overdue, ${String(c('today'))} for today.`
               : c('today') > 0
                 ? `${String(c('today'))} for today, and nothing overdue.`
-                : 'Nothing overdue and nothing due today.'
+                : /*
+                    AND NOT THE SENTENCE THE LIST IS ABOUT TO SAY.
+
+                    With nothing due, this read "Nothing overdue and nothing
+                    due today." an inch above the list's own "Nothing due
+                    today and no reminders." — the same news twice, which
+                    CLAUDE.md records as the thing to look for whenever two
+                    lines are pushed under one condition. This one summarises
+                    the WHOLE list, so when the list is not empty it says how
+                    much is on it, and when it is, it says that instead.
+                  */
+                  c('all') > 0
+                  ? `Nothing due today. ${String(c('all'))} on your list in all.`
+                  : 'Nothing on your list.'
         }</p>
       </div>
     </div>

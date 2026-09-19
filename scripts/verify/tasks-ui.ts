@@ -112,6 +112,9 @@ const act = async (action: string, args: Record<string, unknown>): Promise<unkno
   return body.result
 }
 
+/** Two sentences compared as a person hears them, not as bytes. */
+const bare = (t: string): string => t.toLowerCase().replace(/\W+/g, '')
+
 const TITLE = `UI probe ${run}`
 
 /*
@@ -764,6 +767,160 @@ try {
       drift < 60_000,
     )
 
+    /*
+      THE FOUR WAYS A LIST CAN HAVE NOTHING IN IT, told apart on the screen.
+
+      "Nothing due today", "I could not look", "nothing matches that search"
+      and "still loading" are four different sentences and the product has all
+      four — CLAUDE.md records what it cost to conflate the second with the
+      first, twice. What it did NOT have was anything asserting they reach the
+      page: a renderer's branch nothing renders is the found-nothing shape, and
+      the empty state is the one screen a capture of a seeded list never shows.
+
+      Driven last, and through the store rather than the network, because
+      putting the read into each of these states over the wire is not something
+      the sandbox proxy can be asked to do reliably.
+    */
+    const lead = async (set: string): Promise<string> => {
+      await page.evaluate(`(() => {
+        const w = window.__shots
+        const k = w.mineKey()
+        ${set}
+        w.render()
+      })()`)
+      /*
+        Poll for the sentence rather than sleeping once.
+
+        A fixed pause judges whatever is on the screen when it expires, and on
+        the phone leg the first of these ran while the page was still settling
+        after the save — "NOTHING RENDERED" about a paragraph that arrived a
+        moment later. #41's rule about waiting for a settled state, on the
+        smallest possible surface.
+      */
+      for (let i = 0; i < 12; i += 1) {
+        await page.waitForTimeout(250)
+        const got = await page.evaluate(
+          '(() => { const s = document.querySelector("main .mybuckets"); if (s === null) return 0; let n = 0; for (const e of document.querySelectorAll("main .t-lead")) { if (s.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) n += 1 } return n })()',
+        )
+        if (Number(got) > 0) break
+      }
+      if (process.env.DIAG2 === '1') {
+        console.log(
+          '    state: ' +
+            String(
+              await page.evaluate(
+                '(() => { const w = window.__shots; return JSON.stringify({ k: w.mineKey(), q: w.mine.query, trouble: w.mine.trouble, keys: Object.keys(w.mine.lists), leads: Array.from(document.querySelectorAll("main .t-lead")).map(function(e){return e.textContent.trim().slice(0,45)}) }) })()',
+              ),
+            ),
+        )
+      }
+      /*
+        The LIST's sentence, not the page's.
+
+        `.t-lead` is shared with the subtitle under the heading, and with the
+        counts zeroed that subtitle also reads "Nothing overdue and nothing due
+        today." — so `.first()` returned a line that never changes and all
+        three states looked identical. The product was right in every one of
+        them; the harness was reading the wrong paragraph, which is the fourth
+        time in this file. Take the first one AFTER the bucket strip, because
+        that is what the list region begins with.
+      */
+      return String(
+        await page.evaluate(`(() => {
+          const strip = document.querySelector('main .mybuckets')
+          if (strip === null) return ''
+          for (const e of document.querySelectorAll('main .t-lead')) {
+            if (strip.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) {
+              return (e.textContent || '').replace(/\\s+/g, ' ').trim()
+            }
+          }
+          return ''
+        })()`),
+      )
+    }
+    /*
+      The counts are zeroed HERE, not left to whatever the gateway answered.
+
+      Without it the phone leg's summary read "1 overdue, 2 for today" — a
+      perfectly good sentence about counts this section is not testing, and one
+      that can never collide with the list's line, so the repetition check
+      below passed that leg for the wrong reason.
+    */
+    const emptyToday = await lead(
+      "w.mine.bucket = 'today'; w.mine.query = ''; w.mine.trouble = {};" +
+        ' w.mine.counts = { today: 0, overdue: 0, upcoming: 0, inbox: 0,' +
+        ' unscheduled: 0, done: 0, all: 0 };' +
+        ' w.mine.lists[w.mineKey()] = []',
+    )
+    check(
+      'an empty bucket says what is empty, in his words',
+      emptyToday === '' ? 'NOTHING RENDERED' : emptyToday.slice(0, 60),
+      emptyToday !== '' && !/could not/i.test(emptyToday),
+    )
+    const failed = await lead(
+      "w.mine.bucket = 'today'; w.mine.query = '';" +
+        ' w.mine.lists[w.mineKey()] = []; w.mine.trouble[w.mineKey()] = true',
+    )
+    check(
+      'a list that could not be READ never says there is nothing there',
+      failed === '' ? 'NOTHING RENDERED' : failed.slice(0, 60),
+      /could not/i.test(failed),
+    )
+    const nomatch = await lead(
+      "w.mine.bucket = 'today'; w.mine.trouble = {}; w.mine.query = 'zzqqx';" +
+        ' w.mine.lists[w.mineKey()] = []',
+    )
+    check(
+      'and a search that matched nothing says so about the SEARCH',
+      nomatch === '' ? 'NOTHING RENDERED' : nomatch.slice(0, 60),
+      nomatch.includes('zzqqx'),
+    )
+    /*
+      AND THE SUMMARY ABOVE IS NOT THE SAME NEWS.
+
+      With nothing due, the subtitle under the heading read "Nothing overdue
+      and nothing due today." an inch above the list's "Nothing due today and
+      no reminders." Both true, both pushed under one condition, and one of
+      them therefore a repetition — which is the tell this repository has
+      already paid for on Telegram. Found because the harness was reading the
+      wrong paragraph and printed both.
+
+      CONTAINMENT, not equality, and the sabotage is what said so. Putting the
+      old sentence back left this GREEN, because the list's line ends with a
+      clause about the Overdue tab and the two were therefore not equal — a
+      repetition that is a PREFIX is still a repetition, and an equality test
+      cannot see one.
+    */
+    const summary = String(
+      await page
+        .locator('main .head .t-lead')
+        .first()
+        .innerText()
+        .catch(() => ''),
+    )
+    check(
+      'the summary under the heading is not the list sentence again',
+      `${summary.slice(0, 40)} / ${emptyToday.slice(0, 40)}`,
+      summary !== '' &&
+        !bare(emptyToday).startsWith(bare(summary)) &&
+        !bare(summary).startsWith(bare(emptyToday)),
+    )
+    check(
+      'CONTROL: the three sentences are genuinely different',
+      `${String(new Set([emptyToday, failed, nomatch]).size)} distinct`,
+      new Set([emptyToday, failed, nomatch]).size === 3,
+    )
+    /*
+      "Looking…" is deliberately NOT asserted here.
+
+      It is rendered when the bucket's key is ABSENT from the store, and
+      removing the key is exactly what makes `needMine` fetch — so the state
+      exists for as long as the stubbed response takes to arrive, which is
+      about a millisecond. A check that has to win that race is a check that
+      will be red one run in ten for no reason, and this file already carries
+      one lesson about reporting the product at fault for a timing accident.
+      The branch is one line above the other three in the same expression.
+    */
     await ctx.close()
   }
 
