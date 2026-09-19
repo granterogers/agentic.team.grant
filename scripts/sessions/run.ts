@@ -54,8 +54,8 @@
  * on `outputs.body` and says so. A claimed task is not a task.
  */
 
-import { existsSync } from 'node:fs'
 import { execSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
