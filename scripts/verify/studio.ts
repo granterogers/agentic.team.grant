@@ -145,6 +145,33 @@ for (const [size, opts] of SIZES) {
       shots.push(file)
     }
 
+    /*
+      Let the home board's two lazy reads land before photographing it.
+
+      `needTasks` and `needLately` fire on arrival, so the 900ms pause above
+      was catching the Tasks and Recent activity panels still saying "Reading
+      what is open…". Every portfolio capture this repository has ever taken
+      shows that state, and `npm run space` measured it as 329px of spare room
+      — a number about a placeholder, one step from being reported as an
+      emptiness defect.
+
+      Waited on the STORE rather than on a longer pause: the page knows when it
+      has the answer and a clock does not. Tolerant of never arriving, because
+      the sandbox has no server behind it and a capture run must not die on a
+      screen it could still usefully photograph — the panels then show their
+      settled empty state, which is also worth seeing.
+    */
+    await page
+      .waitForFunction(
+        `(() => {
+          const w = window.__shots
+          return w && w.latest && w.latest.tasks !== null && w.latest.lately !== null
+        })()`,
+        { timeout: 14_000 },
+      )
+      .catch(() => undefined)
+    await page.waitForTimeout(250)
+
     await shoot('portfolio')
 
     // The appearance picker, and one alternative palette, so a change to the

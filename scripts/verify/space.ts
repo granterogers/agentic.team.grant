@@ -197,7 +197,39 @@ page.on('pageerror', (e) => {
 await page.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(700)
 
+/*
+  The home board's two lazy reads, before measuring it.
+
+  `needTasks` and `needLately` fire on arrival, so a 700ms pause measures the
+  Tasks and Recent activity panels while they still say "Reading what is
+  open…". This reported **329px spare on the Tasks panel** — a real number
+  about one line of placeholder text, and it was one step from being written up
+  as an emptiness defect on the front door.
+
+  The same correction the capture harness needed, and the same rule: wait for
+  what the page KNOWS it has, never for a clock. Tolerant of never arriving,
+  because the sandbox has no server and a measurement of the settled empty
+  state is still worth printing — it is simply a different fact, and the line
+  below says which was measured.
+*/
+const settled = await page
+  .waitForFunction(
+    `(() => {
+      const w = window.__shots
+      return w && w.latest && w.latest.tasks !== null && w.latest.lately !== null
+    })()`,
+    { timeout: 14_000 },
+  )
+  .then(() => true)
+  .catch(() => false)
+await page.waitForTimeout(250)
+
 console.log('\n─── portfolio ───')
+console.log(
+  settled
+    ? '  (the lazy panels have settled)'
+    : '  (the lazy panels did NOT settle in 14s — these numbers describe a loading board)',
+)
 for (const row of (await page.evaluate(EMPTY)) as {
   sel: string
   height: number

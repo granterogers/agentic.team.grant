@@ -13817,6 +13817,24 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
       So the harness asks the product what its key is. One rule, one place.
     */
     mineKey,
+    /*
+      The two lazy reads the HOME BOARD waits on.
+
+      `needTasks` and `needLately` are triggered by arriving on the portfolio,
+      so for the first second or two the Tasks and Recent activity panels read
+      "Reading what is open…" — and `npm run shots` fired its portfolio
+      screenshot after a fixed 900ms pause. **Every capture of the front door
+      has therefore photographed a panel mid-load**, and `npm run space`
+      measured one: it reported 329px spare on a panel whose content was one
+      line of placeholder text, and that number was nearly written up as an
+      emptiness defect.
+
+      Exposed rather than given a longer pause, for the reason the capture
+      harness already learned about a settings pane: wait for the SECTION,
+      never for a fixed time. A pause is a guess that gets slower machines
+      wrong and a fast office wrong in the other direction.
+    */
+    latest,
     render,
   }
 }
