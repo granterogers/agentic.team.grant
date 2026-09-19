@@ -57,6 +57,8 @@
   is a rule that does not fire on anything Grant dictates, which is most of
   what he sends. The corpus caught it on its first run.
 */
+import { withoutOpeningAffirmation } from './intent.ts'
+
 const APOS = "['\u2019\u02bc]?"
 const REMIND_ME = new RegExp(
   `\\b(?:remind|nudge|ping|prompt)\\s+me\\b` +
@@ -102,6 +104,41 @@ const I_MUST = new RegExp(
   A reminder that names somebody else is not his.
 */
 const REMIND_SOMEBODY_ELSE = /\b(?:remind|nudge|ping)\s+(?!me\b)\w+/i
+
+/*
+  ASKING FOR A TASK OUTRIGHT, which neither rule above could hear.
+
+  "Right, set aside a task to renew the insurance" and "Anyway, put a task on
+  my list to review the pricing" are not reminders and are not first-person
+  commitments — they are Grant naming the mechanism. `REMIND_ME` wants the word
+  remind and `I_MUST` wants "I <verb> to", so both missed them entirely and the
+  sentence fell through to the office's own work.
+
+  Deliberately requires the NOUN. "Add the figures" is not a request for a task
+  and "make the deck" is work for the team; what distinguishes these is that he
+  said the word task, to-do or reminder.
+*/
+const MAKE_A_TASK =
+  /\b(?:set\s+aside|put|add|create|make|stick|note)\s+(?:me\s+)?(?:a|an|another)\s+(?:task|to-?do|reminder)\b/i
+
+/*
+  And the self-commitment that does not start with "I".
+
+  "So, make sure I call the accountant on Friday" has the same subject as
+  "I need to call the accountant" and none of its shape. `I_MUST` anchors on
+  "i <verb> to" and cannot see it.
+*/
+const MAKE_SURE_I = /\bmake\s+sure\s+(?:that\s+)?i\b/i
+
+/*
+  The guard that keeps all of this on HIS list.
+
+  "Add a task for Emma to research the pricing" says the word task and is the
+  office's work — the same distinction `REMIND_SOMEBODY_ELSE` draws for
+  reminders, drawn again because a rule that recognises the noun has to be
+  told who it is for.
+*/
+const A_TASK_FOR_SOMEBODY_ELSE = /\b(?:task|to-?do|reminder)\s+for\s+(?!me\b|myself\b|us\b)\w+/i
 
 export interface PersonalTask {
   /** What he has to do, with the framing stripped. */
@@ -181,9 +218,24 @@ export function whenFor(said: string, now: Date = new Date()): string | null {
   task ends up contradicting its own date after he moves it.
 */
 const stripFraming = (said: string): string =>
-  said
+  /*
+    The conversational opener comes off FIRST, and from the shared helper.
+
+    "Fine, remind me tomorrow to chase the printers" was becoming a task called
+    *"Fine, to chase the printers"* — the framing word kept and the sentence
+    left as a fragment, on the list this function exists to make scannable.
+    Six of the ten phrasings in Grant's own brief did it.
+
+    `withoutOpeningAffirmation` already knows every one of those openers,
+    because `classifyIntent` needed the same thing for the same reason last
+    week. A second list here would be two places for "Anyway" to be forgotten.
+  */
+  withoutOpeningAffirmation(said)
     .replace(REMIND_ME, ' ')
     .replace(I_MUST, ' ')
+    .replace(MAKE_A_TASK, ' ')
+    .replace(/\bon\s+my\s+(?:list|plate)\b/gi, ' ')
+    .replace(MAKE_SURE_I, ' ')
     .replace(
       /\b(?:on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
       ' ',
@@ -201,6 +253,18 @@ const stripFraming = (said: string): string =>
       ),
       ' ',
     )
+    /*
+      The word left dangling at the front.
+
+      This list already existed for `to`, `that`, `about` and `and` — the
+      leftovers of the reminder framing. The conversational openers leave their
+      own: "ok but remind me…" became *"But to check the refund policy"* and
+      "Sorry, one more — I need to…" became *"One more — email the landlord"*.
+      Widened rather than given a second pass of its own, because two lists of
+      leading words are two places for the next one to be missed.
+    */
+    .replace(/^\s*(?:to|that|about|and|but|so|then|also|right|well|now|one\s+more)\b/gi, ' ')
+    .replace(/^[\s,.:;—–-]+/g, ' ')
     .replace(/^\s*(?:to|that|about|and)\b/i, ' ')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, '')
@@ -257,7 +321,9 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   if (said === '') return null
   if (REMIND_ME_A_QUESTION.test(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
-  const commit = I_MUST.test(said)
+  const commit =
+    I_MUST.test(said) ||
+    ((MAKE_A_TASK.test(said) || MAKE_SURE_I.test(said)) && !A_TASK_FOR_SOMEBODY_ELSE.test(said))
   if (!remind && !commit) return null
 
   const title = stripFraming(said)

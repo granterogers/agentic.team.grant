@@ -8247,7 +8247,8 @@ function myEditor(t) {
         t.parent === null || t.parent === undefined
           ? `<button class="btn small quiet" type="button" data-my-sub="${esc(t.id)}">
                Add a subtask</button>`
-          : `<span class="t-meta">A subtask of something else.</span>`
+          : `<button class="btn small quiet" type="button" data-my-unsub="${esc(t.id)}">
+               Take out of its parent</button>`
       }
       <button class="gobtn danger" type="button" data-my-delete="${esc(t.id)}"
         data-name="${esc(t.title ?? '')}"
@@ -9193,6 +9194,34 @@ function drawShell() {
         'Added.',
       )
       if (done) {
+        forgetMine()
+        void needMine(mine.bucket)
+        render()
+      }
+    })
+  }
+
+  /*
+    Taking a subtask back out (#259, migration 0514).
+
+    The half that matters more than the forward one: putting a task under
+    another has a door — you create it there — and until this there was no way
+    back except deleting it and typing it again. 0514's own drive block ends on
+    the same control for the same reason.
+
+    No picker for moving it under a DIFFERENT parent: that is a list of every
+    other task, on a phone, to do something a delete and a re-add already does.
+  */
+  for (const b of root.querySelectorAll('[data-my-unsub]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Moving…',
+        () => act('my_task_reparent', { p_task_id: b.dataset.myUnsub }),
+        'On its own now.',
+      )
+      if (done) {
+        mine.editing = null
         forgetMine()
         void needMine(mine.bucket)
         render()
