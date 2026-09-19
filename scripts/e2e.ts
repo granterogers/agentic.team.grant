@@ -381,6 +381,28 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'check:tokens',
     'every bare var() names a token :root actually declares — #124 shipped square corners for a day',
   ],
+  /*
+    And the same question once more, at the layer where a whole feature hides.
+
+    `check:callers` walks database functions and `check:pressable` walks
+    gateway actions. Neither can see a JOB KIND, which is where the browser
+    tier went: adapter, ledger, tab, sessions, budget and Stop, all built, all
+    passing their own suites, and unreachable from any sentence Grant could
+    say because nothing ever created a `browser.gather`.
+
+    That was fixed for that one kind and never asked about the other
+    thirty-five. Two more were in the same state on the day this was added.
+    `notebook.collect_artifact` is #66 — bring the audio into the project and
+    send it to Telegram, in his own words — proved by hand on 11 September and
+    then reachable by nothing for eight days, so the live chain ended at a
+    link, the one outcome he said he did not want. `mcp.discover` is #265's
+    survey, and `register_mcp_provider` was returning "ask it what it offers"
+    with nothing able to ask.
+  */
+  [
+    'check:reachable',
+    'every registered job kind has something that can start it — #66 and #265 were both unreachable',
+  ],
 ]
 
 type Result = {

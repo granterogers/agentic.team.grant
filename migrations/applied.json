@@ -503,5 +503,6 @@
   "0502_the_disclosure_lands_on_the_page_grant_actually_opens.sql": "22498083e3d347e676b32cedd94554aa071b0c7a5f6e762f6115e0ffee9477aa",
   "0503_a_file_grant_deleted_in_drive_stops_being_an_answer.sql": "e0ef298908d1ba6c62ad1506b4ccbe5e72cd1ec114ca4e51cc2c9526c3cfd2d9",
   "0504_a_task_you_cannot_change_your_mind_about.sql": "085132be5ab62c8c6db4bbf335aa2e9b999bff0b1cc81282f5592d691c74e457",
-  "0505_five_fixture_connectors_on_grants_settings_page.sql": "0b9f7ed66ced305c3b8b9e6f3024f1c69433653ebe72fc3ef5c5f531a99363b2"
+  "0505_five_fixture_connectors_on_grants_settings_page.sql": "0b9f7ed66ced305c3b8b9e6f3024f1c69433653ebe72fc3ef5c5f531a99363b2",
+  "0506_registering_a_connector_asks_it_what_it_offers.sql": "a610853d3d509a3b5aede72254de4a3bd8466862c0e083913e507f5b3649ca08"
 }

@@ -758,10 +758,55 @@ export function notebookHandlers(db: SqlExecutor): readonly Handler[] {
                    detail = null, ready_at = app.now_utc()
              where artifact_id = ${lit(rowId)}::uuid
           `)
+          /*
+            And now fetch the actual file, which is the step Grant asked for.
+
+            Issue #66, in his words: *"Claire could generate the audio, maybe
+            bring that audio file into the dashboard project, and just directly
+            have the audio file sent to me on Telegram that I can play it
+            directly rather than necessarily having to open notebook."*
+
+            `notebook.collect_artifact` does all of that and has done since 11
+            September — and **nothing has ever enqueued it**. The three real
+            jobs of that kind in the whole history were enqueued by hand on the
+            day it was written, to prove it end to end, and then it was
+            declared done. So the chain ran generate -> poll -> "here is a
+            link", which is the one outcome he said he did not want. Found by
+            `npm run check:reachable`, which asks of every registered kind what
+            a person could do to start it.
+
+            Only when the artifact has a file of its own. A mind map is
+            finished, interactive and has no url — `direct` is already the
+            measured test for that a few lines above — and asking Google to
+            download one would fail for a reason that is not a fault.
+
+            The link message above is left announcing exactly as it was. The
+            collector has six paths that decline to announce (no credential, no
+            service key, no bytes, storage failed, could not record), so going
+            quiet here to avoid a second message would mean that on any of
+            them Grant hears nothing at all, where today he at least gets the
+            link. Two messages on the happy path is the cheap direction.
+          */
+          if (direct) {
+            await db.execute(`
+              select app.enqueue_child(
+                ${lit(job.jobId)}::uuid, 'notebook.collect_artifact',
+                jsonb_build_object(
+                  'notebook_id', ${lit(notebook.id)},
+                  'artifact_id', ${lit(mine.artifactId)},
+                  'project_id', ${lit(String(job.projectId))},
+                  'title', ${lit(title)}
+                ),
+                interval '0 seconds', true, ${lit(String(job.projectId))}::uuid
+              )
+            `)
+          }
+
           return deterministic(
             `${sentence(LABEL[row.kind] ?? row.kind)} is done — “${title}”\n${url}\n\n` +
               (direct
-                ? `It is in "${notebook.name}" and in the project's store here too.`
+                ? `It is in "${notebook.name}" — fetching the file into this project now, ` +
+                  'and it will arrive here to play.'
                 : `That link opens the notebook "${notebook.name}" — this one is interactive ` +
                   "and has no file of its own. It is in this project's store either way."),
             notebook,
