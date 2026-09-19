@@ -766,32 +766,46 @@ try {
       snapshot fails for a reason that has nothing to do with the HTTP layer.
       The property worth asserting is that the two agree right now.
     */
+    const fromRpc = await history(String(agree.jp ?? mine), 100)
     const r = await fetch(`${base}?section=conversation&id=${String(agree.jp ?? mine)}`, {
       headers: { Authorization: `Bearer ${hqToken}` },
     })
     const body = (await r.json().catch(() => ({}))) as { data?: Msg[] }
-    const overHttp = await history(String(agree.jp ?? mine), 100)
     /*
-      Containment, not equality — and the HTTP read goes FIRST.
+      Containment, not equality — and the RPC read goes FIRST.
 
-      The gate caught this as "12 over HTTP vs 11 from the RPC". Nothing
-      disagreed: a turn arrived between the two reads, which is a live office
-      doing its job. Two counts taken a second apart are a race dressed as an
-      assertion, and the comment above this once claimed re-reading the RPC
-      had removed it.
+      The property worth asserting is that the HTTP layer serves the same
+      conversation the RPC does: anything the RPC shows and the page cannot
+      see is the defect this was written to catch.
 
-      What the check exists for is that the HTTP layer serves the same
-      conversation the RPC does. So the HTTP read is taken first and every
-      message the RPC then returns must be in it: a message that arrived in
-      between makes the HTTP answer SHORTER, never wrong, and anything the RPC
-      shows and HTTP does not is the defect this was written to catch.
+      Two counts taken a second apart are a race dressed as an assertion, and
+      this check has now been wrong about the direction TWICE. It first
+      compared equality and the gate caught it as "12 over HTTP vs 11 from the
+      RPC". It was then changed to containment with the HTTP read first, and
+      the comment claimed that made a message arriving in between shorten the
+      HTTP answer harmlessly — which is exactly backwards. With HTTP read
+      first, a message that arrives in between is in the RPC answer and NOT in
+      the HTTP one, so the live office writing a turn fails the check. The
+      gate caught that as "9 over HTTP, 10 from the RPC, 1 the page cannot
+      see".
+
+      The snapshot has to be taken from the side that must be CONTAINED. The
+      RPC is read first, so a message arriving afterwards can only make the
+      HTTP answer LONGER, which containment does not care about, and a
+      message the page genuinely cannot see still fails.
     */
     const seen = new Set((body.data ?? []).map((m) => `${String(m.at)}|${String(m.body)}`))
-    const missing = overHttp.filter((m) => !seen.has(`${String(m.at)}|${String(m.body)}`))
+    const missing = fromRpc.filter((m) => !seen.has(`${String(m.at)}|${String(m.body)}`))
     check(
       'the page can ask for a conversation over HTTP',
-      `http ${String(r.status)}, ${String((body.data ?? []).length)} over HTTP, ` +
-        `${String(overHttp.length)} from the RPC, ${String(missing.length)} the page cannot see`,
+      `http ${String(r.status)}, ${String(fromRpc.length)} from the RPC, ` +
+        `${String((body.data ?? []).length)} over HTTP, ` +
+        `${String(missing.length)} the page cannot see` +
+        // Name them. A bare count sends somebody looking at the HTTP layer
+        // when the answer is which message is missing and why.
+        (missing.length === 0
+          ? ''
+          : ` — ${missing.map((m) => String(m.body).slice(0, 40)).join(' | ')}`),
       r.ok && Array.isArray(body.data) && missing.length === 0,
     )
 
