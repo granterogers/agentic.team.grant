@@ -2513,6 +2513,38 @@ function standing() {
   and `needLately` are the two lazy reads and they are triggered by arriving,
   the same way the Tasks and Recent activity screens trigger them.
 */
+/*
+  The home Tasks panel's invented rows, for the prototype only.
+
+  Shaped to the payload the real panel renders rather than given a renderer of
+  its own -- a second list assembly is this file's most-recorded defect, and
+  the panel below filters, counts and ticks these rows with exactly the code
+  that runs on the office's answer. Only the SOURCE differs, which is the whole
+  point: the prototype shows the design on invented data, and it is invented
+  from the same PROJECTS every other panel on this board uses.
+
+  A prototype task carries no id, so nothing here is tickable -- `data-tick`
+  needs a real row and inventing one would be a control that lies.
+*/
+const protoTasks = () => {
+  const rows = PROJECTS.flatMap((p) => (p.tasks ?? [])
+    .filter((t) => t.state !== 'done')
+    .map((t) => ({
+      id: null,
+      title: t.title,
+      project_name: p.name,
+      owner_name: t.who === undefined ? null : (crewBy(t.who)?.name ?? null),
+      due_on: null,
+      // The prototype says "Due 16 September" as prose, so the panel's own
+      // date formatting has nothing to parse. `overdue` carries the state the
+      // capture needs to show and the due column stays honestly empty.
+      overdue: t.state === 'due',
+      waiting: t.blocked !== undefined,
+      blocked_on: t.blocked ?? null,
+    })))
+  return { counts: {}, tasks: rows }
+}
+
 const HOME_PANEL = {
   waiting: () => {
     /*
@@ -2582,8 +2614,38 @@ const HOME_PANEL = {
     absent one - it is a control that lies, which section 59 is about.
   */
   tasks: () => {
-    const payload = latest.tasks
-    if (payload === null) return '<p class="t-meta">Reading what is open…</p>'
+    /*
+      Three states, because "we have no answer" was standing in for two of them.
+
+      `latest.tasks === null` is true while a read is in flight AND true when
+      nothing ever asked, and the panel rendered the same sentence for both --
+      which is CLAUDE.md's recorded shape exactly: when a default value is also
+      a legitimate value, nothing downstream can tell "we decided this" from
+      "we did not know".
+
+      What that cost: `needTasks` is triggered from the block that runs AFTER
+      the office answers, so on the PROTOTYPE path it is never called at all,
+      and this panel read "Reading what is open…" for ever. Measured, not
+      inferred -- a probe held the page open for 22 seconds and `latest.tasks`
+      never left null. Every capture of the front door this repository has ever
+      taken shows it, and the harness wait added to stop that could never pass,
+      so it spent its full 14-second timeout on every run and photographed the
+      loading state anyway. A comment here previously said the panels read it
+      "for the first second or two"; that was a claim with no check behind it.
+
+      So the sentence is now only ever shown when a read is genuinely out, and
+      the no-token path draws invented tasks from the same PROJECTS the other
+      four home panels already use -- the mock behind "there is no token",
+      which is where `needHistory` was already taught to put it, rather than
+      behind "the request failed".
+    */
+    const payload = latest.tasks ?? (canWrite() ? null : protoTasks())
+    if (payload === null) {
+      return askedTasks
+        ? '<p class="t-meta">Reading what is open…</p>'
+        : `<p class="t-meta">Could not read what is open. The office may not have
+          answered yet — reloading is the quickest way to ask again.</p>`
+    }
     const rows = Array.isArray(payload.tasks) ? payload.tasks : []
     if (rows.length === 0) {
       return `<p class="t-meta">Nothing open, here or on any project. Ask the team
@@ -2617,8 +2679,16 @@ const HOME_PANEL = {
         ? '<p class="t-meta">Nothing under that filter, which is the good answer.</p>'
         : `<ul class="homelist">${keep.slice(0, 40).map((t) => `
         <li class="homerow ${t.overdue === true ? 'od' : ''}">
-          <button class="ptick" data-tick="${esc(t.id)}" title="Mark done"
-            aria-label="Mark &ldquo;${esc(t.title)}&rdquo; done"></button>
+          <!--
+            No id, no tick. The prototype's rows are invented and carry none,
+            and a tick wired to the string "null" is a control that lies -
+            which is the thing this file keeps paying for. .homerow is flex, so
+            leaving it out closes the gap rather than breaking a column, and in
+            the prototype every row is in the same state so nothing looks
+            ragged.
+          -->
+          ${t.id ? `<button class="ptick" data-tick="${esc(t.id)}" title="Mark done"
+            aria-label="Mark &ldquo;${esc(t.title)}&rdquo; done"></button>` : ''}
           <span class="homebody">
             <b>${esc(t.title)}</b>
             <span class="t-meta">${
@@ -13270,8 +13340,19 @@ function forgetMine() {
   mine.counts = null
 }
 
+/*
+  Whether a read is actually out, which is what the loading sentence claims.
+
+  Separate from `latest.tasks === null`, which cannot tell a read in flight
+  from a read nobody started. Set before the await, for the same reason the
+  null guard is: a second render while the first request is in flight must not
+  start a second request, and must not report the panel as unasked either.
+*/
+let askedTasks = false
+
 async function needTasks() {
   if (latest.tasks !== null) return
+  askedTasks = true
   try {
     latest.tasks = await settles(read('portfolio_tasks'))
   } catch {

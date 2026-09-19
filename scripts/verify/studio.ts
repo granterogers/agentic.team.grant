@@ -165,7 +165,15 @@ for (const [size, opts] of SIZES) {
       .waitForFunction(
         `(() => {
           const w = window.__shots
-          return w && w.latest && w.latest.tasks !== null && w.latest.lately !== null
+          if (!w || !w.latest) return false
+          // Settled means the board is no longer CLAIMING to be reading.
+          // Asking whether the store is full cannot work on the prototype path,
+          // where nothing fetches and the store stays null for ever - that
+          // predicate spent its whole timeout on every single run. The page's own
+          // sentence is the honest signal, and it is shown now only while a read
+          // is genuinely out.
+          if (document.body.innerText.includes('Reading what is open')) return false
+          return true
         })()`,
         { timeout: 14_000 },
       )
