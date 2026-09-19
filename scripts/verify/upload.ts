@@ -218,6 +218,106 @@ check(
   String(escaped.p).startsWith(`${projectId}/upload/`) && !String(escaped.p).includes('..'),
 )
 
+/*
+  A malformed PDF — #41 §8's last untested input.
+
+  Nothing in this office parses a PDF on the way IN. Drive downloads one as
+  bytes, `record_file_document` stores it as bytes, and only the office's own
+  reports go the other way (`src/artifacts/pdf.ts`). So the question is not
+  whether a parser copes: it is whether bytes that LOOK like a document and
+  are not can end up being treated as prose.
+
+  That is the direction that costs, and this file's neighbours say why. A row
+  in `public.documents` with `content` set is retrievable, citable, and reaches
+  a model as evidence — and `provenance.ts` exists because a fabrication that
+  gets into the record launders every repetition of itself. Binary rubbish
+  decoded into `content` would be exactly that, arriving through the one door a
+  browser can push bytes through.
+
+  Three shapes, because a single one proves only that a single one is handled:
+  plain rubbish, a truncated file with a REAL `%PDF-1.7` header (the one that
+  defeats a header sniff), and a header followed by NUL bytes (the one that
+  breaks a decoder rather than a parser).
+
+  What is asserted is deliberately not "it is refused". Refusing would need a
+  parser the office does not have, and a byte check strict enough to reject
+  these would one day reject a real file of Grant's — a silent loss, which is
+  worse than storing something unreadable. What is asserted is that it is
+  stored HONESTLY: the bytes come back identical, the row claims no text, and
+  nothing can retrieve it as though it said something.
+*/
+for (const [what, bytes] of [
+  ['rubbish declared as a PDF', Buffer.from(`not a pdf at all ${run}`)],
+  [
+    'a truncated PDF with a real header',
+    Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n'),
+  ],
+  [
+    'a PDF header followed by NUL bytes',
+    Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(64, 0)]),
+  ],
+] as Array<[string, Buffer]>) {
+  const sent = await post({
+    p_project_id: projectId,
+    p_name: `broken-${run}.pdf`,
+    p_mime: 'application/pdf',
+    p_base64: `data:application/pdf;base64,${bytes.toString('base64')}`,
+  })
+  const broken = await one(`
+    select d.document_id::text as id, d.mime_type, d.byte_size::int as size,
+           d.content, d.content_fingerprint
+      from public.documents d
+     where d.project_id = ${lit(projectId)}::uuid
+     order by d.created_at desc limit 1`)
+  const seen =
+    (
+      (await (
+        await fetch(
+          `https://${ref}.supabase.co/functions/v1/hq-api?section=document&id=${String(broken.id)}`,
+          { headers: { Authorization: `Bearer ${apiToken}` } },
+        )
+      )
+        .json()
+        .catch(() => ({}))) as { data?: { url?: string } }
+    ).data ?? {}
+  const back =
+    seen.url === undefined ? null : Buffer.from(await (await fetch(seen.url)).arrayBuffer())
+  check(
+    `${what} is stored, and comes back byte for byte`,
+    `http ${String(sent.status)} · ${String(broken.size ?? 0)} of ${String(bytes.length)} bytes · ${
+      back === null ? 'NO URL' : back.equals(bytes) ? 'identical' : 'ALTERED'
+    }`,
+    sent.status === 200 &&
+      broken.mime_type === 'application/pdf' &&
+      Number(broken.size) === bytes.length &&
+      back !== null &&
+      back.equals(bytes),
+  )
+  check(
+    `${what} claims no text, so nothing can cite it as prose`,
+    `content=${broken.content === null ? 'null' : 'SET'} fingerprint=${
+      broken.content_fingerprint === null ? 'null' : 'SET'
+    }`,
+    broken.content === null && broken.content_fingerprint === null,
+  )
+}
+
+/*
+  And the reader agrees. A row with no content cannot be a search hit, so this
+  is the property stated where a caller would meet it rather than at the
+  column — the two have disagreed before, and when they do the reader is what
+  reaches a prompt.
+*/
+const searchable = await one(`
+  select count(*)::int as n
+    from app.search_documents(p_query => ${lit(`not a pdf at all ${run}`)},
+                              p_project => ${lit(projectId)}::uuid, p_limit => 10)`)
+check(
+  'and no search can retrieve the rubbish inside one',
+  `${String(searchable.n)} hit(s)`,
+  Number(searchable.n) === 0,
+)
+
 // --- teardown ---------------------------------------------------------------
 
 const paths = (
