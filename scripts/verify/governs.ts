@@ -68,7 +68,27 @@ const refusal = async (sql: string): Promise<string> => {
 
 const run = Math.random().toString(36).slice(2, 10)
 const BODY = `Governance probe ${run} — this sentence exists only to be retracted.`
-const NEED = `probe-governs-${run}`
+/*
+  NOT `probe-…`, and that is the whole point of this constant.
+
+  0473 gave the Governance page one shared predicate for harness names,
+  `app.harness_label`, which matches anything beginning `fixture|verify|probe|
+  gate|ledger-proof` followed by a separator. This suite's subject began
+  `probe-`, so the reader correctly refused to show it and two checks reported
+  *"an open proposal reaches the page — undefined"* about a page that was doing
+  exactly its job.
+
+  CLAUDE.md records the same correction being made to `verify:proposes` and not
+  carried across: *"A suite testing a filter cannot name its subject the way the
+  filter matches."* The name reads like a real need and carries the run token,
+  which is what teardown matches on.
+
+  Safe to name it this way here, unlike in `verify:proposes`, because everything
+  NEED touches — `public.proposals` and `public.suggestions` — can be deleted.
+  Nothing in this file writes it to `job_impediments`, which is append-only and
+  is why that suite must keep a fixture name.
+*/
+const NEED = `governs-need-${run}`
 const WHO = 'growth-director'
 
 type Payload = {
@@ -499,6 +519,17 @@ try {
     Three tally rows, and every one of them has a genuinely real impediment
     behind it. The property that actually matters — a row Grant is shown was put
     there by the office and not by a suite — is what this asks now.
+
+    And joined with `is not distinct from`, because NULL is not equal to NULL.
+
+    `job_impediments.staff_slug` is nullable and 48 of the 50 rows saying "an
+    answer the database will accept" — the coherence gate refusing
+    `office.notion_sync`, real work, 46 of them not fixtures — carry no slug at
+    all. With a plain `=` the correlated subquery could never find them, the
+    `not exists` was trivially true, and the check reported a genuinely real
+    tally row as one that both witnesses call a fixture. The same trap this
+    repository already paid four migrations for on `on conflict`, here deciding
+    whether an audit accuses the office of showing Grant test traffic.
   */
   const witnesses = await one(`
     select count(*)::int as n
@@ -506,7 +537,9 @@ try {
      where not exists (
        select 1 from public.job_impediments i
          left join public.jobs j on j.job_id = i.job_id
-        where i.kind = t.kind and i.needed = t.needed and i.staff_slug = t.staff_slug
+        where i.kind is not distinct from t.kind
+          and i.needed is not distinct from t.needed
+          and i.staff_slug is not distinct from t.staff_slug
           and not i.is_fixture and not coalesce(j.is_fixture, false))
   `)
   check(
