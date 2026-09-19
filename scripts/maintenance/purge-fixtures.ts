@@ -165,9 +165,59 @@ if (!go) {
     about the thing you ran it to see is worse than no report, because it
     reads as nothing to do.
   */
+  /*
+    And the tasks, for the same reason the staff sweep is reported here.
+
+    #269's lesson, one table on: a report mode silent about the thing you ran
+    it to see is worse than no report, because it reads as nothing to do. A
+    dry run said "no active fixture projects." while `check:leaks` was
+    pointing at this script for two fixture tasks it would in fact remove.
+  */
+  const wouldSweep = (
+    await db.execute(`
+      select count(*) as n from public.tasks
+       where project_id in (select project_id from public.projects where (${predicate}))
+          or is_fixture
+    `)
+  ).rows[0] as { n: number | string }
+  if (Number(wouldSweep.n) > 0) {
+    console.log(`${String(wouldSweep.n)} fixture task(s) would be swept. Pass --go.`)
+  }
   await reportOrSweepStaff(false)
   process.exit(0)
 }
+
+/*
+  The tasks, and OUTSIDE the active-projects guard (#266, corrected).
+
+  The delete itself was already right — a fixture project's tasks go because
+  the project is going, and a fixture task on a REAL project goes because it
+  is fixture traffic — and it sat INSIDE `if (found.rows.length > 0)`, the
+  guard for active fixture projects. So neither reason could fire unless an
+  unrelated ACTIVE fixture project happened to exist at the same moment.
+
+  Measured: two fixture tasks on `fixture-sess-alpha-the-application`, whose
+  status is `paused` because that is how the session harness leaves its
+  projects. `check:leaks` counted them and named this script as the remedy;
+  this script printed "no active fixture projects." and swept nothing. A check
+  pointing at a cure that cannot reach the disease — the same shape as an
+  approval option nothing can perform — and the second half of the comment
+  above ("a fixture task on a REAL project") was unreachable by construction
+  for the same reason.
+
+  `public.tasks` has no append-only trigger (`tasks_touch` only sets
+  `updated_at`), so unlike `skills` and `job_impediments` these can actually
+  be removed.
+*/
+const sweptTasks = (
+  await db.execute(`
+    delete from public.tasks
+     where project_id in (select project_id from public.projects where (${predicate}))
+        or is_fixture
+    returning task_id
+  `)
+).rows.length
+if (sweptTasks > 0) console.log(`swept ${String(sweptTasks)} fixture task(s).`)
 
 if (found.rows.length > 0) {
   // Briefs and cached sources go first: they are derived data with no value
@@ -182,33 +232,6 @@ if (found.rows.length > 0) {
     delete from public.documents where project_id in (
       select project_id from public.projects where (${predicate})
     )
-  `)
-  /*
-    And the tasks (#266).
-
-    Thirty-one of the thirty-two rows in `public.tasks` were debris on fixture
-    projects, and the sweep had never collected them. They are all correctly
-    labelled — `tasks.is_fixture` is GENERATED from `added_by` and every one of
-    them was added by a `verify:` name — so nothing reported them to Grant
-    wrongly. That is the reason to sweep them rather than the reason not to:
-    the pile was harmless until a new reader looked without the filter, and this
-    repository has rebuilt that pile four times (jobs, lessons, provider_health,
-    impediments).
-
-    BOTH conditions, not either. A fixture project's tasks go because the
-    project is going; a fixture task on a REAL project goes because it is
-    fixture traffic — and that second one is the shape the jobs sweep missed by
-    construction, because #45 sends any suite testing something that filters
-    fixtures to use a real project.
-
-    `public.tasks` has no append-only trigger (`tasks_touch` only sets
-    `updated_at`), so unlike `skills` and `job_impediments` these can actually
-    be removed.
-  */
-  await db.execute(`
-    delete from public.tasks
-     where project_id in (select project_id from public.projects where (${predicate}))
-        or is_fixture
   `)
   // Jobs first, and this was missing until it mattered. Archiving a project
   // left its jobs LIVE, so every verification run added a few more to a set
