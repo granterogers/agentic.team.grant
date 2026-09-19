@@ -265,9 +265,36 @@ defect fixed weeks ago reads as live for ever. Each recording now carries its
 commit and the report names the failing sessions that have not been re-run on
 HEAD. #226's lesson one layer in.
 
+## #172 — the machinery works and has nothing to work on
+
+Measured with the office's own `app.mail_coverage`, on every active project:
+**218 cached messages, 0 contacts, 0 associated.** Not one message reaches a
+project. Association is by contact or by a subject naming the project, and
+Grant's real mail does neither.
+
+The office is NOT lying about this — `mailCoverageNote` handles the state and
+forbids "there is nothing in your email", allowing only "I cannot connect any
+of it to this project". That half is right.
+
+**Proved by driving it, inside a rollback:** adding ONE contact for the
+commonest real correspondent took Legacy Coaching Course from
+`associated before=0 after=13`, and `contacts now = 0` confirmed the probe left
+nothing behind. The strong tier fires correctly and has simply never had a
+contact since ADR-0037 called it "the strongest statement of relevance the
+database holds".
+
+`contact_add` is wired and pressable (`app.js:9462`), so nothing blocks this
+but the data.
+
+**HUMAN ACTION, posted to #172:** add one contact (name + email) to a project
+in People. Thirteen messages associate immediately.
+
+Deliberately not done: no body backfill for the 178 older messages (a privacy
+and cost decision needing an ADR, not a tidy-up), and `gmail.send` stays off.
+
 ## NEXT ACTION
 
-The remaining #172 and #259 scope, then #41 §8's chaos interactions (network
+The remaining #259 scope, then #41 §8's chaos interactions (network
 interruption mid-job, a provider 429/500, two workers on one job, clock skew)
 which no suite exercises. Do NOT chase the six remaining session failures as
 product defects without reproducing them first.
