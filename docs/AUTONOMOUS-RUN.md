@@ -110,21 +110,64 @@ the defect has an operational dimension.
 
 ## Work completed this run
 
-- (nothing yet — the run has just begun)
+1. **Mission ledger persisted** (`fcdb9b8`) before any other work.
+2. **`npm run check:reachable`** (`1be2229`) — a third sibling to
+   `check:callers` and `check:pressable`, asking of all 36 registered job
+   kinds what a PERSON could do to start one. In the gate as suite 38.
+3. **#66's audio made reachable.** `notebook.collect_artifact` has worked
+   since 11 September and nothing ever enqueued it; the only three jobs of
+   that kind were placed by hand the day it was written. The live chain ended
+   at a link, which is the one outcome Grant named as the thing he did not
+   want. `notebook.collect` now hands off when the artifact is ready and has a
+   file of its own. **Worker deployed.**
+4. **#265's connector survey made reachable (0506).**
+   `app.register_mcp_provider` returned *"ask it what it offers"* and nothing
+   could ask — zero `mcp.discover` jobs had ever existed, so
+   `mcp_discovered_tools` stayed empty for ever and `offer_connector_tool`
+   had nothing to point at. Registering now enqueues the survey.
+5. **`ci.dispatch` baselined with a reason** — wiring it would reverse the
+   standing instruction that Actions stays off, not close a gap.
 
 ## Evidence collected this run
 
-- Starting state verified against the remote rather than taken from the prompt.
+- Starting state verified against the remote rather than taken from the
+  prompt, which named a stale SHA.
+- **The provenance-order fix is proved in production on all four affected
+  duties**, which was previously only inferred for two of them:
+  `office.notion_sync` 4 completes (failures stop dead at 23:55 on the 18th),
+  `office.sync` 8, `office.slack_rotate` 2, `briefing.morning` 1 at 04:00.
+  Zero failures from any since.
+- Every enabled duty is running inside its period; `vault-export` is disabled
+  by design, so its zero jobs are correct and NOT a finding.
+- Sabotage, both halves of the new check, each proved to have landed by grep
+  count before the run: removing the #66 hand-off turned 4 of 5 unit tests red
+  and named the kind again; baselining a reachable kind exited 1.
+- 1918 unit tests, lint, typecheck, migrations, secrets, templates all green.
+
+## The instrument was wrong four times before the product was wrong once
+
+Recorded because it is the run's most reusable lesson so far. `kind:` alone
+matched report blocks and plan steps (six phantom kinds); skipping the whole
+registrar file hid an enqueue in that same file; splitting migrations on `;`
+fragments a plpgsql body; and a name match inside `pg_get_functiondef` was
+read as an enqueue and nearly dismissed a real finding. Each was caught before
+it became a filed defect.
 
 ## Discoveries still unresolved
 
-- (none yet)
+- **`notebook.collect_artifact` has not yet run end to end since the fix.**
+  It needs a real audio generation to prove the chain, which spends a real
+  NotebookLM call. INFERRED, not proved, until that happens.
+- **`mcp.discover` likewise** — registering a real provider would prove it;
+  the migration's own drive proves only the enqueue.
+- The 24-hour failure window still shows 8 pre-fix `office.notion_sync`
+  failures; they age out rather than indicating anything live.
 
 ## NEXT ACTION
 
-Inspect live operational state (queue, duties, failures, connector health,
-fixture debris, deployed versions) and compare it against what the suites
-claim, then begin the #41 deep acceptance attack.
+Continue the #41 deep acceptance attack: adversarial provenance under
+conversational bait, multi-step realistic histories across subsystems, and
+the cross-channel/recovery interactions the gate does not exercise.
 
 ---
 
