@@ -446,10 +446,39 @@ conversational corpus is **737/737 across 163 turns**, from 714/737 with
 twenty-three failing turns at the start of this run. Every turn has been run
 against `9376fdb`.
 
+## The deep sweep, and what it found
+
+Beyond the gate: 30-odd suites that nothing routinely runs. Every product
+defect it found was small and every HARNESS defect it found was accusing the
+product of something.
+
+**Product.** `app.project_delete` could never delete a project holding a row in
+`public.decisions` — the foreign key is ON DELETE SET NULL and the ledger
+refuses an UPDATE, so the cascade raised 42501 four frames deep and 0360's
+handler, written for exactly this shape, never saw it. Seventeen projects are
+in that position. 0509 refuses in a sentence; 0510 and 0511 teach
+`app.project_debris()` that a decision and an event pin a project the way a job
+does, so `check:leaks` stops calling them leaks and a sweep stops trying.
+
+**Harness, five of them**, each red against working code:
+`verify:collaborates` (a 200-character floor penalising an honest short ask),
+`verify:governs` (its subject named the way the filter matches; and a
+`staff_slug = staff_slug` join over a nullable column that could never match,
+reporting 46 real impediments as fixtures), `verify:times` (reading the map for
+an activity panel since #25, and `./pulse.js` under a deep link),
+`verify:jobs` (a `provider_health` row cleaned at the start and never at the
+end), `verify:send` (owning its own jobs but not the child the office spawned).
+
+**Environment, one:** `verify:restore` needs `PGHOST` and `MANIFEST` and exits
+1 without them. Not run here; not a defect.
+
 ## NEXT ACTION
 
-#41 §8's one remaining untested item — a malformed PDF — then the complete
-qualification pass and the final evidence-based report.
+The twelve-hour run is complete and the final report is in the conversation.
+Nothing is in flight. If you are a fresh session: reread `CLAUDE.md`, then this
+file, then the open Issues — #279, #277, #259, #213, #172, #41, #18, #280,
+#281, #282 — and pick up from there. Beta is the mode: real usage is the
+primary source of findings.
 
 ---
 
