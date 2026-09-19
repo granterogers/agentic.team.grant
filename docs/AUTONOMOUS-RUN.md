@@ -200,12 +200,36 @@ survives. Worker deployed; roster re-run **9/9, zero failures**.
 | 2 | "says it cannot see it, briefly … no absence stated" | the honest-absence detector, which CLAUDE.md already records as a wording lock that once scored 3/6 while nothing had been invented |
 | 2 | N specialists convened | routing breadth on genuinely multi-desk instructions |
 
+## #278 — part one fixed, part two is Grant's decision
+
+Two of the Issue's numbers were stale: the applied zoom is **1.0** (`fit(1)`),
+not 0.85, and **4** of 24 cards are visible, not 3. A third thing it could not
+have seen: on a real iPhone the port ran **28px past the fold** and the bottom
+**15px of the zoom controls were cut off** — invisible because `npm run shots`
+takes a FULL-PAGE screenshot, so a control under the fold is in the picture
+looking correct.
+
+Fixed: the controls are one bar with a surface (3 cards overlapped -> 1), the
+`24 on the map` count is no longer `display: none` on the phone, and the port
+is `min(55dvh, 468px)` — sized to the room that exists, in `dvh` because a
+phone's chrome moves the viewport.
+
+New instruments: **`npm run mapview`**, and a **phone leg on `verify:map`**,
+which was desktop-only and is why this survived. Sabotaged: 52px and 39px
+below the fold, both red; restored 21/21. **Deployed.**
+
+**Still open and deliberately not decided:** the opening view shows 17% of the
+map. A 208px card at k=1.0 in a 350px port frames ONE column; the columns are
+semantic; zooming out breaks the 12px floor the Issue forbids touching. It is
+the design decision Grant framed, and his three candidates stand. Measurements
+posted to the Issue.
+
 ## NEXT ACTION
 
 Work the 13 remaining session failures in that order, reading the office's
 actual answer before believing any expectation — then continue to the
 cross-channel, recovery and chaos interactions (#41 §8) that no suite
-exercises.
+exercises, and the remaining #172 / #259 scope.
 
 ---
 
