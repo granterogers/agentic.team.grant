@@ -171,3 +171,45 @@ question. `npm run verify:form-rules [--both]`, not in the gate.
 then (authorised) fast-forward merge → main → annotated tag
 v1.0.0-rc.1 → push → verify remote SHA → deploy/verify → release smoke.
 Then the wow-factor design phase with all remaining time.
+
+### Release qualification, first pass — and what the gate could not see
+
+Gate run 1: **36/37**, 2074s. The one failure was `verify:stop` 18/19, a
+HARNESS race proved from `job_state_transitions` (a job forced to
+`running` with no lease is correctly requeued by `recover_stalled_jobs`
+1.5s later). Fixed with a real lease; re-run **19/19**.
+
+**Then I read the queue, and found what the gate could not.**
+`app.office_health()` reported `failing_kinds: [{n: 12, kind:
+office.notion_sync}]`. Every one of the office's SIXTEEN real failures in
+24 hours was one defect:
+
+    path: await howComposed(db, job.jobId),      // counts zero
+    body: announce ? await sayAs(...) : plain,   // spends one
+
+An object literal evaluates in source order, so the provenance was
+decided before the property that made it untrue;
+`enforce_deterministic_claim` refused the insert and the job failed with
+its answer written. `notion-sync.ts` and `sync.ts` had it;
+`briefing.ts` and `slack-rotation.ts` were already correct (body above
+the ask). 0489 fixed the QUESTION in all four and the ORDER in two.
+
+It bites only on runs that spend a model, which is why `office.sync`
+showed 23 completes and 1 failure while `notion_sync` failed 12 of 12.
+
+Fixed, deployed (worker v569), and PROVED live: the duty went from
+`failed` to `complete`, delivered to Slack, `deterministic = false`.
+`tests/agents/provenance-order.test.ts` guards every handler, proved
+against the real file by putting the defect back.
+
+Other real work this pass: 0505 (five fixture connectors on Grant's
+Connections page, filtered + swept + given a witness in check:leaks),
+service marks for the three capability cards plus a check with both
+controls, and the capture/measure harnesses corrected — every portfolio
+screenshot ever taken had photographed a loading panel.
+
+**Position:** gate run 2 in progress against the corrected handlers.
+If green: fast-forward merge → main → annotated tag v1.0.0-rc.1 → push
+→ verify remote SHA → deploy/verify → release smoke. Then the design
+phase; three measured findings are queued and one earlier one was
+withdrawn as an artefact of the mid-load capture.
