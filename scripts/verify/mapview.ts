@@ -83,6 +83,19 @@ await page.locator('[data-tab="overview"]').click()
 await page.waitForTimeout(900)
 
 /*
+  A phone opens the Overview on the PANELS since #278, so the map has to be
+  asked for. This measure exists to say how the map behaves, not whether it is
+  the default — `verify:map` asserts the default, and a measure that silently
+  reported the panels' geometry as the map's would be the wrong-payload trap
+  this repository has paid for three times.
+*/
+if ((await page.locator('.planeport').count()) === 0) {
+  await page.locator('[data-overview="map"]').first().click({ force: true })
+  await page.waitForSelector('.planeport', { timeout: 20_000 })
+  await page.waitForTimeout(900)
+}
+
+/*
   Passed as a STRING for the reason `probe.ts` gives: this project has no `dom`
   lib, so a closure naming `document` cannot typecheck even though it only ever
   runs in the browser.

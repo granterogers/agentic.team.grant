@@ -337,6 +337,20 @@ for (const [size, opts] of SIZES) {
     */
     await page.locator('[data-tab="overview"]').click()
     await page.waitForTimeout(500)
+    /*
+      And say MAP, rather than depending on the default.
+
+      A phone opens the Overview on the panels since #278, so without this the
+      `project` capture became a second photograph of `project-panels` and the
+      phone map lost its capture entirely — and CLAUDE.md is blunt about what
+      that costs: *"a screen with no capture is a screen nobody is watching"*,
+      recorded the last time this exact toggle moved what the Overview opens
+      on. Naming it keeps `project-*` the map and `project-panels-*` the
+      panels, on both sizes, whatever the default becomes next.
+    */
+    await page.locator('[data-overview="map"]').first().click()
+    await page.waitForSelector('.planeport', { timeout: 20_000 })
+    await page.waitForTimeout(700)
     await shoot('project')
 
     /*

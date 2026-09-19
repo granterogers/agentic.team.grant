@@ -4465,13 +4465,51 @@ function panelChrome(spec, kinds, bodyFor) {
  * A per-viewer preference, so browser storage is the right home for it and
  * CLAUDE.md's bounds apply: wrapped, and correct when it comes back empty. The
  * default is the map, because that is what Grant asked to land on.
+ *
+ * ## Except on a phone, where the map cannot do its job (#278)
+ *
+ * Measured rather than judged. On a 390x844 phone the port is 350x464, the
+ * field is 1142x1050, and the map opens at k=1 showing FOUR of twenty-four
+ * cards — 17%, with the zoom controls sitting on one of them. Panning is the
+ * affordance for the rest, and panning to see 83% of a project is not an
+ * overview.
+ *
+ * It cannot be fixed by fitting. Zoom multiplies every font size on the plane
+ * and the smallest text on a card is 12px, which IS the floor the visual
+ * standard sets — so the scale that shows everything (0.31 here) renders the
+ * state line at under 4px, and any scale below 1.0 breaks the floor at all.
+ * That is why the first paint calls `fit(1)`: the floor and the fit are in
+ * direct conflict on a screen this size, and there is no third value.
+ *
+ * So the medium decides, not the preference. On a phone the Overview opens on
+ * the panels — a vertical list that scrolls, shows every module with its state
+ * and its counts, and reaches all of it. The map is one tap away on the same
+ * toggle, in both directions, and an explicit choice still wins on both sizes:
+ * somebody who picks Map on their phone gets Map, every time.
+ *
+ * Nothing about the desktop changes. There the map shows 21 of 24 on opening,
+ * which is what #25 asked for and where it works.
  */
 function mapMode() {
+  let stored = null
   try {
-    return (localStorage.getItem('studio.overview') ?? 'map') !== 'panels'
+    stored = localStorage.getItem('studio.overview')
   } catch {
-    return true
+    /* Per-viewer convenience only; an empty read is the same as no choice. */
   }
+  if (stored !== null) return stored !== 'panels'
+  /*
+    No choice made. The breakpoint is the stylesheet's own 860px, so the
+    default and the phone layout can never disagree about what a phone is.
+    `matchMedia` is absent in some capture contexts, and the desktop answer is
+    the safe one there.
+  */
+  try {
+    if (window.matchMedia?.('(max-width: 860px)').matches === true) return false
+  } catch {
+    /* Treated as a desktop, which is the behaviour this had before. */
+  }
+  return true
 }
 
 /**

@@ -4873,8 +4873,21 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   The kind sits ABOVE the line it labels rather than inline with it, so a long
   title wraps under itself instead of round a chip.
 */
+/*
+  12px, not 11.5 — the same correction `.t-label` carries sixty lines from the
+  top of this file, in the same shape: small caps, spaced, half a pixel under
+  the floor. *"Small caps at 11.5px look fine to someone who already knows what
+  they say."*
+
+  It survived because nothing had ever looked at it. This panel is on the
+  panels board, no phone capture ever opened on the board, and
+  `verify:layouts`' overview route landed on the map — so the audit walked 64
+  states and reported 0 findings over four words that were out of spec. It went
+  red the moment #278 made the panels what a phone opens on, which is the
+  audit working and is also the argument for the change.
+*/
 .storykind {
-  grid-column: 2; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase;
+  grid-column: 2; font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
   color: var(--ink-3);
 }
 .storywhy { grid-column: 2; color: var(--ink-3); }

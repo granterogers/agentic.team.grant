@@ -401,8 +401,48 @@ console.log('#25 — the project map, pressed rather than looked at\n')
   await small.locator('.homego[data-open], .project[data-open]').first().click({ force: true })
   await small.waitForTimeout(1200)
   await small.locator('[data-tab="overview"]').first().click({ force: true })
+  await small.waitForTimeout(1200)
+
+  /*
+    On a phone the Overview OPENS ON THE PANELS (#278), and that is asserted
+    before the map is reached, because it is the fix.
+
+    The map cannot do its job at this size and it cannot be made to. The port
+    is 350x464, the field is 1142x1050, and the map opened at k=1 showing four
+    of twenty-four cards with the zoom controls on one of them. Fitting is not
+    available either: zoom multiplies every font size on the plane and the
+    smallest text on a card is 12px, which IS the floor, so the scale that
+    would show everything renders the state line at under 4px. The medium
+    decides.
+  */
+  const opensOn = (await small.evaluate(`(() => ({
+    map: document.querySelector('.planeport') !== null,
+    panels: document.querySelector('[data-panel]') !== null,
+  }))()`)) as { map: boolean; panels: boolean }
+  check(
+    'a phone opens the Overview on the panels, not on a map showing 17% of it',
+    `map=${String(opensOn.map)} panels=${String(opensOn.panels)}`,
+    !opensOn.map && opensOn.panels,
+  )
+
+  /*
+    And the map is one tap away, in both directions. CLAUDE.md records the
+    one-way door this toggle already grew once — the control drawn only in the
+    map branch, so choosing Panels removed the control that had just been
+    pressed — and making Panels the phone default puts every phone user on the
+    far side of exactly that door.
+  */
+  await small.locator('[data-overview="map"]').first().click({ force: true })
   await small.waitForSelector('.planeport', { timeout: 20_000 })
   await small.waitForTimeout(1200)
+  const backAgain = await small.evaluate(
+    `document.querySelector('[data-overview="panels"]') !== null`,
+  )
+  check(
+    'and the map is one tap away, with the way back still drawn',
+    backAgain === true ? 'both doors' : 'THE WAY BACK IS GONE',
+    backAgain === true,
+  )
 
   const fold = (await small.evaluate(`(() => {
     const port = document.querySelector('.planeport')
