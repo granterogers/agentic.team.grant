@@ -382,6 +382,45 @@ const governed = (from: number, at: number, intent: IntentClass): boolean =>
  * `assignment` signals outvote one strong `question` signal, and "the model
  * was fairly sure" is not the standard the rule sets.
  */
+/**
+ * Words that acknowledge, and the closed-class filler that carries them.
+ *
+ * Only the acknowledging vocabulary itself plus function words. No nouns and
+ * no verbs of doing, because the whole method is that anything Grant is
+ * actually TALKING ABOUT must survive the strip.
+ */
+const THANKS =
+  /\b(thanks?|thank you|ta|cheers|great|perfect|lovely|brilliant|excellent|wonderful|nice|good|ok|okay|fine|super|noted|understood|agreed|appreciated|helpful|useful|clear|sense|cool|yep|yes|yeah|sure|got it|will do|sounds good|makes sense|no worries)\b/gi
+
+/** Function words, which say nothing about a subject on their own. */
+const FILLER =
+  /\b(that|thats|this|it|its|is|was|are|were|be|been|the|a|an|and|but|so|very|really|much|all|for|to|of|i|im|ive|you|your|we|me|my|now|then|well|just|quite|bit|lot|one)\b/gi
+
+/**
+ * Does this message do nothing but acknowledge?
+ *
+ * True only when taking the acknowledging vocabulary and the function words
+ * out leaves effectively nothing. A pleasantry in front of a request leaves
+ * the request, so it is NOT one of these — which is the direction that
+ * matters, because a false positive here means a real instruction answered by
+ * the Chief of Staff with nobody convened, while a false negative is only
+ * today's behaviour.
+ *
+ * The eight-character floor is `correction.ts`'s, deliberately: one idiom for
+ * "what is left after stripping", measured the same way in both places.
+ */
+export const onlyAnAcknowledgement = (said: string): boolean => {
+  const text = String(said ?? '').trim()
+  // A long message is doing something else, whatever it opens with.
+  if (text === '' || text.length > 120) return false
+  const left = text
+    .replace(THANKS, ' ')
+    .replace(FILLER, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+  return left.length < 8
+}
+
 export const classifyIntent = (instruction: string): Classification => {
   const text = instruction.trim()
 
@@ -447,6 +486,49 @@ export const classifyIntent = (instruction: string): Classification => {
         reason:
           `no intent rule matched, but ${String(asked.length)} clause(s) read as an ` +
           `instruction by mood (${asked[0]?.why ?? ''}) — #249`,
+      }
+    }
+
+    /*
+      An acknowledgement is UNDERSTOOD, and understanding it is what stops a
+      specialist being summoned to answer "thanks".
+
+      Measured: *"Thanks, that is helpful."* reached the fallback below as
+      unrecognised, and `pickRoster`'s unrecognised branch then consulted the
+      subject matcher — which is a trigram search and therefore always finds
+      SOMETHING. It came back "the subject is clearly strategy", and the
+      strategy director answered a pleasantry. The roster session's own
+      control ("a pleasantry convenes nobody") caught it, after four days
+      hidden underneath a provider outage that was being scored as nine
+      behavioural failures.
+
+      The unrecognised branch is right for what it was built for — a vague or
+      colloquial request whose subject is plain — and it cannot tell that from
+      a message containing no request at all. So the distinction is drawn
+      HERE, where `recognised` already separates a deliberate remark ("fyi",
+      "note to self") from text nothing parsed. An acknowledgement is the same
+      category: a remark that deliberately asks for nothing.
+
+      STRIPPED AND COUNTED, never enumerated. CLAUDE.md's rule for contentless
+      rejections, which "was wrong in both directions on its first run" when it
+      tried to list the shapes a replacement can take: take the acknowledgement
+      out and look at what survives. `correction.ts` measures the same way, so
+      there is one idiom here rather than two.
+
+      That is also what keeps "Thanks — can you check the pricing?" out of it:
+      a pleasantry in FRONT of an instruction leaves the instruction behind,
+      and `links.ts` already records that shape by name.
+    */
+    if (onlyAnAcknowledgement(text)) {
+      return {
+        intent: 'thought',
+        confident: true,
+        recognised: true,
+        matched: ['acknowledgement'],
+        considered: ['thought'],
+        reason:
+          'this acknowledges rather than asks — nothing is left of it once the ' +
+          'thanks is taken out, so it convenes nobody and the Chief of Staff has it',
       }
     }
 
