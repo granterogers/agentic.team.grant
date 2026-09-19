@@ -445,9 +445,33 @@ check('teardown — the fixture channel is archived', archived, archived === 'ar
   Archived first, because ADR-0014's deferred trigger refuses an ACTIVE project
   with nothing attached and the attachments go below.
 */
-await db.execute(`
+/*
+  KEYED ON THE SLUG, AND THE ARCHIVE IS COUNTED.
+
+  A qualification run found `fixture-artifact-slack-31014230` sitting ACTIVE in
+  Grant's project list half an hour after this suite had reported 17/17 —
+  including this teardown, which printed "project archived". The row's
+  `updated_at` still equalled its `created_at`, and `projects_touch_updated_at`
+  moves it on every update (proved by hand afterwards), so the archive had
+  never touched that row at all while the read two statements later reported
+  one that was archived.
+
+  The cause of the divergence is not established. What is established is that
+  keying the write on a captured id and the assertion on the same captured id
+  cannot tell "archived the right row" from "archived some row" — CLAUDE.md:
+  *"a teardown that matches nothing looks exactly like a teardown that
+  worked."* The slug carries this run's token and cannot be wrong, and counting
+  what the update changed turns a silent miss into a failure.
+*/
+const archivedRow = await one(`
   update public.projects set status = 'archived'
-   where project_id = ${lit(projectId)}::uuid`)
+   where slug = ${lit(SLUG)}
+   returning slug, status`)
+check(
+  'teardown — the fixture project really was archived, by name',
+  `${String(archivedRow.slug ?? 'NOTHING MATCHED')} → ${String(archivedRow.status ?? '')}`,
+  archivedRow.slug === SLUG && archivedRow.status === 'archived',
+)
 let left = { docs: 1, status: '' } as Record<string, unknown>
 for (let i = 0; i < 6; i += 1) {
   await db.execute(`
@@ -460,7 +484,7 @@ for (let i = 0; i < 6; i += 1) {
     select (select count(*)::int from public.documents
              where project_id = ${lit(projectId)}::uuid) as docs,
            (select status from public.projects
-             where project_id = ${lit(projectId)}::uuid) as status`)
+             where slug = ${lit(SLUG)}) as status`)
   if (Number(left.docs) === 0) break
   await pause(10_000)
 }
