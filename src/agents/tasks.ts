@@ -44,7 +44,7 @@
 
 import { readFollowUp } from './clarify.ts'
 import { clauses } from './clauses.ts'
-import type { Classification } from './intent.ts'
+import { type Classification, withoutOpeningAffirmation } from './intent.ts'
 import { readRequest, requestBody } from './request.ts'
 
 /** The classes that may write. Everything cheaper discusses. */
@@ -227,9 +227,23 @@ const wasAsked = (instruction: string, classification: Classification): boolean 
 }
 
 export const taskRequest = (
-  instruction: string,
+  rawInstruction: string,
   classification: Classification,
 ): TaskRequest | null => {
+  /*
+    The same cut `classifyIntent` makes, and for the same measurement.
+
+    "Fine. Set aside a task to book the room myself once they confirm."
+    classified correctly as an assignment once the opening agreement was
+    stripped there — and the TITLE still came back null, because the clause
+    splitter will not give "Fine." a clause of its own (it is too short) and
+    glues it to the instruction, so the extractor never sees a clean one.
+
+    Intent fixed and title not is the worst of the three outcomes: the office
+    decides it is being asked to write something and then cannot say what,
+    which is how a confident answer with an invented intake form is produced.
+  */
+  const instruction = withoutOpeningAffirmation(rawInstruction)
   if (!wasAsked(instruction, classification)) return null
   /*
     A prohibition stops the clause it is in, not the one beside it (#249).

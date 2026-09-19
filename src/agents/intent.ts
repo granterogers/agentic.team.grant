@@ -421,6 +421,28 @@ export const onlyAnAcknowledgement = (said: string): boolean => {
   return left.length < 8
 }
 
+/**
+ * The opening word of agreement, removed, so what follows can be read.
+ *
+ * Exported because `taskRequest` needs the identical cut: classifying the
+ * remainder correctly and then handing the TITLE extractor the original text
+ * fixes half the defect and leaves the other half — measured, the intent came
+ * back `assignment` and the title came back null.
+ *
+ * One definition, two callers, for the reason CLAUDE.md gives about a row list
+ * built twice: two cuts written separately are two cuts that will disagree.
+ *
+ * Returns the text unchanged when there is no affirmation, so a caller can
+ * compare and tell whether anything was taken.
+ */
+export const withoutOpeningAffirmation = (text: string): string =>
+  text
+    .replace(
+      /^(?:yes|yeah|yep|yup|ok|okay|right|sure|fine|good|great|perfect|thanks|thank you|understood|agreed|noted|correct)\b[\s,.!;:—–-]+(?=\S)/i,
+      '',
+    )
+    .trim()
+
 export const classifyIntent = (instruction: string): Classification => {
   const text = instruction.trim()
 
@@ -486,6 +508,54 @@ export const classifyIntent = (instruction: string): Classification => {
         reason:
           `no intent rule matched, but ${String(asked.length)} clause(s) read as an ` +
           `instruction by mood (${asked[0]?.why ?? ''}) — #249`,
+      }
+    }
+
+    /*
+      An affirmation in front of an instruction is not a thought (#254, #237).
+
+      Measured, and the same for every one of them:
+
+          Set aside a task to book the room once they confirm  -> assignment
+          Fine. Set aside a task to book the room once they…   -> THOUGHT
+          OK. / Right. / Thanks. / Good. / Yes. / Perfect.     -> THOUGHT
+
+      So an instruction Grant prefixes with a word of agreement was not read as
+      an instruction at all. Nothing was written, nobody was convened, and the
+      model improvised — which is where the invented intake form and the
+      fabricated "Task … created, owned by you" both came from. He talks like
+      this constantly.
+
+      `affirmed-imperative` exists for this shape and ENUMERATES the verb:
+      generate, make, create, produce, build, record, prepare, add … and "set
+      aside" is not on it, nor are #254's "line up", "square away" or "knock
+      together" — the verbs nothing has seen, which the grammar reader handles
+      perfectly once the preamble is gone. CLAUDE.md: prefer a property over an
+      enumeration of things a future change will add to.
+
+      ## Down HERE, not at the top
+
+      The first attempt stripped before the rules ran, and turned
+      "Yes, do it. Create the task." from `direct_command` into something
+      cheaper — undoing #237's deliberate reading of an affirmed imperative.
+      Its own test caught it.
+
+      So this is a FALLBACK: everything the rules already understand is
+      untouched, and only text that reached the bottom unrecognised is read
+      again without its opening agreement. It can rescue, and it cannot
+      demote.
+    */
+    const onward = withoutOpeningAffirmation(text)
+    if (onward !== text && onward.length >= 12 && !onlyAnAcknowledgement(text)) {
+      const after = classifyIntent(onward)
+      // Only when the remainder is UNDERSTOOD: stripping a word must not turn
+      // "Fine, whatever" into a confident reading of "whatever".
+      if (after.recognised) {
+        return {
+          ...after,
+          matched: [...after.matched, 'after an affirmation'],
+          reason: `${after.reason} (read after the opening agreement, which is not the request)`,
+        }
       }
     }
 
