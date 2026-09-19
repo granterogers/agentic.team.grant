@@ -1,0 +1,118 @@
+/**
+ * The handler behind the `task-reminders` duty (#259, migration 0512).
+ *
+ * `remind_at` has been on `public.tasks` since 0482. The editor sets it,
+ * `app.my_tasks` reads it into the Today bucket, the studio draws it on the
+ * card — and nothing in this directory had ever read it. A person could say
+ * *"remind me Friday at nine"*, watch the office confirm it, see the time on
+ * the card, and hear nothing on Friday.
+ *
+ * CLAUDE.md names the class: *"A dial with no reader is worse than no dial,
+ * because it looks like a decision."*
+ *
+ * ## The one duty that is supposed to interrupt
+ *
+ * `office.chores` sets `announce: false` and says why — the list IS the
+ * notification, and a message every hour about the same dead credential is
+ * narration Grant has twice asked not to get. A reminder is the opposite case
+ * and the exception proves the rule: its entire purpose is to reach him at a
+ * moment he chose. So it announces when there is something, and is silent when
+ * there is not, which is the same principle applied to a different job.
+ *
+ * ## Read, compose, THEN mark
+ *
+ * `app.reminders_due()` is a pure read and `app.reminders_sent()` is a
+ * separate call. Doing it in one `update … returning` would be atomic and
+ * would lose a reminder for ever the moment anything after it failed — and
+ * plenty can fail after a handler returns, because the output insert has gates
+ * in front of it. At-least-once is the correct direction here: a reminder said
+ * twice is an annoyance, a reminder never said is the feature not existing.
+ *
+ * The mark is therefore the LAST thing, after the body is in hand.
+ */
+
+import type { SqlExecutor } from '../db/executor.ts'
+import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import { count } from '../text/plain.ts'
+
+interface Due {
+  readonly id: string
+  readonly title: string
+  readonly remind_at: string
+  readonly due_on: string | null
+  readonly project: string | null
+  readonly overdue: boolean
+}
+
+/**
+ * What the office says when reminders fall due.
+ *
+ * Exported so it can be tested without a database: this is the sentence Grant
+ * actually receives, and the wording is the product.
+ */
+export function remindersBody(due: readonly Due[]): string {
+  if (due.length === 0) return 'Nothing to remind you about.'
+  /*
+    One reminder gets a sentence; several get a list. A list of one reads like
+    a system report, and a paragraph of five is unscannable — #209 is this
+    repository's record of what a run-together list costs, and the fix there
+    was the element the language already has.
+  */
+  const line = (d: Due): string =>
+    `${d.title}${d.project === null ? '' : ` — ${d.project}`}${d.overdue ? ' (overdue)' : ''}`
+  if (due.length === 1) {
+    const only = due[0] as Due
+    return `Reminder: ${line(only)}.`
+  }
+  return (
+    `${count(due.length, 'reminder', 'reminders')}:\n\n` + due.map((d) => `- ${line(d)}`).join('\n')
+  )
+}
+
+export function remindersHandler(db: SqlExecutor): Handler {
+  return {
+    kind: 'tasks.remind',
+    handle: async (job: Job): Promise<HandlerOutput> => {
+      const raw = (await db.execute('select app.reminders_due() as r')).rows[0] as
+        | { r?: unknown }
+        | undefined
+      /*
+        The executor hands a jsonb column back as an OBJECT, and CLAUDE.md
+        records `JSON.parse(String(x))` on one producing
+        "[object Object] is not valid JSON" — a guessed shape that reads like a
+        corrupt payload. Accept either.
+      */
+      const parsed = typeof raw?.r === 'string' ? JSON.parse(raw.r) : (raw?.r ?? [])
+      const due = (Array.isArray(parsed) ? parsed : []) as Due[]
+
+      const body = remindersBody(due)
+
+      /*
+        Marked last, and only for what was actually named in the body. A task
+        that arrived between the read and here is not in `due`, so it is not
+        marked, so it is said on the next tick.
+      */
+      if (due.length > 0) {
+        const ids = due.map((d) => `'${d.id.replace(/'/g, "''")}'::uuid`).join(',')
+        await db.execute(`select app.reminders_sent(array[${ids}])`)
+      }
+
+      return {
+        confidence: 'high',
+        evidence: 'verified',
+        sources: [`job:${job.jobId}`, 'db:tasks'],
+        contradictions: null,
+        path: 'deterministic_retrieval',
+        model: null,
+        /*
+          The exception to the office's quiet default, and the reason is the
+          feature: a reminder that does not interrupt is a row in a table.
+          Silent when there is nothing, so a quarter-hourly duty cannot become
+          ninety-six messages a day saying nothing is due.
+        */
+        announce: due.length > 0,
+        body,
+      } satisfies HandlerOutput
+    },
+  }
+}

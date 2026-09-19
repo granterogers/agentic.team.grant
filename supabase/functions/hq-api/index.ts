@@ -1048,6 +1048,15 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   */
   my_task_add: { fn: 'my_task_add', required: ['p_title'] },
   my_task_set: { fn: 'my_task_set', required: ['p_task_id'] },
+  /*
+    And the two 0513/0514 added, because a task you cannot remove and a
+    relationship you cannot make are both features that exist only in the
+    schema. `my_task_delete` refuses anything that is not Grant's own, so the
+    boundary is enforced in the function rather than by this list being
+    careful.
+  */
+  my_task_delete: { fn: 'my_task_delete', required: ['p_task_id'] },
+  my_task_reparent: { fn: 'my_task_reparent', required: ['p_task_id'] },
 }
 
 /**

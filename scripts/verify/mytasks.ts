@@ -972,6 +972,361 @@ check(
   await db.execute(`delete from public.tasks where task_id = ${lit(id)}::uuid`)
 }
 
+// ===========================================================================
+// Subtasks (#259, migrations 0514/0515)
+// ===========================================================================
+
+console.log('\nsubtasks')
+{
+  const parent = (await press('my_task_add', { p_title: `Parent ${run}` })) as {
+    ok?: boolean
+    id?: string
+  }
+  const parentId = String(parent.id ?? '')
+  const kid = (await press('my_task_add', {
+    p_title: `Child ${run}`,
+    p_parent: parentId,
+  })) as { ok?: boolean; id?: string; parent?: string }
+  check(
+    'a subtask is created through the deployed gateway and remembers its parent',
+    `ok=${String(kid.ok)} parent=${String(kid.parent ?? '')}`,
+    kid.ok === true && String(kid.parent ?? '') === parentId,
+  )
+
+  const withKid = ((await ask('my_tasks', 'all', { q: `Parent ${run}` })) as Row[])[0] as
+    | (Row & { subtasks?: { id?: string; title?: string; done?: boolean }[] })
+    | undefined
+  check(
+    'and the parent carries it, so the list can show it rather than only count it',
+    `${String(withKid?.subtasks?.length ?? 0)} carried`,
+    (withKid?.subtasks ?? []).some((k) => String(k.id) === String(kid.id)),
+  )
+
+  /*
+    The refusal that keeps the depth at one. Asserted on the SENTENCE, because
+    a refusal for the wrong reason looks exactly like the rule working — this
+    file's own neighbours have been caught by that twice.
+  */
+  const nested = (await press('my_task_add', {
+    p_title: `Grandchild ${run}`,
+    p_parent: String(kid.id),
+  })) as { ok?: boolean; error?: string }
+  check(
+    'a subtask of a subtask is refused, and says why',
+    String(nested.error ?? '(accepted!)').slice(0, 70),
+    nested.ok === false && String(nested.error ?? '').includes('do not nest'),
+  )
+
+  /*
+    And the boundary #259's second invariant draws. The team's own work is not
+    a parent for one of Grant's tasks — a canonical task on both sides of that
+    line is the one thing the whole separation exists to prevent.
+  */
+  const theirs = String(
+    (
+      await one(`
+        insert into public.tasks (title, assigned_to_human, added_by, state, project_id)
+        values (${lit(`Theirs ${run}`)}, false, 'verify:mytasks', 'todo',
+                ${lit(projectId)}::uuid)
+        returning task_id::text as id`)
+    ).id ?? '',
+  )
+  const across = (await press('my_task_add', {
+    p_title: `Across ${run}`,
+    p_parent: theirs,
+  })) as { ok?: boolean; error?: string }
+  check(
+    'CONTROL: a personal subtask cannot be hung off the team’s own work',
+    String(across.error ?? '(accepted!)').slice(0, 70),
+    across.ok === false && String(across.error ?? '').includes('team'),
+  )
+
+  // ==========================================================================
+  // Deleting one, which was not possible at all before 0513
+  // ==========================================================================
+
+  console.log('\ndeleting one (#259, migration 0513)')
+
+  const refusedTheirs = (await press('my_task_delete', { p_task_id: theirs })) as {
+    ok?: boolean
+    error?: string
+  }
+  check(
+    'Delete refuses the team’s own work, from the door that is Grant’s',
+    String(refusedTheirs.error ?? '(deleted it!)').slice(0, 70),
+    refusedTheirs.ok === false,
+  )
+  check(
+    'and it is still there afterwards',
+    `${String((await one(`select count(*)::int as n from public.tasks where task_id = ${lit(theirs)}::uuid`)).n)} row(s)`,
+    Number(
+      (
+        await one(
+          `select count(*)::int as n from public.tasks where task_id = ${lit(theirs)}::uuid`,
+        )
+      ).n,
+    ) === 1,
+  )
+  await db.execute(`delete from public.tasks where task_id = ${lit(theirs)}::uuid`)
+
+  const gone = (await press('my_task_delete', { p_task_id: parentId })) as {
+    ok?: boolean
+    children_deleted?: number
+  }
+  check(
+    'deleting a parent takes its subtask, and SAYS how many it took',
+    `ok=${String(gone.ok)} children=${String(gone.children_deleted ?? '?')}`,
+    gone.ok === true && Number(gone.children_deleted) === 1,
+  )
+  check(
+    'and both rows are really gone',
+    `${String((await one(`select count(*)::int as n from public.tasks where task_id in (${lit(parentId)}::uuid, ${lit(String(kid.id))}::uuid)`)).n)} left`,
+    Number(
+      (
+        await one(
+          `select count(*)::int as n from public.tasks
+            where task_id in (${lit(parentId)}::uuid, ${lit(String(kid.id))}::uuid)`,
+        )
+      ).n,
+    ) === 0,
+  )
+}
+
+// ===========================================================================
+// Reminders that actually arrive (#259, migration 0512)
+// ===========================================================================
+
+console.log('\nreminders (#259, migration 0512)')
+{
+  const made = (await press('my_task_add', {
+    p_title: `Remind me ${run}`,
+    p_remind_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+  })) as { id?: string }
+  const id = String(made.id ?? '')
+
+  // Read it the way the handler does, through the same function.
+  const readDue = async (): Promise<{ id: string }[]> => {
+    const raw = (await one(`select app.reminders_due() as r`)).r
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : (raw ?? [])
+    return (Array.isArray(parsed) ? parsed : []) as { id: string }[]
+  }
+
+  check(
+    'a reminder whose moment has passed is reported as due',
+    `${String((await readDue()).length)} due`,
+    (await readDue()).some((d) => d.id === id),
+  )
+
+  /*
+    The whole point, end to end: the DEPLOYED worker runs the duty's handler
+    and the office says something. Driven through `tasks.remind` rather than by
+    calling the SQL, because the defect this closes was not in the SQL — the
+    column was complete and nothing in src/ had ever read it.
+  */
+  const jobId = String(
+    (
+      await one(`
+        insert into public.jobs
+          (correlation_id, project_id, idempotency_key, kind, requested_by, state, announce)
+        values (extensions.gen_random_uuid(), null, ${lit(`verify-mytasks-remind-${run}`)},
+                'tasks.remind', ${lit(`verify:mytasks-${run}`)}, 'queued', false)
+        returning job_id::text as id`)
+    ).id ?? '',
+  )
+  let body = ''
+  for (let i = 0; i < 40; i += 1) {
+    const row = await one(`
+      select j.state, coalesce(o.body, '') as body
+        from public.jobs j
+        left join public.outputs o on o.job_id = j.job_id
+       where j.job_id = ${lit(jobId)}::uuid`)
+    if (['complete', 'failed', 'cancelled'].includes(String(row.state))) {
+      body = String(row.body ?? '')
+      break
+    }
+    await new Promise((r) => setTimeout(r, 3_000))
+  }
+  check(
+    'and the office actually says it — the handler that did not exist until 0512',
+    body === '' ? 'NOTHING WAS SAID' : body.slice(0, 80),
+    body.includes(`Remind me ${run}`),
+  )
+  check(
+    'saying it marks it, so the next quarter-hour does not say it again',
+    `${String((await readDue()).filter((d) => d.id === id).length)} still due`,
+    !(await readDue()).some((d) => d.id === id),
+  )
+
+  /*
+    And the half that makes a reminder usable rather than single-use: moving it
+    re-arms it. Without this, re-scheduling a reminder that had already fired
+    would never fire again — a feature that works exactly once per task, which
+    looks fine in any test that only fires it once.
+  */
+  await press('my_task_set', {
+    p_task_id: id,
+    p_remind_at: new Date(Date.now() - 60_000).toISOString(),
+  })
+  check(
+    'moving a reminder that already fired arms it again',
+    `${String((await readDue()).filter((d) => d.id === id).length)} due`,
+    (await readDue()).some((d) => d.id === id),
+  )
+
+  /*
+    The editor's half, as source. The input had NO value attribute, so it
+    rendered blank on a task that had a reminder — and the save handler reads a
+    blank reminder as "clear it". Opening Details and changing the title
+    silently deleted the reminder. The browser proof is in the QA pass; this is
+    the witness that stops it coming back.
+  */
+  const page = readFileSync('web/studio/app.js', 'utf8')
+  const carries = /data-my-remind type="datetime-local" value="\$\{esc\(localStamp\(/.test(page)
+  check(
+    'the editor renders the reminder it already has, so saving cannot wipe it',
+    carries ? 'the value is rendered' : 'THE INPUT IS BLANK — saving clears the reminder',
+    carries,
+  )
+
+  await db.execute(`delete from public.tasks where task_id = ${lit(id)}::uuid`)
+  await db.execute(`update public.jobs set project_id = null where job_id = ${lit(jobId)}::uuid`)
+}
+
+// ===========================================================================
+// The provider seam, driven as a fake provider (#259, migration 0513)
+// ===========================================================================
+
+console.log('\nthe seam a provider plugs into (#259, migration 0513)')
+{
+  /*
+    A FAKE provider, and that is the point. #259 asks for Vikunja behind an
+    abstraction; the way to know an abstraction is provider-neutral is to drive
+    it with a provider that is not Vikunja. This one is a name and a few RPC
+    calls, it ships nothing, and it exercises every seam a real one would use.
+  */
+  const PROVIDER = `probe-${run}`
+  const made = (await press('my_task_add', { p_title: `Projected ${run}` })) as { id?: string }
+  const id = String(made.id ?? '')
+  const revOf = async (): Promise<number> =>
+    Number(
+      (await one(`select revision from public.tasks where task_id = ${lit(id)}::uuid`)).revision,
+    )
+
+  const offered = async (): Promise<{ upserts: { id: string }[]; deletes: { id: string }[] }> => {
+    const raw = (await one(`select app.tasks_to_push(${lit(PROVIDER)}) as r`)).r
+    const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+      upserts?: { id: string }[]
+      deletes?: { id: string }[]
+    }
+    return { upserts: parsed.upserts ?? [], deletes: parsed.deletes ?? [] }
+  }
+
+  check(
+    'a task no provider has seen is offered for projection',
+    `${String((await offered()).upserts.length)} offered`,
+    (await offered()).upserts.some((u) => u.id === id),
+  )
+
+  await db.execute(
+    `select app.task_pushed(${lit(id)}::uuid, ${lit(PROVIDER)}, 'ext-1', ${String(await revOf())})`,
+  )
+  check(
+    'once projected it is not offered again — the watermark holds',
+    `${String((await offered()).upserts.filter((u) => u.id === id).length)} offered`,
+    !(await offered()).upserts.some((u) => u.id === id),
+  )
+
+  await press('my_task_set', { p_task_id: id, p_title: `Projected ${run} edited` })
+  check(
+    'and an edit here makes it pushable again, which is what keeps them in step',
+    `revision ${String(await revOf())}`,
+    (await offered()).upserts.some((u) => u.id === id),
+  )
+
+  /*
+    Sync status lives in `task_links` and never on the task — #259's fourth
+    invariant, asserted rather than assumed, because the cheap way to build
+    this is a column on `tasks` and that is what makes a canonical model
+    provider-shaped.
+  */
+  const taskCols = (
+    await db.execute(`
+      select column_name from information_schema.columns
+       where table_schema = 'public' and table_name = 'tasks'
+         and column_name in ('sync_state', 'sync_error', 'external_id', 'vikunja_id')`)
+  ).rows as { column_name: string }[]
+  check(
+    'CONTROL: no provider field has leaked onto the canonical task',
+    taskCols.length === 0
+      ? 'the task row is clean'
+      : `LEAKED: ${taskCols.map((c) => c.column_name).join(', ')}`,
+    taskCols.length === 0,
+  )
+
+  await db.execute(
+    `select app.task_push_failed(${lit(id)}::uuid, ${lit(PROVIDER)}, 'the provider was unreachable')`,
+  )
+  const health = await one(`
+    select sync_state, sync_error from public.task_links
+     where task_id = ${lit(id)}::uuid and provider = ${lit(PROVIDER)}`)
+  check(
+    'a provider that fails is recorded where it can be diagnosed, and says what happened',
+    `${String(health.sync_state)} — ${String(health.sync_error ?? '')}`.slice(0, 70),
+    health.sync_state === 'error' && String(health.sync_error ?? '').includes('unreachable'),
+  )
+  check(
+    'and the task itself is untouched by the failure — #259: never unavailable',
+    `${String(((await ask('my_tasks', 'all', { q: `Projected ${run}` })) as Row[]).length)} in the list`,
+    ((await ask('my_tasks', 'all', { q: `Projected ${run}` })) as Row[]).some(
+      (r) => String(r.id) === id,
+    ),
+  )
+
+  // Deleting it leaves the provider something to act on.
+  await press('my_task_delete', { p_task_id: id })
+  check(
+    'deleting a projected task tells the provider to remove its copy',
+    `${String((await offered()).deletes.length)} deletion(s) owed`,
+    (await offered()).deletes.some((d) => d.id === id),
+  )
+  await db.execute(`select app.task_delete_pushed(${lit(id)}::uuid, ${lit(PROVIDER)})`)
+  check(
+    'and once the provider has applied it, nothing is owed',
+    `${String((await offered()).deletes.length)} still owed`,
+    !(await offered()).deletes.some((d) => d.id === id),
+  )
+
+  /*
+    Disconnecting. #259 is explicit: this must never lose a native task, and it
+    is the last proof that a provider is optional rather than a hidden
+    dependency.
+  */
+  const keeper = (await press('my_task_add', { p_title: `Kept ${run}` })) as { id?: string }
+  await db.execute(`
+    select app.task_pushed(${lit(String(keeper.id))}::uuid, ${lit(PROVIDER)}, 'ext-keep', 1)`)
+  const forgot = (await one(`select app.task_provider_forget(${lit(PROVIDER)}) as r`)).r as
+    | string
+    | { links_removed?: number }
+  const said = (typeof forgot === 'string' ? JSON.parse(forgot) : forgot) as {
+    links_removed?: number
+  }
+  check(
+    'disconnecting a provider removes its mappings',
+    `${String(said.links_removed ?? 0)} mapping(s) removed`,
+    Number(said.links_removed ?? 0) >= 1,
+  )
+  check(
+    'and every native task is still there and still in the list',
+    `${String(((await ask('my_tasks', 'all', { q: `Kept ${run}` })) as Row[]).length)} found`,
+    ((await ask('my_tasks', 'all', { q: `Kept ${run}` })) as Row[]).some(
+      (r) => String(r.id) === String(keeper.id),
+    ),
+  )
+
+  await db.execute(`delete from public.tasks where task_id = ${lit(String(keeper.id))}::uuid`)
+  await db.execute(`delete from public.task_tombstones where title like ${lit(`%${run}%`)}`)
+}
+
 const failed = checks.filter((c) => !c.passed)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 process.exit(failed.length === 0 ? 0 : 1)

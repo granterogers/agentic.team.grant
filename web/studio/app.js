@@ -7961,6 +7961,9 @@ function tasksView() {
             : esc(String(t.project.name ?? ''))}
           ${dueWords(t) === '' ? '' : ` · due ${esc(dueWords(t))}`}
           ${t.repeats === null || t.repeats === undefined ? '' : ' · repeats'}
+          ${t.remind_at === null || t.remind_at === undefined
+            ? ''
+            : ` · reminder ${esc(when.stamp(t.remind_at))}`}
           ${t.for_job === null || t.for_job === undefined ? '' : ' · the team is waiting on this'}
         </span>
         ${labels.length === 0
@@ -7968,6 +7971,36 @@ function tasksView() {
           : `<span class="dchips">${labels
               .map((l) => `<span class="dchip">${esc(l)}</span>`)
               .join('')}</span>`}
+        ${(() => {
+          /*
+            The children, under their parent (#259, migration 0515).
+
+            Read from the payload rather than matched up in the page: a subtask
+            due today and its parent due next week are in different buckets, so
+            a renderer that nested whatever happened to be in the same answer
+            would orphan the rest — the row-list-built-twice defect with a
+            filter in front of it.
+          */
+          const kids = Array.isArray(t.subtasks) ? t.subtasks : []
+          if (kids.length === 0) return ''
+          const left = kids.filter((k) => k.done !== true).length
+          return `<ul class="psubs" aria-label="Subtasks of ${esc(t.title)}">
+            ${kids
+              .map(
+                (k) => `<li class="psub${k.done === true ? ' was' : ''}">
+                  <button class="ptick small${k.done === true ? ' on' : ''}"
+                    data-my-tick="${esc(k.id)}" data-done="${k.done === true}"
+                    aria-label="${k.done === true ? 'Reopen' : 'Mark done'} &ldquo;${esc(k.title)}&rdquo;"
+                    ${canWrite() ? '' : 'disabled'}></button>
+                  <span>${esc(k.title)}</span>
+                </li>`,
+              )
+              .join('')}
+            <li class="psub-n t-meta">${
+              left === 0 ? 'All done' : `${String(left)} of ${String(kids.length)} left`
+            }</li>
+          </ul>`
+        })()}
         ${done || !canWrite() ? '' : myEditor(t)}
       </div>
       ${done || !canWrite()
@@ -8075,6 +8108,43 @@ function tasksView() {
   in the database's zone, which for a one-person office in one place is the
   right answer and is stated here so nobody has to rediscover it.
 */
+/**
+ * An instant, in the shape a `datetime-local` input will accept (#259).
+ *
+ * The office stores `remind_at` as a UTC timestamp and the input speaks LOCAL
+ * wall-clock with no zone at all, so the two cannot be handed to each other
+ * raw. `toISOString()` would put the UTC time in a box the browser labels
+ * with the viewer's own clock, which is the quiet kind of wrong: a reminder
+ * set for nine would show as eight and save as eight.
+ *
+ * Empty for an absent or unparseable value, because the editor's blank state
+ * has to mean "no reminder" and nothing else.
+ */
+function localStamp(iso) {
+  if (iso === null || iso === undefined || iso === '') return ''
+  const at = new Date(String(iso))
+  if (Number.isNaN(at.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return (
+    `${String(at.getFullYear())}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}` +
+    `T${pad(at.getHours())}:${pad(at.getMinutes())}`
+  )
+}
+
+/**
+ * And back: a local wall-clock string as an instant the office can store.
+ *
+ * `new Date('2026-09-20T09:00')` is parsed as LOCAL by every browser, which is
+ * exactly what the input means, and `toISOString()` then carries the offset
+ * explicitly. Sending the bare string would leave Postgres to guess a zone
+ * from its session, and a reminder an hour out is a reminder nobody trusts.
+ */
+function instantFrom(local) {
+  if (local === '') return ''
+  const at = new Date(local)
+  return Number.isNaN(at.getTime()) ? '' : at.toISOString()
+}
+
 function myEditor(t) {
   if (mine.editing !== t.id) return ''
   const labels = Array.isArray(t.labels) ? t.labels : []
@@ -8146,7 +8216,7 @@ function myEditor(t) {
       <input data-my-labels value="${esc(labels.join(', '))}"
              placeholder="errand, admin" aria-label="Labels, separated by commas"></label>
     <label class="t-meta">Remind me
-      <input data-my-remind type="datetime-local"
+      <input data-my-remind type="datetime-local" value="${esc(localStamp(t.remind_at))}"
              aria-label="When to remind me"></label>
     <label class="t-meta">Repeat
       <select data-my-repeat aria-label="How often this repeats">
@@ -8162,6 +8232,27 @@ function myEditor(t) {
       </select></label>
     <button class="btn small primary" type="submit">Save</button>
     <span class="t-meta" data-said></span>
+    <!--
+      Adding a subtask, and removing the task, both live in the editor.
+
+      Not on the row: the row is a list of things to do and every control on it
+      is one more thing between Grant and reading it. Details is already the
+      place you go to change your mind about a task, and these are two more
+      ways of doing that.
+
+      No backticks in this comment. Template literal.
+    -->
+    <div class="myedit-more">
+      ${
+        t.parent === null || t.parent === undefined
+          ? `<button class="btn small quiet" type="button" data-my-sub="${esc(t.id)}">
+               Add a subtask</button>`
+          : `<span class="t-meta">A subtask of something else.</span>`
+      }
+      <button class="gobtn danger" type="button" data-my-delete="${esc(t.id)}"
+        data-name="${esc(t.title ?? '')}"
+        data-kids="${String(Array.isArray(t.subtasks) ? t.subtasks.length : 0)}">Delete</button>
+    </div>
   </form>`
 }
 
@@ -9019,7 +9110,12 @@ function drawShell() {
           await act('my_task_set', {
             p_task_id: id,
             ...(labels.length === 0 ? {} : { p_labels: labels }),
-            ...(remind === '' ? {} : { p_remind_at: remind }),
+            /*
+              As an INSTANT, not the box's wall-clock string. The input has no
+              zone; Postgres would take one from its session, and "remind me at
+              nine" arriving an hour out is a reminder nobody trusts.
+            */
+            ...(remind === '' ? {} : { p_remind_at: instantFrom(remind) }),
             ...(every === '' ? {} : { p_repeat_every: every, p_repeat_from: from }),
             p_title: title,
             ...(detail === '' ? {} : { p_detail: detail }),
@@ -9032,6 +9128,71 @@ function drawShell() {
       )
       if (ok?.ok === true) {
         mine.editing = null
+        forgetMine()
+        void needMine(mine.bucket)
+        render()
+      }
+    })
+  }
+
+  /*
+    Removing one for good (#259, migration 0513).
+
+    Confirmed, always — Grant: *"You should always check before making any
+    destructive action with me."* And the sentence NAMES the subtasks, because
+    `tasks_parent_task_id_fkey` is ON DELETE CASCADE and a confirmation that
+    does not mention the three other rows about to go is not a confirmation.
+    Equally it does not overstate: with no children it says so plainly, since
+    a warning that cries wolf is one people learn to click through.
+  */
+  for (const b of root.querySelectorAll('[data-my-delete]')) {
+    b.addEventListener('click', async () => {
+      const kids = Number(b.dataset.kids ?? '0')
+      if (
+        !sure(
+          `Delete “${b.dataset.name}”? ` +
+            (kids === 0
+              ? 'This cannot be undone.'
+              : `Its ${String(kids)} subtask${kids === 1 ? '' : 's'} go with it. ` +
+                'This cannot be undone.'),
+        )
+      ) {
+        return
+      }
+      const done = await attempt(
+        b,
+        'Deleting…',
+        () => act('my_task_delete', { p_task_id: b.dataset.myDelete }),
+        'Deleted.',
+      )
+      if (done) {
+        mine.editing = null
+        forgetMine()
+        void needMine(mine.bucket)
+        render()
+      }
+    })
+  }
+
+  /*
+    Adding a subtask, inline, without leaving the list.
+
+    A prompt rather than a second form: the only thing a subtask needs at birth
+    is a name — it inherits its parent's project (0514) and can be opened and
+    edited like any other task afterwards. A five-field form for one string is
+    the thing #259 means by "fast creation".
+  */
+  for (const b of root.querySelectorAll('[data-my-sub]')) {
+    b.addEventListener('click', async () => {
+      const title = globalThis.prompt?.('What is the subtask?')
+      if (title === null || title === undefined || title.trim() === '') return
+      const done = await attempt(
+        b,
+        'Adding…',
+        () => act('my_task_add', { p_title: title.trim(), p_parent: b.dataset.mySub }),
+        'Added.',
+      )
+      if (done) {
         forgetMine()
         void needMine(mine.bucket)
         render()

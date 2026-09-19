@@ -68,6 +68,7 @@ import { notionImportHandler } from '../handlers/notion-import.ts'
 import { notionSyncHandler } from '../handlers/notion-sync.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { proposeHandler } from '../handlers/propose.ts'
+import { remindersHandler } from '../handlers/reminders.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
 import { type SyncHandlerDeps, syncHandler } from '../handlers/sync.ts'
@@ -452,6 +453,7 @@ export const buildPass = async (
     */
     proposeHandler(db, cannotThink ? null : new ProviderRouter(db, orKey)),
     choresHandler(db),
+    remindersHandler(db),
     // "Use the Notion you already have" — a configuration change the office can
     // now make, rather than one that needed a terminal (0164).
     notionAdoptHandler({ db }),

@@ -509,5 +509,9 @@
   "0508_what_you_can_do_now_and_what_the_clock_does.sql": "5921fc41c7486a63c34129e7ea7f1dbadef91ab0eb17dcc80d797d9b8015124e",
   "0509_a_project_that_was_reasoned_about_says_so_in_words.sql": "2e915012eb4ab163aa31209ff63200c5aadb47c9be98d83c8ee3c10c1a9d1956",
   "0510_a_decision_pins_a_project_the_way_a_job_does.sql": "3a354bff3b6fefb115b02ddab2b53ca589af04b0600fa776fc75be9d5213f688",
-  "0511_the_event_ledger_pins_a_project_too.sql": "6acbbe880b57db1702582e95eb594641876902a4b4dd006515be2700fbe2b441"
+  "0511_the_event_ledger_pins_a_project_too.sql": "6acbbe880b57db1702582e95eb594641876902a4b4dd006515be2700fbe2b441",
+  "0512_a_reminder_that_actually_arrives.sql": "cb3ffdb4375f393dc30e32bf9b11a67e8608ae99af7318002853117a4f598ec2",
+  "0513_the_seam_a_provider_plugs_into.sql": "1a882cb01ef6043c44da1ec45aa90fc5e50227dce0d6ea48b502c3fa918a689c",
+  "0514_a_subtask_you_can_actually_make.sql": "80ca7213c477a1ae052442149ffddc1c8afe25611f910dee93fb6ae8907a6f69",
+  "0515_a_parent_carries_its_subtasks.sql": "584e84a7a0d6eb17f95045108f18f2d80c53c866bb4881abc621b94fe5de1765"
 }

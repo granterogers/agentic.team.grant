@@ -4316,6 +4316,44 @@ body.docked { padding-right: min(380px, 100vw); }
 .ptick:hover::before { border-color: var(--good); background: color-mix(in srgb, var(--good) 18%, transparent); }
 .ptick[disabled] { cursor: default; opacity: .5; }
 
+/* --- Subtasks (#259, migrations 0514/0515) ---------------------------------
+   One level, which is a decision rather than a shortcut: the delete cascade
+   counts children and a recursive count would have to lie, and nesting deeper
+   than this is unreadable at 390px. So there is exactly one indent and it can
+   never grow a second.
+
+   Indented from the parent's TEXT rather than from the row, so the eye follows
+   the title down into the children instead of stepping twice. */
+.psubs {
+  list-style: none; margin: 4px 0 0; padding: 0;
+  display: grid; gap: 1px;
+  border-inline-start: 2px solid var(--edge); padding-inline-start: var(--s3);
+}
+.psub {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  font: 400 13px/1.45 var(--text); color: var(--ink-2);
+}
+.psub > span { overflow-wrap: anywhere; }
+/* Finished, and still legible: a strikethrough at --ink-3 on a tinted row is
+   the "small caps at 11.5px" mistake in a different property. */
+.psub.was > span { text-decoration: line-through; color: var(--ink-3); }
+/* A smaller circle, the SAME touch target. The parent's tick reserves 44px and
+   so does this one — CLAUDE.md records a control measured at 50x29 in a bare
+   viewport and 58x52 in a real touch context, so the floor is honoured here
+   rather than assumed away because the mark is small. */
+.ptick.small { width: 44px; height: 44px; margin: -11px 0 -11px -13px; }
+.ptick.small::before { width: 13px; height: 13px; }
+.psub-n { padding-block-start: 2px; }
+
+/* The two controls that only make sense once you have opened a task. */
+.myedit-more {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center;
+  justify-content: space-between;
+  margin-block-start: var(--s2); padding-block-start: var(--s3);
+  border-block-start: 1px solid var(--edge);
+}
+
 /* --- My tasks (#259) -------------------------------------------------------
    Grant's own list, on the screen the rail already called Tasks. Built from
    `.ptask` rather than beside it: the row is the same shape and a second row
