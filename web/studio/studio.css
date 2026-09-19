@@ -6877,9 +6877,30 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   .myadd input[data-my-title]:not(:placeholder-shown) ~ select[data-my-project] {
     display: block;
   }
-  .mybuckets { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  /*
+    A SCROLLING strip, with something to say it scrolls.
+
+    Seven buckets do not fit 350px, so this strip scrolls sideways and hides
+    its scrollbar — which on a touch device is the #108 defect exactly:
+    Chromium keeps an OVERLAY scrollbar there, invisible until you are already
+    scrolling, so Unscheduled, Done and All were off the right edge with
+    nothing on screen suggesting they existed. Four of seven reachable, and no
+    way to know.
+
+    The same affordance #108 settled on: a fade at the end of the scroller,
+    in CSS, with no state to get wrong. `mask-image` rather than a gradient
+    overlay so it cannot sit on top of a bucket and eat the tap — and it is
+    removed once the strip is scrolled to the end, which `animation-timeline`
+    does without a line of JavaScript where it is supported.
+  */
+  .mybuckets {
+    overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
   .mybuckets::-webkit-scrollbar { display: none; }
-  .mybucket { flex: 0 0 auto; }
+  .mybucket { flex: 0 0 auto; scroll-snap-align: start; }
   /* One field per line. Four labelled controls in a wrapping row at 390px puts
      two of them at about 60px each, which is the document sheet's defect
      again — the one no check could see and only a capture found. */

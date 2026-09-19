@@ -318,7 +318,8 @@ const FURNITURE = `(() => {
     is the eighth time in this repository.
   */
   const first = document.querySelector(
-    '.panel > .pbodywrap > *, .tabbody .card, .tabbody li, .planeport, .tabbody .plane')
+    '.ptasks > li, .panel > .pbodywrap > *, .tabbody .card, .tabbody li, .planeport, ' +
+    '.tabbody .plane')
   let y = first === null ? null : Math.round(first.getBoundingClientRect().top + top)
   /*
     Discount the prototype strip, because Grant never sees it (#188).
@@ -366,10 +367,20 @@ const FURNITURE = `(() => {
       if (kept.some((k) => k.contains(el))) continue
       kept.push(el)
       above.push({
+        /*
+          classList, not a split on the className string. The split was written
+          as a backslash-s and reached the page as a pattern that breaks on the
+          LETTER s, so any class containing one would have been chopped into
+          pieces. It had not bitten yet only because the four bands this
+          measure has named so far happen not to contain one.
+
+          No backticks in this comment: it lives inside a template literal, and
+          that is the ninth time in this repository.
+        */
         sel: el.tagName.toLowerCase() +
-             (el.className && typeof el.className === 'string' && el.className.trim() !== ''
-               ? '.' + el.className.trim().split(/s+/).slice(0, 2).join('.')
-               : ''),
+             (el.classList.length === 0
+               ? ''
+               : '.' + Array.from(el.classList).slice(0, 2).join('.')),
         height: Math.round(r.height),
         y: t,
       })
@@ -432,6 +443,119 @@ if ((await chatTab.count()) > 0) {
     await sub.first().click()
     await pp.waitForTimeout(600)
   }
+  /*
+    MY TASKS on a phone (#259).
+
+    The screen Grant reads a to-do list on, measured the same way as the
+    project Overview: how far down the first task starts, and which bands took
+    the room. A list where one item is visible is a list nobody uses on a
+    phone, and this is the only instrument that can say so with a number.
+
+    Seeded with a token, because the composer, the search and the rows are all
+    drawn for a writer only — without one this would measure an empty screen
+    and report a flattering figure about a page that has no tasks on it.
+  */
+  {
+    await pp.evaluate(`try { localStorage.setItem('hq.token', 'space-audit') } catch (e) {}`)
+    await pp.goto(`http://127.0.0.1:${String(PORT)}/`, { waitUntil: 'networkidle' })
+    await pp.waitForTimeout(700)
+    const toTasks = pp.locator('.navitem[data-go="tasks"], [data-go="tasks"]')
+    if ((await toTasks.count()) > 0) {
+      await toTasks.first().click({ force: true })
+      await pp.waitForTimeout(900)
+    }
+    /*
+      Seeded, because there is no gateway behind this file server.
+
+      Through `window.__shots` and its own `mineKey()`, never a copy of the
+      key: the store is keyed by bucket, query and sort together, and a harness
+      that rebuilds that rule writes to a name the renderer does not read —
+      which reported rows 3 and zero rows in the DOM the last time it was done
+      by hand.
+    */
+    await pp.evaluate(`(() => {
+      const w = window.__shots
+      if (!w || !w.mine) return
+      const day = 86400000
+      const on = (n) => new Date(Date.now() + n * day).toISOString().slice(0, 10)
+      w.mine.counts = { today: 4, overdue: 1, upcoming: 4, inbox: 2,
+                        unscheduled: 2, done: 11, all: 18 }
+      w.mine.bucket = 'today'
+      w.mine.query = ''
+      w.mine.sort = 'smart'
+      w.mine.lists[w.mineKey()] = [1, 2, 3, 4].map((n) => ({
+        id: 'sp-' + n, title: 'A task with a realistic length of title, number ' + n,
+        state: 'todo', due_on: on(n - 2), labels: n === 1 ? ['errand'] : [],
+        overdue: n === 1, project: null, repeats: null, for_job: null,
+        remind_at: null, parent: null, subtasks: [] }))
+      w.render()
+    })()`)
+    await pp.waitForTimeout(500)
+    const seen = (await pp.evaluate(`(() => {
+      const first = document.querySelector('.ptasks > li')
+      const strip = document.querySelector('.mockbar')
+      const sh = strip === null ? 0 : Math.round(strip.getBoundingClientRect().height)
+      if (first === null) {
+        return { rows: document.querySelectorAll('.ptasks > li').length, at: null,
+                 buckets: null, hidden: null }
+      }
+      const top = document.scrollingElement.scrollTop
+      const strip2 = document.querySelector('.mybuckets')
+      return {
+        rows: document.querySelectorAll('.ptasks > li').length,
+        /*
+          And how many are ON SCREEN, which is the product question. The count
+          of rows rendered says nothing about a phone: the list can hold twenty
+          and show one.
+        */
+        visible: Array.from(document.querySelectorAll('.ptasks > li')).filter((li) => {
+          const r = li.getBoundingClientRect()
+          return r.top < window.innerHeight && r.bottom > 0
+        }).length,
+        at: Math.max(0, Math.round(first.getBoundingClientRect().top + top) - sh),
+        /*
+          And how many bucket tabs are off the right edge of the strip, which
+          is the thing a capture cannot show: the scrollbar is hidden on a
+          phone, so four of seven were reachable with nothing saying so.
+        */
+        buckets: strip2 === null ? null : strip2.querySelectorAll('.mybucket').length,
+        hidden: strip2 === null ? null
+          : Array.from(strip2.querySelectorAll('.mybucket')).filter((b) =>
+              b.getBoundingClientRect().right > strip2.getBoundingClientRect().right + 1).length,
+      }
+    })()`)) as {
+      rows: number
+      visible: number
+      at: number | null
+      buckets: number | null
+      hidden: number | null
+    }
+    const bands = (await pp.evaluate(FURNITURE)) as {
+      firstContentAt: number | null
+      above: { sel: string; height: number; y: number }[]
+    }
+    console.log('\n─── phone, my tasks (#259) ───')
+    if (seen.at === null) {
+      console.log(`  NO TASK ROWS FOUND — ${String(seen.rows)} row(s) in .ptasks`)
+    } else {
+      console.log(
+        `  first task at ${String(seen.at)}px of 844 — ` +
+          `${String(Math.round((seen.at / 844) * 100))}% of the screen spent first`,
+      )
+      console.log(
+        `  ${String(seen.visible ?? 0)} of ${String(seen.rows)} task row(s) on screen ` +
+          'without scrolling',
+      )
+      console.log(
+        `  buckets: ${String(seen.buckets ?? 0)} drawn, ${String(seen.hidden ?? 0)} past the ` +
+          'right edge of the strip (the fade is what says so)',
+      )
+      for (const b of bands.above) {
+        console.log(`    ${b.sel.padEnd(24)} ${String(b.height).padStart(4)}px at y=${String(b.y)}`)
+      }
+    }
+  }
+
   const chat = (await pp.evaluate(`(() => {
     const box = (sel) => {
       const el = document.querySelector(sel)

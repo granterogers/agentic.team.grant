@@ -421,6 +421,16 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     covers two of the areas the specification names — a critical cheap
     integration, and persistence.
   */
+  /*
+    The SCREEN, not the office behind it (#259).
+
+    `verify:mytasks` drives every RPC and the gateway; none of that is true of
+    the page, and the worst defect of this Issue lived exactly in that gap —
+    the editor's reminder field rendered blank on a task that had one, and the
+    save read a blank field as "clear it", so opening Details and changing the
+    title deleted the reminder. Every RPC involved was correct.
+  */
+  ['verify:tasks-ui', 'My Tasks pressed in a real browser, on desktop and phone (#259)'],
   ['verify:upload', 'a dropped file, through the deployed gateway, with its provenance intact'],
 ]
 

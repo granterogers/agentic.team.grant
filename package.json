@@ -271,7 +271,8 @@
     "shot:browser": "tsx scripts/verify/browser-shot.ts",
     "verify:ci": "tsx scripts/verify/ci.ts",
     "check:reachable": "tsx scripts/check-reachable.ts",
-    "mapview": "tsx scripts/verify/mapview.ts"
+    "mapview": "tsx scripts/verify/mapview.ts",
+    "verify:tasks-ui": "tsx scripts/verify/tasks-ui.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

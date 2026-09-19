@@ -537,24 +537,51 @@ for (const [size, opts] of SIZES) {
       const w = window.__shots
       const day = 86400000
       const on = (n) => new Date(Date.now() + n * day).toISOString().slice(0, 10)
-      w.mine.counts = { today: 3, overdue: 1, upcoming: 4, inbox: 2,
-                        unscheduled: 2, done: 11, all: 17 }
+      w.mine.counts = { today: 4, overdue: 1, upcoming: 4, inbox: 2,
+                        unscheduled: 2, done: 11, all: 18 }
       w.mine.bucket = 'today'
       w.mine.query = ''
       w.mine.sort = 'smart'
       // Keyed by the PRODUCT's own rule, never by a copy of it.
       w.mine.lists[w.mineKey()] = [
+        /*
+          Four rows, and between them every state the screen can show: overdue,
+          a reminder, a repeat, labels, a project and none, the human-action
+          bridge, and a parent with its subtasks. A capture of three plain rows
+          judges a screen the product does not have.
+        */
         { id: 'mt-1', title: 'Ring the venue about the September cohort',
           state: 'todo', due_on: on(-2), labels: ['errand'], overdue: true,
           project: { slug: 'legacy-coaching-course', name: 'Legacy Coaching Course' },
-          repeats: null, for_job: null },
+          repeats: null, for_job: null, remind_at: null, parent: null, subtasks: [] },
         { id: 'mt-2', title: 'Authorize Google Drive so the office can read it',
           state: 'todo', due_on: on(0), labels: [], overdue: false,
-          project: null, repeats: null, for_job: 'job-1' },
+          project: null, repeats: null, for_job: 'job-1',
+          remind_at: null, parent: null, subtasks: [] },
         { id: 'mt-3', title: 'Send Priya the revised figures',
           state: 'todo', due_on: on(0), labels: ['admin', 'waiting'], overdue: false,
           project: { slug: 'ai-learning', name: 'AI Learning' },
-          repeats: { every: '7 days', from: 'due' }, for_job: null },
+          repeats: { every: '7 days', from: 'due' }, for_job: null,
+          remind_at: new Date(Date.now() + 3 * 3600000).toISOString(),
+          parent: null, subtasks: [] },
+        /*
+          A parent with subtasks (#259, migrations 0514/0515), and one of them
+          already done — a nested list where every child is outstanding never
+          shows what a finished child looks like, and a strikethrough at the
+          wrong ink is the kind of thing only a capture catches.
+        */
+        { id: 'mt-4',
+          title: 'Get the October cohort ready to open — a deliberately long title '
+            + 'so the wrap is judged rather than assumed',
+          state: 'todo', due_on: on(3), labels: ['launch'], overdue: false,
+          project: { slug: 'legacy-coaching-course', name: 'Legacy Coaching Course' },
+          repeats: null, for_job: null, remind_at: null, parent: null,
+          subtasks: [
+            { id: 'mt-4a', title: 'Confirm the room', state: 'done', done: true, due_on: on(1) },
+            { id: 'mt-4b', title: 'Write the welcome email', state: 'todo', done: false,
+              due_on: on(2) },
+            { id: 'mt-4c', title: 'Set the price', state: 'todo', done: false, due_on: null },
+          ] },
       ]
       w.render()
     })()`)

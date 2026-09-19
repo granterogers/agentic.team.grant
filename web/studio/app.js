@@ -7963,7 +7963,15 @@ function tasksView() {
           ${t.repeats === null || t.repeats === undefined ? '' : ' · repeats'}
           ${t.remind_at === null || t.remind_at === undefined
             ? ''
-            : ` · reminder ${esc(when.stamp(t.remind_at))}`}
+            : /*
+                RAW, not escaped. `when.stamp` returns a `<time data-rel>`
+                ELEMENT — that is how `pulse` re-words it without a redraw —
+                and every one of the six other callers interpolates it
+                directly. Wrapping it in `esc()` printed the whole tag as text
+                on the card: *"reminder <time data-rel datetime=… >in 2h</time>"*.
+                It escapes its own content; the six callers are the evidence.
+              */
+              ` · reminder ${when.stamp(t.remind_at)}`}
           ${t.for_job === null || t.for_job === undefined ? '' : ' · the team is waiting on this'}
         </span>
         ${labels.length === 0
