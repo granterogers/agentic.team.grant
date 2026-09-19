@@ -351,9 +351,30 @@ export const claimsToHaveMade = (body: string): string | null => {
   const MADE = '(?:created|added|filed|logged|set up|made|drafted|scheduled|booked|saved)'
   const THING = '(?:task|note|document|doc|draft|page|reminder|event|entry|record|item)'
   const claims: RegExp[] = [
-    // "Task "X" created for you" — the shape the office actually produced.
+    /*
+      "Task "X" created for you" — the shape the office actually produced.
+
+      The window was `{0,60}` and a real title walked straight through it. The
+      office wrote
+
+          Task "Book interview room for second round" assigned to you, due on
+          the 11th, has been added.
+
+      and `public.tasks` gained nothing. Seventy-three characters separate the
+      noun from the claim — the title, plus the two clauses any natural
+      confirmation puts between them — so the gate was blind to exactly the
+      sentences a good model writes, and caught only the terse ones. Found in
+      the #237 conversational corpus, where the harness said no task existed
+      and the answer said one did.
+
+      A character budget was the wrong instrument: it is an artefact, and the
+      property is that the noun and the claim are in the SAME SENTENCE, which
+      the `[^.!?]` class already carries. 140 is a sentence's worth of title
+      and clauses rather than a guess at a title's length, and it stays bounded
+      so the class cannot run to the end of a paragraph.
+    */
     new RegExp(
-      String.raw`\b${THING}\b[^.!?]{0,60}?\b(?:has been|have been|is|was|were)?\s*${MADE}\b`,
+      String.raw`\b${THING}\b[^.!?]{0,140}?\b(?:has been|have been|is|was|were)?\s*${MADE}\b`,
       'i',
     ),
     // "I've created a task", "I have added the note".
@@ -401,6 +422,30 @@ export const claimsToHaveMade = (body: string): string | null => {
       continue
     }
     if (sentence.trim().endsWith('?')) continue
+    /*
+      A DENIAL is not a claim, and this one was refusing honest answers.
+
+          No task has been created yet because I need a title first.
+
+      That is the office declining to invent a title — the behaviour three
+      turns of the #237 corpus are built around — and the gate refused it,
+      which means an answer saying nothing happened was blocked for saying
+      that nothing happened. Pre-existing, not introduced by widening the
+      window above; the distance there is five characters.
+
+      Negation is matched against the NOUN or the VERB rather than anywhere in
+      the sentence, because "No problem, I have added the note" is a real
+      claim with a real "no" in front of it, and suppressing that is the
+      expensive direction for this particular gate: a fabricated creation is
+      one Grant cannot see, and he stops chasing the supplier.
+    */
+    const denied = new RegExp(
+      String.raw`\b(?:no|nothing|none)\s+(?:${THING})\b` +
+        String.raw`|\b(?:not|never)\s+(?:yet\s+)?(?:been\s+)?(?:${MADE})\b` +
+        String.raw`|n't\s+(?:yet\s+)?(?:been\s+)?(?:${MADE})\b`,
+      'i',
+    )
+    if (denied.test(sentence)) continue
     /*
       Somebody ELSE made it, which is a report rather than a claim.
 

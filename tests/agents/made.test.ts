@@ -150,3 +150,96 @@ describe('#248 — the subject dropped, which is how a model reports', () => {
     expect(claimsToHaveMade('Their pricing page was updated last week.')).toBeNull()
   })
 })
+
+/**
+ * A real title walks through a character budget, and a denial was refused.
+ *
+ * Both found in the #237 conversational corpus, on a turn where the harness
+ * said no task existed and the office's answer said one did:
+ *
+ *     Task "Book interview room for second round" assigned to you, due on the
+ *     11th, has been added.
+ *
+ * `public.tasks` gained nothing, and `claimsToHaveMade` — the gate written for
+ * exactly this sentence — did not fire. Seventy-three characters separate the
+ * noun from the claim, and the window was `{0,60}`: the title, plus the two
+ * clauses any natural confirmation puts between them. So the gate saw the
+ * terse fabrications and was blind to the fluent ones, which are the ones a
+ * good model writes.
+ *
+ * A character budget is an artefact. The property is that the noun and the
+ * claim share a SENTENCE, which the `[^.!?]` class already carries.
+ *
+ * ## And the denial it was refusing
+ *
+ * Widening it surfaced a defect that had been there all along, five characters
+ * wide:
+ *
+ *     No task has been created yet because I need a title first.
+ *
+ * That is the office declining to invent a title — the behaviour three turns
+ * of this corpus are built around — and the gate blocked an answer for saying
+ * that nothing had happened.
+ *
+ * Negation is matched against the NOUN or the VERB, never merely present in
+ * the sentence, because "No problem, I have added the note" is a real claim
+ * with a real "no" in front of it. Suppressing that is the expensive direction
+ * here: a fabricated creation is the one Grant cannot see, and he stops
+ * chasing the supplier.
+ *
+ * ## The fix was written twice
+ *
+ * The first attempt put U+0008 where every `\b` should have been — a non-raw
+ * Python heredoc turns a regex word boundary into a backspace, `String.raw`
+ * preserves it, and nothing renders it. The guard silently matched nothing.
+ * `npm run check:templates` named it exactly, which is what that check is for.
+ */
+describe('#248 — the fluent fabrication, and the honest denial', () => {
+  const FLUENT =
+    'Task “Book interview room for second round” assigned to you, due on the 11th, ' +
+    'has been added.'
+
+  it('catches a claim a real title pushed out of the old window', () => {
+    expect(claimsToHaveMade(FLUENT)).not.toBeNull()
+  })
+
+  it('still catches the terse shapes it was written for', () => {
+    for (const body of [
+      'Task "Chase supplier quote" created for you, due Friday.',
+      'Task “Book room” has been added.',
+      'I have added the task.',
+    ]) {
+      expect(claimsToHaveMade(body), body).not.toBeNull()
+    }
+  })
+
+  it('CONTROL: a denial is not a claim', () => {
+    for (const body of [
+      'No task has been created yet because I need a title first.',
+      'I have not created the task because I need a title.',
+      "I haven't created the task yet.",
+      'Nothing has been added yet.',
+      'No note was filed for that.',
+    ]) {
+      expect(claimsToHaveMade(body), body).toBeNull()
+    }
+  })
+
+  it('CONTROL: a "no" that negates nothing still leaves a claim a claim', () => {
+    // The one case that makes the guard have to be precise rather than
+    // "does the sentence contain a negator".
+    expect(claimsToHaveMade('No problem, I have added the note about pricing.')).not.toBeNull()
+  })
+
+  it('CONTROL: the widened window did not start swallowing reports', () => {
+    for (const body of [
+      'The supplier added a surcharge to the quote.',
+      'Their pricing page was updated last week.',
+      "I'll create a task once you confirm.",
+      'I can make you a task for that if you like.',
+      'Shall I file it as a task?',
+    ]) {
+      expect(claimsToHaveMade(body), body).toBeNull()
+    }
+  })
+})
