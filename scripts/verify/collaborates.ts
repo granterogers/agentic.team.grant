@@ -278,16 +278,72 @@ ok(
 */
 const produced = await all(`
   select o.output_id::text as id, length(coalesce(o.body, ''))::int as len,
-         coalesce(j.recipient_agent, '') as by
+         coalesce(o.body, '') as body, coalesce(j.recipient_agent, '') as by
     from public.outputs o
     join public.jobs j on j.job_id = o.job_id
    where j.parent_job_id = ${lit(parent)}::uuid`)
+/*
+  A LENGTH FLOOR PENALISES THE HONEST SHORT ANSWER, and it did.
+
+  This check was `len > 200` for every child, and it went red on
+
+      I need the product's cost structure and sales data to model the margin
+      impact and draft the announcement email — could you share those?
+
+  133 characters, from the communications director, and it is the office's
+  first invariant working: it was handed real work, it looked, the figures are
+  not in the records, and it asked for them by name rather than inventing them.
+  CLAUDE.md records the same correction twice already — a judge that graded
+  compliance marked as POOR an answer that admitted it had not looked, and a
+  held-out corpus scored 3/6 against six honest refusals because the
+  expectation was a list of ways of saying "I cannot see it". A floor is that
+  mistake in arithmetic: *"an invented summary of a document that does not
+  exist is long."*
+
+  What this check is actually for stands: #65's complaint was never that no
+  rows existed, it was that the rows described work nobody did. So the
+  discrimination is against a child that wrote NOTHING or wrote filler, and it
+  is stated as two ways of doing real work rather than one:
+
+    - substantive — over the old floor, no further question asked; or
+    - a specific ask or absence — it asks, or reports finding nothing, AND it
+      names the subject it was handed, so "can you help?" cannot pass.
+
+  The subject words come from `ASK` itself rather than from a list written
+  here, so rewording the request cannot leave the check asserting against
+  vocabulary the suite no longer uses.
+*/
+const SUBJECT = [...new Set(ASK.toLowerCase().match(/[a-z]{5,}/g) ?? [])].filter(
+  (w) => !['need', 'model', 'that', 'goes', 'with'].includes(w),
+)
+const asksOrReportsAbsence = (body: string): boolean => {
+  const t = body.toLowerCase()
+  const naming = SUBJECT.filter((w) => t.includes(w)).length
+  const asking = /\?/.test(body) || /\b(?:could|can|would)\s+you\b|\bi need\b/.test(t)
+  const absent =
+    /\bno(?:thing| record| data| figures)?\b|\bdo(?:n't| not) (?:see|have|hold)\b/.test(t)
+  return naming >= 2 && (asking || absent)
+}
+const shortfall = produced.filter(
+  (p) => !(Number(p.len) > 200 || (Number(p.len) >= 60 && asksOrReportsAbsence(String(p.body)))),
+)
 ok(
   'the second agent produced real work, not merely a second job',
-  produced.length > 0 && produced.every((p) => Number(p.len) > 200),
+  produced.length > 0 && shortfall.length === 0,
   produced.length === 0
     ? 'the child job wrote no output at all'
-    : produced.map((p) => `${String(p.by)}: ${String(p.len)} chars`).join(', '),
+    : produced
+        .map(
+          (p) =>
+            `${String(p.by)}: ${String(p.len)} chars (${
+              Number(p.len) > 200
+                ? 'substantive'
+                : asksOrReportsAbsence(String(p.body))
+                  ? 'a named ask'
+                  : 'FILLER'
+            })`,
+        )
+        .join(', '),
 )
 
 /*
