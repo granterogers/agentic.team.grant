@@ -361,6 +361,83 @@ console.log('#25 — the project map, pressed rather than looked at\n')
   )
 }
 
+/*
+  And the same map on a REAL phone, which nothing here had ever opened (#278).
+
+  Every check above runs at 1440x900, where the map is comfortable: 21 of 24
+  cards visible and the zoom controls in an empty corner. On a 390pt iPhone the
+  port is 350x520 and does not start at the top of the screen, so its bottom ran
+  28px past the fold and the bottom 15px of the zoom controls were cut off —
+  with the controls themselves sitting on three of the four cards that were
+  visible at all.
+
+  None of that is findable from a capture, and the capture is why it survived:
+  npm run shots takes a FULL-PAGE screenshot, so a control below the fold is in
+  the picture, in the right place, looking correct.
+
+  The two assertions below are what make the phone port's size safe to state as
+  a number. 56dvh and 476px were chosen against a measured furniture height, so
+  if anything above the map grows, this goes red rather than the controls going
+  quietly under the chrome.
+
+  Section 25 of the UX QA standard: width does not equal touch. hasTouch and
+  isMobile are what make the coarse-pointer rules apply, and this repository has
+  already read 50x29 off a control that is 58x52 in a real touch context.
+*/
+{
+  const phone = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    hasTouch: true,
+    isMobile: true,
+  })
+  await phone.addInitScript(`try{localStorage.setItem('hq.token','audit')}catch(e){}`)
+  await phone.addInitScript(seedAppearance('dark'))
+  const small = await phone.newPage()
+  small.on('pageerror', (e) => errors.push(`phone: ${e.message}`))
+  await small.goto(`http://127.0.0.1:${String(PORT)}/`)
+  await small.waitForSelector('.rail', { timeout: 20_000 })
+  await small.waitForTimeout(2200)
+  await small.locator('.homego[data-open], .project[data-open]').first().click({ force: true })
+  await small.waitForTimeout(1200)
+  await small.locator('[data-tab="overview"]').first().click({ force: true })
+  await small.waitForSelector('.planeport', { timeout: 20_000 })
+  await small.waitForTimeout(1200)
+
+  const fold = (await small.evaluate(`(() => {
+    const port = document.querySelector('.planeport')
+    if (port === null) return { error: 'no map on the phone overview' }
+    const ctl = document.querySelector('.planectl')
+    /*
+      The prototype strip is discounted, because Grant never sees it (#188).
+      It renders only without a token and pushes everything below it down by
+      its own height; counting it reported the controls as 96px off screen
+      when the real figure was 15. No backticks in this comment - it lives
+      inside a template literal.
+    */
+    const strip = document.querySelector('.mockbar')
+    const sh = strip === null ? 0 : strip.getBoundingClientRect().height
+    const pr = port.getBoundingClientRect()
+    const cr = ctl === null ? null : ctl.getBoundingClientRect()
+    return {
+      port: Math.round(Math.max(0, pr.bottom - sh - window.innerHeight)),
+      ctl: cr === null ? -1 : Math.round(Math.max(0, cr.bottom - sh - window.innerHeight)),
+    }
+  })()`)) as { error?: string; port?: number; ctl?: number }
+
+  check(
+    'the map fits the phone without running past the fold',
+    fold.error ?? `${String(fold.port)}px below the fold`,
+    fold.error === undefined && fold.port === 0,
+  )
+  check(
+    'and its zoom controls are on screen without scrolling',
+    fold.ctl === -1 ? 'no controls found at all' : `${String(fold.ctl)}px below the fold`,
+    fold.ctl === 0,
+  )
+  await phone.close()
+}
+
 check(
   'no page error anywhere in the run',
   errors.length === 0 ? 'none' : errors.slice(0, 2).join(' · '),

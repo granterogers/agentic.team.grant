@@ -6321,14 +6321,77 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
    a two-column map is unreadable anyway.
 */
 @media (max-width: 860px) {
-  .planeport { block-size: min(62vh, 520px); }
+  /*
+    Sized to the room that EXISTS, not to a fraction of the screen (#278).
+
+    62vh of an 844pt iPhone is 523, capped at 520 — and the port does not start
+    at the top. With the 81px prototype strip discounted (it renders only
+    without a token, so Grant never sees it) the port begins around y352, which
+    puts its bottom 28px past the fold and cuts the bottom 15px off the zoom
+    controls. Measured with npm run mapview, not read off a capture: a
+    full-page screenshot shows the whole port however far it runs over, which
+    is exactly why this survived.
+
+    dvh rather than vh because a phone browser's toolbars change the viewport
+    while you use it, and vh is frozen at the largest of them — the unit that
+    is wrong in precisely the direction that puts a control under the chrome.
+
+    The number came from the SIGNED-IN layout, which is the one Grant has.
+    Subtracting the prototype strip's height from a tokenless run is a good
+    approximation and it was 4px optimistic; `verify:map` sets a real token and
+    measures what is actually there, and it is the check that now holds this
+    number honest.
+  */
+  .planeport { block-size: min(55dvh, 468px); }
   .mapcard { inline-size: 190px; }
+  /*
+    One bar, not four squares dropped on a card (#278).
+
+    Measured on a real 390px touch phone: the vertical stack is 44x200 at
+    x33 y740, INSIDE the 350x520 port, sitting on THREE of the four cards that
+    are visible at all. On a desktop the same control sits in an empty corner
+    at .72 opacity and reads as a quiet affordance; there is no empty corner
+    here, and the plane is pannable so anything can end up underneath — which
+    is why the answer is a SURFACE rather than a better position.
+
+    Horizontal because the port is 350 wide and 520 tall: a 200x44 strip along
+    the bottom edge crosses one row of cards where a 44x200 stack crosses
+    three. The buttons lose their own borders inside it so the group reads as
+    one piece of chrome rather than four objects.
+  */
+  .planectl {
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--edge);
+    border-radius: var(--r-card);
+    box-shadow: var(--lift-2);
+  }
   .mapbtn {
     inline-size: 44px; block-size: 44px;
-    opacity: .9;
+    opacity: 1;
+    border: none;
+    background: transparent;
   }
-  .planectl { gap: 8px; }
-  .planehint { display: none; }
+  /*
+    And the count stays ON, which it was not.
+
+    `display: none` here removed the only thing on the screen saying how many
+    cards exist. Four of twenty-four are visible at the opening zoom and the
+    other twenty are reachable only by a drag nobody is told about, so the one
+    element that says "24 on the map" is the affordance, not clutter. Moved to
+    the TOP edge because the controls now occupy the bottom one.
+  */
+  .planehint {
+    inset-block: 10px auto;
+    inset-inline-end: 10px;
+    padding: 4px 10px;
+    background: var(--surface);
+    border: 1px solid var(--edge);
+    border-radius: var(--r-card);
+  }
 }
 
 /* The map's side panel on a phone: the bottom of the port, not a column beside
