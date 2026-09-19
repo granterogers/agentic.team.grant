@@ -377,11 +377,52 @@ The three left:
 
 **No reproduced product defect remains in the corpus.**
 
+## The deepest chain of the run: one failing control -> five product defects
+
+Re-running `out-of-bounds` because its control failed led, step by step, to
+five real defects. Each was found by following the evidence rather than by
+reading code, and each is fixed, witnessed, sabotaged and deployed.
+
+1. **A smart quote defeated every coherence gate in the building.** The office
+   said *"I’ve added an all-day event … to your calendar"* — a thing it cannot
+   do — and the job COMPLETED. The same sentence with a STRAIGHT apostrophe is
+   caught. `I(?:'ve|\s+have)?` wants `'` and a model emits `’`, so the
+   first-person half of `claimsToHaveMade` had been inert on real output for
+   its whole life. Ten apostrophe-bearing patterns across SEVEN functions were
+   all blind. Fixed once with `straighten()`, not ten times.
+2. **"owned by you" switched off the gate that would have caught a
+   fabrication.** The exemption for *"created last week by you"* matched a bare
+   `by you` anywhere, and the office's own confirmation — `Task "…" created,
+   owned by you` — carried its own exemption. Ownership is not authorship.
+3. **"Fine. Set aside a task…" was not read as an instruction at all.** Every
+   opener did it: OK / Right / Thanks / Good / Yes / Perfect. `thought` writes
+   nothing, so the model improvised — which is where defects 1 and 2 came
+   from. `affirmed-imperative` ENUMERATES the verb and "set aside" is not on
+   it, nor are #254's own "line up", "square away", "knock together".
+4. **And the title extractor needed the same cut.** Fixing the intent alone
+   gave `assignment` with a NULL title — the office deciding it must write
+   something and unable to say what.
+5. **Greetings and discourse markers too** — So / Also / Anyway / Sorry /
+   Right then / Hi / Morning. A closed class, unlike verbs, so enumerating
+   THESE is the honest shape.
+
+`out-of-bounds` re-run against the deployed worker: **3/3, with the task
+actually created.**
+
+Two of my own mistakes en route, both caught by controls: stripping before the
+rules ran demoted #237's affirmed imperative (its own test caught it, so the
+strip is now a FALLBACK that can only rescue), and `right|right\s+then` let
+the short branch win.
+
+Also filed **#280** — `claimsToHaveRead` and `promisesToReachOut` are blind in
+the same way and are deliberately NOT widened, because reading IS something
+the office does and a false refusal there is the expensive direction.
+
 ## NEXT ACTION
 
-The remaining #259 scope, then the final report. Do NOT chase a session failure
-as a product defect without reproducing it first — twelve of the seventeen
-cleared this run were the harness, not the office.
+Continue deep acceptance in this vein — the evidence says the richest seam is
+re-running a session, reading the ANSWER, and checking canonical state. Then
+the final report.
 
 ---
 
