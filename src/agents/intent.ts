@@ -460,7 +460,16 @@ const OPENER =
   'yes|yeah|yep|yup|ok|okay|okey|right|sure|fine|good|great|perfect|lovely|brilliant|' +
   'thanks|cheers|understood|agreed|noted|correct|' +
   'so|also|anyway|actually|besides|incidentally|sorry|' +
-  'hi|hey|hello|morning|afternoon|evening)'
+  'hi|hey|hello|morning|afternoon|evening|' +
+  // "Oh — I must remember to renew the domain" kept its "Oh —" all the way
+  // onto the task title. Found in the independent acceptance pass; the
+  // interjections belong with the affirmations because they are the same
+  // thing grammatically, a word in front of the sentence that is not part of
+  // it.
+  // NOT "look" or "listen": "Look into the pricing" is a bare imperative and
+  // the opener strip would turn it into "into the pricing", which no rule
+  // understands. An interjection that is also a verb is not a safe opener.
+  'oh|ah|erm|um|hmm|well)'
 
 export const withoutOpeningAffirmation = (text: string): string => {
   /*

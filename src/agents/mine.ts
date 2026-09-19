@@ -74,8 +74,19 @@ const REMIND_ME = new RegExp(
   need to send the figures" is a thing he is going to do. One word apart, and
   the wrong reading of the first is the expensive one.
 */
+/*
+  `remember to` is invisible between the modal and the `to`.
+
+  "Oh — I must remember to renew the domain before it lapses" is the same
+  sentence as "I must renew the domain", and the adjacency this pattern relies
+  on made it a miss: `must` has to be followed by `to`, and here it is followed
+  by `remember`. Found in the independent acceptance pass. The alternative goes
+  BEFORE the bare `to` so that "I need to remember to X" matches the longer
+  form and the whole framing — not just "I need to" — comes off the title.
+*/
 const I_MUST = new RegExp(
-  `\\bi\\s+(?:need|have|want|ought|must|should|gotta|meant)\\s*(?:to|${APOS}ve\\s+got\\s+to)\\b` +
+  `\\bi\\s+(?:need|have|want|ought|must|should|gotta|meant)\\s*` +
+    `(?:remember\\s+to|to\\s+remember\\s+to|to|${APOS}ve\\s+got\\s+to)\\b` +
     `|\\bi${APOS}(?:m\\s+going\\s+to|ll)\\s+(?:need\\s+to|have\\s+to)\\b`,
   'i',
 )
@@ -131,6 +142,51 @@ const MAKE_A_TASK =
 const MAKE_SURE_I = /\bmake\s+sure\s+(?:that\s+)?i\b/i
 
 /*
+  THE SAME MECHANISM NAMED WITHOUT THE NOUN.
+
+  "Stick 'call the accountant' on my list for Tuesday" and "put chasing the
+  invoice on my to-do list" name the list rather than the word task, so
+  `MAKE_A_TASK` — which deliberately requires the noun — could not hear either.
+  `stripFraming` had been taking "on my list" out of titles since it was
+  written, which is the tell: the phrase was already understood as framing by
+  everything except the rule that decides.
+
+  A PUTTING VERB is required, and it is what keeps the question out. "What is
+  on my list for today?" has the phrase and no verb, so it stays the office's
+  work, which is the reading that answers him. The span between the two is
+  bounded and may not cross a sentence end, because a title is not a paragraph.
+*/
+const ON_MY_LIST =
+  /\b(?:set\s+aside|put|add|stick|chuck|bung|note|shove)\b[^.?!]{2,100}?\bon\s+my\s+(?:to-?do(?:\s+list)?|list|plate)\b/i
+
+/*
+  And the shape a person types when they are in a hurry: "Add: buy a present".
+
+  The COLON is doing all the work. `add` on its own is far too broad — "add the
+  figures to the deck" is work for the team — but nobody writes "Add:" at the
+  start of a line meaning anything other than put this on the list.
+*/
+const ADD_COLON = /^\s*(?:add|to-?do|todo|task)\s*:\s*\S/i
+
+/*
+  ASKING WHETHER IT IS ALREADY THERE.
+
+  "Did I ever add a task about the domain?" said the word task and created one
+  — called *"Did I ever about the domain?"*, because the framing strip took the
+  verb out of the middle of his question. Two costs in one sentence: a row he
+  never asked for on the list he is supposed to trust, and the question
+  swallowed.
+
+  Adjacency again, for the reason `REMIND_ME_A_QUESTION` gives: the
+  interrogative opener has to be directly in front of the putting verb. That
+  leaves "Can you add a task to review the Q4 numbers" alone — a polite request
+  rather than a question about the past — and it cannot be defeated by a
+  question mark somewhere else in the message.
+*/
+const ASKING_WHETHER_IT_EXISTS =
+  /\b(?:did|do|does|have|has|was|were)\s+(?:i|we|you)\s+(?:ever\s+|already\s+|actually\s+)?(?:add|create|put|make|set|stick|note)\b/i
+
+/*
   The guard that keeps all of this on HIS list.
 
   "Add a task for Emma to research the pricing" says the word task and is the
@@ -162,6 +218,29 @@ const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 
 
 const iso = (d: Date): string => d.toISOString().slice(0, 10)
 
+const SMALL: Readonly<Record<string, number>> = {
+  a: 1,
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+}
+
+/** Calendar months, clamped: the 31st plus one month is the 30th. */
+const addMonths = (from: Date, n: number): Date => {
+  const want = from.getUTCDate()
+  const out = new Date(from)
+  out.setUTCDate(1)
+  out.setUTCMonth(out.getUTCMonth() + n)
+  const last = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate()
+  out.setUTCDate(Math.min(want, last))
+  return out
+}
+
 export function whenFor(said: string, now: Date = new Date()): string | null {
   const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   if (/\btoday\b|\bthis\s+evening\b|\btonight\b/i.test(said)) return iso(base)
@@ -190,6 +269,32 @@ export function whenFor(said: string, now: Date = new Date()): string | null {
   if (/\bnext\s+week\b/i.test(said)) {
     base.setUTCDate(base.getUTCDate() + 7)
     return iso(base)
+  }
+  /*
+    "Next month" and "in three weeks" were both misses in the independent
+    acceptance pass — "that can wait until next month" recognised nothing at
+    all and left the follow-up unanswered.
+
+    A month is added by CALENDAR month and then clamped: the 31st plus one
+    month is the 30th, not the 1st of the month after. The day-of-month branch
+    below returns null on a roll rather than guessing, and that is right there
+    — "on the 31st" names a specific day and February has none — but "next
+    month" names a DISTANCE, so the nearest real day is what it meant.
+  */
+  if (/\bnext\s+month\b/i.test(said)) return iso(addMonths(base, 1))
+  const inN =
+    /\bin\s+(\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(day|week|month|fortnight)s?\b/i.exec(
+      said,
+    )
+  if (inN !== null) {
+    const word = String(inN[1] ?? '').toLowerCase()
+    const n = /^\d+$/.test(word) ? Number(word) : (SMALL[word] ?? 1)
+    const unit = String(inN[2] ?? '').toLowerCase()
+    if (n >= 1 && n <= 365) {
+      if (unit === 'month') return iso(addMonths(base, n))
+      base.setUTCDate(base.getUTCDate() + n * (unit === 'week' ? 7 : unit === 'fortnight' ? 14 : 1))
+      return iso(base)
+    }
   }
   const dayOfMonth = /\bon\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(said)
   if (dayOfMonth !== null) {
@@ -234,10 +339,25 @@ const stripFraming = (said: string): string =>
     .replace(REMIND_ME, ' ')
     .replace(I_MUST, ' ')
     .replace(MAKE_A_TASK, ' ')
-    .replace(/\bon\s+my\s+(?:list|plate)\b/gi, ' ')
+    /*
+      "Stick X on my list" keeps X and loses everything around it.
+
+      A plain strip of the phrase would leave "Stick chasing the invoice", and
+      a strip of the leading verb as well would be a rule that fires on every
+      title beginning with `add` — including the perfectly good
+      "remind me to add the figures to the deck". Capturing what sits BETWEEN
+      the verb and the phrase is the only version that cannot reach a title it
+      was not called about.
+    */
+    .replace(
+      /\b(?:set\s+aside|put|add|stick|chuck|bung|note|shove)\s+(?:the\s+)?(.{2,100}?)\s+on\s+my\s+(?:to-?do(?:\s+list)?|list|plate)\b/i,
+      (_m, kept: string) => ` ${String(kept)} `,
+    )
+    .replace(/\bon\s+my\s+(?:to-?do(?:\s+list)?|list|plate)\b/gi, ' ')
+    .replace(/^\s*(?:add|to-?do|todo|task)\s*:\s*/i, ' ')
     .replace(MAKE_SURE_I, ' ')
     .replace(
-      /\b(?:on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
+      /\b(?:for\s+|by\s+|until\s+|before\s+|on\s+|next\s+|this\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi,
       ' ',
     )
     /*
@@ -268,6 +388,12 @@ const stripFraming = (said: string): string =>
     .replace(/^\s*(?:to|that|about|and)\b/i, ' ')
     .replace(/\s{2,}/g, ' ')
     .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, '')
+    /*
+      The quotes come off LAST and only in a matched pair, so a title that
+      genuinely contains one ("the 6\" spacer") keeps it.
+    */
+    .replace(/^(['\u2018\u201c"])(.+)\1$/u, (_m, _q: string, inner: string) => String(inner))
+    .replace(/^[\u2018\u201c](.+)[\u2019\u201d]$/u, (_m, inner: string) => String(inner))
 
 /**
  * Grant's own work, or null.
@@ -301,6 +427,12 @@ const stripFraming = (said: string): string =>
  * `why`, `what`, `who` and `whether` after "remind me" are almost never a
  * reminder framing — they ask to be TOLD something now.
  *
+ * `how` joined them in the independent acceptance pass: *"Remind me how the
+ * pricing works"* created a task called **"How the pricing works"** and
+ * swallowed the question. It belongs with `why` rather than with `when` for
+ * the reason that paragraph gives — there is no reminder reading of "remind me
+ * how", where "remind me when the deadline approaches" has an obvious one.
+ *
  * `when` and `where` are deliberately NOT in the list: *"remind me when the
  * deadline approaches"* is a perfectly good reminder and means the opposite of
  * *"remind me when the deadline is"*. Guessing between them would trade a
@@ -314,16 +446,19 @@ const stripFraming = (said: string): string =>
  * me" directly — which also leaves *"remind me to ask what the price is"*
  * alone, because there "to" comes first.
  */
-const REMIND_ME_A_QUESTION = /\bremind\s+me\s+(?:again\s+)?(?:why|what|who|whether)\b/i
+const REMIND_ME_A_QUESTION = /\bremind\s+me\s+(?:again\s+)?(?:why|what|who|whether|how)\b/i
 
 export function personalTaskRequest(text: string, now: Date = new Date()): PersonalTask | null {
   const said = text.trim()
   if (said === '') return null
   if (REMIND_ME_A_QUESTION.test(said)) return null
+  if (ASKING_WHETHER_IT_EXISTS.test(said)) return null
   const remind = REMIND_ME.test(said) && !REMIND_SOMEBODY_ELSE.test(said)
   const commit =
     I_MUST.test(said) ||
-    ((MAKE_A_TASK.test(said) || MAKE_SURE_I.test(said)) && !A_TASK_FOR_SOMEBODY_ELSE.test(said))
+    ADD_COLON.test(said) ||
+    ((MAKE_A_TASK.test(said) || MAKE_SURE_I.test(said) || ON_MY_LIST.test(said)) &&
+      !A_TASK_FOR_SOMEBODY_ELSE.test(said))
   if (!remind && !commit) return null
 
   const title = stripFraming(said)
@@ -396,13 +531,14 @@ export interface PersonalTaskChange {
   disagree about what counts as a date.
 */
 const WHEN_WORDS =
-  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
+  /\b(?:on\s+|next\s+|this\s+|to\s+|until\s+|by\s+|for\s+|before\s+)?(?:today|tomorrow|tonight|this\s+evening|next\s+week|next\s+month|in\s+(?:\d{1,3}|a|an|one|two|three|four|five|six|seven)\s+(?:day|week|month|fortnight)s?|(?:sun|mon|tues?|wednes?|thurs?|fri|satur)day|on\s+the\s+\d{1,2}(?:st|nd|rd|th)?)\b/gi
 
 const BARE_REFERENT =
   /\b(?:that|this|it|that\s+one|the\s+task|the\s+reminder)\b(?!\s+[a-z]{3,}(?:\s|$))|\b(?:that|this|it)\b\s*$/i
 
 /* Explicitly changing the subject of the previous turn, in the ways people do. */
-const CHANGING = /\b(?:actually|instead|rather|make|move|change|push|bump|call|set|sorry|no)\b/i
+const CHANGING =
+  /\b(?:actually|instead|rather|make|move|change|rename|push|bump|call|set|sorry|no|can\s+wait|hold\s+off)\b/i
 
 /*
   Ordered least-greedy FIRST, and the loop takes the first match.
@@ -414,14 +550,48 @@ const CHANGING = /\b(?:actually|instead|rather|make|move|change|push|bump|call|s
   phrases are checked before the single words that appear inside them.
 */
 const URGENCY: ReadonlyArray<readonly [RegExp, number]> = [
-  [/\b(?:whenever|low\s+priority|no\s+rush|not\s+urgent|deprioriti[sz]e)\b/i, 100],
+  /*
+    "down the list" and "up the list" say the same thing as low and high, and
+    they were both misses in the independent acceptance pass. They match the
+    PHRASE and not the referent in front of it: "bump that up the list" has to
+    leave "that" behind, because the residue is what proves the sentence is
+    about the last task rather than about a new subject.
+  */
+  [
+    /\b(?:down\s+the\s+list|less\s+important|can\s+wait|no\s+hurry|whenever|low\s+priority|no\s+rush|not\s+urgent|deprioriti[sz]e)\b/i,
+    100,
+  ],
   [/\b(?:normal|medium|ordinary)\s+priority\b/i, 50],
   [/\b(?:urgent|top\s+priority|drop\s+everything|asap)\b/i, 10],
-  [/\b(?:important|high\s+priority|priorit(?:y|ise|ize))\b/i, 20],
+  [/\b(?:up\s+the\s+list|more\s+important|important|high\s+priority|priorit(?:y|ise|ize))\b/i, 20],
 ]
 
-/** "call it X" / "rename it to X" — the only rename shape worth recognising. */
-const RENAME = /\b(?:call\s+it|rename\s+it\s+to|make\s+it\s+called)\s+(.{2,120}?)\s*$/i
+/*
+  The rename shapes, and why there are now six of them.
+
+  The first version knew "call it X", "rename it to X" and "make it called X",
+  which is what somebody writes when they are already thinking about the field.
+  In the independent acceptance pass, *"rename that to …"* and *"change the
+  wording to …"* both did nothing at all — the first because it says `that`
+  rather than `it`, which is a difference of one word and no meaning, and the
+  second because it names the thing being changed instead of the task.
+
+  The referent alternatives (`it|that|this`) come from the same family
+  `BARE_REFERENT` protects, so widening them cannot reach a sentence with a
+  subject in it. The quotes people put round a dictated title come off here for
+  the reason they come off a new task's title: the marks are how you say "these
+  exact words out loud", not part of them.
+*/
+const RENAME =
+  /\b(?:call\s+(?:it|that|this)|rename\s+(?:it|that|this)(?:\s+to)?|make\s+(?:it|that|this)\s+called|change\s+(?:the\s+)?(?:wording|title|name)(?:\s+of\s+(?:it|that|this))?\s+to)\s+(.{2,120}?)\s*$/i
+
+/** The quotes round a dictated title, in a matched pair only. */
+const unquote = (t: string): string =>
+  /^(['\u2018\u201c"])(.+)\1$/u.test(t)
+    ? t.slice(1, -1)
+    : /^[\u2018\u201c](.+)[\u2019\u201d]$/u.test(t)
+      ? t.slice(1, -1)
+      : t
 
 export function personalTaskChange(
   text: string,
@@ -469,9 +639,24 @@ export function personalTaskChange(
   }
 
   const rename = RENAME.exec(said)
-  const title = rename === null ? null : (rename[1] ?? '').replace(/[\s.!?]+$/, '')
+  const title = rename === null ? null : unquote((rename[1] ?? '').replace(/[\s.!?]+$/, ''))
+  /*
+    A rename names its own referent, and the residue test cannot see it.
+
+    "rename that to X" puts `that` INSIDE the phrase this strip removes, so by
+    the time the guard runs there is nothing left to prove the sentence is
+    about the last task — and the follow-up was refused. The phrase itself is
+    the evidence: if the words that matched contain a bare referent, the guard
+    is already satisfied.
+
+    "change the wording to X" names NO referent and stays refused, which is the
+    conservative half of the same rule: with nothing pointing at the last task,
+    a rename could be about anything on the screen.
+  */
+  let namedReferent = false
   if (title !== null && title !== '') {
     matched.push('a new name')
+    namedReferent = /\b(?:it|that|this)\b/i.test(String(rename?.[0] ?? '').replace(title, ' '))
     residue = residue.replace(RENAME, (_m, p1: string) => String(_m).replace(p1, ' '))
   }
 
@@ -484,7 +669,7 @@ export function personalTaskChange(
     none of them can be the subject the guard is protecting against.
   */
   residue = residue.replace(new RegExp(CHANGING.source, 'gi'), ' ')
-  if (!BARE_REFERENT.test(residue)) return null
+  if (!namedReferent && !BARE_REFERENT.test(residue)) return null
 
   /*
     Nothing recognised is nothing to do. Returning an empty change would make

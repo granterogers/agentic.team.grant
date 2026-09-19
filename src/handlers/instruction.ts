@@ -2266,7 +2266,34 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         } satisfies HandlerOutput
       }
 
-      const sent = linkRequest(instruction)
+      /*
+        A BRANCH CONTRIBUTES PROSE. IT NEVER PERFORMS THE REQUEST AGAIN.
+
+        #233's fan-out gives every additional convened specialist a child
+        `office.instruction` carrying **the same instruction verbatim**, so
+        every deterministic action below runs once per person convened. #258
+        found that as two near-identical PDFs from one sentence and fixed it
+        for `wantsFile`; #135 inherited the guard for `pageRequest`. Neither
+        carried it to the rest, and the independent acceptance pass found the
+        next instance: "Call it Review the onboarding copy" convened three
+        people and put THREE tasks on Grant's list, from one reply.
+
+        CLAUDE.md's #249/#254 pair is the reason this is one guard rather than
+        a third copy of the same two lines — three defects filed separately
+        were one defective abstraction, and the fix for it repeated the
+        mistake a layer deeper. The abstraction is: an action belongs to the
+        REQUEST, and a branch is a second reading of the request, not a second
+        request. Every path below either answers (safe to do twice, the second
+        answer is another voice) or acts (never safe to do twice).
+
+        `handed_off_by` is set only by the two child enqueues that make a
+        branch, so a request Grant ADDRESSES to a specialist directly carries
+        `addressed_to` without it and is untouched — which is the case that
+        matters, because that one is still his request.
+      */
+      const isBranch = String(payload.handed_off_by ?? '') !== ''
+
+      const sent = isBranch ? null : linkRequest(instruction)
       const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
 
       // Does this ask for something to be MADE? If so, make it, and let the
@@ -2274,7 +2301,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // Both, independently. "Add this video and make an audio overview" is
       // two instructions in one sentence, and the first version answered only
       // the half it noticed first.
-      const wanted = notebookRequest(instruction)
+      const wanted = isBranch ? null : notebookRequest(instruction)
       const made =
         wanted === null ? null : await act(deps.db, job, wanted.kinds, wanted.instructions)
 
@@ -2323,7 +2350,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         traced like everything else. This turn goes quiet about it and the
         child speaks, so Grant gets one message rather than two.
       */
-      const listing = job.projectId === null ? null : artifactListing(instruction)
+      const listing = job.projectId === null || isBranch ? null : artifactListing(instruction)
       const enumerating =
         listing === null
           ? null
@@ -2392,7 +2419,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         The same guard, in the same shape, as `pullOut` two paragraphs below:
         whichever of the three claims the sentence first decides what he gets.
       */
-      const isBranch = String(payload.handed_off_by ?? '') !== ''
       const wantsFile = job.projectId === null || isBranch ? null : artifactRequest(instruction)
 
       /*
@@ -2499,7 +2525,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               })
 
       const pullOut =
-        job.projectId === null || wantsFile !== null ? null : extractionRequest(instruction)
+        job.projectId === null || wantsFile !== null || isBranch
+          ? null
+          : extractionRequest(instruction)
       const extracting =
         pullOut === null
           ? null
@@ -2557,7 +2585,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         gets "I will add that" now and the task some seconds later.
       */
       // A request for a FILE is not a to-do, and it is decided above.
-      const forGrant = wantsFile !== null ? null : personalTaskRequest(instruction)
+      const forGrant = wantsFile !== null || isBranch ? null : personalTaskRequest(instruction)
       const noted =
         forGrant === null
           ? null
@@ -2626,7 +2654,76 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         one bad guess away from editing a row he did not mean. The confirmation
         NAMES what changed, which is the honest alternative to guessing well.
       */
-      const change = noted !== null || wantsFile !== null ? null : personalTaskChange(instruction)
+      // A plural extraction is not a single task. `pullOut` having claimed the
+      // sentence, `taskRequest` must not also file one from the same words —
+      // and neither must it file one the personal-task path has already taken.
+      const asked =
+        pullOut !== null || noted !== null || isBranch
+          ? null
+          : taskRequest(instruction, classifyIntent(instruction))
+
+      /*
+        And the ANSWER to "what should it be called?", which is the other half.
+
+        The first version of the task path asked that question and then could
+        not accept the reply: *"Call it Review the onboarding copy."* matched no
+        task shape, fell through to prose, and the task was never created. A
+        question whose answer is dead is worse than not asking — Grant has typed
+        the same intention twice and has nothing to show for it.
+
+        The lookup is only paid for when this could plausibly BE an answer:
+        `taskRequest` did not already match, the message is short, and there is
+        a conversation behind it. An explicit "call it X" needs no lookup at all.
+      */
+      const namedLater =
+        asked !== null || isBranch || instruction.trim().length > 90
+          ? null
+          : await deps.db
+              .execute(`
+                select coalesce(
+                  (select left(o.body, 500) from public.outputs o
+                     join public.inbound_commands c on c.job_id = o.job_id
+                    where c.origin_channel = 'teamhq'
+                      and c.command_id <> ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
+                      and split_part(c.origin_ref, ':', 1) = (
+                        select split_part(origin_ref, ':', 1) from public.inbound_commands
+                         where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
+                    order by c.received_at desc limit 1), '') as said`)
+              .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
+              /*
+                The third argument is what stops a request becoming a title
+                (#255): a turn that asks for something of its own is never the
+                answer to a question about something else.
+              */
+              .then((prev) =>
+                titleReply(
+                  instruction,
+                  prev === '' ? null : prev,
+                  notebookRequest(instruction) !== null,
+                ),
+              )
+              .catch(() => null)
+
+      /*
+        AND THE ANSWER TO A QUESTION IS NOT A FOLLOW-UP CHANGE.
+
+        "Call it Review the onboarding copy" is both: `RENAME` recognises it,
+        and so does `titleReply` when the previous turn asked for a name. With
+        the change path running first and unconditionally, that one sentence
+        created the new task AND renamed whatever personal task happened to be
+        the most recent one — a row he had made twenty minutes earlier, silently
+        given somebody else's name.
+
+        `namedLater` is the narrower reading: it is only non-null when the
+        office ITSELF asked the question in the previous turn, so preferring it
+        cannot swallow an ordinary rename. Found in the independent acceptance
+        pass by reading the two paths against each other rather than by running
+        one of them.
+      */
+      const change =
+        noted !== null || wantsFile !== null || namedLater !== null || isBranch
+          ? null
+          : personalTaskChange(instruction)
       const changed =
         change === null
           ? null
@@ -2674,56 +2771,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   .catch(() => undefined)
                 return null
               })
-
-      // A plural extraction is not a single task. `pullOut` having claimed the
-      // sentence, `taskRequest` must not also file one from the same words —
-      // and neither must it file one the personal-task path has already taken.
-      const asked =
-        pullOut !== null || noted !== null
-          ? null
-          : taskRequest(instruction, classifyIntent(instruction))
-
-      /*
-        And the ANSWER to "what should it be called?", which is the other half.
-
-        The first version of the task path asked that question and then could
-        not accept the reply: *"Call it Review the onboarding copy."* matched no
-        task shape, fell through to prose, and the task was never created. A
-        question whose answer is dead is worse than not asking — Grant has typed
-        the same intention twice and has nothing to show for it.
-
-        The lookup is only paid for when this could plausibly BE an answer:
-        `taskRequest` did not already match, the message is short, and there is
-        a conversation behind it. An explicit "call it X" needs no lookup at all.
-      */
-      const namedLater =
-        asked !== null || instruction.trim().length > 90
-          ? null
-          : await deps.db
-              .execute(`
-                select coalesce(
-                  (select left(o.body, 500) from public.outputs o
-                     join public.inbound_commands c on c.job_id = o.job_id
-                    where c.origin_channel = 'teamhq'
-                      and c.command_id <> ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid
-                      and split_part(c.origin_ref, ':', 1) = (
-                        select split_part(origin_ref, ':', 1) from public.inbound_commands
-                         where command_id = ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid)
-                    order by c.received_at desc limit 1), '') as said`)
-              .then((r) => String((r.rows[0] as { said?: string } | undefined)?.said ?? ''))
-              /*
-                The third argument is what stops a request becoming a title
-                (#255): a turn that asks for something of its own is never the
-                answer to a question about something else.
-              */
-              .then((prev) =>
-                titleReply(
-                  instruction,
-                  prev === '' ? null : prev,
-                  notebookRequest(instruction) !== null,
-                ),
-              )
-              .catch(() => null)
 
       const filed =
         asked !== null

@@ -1286,6 +1286,110 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
 }
 
 // ===========================================================================
+// "Call it X" is an ANSWER, not a rename (#259, the acceptance pass)
+// ===========================================================================
+
+console.log('\n"call it X" answers the question rather than renaming something else')
+{
+  /*
+    Two readings of one sentence, and the office had been taking both.
+
+    `RENAME` recognises "Call it X" as a follow-up change, and `titleReply`
+    recognises it as the answer to "what should I call it?" — a question the
+    office asks whenever a task request arrives with no title. The change path
+    ran first and unconditionally, so that single reply created the new task
+    AND renamed whatever personal task happened to be the most recent one.
+
+    It has to be driven over the REAL inbound path, twice, in one thread:
+    `namedLater` looks the previous turn up in `public.inbound_commands` by the
+    first segment of `origin_ref`, so a raw job insert — which is how the
+    section above talks to the office — cannot reach this branch at all. A
+    check that could not reach the code it is about would pass for the reason
+    CLAUDE.md keeps recording.
+  */
+  const THREAD = `verify-ans-${run}`
+  const bystander = (await press('my_task_add', {
+    p_title: `Chase the printers ${run}`,
+  })) as { id?: string }
+  const other = String(bystander.id ?? '')
+
+  const turn = async (n: number, text: string): Promise<string> => {
+    const commandId = String(
+      (
+        await one(`
+          insert into public.inbound_commands
+            (origin_channel, origin_ref, actor, instruction, dedupe_key)
+          values ('teamhq', ${lit(`${THREAD}:${String(n)}`)},
+                  ${lit(`verify-mytasks-${run}`)}, ${lit(text)},
+                  ${lit(`teamhq:message:${THREAD}-${String(n)}`)})
+          returning command_id::text as v`)
+      ).v ?? '',
+    )
+    const enq = (await one(`select app.enqueue_inbound(${lit(commandId)}::uuid) as v`)).v as
+      | { job_id?: string }
+      | string
+    const parsed = (typeof enq === 'string' ? JSON.parse(enq) : enq) as { job_id?: string }
+    const jobId = String(parsed.job_id ?? '')
+    for (let i = 0; i < 40; i += 1) {
+      const row = await one(`
+        select j.state, coalesce(o.body, '') as body
+          from public.jobs j left join public.outputs o on o.job_id = j.job_id
+         where j.job_id = ${lit(jobId)}::uuid`)
+      if (['complete', 'failed', 'cancelled'].includes(String(row.state))) {
+        return String(row.body ?? '')
+      }
+      await new Promise((r) => setTimeout(r, 3_000))
+    }
+    return ''
+  }
+
+  const question = await turn(1, 'Add a task')
+  check(
+    'a task request with no title makes the office ASK for one',
+    question.slice(0, 70) || 'IT SAID NOTHING',
+    /call|name|title/i.test(question),
+  )
+
+  const titleBefore = String(
+    (await one(`select title from public.tasks where task_id = ${lit(other)}::uuid`)).title ?? '',
+  )
+  const answered = await turn(2, `Call it Review the onboarding copy ${run}`)
+  const made = await one(`
+    select count(*)::int as n from public.tasks
+     where title = ${lit(`Review the onboarding copy ${run}`)}`)
+  check(
+    'and the answer CREATES the task it was asked about',
+    `${String(made.n)} task(s) — the office said: ${answered.slice(0, 50)}`,
+    Number(made.n) === 1,
+  )
+  const after = await one(`
+    select title from public.tasks where task_id = ${lit(other)}::uuid`)
+  check(
+    'CONTROL: it does NOT rename the task he made twenty minutes ago',
+    `"${String(after.title)}"` +
+      (String(after.title) === titleBefore ? '' : ` — WAS "${titleBefore}"`),
+    String(after.title) === titleBefore,
+  )
+
+  await db.execute(`
+    delete from public.tasks
+     where task_id = ${lit(other)}::uuid
+        or title = ${lit(`Review the onboarding copy ${run}`)}`)
+  await db.execute(
+    `delete from public.inbound_commands where origin_ref like ${lit(`${THREAD}:%`)}`,
+  )
+  const leftover = await one(`
+    select count(*)::int as n from public.tasks
+     where title in (${lit(`Chase the printers ${run}`)},
+                     ${lit(`Review the onboarding copy ${run}`)})`)
+  check(
+    'teardown — neither task of this section is left behind',
+    `${String(leftover.n)} left`,
+    Number(leftover.n) === 0,
+  )
+}
+
+// ===========================================================================
 // The provider seam, driven as a fake provider (#259, migration 0513)
 // ===========================================================================
 
