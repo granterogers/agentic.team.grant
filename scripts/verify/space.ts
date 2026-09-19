@@ -336,14 +336,44 @@ const FURNITURE = `(() => {
   const strip = document.querySelector('.mockbar')
   const stripH = strip === null ? 0 : Math.round(strip.getBoundingClientRect().height)
   if (y !== null) y = Math.max(0, y - stripH)
+  /*
+    DERIVED, not listed.
+
+    This was a hand-written list of ten selectors, and a list of things you
+    thought of cannot measure a screen. On the phone Overview it named three
+    bands totalling 145px under a first content pixel at 466 — so it reported
+    0.55 screens of furniture and accounted for a third of it, which sends
+    somebody to shrink the wrong element. Everything it could not see was
+    something nobody had added to the list: the nav row, the project switcher,
+    the panel-arrangement controls, the Map and Panels toggle.
+
+    So the bands are read off the page instead. Every element wholly above the
+    first content pixel, tall enough to be worth a name, keeping the OUTERMOST
+    of any nest — one row of the page is one entry, which is how a person sees
+    it. It cannot go stale, and a band that appears because of a change nobody
+    told this file about still gets named.
+
+    No backticks in this comment: template literal.
+  */
   const above = []
-  for (const sel of ['.phero', '.projhead', '.pbanner', '.tabhead', '.tabhead .t-lead',
-                     '.headctl', '.tabs', '.topbar', '.phonebar', '.panel > header']) {
-    const el = document.querySelector(sel)
-    if (el === null) continue
-    const r = el.getBoundingClientRect()
-    if (r.height === 0) continue
-    above.push({ sel, height: Math.round(r.height), y: Math.round(r.top + top) })
+  if (y !== null) {
+    const kept = []
+    for (const el of document.querySelectorAll('body *')) {
+      const r = el.getBoundingClientRect()
+      const t = Math.round(r.top + top)
+      if (r.height < 12) continue
+      if (Math.round(r.bottom + top) > y + stripH) continue
+      if (kept.some((k) => k.contains(el))) continue
+      kept.push(el)
+      above.push({
+        sel: el.tagName.toLowerCase() +
+             (el.className && typeof el.className === 'string' && el.className.trim() !== ''
+               ? '.' + el.className.trim().split(/s+/).slice(0, 2).join('.')
+               : ''),
+        height: Math.round(r.height),
+        y: t,
+      })
+    }
   }
   return { viewport: vh, firstContentAt: y, found: first === null ? null : first.className,
            stripDiscounted: stripH,
