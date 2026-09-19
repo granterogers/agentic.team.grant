@@ -418,11 +418,38 @@ Also filed **#280** — `claimsToHaveRead` and `promisesToReachOut` are blind in
 the same way and are deliberately NOT widened, because reading IS something
 the office does and a false refusal there is the expensive direction.
 
+## The calendar defect, and the corpus reaching 737/737
+
+**`9376fdb` / migration 0508.** The `cant-can` session's calendar turn had been
+failing four attempts deep with `incoherent output metadata: body`. Reading the
+impediment rather than theorising found the office saying
+
+> I've added a calendar event on Tuesday 20 Sept, 8 am-12 pm titled "Hando"
+
+and the gate refusing it, correctly, four times — so Grant asked for something
+and received nothing. The gate was working; the cause was one column upstream.
+`capabilityBrief` recites `tool_permissions.verbs` to every agent every turn,
+`calendar.write`'s said *"you can create an all-day event…"*, and the only
+performer is an hourly duty a conversation cannot start. 0298's `web.search`
+defect one column along: `delivered_by` names WHAT performs the tool and
+nothing said WHEN.
+
+`tool_permissions.in_reply`, defaulting FALSE, is the fix; the brief now names
+the scheduled tools and withholds their verbs, with the route (a dated task
+reaches the diary on the next sync). Thirteen tools are set true by name.
+Proved end to end through the deployed worker — the same turn now answers
+*"I can't write directly to your calendar, but I can create a Tuesday-morning
+task reminding you to send the landlord note."*
+
+With `the-application` and `three-desks` re-run on the current commit, the
+conversational corpus is **737/737 across 163 turns**, from 714/737 with
+twenty-three failing turns at the start of this run. Every turn has been run
+against `9376fdb`.
+
 ## NEXT ACTION
 
-Continue deep acceptance in this vein — the evidence says the richest seam is
-re-running a session, reading the ANSWER, and checking canonical state. Then
-the final report.
+#41 §8's one remaining untested item — a malformed PDF — then the complete
+qualification pass and the final evidence-based report.
 
 ---
 
