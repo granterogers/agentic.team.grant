@@ -1266,3 +1266,92 @@ It surfaced because #38's new flat-card detector reads `--r-card` to find cards,
 - **#113, #114, #136, #137, #138** remain proposal parents awaiting his pick.
 - **#130** unchanged from the run's close: `research_summary` and `draft_document` still have no emitter, for the reason recorded there.
 - **#187** unchanged: it writes permanent channels into his real Slack.
+
+---
+
+# v1.0.0-rc.1 — qualified, merged, deployed, and one step short of tagged
+
+**19 September 2026.** `main` is at **`35c9004`**. The release candidate is
+qualified and live; the annotated tag exists locally and could not be pushed.
+
+## The qualification
+
+| | |
+|---|---|
+| `npm run gate` | **37 of 37 GREEN**, 2091s, against this exact tree |
+| `npm test` | 1913 tests, 114 files |
+| lint · typecheck | clean |
+| `check:` secrets, migrations, templates, tokens, icons, callers, pressable | clean |
+| `verify:wired` | 77 attributes, 21 screens, no dead controls |
+| `npm run shots` | 196 captures, **0 NOT CAPTURED** |
+| `deploy:hq` · `deploy:worker` | both ok, both self-probed |
+| `verify:hq` · `verify:ui` | 47/47 · 54/54 |
+
+Three gate runs sit behind that number and all three are recorded, because
+**a suite that has been run once is barely more evidence than one never run**
+and this file already says so. Run 1 was 36/37, its one failure `verify:stop`
+at 18/19. Run 2 was killed at suite 22 of 37 by a container restart, nothing
+red. Run 3 is the complete pass, and `verify:stop` returned **19/19** — the
+independent second verdict run 1's failure needed, which is what turns "we
+think it was a race" into evidence.
+
+## What the gate could not see, and the queue could
+
+`app.office_health()` reported **15 failures in 24 hours** over a green gate.
+Every one is a single defect — provenance computed above the property that
+spends the model, so an object literal asked *"was anything inferred"* before
+the answer had been written — and every one predates its fix.
+
+It is fixed and **proved fixed in production, not merely in a test**:
+`office.notion_sync` completed at 00:27 and `office.sync` at 01:58, after
+failing every two hours through 23:55. `office.slack_rotate` and
+`briefing.morning` were not due in the interval. They are covered by a
+property test that scans every handler for the shape, which is **evidence of
+a weaker kind and is named as such** rather than counted as a live pass.
+
+Reading the queue beside the gate is now the practice, not an afterthought.
+
+## THE ONE TO READ
+
+**The tag cannot be pushed from this environment, and no amount of retrying
+was going to discover that.**
+
+`git push origin v1.0.0-rc.1` returns HTTP 403. Four attempts, exponential
+backoff. Branch pushes to the same remote succeed *within the same minute*,
+which is what rules out authentication and rules out a transient. Going
+around git is refused in the same words:
+
+```
+POST /repos/.../git/tags  ->  403
+Write access to this GitHub API path is not permitted through this proxy.
+```
+
+So it is the agent proxy's write policy on the tags path. Not a repository
+permission, not a credential, and **not something to work around** — no
+credential was reconstructed or printed to establish any of it, and none
+should be. Three commands from any normal clone finish the release, and they
+are in **#279**.
+
+The general lesson is the one this file keeps relearning in new costumes: a
+failure that repeats identically under backoff is a *policy*, and the way to
+tell a policy from a flake is to find something adjacent that still works.
+A branch push in the same minute is that control.
+
+## Filed rather than quietly shipped
+
+- **#278** — the project map on a phone shows **three of twenty-four cards**
+  with the zoom controls sitting on them. Measured with `probe`, not read off
+  the capture: the port is 350×520, the field ~1,142 wide, the honest fit
+  0.30, and the applied fit is the **0.85 floor** that keeps card names above
+  the 12px type floor. The map is correct by its own rules and still close to
+  useless at first sight, which is a composition question rather than a bug,
+  and it says so. Explicitly **not** a regression from the two-line title
+  change: card width and the floor are untouched, and those are what decide
+  how much of the field is visible.
+- **#279** — the tag.
+
+## Still Grant's, unchanged
+
+**#178** (three Notion pages), **#18** and **#213** (credential rotations),
+**#113/#114/#136/#137/#138** (proposal parents awaiting his pick), **#187**
+(writes permanent channels into his real Slack).
