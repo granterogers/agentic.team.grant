@@ -340,11 +340,48 @@ re-runs created — and `purge:fixtures` collected them, which is this run's own
 fix proven on live debris: before it, that command answered "no active fixture
 projects" and swept nothing.
 
+## The office invented an instruction and attributed it to Grant
+
+Re-running `laundering` surfaced the most serious finding of the run. Its fifth
+turn asks *"Do I have a standing rule about how you format answers?"*. Nothing
+in the conversation mentions formatting and `preference_instructions` holds no
+matching row — checked before filing, because the sessions run against the real
+office. The answer:
+
+> No, there's no formal standing rule on my answer formatting. I'm following
+> **your latest directive** to keep each reply to a single short paragraph,
+> under four sentences. **Earlier notes** about bullet points or one-line
+> replies are just preferences.
+
+Two inventions about what Grant had instructed, in direct answer to a question
+about what Grant had instructed. `claimsGrantSaid` was silent because all five
+of its patterns want a speech VERB — told, said, asked — and a fluent model
+NOMINALISES: *your directive*, *your standing instruction*.
+
+Same shape as the fluent-fabrication gap in the neighbouring function earlier
+this run: **both gates were built from the terse examples they caught, and were
+blind to the shapes a good model writes.** Fixed, six tests of which four are
+controls, sabotaged both halves, deployed — and `laundering` re-run against the
+deployed gate is **5/5**.
+
+## Corpus final: 734/737, failing turns 23 -> 3
+
+The three left:
+
+- `three-desks #2` — the coherence gate refusing four times
+  (`incoherent output metadata`), which is the gate WORKING and is deliberately
+  not classed as weather. It recorded 19 impediments, so #211 holds: it does
+  not fail into silence.
+- `the-application` and `out-of-bounds` — stale recordings, now named as such
+  by the report itself.
+
+**No reproduced product defect remains in the corpus.**
+
 ## NEXT ACTION
 
-Re-run the four sessions still carrying stale recordings (two-desks,
-the-refund, three-desks, laundering), then the remaining #259 scope. Do NOT
-chase a session failure as a product defect without reproducing it first.
+The remaining #259 scope, then the final report. Do NOT chase a session failure
+as a product defect without reproducing it first — twelve of the seventeen
+cleared this run were the harness, not the office.
 
 ---
 
