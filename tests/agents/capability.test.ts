@@ -156,6 +156,7 @@ describe('the brief and the boundary', () => {
             tool: 'notion.write',
             what: 'Create and update Notion pages',
             verbs: ['create pages in any shared data source', 'set properties and relations'],
+            inReply: true,
           },
         ],
       }),
@@ -167,14 +168,14 @@ describe('the brief and the boundary', () => {
     // Eighteen of twenty-one tools had no verb while the list lived in
     // TypeScript. Silence about them is what this replaced.
     const brief = capabilityBrief(
-      able({ can: [{ tool: 'web.search', what: 'Search the web', verbs: [] }] }),
+      able({ can: [{ tool: 'web.search', what: 'Search the web', verbs: [], inReply: true }] }),
     )
     expect(brief).toContain('web.search')
   })
 
   it('tells an agent to ASK for a tool the office holds and it does not', () => {
     const brief = capabilityBrief(
-      able({ mustAsk: [{ tool: 'slack.post', what: 'Post to Slack', verbs: [] }] }),
+      able({ mustAsk: [{ tool: 'slack.post', what: 'Post to Slack', verbs: [], inReply: false }] }),
     )
     expect(brief).toContain('ask for one rather than saying it is impossible')
     expect(brief).toContain('slack.post')
@@ -184,7 +185,13 @@ describe('the brief and the boundary', () => {
     const brief = capabilityBrief(
       able({
         cannot: [
-          { tool: 'gmail.send', what: 'Send email', verbs: [], why: 'Destructive. Level 3.' },
+          {
+            tool: 'gmail.send',
+            what: 'Send email',
+            verbs: [],
+            inReply: false,
+            why: 'Destructive. Level 3.',
+          },
         ],
       }),
     )
@@ -211,7 +218,9 @@ describe('the brief and the boundary', () => {
       'Nothing implements this. The row claimed reach the office does not have, ' +
       'and every agent was told it could search the web on the strength of it.'
     const brief = capabilityBrief(
-      able({ cannot: [{ tool: 'web.search', what: 'Search', verbs: [], why: essay }] }),
+      able({
+        cannot: [{ tool: 'web.search', what: 'Search', verbs: [], inReply: false, why: essay }],
+      }),
     )
     expect(brief).toContain('web.search')
     expect(brief).toContain('Nothing implements this')
@@ -227,7 +236,9 @@ describe('the brief and the boundary', () => {
   it('CONTROL: cuts a reason that never ends a sentence', () => {
     const runOn = `${'a'.repeat(300)}`
     const brief = capabilityBrief(
-      able({ cannot: [{ tool: 'db.delete', what: 'Delete', verbs: [], why: runOn }] }),
+      able({
+        cannot: [{ tool: 'db.delete', what: 'Delete', verbs: [], inReply: false, why: runOn }],
+      }),
     )
     expect(brief).not.toContain(runOn)
     expect(brief).toContain('…')

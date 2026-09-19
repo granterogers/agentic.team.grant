@@ -57,6 +57,20 @@ export interface Able {
   readonly tool: string
   readonly what: string
   readonly verbs: readonly string[]
+  /**
+   * Can the colleague WRITING THIS ANSWER cause it to happen now? (0508)
+   *
+   * Required rather than optional, and deliberately. CLAUDE.md records what an
+   * optional field on a row shape costs: a branch that never sets it compiles
+   * green and dies four attempts deep in production. Every construction site
+   * has to say which of the two this is, because the two are not the same
+   * claim and the brief prints them in different sentences.
+   *
+   * Meaningless for `mustAsk` and `cannot`, where the answer is "neither" —
+   * those lists say the tool is not this person's to use at all, and the brief
+   * never reaches a verb for them.
+   */
+  readonly inReply: boolean
 }
 
 /** What has been asked for and refused, so it is not asked for again. */
@@ -125,6 +139,13 @@ export async function capabilityNow(db: SqlExecutor, staffSlug?: string): Promis
         tool: String(row.tool ?? ''),
         what: String(row.what ?? ''),
         verbs: Array.isArray(row.verbs) ? row.verbs.map((x) => String(x)) : [],
+        /*
+          Absent reads as FALSE, which is the same asymmetry 0508's column
+          default is built on: a tool wrongly called unavailable produces a
+          weaker sentence, and one wrongly called available produces a
+          fabricated claim. `must_ask` and `cannot` never carry the key.
+        */
+        inReply: row.in_reply === true,
       }
     })
 
@@ -204,10 +225,24 @@ export function capabilityBrief(cap: Capability): string {
     attention. The tools with no verbs recorded still appear by name and
     description below, which is more than the eighteen of them had before.
   */
-  const verbs = cap.can
+  /*
+    Split by WHEN, before anything is worded (0508).
+
+    The sentence a few lines down tells the agent to use a verb rather than
+    offer to prepare something -- which is right, and which made an unqualified
+    verb list actively dangerous. `calendar.write`'s verbs were true of the
+    office and false of the person answering: the only thing that writes the
+    diary is an hourly duty, and a conversation cannot start it. So the office
+    replied "I've added a calendar event on Tuesday 20 Sept, 8 am-12 pm",
+    four times, and the coherence gate refused all four. Grant asked for
+    something and received nothing.
+  */
+  const now = cap.can.filter((a) => a.inReply)
+  const onTheClock = cap.can.filter((a) => !a.inReply)
+  const verbs = now
     .filter((a) => a.verbs.length > 0)
     .map((a) => `${a.tool} — you can ${a.verbs.slice(0, 4).join(', ')}.`)
-  const plain = cap.can.filter((a) => a.verbs.length === 0).map((a) => a.tool)
+  const plain = now.filter((a) => a.verbs.length === 0).map((a) => a.tool)
 
   return (
     'What this team can reach right now, as a matter of fact: ' +
@@ -218,6 +253,21 @@ export function capabilityBrief(cap: Capability): string {
       : `Not reachable: ${cannotReach.map((r) => `${r.service} (${String(r.detail ?? 'unavailable')})`).join(', ')}. `) +
     (verbs.length === 0 ? '' : `${verbs.join(' ')} `) +
     (plain.length === 0 ? '' : `You also hold: ${plain.join(', ')}. `) +
+    /*
+      What the office does on a schedule, which is not what you can do now.
+
+      Named rather than hidden, for ADR-0018's reason: an agent that does not
+      know a capability exists cannot tell Grant how to reach it. The
+      actionable half is in the sentence — give a task a date and the sync
+      picks it up — so this reads as a route rather than a refusal.
+    */
+    (onTheClock.length === 0
+      ? ''
+      : `The office also does these, but on its own schedule and never inside a reply: ${onTheClock
+          .map((a) => a.tool)
+          .join(', ')}. You cannot perform one now, so do not say you have. ` +
+        'Say what would make it happen — a dated task reaches the diary on the ' +
+        'next sync — or ask for what you need. ') +
     /*
       What this person may NOT do, which is as load-bearing as what they may.
 

@@ -505,5 +505,6 @@
   "0504_a_task_you_cannot_change_your_mind_about.sql": "085132be5ab62c8c6db4bbf335aa2e9b999bff0b1cc81282f5592d691c74e457",
   "0505_five_fixture_connectors_on_grants_settings_page.sql": "0b9f7ed66ced305c3b8b9e6f3024f1c69433653ebe72fc3ef5c5f531a99363b2",
   "0506_registering_a_connector_asks_it_what_it_offers.sql": "a610853d3d509a3b5aede72254de4a3bd8466862c0e083913e507f5b3649ca08",
-  "0507_a_dropped_file_is_his_again.sql": "a56ecf864be2f456b73ed658983b172ed3896edc374cb1015745fa61bcee8a50"
+  "0507_a_dropped_file_is_his_again.sql": "a56ecf864be2f456b73ed658983b172ed3896edc374cb1015745fa61bcee8a50",
+  "0508_what_you_can_do_now_and_what_the_clock_does.sql": "5921fc41c7486a63c34129e7ea7f1dbadef91ab0eb17dcc80d797d9b8015124e"
 }

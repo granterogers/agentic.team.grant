@@ -144,11 +144,12 @@ console.log('\nand it is worked out fresh, not remembered')
   question every real one does, and the honest answer is the suite itself.
 */
 await db.execute(`
-  insert into public.tool_permissions (tool, level, description, enabled, verbs, delivered_by)
+  insert into public.tool_permissions
+    (tool, level, description, enabled, verbs, delivered_by, in_reply)
   values (${lit(TOOL)}, 1,
           'A fixture tool created by verify:capability, and removed by it.',
           true, array['do the fixture thing', 'and the other fixture thing'],
-          'scripts/verify/capability.ts')
+          'scripts/verify/capability.ts', true)
 `)
 
 const appeared = await capabilityNow(db)
@@ -200,6 +201,52 @@ check(
   capabilityBrief(granted).includes('do the fixture thing') ? 'it does' : 'IT DOES NOT',
   capabilityBrief(granted).includes('do the fixture thing'),
 )
+
+/*
+  A capability the CLOCK performs, which is not one this person can perform
+  (0508).
+
+  Driven live rather than asserted in a unit test, because the defect was in
+  the registry and not in the code: `calendar.write`'s verbs read "you can
+  create an all-day event" to every agent on every turn, the only performer is
+  an hourly duty, and the office duly reported a diary entry it had not made —
+  four times, until the job ran out of attempts. The unit tests hold the
+  wording of the brief; this holds the round trip through the column.
+
+  Both directions, because withholding a verb is exactly the #64 defect this
+  whole file exists to prevent: the tool must still be NAMED.
+*/
+await db.execute(`
+  update public.tool_permissions set in_reply = false where tool = ${lit(TOOL)}
+`)
+const clock = await capabilityNow(db, WHO)
+const clockBrief = capabilityBrief(clock)
+check(
+  'a tool only the clock can perform keeps its verbs OUT of the brief',
+  clockBrief.includes('do the fixture thing') ? 'THE VERB IS STILL THERE' : 'withheld',
+  !clockBrief.includes('do the fixture thing'),
+)
+check(
+  'CONTROL: and it is still NAMED, so the agent can say what would start it',
+  clockBrief.includes(TOOL) ? 'named' : 'IT VANISHED FROM THE BRIEF',
+  clockBrief.includes(TOOL),
+)
+check(
+  'CONTROL: the index still reports it as held, so nothing was revoked',
+  clock.can.some((a) => a.tool === TOOL) ? 'still held' : 'IT LEFT can',
+  clock.can.some((a) => a.tool === TOOL),
+)
+check(
+  'CONTROL: and the two calendar tools really are on the clock in the live registry',
+  (await capabilityNow(db, 'chief-of-staff')).can
+    .filter((a) => !a.inReply)
+    .map((a) => a.tool)
+    .join(', ') || 'NONE — 0508 changed nothing',
+  (await capabilityNow(db, 'chief-of-staff')).can.filter((a) => !a.inReply).length >= 2,
+)
+await db.execute(`
+  update public.tool_permissions set in_reply = true where tool = ${lit(TOOL)}
+`)
 
 await db.execute(`
   update public.tool_permissions
