@@ -283,7 +283,35 @@ try {
     await db.execute(`delete from public.documents where project_id = ${lit(projectId)}::uuid`)
     await db.execute(`delete from public.inbound_commands where origin_ref like ${lit('asset:%')}
                        and context->>'project_id' = ${lit(projectId)}`)
+    /*
+      EVERY job on the fixture project, not only the ones this file recorded.
+
+      The list above holds the jobs the suite enqueued itself. The office
+      spawns CHILDREN — and one of them survived, so `project_delete` refused
+      (ADR-0022: a job can never be deleted) and the suite left an ACTIVE
+      fixture project in Grant's list while reporting a teardown failure that
+      read like the delete being broken.
+
+      A suite owns everything on its own fixture project, including the work
+      the office decided to do about it.
+    */
+    await db.execute(`
+      update public.jobs
+         set state = case when state in ('complete', 'cancelled', 'failed') then state
+                          else 'cancelled' end,
+             finished_at = coalesce(finished_at, app.now_utc()),
+             project_id = null
+       where project_id = ${lit(projectId)}::uuid
+    `)
     await db.execute(`select app.project_delete(${lit(SLUG)}, true)`)
+    /*
+      And archived if it still cannot go — 0509's sentence is the honest
+      outcome for a project holding history, and the END STATE is what a
+      teardown is for.
+    */
+    await db.execute(`
+      update public.projects set status = 'archived'
+       where slug = ${lit(SLUG)} and status <> 'archived'`)
   }
   const live =
     jobs.length === 0
@@ -298,10 +326,15 @@ try {
           ).n,
         )
   const project = Number(
-    (await one(`select count(*)::int as n from public.projects where slug = ${lit(SLUG)}`)).n,
+    (
+      await one(
+        `select count(*)::int as n from public.projects
+          where slug = ${lit(SLUG)} and status <> 'archived'`,
+      )
+    ).n,
   )
   check(
-    'teardown — no live jobs and no fixture project left',
+    'teardown — no live jobs and nothing of this run in the project list',
     `${String(live)} live job(s), ${String(project)} project(s)`,
     live === 0 && project === 0,
   )
