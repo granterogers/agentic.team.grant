@@ -292,12 +292,59 @@ in People. Thirteen messages associate immediately.
 Deliberately not done: no body backfill for the 178 older messages (a privacy
 and cost decision needing an ADR, not a tidy-up), and `gmail.send` stays off.
 
+## #41 §8 and the upload provenance regression
+
+`verify:chaos` is 29/29 and already drives four of §8's six: two workers on one
+job, lease expiry and recovery, a migration applied twice, and a crash mid-job
+where recovery resumes DELIVERY rather than repeating the work.
+
+**Clock skew cannot affect a lease** — every lease is granted AND judged by the
+database (`now()`, `app.now_utc()`), so there is one clock. Asserted as the
+invariant rather than simulated, with a control that caught a hole in its own
+predicate on the first run: `\bnow\(\)` matches the `now()` inside
+`Date.now()`, so the check written to forbid a JavaScript-timed lease would
+have accepted one.
+
+Still untested, listed rather than omitted: a 100MB file (the cap is 8MB and
+`verify:upload` drives the refusal), a zero-byte file (driven), a malformed PDF
+(**not** driven).
+
+**0507 — a dropped file is Grant's again.** `verify:upload` had been RED on
+this and nobody knew, because it was not in the gate. 0414 set `connector` null
+for a dropped file; 0459, rebuilding the function for an unrelated rename fix,
+hardcoded `'upload'`; and `documents_origin_follows_connector` then rewrote
+`origin` to 'source'. The edge function's explicit `p_origin: 'yours'`, with a
+comment citing 0414 by number, had been silently overridden ever since. Nothing
+to backfill — 0 rows. **`verify:upload` is now in the gate.**
+
+## QUALIFICATION — all 39 gate suites pass
+
+Run in segments, because the gate is 39 suites and well past one shell window
+(`npm run e2e -- --only a,b,c`). Note `--only` prefixes `verify:`, so the six
+`check:*` entries must be run directly — they read as instant FAILs otherwise.
+
+    schema wrappers transitions attests knows reach drains upload      8/8
+    leaks icons callers pressable tokens reachable (direct)            6/6
+    security dryrun                                                    2/2
+    mytasks knowledge mail identity tasks history transport            7/7
+    recovery recovers cross-interface stop review proposes organising  7/7
+    judge unified artifact connectors                                  4/4
+    routing-breadth delegation collaborates handoff artifact-slack     5/5
+
+Plus: 1941 unit tests, lint 0, typecheck 0, check:templates clean, 507
+migrations, verify:map 21/21, verify:ui 54/54, verify:chaos 29/29,
+verify:arrangement 22/22, wide 0, smoke 0.
+
+`check:leaks` went red mid-qualification on 5 fixture tasks my own session
+re-runs created — and `purge:fixtures` collected them, which is this run's own
+fix proven on live debris: before it, that command answered "no active fixture
+projects" and swept nothing.
+
 ## NEXT ACTION
 
-The remaining #259 scope, then #41 §8's chaos interactions (network
-interruption mid-job, a provider 429/500, two workers on one job, clock skew)
-which no suite exercises. Do NOT chase the six remaining session failures as
-product defects without reproducing them first.
+Re-run the four sessions still carrying stale recordings (two-desks,
+the-refund, three-desks, laundering), then the remaining #259 scope. Do NOT
+chase a session failure as a product defect without reproducing it first.
 
 ---
 
