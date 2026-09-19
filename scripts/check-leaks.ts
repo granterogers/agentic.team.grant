@@ -65,6 +65,7 @@ interface Debris {
   status: string
   docs: number
   jobs: number
+  decisions: number
   removable: boolean
   age_days: number
 }
@@ -167,7 +168,16 @@ const pinned = rows.filter((r) => !r.removable)
 console.log(`\ncheck:leaks — ${String(rows.length)} archived debris project(s)`)
 if (pinned.length > 0) {
   console.log(
-    `  ${String(pinned.length)} carry a job and can never be deleted (ADR-0022) — history, not a leak`,
+    /*
+      A job OR a decision (0510). Both are append-only by section 6 and both
+      make the project permanent, and saying only "carry a job" about a row
+      pinned by a decision sends somebody looking for a job that is not there.
+    */
+    `  ${String(pinned.length)} carry a job or a recorded decision and can never be deleted ` +
+      `(ADR-0022) — history, not a leak` +
+      (pinned.some((r) => Number(r.decisions ?? 0) > 0)
+        ? ` (${String(pinned.filter((r) => Number(r.decisions ?? 0) > 0).length)} of them a decision)`
+        : ''),
   )
 }
 for (const r of sweepable) {

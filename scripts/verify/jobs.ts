@@ -529,6 +529,36 @@ try {
     returning job_id
   `)
   console.log(`Retired ${retired.rows.length} probe job(s) from this run.`)
+  /*
+    AND the circuit-breaker row, which was only ever cleaned at the START.
+
+    Line 396 deletes `provider_health` for this run's provider before the
+    section that exercises it, which works perfectly while you are running the
+    suite and leaves one row behind for ever after the last run. `check:leaks`
+    counts it — *"1 probe provider(s) in provider_health — a circuit breaker
+    suite is not clearing up after itself"* — and `purge:fixtures` does not
+    sweep that table, so the witness reported a class nothing could clear.
+
+    Asserted, not merely attempted: CLAUDE.md, *"a teardown that matches
+    nothing looks exactly like a teardown that worked."*
+  */
+  await db.execute(`delete from public.provider_health where provider = '${provider}'`)
+  const stillThere = (
+    await db.execute(
+      `select count(*)::int as n from public.provider_health where provider = '${provider}'`,
+    )
+  ).rows[0] as { n: number }
+  if (Number(stillThere.n) !== 0) {
+    failedChecks.push({
+      group: 'teardown',
+      what: 'the probe provider is removed',
+      outcome: `${provider} is still in provider_health`,
+      passed: false,
+    })
+    console.log(`  FAIL teardown — ${provider} is still in provider_health`)
+  } else {
+    console.log(`Removed the probe provider ${provider}.`)
+  }
 } catch (error) {
   console.log(`Cleanup did not complete: ${(error as Error).message.slice(0, 160)}`)
 }

@@ -128,14 +128,38 @@ async function tearDown(): Promise<void> {
     update public.jobs set state = 'cancelled', project_id = null
      where job_id = ${lit(jobId)}::uuid
   `)
+  /*
+    DELETED IF IT CAN BE, ARCHIVED IF IT CANNOT — and the difference is the
+    product working.
+
+    Answering a blocker records a DECISION (#129), `decisions.project_id` is
+    ON DELETE SET NULL, and `public.decisions` is append-only by section 6. So
+    the moment this suite answers the blocker it is testing, its own subject
+    has permanent history against it and can never be deleted — the same
+    position as a project holding a job, which ADR-0022 settles by archiving.
+
+    Before 0509 that arrived as a raw `42501` four frames inside
+    `app.project_delete`; it is a sentence now, and this reads the sentence
+    rather than assuming a delete. Asserted on the END STATE either way — the
+    subject is out of Grant's project list — because that is the property the
+    teardown is for, and `left === 0` was asserting the mechanism.
+  */
   const said = (await one(`select public.project_delete(${lit(slug)}) as r`)).r as {
     ok?: boolean
     error?: string
   }
-  const left = Number(
-    (await one(`select count(*)::int as n from public.projects where slug = ${lit(slug)}`)).n,
+  if (said.ok !== true) {
+    await db.execute(`update public.projects set status = 'archived' where slug = ${lit(slug)}`)
+  }
+  const end = await one(`
+    select count(*)::int as n,
+           coalesce(max(status), 'gone') as status
+      from public.projects where slug = ${lit(slug)}`)
+  check(
+    'teardown — the subject is out of the project list',
+    Number(end.n) === 0 ? 'deleted' : `archived — ${String(said.error ?? '').slice(0, 90)}`,
+    Number(end.n) === 0 || String(end.status) === 'archived',
   )
-  check('teardown', said.ok === true ? 'the subject is gone' : String(said.error), left === 0)
 }
 
 console.log(`\nverify:waiting — ${slug}\n`)
