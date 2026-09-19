@@ -6909,7 +6909,21 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
   /* Details drops to its own line rather than squeezing the title; the tick
      and the body stay side by side because the body can now shrink. */
   .ptask { flex-wrap: wrap; }
-  .mydetail { margin-inline-start: 44px; flex-basis: 100%; margin-inline-end: auto; }
+  /*
+    `flex-basis: 100%` PLUS a 44px margin is 100% plus 44px.
+
+    The basis is resolved against the flex container's content box, so the
+    indent is added to a box that already fills the line and the control sat
+    24px past the right edge of every row that had one — on a phone, which is
+    the device it was written for. Found by measuring each row against itself
+    rather than by looking at a capture: the row clips rather than scrolls the
+    page, so `npm run wide` reports nothing and the document is exactly 390px.
+
+    `margin-inline-end: auto` went with it. It only does something when there
+    is free space on the line, and with the basis filling the line there never
+    was any.
+  */
+  .mydetail { margin-inline-start: 44px; flex-basis: calc(100% - 44px); }
 
   /* The find bar is ONE row on a phone, not two.
 

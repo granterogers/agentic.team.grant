@@ -113,6 +113,85 @@ const act = async (action: string, args: Record<string, unknown>): Promise<unkno
 }
 
 const TITLE = `UI probe ${run}`
+
+/*
+  THE STATES THE BRIEF NAMES, on the screen at the same time.
+
+  One short, dated, unlabelled task is the easy case, and until this pass it
+  was the only one this file had ever rendered. The acceptance brief asks for
+  long titles, overdue tasks, labels, missing dates, mixed priorities, subtasks
+  and completed rows — and the interesting failures are not in any one of them
+  but in a list holding all of them at once, which is what a real list is.
+
+  Display only: every write assertion below is scoped to `TITLE`, so these
+  cannot move what the editor test is about. They are never sent to the office
+  — they live in the page's store for the length of one render.
+*/
+const LONG =
+  'Get the October cohort ready to open, confirm the venue, and chase the two ' +
+  'outstanding deposits before the early-bird window closes on the last Friday'
+const COMPANIONS = [
+  {
+    id: 'ui-companion-overdue',
+    title: 'Ring the venue about the September cohort',
+    detail: '',
+    state: 'todo',
+    priority: 10,
+    due_on: new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10),
+    starts_on: null,
+    remind_at: null,
+    labels: ['errand', 'waiting on somebody'],
+    repeats: null,
+    project: { name: 'Legacy Coaching Course — September intake and onboarding' },
+    for_job: null,
+    parent: null,
+    children: 0,
+    subtasks: [],
+    overdue: true,
+    done_at: null,
+  },
+  {
+    id: 'ui-companion-long',
+    title: LONG,
+    detail: '',
+    state: 'todo',
+    priority: 20,
+    due_on: null,
+    starts_on: null,
+    remind_at: null,
+    labels: [],
+    repeats: '7 days',
+    project: null,
+    for_job: null,
+    parent: null,
+    children: 2,
+    subtasks: [
+      { id: 'ui-sub-1', title: 'Confirm the room', done: true },
+      { id: 'ui-sub-2', title: 'Write the welcome email', done: false },
+    ],
+    overdue: false,
+    done_at: null,
+  },
+  {
+    id: 'ui-companion-done',
+    title: 'Send the September invoice',
+    detail: '',
+    state: 'done',
+    priority: 100,
+    due_on: null,
+    starts_on: null,
+    remind_at: null,
+    labels: [],
+    repeats: null,
+    project: { name: 'Legacy Coaching Course' },
+    for_job: null,
+    parent: null,
+    children: 0,
+    subtasks: [],
+    overdue: false,
+    done_at: new Date().toISOString(),
+  },
+]
 const REMIND = new Date(Date.now() + 26 * 3600_000)
 const made = (await act('my_task_add', {
   p_title: TITLE,
@@ -222,6 +301,31 @@ try {
     })()`)
     const page = await ctx.newPage()
     page.on('pageerror', (e) => errors.push(`${label}: ${e.message.slice(0, 140)}`))
+    /*
+      A DROPPED POST IS NOT A REFUSED SAVE, and only counting them can tell.
+
+      Outbound HTTPS here goes through an agent proxy that answers some of the
+      page's requests and drops others with ERR_TOO_MANY_RETRIES — the comment
+      above records it for the section GETs, and the save is subject to exactly
+      the same thing. On one run in three the POST never left the sandbox, the
+      canonical title was unchanged, and this file reported "the save never
+      landed" about a product that had not been asked to do anything.
+
+      So the writes are counted. A save attempt that never reached the office
+      does not spend an attempt, and if the budget goes entirely on dropped
+      requests the outcome says the sandbox ate them rather than delivering a
+      verdict nothing established. CLAUDE.md's rule about a throttle, applied
+      to a proxy: never let an infrastructure failure enter a measurement as
+      data.
+    */
+    let postsDropped = 0
+    let postsAnswered = 0
+    page.on('requestfailed', (r) => {
+      if (r.method() === 'POST' && r.url().includes('hq-api')) postsDropped += 1
+    })
+    page.on('response', (r) => {
+      if (r.request().method() === 'POST' && r.url().includes('hq-api')) postsAnswered += 1
+    })
     if (process.env.DIAG === '1') {
       page.on('requestfailed', (r) =>
         console.log(`    FAILED ${r.url().slice(0, 70)} — ${r.failure()?.errorText ?? ''}`),
@@ -285,7 +389,7 @@ try {
         subtasks: [],
         overdue: false,
         done_at: null,
-      }]
+      }, ...${JSON.stringify(COMPANIONS)}]
       /*
         No render call here — the page renders itself.
 
@@ -325,6 +429,139 @@ try {
       'and the row says a reminder is set, rather than only storing one',
       (await row.innerText()).includes('reminder') ? 'the card says so' : 'NOTHING ON THE CARD',
       (await row.innerText()).includes('reminder'),
+    )
+
+    /*
+      THE LIST, WITH EVERYTHING IN IT, MEASURED RATHER THAN LOOKED AT.
+
+      A capture says a row looks wrong; it cannot say which box is the wrong
+      size, and CLAUDE.md records three confident findings off a PNG of which
+      two would have been "fixed" into a regression. So this compares each row
+      against ITSELF: nothing may be wider than the list that holds it, and a
+      long title must WRAP rather than be cut — which is the difference between
+      a title you can read and one that stops mid-word.
+    */
+    const shape = (await page.evaluate(`(() => {
+      const list = document.querySelector('main > .ptasks')
+      const rows = Array.from(document.querySelectorAll('main > .ptasks .ptask'))
+      /*
+        Name the CHILD that is too wide, not just the row.
+
+        A bare "24px over" sends somebody reading the row's own CSS, and the
+        row is almost never the thing at fault — CLAUDE.md records the cost of
+        a failure line that points somewhere and somewhere is wrong.
+      */
+      const widest = (r) => {
+        let worst = ''
+        let by = 0
+        for (const el of r.querySelectorAll('*')) {
+          const over = Math.round(el.getBoundingClientRect().right - r.getBoundingClientRect().right)
+          if (over > by) {
+            by = over
+            worst = el.className === '' ? el.tagName.toLowerCase() : String(el.className)
+          }
+        }
+        return by === 0 ? '' : worst + ' by ' + String(by) + 'px'
+      }
+      const wide = rows
+        .map((r) => ({
+          t: (r.querySelector('.ptbody b')?.textContent ?? '').slice(0, 22),
+          over: Math.round(r.scrollWidth - r.clientWidth),
+          who: widest(r),
+        }))
+        .filter((x) => x.over > 1)
+      const clipped = Array.from(document.querySelectorAll('main > .ptasks .ptask .ptbody b, main > .ptasks .ptask .ptbody .t-meta, main > .ptasks .psub'))
+        .map((e) => ({
+          t: (e.textContent ?? '').slice(0, 30),
+          over: Math.round(e.scrollWidth - e.clientWidth),
+        }))
+        .filter((x) => x.over > 1)
+      const long = rows.find((r) => (r.querySelector('.ptbody b')?.textContent ?? '').startsWith('Get the October'))
+      const b = long === undefined ? null : long.querySelector('.ptbody b')
+      const line = b === null ? 0 : parseFloat(getComputedStyle(b).lineHeight) || 0
+      const ticks = Array.from(document.querySelectorAll('main > .ptasks > li.ptask > .ptick'))
+        .map((t) => {
+          const r = t.getBoundingClientRect()
+          return Math.round(Math.min(r.width, r.height))
+        })
+      return {
+        rows: rows.length,
+        wide,
+        clipped,
+        longLines: b === null || line === 0 ? 0 : Math.round(b.getBoundingClientRect().height / line),
+        smallestTick: ticks.length === 0 ? 0 : Math.min(...ticks),
+        listWidth: list === null ? 0 : Math.round(list.getBoundingClientRect().width),
+      }
+    })()`)) as {
+      rows: number
+      wide: { t: string; over: number; who: string }[]
+      clipped: { t: string; over: number }[]
+      longLines: number
+      smallestTick: number
+      listWidth: number
+    }
+    if (process.env.DIAG2 === '1') {
+      console.log(
+        '    ' +
+          String(
+            await page.evaluate(`(() => {
+        const out = []
+        for (const r of document.querySelectorAll('main > .ptasks .ptask')) {
+          for (const e of r.querySelectorAll('*')) {
+            if (e.scrollWidth - e.clientWidth > 1 || e.getBoundingClientRect().right > r.getBoundingClientRect().right + 1) {
+              out.push((e.className || e.tagName) + ' sw=' + String(e.scrollWidth) + ' cw=' + String(e.clientWidth) + ' disp=' + getComputedStyle(e).display + ' over=' + String(Math.round(e.getBoundingClientRect().right - r.getBoundingClientRect().right)))
+            }
+          }
+        }
+        return out.slice(0, 6).join(' || ') || 'nothing over'
+      })()`),
+          ),
+      )
+    }
+    check(
+      'the list holds every state the brief names at once',
+      `${String(shape.rows)} row(s) across ${String(shape.listWidth)}px`,
+      shape.rows >= 4,
+    )
+    check(
+      'no row is wider than the list holding it',
+      shape.wide.length === 0
+        ? 'none'
+        : shape.wide.map((x) => `${x.t}: ${String(x.over)}px over — ${x.who}`).join(' | '),
+      shape.wide.length === 0,
+    )
+    /*
+      Proved by sabotage, and the sabotage took three goes to land.
+
+      `white-space: nowrap; overflow: hidden` on the meta line changed nothing
+      twice — first because the span is an inline box until `.ptbody` blockifies
+      it as a grid item, and then because the companion row's `project` was a
+      STRING where the renderer reads `t.project.name`, so the long name this
+      check depends on was rendering as nothing at all. Both times "the check
+      did not fire" was the SABOTAGE failing, which is the reading CLAUDE.md
+      warns costs a detector its credibility.
+
+      With the row shaped as the payload really is, the phone leg goes red at
+      `t-meta sw=491 cw=262`. The desktop leg stays green under the same
+      sabotage — 880px is wide enough for that line — so this control proves
+      the phone leg only, and says so rather than implying more.
+    */
+    check(
+      'and no title or meta line is cut off inside its own box',
+      shape.clipped.length === 0
+        ? 'none'
+        : shape.clipped.map((x) => `${x.t} by ${String(x.over)}px`).join(', '),
+      shape.clipped.length === 0,
+    )
+    check(
+      'a long title WRAPS rather than stopping mid-sentence',
+      `${String(shape.longLines)} line(s)`,
+      shape.longLines >= (label === 'phone' ? 3 : 1),
+    )
+    check(
+      'every row can be ticked with a thumb',
+      `smallest ${String(shape.smallestTick)}px`,
+      shape.smallestTick >= 44,
     )
 
     const opener = row.locator('[data-my-open]')
@@ -450,7 +687,19 @@ try {
       when the thing under test did not happen is worse than no check, which is
       this repository's most expensive recorded lesson.
     */
-    for (let i = 0; i < 4; i += 1) {
+    if (process.env.DIAG === '1') {
+      const btn = page.locator('.myedit button[type="submit"]').first()
+      console.log(
+        `    submit: ${String(await page.locator('.myedit button[type="submit"]').count())} found, ` +
+          `box=${JSON.stringify(await btn.boundingBox())}, ` +
+          `text=${JSON.stringify((await btn.innerText().catch(() => '')).slice(0, 20))}`,
+      )
+    }
+    let spent = 0
+    const droppedBefore = postsDropped
+    for (let i = 0; i < 10 && spent < 4; i += 1) {
+      const answeredBefore = postsAnswered
+      const lostBefore = postsDropped
       await page.locator('.myedit [data-my-title-edit]').first().fill(renamed)
       await page.locator('.myedit button[type="submit"]').first().click({ force: true })
       await page.waitForTimeout(3_500)
@@ -458,6 +707,17 @@ try {
         select title, remind_at, due_on::text as due
           from public.tasks where task_id = ${lit(id)}::uuid`)
       if (String(after.title ?? '') === renamed) break
+      /*
+        An attempt the office never SAW teaches nothing, so it is not one.
+
+        Answered is the only positive evidence that the save was tried: a
+        dropped POST is the proxy, and a POST still in flight when the wait
+        expires is not a refusal either. Counting either of those as an attempt
+        is what exhausted the budget on a run where nothing had been asked —
+        the first version did exactly that and reported the product at fault.
+      */
+      void lostBefore
+      if (postsAnswered > answeredBefore) spent += 1
       said = String(
         await page
           .locator('[data-said]')
@@ -470,11 +730,14 @@ try {
         await page.waitForTimeout(1_000)
       }
     }
+    const lost = postsDropped - droppedBefore
     check(
       'the rename reached the office',
       String(after.title ?? '') === renamed
-        ? 'saved'
-        : `STILL "${String(after.title ?? '')}"${said === '' ? '' : ` — the page said: ${said}`}`,
+        ? `saved${lost === 0 ? '' : ` (after ${String(lost)} request(s) the sandbox proxy dropped)`}`
+        : `STILL "${String(after.title ?? '')}"` +
+            `${lost === 0 ? '' : ` — ${String(lost)} POST(s) never left the sandbox`}` +
+            `${said === '' ? '' : ` — the page said: ${said}`}`,
       String(after.title ?? '') === renamed,
     )
     check(

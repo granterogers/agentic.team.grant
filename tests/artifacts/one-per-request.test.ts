@@ -22,23 +22,67 @@ import { describe, expect, it } from 'vitest'
 
 const source = readFileSync('src/handlers/instruction.ts', 'utf8')
 
-describe('an artifact is started once per request', () => {
-  it('a branch child does not start its own report', () => {
-    // The guard, as a property: whatever it is spelt, the artifact request is
-    // not consulted when the turn is a hand-off.
-    expect(source).toMatch(/isBranch\s*=\s*String\(payload\.handed_off_by \?\? ''\) !== ''/)
-    expect(source).toMatch(/job\.projectId === null \|\| isBranch \? null : artifactRequest/)
-  })
+/**
+ * Where each action is decided, and what its decision may read.
+ *
+ * The first version of this file asserted the guard's exact SPELLING —
+ * `wantsFile !== null ? null : extractionRequest` — and went red the day the
+ * guard got stronger and wrapped onto three lines. CLAUDE.md records that
+ * correction more often than any other: assert the property, never the
+ * artefact that currently implements it.
+ *
+ * The property is that the expression deciding each action mentions
+ * `isBranch`. Read off the assignment itself, so reformatting is invisible and
+ * deleting the guard is not.
+ */
+const decides = (name: string): string => {
+  const at = source.indexOf(`const ${name} =`)
+  if (at < 0) throw new Error(`no assignment to ${name} in instruction.ts`)
+  // Up to the end of that statement: the next `const ` at the same depth is
+  // close enough, and every one of these is followed by one.
+  const next = source.indexOf('\n      const ', at + 1)
+  return source.slice(at, next < 0 ? at + 600 : next)
+}
 
-  it('and the hand-off is what sets the flag the guard reads', () => {
+describe('an action is performed once per request', () => {
+  it('the flag exists and the hand-off is what sets it', () => {
     // Both halves, because either alone is the defect: a guard reading a field
     // nothing writes is inert, and a field nothing reads is dead weight.
+    expect(source).toMatch(/isBranch\s*=\s*String\(payload\.handed_off_by \?\? ''\) !== ''/)
     expect(source).toMatch(/'handed_off_by', \$\{lit\(who\.slug\)\}/)
   })
 
-  it('the extraction path is guarded the same way, which is the precedent', () => {
-    // Named so that removing one and leaving the other is visible: these two
-    // are the same rule about the same sentence.
-    expect(source).toMatch(/wantsFile !== null \? null : extractionRequest/)
+  /*
+    EVERY action path, not the two that had already been paid for.
+
+    #258 guarded the artifact and #135 inherited it for the page fetch. The
+    independent acceptance pass found the next instance — "Call it X" convened
+    three specialists and put three tasks on Grant's list — and the lesson of
+    CLAUDE.md's #249/#254 pair is that a third copy of the same two lines is
+    the mistake, not the fix. So the rule is stated once, over the whole list,
+    and a new action path added without the guard fails here rather than in
+    front of Grant.
+  */
+  for (const [name, why] of [
+    ['wantsFile', 'a second PDF from one sentence (#258)'],
+    ['askedForPage', 'a second fetch of the same page (#135)'],
+    ['sent', 'a connector wired twice'],
+    ['wanted', 'a notebook artifact made twice'],
+    ['listing', 'the same listing enqueued twice'],
+    ['pullOut', 'one document extracted into two sets of tasks'],
+    ['forGrant', 'one personal task per specialist convened'],
+    ['asked', 'one agent task per specialist convened'],
+    ['namedLater', 'the answer to a title question, acted on twice'],
+    ['change', 'one follow-up applied once per specialist'],
+  ] as [string, string][]) {
+    it(`${name} is not decided on a branch — ${why}`, () => {
+      expect(decides(name)).toContain('isBranch')
+    })
+  }
+
+  it('CONTROL: the helper reads the real assignment, so a typo cannot pass', () => {
+    // A found-nothing check needs something that must come back positive.
+    expect(() => decides('nothingIsCalledThis')).toThrow()
+    expect(decides('wantsFile')).toContain('artifactRequest')
   })
 })
