@@ -219,6 +219,42 @@ export interface MetadataProblem {
  * impossible, which is how a confident-sounding guess gets published.
  */
 /**
+ * Straighten the typography before matching anything against it (#237).
+ *
+ * **Every claim detector in this file was defeated by a smart quote.**
+ *
+ *     I've added an all-day event to your calendar.   -> caught
+ *     I’ve added an all-day event to your calendar.   -> NOTHING
+ *
+ * The office cannot write to a calendar from this path. It said the second of
+ * those, the job COMPLETED, and Grant was told an event existed. The pattern
+ * `I(?:'ve|\s+have)?` wants a straight apostrophe, and a model emits U+2019 —
+ * so the first-person half of `claimsToHaveMade`, the most important shape it
+ * has, has been silently inert on the office's real output. What was ever
+ * caught was caught by the noun-first pattern, which happens to need no
+ * apostrophe.
+ *
+ * It is not one function: `claimsGrantSaid` has `that's`, `claimsToHaveSent`
+ * and `claimsToHaveRead` have `I've`, `promisesToReachOut` has `I'll`, the
+ * honest-absence reader has `can't` and `haven't`, and the deliberation
+ * detector has `we'll` and `let's`. All of them, all along.
+ *
+ * CLAUDE.md records this as the ninth instance of the same trap — the session
+ * harness's `plain()` exists for exactly it, and the fix there was normalising
+ * before matching. This is that fix, in the file where it is a SAFETY gate
+ * rather than a score.
+ *
+ * Normalised, never lower-cased: every pattern here is already
+ * case-insensitive, and the matched phrase is returned to a person.
+ */
+export const straighten = (text: string): string =>
+  text
+    .replace(/[\u2018\u2019\u201b]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[\u00a0\u2007\u202f]/g, ' ')
+
+/**
  * Does this text tell the reader what THEY said?
  *
  * #231, Campaign Three. Asked *"What price did I tell you the middle tier
@@ -246,7 +282,7 @@ export interface MetadataProblem {
  * tier?"), because asking is the honest behaviour this is trying to produce.
  */
 export const claimsGrantSaid = (body: string): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const claims: RegExp[] = [
     /\byou\s+(?:told|said\s+to)\s+me\b[^.!?]{0,60}/i,
@@ -329,7 +365,7 @@ export const claimsGrantSaid = (body: string): string | null => {
  * past that nothing performed.
  */
 export const claimsToHaveSent = (body: string): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const claims: RegExp[] = [
     /\bI(?:'ve|\s+have)?\s+(?:just\s+)?(?:posted|sent|messaged|emailed|e-mailed|pinged|notified|forwarded)\b[^.!?]{0,60}/i,
@@ -423,7 +459,7 @@ export const claimsToHaveSent = (body: string): string | null => {
  * saying. Only the past tense is false by construction when nothing happened.
  */
 export const claimsToHaveMade = (body: string): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const MADE = '(?:created|added|filed|logged|set up|made|drafted|scheduled|booked|saved)'
   const THING = '(?:task|note|document|doc|draft|page|reminder|event|entry|record|item)'
@@ -570,7 +606,7 @@ export const claimsToHaveMade = (body: string): string | null => {
  * keep.
  */
 export const promisesToReachOut = (body: string): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   /*
     Raw although it currently needs nothing escaping, because it is a REGEX
@@ -666,7 +702,7 @@ export const promisesToReachOut = (body: string): string | null => {
  * something Grant said, because all three are in the grounding.
  */
 export const fabricatedWhen = (body: string, grounding: string): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const flat = (v: string): string => v.toLowerCase().replace(/[^a-z0-9]/g, '')
   const known = flat(grounding)
@@ -979,7 +1015,7 @@ export const assertsRecordsUnseen = (
    */
   may: { readonly consulted: readonly Domain[]; readonly complete: readonly Domain[] },
 ): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const flat = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ')
   const known = flat(grounding)
@@ -1328,7 +1364,7 @@ export const deliberationLeak = (
 }
 
 export const claimsToHaveRead = (body: string): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   const claims: RegExp[] = [
     // First person, past tense, retrieval verb.
@@ -1921,7 +1957,7 @@ export const formRules = (rules: readonly string[]): readonly FormRule[] => {
  * defective on a change to either.
  */
 export const brokeAForm = (body: string, rules: readonly string[]): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   for (const rule of formRules(rules)) {
     const broke =
@@ -2016,7 +2052,7 @@ const INABILITY =
   /\b(?:cannot|can(?:no|')?t|can\u2019t|unable\s+to|not\s+able\s+to|won't|will\s+not)\b/i
 
 export const narratesSetAside = (body: string): boolean => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return false
   /*
     Sentence by sentence, so a set-aside verb in one place and a form noun a
@@ -2041,7 +2077,7 @@ export const narratesSetAside = (body: string): boolean => {
  * rather than paraphrasing a preference back at him.
  */
 export const setAsideUnsaid = (body: string, rules: readonly string[]): string | null => {
-  const text = String(body ?? '')
+  const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
 
   for (const rule of formRules(rules)) {
