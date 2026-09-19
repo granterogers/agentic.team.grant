@@ -2887,6 +2887,34 @@ Each of these cost real time. They are here so they cost it once.
   which is the only reason it was caught. **Print something from the sabotage
   that proves it landed, and read that line before reading the check's.**
 
+- **An object literal evaluates in SOURCE ORDER, so provenance asked above the
+  body is asked before the body spends the model.** Two handlers wrote
+
+      return {
+        path: await howComposed(db, job.jobId),      // counts zero
+        body: announce ? await sayAs(...) : plain,   // spends one
+      }
+
+  `howComposed` asks exactly the right question — how many inferences are
+  recorded against this job's correlation — one step too early. It answered
+  `deterministic_retrieval`, `sayAs` then recorded an inference, and
+  `enforce_deterministic_claim` refused the insert, so the JOB FAILED.
+  `office.notion_sync` failed every two hours from at least 17:54 to 23:55 on
+  18 September — **twelve of the office's sixteen failures in a day** — and
+  Notion mirroring was silently not running. `office.sync` had the identical
+  shape, and 0489's own comment in `notion-sync.ts` cites `office.sync` as the
+  case it was written for: **0489 fixed the question and left the order**,
+  which is why the failures continued after it shipped and after the worker
+  was deployed. Hoist the body out of the literal: spend, then ask.
+  `tests/agents/provenance-order.test.ts` scans every handler for the shape
+  and was proved against the real file by putting the defect back.
+- **Read the QUEUE before believing a green gate.** 36 of 37 suites passed
+  while a real duty had been failing every two hours for at least six hours.
+  No suite drives that handler's model-spending path, so nothing was pointed
+  at it — `app.office_health()` said `failing_kinds: [{n: 12, kind:
+  office.notion_sync}]` and one query found it. A release gate that only asks
+  the suites is asking what somebody thought to write down.
+
 ---
 
 ## Visual standard

@@ -177,42 +177,54 @@ export function notionSyncHandler(db: SqlExecutor, router: ProviderRouter | null
             `${result.skipped.slice(0, 4).join('; ')}.`)
 
       const announce = parts.length > 0 || result.skipped.length > 0
+      /*
+        THE BODY FIRST, AND THAT ORDER IS THE WHOLE FIX.
+
+        0489 moved this return off `base`'s hardcoded
+        `deterministic_retrieval` and onto `howComposed`, which counts the
+        inferences recorded against the job's correlation. Correct question,
+        asked one step too early: `path` and `body` were both properties of
+        one object literal, and an object literal evaluates in SOURCE ORDER —
+        so `howComposed` counted zero, answered `deterministic_retrieval`, and
+        then `sayAs` on the next line spent a model and recorded one.
+
+        By the time the output was inserted the correlation had an inference
+        and `enforce_deterministic_claim` refused it, so the job FAILED. It
+        failed every two hours from at least 17:54 to 23:55 on 18 September —
+        twelve of the office's sixteen failures in a day — and Notion mirroring
+        was silently not running. Nothing caught it: the fix was in the
+        repository, the worker was deployed, and the defect was in the
+        evaluation order of two lines that read correctly one after the other.
+
+        Hoisting the body out of the literal makes the sequence what it always
+        had to be: spend the model, THEN ask the record what was spent.
+      */
+      const body = announce
+        ? await sayAs(db, router, 'operations-director', {
+            purpose:
+              'Tell Grant what came in from his Notion pages. He writes notes ' +
+              'there; this is you noticing them, not announcing a milestone.',
+            facts: [
+              `${String(result.shared)} page(s) are shared with the integration`,
+              `${String(result.added)} were new`,
+              `${String(result.changed)} had changed since last time`,
+              `they are filed under the project "${String(project.name)}"`,
+              ...(result.skipped.length === 0
+                ? []
+                : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
+            ],
+            fallback: plain,
+            // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
+            job: { jobId: job.jobId, correlationId: job.correlationId },
+            words: 50,
+          })
+        : plain
+
       return {
         ...base,
-        /*
-          Read from the record (0489). This return spends a model whenever
-          `announce` is true, and `base` claims `deterministic_retrieval` —
-          which `enforce_deterministic_claim` refuses on any correlation that
-          recorded an inference, so the output was discarded and the job
-          FAILED. `office.sync` did exactly that twice, most recently 08:02 on
-          18 September.
-
-          Overridden here rather than in `base`: the OTHER returns in this
-          handler are templated and the exemption is true for them, and losing
-          it everywhere would send routine hourly output through quality
-          review for nothing.
-        */
+        // Asked AFTER the body, for the reason above.
         path: await howComposed(db, job.jobId),
-        body: announce
-          ? await sayAs(db, router, 'operations-director', {
-              purpose:
-                'Tell Grant what came in from his Notion pages. He writes notes ' +
-                'there; this is you noticing them, not announcing a milestone.',
-              facts: [
-                `${String(result.shared)} page(s) are shared with the integration`,
-                `${String(result.added)} were new`,
-                `${String(result.changed)} had changed since last time`,
-                `they are filed under the project "${String(project.name)}"`,
-                ...(result.skipped.length === 0
-                  ? []
-                  : [`these were left out: ${result.skipped.slice(0, 4).join('; ')}`]),
-              ],
-              fallback: plain,
-              // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
-              job: { jobId: job.jobId, correlationId: job.correlationId },
-              words: 50,
-            })
-          : plain,
+        body,
         announce,
       } satisfies HandlerOutput
     },

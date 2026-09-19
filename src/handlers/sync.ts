@@ -228,6 +228,48 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
         outcome.sourcesArchived > 0 ||
         outcome.sourcesRestored > 0 ||
         outcome.reconcileRefusals.length > 0
+      /*
+        THE BODY FIRST. Same defect as `notion-sync`, same handler family, and
+        the comment below names this very job kind as the case 0489 was
+        written for.
+
+        `path` and `body` were both properties of one object literal, and an
+        object literal evaluates in SOURCE ORDER — so `howComposed` counted the
+        correlation's inferences BEFORE `sayAs` on the next line spent one,
+        answered `deterministic_retrieval`, and the insert was then refused by
+        `enforce_deterministic_claim`. 0489 fixed the question and left the
+        order, which is why the failures continued after it shipped.
+
+        Written by Marcus when it is going to reach anybody, and left as the
+        template when it is not — there is no point spending a model call on a
+        sentence nobody will read.
+      */
+      const said = announce
+        ? await sayAs(db, router, 'operations-director', {
+            purpose:
+              'Tell Grant what turned up in his notebooks. This is a routine ' +
+              'hourly check and most of them find nothing, so keep it brief ' +
+              'and do not make it sound like an event.',
+            facts: [
+              `${String(outcome.notebooksSeen)} notebook(s) were read`,
+              `${String(outcome.projectsCreated)} new project(s)`,
+              `${String(outcome.sourcesAdded)} new source(s)`,
+              `${String(outcome.sourcesChanged)} source(s) changed`,
+              `${String(outcome.sourcesRemoved)} source(s) we held are no longer listed`,
+              `${String(outcome.sourcesArchived)} archived after a second absence (still on record)`,
+              `${String(outcome.sourcesRestored)} came back out of the archive`,
+              `${String(outcome.reconcileRefusals.length)} notebook(s) refused reconciliation as too big a change`,
+            ],
+            fallback: body,
+            // #268: attributed, so the call lands under this job KIND rather
+            // than under (unattributed).
+            job: { jobId: job.jobId, correlationId: job.correlationId },
+            words: 45,
+          })
+        : body
+      // Asked AFTER the model has or has not been spent.
+      const composed = await howComposed(db, job.jobId)
+
       return {
         ...base,
         /*
@@ -243,32 +285,8 @@ export function syncHandler(deps: SyncHandlerDeps): Handler {
           it everywhere would send routine hourly output through quality
           review for nothing.
         */
-        path: await howComposed(db, job.jobId),
-        // Written by Marcus when it is going to reach anybody, and left as the
-        // template when it is not — there is no point spending a model call on
-        // a sentence nobody will read.
-        body: announce
-          ? await sayAs(db, router, 'operations-director', {
-              purpose:
-                'Tell Grant what turned up in his notebooks. This is a routine ' +
-                'hourly check and most of them find nothing, so keep it brief ' +
-                'and do not make it sound like an event.',
-              facts: [
-                `${String(outcome.notebooksSeen)} notebook(s) were read`,
-                `${String(outcome.projectsCreated)} new project(s)`,
-                `${String(outcome.sourcesAdded)} new source(s)`,
-                `${String(outcome.sourcesChanged)} source(s) changed`,
-                `${String(outcome.sourcesRemoved)} source(s) we held are no longer listed`,
-                `${String(outcome.sourcesArchived)} archived after a second absence (still on record)`,
-                `${String(outcome.sourcesRestored)} came back out of the archive`,
-                `${String(outcome.reconcileRefusals.length)} notebook(s) refused reconciliation as too big a change`,
-              ],
-              fallback: body,
-              // #268: attributed, so the call lands under this job KIND rather than under (unattributed).
-              job: { jobId: job.jobId, correlationId: job.correlationId },
-              words: 45,
-            })
-          : body,
+        path: composed,
+        body: said,
         evidence: 'verified',
         announce,
       } satisfies HandlerOutput
