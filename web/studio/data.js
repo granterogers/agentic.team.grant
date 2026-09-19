@@ -190,11 +190,24 @@ const FALLBACK_PROJECTS = [
         awake.
       */
       { kind: 'connector', name: 'Google Drive', what: 'Course material — watched for new files',
-        health: 'ok', last: '6 minutes ago', gave: 3 },
+        /*
+          The SHAPE `app.studio_sources` returns, which is `FMDD Mon` — "6 Sep",
+          never "6 minutes ago" (#77).
+
+          The prototype had a relative phrase and the live payload has a date,
+          and only the prototype is what a capture sees. The project map's state
+          line is 150px of a 208px card, so the invented phrasing cut three
+          source cards short — 34px, 20px and 13px of text lost — and every one
+          of those findings was about data Grant never receives. CLAUDE.md
+          records both halves of that: *"a measurement of the harness is not a
+          measurement of the product"*, and the prototype holding a second
+          vocabulary in the one place no suite is pointed at.
+        */
+        health: 'ok', last: '6 Sep', gave: 3 },
       { kind: 'connector', name: 'Notion', what: 'Six module pages, written by the office',
-        health: 'ok', last: '2 days ago', gave: 6 },
+        health: 'ok', last: '11 Sep', gave: 6 },
       { kind: 'connector', name: 'NotebookLM', what: 'The interview corpus',
-        health: 'ok', last: '4 hours ago', gave: 12 },
+        health: 'ok', last: '13 Sep', gave: 12 },
       /*
         References, in the shape `app.studio_sources` returns since #35
         (migration 0306): a `via` naming what kind of thing it is, a real URL,
@@ -294,9 +307,9 @@ const FALLBACK_PROJECTS = [
     tasks: [{ title: 'Read the agent-orchestration papers', who: 'tom' }],
     sources: [
       { kind: 'connector', name: 'NotebookLM', what: 'Reading list and notes',
-        health: 'ok', last: '1 day ago', gave: 1 },
+        health: 'ok', last: '12 Sep', gave: 1 },
       { kind: 'reference', name: 'arXiv — agent orchestration', what: 'Search this weekly',
-        last: 'Added 2 days ago', gave: 0 },
+        last: null, gave: 0 },
     ],
     requests: [
       { id: 'r1', ask: 'Compare Monday.com agents against building our own',

@@ -6356,7 +6356,20 @@ body.docked .undobar { left: calc(50% - min(190px, 50vw)); }
     number honest.
   */
   .planeport { block-size: min(55dvh, 468px); }
-  .mapcard { inline-size: 190px; }
+  /*
+    208px on a phone too, not 190 (#77).
+
+    The narrower card was buying a little more of the field per screen and
+    paying for it in words: `npm run mapview` on a real 390px touch phone
+    reported three of twenty-four NAMES clipped and five state lines cut short
+    — "read 6 S…" for "read 6 Sep" — because 190px leaves 132px of content
+    beside a 22px glyph, and "connected  read 6 Sep" needs about 139. The
+    desktop's 208px leaves 150 and loses nothing.
+
+    It costs nothing that matters. The phone shows four of twenty-four cards at
+    either width, which is why #278 made the panels what a phone opens on; this
+    is about what the cards SAY when somebody asks for the map anyway.
+  */
   /*
     One bar, not four squares dropped on a card (#278).
 

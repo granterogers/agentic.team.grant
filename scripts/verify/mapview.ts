@@ -243,6 +243,56 @@ if (r.cardsUnderControls !== 0) {
   console.log(`  the zoom controls sit on ${String(r.cardsUnderControls)} card(s)`)
 }
 
+/*
+  WHAT THE CARDS LOSE, and where the room they lose it beside is.
+
+  `.mapname` clamps at two lines and `.mapstate` is `white-space: nowrap` with
+  the tail ellipsised, so a card can print "read 6 min…" and leave the rest of
+  the sentence unreachable. A capture shows the ellipsis; it cannot say whether
+  three characters were lost or thirty, and it cannot say whether the card had
+  room underneath. Both are measured here, per card, because the answer decides
+  whether this is a wording problem, a width problem or nothing at all.
+*/
+const CARDS = `(() => {
+  const out = []
+  for (const c of document.querySelectorAll('.mapcard')) {
+    const name = c.querySelector('.mapname')
+    const says = c.querySelector('.mapsays')
+    const cr = c.getBoundingClientRect()
+    const used = [...c.children].reduce((n, el) => {
+      const r = el.getBoundingClientRect()
+      return Math.max(n, r.bottom - cr.top)
+    }, 0)
+    out.push({
+      name: name === null ? '' : name.textContent.trim().slice(0, 40),
+      nameLost: name === null ? 0 : Math.max(0, name.scrollHeight - name.clientHeight),
+      says: says === null ? '' : says.textContent.trim(),
+      saysLost: says === null ? 0 : Math.max(0, says.scrollWidth - says.clientWidth),
+      spare: Math.round(cr.height - used - 22),
+    })
+  }
+  return out
+})()`
+const cards = (await page.evaluate(CARDS)) as Array<{
+  name: string
+  nameLost: number
+  says: string
+  saysLost: number
+  spare: number
+}>
+const cutName = cards.filter((c) => c.nameLost > 0)
+const cutSays = cards.filter((c) => c.saysLost > 0)
+console.log(
+  `\n  ${String(cutName.length)} of ${String(cards.length)} card NAMES are clipped, ` +
+    `${String(cutSays.length)} state lines are cut short`,
+)
+for (const c of cutSays.slice(0, 6)) {
+  console.log(
+    `    "${c.name}" — loses ${String(c.saysLost)}px of "${c.says}", ` +
+      `${String(c.spare)}px spare below`,
+  )
+}
+
 console.log(
   `\n  after one drag from ${start === null ? 'nowhere free' : `${String(Math.round(start.x))},${String(Math.round(start.y))} (on ${start.on})`}` +
     ` — pan ${String(after.pan)}, ${String(after.visible)} of ${String(after.cards)} visible`,

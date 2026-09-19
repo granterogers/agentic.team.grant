@@ -332,7 +332,17 @@ export function mock(p, crew) {
       id, kind: reference ? 'reference' : 'service', ref: String(s.id ?? i),
       name: s.name, sub: s.what, url: s.url ?? null,
       state: reference ? 'a pointer' : s.health === 'ok' ? 'connected' : 'needs attention',
-      says: reference ? 'nothing reads this' : s.last ? `read ${s.last}` : 'never read',
+      /*
+        "not indexed", not "nothing reads this" (#77).
+
+        Eighteen characters do not fit the state line — 150px of a 208px card,
+        `nowrap`, ellipsised — so the sentence lost 19px and stopped mid-word,
+        which reads as a defect rather than as a summary. The shorter phrase is
+        the same fact in this product's own vocabulary: the office indexes what
+        it reads, `app.project_knowledge` already reports a connector with
+        nothing indexed, and the card's state beside it still says "a pointer".
+      */
+      says: reference ? 'not indexed' : s.last ? `read ${s.last}` : 'never read',
     })
   }
 
