@@ -224,12 +224,53 @@ semantic; zooming out breaks the 12px floor the Issue forbids touching. It is
 the design decision Grant framed, and his three candidates stand. Measurements
 posted to the Issue.
 
+## The conversational corpus, worked through: 714 -> 730 of 737
+
+Failing turns **23 -> 6**, and every one of the seventeen is accounted for:
+
+| n | what it actually was |
+|---|---|
+| 9 | a four-day-old OpenRouter outage scored as bad answers (`weather()`) |
+| 5 | **stale recordings of defects already fixed** — including two the absence detector's own comment quotes as the case it was written for |
+| 2 | the harness comparing a cumulative total where it meant a delta |
+| 1 | a real routing defect — a pleasantry convening the strategy director |
+| 1 | **a real gap in a safety gate** — see below |
+
+**None of the six that remain is a product defect anybody has reproduced.**
+They are two stale recordings, two stochastic answer shapes that pass on
+re-run, and two routing-breadth counts.
+
+## The gate that was blind to the fluent fabrication
+
+`claimsToHaveMade` exists to catch the office saying it created something when
+it did not. Its window was `{0,60}` characters between the noun and the claim,
+and the office wrote *"Task "Book interview room for second round" assigned to
+you, due on the 11th, has been added."* — seventy-three characters, nothing in
+`public.tasks`, gate silent. It caught the TERSE fabrications and was blind to
+the fluent ones, which are the ones a good model writes.
+
+Widening it surfaced a second defect five characters wide: *"No task has been
+created yet because I need a title first"* was being REFUSED — the office
+blocked for honestly saying nothing happened. Negation now matches the noun or
+the verb, never merely the sentence, so "No problem, I have added the note"
+stays a claim. Ten of sixteen new assertions are controls. **Deployed.**
+
+The first version of that fix put U+0008 where every `\b` belonged — the
+non-raw Python heredoc trap — and `npm run check:templates` named it exactly.
+
+## And the reason it took so many re-runs: recordings had no commit
+
+`--report` scores STORED recordings and nothing said how old one was, so a
+defect fixed weeks ago reads as live for ever. Each recording now carries its
+commit and the report names the failing sessions that have not been re-run on
+HEAD. #226's lesson one layer in.
+
 ## NEXT ACTION
 
-Work the 13 remaining session failures in that order, reading the office's
-actual answer before believing any expectation — then continue to the
-cross-channel, recovery and chaos interactions (#41 §8) that no suite
-exercises, and the remaining #172 / #259 scope.
+The remaining #172 and #259 scope, then #41 §8's chaos interactions (network
+interruption mid-job, a provider 429/500, two workers on one job, clock skew)
+which no suite exercises. Do NOT chase the six remaining session failures as
+product defects without reproducing them first.
 
 ---
 
