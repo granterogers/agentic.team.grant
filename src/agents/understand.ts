@@ -321,6 +321,22 @@ const SYSTEM = [
   '7. Read the mood from the MAIN CLAUSE. "Tell me", "let me know", "what",',
   '   "give me" in front of something about his list is still a task_query;',
   '   the polite wrapper does not change the subject.',
+  '8. A prohibition about THIS request is not a standing instruction. "Do not',
+  '   write it up as a summary, read the transcript and give me the decisions"',
+  '   is ONE request, and the first half says how to do it. Only a rule about',
+  '   how the office should behave in future is a preference — "from now on",',
+  '   "always", "never", "stop doing X".',
+  '9. A correction can replace PART of a request. "Ask Daniel about the',
+  '   pricing, no, sorry, Emma" still asks for the thing; only the name',
+  '   changed. Put the replaced words in abandoned and keep the request, with',
+  '   the correction applied. Only put nothing in surviving when he withdrew',
+  '   the request itself.',
+  '10. Something he has already done asks for nothing. "I already added it this',
+  '    morning, so do not add it again" is a report and a prohibition, not a',
+  '    request: surviving is empty.',
+  '11. A trailing afterthought is still its own request. "...and while you are',
+  '    at it tell me how many there are" is a second entry, not part of the',
+  '    first.',
 ].join('\n')
 
 interface Raw {
