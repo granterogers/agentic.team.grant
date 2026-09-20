@@ -279,6 +279,7 @@
     "verify:anchors": "tsx scripts/verify/anchors.ts",
     "verify:progress": "tsx scripts/verify/progress.ts",
     "verify:plans": "tsx scripts/verify/plans.ts",
+    "verify:pursues": "tsx scripts/verify/pursues.ts",
     "verify:understands": "tsx scripts/verify/understands.ts"
   },
   "devDependencies": {

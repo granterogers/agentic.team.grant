@@ -68,6 +68,7 @@ import { notionImportHandler } from '../handlers/notion-import.ts'
 import { notionSyncHandler } from '../handlers/notion-sync.ts'
 import { planHandler } from '../handlers/plan.ts'
 import { proposeHandler } from '../handlers/propose.ts'
+import { pursueHandler } from '../handlers/pursue.ts'
 import { remindersHandler } from '../handlers/reminders.ts'
 import { slackRotationHandler } from '../handlers/slack-rotation.ts'
 import { sourceHandler } from '../handlers/source.ts'
@@ -483,6 +484,13 @@ export const buildPass = async (
       family as a column nothing writes.
     */
     extractTasksHandler({ db, router: cannotThink ? null : new ProviderRouter(db, orKey) }),
+    /*
+      Carrying out a plan the office composed (#283).
+
+      No router: this handler runs capabilities and reads their receipts. The
+      thinking happened when the plan was written; doing is deterministic.
+    */
+    pursueHandler({ db }),
     /*
       Turning a request into a finished file (#258).
 

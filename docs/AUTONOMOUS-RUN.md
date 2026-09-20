@@ -175,14 +175,62 @@ gates a level-2 capability, so reality is controlled, but **the planner reached
 for a contact channel to reach outside humans** and no assertion caught it.
 Not fixed by editing the frozen corpus. Tracked below as unproved.
 
+## PLANS NOW RUN — `npm run verify:pursues`, 7/7
+
+`src/agents/perform.ts` compiles a validated plan into `Step[]` and
+`src/handlers/pursue.ts` runs them as a child job. **No second workflow
+engine**: `checkpoint.ts` already provides skip, park, stale, stop and — the
+thing that mattered — hands every step the recorded outcomes of the steps
+before it. The property was already there; nothing could compose a plan to use
+it.
+
+### THE INVARIANT, PROVED BY A TOKEN THAT CANNOT ARRIVE ANY OTHER WAY
+
+The run creates a project holding a document whose title carries an invented
+word. Step A reads the project; step B writes a task. **The word appears in the
+task's detail**, and there is no route by which it could except step B reading
+step A's observation. The planner never sees it.
+
+    step A saw:  1 document(s) and 0 open task(s). Documents: The zelmirath… handbook.
+    step B wrote: a task whose detail carries that exact sentence
+
+Proved able to fail: with `task.create` changed to use the request instead of
+the upstream observation — the two-independent-handlers failure wearing a plan
+— the check goes RED and the control stays correct.
+
+**And the first sabotage attempt did not land** (the assertion in the patch
+script failed, biome had reformatted the target), so the run that followed it
+was green over unmodified code and proved nothing. Caught because the script
+printed `sabotage present: 0`. Print something from the sabotage that proves
+it landed, then believe the check — sixth instance in this repository.
+
+### THE OTHER FOUR CHECKS
+
+| | |
+|---|---|
+| restart | running the same plan twice leaves ONE task, not two — `local` effect, `step_begin` skips what is recorded |
+| control | a dependent step whose upstream found NOTHING writes nothing and says why, rather than inventing work |
+| capability gap | `slack.post` is granted and has no executor: an honest impediment recorded through `app.cannot`, not a silent success |
+| teardown | asserted — nothing left in his projects or on his list |
+
+### TWO GATES, DELIBERATELY DIFFERENT QUESTIONS
+
+`goal.ts` asks **does this capability exist and may it be proposed** — about
+`tool_permissions`, which owns permission truth. `perform.ts` asks **can it
+actually be performed** — about whether code exists. A registry row can claim
+anything (0298), so a granted capability with no executor becomes an
+impediment rather than a no-op.
+
 ## WHAT IS STILL UNPROVED
 
-- The planner is not yet WIRED to anything. It scores; it does not run.
-- A plan's steps do not yet execute, so no step consumes another's output.
-- Nothing is durable through `checkpoint.ts` yet.
-- Goal-completion verification is untouched.
-- The `slack.post`-to-outsiders reach above has no guard.
-- Everything below step 4. This section is kept honest as the run proceeds —
+- The planner and executor are not yet reached from a real message: nothing
+  enqueues `office.pursue` from `instruction.ts`.
+- Goal-completion verification is untouched — a handler returning is still
+  taken as the goal being met.
+- No bounded re-planning.
+- The `slack.post`-to-outsiders reach has no guard (audience vs channel).
+- ContextPack not started.
+- No production-like acceptance through a real interface yet. This section is kept honest as the run proceeds —
 a claim only moves up once evidence exists for it.
 
 ---
