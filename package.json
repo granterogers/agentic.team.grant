@@ -278,6 +278,7 @@
     "check:one-brain": "tsx scripts/check-one-brain.ts",
     "verify:anchors": "tsx scripts/verify/anchors.ts",
     "verify:progress": "tsx scripts/verify/progress.ts",
+    "verify:plans": "tsx scripts/verify/plans.ts",
     "verify:understands": "tsx scripts/verify/understands.ts"
   },
   "devDependencies": {
