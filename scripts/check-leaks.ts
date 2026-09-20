@@ -407,6 +407,58 @@ if (stuck.length > 0) {
   }
 }
 
+/*
+  THE ONE THIS CHECK COULD NOT SEE, and the reason Grant got a test reminder.
+
+  Everything above asks whether the database is CLEAN NOW. A delivery is not a
+  row that lingers — it is an event that already happened, 0.26 seconds after
+  the output was written and long before any teardown could run. So the
+  previous run reported "no QA debris" truthfully while 162 harness messages
+  had been SENT to real destinations across 42 runs, 87 of them to Grant.
+
+  "Clean now" and "no synthetic side effect ever escaped" are different claims.
+  Only the first was ever being made. This makes the second one.
+
+  It counts ATTEMPTS as well as sends, because 0523's guard suppresses rather
+  than raising: a suite that keeps aiming at a production destination is a
+  suite about to escape the day somebody widens the registry, and a guard
+  nobody can measure is one nobody notices decaying.
+*/
+const guard = (
+  (await db.execute('select app.harness_escapes() as v')).rows[0] as { v?: unknown } | undefined
+)?.v
+const esc = (typeof guard === 'string' ? JSON.parse(guard) : (guard ?? {})) as {
+  since?: string
+  escaped?: { channel?: string; target?: string; by?: string; at?: string }[]
+  refused?: number
+  before_the_guard?: number
+}
+const got = esc.escaped ?? []
+console.log(
+  `\n  harness traffic that reached a real destination SINCE the guard: ${String(got.length)}` +
+    ` · refused by it: ${String(esc.refused ?? 0)}` +
+    ` · before it existed: ${String(esc.before_the_guard ?? 0)}`,
+)
+
+if (got.length > 0) {
+  console.error(
+    [
+      ``,
+      `check:leaks FAILED — ${String(got.length)} harness delivery(s) REACHED a real destination.`,
+      ...got
+        .slice(0, 6)
+        .map((g) => `  ${String(g.by)} -> ${String(g.channel)} ${String(g.target)}`),
+      ``,
+      'This is the defect that put "Reminder: Remind me khgkowx8." on his phone.',
+      '0523 makes a production destination structurally unreachable from a harness',
+      'job, so a send getting through means something bypassed app.claim_delivery or',
+      'a real destination was registered in public.test_destinations. Neither is a',
+      'cleanup problem and neither is fixed by a teardown.',
+    ].join('\n'),
+  )
+  process.exit(1)
+}
+
 if (noisy.length > 0) {
   console.error(`\ncheck:leaks FAILED — harness traffic on a table Grant reads:`)
   for (const n of noisy) console.error(`  ${n}`)

@@ -18,7 +18,82 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-# ⭐ CURRENT MISSION — PRODUCTION CORRECTIVE RUN (20 September 2026)
+# ⭐ CURRENT MISSION — SEMANTIC ARCHITECTURE & PRODUCTION COMMUNICATIONS (8h)
+
+**Supersedes the corrective run below it, which it continues rather than
+replaces: anchors A–D and the QA-isolation invariant all still hold.**
+
+**Started at `581070e`** (tree clean, 522 migrations). Eight-hour autonomous
+window. No questions to Grant; a human-only blocker is recorded here and worked
+around, never used as a reason to stop.
+
+## THE HYPOTHESIS UNDER TEST
+
+> Is the office asking deterministic TypeScript heuristics to understand too
+> much natural human language before a capable model has resolved what Grant
+> actually means?
+
+Prove or disprove it against the CURRENT repository and real production
+evidence. If supported, move the boundary systematically rather than teaching
+regexes one more phrase.
+
+The governing principle, if the evidence supports the change:
+
+> **THE LLM UNDERSTANDS THE HUMAN. DETERMINISTIC CODE CONTROLS REALITY.**
+> LLM interpretation is never authorization.
+
+Deterministic must keep: auth, permissions, capability boundaries, provenance,
+canonical state, validation, tool execution, idempotency, dedupe, transactions,
+security, human-approval boundaries, side-effect isolation, delivery, audit,
+and verification that a claimed action actually happened.
+
+## THE SECOND HALF OF THE MISSION — ONE OFFICE, THREE DOORS
+
+Telegram (voice + text), Slack (chat) and Team HQ (voice + text) are interfaces
+into ONE office and must not grow independent natural-language brains. Same
+interpretation, canonical state, permissions, provenance, progress model and
+conversational continuity, whichever door Grant uses.
+
+Also in scope: specialist visibility in Slack; truthful non-spammy progress for
+long work (five minutes of silence must be impossible); cross-channel coherence
+with no echo loops and no duplicated action.
+
+## WHERE THIS RUN STARTS FROM — anchor C is already fixed
+
+| | |
+|---|---|
+| 0523 | harness traffic may not reach a production destination — DEFAULT DENY at `app.claim_delivery`, the single door every sender passes |
+| 0524 | the guard knows when it started, so the gate claims "none since" rather than failing on history for ever |
+| `check:leaks` | now counts escapes, refusals and the historical total |
+
+Measured at install: **162 harness deliveries had reached real destinations
+across 42 runs, 87 of them to Grant's own Telegram.** Since the guard: **0
+escaped, 5 refused.** The exact job behind *"Reminder: Remind me khgkowx8."*
+(`409cb8d3`) is now refused when re-asked.
+
+**Why the guard and not a better teardown:** the send happened 0.26 seconds
+after the output. No cleanup can be early enough. `is_fixture` was true on that
+job the whole time — the flag existed and the delivery path had never asked.
+
+## WHY THE PREVIOUS GREEN SUITE MISSED IT
+
+`verify:mytasks` was re-run against the guard and scored **88/88, unchanged** —
+because it asserts the reminder was COMPOSED and never that it was or was not
+SENT. That is the acceptance gap in one line. The new invariants separate:
+database clean now · no synthetic side effect ever escaped · delivery happened ·
+action happened · the report matched the action · every surviving clause ran ·
+no abandoned clause ran · cross-channel state agrees · the semantic result is
+channel-independent.
+
+## NEXT ACTION
+
+Map the real pipelines for all five ingresses and answer, in this file, from
+traced code rather than inference: **where does the system currently decide
+what Grant MEANS**, and **have Telegram, Slack and Team HQ drifted?**
+
+---
+
+# PREVIOUS MISSION — PRODUCTION CORRECTIVE RUN (20 September 2026)
 
 **Started at `581070e`, tree clean, 522 migrations.** This block is the first
 thing a compacted session must read. The Personal Tasks run below is finished;

@@ -520,5 +520,7 @@
   "0519_the_office_can_be_told_where_vikunja_is.sql": "e8d3c6ee8dc10e0ed025e7a45ede67a83560762cb0ef85b3ecf1ca39ac8e807c",
   "0520_disconnecting_takes_the_credential_with_it.sql": "53e43d12aeca0ca1b764d46eb024a81f886270e2f9793bbec56e89c19a65dca8",
   "0521_the_setter_had_a_whitelist.sql": "6397604e4a88c92a6efa354bd3f230feb1f673605a640e53138ab68bb3a2781c",
-  "0522_one_reader_for_the_task_provider_panel.sql": "b286dcfc0049863fe176da48f2fc843874c025cafc19efb66360b18800d08d4f"
+  "0522_one_reader_for_the_task_provider_panel.sql": "b286dcfc0049863fe176da48f2fc843874c025cafc19efb66360b18800d08d4f",
+  "0523_harness_traffic_may_not_reach_a_production_destination.sql": "f960326fb01baae375a94ef980722f57ba45e5584f09ec58dd0b295bb844997c",
+  "0524_the_guard_knows_when_it_started.sql": "d7a34b2ef263d210b38c3e25bbf49e0a08f8bcafad80bcce9f25f9a35495c589"
 }
