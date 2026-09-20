@@ -86,9 +86,45 @@ A planner may not reinterpret "this would be useful" as permission.
 9. Exercise real requests through the real interfaces
 10. Attack it, fix credible failures, deploy, verify, clean up, document
 
+## STANDING INSTRUCTION FOR THIS RUN — DO NOT STOP FOR UPDATES
+
+Grant, explicitly, after the baseline was established:
+
+> *"A progress update is NOT a handoff to Grant. When you provide an update,
+> immediately continue working unless there is a genuinely unavoidable
+> human-only blocker that prevents ALL useful work. Grant does not need to
+> reply 'continue', 'yes', 'ok', or give permission for the next ordinary
+> engineering step. Assume continued authorization for all safe, reversible
+> repository engineering work covered by the existing master mission."*
+
+And: *"Do not voluntarily finish early... If the primary architecture becomes
+green early, spend the remaining time trying to BREAK it."*
+
+**If a compaction happens, this instruction is the mission. Recover it from
+here and continue without asking Grant to restate anything.**
+
+## ESTABLISHED EVIDENCE — DO NOT REWRITE THIS LATER
+
+Frozen at `65b63ee`. Grant: *"Preserve this evidence. Do not rewrite history
+later to make the new implementation look better."*
+
+| | |
+|---|---|
+| corpus | 23 realistic planning cases, frozen before any candidate existed |
+| today's architecture | **7 / 23** goals reachable |
+| of those seven | **all single-step** |
+| multi-step goals | **0 / 16** reachable |
+| unsafe proposals | **0** — and this must stay 0 |
+| corrected baseline | an earlier 4/23 was a harness error (under-credited `db.read`) and was fixed BEFORE implementation |
+| capability registry | 14 enabled of 23, carrying `level`, `in_reply`, `delivered_by`, `verbs` |
+
+**Conclusion: the hypothesis is supported.** Semantic understanding improved;
+planning and orchestration still cannot compose existing capabilities into
+novel multi-step work.
+
 ## WHAT IS STILL UNPROVED
 
-Everything below step 1. This section is kept honest as the run proceeds —
+Everything below step 4. This section is kept honest as the run proceeds —
 a claim only moves up once evidence exists for it.
 
 ---
