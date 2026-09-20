@@ -294,6 +294,39 @@ child is driven to a terminal state before the check, and the check asserts it
 did not DIE — `settled(state)` includes `failed`, and a check satisfied by its
 subject having died is worse than no check.
 
+### `verify:anchors` — 15/15, and the red check paid for itself three times
+
+The child-survival check went red on its first run, which is what it was for,
+and behind it were two more defects and then a class.
+
+1. **A CHILD SHARES ITS PARENT'S CORRELATION** — confirmed by query, not
+   inferred: every child job in a two-hour window has its parent's correlation
+   id. So `office.extract_tasks`, enqueued by `office.instruction`, inherits a
+   spent correlation before its own first line, and fixing only the returns
+   below its own model call left the EARLY ones claiming determinism. The run
+   failed on exactly one of those: the honest *"I could not find anything
+   called that"* was the sentence the constraint refused.
+2. **The named source was the PROJECT.** "Scan the entirety of the <project>"
+   sent the extractor hunting for a DOCUMENT with that title, found none, and
+   told Grant it could not find anything by that name — about a project he had
+   just asked it to read in full. A project name resolves to "the whole
+   project" now, matched with the same trigram the title lookup uses.
+3. **Then the class, which is the point.** 77 failed jobs across ten kinds
+   carry *"cannot be marked deterministic"*: `office.notion_sync` 30,
+   `research.liar` 21, `office.slack_rotate` 10, `notebook.generate` and
+   `notebook.add_source` among them. Twenty-one handlers hardcode the claim and
+   five are child kinds, so each fails the moment it is reached from a
+   conversation. Patching them one at a time is the #249/#254 mistake: the
+   claim is not a handler's to make at all. **The worker asks the record,
+   once.** A wrong claim now costs a review rather than costing Grant the
+   answer, which is the safer direction and what `instruction.ts` already did
+   by hand.
+
+And the suite's own teardown had the found-nothing shape in the check written
+to prove it left nothing: it swept and counted only `assigned_to_human` tasks,
+while the delegation it had just proved works creates PROJECT tasks. Three sat
+in the project under a green "nothing of this run is left". Both halves widened.
+
 ## NEXT ACTION
 
 Specialist visibility in Slack — who contributed, their work product, Claire's

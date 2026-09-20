@@ -557,9 +557,23 @@ await db
       update public.projects set status = 'archived'
        where project_id = ${lit(projectId)}::uuid`)
   })
+/*
+  EVERY task of this run, not only the ones on HIS list.
+
+  The delegation really does create tasks now — that is the point of it — and
+  `app.task_add` writes PROJECT tasks, which are not `assigned_to_human`. The
+  first version of this teardown swept and counted only the personal ones, so
+  it reported "nothing left" while three extracted tasks sat in the project:
+  the found-nothing shape, in the check written to prove the run left nothing.
+*/
+await db
+  .execute(`
+    delete from public.tasks
+     where project_id = ${lit(projectId)}::uuid and not assigned_to_human`)
+  .catch(() => undefined)
 const leftTasks = await one(`
   select count(*)::int as n from public.tasks
-   where assigned_to_human and state <> 'done'
+   where state <> 'done'
      and (title like ${lit(`%${run}%`)} or project_id = ${lit(projectId)}::uuid)`)
 const leftProject = await one(`
   select count(*)::int as n from public.projects
