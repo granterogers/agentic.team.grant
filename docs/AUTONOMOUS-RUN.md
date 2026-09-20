@@ -18,7 +18,77 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-# ⭐ CURRENT MISSION — PERSONAL TASKS COMPLETION RUN (#259)
+# ⭐ CURRENT MISSION — PRODUCTION CORRECTIVE RUN (20 September 2026)
+
+**Started at `581070e`, tree clean, 522 migrations.** This block is the first
+thing a compacted session must read. The Personal Tasks run below is finished;
+Grant's real Telegram use contradicted it within the hour, and this run fixes
+the CLASSES behind that rather than the screenshots.
+
+## THE FINDING THAT OUTRANKS EVERYTHING ELSE — anchor C
+
+A reminder reading **"Reminder: Remind me khgkowx8."** arrived on Grant's real
+Telegram. `khgkowx8` is a `verify:mytasks` run token — from a gate run made
+during the previous session, at 07:33 this morning.
+
+Traced in one query, and the answer is not debris:
+
+| | |
+|---|---|
+| job `409cb8d3` | `kind = tasks.remind` · `requested_by = verify:mytasks-khgkowx8` |
+| | **`is_fixture = true`** · **`app.harness_job() = true`** · `announce = true` |
+| delivery `3edbb00c` | `telegram -> 1386648496` (Grant's real chat) · **`state = sent`** · `suppressed_reason = NULL` |
+
+**The office knew it was harness traffic and delivered it anyway.** Nothing in
+the delivery path consults `is_fixture`. Cleanup could never have prevented it:
+the send happened 0.26 seconds after the output.
+
+**Blast radius, measured:** `162` harness deliveries have been SENT to real
+destinations across `42` distinct harness runs — **87 to Grant's own Telegram**
+(chat `1386648496`), 50 to Slack `C0C276SFM7D`, 25 across two more channels.
+Seventeen more sit unsent, all terminal `failed` against synthetic chat ids.
+
+**THE PERMANENT INVARIANT THIS RUN INSTALLS:** harness identity must be a
+DELIVERY BOUNDARY, enforced in the database, not a label a reader may consult.
+A job that is harness traffic may not produce a delivery to a production
+destination, and no future suite can reach Grant by forgetting cleanup.
+
+## The other three anchors
+
+- **A — multi-intent.** *"I've told you to always give your information in
+  clear bullet points. Also, I want you to tell me what my current tasks are."*
+  The preference was stored; the task query was never answered. Find the
+  general multi-clause orchestration defect, not this sentence.
+- **B — spoken self-correction + delegated generation.** *"Create a task for me
+  and the um... No actually, you know what? Scan the entirety of the Legacy
+  Coaching Project and create appropriate tasks for me to review."* Reproduced
+  offline: `personalTaskRequest` returns a task titled *"For me and the um... No
+  actually, you know what? Scan the entirety…"* — canonical row
+  `9e2d60ed`, `added_by = grant`, created 08:35:52. TWO defects: the abandoned
+  clause is not discarded, and delegated task GENERATION is being read as
+  literal task creation.
+- **D — the clarification state.** *"Happy to add that. What should it be
+  called?"* Trace the surrounding canonical state before judging it.
+
+## Why the previous acceptance missed all of this
+
+88/88, 46/46, 47/47 and a green gate said the DATABASE was clean at the end of
+a run. None of them asked whether a synthetic side effect had already left the
+building, whether every surviving clause of a multi-clause sentence executed,
+or whether the report Grant reads matches what actually happened. The new
+invariants are written against exactly those three gaps.
+
+## Order of work, and why
+
+1. **C first** — it is live, and every test this run performs would otherwise
+   hit Grant again. The guard is a precondition for the rest.
+2. B, then A, then D.
+3. The spoken-language corpus, cross-channel coherence, specialist visibility
+   in Slack, truthful progress for long work.
+
+---
+
+# PREVIOUS MISSION — PERSONAL TASKS COMPLETION RUN (#259)
 
 **Started 19 September 2026, after the deep-acceptance run ended at `4e68eee`.**
 This block is the first thing a compacted session must read.
