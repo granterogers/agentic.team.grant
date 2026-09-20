@@ -18,7 +18,82 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-# ⭐ CURRENT MISSION — SEMANTIC ARCHITECTURE & PRODUCTION COMMUNICATIONS (8h)
+# ⭐ CURRENT MISSION — GOAL PLANNING, CAPABILITY COMPOSITION & PRODUCTION USABILITY (8h)
+
+**Supersedes the semantic run below it, which it continues rather than
+replaces: every invariant that run established still holds.**
+
+**Started at `e22688d`** — tree clean, 524 migrations, `main` and the working
+branch both at that SHA, worker deployed v628, Telegram webhook current.
+**Production was clean at the start: zero jobs in any non-terminal state, zero
+deliveries pending, zero reminders pending, one duty due.**
+
+## THE MISSION, IN ONE SENTENCE
+
+Grant should be able to speak or type a messy multi-step goal the code has
+never seen, and the office should work out what is required, use the
+capabilities it actually has, coordinate specialists where useful, do the work
+safely, survive interruption, verify what really happened, and report a
+concise truthful outcome.
+
+## THE HYPOTHESIS UNDER TEST
+
+> The model should understand the human and intelligently PLAN how to achieve
+> the goal. Deterministic software should control reality: permissions,
+> authorization, capability availability, approvals, provenance, canonical
+> state, idempotency, external effects and execution safety.
+
+The previous run fixed the inversion one level up — arbitrary human language
+was read by regex before any model saw it. **This run asks whether the same
+inversion remains one level DOWN: does intelligent understanding now feed a
+hand-authored deterministic planner that must already anticipate every useful
+sequence of work?**
+
+Prove or disprove it behaviourally, on realistic requests the planner has never
+been taught, against a corpus frozen before the candidate runs.
+
+## WHAT MUST STAY DETERMINISTIC
+
+Transport normalization, authentication, tenancy, RLS, actor identity,
+permissions, capability grants, approval requirements, provenance, canonical
+IDs, ambiguity checks, idempotency, dedupe, effect reconciliation,
+test-delivery isolation, budgets, protocol validation. **A model may propose an
+action; it does not grant itself permission to perform it.**
+
+And the semantic contract from the last run is not to be regressed: one
+utterance may carry several surviving intents, an abandoned intent must not
+execute, corrections matter, voice and text are equivalent, and the channels
+are interfaces into one office.
+
+## THE HUMAN-CONTACT BOUNDARY
+
+Research, retrieval, planning, drafting, internal specialist consultation and
+safe reversible internal work proceed autonomously within existing grants.
+Contacting another human does not: prepare the exact intended message and
+require Grant's approval, unless an existing explicit authorization covers it.
+A planner may not reinterpret "this would be useful" as permission.
+
+## ORDER OF WORK
+
+1. Persist the mission · verify HEAD, deployments, production cleanliness ✅
+2. Map understand → plan → capability → execution → verification from CODE
+3. Freeze a novel-work corpus and a held-out set; baseline today's planner
+4. Prove or disprove the planning inversion
+5. If proven: the smallest constrained structured planner vertical slice
+6. Wire it to canonical capability truth and deterministic validation
+7. Make one meaningful multi-step path durable through `checkpoint.ts`
+8. Verify goal completion from canonical effects; bounded re-plan if justified
+9. Exercise real requests through the real interfaces
+10. Attack it, fix credible failures, deploy, verify, clean up, document
+
+## WHAT IS STILL UNPROVED
+
+Everything below step 1. This section is kept honest as the run proceeds —
+a claim only moves up once evidence exists for it.
+
+---
+
+# PREVIOUS MISSION — SEMANTIC ARCHITECTURE & PRODUCTION COMMUNICATIONS (8h)
 
 **Supersedes the corrective run below it, which it continues rather than
 replaces: anchors A–D and the QA-isolation invariant all still hold.**
