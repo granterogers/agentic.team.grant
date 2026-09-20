@@ -726,6 +726,97 @@ the semantic-architecture mission, not GitHub issue 282.** Nothing can be done
 about that now without rewriting history, and a note is cheaper than a wrong
 link.
 
+## `suggest` IS A QUESTION, AND THE OFFICE ANSWERED IT WITH SILENCE
+
+The most important case in the file, because **`suggest` is the global default
+— it is the path Grant's own projects take today.**
+
+`observe` refuses and `suggest` asks: *"It proposes; you decide, even for a
+draft."* The first draft of the policy gate treated both as an impediment, and
+`refusalSentence` says, for an ask, *"I have not done this yet — I need you to
+say."* **There was nothing to say it to.** No blocker, no pause, nothing on his
+Governance page and nothing on his list. An offer promising what no press can
+perform, with the office making the offer.
+
+Everything needed was already built and none of it was reached:
+
+- `awaiting_approval` is a known pause reason whose `binds_to` the database
+  REQUIRES (`job_pauses_approval_binds`)
+- it is deliberately absent from `app.resumable_now`, because a clock cannot
+  answer a question
+- `raiseBlocker` puts the question where he answers it
+- `blockers_make_a_task` puts it on his list, and `blockers_close_their_task`
+  clears it when he answers
+
+So `refuse` stays an impediment — his dial says no and inventing a question
+would be asking him to overrule a setting he chose — and **`ask` pauses and
+asks one**, bound to the STEP rather than the category (#131: *"Approving
+something you cannot see is not an approval. It is consent to a category."*).
+The plan stops there rather than skipping ahead, because a later step running
+against an absence would report honestly that it found nothing and bury the
+question. `pursue.ts` announces a pause that is a question, where it stayed
+silent for the two pauses it could previously produce.
+
+Six checks, and **proved able to fail**: with the `ask` branch neutered, four
+go red including the exact inversion — *"1 from the plan, 0 from the blocker"*.
+
+### The check was wrong three times before the product was wrong once
+
+Worth recording in full, because each wrong version looked right:
+
+1. **Counted tasks titled with the run token in the last five minutes → 3.**
+   Every one written by an earlier section of the same file, doing its job.
+2. **Counted his whole list before and after → 12 to 13.** Exact, and still
+   wrong: a global count over a live office, so the deployed worker finishing
+   anything at all in that window lands in it.
+3. **Counted a token only this step could produce → 1.** Genuinely written —
+   and correctly, by `blockers_make_a_task`. Asking him a question is SUPPOSED
+   to put a task on his list, and the check was calling the feature a defect.
+
+The version that holds tells the two apart by what wrote them: the executor
+titles a task with the step's `why`, the blocker trigger with
+`<capability> — <why>`. So the question reaching his list is asserted as a
+feature and the plan's own write is asserted absent.
+
+## THE TWO `verify:worker` FAILURES
+
+**Neither was the checkpoint change, and only one was a defect at all.**
+
+The coherence check asserted `failed` on the FIRST attempt. A refusal correctly
+lands in `retrying` and the office takes up to five — the retry-loop trap
+CLAUDE.md names, which this suite then fell into. It asserts the property at
+both ends now: no reviewer spent and no completion on attempt one, and `failed`
+with the reviewer still never consulted once the attempts run out. Neither end
+alone is the claim — the first would pass against a gate that refused for ever,
+the second against one that spent a reviewer on the way.
+
+The cost check is #284 and is covered above. It was asserting a CONFIGURATION,
+not a behaviour of the worker, so it is split: the ledger invariant is asserted
+(the office's computed cost equals the provider's reported cost — what would
+catch a figure the office invented), and the run-rate is printed beside it
+naming the issue. A check that fails on a decision nobody has made yet is a
+check somebody switches off.
+
+**And the first run-rate was wrong too**: dividing the lifetime total by the
+lifetime span gave $1.10 a month, diluted by every free day before 15
+September. Over the last seven days it is **$2.71**. A rate over all history is
+not the current rate.
+
+`verify:worker` **29/29**.
+
+## A DEBRIS CLASS MY OWN WITNESS CAUGHT, ON MY OWN DEBRIS
+
+`check:leaks` went red on two stranded autonomy rows — left by an earlier run
+of the very suite whose teardown was written to clear them. The teardown keyed
+on its own run's project ids, and **a teardown keyed to its own token can never
+collect an earlier run's**, which is exactly how the fixture connectors piled
+up. A crashed run leaves precisely the rows a tidy one would have removed.
+
+Both suites sweep the CLASS now — any autonomy row on a fixture or archived
+project, because nobody can act on such a project so a setting for it decides
+nothing — and both ASSERT the sweep, which is the half that stops it coming
+back a third time.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
@@ -737,6 +828,8 @@ link.
   `verify:pursues`' `observe` control, not by a real turn of his.
 - No bounded re-planning: a step that finds nothing ends the plan honestly
   rather than causing the office to think again.
+- One `verify:composes` run reported 13/14 and the next 14/14, and the failing
+  line was not captured. Recorded rather than dismissed.
 - The composition rate is now stable on ONE sentence over four end-to-end runs
   and eight paired direct calls. That is not a claim about every sentence, and
   the held-out corpus was spent before these fixes existed, so nothing frozen

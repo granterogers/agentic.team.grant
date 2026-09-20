@@ -112,11 +112,25 @@ export function pursueHandler(deps: PursueDeps): Handler {
       )
 
       if (run.kind === 'paused') {
+        /*
+          A PAUSE THAT ASKS HIM SOMETHING MUST REACH HIM.
+
+          `announce: false` was right for the pauses this handler could produce
+          when it was written — a stale checkpoint and an interrupted external
+          write are both for a person who is already looking. `awaiting_approval`
+          is the opposite: the office has stopped BECAUSE it needs an answer,
+          and a question nobody is told about is #211's silent gate again, one
+          layer out. The blocker is on his Governance page either way; this is
+          what makes the turn say so.
+        */
+        const asking = run.pause.reason === 'awaiting_approval'
         return {
           ...base,
           path: await spent(),
-          announce: false,
-          body: `I stopped part way through, at "${run.at}": ${run.pause.detail} ${run.pause.resumeWhen}`,
+          announce: asking,
+          body: asking
+            ? `I have stopped before "${run.at}" because I need you to say. ${run.pause.detail} ${run.pause.resumeWhen}`
+            : `I stopped part way through, at "${run.at}": ${run.pause.detail} ${run.pause.resumeWhen}`,
         }
       }
 

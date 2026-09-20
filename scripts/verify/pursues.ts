@@ -703,6 +703,130 @@ check(
   backOn.enabled === true,
 )
 
+// --- the dial that ASKS rather than refusing --------------------------------
+/*
+  `suggest` IS A QUESTION, AND THE FIRST DRAFT ANSWERED IT WITH SILENCE.
+
+  `observe` refuses and `suggest` ASKS — *"It proposes; you decide, even for a
+  draft."* Both became an impediment, and `refusalSentence` says, for an ask,
+  "I have not done this yet — I need you to say." There was nothing to say it
+  to: no blocker, no pause, nothing on his Governance page. An offer promising
+  what no press can perform, with the office making the offer.
+
+  It pauses now, with `awaiting_approval` — the reason whose `binds_to` the
+  database REQUIRES, deliberately absent from `app.resumable_now` because a
+  clock cannot answer a question — and raises a blocker he can press.
+
+  The global default IS `suggest`, so this is the path Grant's own projects
+  take today, which makes it the most important case in this file.
+*/
+const askJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-ask-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+  returning job_id::text as id`)
+const askJobId = String(askJob.id)
+let asked: Awaited<ReturnType<typeof runSteps>> | null = null
+/*
+  A TOKEN OF ITS OWN, because neither of the first two drafts could work.
+
+  The first counted tasks titled with this run's token in the last five minutes
+  and reported THREE — every one written by an EARLIER section of this same
+  file, which is exactly what those sections are supposed to write.
+
+  The second counted his whole list before and after, which is exact and still
+  wrong: it is a global count over a live office, so the deployed worker
+  finishing anything at all in that window lands in it. It reported 12 to 13.
+
+  What cannot be confused is a title only this step could produce. The plan is
+  the same shape as the one above; the word in it exists nowhere else.
+*/
+const ASKED = `pemberquil${run}`
+const askPlan: GoalPlan = {
+  ...plan,
+  steps: plan.steps.map((st, i) => (i === 1 ? { ...st, why: `Review the ${ASKED} clause` } : st)),
+}
+try {
+  await db.execute(`
+    select app.hq_autonomy_set('suggest', ${lit(projectId)}::uuid,
+      'verify:pursues', 'the control for the asking path')`)
+  asked = await runSteps(
+    db,
+    askJobId,
+    'office.pursue@1',
+    compile(askPlan, db, askJobId, projectId, 'review it'),
+  )
+} finally {
+  await db.execute(`
+    select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+      'verify:pursues', 'restored')`)
+}
+check(
+  'on SUGGEST the plan PAUSES at the write rather than skipping past it',
+  asked?.kind === 'paused'
+    ? `${asked.pause.reason} at "${asked.at}"`
+    : `it did not pause: ${String(asked?.kind)}`,
+  asked?.kind === 'paused' && asked.pause.reason === 'awaiting_approval',
+)
+const question = await one(`
+  select count(*)::int as n,
+         coalesce(max(requested_action), '') as action,
+         coalesce(max(array_to_string(approval_options, ' | ')), '') as options
+    from public.blockers where job_id = ${lit(askJobId)}::uuid`)
+check(
+  'and it raises a question he can actually answer, naming the capability',
+  Number(question.n) === 0
+    ? 'no blocker — the sentence promised an answer nobody could give'
+    : `"${String(question.action).slice(0, 60)}" → ${String(question.options)}`,
+  Number(question.n) === 1 &&
+    String(question.action).includes('task.create') &&
+    String(question.action).includes(ASKED),
+)
+const boundTo = await one(`
+  select coalesce(binds_to, '') as binds, resumable
+    from public.job_pauses where job_id = ${lit(askJobId)}::uuid and resumed_at is null`)
+check(
+  'the pause is BOUND to this step, not to a category, and no tick can clear it',
+  `binds_to=${String(boundTo.binds).slice(0, 16)}… resumable=${String(boundTo.resumable)}`,
+  String(boundTo.binds) !== '' && boundTo.resumable === false,
+)
+const wokeByItself = await one(`
+  select count(*)::int as n
+    from jsonb_array_elements(app.resumable_now()) r
+   where (r ->> 'job_id') = ${lit(askJobId)}`)
+check(
+  'CONTROL: the tick does not offer to resume it — a clock cannot answer a question',
+  `${String(wokeByItself.n)} of app.resumable_now()`,
+  Number(wokeByItself.n) === 0,
+)
+const rows = (
+  await db.execute(`
+    select title from public.tasks
+     where title like ${lit(`%${ASKED}%`)} or detail like ${lit(`%${ASKED}%`)}`)
+).rows as unknown as { title: string }[]
+/*
+  TWO ROWS ARE POSSIBLE HERE AND ONLY ONE OF THEM IS A DEFECT.
+
+  `blockers_make_a_task` puts every blocker on Grant's list by design, and
+  `blockers_close_their_task` clears it when he answers — so asking him a
+  question SHOULD produce a task, and the first version of this check called
+  that a write and went red over the office working.
+
+  They are told apart by their titles, which is not a wording lock but a
+  difference in what wrote them: the executor titles a task with the step's
+  `why` alone, and the blocker trigger titles one with `<capability> — <why>`.
+  So the question reaching his list is asserted as a FEATURE, and the plan's
+  own write is asserted absent.
+*/
+const fromTheBlocker = rows.filter((r) => r.title.startsWith('task.create —')).length
+const fromThePlan = rows.length - fromTheBlocker
+check(
+  'the question reaches his list, and the plan writes nothing while it waits',
+  `${String(fromTheBlocker)} from the blocker, ${String(fromThePlan)} from the plan`,
+  fromTheBlocker === 1 && fromThePlan === 0,
+)
+
 // --- the dial Grant can turn -----------------------------------------------
 /*
   OBSERVE MEANS OBSERVE, AND NOTHING IN THIS PATH WAS ASKING.
@@ -783,7 +907,8 @@ await db.execute(`
     state_reason = 'verify:pursues teardown'
    where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid,
                     ${lit(revokedJobId)}::uuid, ${lit(observeJobId)}::uuid,
-                    ${lit(injectJobId)}::uuid, ${lit(resumeJobId)}::uuid)
+                    ${lit(injectJobId)}::uuid, ${lit(resumeJobId)}::uuid,
+                    ${lit(askJobId)}::uuid)
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.tasks where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid);
@@ -794,11 +919,20 @@ await db.execute(`
   archive branch, and the check reports "0 live project(s)" while leaving
   debris. CLAUDE.md's 32-foreign-keys trap, found by reading `confdeltype`
   rather than by trusting a green teardown.
+
+  Swept by CLASS rather than by this run's ids, deliberately. A teardown keyed
+  to its own token can never collect an earlier run's, which is how the fixture
+  connectors piled up — and a crashed run leaves exactly the rows a tidy one
+  would have removed. Any autonomy row on a fixture or archived project is
+  debris by definition: nobody can act on such a project, so a setting for it
+  decides nothing.
 */
 await db
   .execute(`
-    delete from public.autonomy_settings
-     where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid)`)
+    delete from public.autonomy_settings a
+     using public.projects p
+     where p.project_id = a.project_id
+       and (p.is_fixture or p.status = 'archived')`)
   .catch(() => undefined)
 for (const id of [projectId, emptyId]) {
   await db
@@ -821,6 +955,16 @@ check(
   'teardown — nothing of this run is left in his projects or on his list',
   `${String(left.projects)} live project(s), ${String(left.tasks)} task(s)`,
   Number(left.projects) === 0 && Number(left.tasks) === 0,
+)
+
+const stranded = await one(`
+  select count(*)::int as n from public.autonomy_settings a
+    join public.projects p on p.project_id = a.project_id
+   where p.is_fixture or p.status = 'archived'`)
+check(
+  'teardown — no autonomy setting is left on a project nobody can act on',
+  `${String(stranded.n)} stranded row(s)`,
+  Number(stranded.n) === 0,
 )
 
 const failed = checks.filter((c) => !c.ok)

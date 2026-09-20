@@ -489,9 +489,20 @@ await db.execute(`
   archive branch, and the check reports "0 live project(s)" while leaving
   debris. CLAUDE.md's 32-foreign-keys trap, found by reading `confdeltype`
   rather than by trusting a green teardown.
+
+  Swept by CLASS rather than by this run's ids, deliberately. A teardown keyed
+  to its own token can never collect an earlier run's, which is how the fixture
+  connectors piled up — and a crashed run leaves exactly the rows a tidy one
+  would have removed. Any autonomy row on a fixture or archived project is
+  debris by definition: nobody can act on such a project, so a setting for it
+  decides nothing.
 */
 await db
-  .execute(`delete from public.autonomy_settings where project_id = ${lit(projectId)}::uuid`)
+  .execute(`
+    delete from public.autonomy_settings a
+     using public.projects p
+     where p.project_id = a.project_id
+       and (p.is_fixture or p.status = 'archived')`)
   .catch(() => undefined)
 await db
   .execute(`delete from public.projects where project_id = ${lit(projectId)}::uuid`)
@@ -511,6 +522,16 @@ check(
   'teardown — nothing of this run is left in his projects or on his list',
   `${String(left.projects)} live project(s), ${String(left.tasks)} task(s)`,
   Number(left.projects) === 0 && Number(left.tasks) === 0,
+)
+
+const stranded = await one(`
+  select count(*)::int as n from public.autonomy_settings a
+    join public.projects p on p.project_id = a.project_id
+   where p.is_fixture or p.status = 'archived'`)
+check(
+  'teardown — no autonomy setting is left on a project nobody can act on',
+  `${String(stranded.n)} stranded row(s)`,
+  Number(stranded.n) === 0,
 )
 
 const failed = checks.filter((c) => !c.passed)

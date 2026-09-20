@@ -374,10 +374,42 @@ const countingReviewer: Reviewer = (o, j) => {
 }
 const incResult =
   incDequeued === null ? null : await runJob(db, incDequeued, HANDLERS, countingReviewer)
+/*
+  ONE ATTEMPT IS NOT THE VERDICT, AND THIS CHECK HAD FORGOTTEN IT.
+
+  It asserted `failed` on the FIRST attempt. #185's coherence gate refuses an
+  attempt and the office takes up to five — so a refusal landing in `retrying`
+  is the gate working, and asserting otherwise is asserting against the retry
+  loop, which CLAUDE.md names as a trap and which this suite then fell into.
+
+  The property has two ends and both are checked. On the first attempt: no
+  reviewer is spent and the job does not complete. At exhaustion: it ends
+  FAILED, the reviewer was never called once, and nothing ever reached
+  `outputs`. Neither end alone is the claim — the first would pass against a
+  gate that refused for ever without giving up, and the second would pass
+  against one that spent a reviewer on the way.
+*/
 record(
-  'high confidence in a speculative finding fails, and no reviewer was consulted',
-  `${String(incResult?.finalState)}, reviewer called=${String(reviewerCalled)}`,
-  incResult?.finalState === 'failed' && !reviewerCalled,
+  'a speculative finding asserted with confidence does not complete, and costs no reviewer',
+  `attempt 1: ${String(incResult?.finalState)}, reviewer called=${String(reviewerCalled)}`,
+  incResult?.finalState !== 'complete' && !reviewerCalled,
+)
+/*
+  Drive it to the end the office would reach on its own. Bounded well above
+  `max_attempts` so a run that somehow never settles reports that rather than
+  spinning.
+*/
+let incFinal = String(incResult?.finalState ?? '')
+for (let attempt = 0; attempt < 8 && incFinal === 'retrying'; attempt += 1) {
+  await db.execute(`select app.requeue_retrying()`)
+  const again = await dequeue(db, WORKER, true, true, undefined, MINE)
+  if (again === null || again.jobId !== incJob) break
+  incFinal = String((await runJob(db, again, HANDLERS, countingReviewer)).finalState)
+}
+record(
+  'and when its attempts run out it is FAILED, with the reviewer still never consulted',
+  `${incFinal}, reviewer called=${String(reviewerCalled)}`,
+  incFinal === 'failed' && !reviewerCalled,
 )
 const incOutputs = await one(
   `select count(*)::int as n from public.outputs where job_id = ${lit(incJob)}::uuid`,
@@ -643,15 +675,63 @@ if (apiKey === '') {
     liveState === 'complete' && liveOut?.rs === 'approved' && liveOut?.deterministic === false,
   )
 
+  /*
+    THIS CHECK WAS ASSERTING A CONFIGURATION, NOT A BEHAVIOUR OF THE WORKER.
+
+    It read "the real call was recorded and cost nothing" and went red at
+    $0.00008447, and the office was not at fault: `public.usable_models` ranks
+    `openai/gpt-oss-120b` and two others at priority 10, 20 and 30 with their
+    per-token prices visible in the same rows, and the free models at 100. Those
+    three are the certified stack. The worker called the model it was told to
+    call and recorded what it cost, which is everything this suite can speak to.
+
+    So the assertion is split into the two questions that are actually here.
+
+    The INVARIANT is about the ledger: a call is recorded, and the cost the
+    office computed equals the cost the provider reported. That is what would
+    catch an estimation defect — a figure the office invented and nobody could
+    check — and it is the half that belongs in a worker suite.
+
+    The CONSTRAINT is `~£0/month`, and reconciling it against the live
+    configuration is Grant's decision, filed as #284. Printed here as a
+    run-rate rather than asserted, because a check that fails on a decision
+    nobody has made yet is a check somebody switches off.
+  */
   const spend = await one(`
-    select coalesce(sum(cost_usd), 0)::text as total, count(*)::int as calls
-    from public.inference_usage
-    where correlation_id = (select correlation_id from public.jobs where job_id = ${lit(liveJob)}::uuid)
+    select coalesce(sum(cost_usd), 0)::text            as total,
+           coalesce(sum(provider_reported_cost), 0)::text as reported,
+           count(*)::int                                as calls,
+           count(*) filter (where provider_reported_cost is null)::int as unreported
+      from public.inference_usage
+     where correlation_id = (select correlation_id from public.jobs where job_id = ${lit(liveJob)}::uuid)
   `)
   record(
-    'the real call was recorded and cost nothing',
-    `${String(spend?.calls)} call(s), $${String(spend?.total)}`,
-    Number(spend?.calls) >= 1 && Number(spend?.total) === 0,
+    'the real call was recorded, and the cost the office computed is the cost the provider reported',
+    `${String(spend?.calls)} call(s), office $${String(spend?.total)}, provider $${String(spend?.reported)}` +
+      `${Number(spend?.unreported) > 0 ? `, ${String(spend?.unreported)} unreported` : ''}`,
+    Number(spend?.calls) >= 1 &&
+      (Number(spend?.unreported) > 0 || Number(spend?.total) === Number(spend?.reported)),
+  )
+  /*
+    A RATE OVER ALL HISTORY IS NOT THE CURRENT RATE.
+
+    The first version divided the lifetime total by the lifetime span and
+    printed $1.10 a month. Nothing was charged before 15 September, so that
+    average is diluted by every free day before it and understates what the
+    office costs TODAY by more than three times. Seven days, which is short
+    enough to reflect the present configuration and long enough not to swing
+    on one busy afternoon.
+  */
+  const rate = await one(`
+    select round((coalesce(sum(cost_usd) filter (
+                    where occurred_at > now() - interval '7 days'), 0) * 30 / 7)::numeric, 2)::text as month,
+           round(coalesce(sum(cost_usd), 0)::numeric, 4)::text as ever,
+           min(occurred_at) filter (where cost_usd > 0)::date::text as charging_since
+      from public.inference_usage`)
+  console.log(
+    `\n  spend: $${String(rate?.ever)} in total, first charged ${String(rate?.charging_since)} — ` +
+      `about $${String(rate?.month)} a month at the last 7 days' rate. ` +
+      'CLAUDE.md says ~0. Not asserted: see #284.',
   )
 }
 

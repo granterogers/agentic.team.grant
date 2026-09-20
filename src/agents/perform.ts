@@ -41,7 +41,8 @@
  * things and CLAUDE.md records what conflating them costs.
  */
 import type { SqlExecutor } from '../db/executor.ts'
-import type { Outcome, Step } from '../jobs/checkpoint.ts'
+import { raiseBlocker } from '../inference/record.ts'
+import type { Outcome, Paused, Step } from '../jobs/checkpoint.ts'
 import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
 import { mayAct, refusalSentence } from './approval.ts'
@@ -462,7 +463,7 @@ export const compile = (
     return {
       name: `${step.id}:${step.capability}`,
       effect: executor?.effect ?? 'none',
-      run: async (done): Promise<{ outcome: Outcome }> => {
+      run: async (done): Promise<{ outcome?: Outcome; pause?: Paused }> => {
         /*
           A CAPABILITY THE OFFICE CANNOT PERFORM IS AN IMPEDIMENT, NOT A SKIP.
 
@@ -515,8 +516,72 @@ export const compile = (
           projectId,
           tool: step.capability,
         })
-        if (decision.verdict !== 'proceed') {
+        /*
+          REFUSE AND ASK ARE DIFFERENT ANSWERS, AND THE FIRST DRAFT TREATED
+          THEM AS ONE.
+
+          Both became an impediment, and `refusalSentence` says, for `ask`,
+          *"I have not done this yet — I need you to say."* There was nothing to
+          say it to. That is the defect this repository keeps paying for in
+          another costume: an offer promising what no press can perform, and
+          here the office was the one making the offer.
+
+          `refuse` is right as an impediment. Grant's dial says no, and there is
+          nothing to ask — inventing a question would be asking him to overrule
+          a setting he chose.
+
+          `ask` is a question, so it PAUSES and asks one. Everything needed was
+          already built: `awaiting_approval` is a known pause reason whose
+          `binds_to` the database REQUIRES, it is deliberately absent from
+          `app.resumable_now` because it waits on a person rather than a clock,
+          and `raiseBlocker` puts the question where he answers it.
+
+          The binding is the step, not the job. An approval is consent to THIS
+          action — #131: *"Approving something you cannot see is not an
+          approval. It is consent to a category."*
+        */
+        if (decision.verdict === 'refuse') {
           return { outcome: nothing(step.capability, refusalSentence(decision)) }
+        }
+        if (decision.verdict === 'ask') {
+          /*
+            The plan stops here rather than skipping ahead. A later step
+            depending on this one would otherwise run against an absence and
+            report honestly that it found nothing — true, and a worse answer
+            than "I need you to say", because it buries the question.
+          */
+          const pause: Paused = {
+            reason: 'awaiting_approval',
+            detail: `${step.capability}: ${decision.because}`,
+            resumeWhen: `Grant answers, or raises this project's autonomy above ${
+              decision.autonomy ?? 'its current level'
+            }.`,
+            /*
+              Not resumable by a tick. `resumable_now` lists the four reasons
+              that wait on something other than a person, and this is not one
+              of them — a clock cannot answer a question.
+            */
+            resumable: false,
+            binds: {
+              step: `${step.id}:${step.capability}`,
+              capability: step.capability,
+              project: projectId,
+            },
+          }
+          await raiseBlocker(db, {
+            jobId,
+            ...(projectId === null ? {} : { projectId }),
+            requestedAction: `${step.capability} — ${step.why === '' ? request : step.why}`.slice(
+              0,
+              280,
+            ),
+            whyNeeded: decision.because,
+            consequencesOfDelay: 'The rest of the plan waits until you answer.',
+            approvalOptions: ['Yes, do it', 'No, leave it'],
+            originatingAgent: 'chief-of-staff',
+            workCanContinue: false,
+          }).catch(() => undefined)
+          return { pause }
         }
         /*
           The outcomes are keyed by STEP NAME, and the plan's ids are what the
