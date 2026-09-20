@@ -1,0 +1,132 @@
+{
+  "why": "HELD OUT. Written on 20 September 2026 against the frozen implementation at commit 412b24a, and committed BEFORE it was run even once. A corpus that has found a defect has, by finding it, stopped being able to find the next one: every line of the fix for anchors A and B was written while looking at docs/testing/spoken-corpus.json, so that file is regression material and is no longer evidence. Nothing here reuses a sentence, a noun or a shape from it. The freeze is a commit hash rather than an intention.",
+  "how": "Each case says what a careful person reading the sentence would agree Grant is asking for. `surviving` is the kinds, in the order he said them; `abandoned` is how many clauses he started and replaced. `other` and an empty list are the same outcome — both end in the cascade doing nothing and Claire simply replying.",
+  "cases": [
+    {
+      "id": "held-invoice-and-check",
+      "said": "Right so put something on my list to send the invoice to Harper by the end of the week, and separately can you look at whether the September numbers actually reconcile.",
+      "surviving": ["task_create", "delegate"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-mid-list-correction",
+      "said": "Add three things for me. Chase the printer, book the room, and... hmm, no, drop the room one, just chase the printer and send the agenda round.",
+      "surviving": ["task_create"],
+      "abandoned": 1
+    },
+    {
+      "id": "held-question-then-rule",
+      "said": "How many of the workshop attendees came back for a second session? And going forward please stop opening every reply with a summary of what I just asked.",
+      "surviving": ["question", "preference"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-whole-sentence-retracted",
+      "said": "Set up a reminder for the quarterly review — actually forget the reminder entirely, I have it in my calendar already.",
+      "surviving": [],
+      "abandoned": 1
+    },
+    {
+      "id": "held-move-the-date",
+      "said": "That thing you just put down for me, shift it to the Monday instead, the Friday is no good.",
+      "surviving": ["task_change"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-delegate-then-ask",
+      "said": "Go through everything we hold on the coaching work and pull together the things still outstanding, and while you are at it tell me roughly how many documents that is.",
+      "surviving": ["delegate", "question"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-rambling-voice-note",
+      "said": "Okay so, um, I was thinking, right, the thing is we need, we need to, sorry, we need to get the onboarding pack tidied up before next Thursday so put that on my list would you",
+      "surviving": ["task_create"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-ask-list-colloquially",
+      "said": "What have I actually got on at the moment? I have completely lost track this week.",
+      "surviving": ["task_query"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-rule-only",
+      "said": "From now on when you are not sure about something, say so up front rather than at the end.",
+      "surviving": ["preference"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-three-way",
+      "said": "Put a note on my list to ring the accountant, tell me what is already overdue, and from now on use British spelling in anything you write.",
+      "surviving": ["task_create", "task_query", "preference"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-not-that-this",
+      "said": "Do not write it up as a summary. Read the transcript properly and give me the decisions that were actually made.",
+      "surviving": ["delegate"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-swap-the-person",
+      "said": "Ask Daniel about the pricing — no, sorry, Emma, she did the research on it.",
+      "surviving": ["delegate"],
+      "abandoned": 1
+    },
+    {
+      "id": "held-restart-the-thought",
+      "said": "Can you find out when — actually, the simpler question is just: has anyone replied to the proposal yet.",
+      "surviving": ["question"],
+      "abandoned": 1
+    },
+    {
+      "id": "held-two-abandoned",
+      "said": "Book the venue, no wait, check the budget first, no, you know what, forget both of those and just tell me what the venue costs.",
+      "surviving": ["question"],
+      "abandoned": 2
+    },
+    {
+      "id": "held-implicit-task",
+      "said": "I keep forgetting to renew the domain. Make sure that does not slip.",
+      "surviving": ["task_create"],
+      "abandoned": 0
+    },
+    {
+      "id": "held-question-about-office",
+      "said": "Which of the team would normally handle something like a contract review?",
+      "surviving": ["question"],
+      "abandoned": 0
+    },
+    {
+      "id": "control-held-acknowledgement",
+      "said": "Yes that is exactly right, thank you, leave it there.",
+      "surviving": [],
+      "abandoned": 0
+    },
+    {
+      "id": "control-held-mentions-task-word",
+      "said": "The task force meeting overran again, which is why I am behind.",
+      "surviving": [],
+      "abandoned": 0
+    },
+    {
+      "id": "control-held-mentions-remind",
+      "said": "That reminds me of the conversation we had about pricing in the spring.",
+      "surviving": [],
+      "abandoned": 0
+    },
+    {
+      "id": "control-held-hypothetical",
+      "said": "If we ever did decide to move the workshops online, that would change the pricing completely.",
+      "surviving": [],
+      "abandoned": 0
+    },
+    {
+      "id": "control-held-past-tense",
+      "said": "I already added the venue call to my own list this morning, so do not add it again.",
+      "surviving": [],
+      "abandoned": 0
+    }
+  ]
+}
