@@ -300,10 +300,19 @@ const piles = await db.execute(`
       Counted for a fixture or archived project, because those are the two ways
       a project stops being one Grant can act on. A row on a live project of his
       is a SETTING, not debris, however it got there.
+
+      AND OLDER THAN FIFTEEN MINUTES, because a suite that is RUNNING has set
+      one and not yet swept it. Without the age this went red on a live
+      verify:composes four minutes in -- a check that fires on work in progress
+      is a check somebody learns to ignore, which is the failure mode the
+      token-shape list in verify:hq already cost this repository once. Fifteen
+      minutes is 0419's own number for the same question: long enough that
+      nothing legitimate is still holding it.
     */
     (select count(*) from public.autonomy_settings a
        join public.projects p on p.project_id = a.project_id
-      where p.is_fixture or p.status = 'archived') as stranded_autonomy,
+      where (p.is_fixture or p.status = 'archived')
+        and a.set_at < app.now_utc() - interval '15 minutes') as stranded_autonomy,
     /*
       The roster Grant looks at, asked the way he sees it (#269).
 

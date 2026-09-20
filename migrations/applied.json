@@ -525,5 +525,6 @@
   "0524_the_guard_knows_when_it_started.sql": "d7a34b2ef263d210b38c3e25bbf49e0a08f8bcafad80bcce9f25f9a35495c589",
   "0525_a_reader_superseded_an_hour_after_it_was_written.sql": "0a1e3d7884a008d1037658ae3dfa48c9ae5aa1c8ef9f50b85d1ebca256917f6a",
   "0526_a_handler_that_never_went_through_the_worker.sql": "2bd64a5daba5e72d3504fd45d448debab7eb4cb3d51891b52509f8f6fc116d71",
-  "0527_a_column_the_stale_check_never_read.sql": "ea28964c90930eb38c30353cbf54fdc53cd54b33a35213e3a5b13d7b7c58b0a2"
+  "0527_a_column_the_stale_check_never_read.sql": "ea28964c90930eb38c30353cbf54fdc53cd54b33a35213e3a5b13d7b7c58b0a2",
+  "0528_two_webhooks_at_once_must_not_error.sql": "ad3043dc18b99614167929d1d18cff2424bf28a58faad3893f234ba30699e425"
 }

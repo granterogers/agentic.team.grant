@@ -941,6 +941,74 @@ without one it declines for the same irrelevant reason.
 
 `npm test` **2198** · `verify:pursues` 36/36 · gate clean.
 
+## TWO WEBHOOKS AT ONCE RAISED 23505 AT GRANT
+
+**The duplicate test written an hour earlier found this, on the deployed run.**
+
+`app.enqueue_inbound` is idempotent by SELECT-then-INSERT, which is not atomic.
+Two calls in flight together both miss the existing row and both insert;
+`jobs_one_live_per_idempotency_key` catches the second and raises **23505 out
+of a SECURITY DEFINER function**. The adapter sees a hard error for a message
+that WAS recorded, and Grant is told his message could not be taken — the same
+shape as the `addressed_to` foreign key already in CLAUDE.md, where a bad value
+lost the whole turn instead of degrading.
+
+Not hypothetical: Telegram retries a delivery it did not get an acknowledgement
+for, and it retries fast. Slack does the same. **Sequential duplicates were
+always handled**, which is why nothing had ever seen it — and why the first two
+runs of my own concurrent test passed, because the two calls happened to
+serialise. It is a race, so it presents as a flake until you read the error.
+
+Migration **0528** is the standard idempotent insert, and the conflict target
+has to MATCH the partial index or it catches nothing — CLAUDE.md records three
+migrations spent learning that on `documents_one_per_external_ref`. `do nothing`
+rather than `do update`, because the loser of the race wants the winner's job,
+not to overwrite it; it then reads the row back, because **both callers must be
+told the same job id, which is what idempotent means to the adapter that
+asked**.
+
+Driven in the migration, with the control that matters: the same job id for
+both calls AND exactly one live job on that key. A function that returned the
+same id while inserting twice would pass the first and fail the second.
+
+## THE FIRST-ATTEMPT CHECK WENT RED, AND THAT IS THE INSTRUMENT WORKING
+
+One end-to-end run in roughly nine needed a **second** attempt to compose, and
+`verify:composes` said so by name: *"took 2 attempts, so something upstream of
+the planner is varying again."*
+
+**The input cause is fixed and this is not it.** The planner now receives
+Grant's sentence verbatim, which cannot vary; twelve direct calls on that
+sentence composed 12/12. What is left is the model's own sampling, which
+`temperature: 0` does not remove on a free model — CLAUDE.md records a judge
+giving different verdicts on an unchanged corpus at temperature 0.
+
+**Not tuned against it.** One observation is not a rate, and #229's rule is to
+print the margin rather than tune a prompt against a coin. Pinning the
+planner's model or sharpening the composition rule are both plausible and both
+need a measurement first — the kind `verify:plans` does, over a corpus, not an
+anecdote from one red run.
+
+So the check stays strict. It is the thing that will say whether this gets
+better or worse, and softening it to make a number look tidy would throw away
+the only instrument pointed at the question.
+
+## A WITNESS THAT FIRED ON WORK IN PROGRESS
+
+`check:leaks` went red on a single stranded autonomy row — set four minutes
+earlier by a `verify:composes` run that was **still running**. The witness
+could not tell debris from a suite mid-flight, and a check that fires on work
+in progress is one somebody learns to ignore. That is the failure mode the
+token-shape list in `verify:hq` already cost this repository once.
+
+Aged at fifteen minutes, which is 0419's own number for the same question.
+**Proved still able to fire**: a row backdated two hours is reported; the live
+run's is not.
+
+And the comment explaining it contained backticks inside a template literal —
+**seventh instance** of that trap, in `scripts/`, where `check:templates` does
+not reach.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
@@ -952,8 +1020,12 @@ without one it declines for the same irrelevant reason.
   `verify:pursues`' `observe` control, not by a real turn of his.
 - No bounded re-planning: a step that finds nothing ends the plan honestly
   rather than causing the office to think again.
-- One `verify:composes` run reported 13/14 and the next 14/14, and the failing
-  line was not captured. Recorded rather than dismissed.
+- The planner still returns a one-step plan on roughly one end-to-end run in
+  nine, after the input cause was removed. That is model sampling, it is
+  measured by the first-attempt check rather than hidden by the retry, and
+  reducing it needs a corpus measurement rather than a prompt tweak.
+- One earlier `verify:composes` run reported 13/14 and the next 14/14, and the
+  failing line was not captured. Recorded rather than dismissed.
 - The composition rate is now stable on ONE sentence over four end-to-end runs
   and eight paired direct calls. That is not a claim about every sentence, and
   the held-out corpus was spent before these fixes existed, so nothing frozen
