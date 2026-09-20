@@ -706,8 +706,25 @@ reports spend anywhere Grant looks** — data with no witness, which is the
 dial-with-no-reader defect wearing the other hat.
 
 It is his decision, not mine: the alternative is demoting the three models that
-earned the GREEN verdict. Filed rather than fixed, and #283 makes it slightly
-worse — one planner call per composed turn.
+earned the GREEN verdict. **Filed as [#284](https://github.com/granterogers/agentic.team.grant/issues/284)**
+rather than fixed, and #283 makes it slightly worse — one planner call per
+composed turn.
+
+## A NUMBERING MIX-UP, RECORDED RATHER THAN TIDIED AWAY
+
+`#282` and `#283` were **labels in Grant's master-run briefs, never GitHub
+issue numbers**. GitHub's `#282` is an unrelated phone-chrome issue, and `#283`
+did not exist — so every commit in this run cited a number with no home.
+
+Filing the spend finding took the number 283 for about ten minutes. That would
+have pointed the whole run's commit history at the wrong thing, permanently, so
+it was repaired rather than left: **283 is now the goal-planning mission
+issue** the commits are about, and the spend finding moved to **284**.
+
+The residual ambiguity is worth stating plainly: **`#282` in this ledger means
+the semantic-architecture mission, not GitHub issue 282.** Nothing can be done
+about that now without rewriting history, and a note is cheaper than a wrong
+link.
 
 ## WHAT IS STILL UNPROVED
 
