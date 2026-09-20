@@ -81,11 +81,71 @@ and a two-way tick.
 - Sync metadata lives beside the task, never in the canonical task row.
 - Disconnecting a provider must never lose a native task.
 
+## PHASE 1 IS COMPLETE — 20 September 2026
+
+All four gaps are built, deployed and verified, and the **independent second
+acceptance pass is clean**. Ending SHA of Phase 1: see the last `#259` commit
+on this branch.
+
+| | |
+|---|---|
+| reminders delivered | 0512 · `tasks.remind_at` → `app.reminders_due` → the `task-reminders` duty → `src/handlers/reminders.ts` |
+| the provider seam | 0513 · `tasks.revision`, `public.task_links`, `public.task_tombstones`, push watermark, `my_task_delete` |
+| subtasks | 0514 / 0515 · `p_parent`, `app.task_parent_ok`, `my_task_reparent`, children in the payload |
+| delete and archive | 0513 / 0517 · with a refusal that says which of two things is wrong |
+| the referent for a follow-up | 0516 · `tasks.seq`, `app.my_task_recent` |
+
+**Verification:** `verify:mytasks` **88/88** · `verify:tasks-ui` **46/46** on
+desktop and phone · `verify:layouts` 64 states / 0 findings · `verify:ui`
+54/54 · 2,057 unit tests · the full 40-entry readiness gate green.
+
+### What the independent pass found, after Phase 1 was called complete
+
+Nine defects, in a product that had passed its own corpus. The three worth
+remembering:
+
+1. **A branch performed the request again.** #233's fan-out hands every extra
+   convened specialist a child job with the same instruction, so every
+   deterministic action ran once per person — *"Call it Review the onboarding
+   copy"* put THREE tasks on the list from one reply. `isBranch` existed and
+   guarded only PDFs and page-fetches. It now gates all ten action paths, and
+   `tests/artifacts/one-per-request.test.ts` asserts the property over the
+   list so the next path added without it fails there.
+2. **Two false positives.** *"Remind me how the pricing works"* created a task
+   and swallowed the question; *"Did I ever add a task about the domain?"*
+   created *"Did I ever about the domain?"*.
+3. **Details sat 24px off the edge of every task row on a phone.**
+   `flex-basis: 100%` plus a 44px indent. Invisible to `npm run wide`, because
+   the row clips rather than scrolling the page.
+
+**And the harness was wrong nine times against three product defects.** Every
+one is written up in the file it lives in. The pattern worth carrying: when a
+check does not fire, suspect the check.
+
+### Deliberately NOT changed, with the reason
+
+- *"note to self: cancel the gym membership"* is not claimed as a personal
+  task. `classifyIntent` already reads "note to self" as a deliberate remark,
+  and a sentence of that shape is as often a note as a task. Grant's call.
+- *"change the wording to X"* with no referent is refused. Nothing in it points
+  at the last task, and a rename could be about anything on the screen.
+- *"scrap the deadline on that"* — clearing a due date by talking. The UI can
+  (`p_clear`); the conversation cannot, because `PersonalTaskChange` has no way
+  to say "remove" as distinct from "unchanged".
+- **53% of a phone screen is spent before the first task** (448px of 844,
+  2 of 4 rows visible, measured by `npm run space`). The composer already
+  discloses its date and project progressively; the remaining cost is the
+  title, the search row and the bucket strip.
+
 ## NEXT ACTION
 
-Phase 1, in this order: reminders delivered → the provider seam (revision,
-external links, tombstones, delete/archive) → subtasks → UI polish and mobile
-→ browser QA → independent second acceptance pass.
+**Phase 2 — Vikunja**, which is conditional and has a real blocker: a Vikunja
+server needs somewhere to live, and the standing constraints forbid creating
+paid infrastructure or making an irreversible external commitment without
+Grant. What does NOT need his decision is proving the provider against a REAL
+Vikunja run locally — the seam, the field mappings, the conflict policy and
+two-way sync are all provable that way, and the result is an integration
+Grant can then point at whichever host he chooses.
 
 ---
 
