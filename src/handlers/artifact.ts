@@ -36,6 +36,7 @@
  * parses to nothing is a failure rather than an empty PDF with a cover on it.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import { type Block, coverTakes, type Report, renderReport } from '../artifacts/report.ts'
 import { filenameFor, storeArtifact } from '../artifacts/store.ts'
 import { validatePdf } from '../artifacts/validate.ts'
@@ -443,7 +444,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             `I stopped part way through the report, at "${run.at}": ${run.pause.detail} ` +
             `${run.pause.resumeWhen}`,
           evidence: 'verified',
-          path: 'deterministic_retrieval',
+          path: await howComposed(deps.db, job.jobId),
         }
       }
 
@@ -456,7 +457,7 @@ export function artifactHandler(deps: ArtifactDeps): Handler {
             'Everything I had already finished is recorded, so asking again carries on ' +
             'from there rather than starting over.',
           evidence: 'verified',
-          path: 'deterministic_retrieval',
+          path: await howComposed(deps.db, job.jobId),
         }
       }
 

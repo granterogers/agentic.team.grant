@@ -211,15 +211,94 @@ refused by default: an adapter may import `quality.ts` and `provenance.ts`
 else from `src/agents`. Proved able to fail by putting an `understand` import
 into `src/slack/events.ts`: red, named the file, restored, green.
 
+### CROSS-CHANNEL ACTION EQUIVALENCE — proved, not reasoned
+
+`verify:equivalence` proves the same words reach the canonical layer on every
+surface. It does not RUN the jobs, so nothing asserted that the same sentence
+DOES the same thing whichever door Grant used. `verify:anchors` now drives
+anchor A on all four — telegram, slack, teamhq, voice — and asserts the four
+agree:
+
+    telegram: rule=true answered=true added=0 · slack: rule=true answered=true
+    added=0 · teamhq: rule=true answered=true added=0 · voice: rule=true
+    answered=true added=0
+
+Two checks, because four doors agreeing to do NOTHING would satisfy the first:
+the second says what they agree on is the right thing. `check:one-brain` is the
+structural half and this is the behavioural one, and they fail differently — the
+check would stay green if a door started passing subtly different TEXT to a
+shared interpreter.
+
+### THE SUITE WAS LEAVING PERMANENT DEBRIS ON HIS GOVERNANCE PAGE
+
+Found by `check:leaks`, which is what it is for. `remember` was called with the
+literal `'grant'`, so every lesson claimed him as author whoever sent the
+message — and `lessons.is_fixture` is GENERATED from that column while the table
+refuses DELETE and UPDATE by trigger. **Thirteen copies of one standing
+preference accumulated in an afternoon**, from the suite written to prove the
+office behaves. Sixth instance in this repository of harness traffic about to be
+read as real, and the first inside a suite written for #282.
+
+Fixed in the product, not in the teardown: the handler reads
+`jobs.requested_by` and records who actually taught it, falling back to `grant`
+for a job with nothing recorded. A harness lesson is then `verify-anchors`,
+`is_fixture` is generated true, and it never reaches the page. The suite asserts
+the attribution rather than believing it.
+
+The twelve already stored were retracted through `app.retract_lesson`, the
+sanctioned withdrawal path; the one at 06:15 attributed to `telegram:grant` was
+left alone, because it is not the harness's to retract. Two fixture tasks
+swept. `check:leaks` clean, 0 harness deliveries escaped since the guard, and
+Grant's four real projects untouched.
+
+### AND THE ANCHOR-B FIX MADE A LATENT DEFECT REACHABLE
+
+Teaching `extract.ts` the "read a source and make tasks" shape sent real work
+to `office.extract_tasks` for the first time from an ordinary sentence — and
+**every one of those jobs FAILED**:
+
+    output cannot be marked deterministic: job … has 1 recorded inference
+    attempt(s) against correlation …
+
+`extract-tasks.ts` built one `base` object with
+`path: 'deterministic_retrieval'` and spread it into all five returns, two of
+which sit below `router.complete`. The insert was refused, the job died, and
+Grant would have got nothing for a delegation he had asked for.
+`verify:extract` passed 11/11 throughout, because it asserts the TASK ROWS,
+which really were created.
+
+`provenance.ts` records the identical shape in `slack-rotation.ts`, where the
+only branch that spends a model is the one reporting a failure — the check
+silenced exactly the message it exists to protect, for two days. Three files
+now, so it was fixed as a CLASS: `artifact.ts`, `synthesise.ts` and
+`notion-import.ts` were in the same state and all four now ASK `howComposed`
+rather than asserting.
+
+`tests/agents/provenance-order.test.ts` gains the structural half — a handler
+that can reach a model must import `howComposed` — with a control asserting the
+rule is not vacuous. Its existing order detector was ALSO fixed: it scanned to
+`satisfies HandlerOutput`, which not every return carries, so it reported a
+correct return against a `router.complete` twenty-nine lines below it in a
+different statement. Brace balance now bounds it, and its own controls still
+pass, so the loosening did not make it blind.
+
+### AND THE SUITE WAS KILLING THE WORK IT ASSERTED
+
+`verify:anchors` cancelled any job its scoped dequeue returned that was not the
+one it wanted — including **its own delegated child**, which inherits
+`requested_by`. So it cancelled the extraction, then asserted the extraction
+had happened, and was green. CLAUDE.md records `verify:recovers` taking its own
+earlier work; this is the sharper version, because the child IS the thing under
+test. A job from the run's own project is now RUN rather than set aside, the
+child is driven to a terminal state before the check, and the check asserts it
+did not DIE — `settled(state)` includes `failed`, and a check satisfied by its
+subject having died is worse than no check.
+
 ## NEXT ACTION
 
-Cross-channel ACTION equivalence: one multi-intent sentence through all four
-surfaces, asserting the four turns agree on what they DID.
-`verify:equivalence` already proves the same words reach the canonical layer on
-every surface; what is not yet asserted is that the same actions follow.
-
-Then: specialist visibility in Slack, and truthful progress for long work —
-five minutes of silence must be impossible.
+Specialist visibility in Slack — who contributed, their work product, Claire's
+synthesis, and the resulting action — and truthful progress for long work: five
+minutes of silence must be impossible.
 
 ---
 

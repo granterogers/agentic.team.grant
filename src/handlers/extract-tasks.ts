@@ -35,6 +35,7 @@
  * answer, because he cannot tell.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import type { ProviderRouter } from '../providers/router.ts'
@@ -130,6 +131,26 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
   return {
     kind: 'office.extract_tasks',
     handle: async (job: Job): Promise<HandlerOutput> => {
+      /*
+        THE BRANCHES BELOW THE MODEL CALL MAY NOT CLAIM DETERMINISM.
+
+        `base` was spread into all five returns with
+        `path: 'deterministic_retrieval'`, and two of those sit AFTER
+        `router.complete`. `enforce_deterministic_claim` refuses the claim on
+        any correlation that spent an inference and is right to, so the output
+        INSERT was refused, the job FAILED, and Grant got nothing for a
+        delegation he had asked for.
+
+        It went unseen because nothing reached this handler from an ordinary
+        sentence until #282 taught `extract.ts` the "read a source and make
+        tasks" shape — and because `verify:extract` asserts the TASK ROWS,
+        which really were created, rather than the output the job dies on.
+
+        This is `provenance.ts`'s own worked example happening a third time:
+        one `base` object, one claim, five returns, and only the branches that
+        spend a model are wrong. So the claim is ASKED rather than asserted,
+        which is what `howComposed` is for.
+      */
       const base = {
         confidence: 'high' as const,
         evidence: 'verified' as const,
@@ -138,6 +159,14 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
         path: 'deterministic_retrieval' as const,
         model: null,
       }
+      /*
+        Asked AFTER the model call in each branch that makes one, never in the
+        object literal beside the body: CLAUDE.md records two handlers that
+        asked one step too early because an object literal evaluates in source
+        order, and failed every two hours for six hours.
+      */
+      const spent = async (): Promise<'deterministic_retrieval' | 'inference'> =>
+        await howComposed(db, job.jobId)
       const say = (body: string): HandlerOutput => ({ ...base, body }) satisfies HandlerOutput
 
       if (job.projectId === null || job.projectId === undefined) {
@@ -228,6 +257,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
         */
         return {
           ...base,
+          path: await spent(),
           body: `I read ${from} and could not find anything in it that needs doing.`,
           shape: 'tasks_extracted',
           facts: { tasks: [], from },
@@ -300,6 +330,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
 
       return {
         ...base,
+        path: await spent(),
         body,
         shape: 'tasks_extracted',
         facts: { tasks: found, from },

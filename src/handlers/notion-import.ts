@@ -37,6 +37,7 @@
  * updated, because a rerun must not overwrite an edit he made in between.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import { NotionClient } from '../notion/api.ts'
@@ -298,11 +299,25 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
         path: 'deterministic_retrieval' as const,
         model: null,
       }
-      const say = (body: string, announce = true): HandlerOutput =>
-        ({ ...base, body, announce }) satisfies HandlerOutput
+      /*
+        ASKED, NEVER ASSERTED (#282, and provenance.ts's own worked example a
+        fourth time). `base` carries `deterministic_retrieval` and `say` is
+        used on both sides of a model call — `curriculum` asks a model to plan
+        the import, and `enforce_deterministic_claim` refuses the claim on any
+        correlation that spent one. A branch below it would fail the job and
+        lose the answer, which is the shape that silenced ten Slack rotation
+        failures for two days.
+      */
+      const say = async (body: string, announce = true): Promise<HandlerOutput> =>
+        ({
+          ...base,
+          path: await howComposed(db, job.jobId),
+          body,
+          announce,
+        }) satisfies HandlerOutput
 
       const ready = await prepare(db, job)
-      if (ready.stop !== null) return say(ready.stop)
+      if (ready.stop !== null) return await say(ready.stop)
       const { projectId, projectName, token, docsDb, projectsDb, tasksDb, sources } = ready
 
       /*
@@ -444,7 +459,7 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
         (modules.length === 0 ? '' : `\n\nModules: ${modules.map((m) => m.name).join(', ')}.`) +
         (links.length === 0 ? '' : `\n\n${links.slice(0, 6).join('\n')}`)
 
-      return say(body)
+      return await say(body)
     },
   }
 }

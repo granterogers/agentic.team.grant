@@ -2486,13 +2486,41 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         run over, so the two cannot disagree about whether a second intent
         exists.
       */
+      /*
+        WHO TAUGHT IT, rather than an assumption that it was Grant.
+
+        `remember` was called with the literal `'grant'`, so every lesson in
+        `public.lessons` claims him as its author whoever sent the message —
+        and `lessons.is_fixture` is GENERATED from that column, which means a
+        suite driving this path stores a REAL standing preference on the
+        Governance page that can never be removed (the table refuses DELETE and
+        UPDATE by trigger). `verify:anchors` put thirteen copies of one rule
+        there in an afternoon before this was noticed.
+
+        `jobs.requested_by` is composed as `<origin_channel>:<subject>`, so the
+        subject half is who sent it — the same field #65 and 0342 both turn on.
+        `grant` remains the fallback, because a job with nothing recorded is
+        one from before this existed.
+
+        One query, on a path that fires only when he is actually teaching
+        something.
+      */
+      const learnedBy = await deps.db
+        .execute(`
+          select coalesce(
+                   nullif(split_part(coalesce(requested_by, ''), ':', 2), ''),
+                   'grant') as v
+            from public.jobs where job_id = ${lit(job.jobId)}::uuid`)
+        .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? 'grant'))
+        .catch(() => 'grant')
+
       const taught =
         teaching === null
           ? null
           : await remember(
               deps.db,
               teaching,
-              'grant',
+              learnedBy,
               // Addressed to one person, or to the office. Getting this backwards
               // means a rule for Ruby quietly governing Daniel.
               (payload.addressed_to ?? '') === '' ? null : who.slug,

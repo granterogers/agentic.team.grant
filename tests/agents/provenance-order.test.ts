@@ -36,22 +36,43 @@ const HANDLERS = globSync('src/handlers/*.ts')
  * Does this file put a model call AFTER `path: await howComposed(...)` inside
  * the same object literal?
  *
- * Scanned from the `path:` line to the closing `satisfies HandlerOutput`,
- * which is how every one of these returns is written. A model call is
- * `sayAs(` or `router.complete(` — the two ways this repository spends one.
+ * Scanned from the `path:` line to the END OF THE OBJECT LITERAL, found by
+ * brace balance. A model call is `sayAs(` or `router.complete(` — the two ways
+ * this repository spends one.
+ *
+ * The first version stopped at `satisfies HandlerOutput`, which is how MOST of
+ * these returns are written and not all of them. A correct return without that
+ * suffix let the scan run on into the rest of the function, and #282 added one:
+ * `synthesise.ts`'s `dependency_wait` branch was reported against a
+ * `router.complete` twenty-nine lines below it, in a different statement. A
+ * detector that points at the wrong place is worse than a bare count, which
+ * this repository has already paid for twice — `check:templates` naming a
+ * backtick for every parse error, and an audit printing "12 of 6".
+ *
+ * Brace balance cannot be fooled that way: the literal ends where it ends.
  */
 const asksTooEarly = (src: string): readonly string[] => {
   const bad: string[] = []
   const lines = src.split('\n')
   for (const [i, line] of lines.entries()) {
     if (!/path:\s*await\s+howComposed\(/.test(line)) continue
+    /*
+      Depth 1 at the `path:` line, because it sits one level inside the object
+      literal that opened above it. The literal is closed by the line that
+      brings the balance back to zero.
+    */
+    let depth = 1
     for (let j = i + 1; j < lines.length; j++) {
       const l = lines[j] ?? ''
-      if (/satisfies HandlerOutput/.test(l)) break
       if (/\b(?:sayAs|router\.complete)\(/.test(l)) {
         bad.push(`${String(i + 1)} -> ${String(j + 1)}: ${l.trim().slice(0, 60)}`)
         break
       }
+      for (const ch of l) {
+        if (ch === '{') depth += 1
+        else if (ch === '}') depth -= 1
+      }
+      if (depth <= 0) break
     }
   }
   return bad
@@ -105,5 +126,57 @@ describe('a handler asks how it composed its answer after composing it', () => {
       '      } satisfies HandlerOutput',
     ].join('\n')
     expect(asksTooEarly(ok)).toEqual([])
+  })
+})
+
+/**
+ * AND THE OTHER HALF: a handler that can spend a model may not hardcode the
+ * claim at all.
+ *
+ * The order check above catches asking too early. It cannot catch never
+ * asking, which is the commoner shape and the one that took a day to find:
+ * `extract-tasks.ts` built one `base` object with
+ * `path: 'deterministic_retrieval'` and spread it into all five of its
+ * returns, two of which sit below `router.complete`. Every delegation that
+ * reached it FAILED — the output insert refused, the job dead, Grant given
+ * nothing for work he had asked for — and `verify:extract` passed 11/11
+ * throughout, because it asserts the TASK ROWS, which really were created.
+ *
+ * `provenance.ts` records the identical defect in `slack-rotation.ts`, where
+ * the only branch that spends a model is the one that reports a failure: the
+ * check silenced exactly the message it exists to protect. Three files now.
+ *
+ * So the property is structural and cheap: **a handler that can reach a model
+ * must import `howComposed`.** It does not prove every branch asks — nothing
+ * short of running them can — but a file that spends inferences and has never
+ * heard of the question is the state all three defects were in.
+ */
+describe('a handler that spends a model asks how it was composed', () => {
+  it('every model-spending handler imports howComposed', () => {
+    const missing: string[] = []
+    for (const file of HANDLERS) {
+      const source = readFileSync(file, 'utf8')
+      const spends = /\.complete\(/.test(source)
+      const claims = /path:\s*'deterministic_retrieval'/.test(source)
+      if (!spends || !claims) continue
+      if (!/howComposed/.test(source)) missing.push(file)
+    }
+    expect(missing, `these claim determinism and can spend a model: ${missing.join(', ')}`).toEqual(
+      [],
+    )
+  })
+
+  it('CONTROL: the rule is not vacuous — some handler is in scope', () => {
+    /*
+      A found-nothing check is indistinguishable from a check that cannot find
+      anything, and CLAUDE.md records three instances of exactly that. If no
+      handler both spends a model and carries the literal, the assertion above
+      passes over an empty set and says nothing.
+    */
+    const inScope = HANDLERS.filter((f) => {
+      const s = readFileSync(f, 'utf8')
+      return /\.complete\(/.test(s) && /path:\s*'deterministic_retrieval'/.test(s)
+    })
+    expect(inScope.length).toBeGreaterThan(0)
   })
 })

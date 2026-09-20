@@ -76,7 +76,7 @@ const run = Math.random().toString(36).slice(2, 10)
 const SLUG = `anchor-proof-${run}`
 const NAME = `Anchor proof ${run}`
 const WORKER = `anchors-${run}`
-const MINE = 'telegram:verify-anchors'
+const mineOn = (surface: string): string => `${surface}:verify-anchors`
 
 console.log('the production anchors, through the real path (#282) —\n')
 
@@ -117,13 +117,46 @@ interface Turn {
   requestedBy: string
 }
 
+/*
+  WHAT TO DO WITH A JOB THIS RUN DID NOT ASK FOR.
+
+  #184's scope keeps other suites out; nothing stops this suite taking its OWN
+  later work, and CLAUDE.md records `verify:recovers` doing exactly that. Here
+  it is sharper than a race: anchor B's whole point is that the office enqueues
+  a CHILD, the child inherits `requested_by`, and the dequeue loop looking for
+  the NEXT parent takes it — so the first version cancelled the delegation it
+  had just proved the office started, and then asserted the delegation had
+  happened. Green, over work the harness had killed.
+
+  So a job from this run's own project is RUN, which is what the office would
+  have done with it, and only a genuine stranger is set aside.
+*/
+const setAside = async (got: Job): Promise<void> => {
+  const mine = await one(`
+    select (project_id = ${lit(projectId)}::uuid) as ours from public.jobs
+     where job_id = ${lit(got.jobId)}::uuid`)
+  if (mine.ours === true) {
+    const pass = await buildPass(db, WORKER, {
+      max: 1,
+      canTranscribe: false,
+      canSubprocess: false,
+      projectRef,
+    })
+    await runJob(db, got, pass.handlers, pass.review).catch(() => undefined)
+    return
+  }
+  await db.execute(`
+    update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+      state_reason = 'not this suite''s job' where job_id = ${lit(got.jobId)}::uuid`)
+}
+
 /** One whole turn: the message arrives, the office answers, the row is read. */
-const say = async (tag: string, said: string): Promise<Turn> => {
+const say = async (tag: string, said: string, surface = 'telegram'): Promise<Turn> => {
   const command = await one(`
     insert into public.inbound_commands
       (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
-    values ('telegram', ${lit(`anchors-${run}-${tag}`)}, 'verify-anchors', ${lit(said)},
-            ${lit(`telegram:message:anchors-${run}-${tag}`)}, ${lit(projectId)}::uuid)
+    values (${lit(surface)}, ${lit(`anchors-${run}-${tag}`)}, 'verify-anchors', ${lit(said)},
+            ${lit(`${surface}:message:anchors-${run}-${tag}`)}, ${lit(projectId)}::uuid)
     returning command_id::text as id`)
   const enqueued = await one(`select app.enqueue_inbound(${lit(String(command.id))}::uuid) as j`)
   const jobId = String(
@@ -142,13 +175,10 @@ const say = async (tag: string, said: string): Promise<Turn> => {
   */
   let job: Job | null = null
   for (let attempt = 0; attempt < 5 && job === null; attempt += 1) {
-    const got = await dequeue(db, WORKER, false, false, undefined, MINE)
+    const got = await dequeue(db, WORKER, false, false, undefined, mineOn(surface))
     if (got !== null && got.jobId === jobId) job = got
-    else if (got !== null) {
-      await db.execute(`
-        update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
-          state_reason = 'not this suite''s job' where job_id = ${lit(got.jobId)}::uuid`)
-    } else await pause(1_000)
+    else if (got !== null) await setAside(got)
+    else await pause(1_000)
   }
   if (job === null) {
     // The deployed worker took it, which is the office working. Wait and read
@@ -183,13 +213,10 @@ const say = async (tag: string, said: string): Promise<Turn> => {
       await db.execute(`select app.requeue_retrying()`)
       let again: Job | null = null
       for (let tries = 0; tries < 5 && again === null; tries += 1) {
-        const got = await dequeue(db, WORKER, false, false, undefined, MINE)
+        const got = await dequeue(db, WORKER, false, false, undefined, mineOn(surface))
         if (got !== null && got.jobId === jobId) again = got
-        else if (got !== null) {
-          await db.execute(`
-            update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
-              state_reason = 'not this suite''s job' where job_id = ${lit(got.jobId)}::uuid`)
-        } else await pause(1_000)
+        else if (got !== null) await setAside(got)
+        else await pause(1_000)
       }
       if (again === null) break
       job = again
@@ -259,6 +286,28 @@ check(
   'the standing rule was still stored',
   `${String(rule.n)} lesson row(s) from this job`,
   Number(rule.n) >= 1,
+)
+
+/*
+  AND IT IS THIS SUITE'S RULE, NOT ONE OF HIS.
+
+  `public.lessons` refuses DELETE and UPDATE by trigger, so a lesson this suite
+  stores as real is permanently on Grant's Governance page. Before the handler
+  recorded who actually taught it — it passed the literal `'grant'` — thirteen
+  copies of "always give your information in clear bullet points" accumulated
+  there in one afternoon, from the suite written to prove the office behaves.
+
+  `lessons.is_fixture` is GENERATED from `learned_by`, so this is asserted
+  rather than believed. 0460 and 0463 are two suites that believed an
+  attribution and were wrong.
+*/
+const mine = await one(`
+  select count(*)::int as n from public.lessons
+   where from_job = ${lit(a.jobId)}::uuid and is_fixture`)
+check(
+  'and it is attributed to the harness, so it never reaches his Governance page',
+  `${String(mine.n)} of ${String(rule.n)} marked as harness traffic`,
+  Number(mine.n) === Number(rule.n) && Number(rule.n) >= 1,
 )
 
 /*
@@ -333,13 +382,54 @@ check(
   So: a child job exists (the office went and read the project), and nothing
   went onto his own list from a sentence that asked the office to do the work.
 */
+/*
+  DRIVE THE CHILD BEFORE ASKING WHETHER IT WORKED.
+
+  The delegation is a child job, and a child that is still QUEUED has not
+  failed — so a check written without this would pass over work that had not
+  happened yet, which is the harness reporting a turn it never saw. The suite
+  runs it the way the deployed worker would, then reads the row.
+*/
+for (let sweep = 0; sweep < 6; sweep += 1) {
+  const waiting = await one(`
+    select count(*)::int as n from public.jobs
+     where parent_job_id = ${lit(b.jobId)}::uuid
+       and state in ('queued', 'retrying')`)
+  if (Number(waiting.n) === 0) break
+  await db.execute(`select app.requeue_retrying()`)
+  const got = await dequeue(db, WORKER, false, false, undefined, mineOn('telegram'))
+  if (got === null) await pause(2_000)
+  else await setAside(got)
+}
+
 const child = await one(`
-  select count(*)::int as n from public.jobs
-   where parent_job_id = ${lit(b.jobId)}::uuid`)
+  select count(*)::int as n,
+         count(*) filter (where state = 'failed')::int as dead,
+         coalesce(string_agg(left(coalesce(state_reason, ''), 70), ' | ')
+                    filter (where state = 'failed'), '') as why
+    from public.jobs where parent_job_id = ${lit(b.jobId)}::uuid`)
 check(
   'the surviving request was delegated rather than dropped',
   `${String(Number(child.n))} child job(s) from "scan the project and create tasks"`,
   Number(child.n) >= 1,
+)
+/*
+  AND THE CHILD DID NOT DIE.
+
+  The first version counted children and stopped there, and it passed green
+  over a delegation that FAILED every time: `extract-tasks.ts` claimed
+  `deterministic_retrieval` on a branch below its model call, the output insert
+  was refused, and Grant got nothing for work he had asked for. CLAUDE.md
+  records the same shape as `settled(state)` including `failed` — a check
+  satisfied by the subject having died is worse than no check, because the
+  report says the question was asked.
+*/
+check(
+  'and the child did the work rather than dying',
+  Number(child.dead) === 0
+    ? 'none failed'
+    : `${String(Number(child.dead))} FAILED: ${String(child.why)}`,
+  Number(child.dead) === 0,
 )
 check(
   'and it was not filed as one badly-titled to-do of his own',
@@ -368,6 +458,79 @@ check(
   'CONTROL: one plain request still makes exactly one task',
   `${String(made.length)} task(s): ${made.map((t) => t.title).join(' | ') || 'none'}`,
   made.length === 1,
+)
+
+// --- ONE OFFICE, THREE DOORS ----------------------------------------------
+console.log('\n  cross-channel — the same sentence, every surface')
+
+/*
+  THE SEMANTIC RESULT MUST BE CHANNEL-INDEPENDENT.
+
+  `verify:equivalence` proves the same words reach the canonical layer on every
+  surface, and that four surfaces produce the same kind of job in the same
+  project attributed to the same person. What it does NOT do is RUN them, so
+  nothing anywhere asserted that the same sentence DOES the same thing
+  whichever door Grant used.
+
+  `check:one-brain` is the structural half — no adapter may read what he meant.
+  This is the behavioural half, and the two answer different questions: the
+  check would stay green if a door started passing subtly different TEXT to a
+  shared interpreter, and this would go red.
+
+  Anchor A is the sentence, because it is the one with the most to get wrong:
+  a rule to store, a question to answer, and nothing to put on his list.
+
+  Asserted as AGREEMENT between the surfaces rather than against an expected
+  value. A constant would be a wording lock in a different costume; agreement
+  survives every rewording and fails on every real divergence.
+*/
+const DOORS = ['slack', 'teamhq', 'voice'] as const
+interface Door {
+  surface: string
+  storedARule: boolean
+  answered: boolean
+  addedToHisList: number
+}
+const doors: Door[] = [
+  {
+    surface: 'telegram',
+    storedARule: Number(rule.n) >= 1,
+    answered: a.model !== null,
+    addedToHisList: afterA.length - before.length,
+  },
+]
+for (const surface of DOORS) {
+  const seen = await tasksMade()
+  const turn = await say(`x-${surface}`, A, surface)
+  const lesson = await one(`
+    select count(*)::int as n from public.lessons
+     where from_job = ${lit(turn.jobId)}::uuid`)
+  const now = await tasksMade()
+  doors.push({
+    surface,
+    storedARule: Number(lesson.n) >= 1,
+    answered: turn.model !== null,
+    addedToHisList: now.length - seen.length,
+  })
+}
+
+const shape = (d: Door): string =>
+  `rule=${String(d.storedARule)} answered=${String(d.answered)} added=${String(d.addedToHisList)}`
+const shapes = new Set(doors.map(shape))
+check(
+  'every door does the same thing with the same sentence',
+  doors.map((d) => `${d.surface}: ${shape(d)}`).join(' · '),
+  shapes.size === 1,
+)
+/*
+  And the agreement is on the RIGHT thing. Four doors agreeing to do nothing
+  would satisfy the check above — which is the found-nothing shape CLAUDE.md
+  records three times, and the reason this second line exists.
+*/
+check(
+  'and what they agree on is: rule stored, question answered, list untouched',
+  `${String(doors.filter((d) => d.storedARule && d.answered && d.addedToHisList === 0).length)} of ${String(doors.length)} doors`,
+  doors.every((d) => d.storedARule && d.answered && d.addedToHisList === 0),
 )
 
 // --- teardown --------------------------------------------------------------

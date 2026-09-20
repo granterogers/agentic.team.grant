@@ -36,6 +36,7 @@
  * somebody has to remember.
  */
 
+import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { pauseJob } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -193,7 +194,7 @@ export function synthesiseHandler(deps: SynthesiseDeps): Handler {
           announce: false,
           body: `Waiting for ${who === '' ? 'the rest of the team' : who} before I answer.`,
           evidence: 'verified',
-          path: 'deterministic_retrieval',
+          path: await howComposed(deps.db, job.jobId),
         }
       }
 
