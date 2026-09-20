@@ -182,3 +182,50 @@ describe('what a real turn lets the planner start', () => {
     expect(line).toBeNull()
   })
 })
+
+/**
+ * WHICH TEXT THE PLANNER IS GIVEN (#283).
+ *
+ * `understand` hands the cascade a cleaned sentence, by contract and by
+ * measurement. The planner needs the whole request, because the clause a
+ * cleanup drops is often the PURPOSE clause and purpose is what decides
+ * whether a goal has a second step.
+ *
+ * The rule cannot be "always the raw instruction", because #282's anchor B is
+ * Grant correcting himself mid-message: the raw text still contains the
+ * fragment he withdrew, and planning it would perform the thing he replaced.
+ *
+ * These assert the SELECTION, which is the decision, without a provider.
+ */
+const choose = (instruction: string, abandoned: readonly string[], readings: readonly string[]) =>
+  abandoned.length === 0 ? instruction.trim() : readings.join(' ')
+
+describe('which text the planner is given', () => {
+  const RAW =
+    'Go through the onboarding material and then work out what is out of date, ' +
+    'so that I have something concrete to pick up later.'
+  /** What `understand` returned on two of eight real runs: the purpose clause gone. */
+  const CLEANED = 'Go through the onboarding material and work out what is out of date.'
+
+  it('uses his own sentence when he did not correct himself', () => {
+    expect(choose(RAW, [], [CLEANED])).toBe(RAW)
+    // The clause that decides whether there is a second step survives.
+    expect(choose(RAW, [], [CLEANED])).toContain('something concrete to pick up later')
+  })
+
+  it('uses the readings when he corrected himself, because the raw text still holds what he withdrew', () => {
+    const withCorrection =
+      'Create a task for me and the um... No actually, scan the whole project and create tasks.'
+    const survived = 'Scan the whole project and create tasks.'
+    expect(choose(withCorrection, ['Create a task for me and the um...'], [survived])).toBe(
+      survived,
+    )
+    expect(
+      choose(withCorrection, ['Create a task for me and the um...'], [survived]),
+    ).not.toContain('um...')
+  })
+
+  it('CONTROL: the two branches are genuinely different, so the choice is doing work', () => {
+    expect(choose(RAW, [], [CLEANED])).not.toBe(choose(RAW, ['x'], [CLEANED]))
+  })
+})

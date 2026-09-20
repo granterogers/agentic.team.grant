@@ -205,7 +205,8 @@ export const planAndPursue = async (
   job: Job,
   request: string,
 ): Promise<string | null> => {
-  const [catalogue, roster] = await Promise.all([
+  const canDo = new Set(performable())
+  const [granted, roster] = await Promise.all([
     planningCatalogue(db),
     db
       .execute(
@@ -219,12 +220,21 @@ export const planAndPursue = async (
         }),
       ),
   ])
-  const plan = await planFor(request, catalogue as readonly Capability[], roster, router, {
+  /*
+    The registry says what is ALLOWED and `performable()` says what has code
+    behind it. Two different questions (0298), joined here rather than in
+    either half — `goal.ts` must not import the executors and `perform.ts`
+    must not build the catalogue, or the two gates become one.
+  */
+  const catalogue: readonly Capability[] = granted.map((c) => ({
+    ...c,
+    performable: canDo.has(c.tool),
+  }))
+  const plan = await planFor(request, catalogue, roster, router, {
     jobId: job.jobId,
     correlationId: job.correlationId,
   })
 
-  const canDo = new Set(performable())
   const doable = plan.steps.filter((s) => canDo.has(s.capability))
   if (plan.steps.length < 2 || doable.length === 0) return null
 
@@ -3142,6 +3152,38 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         swallowed write is indistinguishable from a feature nobody built, which
         is why the catch writes rather than merely returning null.
       */
+      /*
+        THE PLANNER GETS WHAT GRANT SAID, NOT A TIDIED VERSION OF IT.
+
+        `Reading.text` is *"the request as a single clean sentence, in Grant's
+        own words wherever possible"*, and the cascade below WANTS that — #282
+        measured the win, because a recogniser is good at one clear request and
+        bad at a paragraph of speech.
+
+        The planner has the opposite need, and giving it the same text was a
+        real defect rather than a preference. Over eight runs of one sentence
+        the cleaned reading came back at 148, 142 and 91 characters, and the
+        91-character version had silently dropped *"so that I have something
+        concrete to pick up later"* — **the purpose clause**. Purpose is
+        precisely what decides whether a goal needs a second step, so the
+        planner was composing one-step plans from a paraphrase that had removed
+        the reason for the second one. That is what the three consecutive
+        `verify:composes` failures were; twelve direct calls of `planFor` on the
+        WHOLE sentence composed 12/12.
+
+        So: his sentence, verbatim, whenever it is safe to use it.
+
+        It is not safe when he corrected himself mid-message. #282's anchor B
+        is *"Create a task for me and the um... No actually, scan the entirety
+        of the project"* — the raw instruction still contains the fragment he
+        replaced, and a planner reading it would plan the thing he withdrew.
+        `abandoned` is non-empty exactly then, and the readings are the only
+        reconstruction available, so that branch keeps them. Verbatim in the
+        common case, safe in the other, and neither pretends to be the other.
+      */
+      const goalAsHeSaidIt =
+        understood.abandoned.length === 0 ? instruction.trim() : requests.join(' ')
+
       const actedAlready = [
         linked,
         made,
@@ -3156,7 +3198,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const pursuing =
         actedAlready || isBranch || requests.length === 0
           ? null
-          : await planAndPursue(deps.db, deps.router, job, requests.join(' ')).catch(
+          : await planAndPursue(deps.db, deps.router, job, goalAsHeSaidIt).catch(
               async (error: unknown) => {
                 await deps.db
                   .execute(`

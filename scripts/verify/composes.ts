@@ -309,6 +309,27 @@ check(
     : `office.pursue ${childId.slice(0, 8)} — composed on attempt ${String(attemptsSpent)} of ${String(ATTEMPTS)}`,
   childId !== '',
 )
+/*
+  AND IT COMPOSED FIRST TIME, WHICH IS THE ASSERTION THE RETRY MUST NOT HIDE.
+
+  The retry was added when this suite flaked, and a retry that makes a
+  nondeterministic product look deterministic is the wrong instrument — it
+  turns a defect into a longer runtime. The cause was found and fixed: the
+  planner was being handed `understand`'s CLEANED sentence, which came back at
+  91 to 148 characters for one 148-character message and sometimes dropped the
+  purpose clause. It gets his own words now, which cannot vary.
+
+  So the retry stays as EVIDENCE — a second attempt still produces the chain
+  checks below rather than losing them — and this check is what goes red if the
+  instability comes back.
+*/
+check(
+  'and it composed on the FIRST attempt — the input to the planner is stable',
+  attemptsSpent === 1
+    ? 'first attempt'
+    : `took ${String(attemptsSpent)} attempts, so something upstream of the planner is varying again`,
+  attemptsSpent === 1,
+)
 
 /*
   A PLAN IS DATA ON THE JOB, never a decision the model gets to keep making.

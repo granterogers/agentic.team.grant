@@ -63,6 +63,16 @@ export interface Capability {
   readonly inReply: boolean
   readonly purpose: string
   readonly verbs: readonly string[]
+  /**
+   * Whether the office can actually DO it today, as opposed to being allowed
+   * to.
+   *
+   * Supplied by the caller from `performable()`, never read from the registry
+   * — the registry is the authority on permission and says nothing about
+   * whether code exists (0298). Undefined means the caller did not say, and
+   * the sheet then makes no claim either way.
+   */
+  readonly performable?: boolean
 }
 
 /** One piece of proposed work. */
@@ -195,7 +205,24 @@ export const catalogueSheet = (catalogue: readonly Capability[]): string =>
   catalogue
     .map(
       (c) =>
-        `- ${c.tool} (${c.inReply ? 'runs now' : 'runs as a background job'}) — ` +
+        `- ${c.tool} (${c.inReply ? 'runs now' : 'runs as a background job'}` +
+        /*
+          SAID, NOT HIDDEN.
+
+          A capability can be granted and have nothing behind it — 0298's
+          defect, and `perform.ts` reports one as an honest impediment rather
+          than a silent no-op. But a planner that does not KNOW keeps choosing
+          them: a measured run picked `notebook.write` as its second step, and
+          the office could only refuse, so Grant got a read and an apology
+          where a plan was promised.
+
+          Marked rather than removed, deliberately. Removing it would hide the
+          gap, and 0298's whole argument is that a listed gap can become a
+          proposal (#49) while a deleted one cannot. The validator still
+          ACCEPTS it, so a plan that genuinely needs it still says so and still
+          records the impediment — the model is simply told the cost first.
+        */
+        `${c.performable === false ? ', NOT YET BUILT — the office can only refuse it' : ''}) — ` +
         `${c.purpose.split('.')[0]?.slice(0, 150) ?? c.purpose.slice(0, 150)}`,
     )
     .join('\n')
@@ -238,7 +265,30 @@ export function validate(
 ): GoalPlan {
   const byName = new Map(catalogue.map((c) => [c.tool, c]))
   const goal = typeof raw.goal === 'string' ? raw.goal.trim().slice(0, 400) : ''
+  /*
+    NO STEPS ARRAY IS NOT AN EMPTY PLAN.
+
+    `[]` is the model saying, legitimately, that nothing is needed — usually
+    beside a populated `unreachable`. A MISSING array is an answer that was not
+    a plan at all, and the two must not arrive as the same thing: the brace
+    scan spans the first `{` to the last `}`, so a bare JSON array of steps
+    yields the inner step object, which parses, has no `steps` key, and came
+    back as a MODEL plan with nothing in it.
+
+    Nothing unsafe followed — a zero-step plan starts no work — but `how` is
+    the field that says how a plan was arrived at, and `npm run verify:plans`
+    scores a fallback the way today's cascade scores. Reporting "the model
+    answered with something unreadable" as `model` would move a measurement for
+    a reason that has nothing to do with the office. CLAUDE.md's rule about a
+    default value that is also a legitimate value, in a new place.
+  */
+  if (raw.steps !== undefined && !Array.isArray(raw.steps)) {
+    return fellBack('the answer had no list of steps in it')
+  }
   const proposed = Array.isArray(raw.steps) ? raw.steps : []
+  if (raw.steps === undefined) {
+    return fellBack('the answer had no list of steps in it')
+  }
   if (proposed.length > MOST_STEPS) {
     return fellBack(`the plan had ${String(proposed.length)} steps`)
   }
@@ -374,6 +424,10 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '1. capability MUST be one of the names listed above, exactly. If the work needs',
     '   something not on that list, do not invent a name — put a short description of',
     '   the missing work in unreachable instead.',
+    '1b. A capability marked NOT YET BUILT can only be refused. If another listed',
+    '   capability achieves the same thing, choose that one. If none does, the work',
+    '   belongs in unreachable — naming the unbuilt capability anyway only produces',
+    '   an apology where a plan was promised.',
     '2. needs lists the ids of EARLIER steps whose RESULT this step requires. Use it',
     '   only for a real dependency: if the second step cannot be written until the',
     '   first one has found something out, it depends on it. Independent work has',

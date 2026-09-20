@@ -107,11 +107,27 @@ today produce prose. If those turns become common and the composition rate
 stays where it is, the fast path's threshold is the dial to turn, not the
 feature to remove.
 
+### 5. The planner reads what Grant said, and knows what the office can do
+
+Two later corrections, both of which had looked like model nondeterminism.
+
+`understand` hands the CASCADE a cleaned sentence, by contract and by
+measurement. Handing the planner the same text lost the purpose clause on a
+third of runs, and purpose is what decides whether a goal has a second step. The
+planner gets his own words — except where he corrected himself mid-message,
+where the raw text still holds the fragment he withdrew and the readings are the
+only reconstruction available.
+
+And the catalogue sheet marks a capability with no executor **NOT YET BUILT**,
+because a planner that does not know keeps choosing them. Marked rather than
+removed: the validator still accepts one, so a plan that genuinely needs it
+still records the impediment that becomes a proposal.
+
 ## What this does NOT claim
 
-The planner is a free model and its output varies. On an unchanged composed
-sentence it returns a two-step plan most of the time and a one-step plan the
-rest, so the office genuinely behaves differently on identical input.
-`verify:composes` measures that with a bounded retry and reports the attempt
-rather than hiding it behind a green tick. Reducing that variance is open work,
-not a solved problem.
+The planner is a free model. After the two corrections above it composed the
+identical plan on four consecutive end-to-end runs and on eight paired direct
+calls — but that is **one sentence**, and the held-out corpus was spent before
+those fixes existed, so nothing frozen has scored them. `verify:composes`
+asserts first-attempt composition, which is what goes red if the instability
+returns; it does not establish a rate across the space of things Grant says.

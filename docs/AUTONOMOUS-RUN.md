@@ -512,6 +512,97 @@ Nothing here changes a turn the cascade already handles, and an ordinary
 question starts no plan at all. That control runs through the same door in the
 same run.
 
+## THE NONDETERMINISM WAS A DEFECT, AND IT HAD TWO CAUSES
+
+The bounded retry added earlier was the wrong instrument — it made a varying
+product look steady. Both causes are now fixed at source and the retry has been
+demoted to evidence, with a check that FAILS if composition ever needs a second
+attempt again.
+
+### 1. The planner was being handed a paraphrase of what Grant said
+
+`Reading.text` is, by its own contract, *"the request as a single clean
+sentence, in Grant's own words wherever possible"*. The cascade WANTS that —
+#282 measured the win, because a recogniser is good at one clear request and
+bad at a paragraph of speech.
+
+The planner has the opposite need, and giving it the same text was a defect.
+Over eight runs of ONE 148-character sentence the cleaned reading came back at
+**91, 96, 142 and 148 characters**, and the short ones had dropped *"so that I
+have something concrete to pick up later"* — **the purpose clause**. Purpose is
+exactly what decides whether a goal needs a second step, so the planner was
+composing one-step plans from a paraphrase with the reason for the second step
+removed.
+
+Measured paired, both inputs in the same run, same model:
+
+| input to the planner | composed a 2-step plan |
+|---|---|
+| `understand`'s cleaned sentence (91–148 chars) | **7/8** |
+| Grant's own sentence (148 chars, always) | **8/8** |
+
+The rate is the smaller half of the evidence. The structural half is that the
+verbatim input **cannot vary at all**, and the one observed one-step plan came
+from a 91-character cleaning.
+
+**It is not always safe to use his raw words**, and that is why the fix is a
+choice rather than a substitution. #282's anchor B is Grant correcting himself
+mid-message: the raw instruction still contains the fragment he withdrew, and a
+planner reading it would plan the thing he replaced. `abandoned` is non-empty
+exactly then, and that branch keeps the readings. Verbatim in the common case,
+safe in the other, and neither pretends to be the other.
+
+### 2. The planner did not know which capabilities the office can perform
+
+A registry row can claim anything (0298) and `perform.ts` turns one with no
+executor into an honest impediment. Right, and not enough: a planner that does
+not KNOW keeps choosing them. A measured run picked `notebook.write` as its
+second step, the office could only refuse, and Grant would have got a read and
+an apology where a plan was promised.
+
+The catalogue sheet marks them **NOT YET BUILT** and rule 1b tells the model to
+prefer a capability that works or put the work in `unreachable`. Marked, not
+removed — 0298's argument is that a listed gap can become a proposal (#49)
+while a deleted one cannot, and the validator still accepts it, so a plan that
+genuinely needs it still records the impediment.
+
+### The result, measured the same way as the failure
+
+**Four consecutive `verify:composes` runs: 13/13 each, the identical plan
+`notebook.read → draft.create` every time, composed on the FIRST attempt every
+time.** Before the fixes: three consecutive failures, a `notebook.write` step
+the office could only refuse, and step counts that varied on unchanged input.
+
+`verify:plans` is unmoved by the change: candidate **14/23** against today's
+**7/23**, multi-step **6/15** against **0/15**, 0 forbidden, 0 invented.
+
+## THE PLANNER'S PROVIDER BOUNDARY, ATTACKED
+
+`goal-validator.test.ts` attacks the validator, which sees a parsed object.
+`goal-boundary.test.ts` attacks everything between a provider's bytes and that
+object, because the extraction is a brace scan from the first `{` to the last
+`}` — the right shape for real model output, and the shape that fails
+interestingly. Twelve cases: a markdown fence, prose either side, a truncated
+answer, no JSON at all, an empty answer, a bare array, two objects, a provider
+that throws, a rejection that must never reach the caller, an instruction
+hidden in a step reason, and five capability names that only LOOK like one on
+the sheet, with a control proving the exact name is accepted.
+
+**It found one thing and corrected one test that was pinning a defect.**
+
+A bare JSON array of steps yields its FIRST ELEMENT to the brace scan — which
+parses, has no `steps` key, and came back as a **`model` plan with nothing in
+it**. Nothing unsafe followed, because a zero-step plan starts no work; it
+mattered for measurement, since `verify:plans` scores a fallback the way
+today's cascade scores. A missing steps array is now a fallback with a reason,
+while an EMPTY one stays a legitimate answer — the default-value-is-also-a-
+legitimate-value defect, in a new place, with a control for each side.
+
+And the existing test for it was titled *"a garbage shape falls back rather
+than throwing"* while asserting `how === 'model'`. **The title was right and
+the assertion was pinning the defect.** Read what a test asserts, not what it
+is called.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
@@ -523,11 +614,10 @@ same run.
   `verify:pursues`' `observe` control, not by a real turn of his.
 - No bounded re-planning: a step that finds nothing ends the plan honestly
   rather than causing the office to think again.
-- **The planner's composition rate is not measured.** Seven observations, in
-  two clusters, is not a rate — and whether the variance is per-call or
-  time-correlated (a provider or model rotation) changes what the fix is.
-  Measuring it properly is open work, and until it is done the bounded retry is
-  an instrument that reports rather than an answer.
+- The composition rate is now stable on ONE sentence over four end-to-end runs
+  and eight paired direct calls. That is not a claim about every sentence, and
+  the held-out corpus was spent before these fixes existed, so nothing frozen
+  has scored them.
 - Goal-completion verification is untouched — a settled child is still taken
   as the goal being met.
 - Goal-completion verification is untouched — a handler returning is still

@@ -12,7 +12,7 @@
  * refusals and be a worse defect than the one it guards.
  */
 import { describe, expect, it } from 'vitest'
-import { type Capability, validate } from '../../src/agents/goal.ts'
+import { type Capability, catalogueSheet, validate } from '../../src/agents/goal.ts'
 
 const CATALOGUE: Capability[] = [
   {
@@ -195,8 +195,40 @@ describe('validate — bounds and shape', () => {
   })
 
   it('a garbage shape falls back rather than throwing', () => {
-    expect(validate({} as never, CATALOGUE, ROSTER).how).toBe('model')
-    expect(validate({ steps: 'not a list' } as never, CATALOGUE, ROSTER).how).toBe('model')
+    /*
+      This asserted `how === 'model'` while its own title said "falls back",
+      and the title was right. An answer with no list of steps in it is not a
+      plan the model produced with nothing in it — it is an answer that was not
+      a plan, and `how` is the field that says which.
+
+      Nothing unsafe followed either way, because a zero-step plan starts no
+      work. It mattered for MEASUREMENT: `npm run verify:plans` scores a
+      fallback the way today's cascade scores, so an unreadable answer counted
+      as `model` would move the number for a reason that has nothing to do with
+      the office. The brace scan makes this reachable — a bare JSON array of
+      steps yields its first element, which parses and has no `steps` key.
+    */
+    expect(validate({} as never, CATALOGUE, ROSTER).how).toBe('fallback')
+    expect(validate({ steps: 'not a list' } as never, CATALOGUE, ROSTER).how).toBe('fallback')
+    // The property the title is about: neither of those threw.
+    expect(validate({} as never, CATALOGUE, ROSTER).steps).toHaveLength(0)
+  })
+
+  it('CONTROL: an EMPTY list of steps is the model saying nothing is needed, and is kept', () => {
+    /*
+      The distinction the change above exists for. `[]` beside a populated
+      `unreachable` is a real, useful answer: the office understood and has no
+      way to do it. Folding that into the same verdict as an unreadable reply
+      is the defect this repository keeps paying for — a default value that is
+      also a legitimate value, so no reader can tell them apart.
+    */
+    const got = validate(
+      { goal: 'g', steps: [], unreachable: ['book a flight'] } as never,
+      CATALOGUE,
+      ROSTER,
+    )
+    expect(got.how).toBe('model')
+    expect(got.unreachable).toContain('book a flight')
   })
 })
 
@@ -353,5 +385,51 @@ describe('validate — a delivery capability may not reach outside the office', 
       ROSTER,
     )
     expect(got.steps[0]?.audience).toBeNull()
+  })
+})
+
+/**
+ * WHAT THE SHEET SAYS ABOUT A CAPABILITY NOTHING PERFORMS (#283).
+ *
+ * A registry row can claim anything (0298) and `perform.ts` turns one with no
+ * executor into an honest impediment. That is right, and it is not enough: a
+ * planner that does not KNOW keeps choosing them. A measured run picked
+ * `notebook.write` as its second step and the office could only refuse, so the
+ * turn produced a read and an apology where a plan was promised.
+ *
+ * Marked rather than removed — 0298's argument is that a listed gap can become
+ * a proposal (#49) while a deleted one cannot, and the validator still accepts
+ * it so a plan that genuinely needs it still records the impediment.
+ */
+describe('the sheet tells the planner what has code behind it', () => {
+  const cap = (tool: string, performable?: boolean) => ({
+    tool,
+    level: 1,
+    enabled: true,
+    inReply: true,
+    purpose: `Does ${tool}. And a second sentence nobody needs.`,
+    verbs: [],
+    ...(performable === undefined ? {} : { performable }),
+  })
+
+  it('marks a granted capability nothing performs', () => {
+    const sheet = catalogueSheet([cap('notebook.write', false)])
+    expect(sheet).toContain('NOT YET BUILT')
+    expect(sheet).toContain('notebook.write')
+  })
+
+  it('says nothing extra about one that works', () => {
+    expect(catalogueSheet([cap('db.read', true)])).not.toContain('NOT YET BUILT')
+  })
+
+  it('CONTROL: makes no claim when the caller did not say', () => {
+    // Undefined is not false. A caller that has not asked must not be reported
+    // as having found nothing — the distinction this repository keeps paying for.
+    expect(catalogueSheet([cap('db.read')])).not.toContain('NOT YET BUILT')
+  })
+
+  it('still lists it, because a deleted gap can never become a proposal', () => {
+    const sheet = catalogueSheet([cap('db.read', true), cap('notebook.write', false)])
+    expect(sheet.split('\n')).toHaveLength(2)
   })
 })
