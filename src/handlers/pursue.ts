@@ -124,13 +124,42 @@ export function pursueHandler(deps: PursueDeps): Handler {
           what makes the turn say so.
         */
         const asking = run.pause.reason === 'awaiting_approval'
+        /*
+          A PAUSE MUST NOT SWALLOW THE WORK ALREADY DONE.
+
+          `RunEnd` carries `at` and the pause and no outcomes, so this branch
+          reported the stop and nothing else — a plan that read the material
+          and then stopped to ask told Grant only that it needed an answer,
+          losing the reading entirely. He is then asked to approve a step
+          without being shown what the step before it found, which is #131's
+          objection exactly: approving something you cannot see is consent to a
+          category.
+
+          The finished steps are in `public.job_steps`, so they are read back
+          rather than lost. Canonical state, not a variable that happened to
+          survive.
+        */
+        const already = (
+          await db
+            .execute(`
+              select coalesce(outcome ->> 'saw', '') as saw
+                from public.job_steps
+               where job_id = ${lit(job.jobId)}::uuid
+                 and finished_at is not null
+                 and coalesce(outcome ->> 'found', 'false') = 'true'
+               order by ordinal`)
+            .catch(() => ({ rows: [] as Record<string, unknown>[] }))
+        ).rows
+          .map((r) => String((r as { saw?: string }).saw ?? ''))
+          .filter((line) => line !== '')
+        const sofar = already.length === 0 ? '' : `${already.join('\n')}\n\n`
         return {
           ...base,
           path: await spent(),
           announce: asking,
           body: asking
-            ? `I have stopped before "${run.at}" because I need you to say. ${run.pause.detail} ${run.pause.resumeWhen}`
-            : `I stopped part way through, at "${run.at}": ${run.pause.detail} ${run.pause.resumeWhen}`,
+            ? `${sofar}I have stopped before "${run.at}" because I need you to say. ${run.pause.detail} ${run.pause.resumeWhen}`
+            : `${sofar}I stopped part way through, at "${run.at}": ${run.pause.detail} ${run.pause.resumeWhen}`,
         }
       }
 

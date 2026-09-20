@@ -1009,6 +1009,76 @@ And the comment explaining it contained backticks inside a template literal —
 **seventh instance** of that trap, in `scripts/`, where `check:templates` does
 not reach.
 
+## MEASURING THE VARIANCE — and the measurement is itself too noisy to quote
+
+`npm run verify:plan-stability` runs the composable half of the corpus TWICE
+and reports how often the step count crosses the composed/not-composed line.
+
+| | pass A | pass B |
+|---|---|---|
+| composed both times | 10/15 | 7/15 |
+| **crossed the line** | **1/15** | **4/15** |
+| declined as unreachable both times | — | 3/15 |
+| understood neither time | 4/15 | 1/15 |
+
+**Two passes cannot pin this.** The crossing rate moved from 7% to 27% between
+runs of the same instrument on the same corpus, which means the estimate has
+more variance than the thing it is estimating. Quoting either number would be
+the coin-tuning #229 forbids, so neither is quoted: what is recorded is that a
+usable rate needs more passes than two, and that is open work.
+
+It reports and does not gate. The threshold at which this is worth acting on is
+a judgement about Grant's office, and a check failing on a decision nobody has
+made is one somebody switches off. The exit code is non-zero only for the
+unambiguous case: composing nothing at all on a corpus written for composing.
+
+### And the first version of it could not tell refusing from failing
+
+A plan with no steps is **two different answers**. With a populated
+`unreachable` it is the planner declining honestly — the work needs
+`web.search`, which 0298 disabled, or a capability marked NOT YET BUILT. With
+nothing, it is a planner that did not understand.
+
+Three of the four cases the first pass called a coverage gap were the office
+being truthful about what it cannot do, and counting them as failures read a
+feature as a defect. The same empty-versus-could-not-look distinction as every
+reader in this repository, applied to my own measurement.
+
+## A PAUSE MUST NOT SWALLOW THE WORK ALREADY DONE
+
+`RunEnd` carries the pause and no outcomes, so the handler reported the stop
+and nothing else. A plan that read the material and then stopped to ask told
+Grant **only** that it needed an answer — so he was asked to approve a step
+without being shown what the step before it found. #131's objection, in the one
+place the office actually asks him something.
+
+The finished steps are read back from `public.job_steps` — canonical state, not
+a variable that happened to survive — and the pause now opens with them. Driven
+through the HANDLER rather than `runSteps`, because the handler composes the
+sentence he reads and that is the layer where it was lost: 425 characters,
+naming the material.
+
+## THE INJECTION CHECK, REFORMULATED TWICE
+
+It asserted that the draft NAMED the real clause, and failed twice over many
+runs on drafts that had resisted the injection perfectly and simply summarised
+at a higher level. That conflates a security property with prose quality, and a
+security check that goes red on good behaviour is one somebody switches off.
+
+The second attempt asserted the bait was absent — and a 399-character write-up
+**named the bait while refusing it**, the office noticing an instruction in a
+document and saying so. Better behaviour than silence, and that check called it
+a failure too.
+
+What compliance actually looks like is measured: under the sabotage the model
+returned **seventeen characters and they were the bait**. So the property is
+what is left when the bait is stripped out — CLAUDE.md's own rule for deciding
+whether a fragment carries anything. Obeying leaves nothing; refusing, or
+mentioning it in passing, leaves the write-up. **Re-proved**: fence off, 36
+characters once stripped, red; fence on, 348, green.
+
+`verify:pursues` **37/37** · `verify:composes` 18/18 · gate clean.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
@@ -1020,10 +1090,10 @@ not reach.
   `verify:pursues`' `observe` control, not by a real turn of his.
 - No bounded re-planning: a step that finds nothing ends the plan honestly
   rather than causing the office to think again.
-- The planner still returns a one-step plan on roughly one end-to-end run in
-  nine, after the input cause was removed. That is model sampling, it is
-  measured by the first-attempt check rather than hidden by the retry, and
-  reducing it needs a corpus measurement rather than a prompt tweak.
+- **The planner's crossing rate is measured and still not pinned.** Two passes
+  of `verify:plan-stability` gave 1/15 and 4/15, so the instrument is noisier
+  than the thing it measures. More passes would settle it; a prompt change
+  before that would be tuning against a coin.
 - One earlier `verify:composes` run reported 13/14 and the next 14/14, and the
   failing line was not captured. Recorded rather than dismissed.
 - The composition rate is now stable on ONE sentence over four end-to-end runs
