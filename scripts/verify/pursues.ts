@@ -76,10 +76,23 @@ console.log('carrying out a plan (#283) —\n')
 
 const project = await one(`
   insert into public.projects (slug, name, purpose, status)
-  values (${lit(`pursue-proof-${run}`)}, ${lit(`Pursue proof ${run}`)},
+  values (${lit(`fixture-pursue-proof-${run}`)}, ${lit(`Pursue proof ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
+
+/*
+  THE DIAL IS PART OF THE PRODUCT NOW, SO THE SUITE HAS TO SET IT.
+
+  `app.may_act` is consulted at every step, and the GLOBAL default is
+  `suggest`, under which a level-1 write asks rather than proceeds. That is
+  Grant's setting doing exactly what #15 built it for — so a suite proving what
+  a plan DOES has to put its own project on a level where doing is permitted,
+  and a separate control below proves `observe` refuses.
+*/
+await db.execute(`
+  select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+    'verify:pursues', 'so the suite can prove what a plan does')`)
 
 await db.execute(`
   insert into public.documents
@@ -213,15 +226,23 @@ check(
 */
 const empty = await one(`
   insert into public.projects (slug, name, purpose, status)
-  values (${lit(`pursue-empty-${run}`)}, ${lit(`Pursue empty ${run}`)},
+  values (${lit(`fixture-pursue-empty-${run}`)}, ${lit(`Pursue empty ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const emptyId = String(empty.id)
+/*
+  The same level, or the control below would pass for the wrong reason: a step
+  refused by the policy is not a step that declined because its upstream found
+  nothing, and a check cannot tell them apart from `found: false` alone.
+*/
+await db.execute(`
+  select app.hq_autonomy_set('act_with_review', ${lit(emptyId)}::uuid,
+    'verify:pursues', 'so the control refuses for its own reason')`)
 const emptyJob = await one(`
   insert into public.jobs
     (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
   values ('office.pursue', 'running', ${lit(emptyId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-empty-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`fixture-pursue-empty-${run}`)}, gen_random_uuid(), '{}'::jsonb)
   returning job_id::text as id`)
 const emptyJobId = String(emptyJob.id)
 const onEmpty = await runSteps(
@@ -413,13 +434,78 @@ try {
 const backOn = await one(`select enabled from public.tool_permissions where tool = 'task.create'`)
 check(
   'a capability withdrawn AFTER the plan was made is refused at the moment of doing',
-  refusal.slice(0, 90),
-  refusal.includes('withdrawn after this plan was made'),
+  refusal.slice(0, 100),
+  /*
+    The refusal must carry the reason THIS RUN just wrote into the registry,
+    which is what proves the policy read the live row rather than the plan.
+    A refusal for the wrong reason looks exactly like the rule working.
+  */
+  refusal.includes('verify:pursues'),
 )
 check(
   'and the suite put the permission back — the office can still write to his list',
   `task.create enabled=${String(backOn.enabled)}`,
   backOn.enabled === true,
+)
+
+// --- the dial Grant can turn -----------------------------------------------
+/*
+  OBSERVE MEANS OBSERVE, AND NOTHING IN THIS PATH WAS ASKING.
+
+  `autonomy_settings` and `app.may_act` have existed since #15; the plan
+  executor consulted neither, so a plan could have written to a project Grant
+  had told to watch and say nothing. The dial is asked at every step now, and
+  this drives it: on `observe` the read still happens (level 0 is `proceed` at
+  every level — reading is what observing IS) and the write does not.
+
+  Restored in a `finally`, for the same reason the revocation control is: a
+  suite that leaves one of Grant's settings changed has altered the product to
+  test it.
+*/
+const observeJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-observe-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+  returning job_id::text as id`)
+const observeJobId = String(observeJob.id)
+let watched: Record<string, unknown> = {}
+let readUnderObserve: Record<string, unknown> = {}
+try {
+  await db.execute(`
+    select app.hq_autonomy_set('observe', ${lit(projectId)}::uuid,
+      'verify:pursues', 'the control for the dial')`)
+  const onObserve = await runSteps(
+    db,
+    observeJobId,
+    'office.pursue@1',
+    compile(plan, db, observeJobId, projectId, 'review it'),
+  )
+  watched = (onObserve.kind === 'done' ? onObserve.outcomes['note:task.create'] : {}) as Record<
+    string,
+    unknown
+  >
+  readUnderObserve = (
+    onObserve.kind === 'done' ? onObserve.outcomes['look:db.read'] : {}
+  ) as Record<string, unknown>
+} finally {
+  await db.execute(`
+    select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+      'verify:pursues', 'restored')`)
+}
+check(
+  'on OBSERVE the office still reads — reading is what observing is',
+  readUnderObserve.found === true
+    ? `${String(readUnderObserve.docs ?? 0)} document(s)`
+    : `the read was refused: ${String(readUnderObserve.impediment ?? '').slice(0, 70)}`,
+  readUnderObserve.found === true,
+)
+check(
+  'and on OBSERVE it writes nothing to his list, saying why in his words',
+  watched.found === false
+    ? String(watched.impediment ?? '').slice(0, 90)
+    : 'IT WROTE A TASK ON A PROJECT SET TO OBSERVE',
+  watched.found === false && String(watched.impediment ?? '').includes('did not do this'),
 )
 
 // --- teardown --------------------------------------------------------------
@@ -441,11 +527,23 @@ await db.execute(`
   update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
     state_reason = 'verify:pursues teardown'
    where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid,
-                    ${lit(revokedJobId)}::uuid)
+                    ${lit(revokedJobId)}::uuid, ${lit(observeJobId)}::uuid)
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.tasks where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid);
 `)
+/*
+  `autonomy_settings.project_id` is NO ACTION, not CASCADE — so the row this
+  suite set blocks the project delete, the teardown falls through to its
+  archive branch, and the check reports "0 live project(s)" while leaving
+  debris. CLAUDE.md's 32-foreign-keys trap, found by reading `confdeltype`
+  rather than by trusting a green teardown.
+*/
+await db
+  .execute(`
+    delete from public.autonomy_settings
+     where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid)`)
+  .catch(() => undefined)
 for (const id of [projectId, emptyId]) {
   await db
     .execute(`delete from public.projects where project_id = ${lit(id)}::uuid`)

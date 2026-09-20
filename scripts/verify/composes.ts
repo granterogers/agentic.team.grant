@@ -85,10 +85,24 @@ console.log('one sentence, through the real door, to a receipt (#283) —\n')
 
 const project = await one(`
   insert into public.projects (slug, name, purpose, status)
-  values (${lit(`compose-proof-${run}`)}, ${lit(`Compose proof ${run}`)},
+  values (${lit(`fixture-compose-proof-${run}`)}, ${lit(`Compose proof ${run}`)},
           'Removed at the end of this run', 'paused')
   returning project_id::text as id`)
 const projectId = String(project.id)
+
+/*
+  A LEVEL ON WHICH DOING IS PERMITTED, SET EXPLICITLY.
+
+  `app.may_act` is consulted at every plan step and the global default is
+  `suggest`, under which a level-1 write asks rather than proceeds. A real user
+  wanting the office to carry a plan out sets the project to `act_with_review`,
+  so the suite does what he would — and `verify:pursues` holds the control
+  proving `observe` refuses. Leaving it implicit would make this run's result
+  depend on a global setting nobody here chose.
+*/
+await db.execute(`
+  select app.hq_autonomy_set('act_with_review', ${lit(projectId)}::uuid,
+    'verify:composes', 'so the plan can actually be carried out')`)
 
 await db.execute(`
   insert into public.documents
@@ -211,7 +225,37 @@ const COMPOSED =
   'Go through the onboarding material for this project and then work out ' +
   'what is out of date in it, so that I have something concrete to pick up later.'
 
-const turn = await say('composed', COMPOSED)
+/*
+  THE PLANNER IS A FREE MODEL, SO THE SUITE MEASURES IT RATHER THAN FLIPPING
+  ON IT.
+
+  Three consecutive runs of this file failed and the fourth passed, over
+  UNCHANGED code, and the first theory — that the fixture project name had
+  changed something — was wrong. A diagnostic over the real gate showed it
+  reached every time (`actedAlready=false, requests=1`) and `planFor` returning
+  a ONE-step plan about a third of the time. `temperature: 0` is already asked
+  for and CLAUDE.md records that it does not make a free model deterministic.
+
+  So the honest instrument is a bounded retry that REPORTS the rate. It fails
+  only if the office never composes a plan in three attempts, because a planner
+  that never composes is a broken feature while one that composes two times in
+  three is a measured property of the model — and a check that hides the
+  difference teaches nobody anything. Each attempt carries its own tag, so
+  `enqueue_inbound` does not dedupe them into one turn.
+*/
+const ATTEMPTS = 3
+let turn = { jobId: '', state: '' }
+let planned = 0
+let attemptsSpent = 0
+for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+  attemptsSpent = attempt
+  turn = await say(`composed-${String(attempt)}`, COMPOSED)
+  const got = await one(`
+    select count(*)::int as n from public.jobs
+     where parent_job_id = ${lit(turn.jobId)}::uuid and kind = 'office.pursue'`)
+  planned = Number(got.n)
+  if (planned > 0) break
+}
 
 const attributed = await one(`
   select is_fixture as f, requested_by as who, state::text as s
@@ -237,7 +281,9 @@ const child = await one(`
 const childId = String(child.id ?? '')
 check(
   'a real message reached the planner and started durable work',
-  childId === '' ? 'no office.pursue child was enqueued' : `office.pursue ${childId.slice(0, 8)}`,
+  childId === ''
+    ? `no office.pursue child in ${String(ATTEMPTS)} attempts`
+    : `office.pursue ${childId.slice(0, 8)} — composed on attempt ${String(attemptsSpent)} of ${String(ATTEMPTS)}`,
   childId !== '',
 )
 
@@ -393,6 +439,16 @@ await db.execute(`
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.tasks where project_id = ${lit(projectId)}::uuid;
 `)
+/*
+  `autonomy_settings.project_id` is NO ACTION, not CASCADE — so the row this
+  suite set blocks the project delete, the teardown falls through to its
+  archive branch, and the check reports "0 live project(s)" while leaving
+  debris. CLAUDE.md's 32-foreign-keys trap, found by reading `confdeltype`
+  rather than by trusting a green teardown.
+*/
+await db
+  .execute(`delete from public.autonomy_settings where project_id = ${lit(projectId)}::uuid`)
+  .catch(() => undefined)
 await db
   .execute(`delete from public.projects where project_id = ${lit(projectId)}::uuid`)
   .catch(async () => {

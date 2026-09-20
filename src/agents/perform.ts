@@ -44,6 +44,7 @@ import type { SqlExecutor } from '../db/executor.ts'
 import type { Outcome, Step } from '../jobs/checkpoint.ts'
 import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
 import type { ProviderRouter } from '../providers/router.ts'
+import { mayAct, refusalSentence } from './approval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -436,15 +437,6 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
   },
 }
 
-/**
- * The level nothing may do on its own.
- *
- * Stated here as well as in `goal.ts` because the two ask at different
- * moments — planning and doing — and a plan can outlive the permission it was
- * written under. Same number, two gates, deliberately.
- */
-const NEVER_AUTONOMOUS = 3
-
 /** Which registry capabilities this office can actually perform today. */
 export const performable = (): readonly string[] => Object.keys(EXECUTORS)
 
@@ -489,42 +481,42 @@ export const compile = (
           }
         }
         /*
-          PERMISSION IS ASKED AGAIN HERE, AT THE MOMENT OF DOING.
+          THE POLICY IS ASKED AGAIN HERE, AT THE MOMENT OF DOING.
 
-          `validate` asked when the plan was WRITTEN. A plan is data on a job:
-          it can sit in the queue, be retried, resume after a restart, and be
-          carried out minutes or hours later — and in between, Grant can revoke
-          a capability on the Team page or a level can change. A plan approved
-          under one permission and executed under another is precisely the gap
-          "the model may propose sequence, it never grants authority" is about,
-          and nothing was closing it.
+          Two distinct things were missing and `app.may_act` answers both.
 
-          Cheap, and asked of the same table the validator asks: one row, at
-          the step that is about to use it. A revoked capability becomes an
-          impediment recorded through `app.cannot`, which is the same honest
-          direction as one nothing performs.
+          FIRST, a plan can outlive the permission it was written under.
+          `validate` asked the registry when the plan was COMPOSED; the plan
+          then travels as data on a child job that can queue, retry and resume.
+          In between, Grant can revoke a capability on the Team page. A plan
+          approved under one permission and executed under another is precisely
+          what "the model may propose sequence, it never grants authority"
+          forbids.
+
+          SECOND — and this one was the whole of #15 going unconsulted — the
+          AUTONOMY DIAL. `autonomy_settings` lets Grant say `observe` on a
+          project, and nothing in this path asked. A plan could have written to
+          a project he had told to watch and say nothing.
+
+          `mayAct` is used rather than a query of `tool_permissions`, because
+          the policy is more than the registry: it reads the dial, the matrix
+          and any standing authorization, and 0298's CHECK guarantees a level-3
+          action can never resolve to `proceed` however the matrix is edited.
+          Reimplementing two-thirds of that here is #249's defective
+          abstraction with a third instance.
+
+          `jobAskedFor` is deliberately NOT passed. 0423 lets work a person
+          asked for proceed without asking again, and what Grant asked for is
+          the GOAL — the steps are what a model derived from it. Treating the
+          derivation as consent would make LLM interpretation into
+          authorization, which is the one thing the whole design forbids.
         */
-        const { rows: allowed } = await db.execute(`
-          select enabled, level from public.tool_permissions
-           where tool = ${lit(step.capability)}`)
-        const permission = allowed[0] as { enabled?: boolean; level?: number } | undefined
-        if (permission === undefined || permission.enabled !== true) {
-          return {
-            outcome: nothing(
-              step.capability,
-              permission === undefined
-                ? `${step.capability} is no longer in the capability registry`
-                : `${step.capability} was withdrawn after this plan was made`,
-            ),
-          }
-        }
-        if (Number(permission.level) >= NEVER_AUTONOMOUS) {
-          return {
-            outcome: nothing(
-              step.capability,
-              `${step.capability} is now level ${String(permission.level)}, which is never done without Grant`,
-            ),
-          }
+        const decision = await mayAct(db, {
+          projectId,
+          tool: step.capability,
+        })
+        if (decision.verdict !== 'proceed') {
+          return { outcome: nothing(step.capability, refusalSentence(decision)) }
         }
         /*
           The outcomes are keyed by STEP NAME, and the plan's ids are what the

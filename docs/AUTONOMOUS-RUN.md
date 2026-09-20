@@ -412,6 +412,77 @@ model at all.
 
 `verify:pursues` **12/12** · `verify:composes` **12/12**.
 
+## #15's DIAL WAS NOT BEING ASKED, AND THE FIRST THEORY OF THE FLAKE WAS WRONG
+
+### The gap
+
+`autonomy_settings`, `app.autonomy_for` and `app.may_act` have existed since
+#15. **The plan executor consulted none of them.** A plan could have written to
+a project Grant had set to `observe`, which is the one setting whose entire
+meaning is that it does not.
+
+The execution-time check now calls `mayAct` rather than querying
+`tool_permissions` directly — the policy is more than the registry: it reads
+the dial, the matrix and any standing authorization, and 0298's CHECK
+guarantees a level-3 action can never resolve to `proceed` however the matrix
+is edited. Reimplementing two-thirds of that beside it would have been #249's
+defective abstraction with a third instance.
+
+`jobAskedFor` is deliberately not passed. 0423 lets work a person asked for
+proceed without asking again, and what Grant asked for is the GOAL — the steps
+are what a model derived from it. Treating the derivation as consent would make
+LLM interpretation into authorization.
+
+**Driven, both ways.** On `observe` the read still happens (level 0 is
+`proceed` at every autonomy level — reading is what observing IS) and the write
+does not, saying so in Grant's own words. Both controls restore the setting in
+a `finally`, because a suite that leaves one of his settings changed has
+altered the product to test it. With the verdict check neutered, the write
+control goes red.
+
+**The consequence is stated rather than engineered around:** the global default
+is `suggest`, under which a level-1 write ASKS. So a composed plan needs a
+project on `act_with_review`, and both suites now set that explicitly, as a
+real user would. Carving an exemption to make the feature look livelier would
+have been trading the baseline for apparent intelligence.
+
+### A teardown that had been passing for the wrong reason
+
+`autonomy_settings.project_id` is `NO ACTION`, not `CASCADE`, so the row the
+suite set BLOCKED the project delete, the teardown fell through to its archive
+branch, and the check reported *"0 live project(s)"* while leaving debris.
+Found by reading `confdeltype`, not by trusting a green teardown. Both suites
+clear the row first, and their subjects are fixture-named now so they can never
+reach his switcher and `check:leaks` can count them.
+
+### THE FLAKE: THREE FAILURES, AND THE FIRST EXPLANATION WAS WRONG
+
+`verify:composes` failed three consecutive runs after the rename, and the
+obvious reading — the fixture project name changed something — was wrong. A
+diagnostic over the real gate showed it reached **every** time
+(`actedAlready=false, isBranch=false, requests=1`), and a direct loop over
+`planFor` on the unchanged sentence returned a ONE-step plan once in three.
+`temperature: 0` is already asked for, and CLAUDE.md records that it does not
+make a free model deterministic.
+
+**What the observations actually are, stated rather than averaged:** three
+consecutive suite failures, then four consecutive passes — and all four
+composed on the FIRST attempt, so the retry has not yet fired in a passing run.
+That is the shape of time-correlated model behaviour, not of a per-call coin,
+and calling it "a third of the time" would be a rate seven observations cannot
+support.
+
+**This is a product fact, not a harness one: the office genuinely behaves
+differently on identical input.** So the suite measures it — a bounded retry of
+three, failing only if the office never composes a plan, and REPORTING which
+attempt succeeded. A check that hid the difference behind a green tick would
+have taught nobody anything, and #229's rule is to print the margin next to the
+number.
+
+ADR-0045 records the four constraints — the cascade-declined gate, permission
+asked twice, existing versus performable, and audience — and its final section
+says plainly what the planner does NOT claim.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
@@ -420,6 +491,11 @@ model at all.
   narrow; it is still a gap.
 - No bounded re-planning: a step that finds nothing ends the plan honestly
   rather than causing the office to think again.
+- **The planner's composition rate is not measured.** Seven observations, in
+  two clusters, is not a rate — and whether the variance is per-call or
+  time-correlated (a provider or model rotation) changes what the fix is.
+  Measuring it properly is open work, and until it is done the bounded retry is
+  an instrument that reports rather than an answer.
 - Goal-completion verification is untouched — a settled child is still taken
   as the goal being met.
 - Goal-completion verification is untouched — a handler returning is still
