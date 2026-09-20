@@ -80,7 +80,7 @@ import { drain } from '../jobs/worker.ts'
 import { HttpNotebookAdapter } from '../notebook/http-adapter.ts'
 import { ProviderRouter } from '../providers/router.ts'
 import { SlackClient } from '../slack/api.ts'
-import { narrateHandoffs } from '../slack/narrate.ts'
+import { narrateHandoffs, narrateOutcomes } from '../slack/narrate.ts'
 import { slackChannel } from '../slack/notifier.ts'
 import { SlackOffice } from '../slack/office.ts'
 import { TelegramClient } from '../telegram/api.ts'
@@ -286,6 +286,18 @@ export const buildPass = async (
     floor = async (): Promise<void> => {
       for (const s of await narrateHandoffs(db, slack, office, teamId)) {
         if (s.outcome === 'sent') log(`floor: narrated ${s.jobId.slice(0, 8)}`)
+      }
+      /*
+        And how it turned out (#282).
+
+        The decisions alone made the floor a log of intentions: "Emma has it"
+        and then nothing, whether she answered, produced nothing, or the job
+        died. AFTER the decisions in the same pass, so a job that was decided
+        and settled between two ticks gets both halves in order, and the
+        outcome threads under its own decision.
+      */
+      for (const s of await narrateOutcomes(db, slack, office, teamId)) {
+        if (s.outcome === 'sent') log(`floor: outcome ${s.jobId.slice(0, 8)}`)
       }
     }
   }

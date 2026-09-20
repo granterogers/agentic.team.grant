@@ -327,11 +327,73 @@ to prove it left nothing: it swept and counted only `assigned_to_human` tasks,
 while the delegation it had just proved works creates PROJECT tasks. Three sat
 in the project under a green "nothing of this run is left". Both halves widened.
 
+### GRANT HIT BOTH ANCHORS HIMSELF, AT 08:35 TODAY, AN HOUR BEFORE THE FIXES
+
+Found by DRIVING the new outcome query rather than by reading it — two real
+`telegram:grant` jobs, not fixtures:
+
+| | |
+|---|---|
+| `b639bd85` 08:34 | anchor A. Claire: *"I'm missing your task list – I have no record of any current tasks for you."* The office could not see `public.tasks` at all, which is what `taskSpine` now fixes. |
+| `38c7b37f` 08:35 | anchor B. A real personal task on his list, `9e2d60ed`, titled **"For me and the um... No actually, you know what? Scan the entirety of the Legacy Coaching Project and create appropriate tasks for me to review"**, state `todo`, `added_by` grant. |
+
+**That row is genuine user data and has NOT been touched.** It was created by
+the office from a real message, so it is not synthetic debris to sweep, and
+CLAUDE.md is explicit that a destructive action on his data is confirmed first.
+It is reported for him to decide, and `app.my_task_delete` is the path if he
+wants it gone.
+
+This is the strongest validation the fixes have: both anchors were live in
+production on the day, and `verify:anchors` now proves the same two sentences
+behave correctly on all four doors.
+
+### THE FLOOR CHANNEL SHOWS THE END OF A CONVERSATION, NOT ONLY THE START
+
+`narrateHandoffs` posts the DECISION — what came in, how it was read, who it
+went to. The channel had never shown what came of it, so "Emma has it" and then
+nothing covered three different outcomes: she answered, she produced nothing,
+or the job died.
+
+`narrateOutcomes` threads the outcome under its own decision post, assembled
+clause by clause from columns with no line that is not backed by one:
+each convened specialist and what they produced (a child job with its own
+output, so *"Emma had it and produced nothing"* is a fact rather than an
+omission), the lead's synthesis, the work it started, the tasks and documents
+it made, and — first, when it applies — that the job died and why.
+
+15 unit tests, one per branch, because the shapes that matter most are the ones
+a live run produces least often and a fabricated standup would never produce
+at all.
+
+Two defects of my own on the way: the query JOINED `routing_decisions`, and a
+retry writes a second row, so one job produced two identical outcome posts —
+saved from Grant only by the dedupe key, and found by running the query rather
+than by reading it. And a backtick in a comment inside the SQL template
+literal, which is CLAUDE.md's first trap, hit for the sixth time outside
+`web/`.
+
+### `check:templates` NOW COVERS 1,277 SQL LITERALS, NOT JUST `web/`
+
+Outside `web/` the trap is not silent — tsc refuses the file — but what it
+costs is the DIAGNOSIS: `error TS1005: ',' expected` at a column sixty
+characters in, naming a comma and saying nothing about backticks.
+
+The rule is exact rather than heuristic: a SQL literal here never contains a
+legitimate backtick, so from each `execute(` opener the first backtick either
+closes the literal or IS the defect — and which one it is depends on whether it
+sits inside a comment, walked with a state machine rather than matched.
+
+**The first version was pattern-matched and the sabotage left it GREEN**,
+because inside a multi-line block comment the continuation lines carry no
+marker. Restoring the exact defect, watching it stay green, and only then
+finding the flaw is the whole argument for breaking a detector on purpose.
+Red with the defect, green without, and the summary names what it measured.
+
 ## NEXT ACTION
 
-Specialist visibility in Slack — who contributed, their work product, Claire's
-synthesis, and the resulting action — and truthful progress for long work: five
-minutes of silence must be impossible.
+Truthful progress for long work: five minutes of silence must be impossible.
+Specialist visibility in Slack is done — `narrateOutcomes` now shows who
+contributed, their work product, the synthesis and the resulting action.
 
 ---
 

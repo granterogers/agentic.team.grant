@@ -96,6 +96,92 @@ for (const file of FILES) {
 }
 
 /*
+  THE SAME TRAP OUTSIDE web/, WHICH IS WHERE IT NOW KEEPS HAPPENING (#282).
+
+  The HTML-comment scan above covers `web/**`. CLAUDE.md records the identical
+  defect five more times elsewhere — an SQL comment inside a migration heredoc,
+  one inside a template literal in `scripts/verify/import.ts`, one in a
+  handler, one in `scripts/verify/ui.ts`, and one in `src/slack/narrate.ts`
+  written while adding the very feature this check was extended for.
+
+  Outside `web/` it is not silent: tsc refuses the file. What it costs is the
+  DIAGNOSIS. The message is
+
+      src/slack/narrate.ts(539,60): error TS1005: ',' expected.
+
+  which points at a line sixty characters in, names a comma, and says nothing
+  about backticks — the "report line that names the wrong cause" defect this
+  repository has paid for twice already.
+
+  ## How this finds it exactly, rather than heuristically
+
+  A SQL template literal in this repository never contains a legitimate
+  backtick. So: from each `execute(` opener, scan forward to the next backtick.
+  In a CORRECT file that backtick closes the literal and sits on a line like
+  `  \`)` or at the end of the SQL. In a BROKEN one it is the offending
+  character itself, and the line it sits on is a comment.
+
+  That asymmetry is the whole check, and it means a false positive requires a
+  SQL literal legitimately closed on a comment line, which is not a thing.
+*/
+/**
+ * Is the character at `at` inside a SQL comment that began after `from`?
+ *
+ * Walked rather than pattern-matched, because the first version of this check
+ * asked whether the offending backtick's LINE STARTS with a comment marker —
+ * and inside a multi-line block comment the continuation lines have no marker
+ * at all. The sabotage that restored the exact defect this was written for
+ * left it GREEN, which is the whole argument for breaking a detector on
+ * purpose before believing it.
+ */
+const insideSqlComment = (text: string, from: number, at: number): boolean => {
+  let block = false
+  let line = false
+  for (let i = from; i < at; i += 1) {
+    const two = text.slice(i, i + 2)
+    if (line) {
+      if (text[i] === '\n') line = false
+      continue
+    }
+    if (block) {
+      if (two === '*/') {
+        block = false
+        i += 1
+      }
+      continue
+    }
+    if (two === '/*') {
+      block = true
+      i += 1
+    } else if (two === '--') {
+      line = true
+      i += 1
+    }
+  }
+  return block || line
+}
+
+let SQL_SCANNED = 0
+for (const file of globSync('{src,scripts,tests,supabase}/**/*.ts')) {
+  const text = readFileSync(file, 'utf8')
+  const lineOf = (index: number): number => text.slice(0, index).split('\n').length
+  for (const opener of text.matchAll(/\bexecute\(\s*`/g)) {
+    const from = (opener.index ?? 0) + opener[0].length
+    const close = text.indexOf('`', from)
+    if (close === -1) continue
+    SQL_SCANNED += 1
+    if (insideSqlComment(text, from, close)) {
+      fail(
+        file,
+        lineOf(close),
+        'backtick inside a comment inside a SQL template literal — this ends the string, ' +
+          'and tsc will report it as a missing comma somewhere else',
+      )
+    }
+  }
+}
+
+/*
   The invisible-character trap (#231).
 
   A regex written into a file by a non-raw Python heredoc turns every `\b`
@@ -151,5 +237,14 @@ if (bad > 0) {
   process.exit(1)
 }
 console.log(
-  `check:templates clean — ${FILES.length} files parse as modules, no backticks in HTML comments, no stray control characters`,
+  /*
+    NAMING WHAT WAS CHECKED, because a count that does not is a count nobody
+    can tell from a check that looked at nothing. `npm run space` printed a
+    perfect 0px over a selector that matched nothing, and the fix there was the
+    same: say what you measured to.
+  */
+  `check:templates clean — ${FILES.length} web file(s) parse as modules with no backticks in ` +
+    `HTML comments, ${String(SQL_SCANNED)} SQL template literal(s) across src, scripts, tests ` +
+    'and supabase carry no backtick inside a comment, and no source file carries a stray ' +
+    'control character',
 )

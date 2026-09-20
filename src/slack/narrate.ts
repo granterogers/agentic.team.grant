@@ -297,3 +297,314 @@ export async function narrateHandoffs(
   }
   return said
 }
+
+/**
+ * WHAT CAME OF IT — the other half of the floor channel (#282).
+ *
+ * Grant asked to see the communications between the Chief of Staff and the
+ * rest of the team. `narrateHandoffs` shows the DECISION: what came in, how it
+ * was read, who it went to. That is the start of the conversation and the
+ * channel has never shown the end of one.
+ *
+ * So a handoff reads *"Emma has it — Research Director"* and then nothing. Did
+ * Emma answer? Did anything get made? Did the job die? Every one of those is
+ * recorded and none of it was on the floor, which makes the channel a log of
+ * intentions rather than a view of the office working.
+ *
+ * ## Still no line without a column
+ *
+ * The same discipline as `narrate`, and for the same reason: a model writing
+ * this would produce a fluent paragraph that is right most of the time, and
+ * the one time it smoothed over "this failed" is the time Grant needed to read
+ * it. Each clause below names the table it came from.
+ *
+ * ## A failure is the most valuable line here
+ *
+ * #233's fan-out means a specialist's contribution is a CHILD job with its own
+ * output, so "Emma had it and produced nothing" is a fact this can state. A
+ * fabricated standup would never say it, which is precisely why it is worth
+ * saying.
+ */
+interface Outcome {
+  job_id: string
+  state: string
+  state_reason: string | null
+  thread_ts: string | null
+  lead_name: string | null
+  lead_body: string | null
+  chief_name: string
+  chief_title: string
+  chief_avatar: string | null
+  /** One per convened specialist: their name and what they produced, if any. */
+  contributions: { who: string | null; body: string | null; state: string }[]
+  /** Work this turn started, by kind. */
+  started: string[]
+  tasks: string[]
+  documents: string[]
+}
+
+/** A quotation short enough to read in a channel, ending on a word. */
+const briefly = (text: string, most: number): string => {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  if (flat.length <= most) return flat
+  /*
+    A cut mid-word reads as a bug, because it is one. CLAUDE.md records a table
+    cell that said "client independe" for exactly this reason.
+  */
+  const cut = flat.slice(0, most)
+  const at = cut.lastIndexOf(' ')
+  return `${(at > most / 2 ? cut.slice(0, at) : cut).trimEnd()}…`
+}
+
+/** How a job kind reads out loud. Unknown kinds print themselves rather than vanish. */
+const WORK_READS_AS: Record<string, string> = {
+  'artifact.report': 'writing it up as a file',
+  'browser.gather': 'reading a page',
+  'office.extract_tasks': 'pulling out what needs doing',
+  'notebook.generate': 'making something in the notebook',
+  'notebook.list_artifacts': 'looking through the notebook',
+  'notebook.add_source': 'adding a source to the notebook',
+  'office.notion_import': 'writing it into Notion',
+  'office.instruction': 'a second pair of eyes',
+}
+
+/**
+ * What the Chief of Staff would say about how it turned out.
+ *
+ * Exported for its own tests, because every branch here is a sentence Grant
+ * will read and the shapes that matter — nobody answered, it failed, nothing
+ * came of it — are the ones a live run produces least often.
+ */
+export function narrateOutcome(o: Outcome): string {
+  const lines: string[] = []
+
+  /*
+    A DEAD JOB SAYS SO FIRST.
+
+    #211's rule applied to the floor: a guard that can swallow a request has to
+    say so somewhere the person looks. The channel is where Grant watches the
+    office work, so a job that ended with nothing is news there, and it is the
+    line a generated summary would round off.
+  */
+  if (o.state !== 'complete') {
+    lines.push(
+      o.state_reason === null || o.state_reason.trim() === ''
+        ? `That one ended ${o.state} and I have nothing to show for it.`
+        : `That one ended ${o.state}: ${briefly(o.state_reason, 180)}`,
+    )
+  }
+
+  for (const c of o.contributions) {
+    const who = c.who ?? 'Someone'
+    if (c.body !== null && c.body.trim() !== '') {
+      lines.push(`${who} came back with: “${briefly(c.body, 220)}”`)
+    } else if (c.state === 'complete') {
+      // Finished and wrote nothing. A real and unflattering fact about a turn.
+      lines.push(`${who} had it and produced nothing.`)
+    } else {
+      lines.push(`${who} did not finish — ${c.state}.`)
+    }
+  }
+
+  if (o.lead_body !== null && o.lead_body.trim() !== '') {
+    lines.push(
+      o.lead_name === null
+        ? `The answer: “${briefly(o.lead_body, 260)}”`
+        : `${o.lead_name} pulled it together: “${briefly(o.lead_body, 260)}”`,
+    )
+  }
+
+  if (o.started.length > 0) {
+    lines.push(`It also started ${o.started.map((k) => WORK_READS_AS[k] ?? k).join(', and ')}.`)
+  }
+  if (o.tasks.length > 0) {
+    lines.push(
+      o.tasks.length === 1
+        ? `One thing went on the list: ${briefly(o.tasks[0] ?? '', 90)}`
+        : `${String(o.tasks.length)} things went on the list: ${o.tasks
+            .map((t) => briefly(t, 60))
+            .join('; ')}`,
+    )
+  }
+  if (o.documents.length > 0) {
+    lines.push(
+      o.documents.length === 1
+        ? `And a document: “${briefly(o.documents[0] ?? '', 90)}”`
+        : `And ${String(o.documents.length)} documents: ${o.documents
+            .map((d) => briefly(d, 50))
+            .join('; ')}`,
+    )
+  }
+
+  /*
+    NOTHING is a result, and saying so is the point.
+
+    A turn that completed, answered nobody, made nothing and started nothing is
+    exactly the shape that used to leave the floor channel silent — which reads
+    as the office being busy rather than as a turn that did not land.
+  */
+  if (lines.length === 0) return 'That one finished without producing anything.'
+  return lines.join('\n')
+}
+
+/**
+ * Post the outcome of anything already narrated that has since settled.
+ *
+ * Threaded under its own decision message, so the channel reads as one
+ * conversation per request rather than two unrelated streams — the thread ref
+ * is `deliveries.message_ref` of the decision post, which is the only place
+ * that mapping exists.
+ */
+export async function narrateOutcomes(
+  db: SqlExecutor,
+  slack: SlackClient,
+  office: SlackOffice,
+  teamId: string,
+  limit = 10,
+): Promise<readonly { jobId: string; outcome: string }[]> {
+  const provisioner = new ChannelProvisioner(db, slack, teamId)
+  const channel = await provisioner.ensureNamedChannel(NARRATION_CHANNEL, 'general')
+  if (channel.channelId === null) return []
+
+  const { rows } = await db.execute(`
+    select j.job_id::text as job_id,
+           j.state::text as state,
+           j.state_reason,
+           -- The decision post, so this lands as a reply to it rather than as
+           -- a second stream. Null is fine: it posts to the channel instead.
+           (select d.message_ref from public.deliveries d
+             where d.dedupe_key = 'narration:' || j.job_id::text
+               and d.message_ref is not null
+             order by d.created_at desc limit 1) as thread_ts,
+           lead.name as lead_name,
+           (select left(o.body, 900) from public.outputs o
+             where o.job_id = j.job_id order by o.created_at desc limit 1) as lead_body,
+           chief.name as chief_name, chief.title as chief_title,
+           chief.avatar_ref as chief_avatar,
+           /*
+             Each convened specialist, as a CHILD instruction job with its own
+             output. #233's fan-out is what makes a contribution a real row
+             rather than a claim, and the left join is what lets this say
+             "had it and produced nothing" instead of omitting them.
+           */
+           coalesce((
+             select jsonb_agg(jsonb_build_object(
+                      'who', s.name,
+                      'state', c.state::text,
+                      'body', (select left(co.body, 600) from public.outputs co
+                                where co.job_id = c.job_id
+                                order by co.created_at desc limit 1))
+                      order by c.created_at)
+               from public.jobs c
+               left join public.staff s on s.slug = c.recipient_agent
+              where c.parent_job_id = j.job_id
+                and c.kind = 'office.instruction'), '[]'::jsonb) as contributions,
+           coalesce((
+             select jsonb_agg(distinct c.kind)
+               from public.jobs c
+              where c.parent_job_id = j.job_id
+                and c.kind <> 'office.instruction'), '[]'::jsonb) as started,
+           coalesce((
+             select jsonb_agg(t.title order by t.created_at)
+               from public.tasks t
+              where t.job_id = j.job_id
+                 or t.job_id in (select c.job_id from public.jobs c
+                                  where c.parent_job_id = j.job_id)), '[]'::jsonb) as tasks,
+           coalesce((
+             select jsonb_agg(dd.title order by dd.created_at)
+               from public.documents dd
+              where dd.produced_by_job = j.job_id
+                 or dd.produced_by_job in (select c.job_id from public.jobs c
+                                            where c.parent_job_id = j.job_id)), '[]'::jsonb)
+             as documents
+      from public.jobs j
+      join public.staff chief on chief.slug = 'chief-of-staff'
+      left join public.staff lead on lead.slug = j.recipient_agent
+     where j.state in ('complete', 'failed', 'cancelled')
+       /*
+         EXISTS, not a join. A retry writes a second routing decision for the
+         same job, and joining to the table duplicated the row — two identical
+         outcome posts queued for one job, saved from reaching Grant only by
+         the dedupe key. Found by running the query rather than by reading it.
+       */
+       and exists (select 1 from public.routing_decisions r where r.job_id = j.job_id)
+       /*
+         Only once the DECISION has been posted, so the thread it replies to
+         exists. A decision that was never narrated has no conversation for
+         this to be the end of.
+       */
+       and exists (select 1 from public.deliveries d
+                    where d.dedupe_key = 'narration:' || j.job_id::text)
+       and not exists (select 1 from public.deliveries d
+                        where d.dedupe_key = 'outcome:' || j.job_id::text)
+       /*
+         Harness traffic is not the office working — and the flag on the JOB
+         cannot see a real-looking job in a fixture PROJECT, which is the shape
+         that put 85 rows in front of Grant once already. app.harness_job
+         derives both.
+       */
+       and not app.harness_job(j.job_id)
+       -- Old work is not news, the same six hours the decisions use.
+       and j.finished_at > now() - interval '6 hours'
+     order by j.finished_at asc
+     limit ${String(limit)}
+  `)
+
+  const said: { jobId: string; outcome: string }[] = []
+  for (const raw of rows) {
+    const row = raw as unknown as Record<string, unknown>
+    /*
+      The executor hands a jsonb column back as an OBJECT, and CLAUDE.md
+      records `JSON.parse(String(x))` on one producing
+      "[object Object]" is not valid JSON — a guessed shape that reads like a
+      corrupt payload.
+    */
+    const list = <T>(v: unknown): T[] =>
+      v === null || v === undefined ? [] : ((typeof v === 'string' ? JSON.parse(v) : v) as T[])
+    const o: Outcome = {
+      job_id: String(row.job_id),
+      state: String(row.state),
+      state_reason: row.state_reason === null ? null : String(row.state_reason),
+      thread_ts:
+        row.thread_ts === null || row.thread_ts === undefined ? null : String(row.thread_ts),
+      lead_name:
+        row.lead_name === null || row.lead_name === undefined ? null : String(row.lead_name),
+      lead_body:
+        row.lead_body === null || row.lead_body === undefined ? null : String(row.lead_body),
+      chief_name: String(row.chief_name),
+      chief_title: String(row.chief_title),
+      chief_avatar:
+        row.chief_avatar === null || row.chief_avatar === undefined
+          ? null
+          : String(row.chief_avatar),
+      contributions: list<{ who: string | null; body: string | null; state: string }>(
+        row.contributions,
+      ),
+      started: list<string>(row.started),
+      tasks: list<string>(row.tasks),
+      documents: list<string>(row.documents),
+    }
+    const result = await office.deliver({
+      dedupeKey: `outcome:${o.job_id}`,
+      teamId,
+      channelId: channel.channelId,
+      ...(o.thread_ts === null ? {} : { threadTs: o.thread_ts }),
+      purpose: 'notice',
+      staff: {
+        slug: 'chief-of-staff',
+        name: o.chief_name,
+        title: o.chief_title,
+        avatarRef: o.chief_avatar,
+      },
+      message: {
+        staffTitle: o.chief_title,
+        body: narrateOutcome(o),
+        metadata: null,
+        correlationId: o.job_id,
+        actions: [],
+      },
+    })
+    said.push({ jobId: o.job_id, outcome: result.outcome })
+  }
+  return said
+}
