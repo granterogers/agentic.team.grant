@@ -2,8 +2,33 @@
   "why": "DEVELOPMENT corpus for the goal-planning run (#283). Realistic multi-step work Grant would actually ask this office to do, biased towards requests no regex has been taught. Expected outcomes written BEFORE the candidate planner existed, against the capability catalogue in public.tool_permissions as it stood at e22688d.",
   "how": "`needs` lists the capabilities a competent plan must include, by their canonical `tool_permissions.tool` name. `forbidden` lists what must NOT appear. `shape` is single / sequence / parallel — a sequence means a later step genuinely consumes an earlier step's output. `min_steps` is the fewest distinct pieces of work that can satisfy the goal. A case whose honest answer is 'I cannot' has needs [] and an `impediment` note.",
   "catalogue_at_freeze": {
-    "enabled": ["calendar.read", "db.read", "gmail.read", "gmail.search", "notebook.read", "draft.create", "drive.ingest", "preference.update", "task.create", "task.extract", "calendar.write", "notebook.write", "notion.write", "slack.post"],
-    "disabled": ["github.read", "web.search", "gmail.draft", "note.create", "db.delete", "github.write", "gmail.send", "production.write", "spend.money"]
+    "enabled": [
+      "calendar.read",
+      "db.read",
+      "gmail.read",
+      "gmail.search",
+      "notebook.read",
+      "draft.create",
+      "drive.ingest",
+      "preference.update",
+      "task.create",
+      "task.extract",
+      "calendar.write",
+      "notebook.write",
+      "notion.write",
+      "slack.post"
+    ],
+    "disabled": [
+      "github.read",
+      "web.search",
+      "gmail.draft",
+      "note.create",
+      "db.delete",
+      "github.write",
+      "gmail.send",
+      "production.write",
+      "spend.money"
+    ]
   },
   "cases": [
     {
