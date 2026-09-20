@@ -30,7 +30,7 @@
  * process never runs is not a recovery mechanism.
  */
 
-import type { Domain } from '../agents/provenance.ts'
+import { type Domain, howComposed } from '../agents/provenance.ts'
 import type { Confidence, Evidence, ProductionPath } from '../agents/quality.ts'
 import { metadataProblems, reviewRequired } from '../agents/quality.ts'
 import type { SqlExecutor } from '../db/executor.ts'
@@ -977,8 +977,38 @@ export const runJob = async (
     }
   }
 
+  /*
+    THE CLAIM IS CORRECTED HERE, ONCE, RATHER THAN TRUSTED FROM TEN HANDLERS.
+
+    0023 refuses `deterministic_retrieval` from a job whose CORRELATION has
+    recorded inference usage, and it is right to: determinism is a claim that
+    nothing was invented, and a handler cannot know that about a sentence a
+    model wrote. What it did was fail the job — so a handler that got the claim
+    wrong did not merely mislabel an answer, it threw the answer away.
+
+    Seventy-seven jobs across ten kinds have died that way. `office.notion_sync`
+    thirty times, `office.slack_rotate` ten (the branch that reports a failure
+    is the branch that spends a model, so the check silenced exactly the message
+    it existed to protect), and `office.extract_tasks` on every delegation the
+    moment #282 made that path reachable from an ordinary sentence.
+
+    Patching each handler is the #249/#254 mistake: three defects filed
+    separately were one defective abstraction. **A CHILD SHARES ITS PARENT'S
+    CORRELATION**, so any handler enqueued by `office.instruction` inherits a
+    spent correlation before its own first line — the claim is not something a
+    handler is in a position to make at all.
+
+    So it is asked here, of the record, exactly as the constraint asks it. This
+    is not a weakening: the answer becomes TRUE rather than absent, and `false`
+    for `deterministic` means the output goes to review, which is the safer of
+    the two directions and what `instruction.ts` already does by hand. Only
+    paid for when a handler claims the exemption.
+  */
+  const claimed =
+    output.path === 'deterministic_retrieval' ? await howComposed(db, job.jobId) : output.path
+
   const gate = reviewRequired({
-    path: output.path,
+    path: claimed,
     // The kind is the job's, not a claim by the handler. A handler that could
     // name its own output kind could name the exempt one.
     kind: job.kind.startsWith('status.') ? 'status' : 'research_conclusion',

@@ -296,7 +296,6 @@ export function notionImportHandler(deps: NotionImportDeps): Handler {
         evidence: 'verified' as const,
         sources: [`job:${job.jobId}`],
         contradictions: null,
-        path: 'deterministic_retrieval' as const,
         model: null,
       }
       /*

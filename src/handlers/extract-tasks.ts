@@ -132,7 +132,17 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
     kind: 'office.extract_tasks',
     handle: async (job: Job): Promise<HandlerOutput> => {
       /*
-        THE BRANCHES BELOW THE MODEL CALL MAY NOT CLAIM DETERMINISM.
+        NO BRANCH OF A CHILD JOB MAY CLAIM DETERMINISM, not merely the ones
+        below its own model call.
+
+        A CHILD SHARES ITS PARENT'S CORRELATION. `office.extract_tasks` is
+        enqueued by `office.instruction`, which by then has spent a semantic
+        read and an answer, so `enforce_deterministic_claim` — which counts
+        inferences against the CORRELATION — refuses the claim from the child's
+        very first line. Fixing only the two returns below `router.complete`
+        left the early ones claiming it, and the run that found this failed on
+        exactly one of those: the named source did not match a document, the
+        handler said so through `say`, and the honest sentence was refused.
 
         `base` was spread into all five returns with
         `path: 'deterministic_retrieval'`, and two of those sit AFTER
@@ -156,7 +166,6 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
         evidence: 'verified' as const,
         sources: [`job:${job.jobId}`],
         contradictions: null,
-        path: 'deterministic_retrieval' as const,
         model: null,
       }
       /*
@@ -167,10 +176,11 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
       */
       const spent = async (): Promise<'deterministic_retrieval' | 'inference'> =>
         await howComposed(db, job.jobId)
-      const say = (body: string): HandlerOutput => ({ ...base, body }) satisfies HandlerOutput
+      const say = async (body: string): Promise<HandlerOutput> =>
+        ({ ...base, path: await spent(), body }) satisfies HandlerOutput
 
       if (job.projectId === null || job.projectId === undefined) {
-        return say('I do not know which project that is about. Say which one.')
+        return await say('I do not know which project that is about. Say which one.')
       }
       const payload = (
         (
@@ -179,7 +189,35 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
           )
         ).rows[0] as { pinned_config?: Record<string, unknown> } | undefined
       )?.pinned_config
-      const named = String(payload?.from ?? '').trim()
+      const namedRaw = String(payload?.from ?? '').trim()
+
+      /*
+        NAMING THE PROJECT MEANS THE WHOLE PROJECT, not a document called that.
+
+        "Scan the entirety of the Legacy Coaching Project and create
+        appropriate tasks" names a source, and the source is the project. The
+        lookup below matches DOCUMENT TITLES, so the run that found this went
+        hunting for a document called "Anchor proof uugvui8u", found none, and
+        told Grant it could not find anything by that name — about a project
+        with documents in it, which he had just asked it to read in full.
+
+        `from: null` is the reading this handler already has for "what needs
+        doing here", so the project name simply resolves to it. Matched with
+        the same trigram the title lookup uses, because he will say "the Legacy
+        Coaching project" for a project called "Legacy Coaching Course".
+      */
+      const named =
+        namedRaw === '' ||
+        (await db
+          .execute(`
+              select (extensions.similarity(lower(name), ${lit(namedRaw.toLowerCase())}) > 0.5
+                      or lower(name) like ${lit(`%${namedRaw.toLowerCase()}%`)}
+                      or ${lit(namedRaw.toLowerCase())} like '%' || lower(name) || '%') as whole
+                from public.projects where project_id = ${lit(job.projectId)}::uuid`)
+          .then((r) => (r.rows[0] as { whole?: boolean } | undefined)?.whole === true)
+          .catch(() => false))
+          ? ''
+          : namedRaw
 
       /*
         The material. A named source is matched on its title and NOTHING ELSE
@@ -207,7 +245,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
       ).rows.map((r) => ({ title: String(r.title), content: String(r.content) }))
 
       if (sources.length === 0) {
-        return say(
+        return await say(
           named === ''
             ? 'There is nothing read in on this project yet, so there is nothing to pull tasks out of.'
             : `I could not find anything here called “${named}”. If it is in a notebook or a ` +
@@ -215,7 +253,7 @@ export function extractTasksHandler(deps: ExtractTasksDeps): Handler {
         )
       }
       if (router === null) {
-        return say(
+        return await say(
           'I cannot read anything closely just now — the office has no model to think with.',
         )
       }
