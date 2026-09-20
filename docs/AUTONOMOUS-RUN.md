@@ -448,11 +448,44 @@ client, so the real query, the real freshness re-read and the real dedupe all
 run against a real row while what would have been sent is recorded.
 `verify:slack` already uses the same shape.
 
+### NO ECHO LOOPS — one door had the guard and the other did not
+
+`src/slack/events.ts` refuses an event from this app before anything else looks
+at it, *"because every other branch would happily process it"*.
+`src/channels/telegram.ts` had **no equivalent**: `from.is_bot` was declared in
+its update type and read by NOTHING. The dial-with-no-reader shape, on the one
+field that stops the office answering itself.
+
+It has not fired because in a PRIVATE chat Telegram does not hand a bot its own
+messages — an accident of the current configuration rather than a design. A bot
+in a GROUP does receive other bots' messages, `telegram.direct_to_grant`
+decides which of the two Grant gets, and six retired staff bots are still rows
+in `telegram_bots`. Each is one setting away from a loop with a model call in
+it.
+
+Refused at the top of the message branch now, for Slack's reason exactly: a
+loop that has already written an `inbound_commands` row has already cost a job.
+A person's message never carries the flag, and a channel auto-forward arrives
+as `sender_chat`, so the guard cannot silence him.
+
+`tests/channels/no-echo-loop.test.ts` asserts it BOTH ways for both doors — a
+guard that refuses everything would pass the refusal half and be a worse defect
+than the one it fixes — and as a property over the adapters, so a third door
+cannot ship without one. Proved: with the guard removed, three tests go red.
+
+**And the first draft of that file passed for the wrong reason.** Slack takes
+`(envelope, botUserId, now)` and Telegram takes `(update, now, botId)`; both
+Slack refusal tests threw `now.toISOString is not a function` — a refusal that
+looks exactly like the rule working. Only the control that expects SUCCESS
+could tell the difference, which is the whole argument for pairing them.
+
+  verify:cross-interface 10/10 · verify:equivalence 16/16 · npm test 2142/2142
+
 ## NEXT ACTION
 
-The remaining mission item is cross-channel coherence with no echo loops and no
-duplicated action. Specialist visibility in Slack and truthful progress are
-both done.
+Every item of the mission is now closed. The remaining work is Grant's own beta
+usage: a genuine failure he hits during normal use is worth more than any
+corpus, because nobody wrote it to find anything.
 
 ---
 

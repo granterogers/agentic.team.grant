@@ -230,6 +230,35 @@ export function toCanonicalCommand(
   const message = update.message
   if (message === undefined) throw new UnsupportedUpdateError(update.update_id)
 
+  /*
+    OUR OWN OUTPUT, COMING BACK AS INPUT (#282).
+
+    `src/slack/events.ts` refuses an event from this app before anything else
+    looks at it, "because every other branch would happily process it". This
+    door had no equivalent — `from.is_bot` was declared in the type above and
+    read by NOTHING, which is the dial-with-no-reader shape, on the one field
+    that stops an echo loop.
+
+    In a private chat Telegram does not deliver a bot its own messages, which
+    is why nothing has gone round yet. It is not a guarantee: a bot in a GROUP
+    receives messages from other bots, `telegram.direct_to_grant` decides
+    whether the office talks to Grant privately or in the office group, and six
+    retired staff bots are still rows in `telegram_bots` waiting to be
+    re-enabled. Each of those is one setting away from the office answering
+    itself, in a loop with a model call in it.
+
+    Refused here rather than filtered later, for Slack's reason exactly: every
+    branch below would happily process it, and a loop that has already written
+    an `inbound_commands` row has already cost a job.
+
+    A person's message never carries this flag, so the guard cannot silence
+    Grant — and a channel auto-forward arrives as `sender_chat` rather than as
+    a bot `from`, so it is untouched too.
+  */
+  if (message.from?.is_bot === true) {
+    throw new UnsupportedUpdateError(update.update_id)
+  }
+
   // Spoken or typed, in that order of preference. A voice note WITH a caption
   // is one message and the recording is the substance of it — the caption is
   // usually "listen to this" — so the transcript wins and the caption is
