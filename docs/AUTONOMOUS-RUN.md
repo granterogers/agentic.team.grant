@@ -137,15 +137,65 @@ check does not fire, suspect the check.
   discloses its date and project progressively; the remaining cost is the
   title, the search row and the bucket strip.
 
+## PHASE 2 IS BUILT AND PROVED — 20 September 2026
+
+Against a REAL Vikunja v2.6.0, not a fake. `npm run vikunja:dev` fetches the
+released binary, checks its published sha256, runs it on SQLite, registers an
+account and mints a scoped API token — no hosting account, nothing paid for,
+nothing to cancel. **`npm run verify:vikunja` is 47/47.**
+
+| | |
+|---|---|
+| the inbound half the seam never had | 0518 · `app.task_pulled`, the conflict policy, the tombstone rule |
+| the provider, as one implementation | `src/tasks/provider.ts` (the interface), `src/tasks/vikunja.ts`, `src/tasks/sync.ts` |
+| Grant's own door | 0519–0522 · `hq_set_vikunja`, `hq_forget_vikunja`, `task_sync_panel`, the `tasks.sync` duty, the Connections card |
+| the decision, written down | **ADR-0043** |
+
+Proved: create/edit/complete/reopen both ways · idempotent rounds · mapped
+dates and priorities (they run in OPPOSITE directions) · a delete that could
+not be delivered stays owed and the provider cannot put the task back · the
+provider dies and the office does not · reconnecting catches up ·
+**disconnecting loses no task and takes the credential with it** · and nothing
+the run did not create moved.
+
+### The two things to know before touching this
+
+1. **A sync round is GLOBAL.** `tasks_to_push` takes no scope and must not get
+   one. The suite snapshots the revision of every task it did not create and
+   fails if any moved.
+2. **The conflict check was worthless for three revisions.** It changed both
+   sides and ran a round — which pushes before it pulls, so the canonical value
+   always won for the wrong reason, and disabling the conflict branch entirely
+   left it green. It is driven through `app.task_pulled` directly now, and the
+   same sabotage turns five checks red.
+
+## WHAT IS NOT DONE, AND WHAT GRANT HAS TO DECIDE
+
+**The Vikunja this was proved against lives in this container and is gone when
+the container is.** Nothing about that is a defect in the integration, and
+finishing it needs one decision that is not an agent's to make:
+
+> **Where should Vikunja live?** It needs a host with a public HTTPS address.
+> The standing constraints forbid creating paid infrastructure or making an
+> irreversible external commitment without him, so this stops here.
+
+Once he has one, the whole of the remaining work is:
+
+1. Open the dashboard → Settings → Connections → *Your task list elsewhere*.
+2. Paste the address, the project id and an API token from that Vikunja
+   (Settings → API tokens there; the office needs tasks read/write, projects
+   read/write and labels read).
+3. Press Connect. The `tasks.sync` duty starts itself and runs every fifteen
+   minutes.
+
+Nothing else is outstanding. The office is currently left with nothing
+connected, no credential stored and the duty disabled.
+
 ## NEXT ACTION
 
-**Phase 2 — Vikunja**, which is conditional and has a real blocker: a Vikunja
-server needs somewhere to live, and the standing constraints forbid creating
-paid infrastructure or making an irreversible external commitment without
-Grant. What does NOT need his decision is proving the provider against a REAL
-Vikunja run locally — the seam, the field mappings, the conflict policy and
-two-way sync are all provable that way, and the result is an integration
-Grant can then point at whichever host he chooses.
+Grant's, not an agent's: choose a host for Vikunja, or leave Personal Tasks
+native — which is a complete product on its own and is what the office is
+running today.
 
 ---
 
