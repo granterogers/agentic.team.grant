@@ -272,7 +272,9 @@
     "verify:ci": "tsx scripts/verify/ci.ts",
     "check:reachable": "tsx scripts/check-reachable.ts",
     "mapview": "tsx scripts/verify/mapview.ts",
-    "verify:tasks-ui": "tsx scripts/verify/tasks-ui.ts"
+    "verify:tasks-ui": "tsx scripts/verify/tasks-ui.ts",
+    "vikunja:dev": "bash scripts/vikunja-dev.sh",
+    "verify:vikunja": "tsx scripts/verify/vikunja.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
