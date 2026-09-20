@@ -42,6 +42,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { tasksSyncHandler } from '../../src/handlers/tasks-sync.ts'
 import { ProviderDownError, type TaskProvider } from '../../src/tasks/provider.ts'
 import { syncOnce } from '../../src/tasks/sync.ts'
 import { VikunjaProvider } from '../../src/tasks/vikunja.ts'
@@ -524,6 +525,107 @@ try {
   )
 
   // =========================================================================
+  console.log('\nand it is GRANT’s to connect, not a script’s')
+  // =========================================================================
+  /*
+    The same engine, reached the way a person reaches it: an address and a
+    token he supplies, a duty that starts when he does, and a handler that is
+    silent when nothing moved. CLAUDE.md's long-range rule — a capability that
+    exists only as a script an agent runs is a capability Grant does not have.
+
+    Configured and then FORGOTTEN inside this suite, because pointing the real
+    office at a server that lives in this container would leave it trying every
+    quarter of an hour after the container is gone.
+  */
+  const refused = j(
+    (
+      await one(`
+    select app.hq_set_vikunja(${lit(token)}, 1, ${lit(token)}) as v`)
+    ).v,
+  )
+  check(
+    'CONTROL: a token pasted into the address box is refused, by class not by characters',
+    String(refused.error ?? 'IT WAS ACCEPTED').slice(0, 60),
+    String(refused.error ?? '').includes('credential rather than an address'),
+  )
+  const wired = j(
+    (
+      await one(`
+    select app.hq_set_vikunja(${lit(url)}, ${String(projectId)}, ${lit(token)}) as v`)
+    ).v,
+  )
+  check(
+    'Grant can connect it with an address and a token, and nothing else',
+    String(wired.error ?? wired.note ?? ''),
+    wired.ok === true,
+  )
+  check(
+    'and connecting it starts the duty that was waiting for it',
+    String(
+      (
+        await one(
+          `select enabled::text as v from public.responsibilities where job_kind = 'tasks.sync'`,
+        )
+      ).v,
+    ),
+    String(
+      (
+        await one(
+          `select enabled::text as v from public.responsibilities where job_kind = 'tasks.sync'`,
+        )
+      ).v,
+    ) === 'true',
+  )
+  const settings = j((await one('select app.vikunja_settings() as v')).v)
+  check(
+    'the settings reader says it is configured and does NOT carry the token',
+    JSON.stringify(settings),
+    settings.configured === true && !JSON.stringify(settings).includes(token),
+  )
+
+  const changedForDuty = await add(NAME('for the duty to find'))
+  const outcome = await tasksSyncHandler(db).handle(
+    {
+      jobId: '00000000-0000-0000-0000-000000000000',
+      kind: 'tasks.sync',
+      correlationId: '00000000-0000-0000-0000-000000000000',
+      projectId: null,
+      idempotencyKey: `verify-vikunja-${run}`,
+      attempt: 1,
+    },
+    db,
+  )
+
+  check(
+    'the DUTY does the same round, and says what moved in a sentence',
+    `${outcome.body} · announce=${String(outcome.announce)}`,
+    outcome.body.includes('sent 1') && outcome.announce === true,
+  )
+  check(
+    'and the task it found is at the provider',
+    `${String((await ours()).filter((t) => String(t.title ?? '') === NAME('for the duty to find')).length)} there`,
+    (await ours()).filter((t) => String(t.title ?? '') === NAME('for the duty to find')).length ===
+      1,
+  )
+  const quiet = await tasksSyncHandler(db).handle(
+    {
+      jobId: '00000000-0000-0000-0000-000000000000',
+      kind: 'tasks.sync',
+      correlationId: '00000000-0000-0000-0000-000000000000',
+      projectId: null,
+      idempotencyKey: `verify-vikunja-${run}b`,
+      attempt: 1,
+    },
+    db,
+  )
+  check(
+    'and a tick with nothing to do says nothing at all',
+    `${quiet.body} · announce=${String(quiet.announce)}`,
+    quiet.announce === false,
+  )
+  void changedForDuty
+
+  // =========================================================================
   console.log('\ndisconnecting it leaves the list intact — the final proof')
   // =========================================================================
   const beforeForget = Number(
@@ -533,7 +635,7 @@ try {
        where title like ${lit(`fixture-vik-${run}%`)} and state <> 'done'`)
     ).n,
   )
-  await one(`select app.task_provider_forget(${lit(PROVIDER)})`)
+  const forgot = j((await one('select app.hq_forget_vikunja() as v')).v)
   const afterForget = Number(
     (
       await one(`
@@ -545,6 +647,32 @@ try {
     'disconnecting the provider loses no native task',
     `${String(beforeForget)} before · ${String(afterForget)} after`,
     beforeForget > 0 && beforeForget === afterForget,
+  )
+  check(
+    'and the credential goes with it, rather than being left to rot',
+    JSON.stringify({
+      credential: forgot.credential_removed,
+      links: forgot.links_removed,
+      kept: forgot.tasks_kept,
+    }),
+    forgot.credential_removed === true && Number(forgot.links_removed) > 0,
+  )
+  check(
+    'and the duty stops, so the office is not calling a server it forgot',
+    String(
+      (
+        await one(
+          `select enabled::text as v from public.responsibilities where job_kind = 'tasks.sync'`,
+        )
+      ).v,
+    ),
+    String(
+      (
+        await one(
+          `select enabled::text as v from public.responsibilities where job_kind = 'tasks.sync'`,
+        )
+      ).v,
+    ) === 'false',
   )
   check(
     'and every link to it is gone, so nothing still claims to be in step',
@@ -582,6 +710,12 @@ try {
   // ==========================================================================
   console.log('\nteardown')
   // ==========================================================================
+  /*
+    Whatever happened above, the office must not be left pointing at a server
+    that lives in this container. Run unconditionally, so a crash halfway
+    through cannot leave a quarter-hourly duty calling a dead address.
+  */
+  await db.execute('select app.hq_forget_vikunja()').catch(() => undefined)
   await db
     .execute(`delete from public.task_links where provider = ${lit(PROVIDER)}`)
     .catch(() => undefined)

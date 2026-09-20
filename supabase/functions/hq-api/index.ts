@@ -173,6 +173,14 @@ const SECTIONS: Readonly<
     paging is by `p_before`, which no caller can reach yet — when the studio
     needs to scroll back, that becomes a second query parameter here.
   */
+  /*
+    Whether a task provider is connected, and anything it disagrees about
+    (#259, Phase 2). ONE section rather than two: a panel whose two halves
+    arrive in separate calls will eventually show a connected badge over an
+    empty mapping, which is the row-list-built-twice defect with a screen in
+    front of it.
+  */
+  task_sync: { fn: 'task_sync_panel' },
   conversation: { fn: 'conversation_history', arg: 'p_project_id' },
   /*
     How fast the conversation is growing, and how much room is left (#204).
@@ -1057,6 +1065,23 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
   */
   my_task_delete: { fn: 'my_task_delete', required: ['p_task_id'] },
   my_task_reparent: { fn: 'my_task_reparent', required: ['p_task_id'] },
+  /*
+    Connecting a task provider, and letting it go (#259, Phase 2).
+
+    Three arguments, all required, because a connection with two of them is not
+    a connection. The address and the token are sorted BY SHAPE inside
+    `hq_set_vikunja` rather than trusted to arrive in the right boxes — 0359
+    records what the alternative cost: a live secret pasted into a plaintext
+    setting and rendered back onto the Settings page.
+
+    Disconnecting takes the credential with it (0520) and says what it removed,
+    so "disconnect" means what the word means.
+  */
+  vikunja_connect: {
+    fn: 'hq_set_vikunja',
+    required: ['p_base_url', 'p_project_id', 'p_api_token'],
+  },
+  vikunja_forget: { fn: 'hq_forget_vikunja', required: [] },
 }
 
 /**

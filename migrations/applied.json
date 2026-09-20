@@ -516,5 +516,9 @@
   "0515_a_parent_carries_its_subtasks.sql": "584e84a7a0d6eb17f95045108f18f2d80c53c866bb4881abc621b94fe5de1765",
   "0516_the_task_that_that_means.sql": "fefa82c529eaeb97ba044cd807d95b23ba216ad4c4b166ad6fad1bc1f683595d",
   "0517_a_refusal_that_says_which_of_two_things_is_wrong.sql": "a241e4d87f2e83c7b9cf45619455a6d36a489978e9f6a29f42d85f5dea696278",
-  "0518_a_change_that_came_back_the_other_way.sql": "afb879825e3b8d33221617c5cdbb9c2c201e5747eb3534377a3b01454b56bf96"
+  "0518_a_change_that_came_back_the_other_way.sql": "afb879825e3b8d33221617c5cdbb9c2c201e5747eb3534377a3b01454b56bf96",
+  "0519_the_office_can_be_told_where_vikunja_is.sql": "e8d3c6ee8dc10e0ed025e7a45ede67a83560762cb0ef85b3ecf1ca39ac8e807c",
+  "0520_disconnecting_takes_the_credential_with_it.sql": "53e43d12aeca0ca1b764d46eb024a81f886270e2f9793bbec56e89c19a65dca8",
+  "0521_the_setter_had_a_whitelist.sql": "6397604e4a88c92a6efa354bd3f230feb1f673605a640e53138ab68bb3a2781c",
+  "0522_one_reader_for_the_task_provider_panel.sql": "b286dcfc0049863fe176da48f2fc843874c025cafc19efb66360b18800d08d4f"
 }

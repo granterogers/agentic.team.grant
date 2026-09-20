@@ -6320,6 +6320,76 @@ function connectionsTab() {
     <div class="servicegrid">${list.map(card).join('')}</div>
 
     <!--
+      Your task list somewhere else (number 259, Phase 2).
+
+      The office keeps Grant's personal tasks; a provider is a projection of
+      them and never the list. So this is a small card rather than a service
+      alongside Slack and Google: nothing here can stop the tasks working, and
+      the copy says so where he can read it before connecting anything.
+
+      The two fields are sorted BY SHAPE in the database, not by which box they
+      arrived in. 0359 records the alternative: a live secret pasted into a
+      plaintext setting and printed back onto this very page.
+
+      No backticks in this comment. Template literal.
+    -->
+    ${(() => {
+      const v = config.TASK_SYNC
+      if (v.configured === null) {
+        return `<section class="tsync" data-tsync>
+          <h3 class="t-title">Your task list elsewhere</h3>
+          <p class="t-meta">Asking the office…</p></section>`
+      }
+      if (v.configured === true) {
+        return `<section class="tsync on" data-tsync>
+          <h3 class="t-title">Your task list elsewhere</h3>
+          <p class="t-lead" style="margin:0 0 var(--s3)">Kept in step with Vikunja at
+            <b>${esc(String(v.url ?? ''))}</b>, project ${esc(String(v.project ?? ''))} —
+            ${String(v.linked)} task${v.linked === 1 ? '' : 's'} mapped. Your tasks live here;
+            that is a copy.</p>
+          ${
+            v.trouble.length === 0
+              ? '<p class="t-meta">Nothing in disagreement.</p>'
+              : `<ul class="ptasks">${v.trouble
+                  .slice(0, 5)
+                  .map(
+                    (t) => `<li class="ptask"><div class="ptbody"><b>${esc(
+                      String(t.title ?? ''),
+                    )}</b><span class="t-meta">${esc(String(t.why ?? t.state ?? ''))}</span></div></li>`,
+                  )
+                  .join('')}</ul>`
+          }
+          <span class="t-meta" data-said></span>
+          ${
+            canWrite()
+              ? '<button class="btn small quiet" data-vikunja-off>Disconnect</button>'
+              : ''
+          }
+        </section>`
+      }
+      return `<section class="tsync" data-tsync>
+        <h3 class="t-title">Your task list elsewhere</h3>
+        <p class="t-lead" style="margin:0 0 var(--s3)">Your tasks work on their own. If you
+          keep a Vikunja, the office can mirror them both ways — it stays a copy, and
+          disconnecting it never loses anything.</p>
+        ${
+          canWrite()
+            ? `<form class="myadd" data-vikunja-on data-saidwrap>
+                 <input data-vikunja-url placeholder="https://tasks.example.com"
+                        aria-label="The address of your Vikunja" required>
+                 <input data-vikunja-project type="number" min="1" placeholder="Project"
+                        aria-label="Which Vikunja project" required>
+                 <input data-vikunja-token type="password" placeholder="API token"
+                        aria-label="A Vikunja API token" required>
+                 <button class="btn primary" type="submit">Connect</button>
+                 <span class="t-meta" data-said></span>
+               </form>`
+            : '<p class="t-meta">Sign in to connect one.</p>'
+        }
+      </section>`
+    })()}
+
+    <!--
       Outside providers the office has registered (#265).
 
       The other direction from the MCP block below: that one is what connects
@@ -7665,6 +7735,56 @@ function settingsSheet() {
        a credential is not revoking it; Postgres makes no HTTP calls, so
        claiming a revocation here would be false. The link is the honest half.
   */
+  /*
+    Connecting a task provider, and letting it go (#259, Phase 2).
+
+    Both go through the gateway to functions that sort the address and the
+    token by SHAPE, so the page does not judge either — it hands over what was
+    typed and says back exactly what the office answered. A page that
+    pre-validated a credential would be a second opinion about a boundary, and
+    the two would drift.
+  */
+  const wire = $('[data-vikunja-on]', v)
+  if (wire !== null) {
+    wire.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const url = String($('[data-vikunja-url]', wire)?.value ?? '').trim()
+      const project = Number($('[data-vikunja-project]', wire)?.value ?? 0)
+      const token = String($('[data-vikunja-token]', wire)?.value ?? '').trim()
+      const btn = $('button[type="submit"]', wire)
+      const done = await attempt(btn, 'Connecting…', async () =>
+        await act('vikunja_connect', {
+          p_base_url: url,
+          p_project_id: project,
+          p_api_token: token,
+        }),
+      )
+      /*
+        The token field is cleared whatever happened, including a refusal.
+        A credential left in a form is a credential in the next screenshot,
+        and this page is captured on every run.
+      */
+      const box = $('[data-vikunja-token]', wire)
+      if (box !== null) box.value = ''
+      if (!done) return
+      await afterWrite()
+    })
+  }
+  for (const b of v.querySelectorAll('[data-vikunja-off]')) {
+    b.addEventListener('click', async () => {
+      if (
+        !sure(
+          'Disconnect Vikunja? Every task stays here — it was a copy, not the list. ' +
+            'The API token is removed too, so reconnecting needs a new one.',
+        )
+      ) {
+        return
+      }
+      const done = await attempt(b, 'Disconnecting…', async () => await act('vikunja_forget', {}))
+      if (!done) return
+      await afterWrite()
+    })
+  }
   for (const b of v.querySelectorAll('[data-disconnect]')) {
     b.addEventListener('click', async () => {
       const key = b.dataset.disconnect
@@ -14165,6 +14285,19 @@ if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
       wrong and a fast office wrong in the other direction.
     */
     latest,
+    /*
+      The SHELL state, so a harness can open the pane it needs to press in
+      (#259, Phase 2).
+
+      The provider controls live on Settings - Connections, which is a pane
+      that fetches when it opens; CLAUDE.md records that a sandbox capture of
+      one draws nothing and that the honest place to press such a control is a
+      suite that can put the page in the right state. This is that door, behind
+      the same localhost guard as everything else here, and the product reads
+      none of it.
+    */
+    state,
+    config,
     render,
   }
 }

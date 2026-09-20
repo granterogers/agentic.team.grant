@@ -300,6 +300,16 @@ export const CONNECTIONS = [...FALLBACK_CONNECTIONS]
  * fact from zero and the pane renders it as a different sentence.
  */
 export const MAIL_BODIES = { bulk: 0, held: null, messages: 0, unread: 0 }
+
+/*
+  Whether Grant's tasks are being kept in step with anything (#259, Phase 2).
+
+  `configured` is NULL until the office has answered, never false — 0420's
+  lesson, which cost a Governance page reading "0 open" over fourteen rows.
+  "Not connected" and "I have not asked yet" are different sentences and the
+  card says so.
+*/
+export const TASK_SYNC = { configured: null, url: null, project: null, linked: 0, trouble: [] }
 export const BEHAVIOURS = [...FALLBACK_BEHAVIOURS]
 export const STANDING = [...FALLBACK_STANDING]
 export const DECISIONS = [...FALLBACK_DECISIONS]
@@ -422,6 +432,21 @@ export async function hydrateSettings(read) {
     read('standing')
       .then((rows) => {
         if (Array.isArray(rows)) replace(STANDING, rows)
+      })
+      .catch(() => undefined)
+
+    /*
+      And the task provider, its own call for the same reason: it belongs to
+      one card on one tab and the settings payload is already large.
+    */
+    read('task_sync')
+      .then((d2) => {
+        if (d2 === null || typeof d2 !== 'object') return
+        TASK_SYNC.configured = d2.configured === true
+        TASK_SYNC.url = typeof d2.base_url === 'string' ? d2.base_url : null
+        TASK_SYNC.project = typeof d2.project_id === 'number' ? d2.project_id : null
+        TASK_SYNC.linked = typeof d2.linked === 'number' ? d2.linked : 0
+        replace(TASK_SYNC.trouble, Array.isArray(d2.trouble) ? d2.trouble : [])
       })
       .catch(() => undefined)
 

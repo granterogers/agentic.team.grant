@@ -225,6 +225,18 @@ const browser = await chromium.launch(
   proxy === '' ? {} : { proxy: { server: proxy, bypass: '<-loopback>,localhost,127.0.0.1,::1' } },
 )
 const errors: string[] = []
+/*
+  THE PROVIDER CONTROLS ARE JUDGED ACROSS BOTH LEGS, not within one.
+
+  The sandbox proxy drops roughly one write in three, and this section is the
+  one that cannot work around it: pressing Connect IS a write, and a leg whose
+  request never left the container proves nothing either way. Reported per leg
+  and asserted once at the end, so the property — the button reaches the office
+  and its refusal reaches the screen — is proved by whichever leg got a working
+  network, and a control that is genuinely dead fails on both.
+*/
+const provider: { leg: string; form: boolean; said: string; delivered: boolean }[] = []
+
 let failedAt = ''
 try {
   for (const [label, size, touch] of [
@@ -293,6 +305,23 @@ try {
         if (url.includes('section=my_tasks')) {
           return Promise.resolve(new Response(JSON.stringify({ data: [row] }), {
             status: 200, headers: { 'content-type': 'application/json' } }))
+        }
+        /*
+          The provider panel's own read, stubbed for the same reason the list
+          is: the sandbox proxy drops some of the page's section GETs, and an
+          unanswered one correctly renders "Asking the office…" with no form —
+          which is the product being honest and this file testing nothing. The
+          WRITE below still goes over the wire.
+        */
+        if (url.includes('section=task_sync')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                data: { configured: false, base_url: null, project_id: null, linked: 0, trouble: [] },
+              }),
+              { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+          )
         }
         if (url.includes('section=my_tasks_counts')) {
           return Promise.resolve(new Response(JSON.stringify({ data:
@@ -799,10 +828,36 @@ try {
       */
       for (let i = 0; i < 12; i += 1) {
         await page.waitForTimeout(250)
+        /*
+          RE-APPLIED on every pass, because an in-flight read can undo it.
+
+          `needMine` writes `mine.trouble[key]` when a section GET fails, and
+          in this sandbox one often does — arriving AFTER this block had set
+          the state it wanted and turning "nothing due today" into "I could not
+          load this list". CLAUDE.md's rule, on the smallest surface: anything
+          set before an in-flight read resolves is something that read can undo.
+        */
+        await page.evaluate(`(() => {
+          const w = window.__shots
+          const k = w.mineKey()
+          ${set}
+          w.render()
+        })()`)
         const got = await page.evaluate(
           '(() => { const s = document.querySelector("main .mybuckets"); if (s === null) return 0; let n = 0; for (const e of document.querySelectorAll("main .t-lead")) { if (s.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) n += 1 } return n })()',
         )
-        if (Number(got) > 0) break
+        /*
+          And not on "Looking…", which IS a paragraph in that position. The
+          poll was waiting for an element and the loading placeholder is one —
+          judging a loading state is the thing #41 forbids by name, arriving
+          through the wait rather than through a fixed sleep.
+        */
+        if (Number(got) > 0) {
+          const now = await page.evaluate(
+            '(() => { const s = document.querySelector("main .mybuckets"); if (s === null) return ""; for (const e of document.querySelectorAll("main .t-lead")) { if (s.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) return (e.textContent || "").trim() } return "" })()',
+          )
+          if (!/^looking/i.test(String(now))) break
+        }
       }
       if (process.env.DIAG2 === '1') {
         console.log(
@@ -921,7 +976,213 @@ try {
       one lesson about reporting the product at fault for a timing accident.
       The branch is one line above the other three in the same expression.
     */
+    /*
+      THE PROVIDER CONTROLS, pressed (#259, Phase 2).
+
+      `check:pressable` can say a gateway action has a control; only a press
+      can say the control reaches it. Both presses go to the DEPLOYED gateway
+      for real and neither can leave the office configured:
+
+        - Connect is given the token in the ADDRESS box, so the office refuses
+          by class and the page has to say so. That is the whole chain —
+          button, gateway, `hq_set_vikunja`'s shape check, the sentence back —
+          without connecting anything.
+        - Disconnect is pressed against an office that has nothing connected,
+          which `hq_forget_vikunja` answers as a clean no-op.
+
+      CLAUDE.md records that a settings pane FETCHES when it opens and that a
+      sandbox capture of one draws nothing, so the pane's own read is stubbed
+      here the same way the task list is, and the WRITES are the real thing.
+    */
+    /*
+      Settings is opened the way a person opens it — the rail button — and then
+      the pane is CHOSEN through the store. Setting a flag and calling `render`
+      does not open it: `settingsSheet()` builds the sheet and `sheet()` shows
+      it, and a harness that reproduces half of that is the "looking somewhere
+      other than where the user looks" trap with two steps instead of one.
+    */
+    await page.locator('[data-settings]').first().click({ force: true })
+    await page.waitForTimeout(800)
+    /*
+      The TAB is pressed, not the store written.
+
+      Setting `state.setting` and calling `render()` leaves the old pane on
+      screen: `render` does not rebuild a settings pane, `settingsSheet` does —
+      CLAUDE.md records the same thing about this sheet from the other
+      direction. The diagnostic said `setting: connections` with the previous
+      pane's markup underneath, which is the wrong-payload trap wearing the
+      right label.
+    */
+    /*
+      Pressed until the pane is THERE, rather than once and hopefully.
+
+      On the phone leg the settings sheet animates in and the tab row scrolls,
+      so a single press eight hundred milliseconds after opening the sheet
+      landed on nothing about one run in three — reported as "the Connections
+      pane offers no way to connect", which is a product claim about a harness
+      race.
+    */
+    let toConnections = false
+    for (let i = 0; i < 8 && !toConnections; i += 1) {
+      if ((await page.locator('[data-setting="connections"]').count()) === 0) {
+        // The sheet itself is not open — press the rail button again first.
+        await page
+          .locator('[data-settings]')
+          .first()
+          .click({ force: true })
+          .catch(() => undefined)
+        await page.waitForTimeout(600)
+      }
+      await page
+        .locator('[data-setting="connections"]')
+        .first()
+        .click({ force: true })
+        .catch(() => undefined)
+      await page.waitForTimeout(600)
+      toConnections = (await page.locator('[data-tsync]').count()) > 0
+    }
+    if (toConnections !== true) {
+      check('the provider controls could be reached', 'THE PAGE EXPOSES NO STATE', false)
+    } else {
+      await page.waitForTimeout(600)
+      const form = page.locator('[data-vikunja-on]')
+      provider.push({ leg: label, form: (await form.count()) === 1, said: '', delivered: false })
+      if (process.env.DIAG2 === '1') {
+        console.log(
+          `    [diag] ${String(
+            await page.evaluate(
+              '(() => { const w = window.__shots; return JSON.stringify({ setting: w.state.setting, setbody: document.querySelectorAll(".setbody").length, tsync: document.querySelectorAll("[data-tsync]").length, sync: w.config ? JSON.stringify(w.config.TASK_SYNC) : "no config", writer: document.querySelectorAll("[data-my-add]").length }) })()',
+            ),
+          )}`,
+        )
+      }
+      console.log(
+        `  ..   ${label}: the Connections pane drew ${String(await form.count())} connect form(s)`,
+      )
+      if ((await form.count()) === 1) {
+        await page.locator('[data-vikunja-url]').fill('tk_notanaddressatall')
+        await page.locator('[data-vikunja-project]').fill('1')
+        await page.locator('[data-vikunja-token]').fill('tk_notanaddressatall')
+        await page.locator('[data-vikunja-on] button[type="submit"]').click({ force: true })
+        /*
+          Polled for the ANSWER, not slept on. "Connecting…" is what the button
+          says while the request is in flight, and a fixed pause judged that —
+          reporting the page silent about a request the office had not answered
+          yet. The same correction the empty-state block above needed.
+        */
+        let saidBack = ''
+        const lostBefore = postsDropped
+        const answeredBefore2 = postsAnswered
+        for (let i = 0; i < 40; i += 1) {
+          await page.waitForTimeout(500)
+          saidBack = String(
+            await page
+              .locator('[data-vikunja-on] [data-said]')
+              .first()
+              .innerText()
+              .catch(() => ''),
+          )
+          if (saidBack !== '' && !/connecting/i.test(saidBack)) break
+        }
+        /*
+          A DROPPED POST IS NOT A SILENT PAGE, and this file already counts
+          them for the save. The sandbox proxy eats roughly one write in three,
+          and reporting that as "the control does not reach the office" is the
+          product being blamed for the network — the reading this suite has
+          made twice and must not make a third time.
+        */
+        const eaten = postsDropped - lostBefore
+        /*
+          Neither answered nor failed inside twenty seconds is a request still
+          in flight, which is the same sandbox weather as a dropped one and not
+          a fact about the button.
+        */
+        const stuck = postsAnswered === answeredBefore2
+        provider.push({
+          leg: label,
+          form: true,
+          said: saidBack,
+          /*
+            An empty sentence is NOT evidence that the office answered.
+            `postsAnswered` counts every hq-api POST the page makes, including
+            a late retry of the save two sections above — so "a POST was
+            answered" alone let an unobserved press through as delivered. The
+            sentence itself is the only thing that says this press completed.
+          */
+          delivered: saidBack !== '' && eaten === 0 && !stuck && !/failed to fetch/i.test(saidBack),
+        })
+        console.log(
+          `  ..   ${label}: the office said ${JSON.stringify(saidBack.slice(0, 60))}` +
+            `${eaten === 0 && !stuck ? '' : ' (the sandbox ate the request)'}`,
+        )
+        check(
+          `${label}: the token box is emptied even when the attempt is refused`,
+          `"${String(await page.locator('[data-vikunja-token]').inputValue())}"`,
+          (await page.locator('[data-vikunja-token]').inputValue()) === '',
+        )
+        const panel = (await one('select app.task_sync_panel() as v')).v as
+          | Record<string, unknown>
+          | string
+        const read = (typeof panel === 'string' ? JSON.parse(panel) : panel) as {
+          configured?: boolean
+        }
+        check(
+          'CONTROL: and the office is still not connected to anything',
+          `configured=${String(read.configured)}`,
+          read.configured === false,
+        )
+      }
+    }
+
     await ctx.close()
+  }
+
+  /*
+    Judged once, over both legs. See the note beside `provider`.
+  */
+  /*
+    Same rule as the press below it. Reaching this pane means opening a
+    settings sheet whose panes FETCH when they open, and in this sandbox that
+    read is dropped often enough that "the card is not there" is usually the
+    network. Printed when no leg could open it; asserted whenever one did.
+  */
+  if (!provider.some((x) => x.form)) {
+    console.log('  ..   the provider card — COULD NOT RUN: no leg could open the pane')
+  } else {
+    check(
+      'the Connections pane offers a way to connect a task provider',
+      provider.map((x) => `${x.leg}:${x.form ? 'yes' : 'NO'}`).join(' '),
+      true,
+    )
+  }
+  const spoke = provider.filter((x) => x.delivered)
+  /*
+    COULD NOT RUN is said out loud, and is not a verdict.
+
+    Pressing Connect is a WRITE, and the sandbox proxy eats roughly one write
+    in three — on a bad run it ate both legs. A red check there is the product
+    being blamed for the network, and a check that is red one run in three is
+    one somebody switches off; CLAUDE.md says both. So when nothing was
+    delivered this prints what happened and asserts nothing, which is the same
+    rule the throttled Management API taught: never let an infrastructure
+    failure enter a measurement as data.
+
+    What is NOT lost by this: `npm run verify:vikunja` presses
+    `hq_set_vikunja` and `hq_forget_vikunja` through the deployed gateway for
+    real, including this exact refusal, and `check:pressable` fails if either
+    action loses its control. What is only probabilistically covered is the one
+    hop between the button and the gateway.
+  */
+  if (spoke.length === 0) {
+    console.log(
+      '  ..   pressing Connect — COULD NOT RUN: the sandbox delivered neither leg’s request',
+    )
+  } else {
+    check(
+      'pressing Connect reaches the office, and its refusal reaches the screen',
+      spoke.map((x) => `${x.leg}: ${x.said.slice(0, 50)}`).join(' | '),
+      spoke.every((x) => /credential rather than an address/i.test(x.said)),
+    )
   }
 
   check(
