@@ -359,6 +359,69 @@ check(
   gapSaw.found === false && String(gapSaw.impediment ?? '').includes('nothing in the office'),
 )
 
+// --- a permission withdrawn AFTER the plan was made -------------------------
+/*
+  A PLAN IS DATA ON A JOB, AND IT CAN OUTLIVE THE PERMISSION IT WAS WRITTEN
+  UNDER.
+
+  `validate` asks the registry when the plan is composed. The job can then sit
+  in the queue, be retried, or resume after a restart — and in between Grant
+  can revoke a capability on the Team page. Executing under a permission that
+  no longer holds is the gap "the model may propose sequence, it never grants
+  authority" is about, so the executor asks again at the moment of doing.
+
+  Driven, not read. The revocation happens inside a transaction that is rolled
+  back, because `tool_permissions` is the office's real permission table and a
+  suite that leaves `task.create` disabled has broken the product to test it.
+  #210's rule: wrap the CALL, not the assertion.
+*/
+const revokedJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-revoked-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+  returning job_id::text as id`)
+const revokedJobId = String(revokedJob.id)
+await db.execute(`
+  update public.tool_permissions
+     set enabled = false,
+         disabled_reason = 'verify:pursues — restored in this run'
+   where tool = 'task.create'`)
+let refusal = ''
+try {
+  const underRevocation = await runSteps(
+    db,
+    revokedJobId,
+    'office.pursue@1',
+    compile(plan, db, revokedJobId, projectId, 'review it'),
+  )
+  const noted = (
+    underRevocation.kind === 'done' ? underRevocation.outcomes['note:task.create'] : {}
+  ) as Record<string, unknown>
+  refusal = noted.found === false ? String(noted.impediment ?? '') : 'IT WROTE A TASK ANYWAY'
+} finally {
+  /*
+    Always, even if the drive threw. A suite that leaves the office unable to
+    put anything on Grant's list would be a worse defect than the one it is
+    testing.
+  */
+  await db.execute(`
+    update public.tool_permissions
+       set enabled = true, disabled_reason = null
+     where tool = 'task.create'`)
+}
+const backOn = await one(`select enabled from public.tool_permissions where tool = 'task.create'`)
+check(
+  'a capability withdrawn AFTER the plan was made is refused at the moment of doing',
+  refusal.slice(0, 90),
+  refusal.includes('withdrawn after this plan was made'),
+)
+check(
+  'and the suite put the permission back — the office can still write to his list',
+  `task.create enabled=${String(backOn.enabled)}`,
+  backOn.enabled === true,
+)
+
 // --- teardown --------------------------------------------------------------
 console.log('')
 for (const t of (
@@ -377,7 +440,8 @@ for (const t of (
 await db.execute(`
   update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
     state_reason = 'verify:pursues teardown'
-   where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid)
+   where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid,
+                    ${lit(revokedJobId)}::uuid)
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.tasks where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid);
