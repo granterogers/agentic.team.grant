@@ -471,21 +471,76 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'task.extract': {
     effect: 'local',
-    run: async ({ db, jobId }): Promise<Observation> => {
+    run: async ({ db, jobId, step, from }): Promise<Observation> => {
+      /*
+        THIS EXECUTOR IGNORED ITS DEPENDENCY, AND THE CHAIN CLAIM WAS FALSE
+        FOR IT.
+
+        It took only `db` and `jobId`, enqueued the child with `from: ''` and
+        reported success. So a plan of `notebook.read → task.extract`, which
+        the planner composes readily, declared a dependency that nothing
+        honoured: the child re-read the whole project and the first step might
+        as well not have run. Found by `verify:composes` against the DEPLOYED
+        worker, on a plan shape the in-process runs happened not to produce.
+
+        `office.extract_tasks` reads `from` as a document title, with empty
+        meaning the whole project — so the dependency has a real expression.
+        One document upstream scopes the child to it; several means the whole
+        project, which is what the read covered anyway. Either way the
+        observation RECORDS what it was scoped to, so the chain is visible in
+        `public.job_steps` rather than asserted in a comment.
+      */
+      const upstream = step.needs
+        .map((id) => from[id] as Observation | undefined)
+        .filter((o): o is Observation => o !== undefined && o.found)
+      if (step.needs.length > 0 && upstream.length === 0) {
+        return nothing(
+          'task.extract',
+          'the step it depends on found nothing, so there is nothing to pull tasks out of',
+        )
+      }
+      /*
+        The titles the earlier step actually saw. `notebook.read` writes them
+        as `"<title>": <excerpt>`, and `db.read` as a list — one shape is
+        parseable, the other is not, so the scoping uses the ids' count and the
+        narration carries the text. Honest about which it can do.
+      */
+      const scopedTo = upstream.flatMap((o) => o.ids)
+      const only =
+        scopedTo.length === 1
+          ? String(
+              (
+                (
+                  await db.execute(
+                    `select coalesce(title, '') as t from public.documents
+                      where document_id = ${lit(String(scopedTo[0]))}::uuid`,
+                  )
+                ).rows[0] as { t?: string } | undefined
+              )?.t ?? '',
+            )
+          : ''
       const { rows } = await db
         .execute(`
           select app.enqueue_child(${lit(jobId)}::uuid, 'office.extract_tasks',
-            jsonb_build_object('from', ''), interval '0', false)::text as id`)
+            jsonb_build_object('from', ${lit(only)}), interval '0', false)::text as id`)
         .catch(() => ({ rows: [] as Record<string, unknown>[] }))
       const id = String((rows[0] as { id?: string } | undefined)?.id ?? '')
-      return id === ''
-        ? nothing('task.extract', 'the extraction job could not be started')
-        : {
-            capability: 'task.extract',
-            found: true,
-            ids: [id],
-            saw: 'Started reading what this project holds to pull out what needs doing.',
-          }
+      if (id === '') return nothing('task.extract', 'the extraction job could not be started')
+      const carried = upstream
+        .map((o) => o.saw)
+        .join(' ')
+        .slice(0, 400)
+      return {
+        capability: 'task.extract',
+        found: true,
+        ids: [id],
+        saw:
+          only === ''
+            ? `Pulling out what needs doing, from what was read: ${carried || 'the whole project'}`
+            : `Pulling out what needs doing from "${only}". ${carried}`,
+        scopedTo: only === '' ? 'the whole project' : only,
+        upstreamDocuments: scopedTo.length,
+      }
     },
   },
 }

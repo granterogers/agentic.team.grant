@@ -893,6 +893,54 @@ its own parked work.
 `verify:pursues` **36/36** · `verify:composes` 18/18 · `verify:recovers` 19/19 ·
 `verify:drains` 8/8 · gate clean.
 
+## AN EXECUTOR THAT IGNORED ITS DEPENDENCY, AND THE CHAIN CLAIM WAS FALSE FOR IT
+
+Found by the **deployed** run, on a plan shape the in-process runs happened
+never to produce. The planner composed `notebook.read → task.extract`, and
+`task.extract` took only `db` and `jobId`: it enqueued the child with
+`from: ''` and reported success. **A dependency the plan declared and nothing
+honoured** — the child re-read the whole project and the first step might as
+well not have run.
+
+`office.extract_tasks` reads `from` as a document title, with empty meaning the
+whole project, so the dependency has a real expression. One document upstream
+scopes the child to it; several means the whole project, which is what the read
+covered anyway. Either way the observation now RECORDS what it was scoped to,
+so the chain is visible in `public.job_steps` rather than asserted in a comment.
+And it declines when the upstream found nothing, like every other actor.
+
+### The class, not the instance
+
+`verify:pursues` proves the invariant for the capabilities its plans use;
+`verify:composes` for whatever the planner picks on the day. Neither says
+anything about the SET of executors, which is how this shipped.
+`tests/agents/every-dependent-step-consumes.test.ts` asks it of all of them,
+read off `EXECUTORS` rather than a list somebody maintains.
+
+### And the check was satisfied by a superstring, an hour after reading #268
+
+The first version scanned each executor's SOURCE for the word `from`. Putting
+the defect back left it **green**, because the sabotage happened to declare a
+LOCAL called `from`.
+
+It is behavioural now: given an upstream that found something distinctive,
+whatever the step records **or writes** must carry it. Both count, and the
+difference is real rather than a convenience — `task.create` consumes into the
+task's detail, which is a database row and not part of its observation, while
+`notebook.read` and `draft.create` consume into what they record. An executor
+ignoring `from` produces neither.
+
+Two further corrections to the fixture, each of which would have made a check
+pass for the wrong reason: the fake database answers writes plausibly, because
+an executor failing on the DATABASE declines for a reason that has nothing to
+do with its upstream; and `draft.create` gets an echoing provider, because
+without one it declines for the same irrelevant reason.
+
+**Proved able to fail against the original defect restored verbatim**: both
+`task.extract` checks go red, and every other executor stays green.
+
+`npm test` **2198** · `verify:pursues` 36/36 · gate clean.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
