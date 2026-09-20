@@ -382,6 +382,24 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every bare var() names a token :root actually declares — #124 shipped square corners for a day',
   ],
   /*
+    And the question the whole second half of #282 is about.
+
+    Telegram, Slack and Team HQ are three doors into one office, and §5 says an
+    adapter may only TRANSLATE. Tracing every ingress found one path, which is
+    why placing the semantic layer in `office.instruction` fixed all of them at
+    once — and nothing anywhere was keeping it that way.
+
+    The cheapest way for it to break is somebody adding "just a small regex" to
+    one adapter for a shape the office reads badly: local-looking, green in
+    every suite, and a second reader of human language in the building. The
+    symptom a month later is the same sentence behaving differently depending
+    on which door Grant used, which is the hardest class of defect to see.
+  */
+  [
+    'check:one-brain',
+    'no door reads what Grant MEANT — one interpreter, or two that will disagree (#282)',
+  ],
+  /*
     And the same question once more, at the layer where a whole feature hides.
 
     `check:callers` walks database functions and `check:pressable` walks

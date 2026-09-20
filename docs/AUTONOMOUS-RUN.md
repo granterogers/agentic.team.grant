@@ -166,12 +166,60 @@ exists, and nothing went on his list) were red on it.
 `verify:extract` 11/11 · `verify:mytasks` 88/88 · lint, typecheck,
 `check:secrets`, `check:templates` clean.
 
+### THE HELD-OUT SET — written against a frozen commit, committed unrun
+
+21 new cases, no sentence or shape reused from the development corpus, frozen
+at `412b24a`. **First run, before anything was changed:**
+
+| | |
+|---|---|
+| semantic | **15 / 21** |
+| today's deterministic layer | 10 / 21 |
+| abandoned clauses counted correctly | **21 / 21** |
+
+The abandoned figure is the strongest result in this run: perfect, on material
+the fixes had never seen. The intent margin is far narrower than the
+development corpus's 24 vs 11, which is exactly what a held-out set is for.
+
+Six misses, adjudicated BEFORE anything was touched: one defensible, **one
+where the harness expectation was wrong** (the model correctly returned two
+tasks where the corpus said one), and four real — a trailing afterthought
+swallowed, a one-off prohibition read as a standing rule, a correction that
+replaced a NAME discarding the whole request, and a past-tense report read as
+a task change. Four general rules were added; held-out went to **20/21**, the
+development corpus held at 24/24, `verify:anchors` held at 11/11.
+
+**The corpus file was not edited.** Its expectations are what was committed
+before the run, so 15/21 stands in the record. From here it is spent: it has
+seen the fixes and is regression material like the first one.
+
+### ANCHOR D IS NOT OPEN
+
+*"Happy to add that. What should it be called?"* — the general cause was
+already fixed by #255 and is wired: `src/agents/clarify.ts` is imported by
+`tasks.ts`, unit-tested, and carries the invariant in its header —
+**a pending clarification is not permission to reinterpret the next arbitrary
+user turn as missing action data.** One turn for an implicit answer, for ever
+for an explicit one. No defect found; no change made.
+
+### THE SECOND HALF, LOCKED IN — `npm run check:one-brain`, in the gate
+
+The doors have not drifted, and nothing was keeping it that way. The check is
+an ALLOW list rather than a forbid list, so a module that does not exist yet is
+refused by default: an adapter may import `quality.ts` and `provenance.ts`
+(output side — deciding whether the office may SEND what it wrote) and nothing
+else from `src/agents`. Proved able to fail by putting an `understand` import
+into `src/slack/events.ts`: red, named the file, restored, green.
+
 ## NEXT ACTION
 
-Anchor D — trace the suspicious clarification state *"Happy to add that. What
-should it be called?"* — then the cross-channel equivalence suite (Telegram
-text / Telegram voice / Slack / Team HQ over one corpus), then the held-out
-adversarial set written against a frozen commit.
+Cross-channel ACTION equivalence: one multi-intent sentence through all four
+surfaces, asserting the four turns agree on what they DID.
+`verify:equivalence` already proves the same words reach the canonical layer on
+every surface; what is not yet asserted is that the same actions follow.
+
+Then: specialist visibility in Slack, and truthful progress for long work —
+five minutes of silence must be impossible.
 
 ---
 
