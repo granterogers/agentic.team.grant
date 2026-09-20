@@ -221,16 +221,45 @@ actually be performed** — about whether code exists. A registry row can claim
 anything (0298), so a granted capability with no executor becomes an
 impediment rather than a no-op.
 
+## AUDIENCE IS NOT A DELIVERY CHANNEL — the held-out finding, closed
+
+*"Let the whole cohort know the session has moved"* produced a `slack.post`
+step. Slack is granted and internal; the cohort are outside the office. The
+capability was available and the AUDIENCE was not, and nothing in the plan
+could express the difference.
+
+`PlanStep.audience` is `office | grant | outside | null`. The model DECLARES
+it; deterministic code uses it in one direction only — **to refuse**. A step
+claiming `office` is granted nothing by saying so, because the approval policy
+still rules at execution, so a model cannot talk its way past the boundary by
+choosing the comfortable word.
+
+A delivery capability (`slack.post`, `gmail.send`, `gmail.draft`,
+`notion.write`) aimed at `outside` is refused and the refusal joins
+`unreachable`, so Grant hears it. Refused rather than quietly downgraded to
+`draft.create`: substituting a different action is how an approved plan stops
+matching what runs.
+
+**The frozen corpus was NOT edited to cover this.** Seven regression tests
+here, four of them controls — `draft.create` for an outside audience is
+allowed (the refusal has to point somewhere), `slack.post` for the office is
+allowed, a READ for an outside audience is untouched because the rule is about
+delivery rather than about who benefits, and an unrecognised audience word is
+treated as unstated rather than as permission.
+
+Proved able to fail: with the guard removed, three go red.
+
 ## WHAT IS STILL UNPROVED
 
 - The planner and executor are not yet reached from a real message: nothing
-  enqueues `office.pursue` from `instruction.ts`.
+  enqueues `office.pursue` from `instruction.ts`. **This is the next action.**
 - Goal-completion verification is untouched — a handler returning is still
   taken as the goal being met.
 - No bounded re-planning.
-- The `slack.post`-to-outsiders reach has no guard (audience vs channel).
 - ContextPack not started.
-- No production-like acceptance through a real interface yet. This section is kept honest as the run proceeds —
+- No production-like acceptance through a real interface yet.
+- Only three executors exist (`db.read`, `task.create`, `task.extract`), so
+  most catalogue capabilities are still honest impediments rather than work. This section is kept honest as the run proceeds —
 a claim only moves up once evidence exists for it.
 
 ---

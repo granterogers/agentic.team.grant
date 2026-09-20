@@ -77,6 +77,23 @@ export interface PlanStep {
   readonly needs: readonly string[]
   /** A staff slug, when the work genuinely belongs to one. */
   readonly specialist: string | null
+  /**
+   * WHO this step's output is for — which is not the same question as which
+   * channel could carry it.
+   *
+   * Found on the held-out set: *"Let the whole cohort know the session has
+   * moved"* produced a `slack.post` step. Slack is granted and internal; the
+   * cohort are people outside the office. The capability was available and the
+   * AUDIENCE was not, and nothing in the plan could express the difference —
+   * so the planner reached for a delivery channel to reach outsiders, and the
+   * only thing between it and Grant's reputation was the approval policy.
+   *
+   * The model DECLARES this. Deterministic code uses it in one direction only:
+   * to REFUSE. A step claiming `office` is not thereby permitted anything, so
+   * a model cannot talk its way past the boundary by choosing the comfortable
+   * word — the approval policy still rules at execution.
+   */
+  readonly audience: 'office' | 'grant' | 'outside' | null
 }
 
 export interface GoalPlan {
@@ -105,6 +122,22 @@ export interface GoalPlan {
  */
 const MOST_STEPS = 8
 const LONGEST_WHY = 240
+
+/**
+ * Capabilities that put words in front of a person.
+ *
+ * Not a permission list — `tool_permissions` owns that. This is the narrower
+ * question of which capabilities are a DELIVERY, so an audience outside the
+ * office can be refused one. `draft.create` is deliberately absent: preparing
+ * something is exactly what the office may do for an outside audience, and it
+ * is what the refusal points at.
+ */
+const DELIVERS_TO_PEOPLE: ReadonlySet<string> = new Set([
+  'slack.post',
+  'gmail.send',
+  'gmail.draft',
+  'notion.write',
+])
 
 /**
  * The autonomy ceiling for a PROPOSAL.
@@ -175,6 +208,7 @@ interface RawPlan {
     why?: unknown
     needs?: unknown
     specialist?: unknown
+    audience?: unknown
   }[]
   unreachable?: unknown[]
 }
@@ -220,6 +254,9 @@ export function validate(
     const needs = Array.isArray(s?.needs) ? s.needs.map((n) => String(n).trim()) : []
     const specialist =
       typeof s?.specialist === 'string' && s.specialist.trim() !== '' ? s.specialist.trim() : null
+    const declared = typeof s?.audience === 'string' ? s.audience.trim() : ''
+    const audience: PlanStep['audience'] =
+      declared === 'office' || declared === 'grant' || declared === 'outside' ? declared : null
 
     if (id === '' || seen.has(id)) {
       refused.push(`a step had ${id === '' ? 'no id' : `a repeated id (${id})`}`)
@@ -254,14 +291,39 @@ export function validate(
         over it anyway, whereas WHAT the step does is the safety question.
       */
       refused.push(`${specialist} is not on the roster, so ${id} was left unassigned`)
-      steps.push({ id, capability, why, needs, specialist: null })
+      steps.push({ id, capability, why, needs, specialist: null, audience })
       seen.add(id)
       continue
     }
-    steps.push({ id, capability, why, needs, specialist })
+    /*
+      AUDIENCE IS NOT CHANNEL, and this is the only place that can tell.
+
+      A delivery capability aimed at people outside the office is refused and
+      turned into something Grant can act on: the office prepares, he sends.
+      Refused rather than quietly downgraded to `draft.create`, because
+      substituting a different action is how an approved plan stops matching
+      what runs.
+    */
+    if (audience === 'outside' && DELIVERS_TO_PEOPLE.has(capability)) {
+      refused.push(
+        `${capability} would put this in front of people outside the office — ` +
+          'preparing it is as far as I may go without your say-so',
+      )
+      continue
+    }
+    steps.push({ id, capability, why, needs, specialist, audience })
     seen.add(id)
   }
 
+  /*
+    A REFUSAL GRANT SHOULD HEAR ABOUT IS NOT JUST A LOG LINE.
+
+    An outside-audience refusal is the office declining something he asked for,
+    so it joins `unreachable` and reaches the answer. The other refusals — a
+    bad id, an unknown specialist — are the model's bookkeeping and stay in
+    `refused`, where the office can see them and he need not.
+  */
+  const toldHim = refused.filter((r) => r.includes('outside the office'))
   const unreachable = (Array.isArray(raw.unreachable) ? raw.unreachable : [])
     .filter((u): u is string => typeof u === 'string' && u.trim() !== '')
     .map((u) => u.trim().slice(0, LONGEST_WHY))
@@ -272,11 +334,24 @@ export function validate(
     falls back, so the cascade answers, rather than presenting Grant with an
     empty plan and a list of complaints.
   */
-  if (steps.length === 0 && proposed.length > 0 && unreachable.length === 0) {
+  if (
+    steps.length === 0 &&
+    proposed.length > 0 &&
+    unreachable.length === 0 &&
+    toldHim.length === 0
+  ) {
     return fellBack(`every proposed step was refused: ${refused.join('; ').slice(0, 200)}`)
   }
 
-  return { goal, steps, unreachable, refused, how: 'model', why: null, model: null }
+  return {
+    goal,
+    steps,
+    unreachable: [...unreachable, ...toldHim].slice(0, MOST_STEPS),
+    refused,
+    how: 'model',
+    why: null,
+    model: null,
+  }
 }
 
 const SYSTEM = (sheet: string, roster: string): string =>
@@ -286,7 +361,8 @@ const SYSTEM = (sheet: string, roster: string): string =>
     'do NOT answer the request.',
     '',
     'Answer with JSON only, in exactly this shape:',
-    '{"goal":"...","steps":[{"id":"s1","capability":"...","why":"...","needs":[],"specialist":null}],"unreachable":[]}',
+    '{"goal":"...","steps":[{"id":"s1","capability":"...","why":"...","needs":[],',
+    '  "specialist":null,"audience":"office"}],"unreachable":[]}',
     '',
     'THE ONLY CAPABILITIES THIS OFFICE HAS:',
     sheet,
@@ -317,8 +393,12 @@ const SYSTEM = (sheet: string, roster: string): string =>
     '   remark — return no steps at all.',
     '5. specialist is a slug from the list of people, and only when the work genuinely',
     '   belongs to their subject. null otherwise.',
-    '6. Contacting anybody outside the office is never a step. Preparing what would',
-    '   be sent is draft.create; the sending is Grant’s decision, not yours.',
+    '6. audience says WHO the step output is for: "office" (us), "grant" (him), or',
+    '   "outside" (anybody else — a client, a supplier, a cohort, the public).',
+    '   Say it honestly. A step whose audience is outside the office may only ever',
+    '   be draft.create: preparing what would be sent is as far as you go, and the',
+    '   sending is Grant’s decision. Never reach for a channel just because it',
+    '   happens to be available.',
     '7. If the request is too vague to act on, or names something you cannot',
     '   identify, return no steps and say what you would need in unreachable.',
     '8. why is one short phrase for Grant, not an explanation to yourself.',

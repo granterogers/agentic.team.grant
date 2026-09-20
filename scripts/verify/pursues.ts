@@ -103,6 +103,7 @@ const plan: GoalPlan = {
       why: 'see what the project holds',
       needs: [],
       specialist: null,
+      audience: 'grant',
     },
     {
       id: 'note',
@@ -110,6 +111,7 @@ const plan: GoalPlan = {
       why: `Review what came out of ${TOKEN}`,
       needs: ['look'],
       specialist: null,
+      audience: 'grant',
     },
   ],
   unreachable: [],
@@ -232,7 +234,19 @@ const gapJobId = String(gapJob.id)
 const gapPlan: GoalPlan = {
   ...plan,
   steps: [
-    { id: 'post', capability: 'slack.post', why: 'tell the team', needs: [], specialist: null },
+    {
+      id: 'post',
+      capability: 'slack.post',
+      why: 'tell the team',
+      needs: [],
+      specialist: null,
+      /*
+        Deliberately the OFFICE, so this case tests the missing-executor gap
+        and not the audience refusal — those are different guards and a case
+        that trips both proves neither.
+      */
+      audience: 'office',
+    },
   ],
 }
 const gap = await runSteps(

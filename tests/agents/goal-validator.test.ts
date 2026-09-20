@@ -245,3 +245,113 @@ describe('validate — level 3 can never be proposed', () => {
     expect(got.why).toContain('gmail.send')
   })
 })
+
+/**
+ * AUDIENCE IS NOT A DELIVERY CHANNEL (#283).
+ *
+ * A post-discovery regression, from the held-out run. Asked to *"let the whole
+ * cohort know the session has moved"*, the planner proposed `slack.post` —
+ * granted, internal, and aimed at people outside the office. The capability
+ * was available and the AUDIENCE was not, and nothing in the plan could
+ * express the difference. Only the approval policy stood between it and
+ * Grant's reputation.
+ *
+ * The frozen corpus is NOT edited to cover this. It is a separate regression,
+ * here, where it can be stated exactly.
+ *
+ * The model declares the audience and deterministic code uses it in ONE
+ * direction: to refuse. Declaring `office` grants nothing — the approval
+ * policy still rules at execution — so a model cannot talk its way past the
+ * boundary by choosing the comfortable word.
+ */
+describe('validate — a delivery capability may not reach outside the office', () => {
+  const outward = (capability: string) =>
+    validate(
+      { goal: 'g', steps: [step({ capability, audience: 'outside' })] },
+      [
+        ...CATALOGUE,
+        {
+          tool: 'notion.write',
+          level: 2,
+          enabled: true,
+          inReply: true,
+          purpose: 'write to Notion',
+          verbs: ['write'],
+        },
+      ],
+      ROSTER,
+    )
+
+  it('slack.post aimed at outsiders is refused — the cohort case', () => {
+    const got = outward('slack.post')
+    expect(got.steps).toHaveLength(0)
+    expect(got.refused.join(' ')).toContain('outside the office')
+  })
+
+  it('and the refusal reaches Grant rather than staying a log line', () => {
+    /*
+      The office declining something he asked for is news. A refusal he never
+      hears about is indistinguishable from the office quietly not bothering.
+    */
+    expect(outward('slack.post').unreachable.join(' ')).toContain('outside the office')
+  })
+
+  it('every outward capability is covered, not just the one that was caught', () => {
+    for (const capability of ['slack.post', 'notion.write']) {
+      expect(outward(capability).steps, capability).toHaveLength(0)
+    }
+  })
+
+  it('CONTROL: draft.create for an outside audience is ALLOWED', () => {
+    /*
+      The whole point of the refusal is that it points somewhere. Preparing
+      what would be sent is exactly what the office may do for an outside
+      audience, so a guard that also blocked this would leave Grant with
+      nothing instead of something to approve.
+    */
+    const got = validate(
+      { goal: 'g', steps: [step({ capability: 'draft.create', audience: 'outside' })] },
+      CATALOGUE,
+      ROSTER,
+    )
+    expect(got.steps).toHaveLength(1)
+    expect(got.steps[0]?.capability).toBe('draft.create')
+  })
+
+  it('CONTROL: slack.post for the OFFICE is allowed — Slack is where the team is', () => {
+    const got = validate(
+      { goal: 'g', steps: [step({ capability: 'slack.post', audience: 'office' })] },
+      CATALOGUE,
+      ROSTER,
+    )
+    expect(got.steps).toHaveLength(1)
+  })
+
+  it('CONTROL: a read for an outside audience is untouched', () => {
+    /*
+      The rule is about DELIVERY, not about who benefits. Reading the mail to
+      answer a question about a client is not contacting the client.
+    */
+    const got = validate(
+      { goal: 'g', steps: [step({ capability: 'gmail.search', audience: 'outside' })] },
+      CATALOGUE,
+      ROSTER,
+    )
+    expect(got.steps).toHaveLength(1)
+  })
+
+  it('an unrecognised audience word is treated as unstated, not as permission', () => {
+    /*
+      A model returning "everyone" or "" must not thereby escape the check by
+      failing to say the forbidden word. Unstated means the guard does not
+      fire — the approval policy is still there — but it must never mean the
+      guard is satisfied.
+    */
+    const got = validate(
+      { goal: 'g', steps: [step({ capability: 'slack.post', audience: 'everyone' })] },
+      CATALOGUE,
+      ROSTER,
+    )
+    expect(got.steps[0]?.audience).toBeNull()
+  })
+})
