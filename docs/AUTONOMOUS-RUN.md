@@ -637,6 +637,78 @@ what was written and could not add a step or write a row, because the plan was
 composed before any document was read and every write goes through the policy.
 That is the layering doing its job rather than the prompt doing all of it.
 
+## DURABILITY, DRIVEN — and a column the stale check never read
+
+### Does B consume A when A's observation comes back OFF DISK?
+
+The restart case runs a whole plan twice and proves a completed local effect is
+not repeated. It cannot see this: in both passes step A also ran in the same
+process, so `from` could have been satisfied from memory and nobody would know.
+
+Driven properly — step A alone in one call, then a fresh compile of both steps
+in a second — with a control asserting nothing was written before the resume,
+so the check cannot pass early. **It holds.** Step B carried a token that
+existed only in step A's recorded outcome, and step A was skipped rather than
+re-run.
+
+### A PLAN RESUMED UNDER DIFFERENT CODE DID NOT PARK
+
+`app.step_begin` carries this comment directly above its staleness test:
+
+> *A checkpoint from different code is not a checkpoint this run may reason
+> about, finished or not.*
+
+and then compares `schema_version` only. **`job_steps.code_version` has been
+written on every step since the table existed and read by nothing.** Two files
+document the mechanism it did not have — `checkpoint.ts` says a code version is
+*"bumped when the MEANING of a step's outcome changes"* and that a resume under
+a different number *"parks rather than guessing"*, and `pursue.ts` repeats it.
+
+Found by driving it: the same plan under `office.pursue@1` and then
+`office.pursue@2` carried straight on. Migration **0527** makes the comment
+true, spliced from the live definition rather than retyped, and drives it in
+the migration: a new step does, the same code skips, different code is stale
+and the reason NAMES the code that recorded it, and the schema test still
+works so the splice did not displace it. The skip case is the control — a
+function that returned `stale` for everything would pass the test without it.
+
+Safe to turn on now because all 19 unfinished steps in the database belong to
+cancelled `verify:stop` probes, so no real in-flight work is disturbed; and
+parking is not destructive.
+
+`verify:pursues` **23/23**. `verify:recovers` 19/19 · `verify:stop` 19/19 ·
+`verify:drains` 8/8 · `verify:browser` 34/34 — the four other suites that
+exercise checkpoints.
+
+## A HARD CONSTRAINT THE LIVE CONFIGURATION DOES NOT MEET
+
+`verify:worker` asserts that a real model call *"cost nothing"*. It reported
+**$0.00008447**, and the ledger says that is not an estimate:
+`provider_reported_cost` equals `cost_usd` to the last digit.
+
+| model | calls | charged |
+|---|---|---|
+| `openai/gpt-oss-120b` | 5,470 | $0.6191 |
+| `qwen/qwen3.7-flash` | 226 | $0.0087 |
+| `mistralai/mistral-small-3.2-24b-instruct` | 78 | $0.0027 |
+| everything `:free` | 2,243 | $0.0002 |
+
+**$0.63 since 15 September** — roughly **$3.80 a month** against CLAUDE.md's
+*"~£0/month … OpenRouter free models"*.
+
+**This is not a code defect and it was not introduced by this run.**
+`public.usable_models` shows the three paid models at priority 10, 20 and 30
+with their prices visible, and the free ones at 100. The office is doing
+exactly what it is configured to do, and the same three models are the
+certified stack CLAUDE.md names. What is unreconciled is the **constraint**
+against the **configuration**, and the reason nobody noticed is that **nothing
+reports spend anywhere Grant looks** — data with no witness, which is the
+dial-with-no-reader defect wearing the other hat.
+
+It is his decision, not mine: the alternative is demoting the three models that
+earned the GREEN verdict. Filed rather than fixed, and #283 makes it slightly
+worse — one planner call per composed turn.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical

@@ -397,6 +397,142 @@ check(
   gapSaw.found === false && String(gapSaw.impediment ?? '').includes('nothing in the office'),
 )
 
+// --- the office died between step A and step B ------------------------------
+/*
+  DOES B CONSUME A WHEN A'S OBSERVATION COMES BACK OFF DISK?
+
+  The restart case above runs the WHOLE plan twice and proves a completed local
+  effect is not repeated. It cannot see this, because in both passes step A
+  also ran in the same process — so `from` could have been satisfied by the
+  in-memory result and nobody would know.
+
+  A worker restart is not hypothetical: `checkpoint.ts` exists for it, a job
+  can be leased and lost, and `recover_stalled_jobs` puts it back. The real
+  claim is that the plan RESUMES rather than restarts, which means step B must
+  read step A's outcome out of `public.job_steps`. This drives exactly that:
+  step A alone in one call, then both steps in a second call with a fresh
+  compile, and the token must still reach the task.
+*/
+const resumeJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-resume-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+  returning job_id::text as id`)
+const resumeJobId = String(resumeJob.id)
+const RESUMED = `velkanth${run}`
+await db.execute(`
+  insert into public.documents
+    (project_id, connector, external_ref, title, content, content_fingerprint,
+     content_chars, fetched_at, state)
+  values (${lit(projectId)}::uuid, 'upload', ${lit(`res-${run}`)},
+          ${lit(`The ${RESUMED} register`)},
+          ${lit(`The ${RESUMED} register has not been reconciled this quarter.`)},
+          encode(sha256(${lit(`fpr-${run}`)}::bytea), 'hex'), 60, app.now_utc(), 'approved')`)
+const twoStep: GoalPlan = {
+  ...plan,
+  steps: [
+    {
+      id: 'study',
+      capability: 'notebook.read',
+      why: `${RESUMED} register`,
+      needs: [],
+      specialist: null,
+      audience: 'grant',
+    },
+    {
+      id: 'note',
+      capability: 'task.create',
+      why: `Reconcile the ${RESUMED} register`,
+      needs: ['study'],
+      specialist: null,
+      audience: 'grant',
+    },
+  ],
+}
+/*
+  THE CRASH. Only step A is compiled, so the process ends with A recorded and B
+  never attempted — which is what a lost lease leaves behind.
+*/
+const halfWay = await runSteps(db, resumeJobId, 'office.pursue@1', [
+  ...compile({ ...twoStep, steps: [twoStep.steps[0] as never] }, db, resumeJobId, projectId, 'go'),
+])
+check(
+  'the office got through step A and then stopped',
+  halfWay.kind === 'done' ? 'step A recorded' : `${halfWay.kind}`,
+  halfWay.kind === 'done',
+)
+const beforeResume = await one(`
+  select count(*)::int as n from public.tasks where detail like ${lit(`%${RESUMED}%`)}`)
+check(
+  'CONTROL: nothing was written before the resume, so the check below cannot pass early',
+  `${String(beforeResume.n)} task(s)`,
+  Number(beforeResume.n) === 0,
+)
+/*
+  A FRESH START. Nothing of the first call survives in memory — a new compile,
+  and `step_begin` must skip A and hand B what A recorded.
+*/
+const resumed = await runSteps(
+  db,
+  resumeJobId,
+  'office.pursue@1',
+  compile(twoStep, db, resumeJobId, projectId, 'go'),
+)
+const afterResume = await one(`
+  select count(*)::int as n,
+         coalesce(max(detail), '') as detail
+    from public.tasks where detail like ${lit(`%${RESUMED}%`)}`)
+check(
+  'and on resume step B consumed the observation step A left ON DISK',
+  Number(afterResume.n) === 0
+    ? 'nothing carries the register, so the resume lost what A found'
+    : `"${String(afterResume.detail).slice(0, 70)}"`,
+  resumed.kind === 'done' && Number(afterResume.n) === 1,
+)
+check(
+  'and A was skipped rather than run again',
+  (() => {
+    const o = (resumed.kind === 'done' ? resumed.outcomes['study:notebook.read'] : {}) as Record<
+      string,
+      unknown
+    >
+    return `A's recorded outcome came back: found=${String(o.found)}`
+  })(),
+  ((resumed.kind === 'done' ? resumed.outcomes['study:notebook.read'] : {}) as { found?: boolean })
+    .found === true,
+)
+
+// --- a checkpoint written by different code ---------------------------------
+/*
+  A PLAN RESUMED UNDER CODE THAT DID NOT WRITE ITS EARLIER STEPS MUST PARK.
+
+  `office.pursue@1` is bumped when the MEANING of a step's outcome changes, and
+  the whole point is that a resume under a different number does not guess. The
+  verdict exists in `checkpoint.ts`; nothing drove it for this handler, so the
+  version string was a comment rather than a mechanism.
+*/
+const stale = await runSteps(
+  db,
+  resumeJobId,
+  'office.pursue@2',
+  compile(twoStep, db, resumeJobId, projectId, 'go'),
+)
+check(
+  'a plan resumed under different code PARKS rather than guessing',
+  stale.kind === 'paused'
+    ? `${stale.pause.reason}: ${stale.pause.detail.slice(0, 60)}`
+    : `it carried on: ${stale.kind}`,
+  stale.kind === 'paused' && stale.pause.reason === 'checkpoint_stale',
+)
+const afterStale = await one(`
+  select count(*)::int as n from public.tasks where detail like ${lit(`%${RESUMED}%`)}`)
+check(
+  'and parking wrote nothing extra',
+  `${String(afterStale.n)} task(s), still`,
+  Number(afterStale.n) === 1,
+)
+
 // --- an instruction hidden in material Grant filed himself ------------------
 /*
   THE FENCE DOES NOT COVER THIS DOCUMENT, AND THAT IS DELIBERATE.
@@ -633,7 +769,7 @@ for (const t of (
   await db.execute(
     `select task_id::text as id from public.tasks
        where detail like ${lit(`%${TOKEN}%`)} or detail like ${lit(`%${DEEP}%`)}
-          or title like ${lit(`%${TOKEN}%`)}`,
+          or detail like ${lit(`%${RESUMED}%`)} or title like ${lit(`%${TOKEN}%`)}`,
   )
 ).rows) {
   await db
@@ -647,7 +783,7 @@ await db.execute(`
     state_reason = 'verify:pursues teardown'
    where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid,
                     ${lit(revokedJobId)}::uuid, ${lit(observeJobId)}::uuid,
-                    ${lit(injectJobId)}::uuid)
+                    ${lit(injectJobId)}::uuid, ${lit(resumeJobId)}::uuid)
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.tasks where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid);
@@ -679,7 +815,7 @@ const left = await one(`
              and status <> 'archived')::int as projects,
          (select count(*) from public.tasks
            where (detail like ${lit(`%${TOKEN}%`)} or detail like ${lit(`%${DEEP}%`)}
-                  or title like ${lit(`%${TOKEN}%`)})
+                  or detail like ${lit(`%${RESUMED}%`)} or title like ${lit(`%${TOKEN}%`)})
              and state <> 'done')::int as tasks`)
 check(
   'teardown — nothing of this run is left in his projects or on his list',

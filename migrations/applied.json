@@ -524,5 +524,6 @@
   "0523_harness_traffic_may_not_reach_a_production_destination.sql": "f960326fb01baae375a94ef980722f57ba45e5584f09ec58dd0b295bb844997c",
   "0524_the_guard_knows_when_it_started.sql": "d7a34b2ef263d210b38c3e25bbf49e0a08f8bcafad80bcce9f25f9a35495c589",
   "0525_a_reader_superseded_an_hour_after_it_was_written.sql": "0a1e3d7884a008d1037658ae3dfa48c9ae5aa1c8ef9f50b85d1ebca256917f6a",
-  "0526_a_handler_that_never_went_through_the_worker.sql": "2bd64a5daba5e72d3504fd45d448debab7eb4cb3d51891b52509f8f6fc116d71"
+  "0526_a_handler_that_never_went_through_the_worker.sql": "2bd64a5daba5e72d3504fd45d448debab7eb4cb3d51891b52509f8f6fc116d71",
+  "0527_a_column_the_stale_check_never_read.sql": "ea28964c90930eb38c30353cbf54fdc53cd54b33a35213e3a5b13d7b7c58b0a2"
 }
