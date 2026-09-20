@@ -81,7 +81,25 @@ const MINE = 'telegram:verify-composes'
 */
 const DEEP = `thravelqu${run}`
 
-console.log('one sentence, through the real door, to a receipt (#283) —\n')
+/*
+  `--deployed` LETS THE DEPLOYED WORKER DO IT, WHICH IS A DIFFERENT CLAIM.
+
+  By default this suite dequeues in-process, which proves the code in the
+  repository works end to end. It says nothing about the code that is RUNNING:
+  CLAUDE.md records a migration whose behaviour change sat undeployed for
+  fifteen minutes while the old worker put back what it had removed, and nine
+  hourly jobs against a worker older than their handler.
+
+  With the flag, nothing is dequeued here at all. The rows are written and the
+  office is left to pick them up on its own pg_cron tick, so a pass means the
+  DEPLOYED worker carries this. Slower by design — it waits for a real tick
+  rather than simulating one.
+*/
+const DEPLOYED = process.argv.includes('--deployed')
+
+console.log(
+  `one sentence, through the real door, to a receipt (#283)${DEPLOYED ? ' — against the DEPLOYED worker' : ''} —\n`,
+)
 
 const project = await one(`
   insert into public.projects (slug, name, purpose, status)
@@ -146,7 +164,7 @@ const setAside = async (got: Job): Promise<void> => {
 /** Run one specific job to settlement, through the office's own retry loop. */
 const drive = async (jobId: string): Promise<string> => {
   let job: Job | null = null
-  for (let attempt = 0; attempt < 6 && job === null; attempt += 1) {
+  for (let attempt = 0; attempt < (DEPLOYED ? 0 : 6) && job === null; attempt += 1) {
     const got = await dequeue(db, WORKER, false, false, undefined, MINE)
     if (got !== null && got.jobId === jobId) job = got
     else if (got !== null) await setAside(got)
@@ -155,7 +173,7 @@ const drive = async (jobId: string): Promise<string> => {
   if (job === null) {
     // The deployed worker took it, which is the office working. Read the
     // canonical result rather than the return value of a path not taken.
-    for (let waited = 0; waited < 24; waited += 1) {
+    for (let waited = 0; waited < (DEPLOYED ? 60 : 24); waited += 1) {
       const st = await one(
         `select state::text as s from public.jobs where job_id = ${lit(jobId)}::uuid`,
       )
@@ -243,7 +261,12 @@ const COMPOSED =
   difference teaches nobody anything. Each attempt carries its own tag, so
   `enqueue_inbound` does not dedupe them into one turn.
 */
-const ATTEMPTS = 3
+/*
+  One attempt against the deployed office: each turn waits for a real tick, so
+  three would be a quarter of an hour. The question there is whether the
+  RUNNING code carries this at all, and one composed plan answers it.
+*/
+const ATTEMPTS = DEPLOYED ? 1 : 3
 let turn = { jobId: '', state: '' }
 let planned = 0
 let attemptsSpent = 0

@@ -483,12 +483,44 @@ ADR-0045 records the four constraints — the cascade-declined gate, permission
 asked twice, existing versus performable, and audience — and its final section
 says plainly what the planner does NOT claim.
 
+## DEPLOYED, AND PROVED AGAINST THE THING THAT IS RUNNING
+
+**Worker v631, ACTIVE.** `npm run verify:composes -- --deployed` then dequeued
+NOTHING in-process: the rows were written and the office picked them up on its
+own pg_cron tick. **12/12.** A composed sentence entered at
+`inbound_commands`, the deployed handler declined it through the cascade,
+composed `notebook.read → draft.create`, started a child, and the token that
+exists only inside a document's body reached the dependent step's recorded
+outcome and a durable row.
+
+That is a different claim from the in-process run, and CLAUDE.md is why the
+flag exists: **a migration is not a deploy.** 0283 taught `syncNotion` to skip
+Notion containers and the deployed worker put all three back fifteen minutes
+later, because it had been built before the change.
+
+`app.office_health()`: 0 failed, 0 stalled, 0 waiting.
+
+### What the deploy means for Grant, concretely
+
+The only autonomy row on a live project of his is the **global `suggest`**,
+from migration 0027. Under `suggest` a level-1 write ASKS. So on his real
+projects a composed request will read the material and then say, in his own
+words, that it needs him to say — it will not write. Level 0 reads proceed,
+because reading is what observing is.
+
+Nothing here changes a turn the cascade already handles, and an ordinary
+question starts no plan at all. That control runs through the same door in the
+same run.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
   door every adapter writes to — but **not through Telegram or Slack
   themselves**. §5's rule says an adapter may only translate, so the gap is
   narrow; it is still a gap.
+- **Nothing has yet been observed on one of Grant's own projects**, where the
+  dial is `suggest` and the write steps will ask. The asking path is proved by
+  `verify:pursues`' `observe` control, not by a real turn of his.
 - No bounded re-planning: a step that finds nothing ends the plan honestly
   rather than causing the office to think again.
 - **The planner's composition rate is not measured.** Seven observations, in
