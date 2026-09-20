@@ -389,11 +389,70 @@ marker. Restoring the exact defect, watching it stay green, and only then
 finding the flaw is the whole argument for breaking a detector on purpose.
 Red with the defect, green without, and the summary names what it measured.
 
+### FIVE MINUTES OF SILENCE — measured, then made impossible
+
+**Measured before anything was built.** 335 real `office.instruction` jobs over
+fourteen days:
+
+| | |
+|---|---|
+| median | **21s** |
+| p90 | **259s** |
+| over five minutes | **30 of 335** |
+| worst | 15 hours |
+
+And nothing covered it. `announceStart` speaks only when the roster NAMES
+somebody with a bot, and #70 retired the staff bots — **two "on it" messages
+have been sent in the system's history, five days apart.** So the ordinary turn
+is instant, about one in eleven is not, and those are exactly the ones where
+Grant watches nothing.
+
+`sayStillWorking` runs on every pass, UNCONDITIONALLY — gating it on "the pass
+did something", the way the floor channel is gated, would silence it in
+precisely the case it exists for. First note at four minutes, then at most one
+per ten, enforced by a bucket in the dedupe key so there is no timer and no
+column to keep in step.
+
+Every sentence has a column behind it and there is no model: elapsed from
+`started_at`, a pause quoted from `waiting_on`, and a fan-out counted from the
+CHILD ROWS, so *"2 of 3 of the people I asked have come back"* is a count
+rather than an impression. A control asserts that no branch claims a result, a
+finding, a percentage or a stage.
+
+### THE RACE, AND TWO CHECKS THAT PASSED FOR THE WRONG REASON
+
+A note telling Grant work is under way AFTER he has the answer is worse than
+silence, so the state is re-read immediately before the send.
+
+**The first version of that check settled the job and then called** — and the
+query itself filters settled states, so the freshness re-read was never
+reached. Removing the guard entirely left the suite GREEN. The guard exists for
+the RACE (the drain and this pass run in the same minute), so the suite now
+reproduces one: two quiet jobs, and while the first is being sent the recorder
+settles the second, which has already passed the query.
+
+The first attempt at THAT was also wrong twice — it settled whichever row it
+happened to be sending, and then both jobs were put in a bucket the controls
+had already spent, so the older job's send was deduped, the recorder was never
+called for it, and the race job settled itself. The harness reporting its own
+arithmetic as a defect, caught by reading the output rather than the tally.
+
+Red with the guard removed, green with it, 9/9.
+
+### A SEAM, BECAUSE #45 AND THE REAL DESTINATION PULL AGAINST EACH OTHER
+
+The reader filters harness traffic through `app.harness_job`, so #45 sends the
+suite a REAL job — and a real job with a real note is a real Telegram message
+to Grant. `sayStillWorking` takes an optional transport, defaulting to the real
+client, so the real query, the real freshness re-read and the real dedupe all
+run against a real row while what would have been sent is recorded.
+`verify:slack` already uses the same shape.
+
 ## NEXT ACTION
 
-Truthful progress for long work: five minutes of silence must be impossible.
-Specialist visibility in Slack is done — `narrateOutcomes` now shows who
-contributed, their work product, the synthesis and the resulting action.
+The remaining mission item is cross-channel coherence with no echo loops and no
+duplicated action. Specialist visibility in Slack and truthful progress are
+both done.
 
 ---
 

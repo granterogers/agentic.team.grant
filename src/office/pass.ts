@@ -39,7 +39,7 @@
  */
 import { processCallbacks } from '../channels/callbacks.ts'
 import { combinedNotifier, pagerChannel } from '../channels/notify.ts'
-import { announceStart } from '../channels/progress.ts'
+import { announceStart, sayStillWorking } from '../channels/progress.ts'
 import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { artifactHandler } from '../handlers/artifact.ts'
@@ -598,6 +598,26 @@ export const buildPass = async (
     // definition nothing new to narrate. Grant is waiting at the other end of
     // this; the running commentary can wait for a pass that has something to
     // comment on.
+    /*
+      ANYTHING THAT HAS BEEN QUIET TOO LONG (#282).
+
+      UNCONDITIONAL, and that is the whole point: a pass that handled nothing
+      is exactly the pass where a long job is sitting there and Grant is
+      watching nothing. Gating it on `done.length` the way the floor channel is
+      gated would silence it in precisely the case it exists for.
+
+      Measured before it was built — 335 real turns over a fortnight, median
+      21s, p90 259s, and 30 of them over five minutes. Never fatal: a courtesy
+      note that fails must not take the pass with it.
+    */
+    try {
+      for (const s of await sayStillWorking(db)) {
+        if (s.outcome === 'sent') log(`progress: still working on ${s.jobId.slice(0, 8)}`)
+      }
+    } catch (error) {
+      log(`progress: ${(error as Error).message.slice(0, 120)}`)
+    }
+
     if (floor !== null && done.length > 0) {
       try {
         await floor()
