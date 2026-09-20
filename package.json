@@ -274,7 +274,8 @@
     "mapview": "tsx scripts/verify/mapview.ts",
     "verify:tasks-ui": "tsx scripts/verify/tasks-ui.ts",
     "vikunja:dev": "bash scripts/vikunja-dev.sh",
-    "verify:vikunja": "tsx scripts/verify/vikunja.ts"
+    "verify:vikunja": "tsx scripts/verify/vikunja.ts",
+    "verify:understands": "tsx scripts/verify/understands.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

@@ -1,0 +1,154 @@
+{
+  "why": "Realistic human speech, with the expected semantic outcome written BEFORE anything ran. Anchors A and B are the two production sentences; everything else was generated to cover the classes around them. Held-out cases live in spoken-corpus-heldout.json and were written after the fixes were frozen.",
+  "cases": [
+    {
+      "id": "anchor-a",
+      "said": "I've told you to always give your information in the form of clear bullet points. Also, I want you to tell me what my current tasks are.",
+      "surviving": ["preference", "task_query"],
+      "abandoned": 0
+    },
+    {
+      "id": "anchor-b",
+      "said": "Create a task for me and the um... No actually, you know what? Scan the entirety of the Legacy Coaching Project and create appropriate tasks for me to review.",
+      "surviving": ["delegate"],
+      "abandoned": 1
+    },
+
+    {
+      "id": "correct-date",
+      "said": "Remind me to ring the venue on Thursday. No wait, make that Friday.",
+      "surviving": ["task_create"],
+      "abandoned": 1
+    },
+    {
+      "id": "scratch-that",
+      "said": "Add a task to email the printers. Scratch that, I'll do it myself.",
+      "surviving": [],
+      "abandoned": 1
+    },
+    {
+      "id": "forget-that",
+      "said": "Put together the pricing summary — actually forget that for now.",
+      "surviving": [],
+      "abandoned": 1
+    },
+    {
+      "id": "two-corrections",
+      "said": "Remind me Monday to call the accountant, no Tuesday, actually you know what, Wednesday.",
+      "surviving": ["task_create"],
+      "abandoned": 2
+    },
+    {
+      "id": "swap-subject",
+      "said": "Set aside a task to review the onboarding copy. Sorry, what I mean is the pricing page.",
+      "surviving": ["task_create"],
+      "abandoned": 1
+    },
+
+    {
+      "id": "two-intents",
+      "said": "Right, remind me to chase the deposit tomorrow, and also tell me what's overdue.",
+      "surviving": ["task_create", "task_query"],
+      "abandoned": 0
+    },
+    {
+      "id": "three-intents",
+      "said": "Morning. Can you add a task to renew the domain, tell me what's on for today, and from now on keep your answers short.",
+      "surviving": ["task_create", "task_query", "preference"],
+      "abandoned": 0
+    },
+    {
+      "id": "pref-then-request",
+      "said": "Always use British spelling in anything you write for me. Now, what did we decide about the September cohort?",
+      "surviving": ["preference", "question"],
+      "abandoned": 0
+    },
+    {
+      "id": "request-then-pref",
+      "said": "What's on my plate this week? And stop sending me those hourly updates.",
+      "surviving": ["task_query", "preference"],
+      "abandoned": 0
+    },
+    {
+      "id": "task-and-question",
+      "said": "Stick 'call the accountant' on my list, and remind me how the refund policy works.",
+      "surviving": ["task_create", "question"],
+      "abandoned": 0
+    },
+
+    {
+      "id": "delegate-generate",
+      "said": "Have a proper look through the Wellness project and set up whatever tasks you think I need.",
+      "surviving": ["delegate"],
+      "abandoned": 0
+    },
+    {
+      "id": "delegate-research",
+      "said": "Go and find out what the other providers charge for something like ours and write it up.",
+      "surviving": ["delegate"],
+      "abandoned": 0
+    },
+    {
+      "id": "literal-create",
+      "said": "Create a task called Renew the insurance.",
+      "surviving": ["task_create"],
+      "abandoned": 0
+    },
+
+    {
+      "id": "filler-heavy",
+      "said": "Um, so, like, I guess what I need is, er, a reminder to send Priya the contract before Friday.",
+      "surviving": ["task_create"],
+      "abandoned": 0
+    },
+    {
+      "id": "restart",
+      "said": "Can you — hang on — what I actually want is for you to tell me everything that's overdue.",
+      "surviving": ["task_query"],
+      "abandoned": 1
+    },
+    {
+      "id": "opener-only",
+      "said": "Fine, remind me tomorrow to chase the printers.",
+      "surviving": ["task_create"],
+      "abandoned": 0
+    },
+    {
+      "id": "change-attr",
+      "said": "That last one — actually make it urgent, keep the date as it is.",
+      "surviving": ["task_change"],
+      "abandoned": 0
+    },
+
+    {
+      "id": "control-remind-question",
+      "said": "Remind me how the pricing works again?",
+      "surviving": ["question"],
+      "abandoned": 0
+    },
+    {
+      "id": "control-word-task",
+      "said": "Did I ever add a task about the domain?",
+      "surviving": ["question"],
+      "abandoned": 0
+    },
+    {
+      "id": "control-actually",
+      "said": "That's actually a really good point about the September intake.",
+      "surviving": [],
+      "abandoned": 0
+    },
+    {
+      "id": "control-project-word",
+      "said": "The Legacy Coaching Project has been going well this month.",
+      "surviving": [],
+      "abandoned": 0
+    },
+    {
+      "id": "control-thanks",
+      "said": "Thanks, that's exactly what I needed.",
+      "surviving": [],
+      "abandoned": 0
+    }
+  ]
+}
