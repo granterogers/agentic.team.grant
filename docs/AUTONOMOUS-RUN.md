@@ -836,6 +836,63 @@ downstream was doubled: one command row, one job on that idempotency key.
 
 `verify:composes` **18/18**.
 
+## AN OUTAGE IS NOT AN ANSWER
+
+`draft.create` ended `.catch(() => null)`, so **every** provider failure became
+*"the provider returned nothing to write"* — a verdict, handed to Grant as
+though the office had tried and the answer was no. A thirty-second outage
+produced a permanently incomplete plan.
+
+`provider_unavailable` is one of the four reasons `app.resumable_now` wakes, so
+the plan **pauses** and the office picks it up itself. The two cases are told
+apart by which one happened: a THROW is the provider being unreachable; an
+EMPTY BODY is the provider answering badly, which is a verdict the job's own
+retry loop should handle, not a pause waiting on a clock that cannot change it.
+Safe to re-run because the step is `effect: 'none'` — it writes nothing.
+
+Executors can now answer `Later` as well as an observation, which is the type
+that makes the distinction explicit rather than conventional.
+
+**Proved able to fail**: with the pause neutered, three checks go red — and the
+informative one is that the plan then records **2 finished steps** instead of
+keeping 1 and stopping. The work already done is exactly what pausing protects.
+
+The CONTROL is the other half: a provider that answers with nothing must stay a
+verdict. Without it the change would pass against an executor that paused on
+everything.
+
+## A PLAN NAMES A WORLD THAT CAN CHANGE UNDER IT
+
+The plan is composed against the project as it was, then travels as data on a
+job that can queue, retry and resume. Grant can archive the documents in
+between. Driven by doing exactly that between composing the steps and running
+them: the read reports **finding nothing** rather than failing to look, and the
+step depending on it **declines rather than writing from an absence**. The
+distinction this whole file is built on, at the one moment it is easiest to get
+wrong.
+
+## THE SUITE WAS CREATING A STATE THE OFFICE IS RIGHT TO DISTRUST
+
+The stale-reference work made this file long enough to lose a race it had
+always been running.
+
+Every job here is inserted `running` **with no lease** — and a job in `running`
+with no lease is precisely what `app.recover_stalled_jobs` exists to reclaim.
+So the deployed worker began reclaiming earlier sections' jobs, requeueing
+them, running `office.pursue` against an empty `pinned_config` and completing
+them. The stale-checkpoint case then tried to pause a job that was already
+terminal, and **the suite died several sections after the cause** — the error
+named `complete -> paused` and pointed at a line that was not the problem.
+
+Two fixes, because either alone leaves the class open. Every fixture job is
+LEASED, which is what a real worker does and makes the fixture faithful rather
+than making the suite race faster. And each section SETTLES its own job the
+moment it has asserted, which is `verify:recovers`' lesson about a suite taking
+its own parked work.
+
+`verify:pursues` **36/36** · `verify:composes` 18/18 · `verify:recovers` 19/19 ·
+`verify:drains` 8/8 · gate clean.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical

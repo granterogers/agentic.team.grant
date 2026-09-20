@@ -89,10 +89,29 @@ export interface Observation extends Outcome {
   readonly impediment?: string
 }
 
+/**
+ * What an executor may answer with instead of an observation.
+ *
+ * A step that could not run is usually an impediment — the office looked and
+ * there is nothing, or it is not allowed, or nothing performs it. Those are
+ * VERDICTS: they will read the same in five minutes.
+ *
+ * An outage is not a verdict. `resumable_now` wakes four reasons and
+ * `provider_unavailable` is one of them, so a step that is merely early can
+ * say so and be tried again, instead of reporting "I could not" about
+ * something that was briefly unreachable.
+ */
+export interface Later {
+  readonly pause: Paused
+}
+
+const isLater = (x: Observation | Later): x is Later =>
+  (x as { pause?: unknown }).pause !== undefined
+
 export interface Executor {
   /** What it does outside the office, so an interrupted resume knows. */
   readonly effect: 'none' | 'local' | 'external'
-  readonly run: (doing: Doing) => Promise<Observation>
+  readonly run: (doing: Doing) => Promise<Observation | Later>
 }
 
 /**
@@ -276,7 +295,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
    */
   'draft.create': {
     effect: 'none',
-    run: async ({ step, from, request, router }): Promise<Observation> => {
+    run: async ({ step, from, request, router }): Promise<Observation | Later> => {
       const upstream = step.needs
         .map((id) => from[id] as Observation | undefined)
         .filter((o): o is Observation => o !== undefined && o.found)
@@ -295,6 +314,25 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         .map((o) => o.saw)
         .join('\n\n')
         .slice(0, 6_000)
+      /*
+        AN OUTAGE IS NOT AN ANSWER.
+
+        This was `.catch(() => null)`, which turned every provider failure into
+        "the provider returned nothing to write" — a verdict, reported to Grant
+        as though the office had tried and the answer was no. A thirty-second
+        outage produced a permanently incomplete plan.
+
+        The two are told apart by which one happened. A THROW is the provider
+        being unreachable, and `provider_unavailable` is one of the four
+        reasons `app.resumable_now` wakes, so the plan pauses and the tick
+        tries again. An EMPTY BODY is the provider answering badly, which is a
+        verdict: the job's own retry loop is the right place for that, not a
+        pause waiting on a clock.
+
+        Safe to re-run because this step is `effect: 'none'` — it writes
+        nothing, so composing again costs a model call and duplicates nothing.
+      */
+      let unreachable: string | null = null
       const said = await router
         .complete({
           /*
@@ -335,7 +373,21 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
           ],
           maxTokens: 1_200,
         })
-        .catch(() => null)
+        .catch((error: unknown) => {
+          unreachable = String((error as Error).message ?? 'the provider could not be reached')
+          return null
+        })
+      if (unreachable !== null) {
+        return {
+          pause: {
+            reason: 'provider_unavailable',
+            detail: `Writing it up needs a model and none answered: ${String(unreachable).slice(0, 200)}`,
+            resumeWhen: 'A provider answers again. The office retries on its own.',
+            resumable: true,
+            until: new Date(Date.now() + 60_000),
+          },
+        }
+      }
       const body = (said?.content ?? '').trim()
       if (body === '') {
         return nothing('draft.create', 'the provider returned nothing to write')
@@ -592,17 +644,18 @@ export const compile = (
         for (const [name, outcome] of Object.entries(done)) {
           from[name.split(':')[0] ?? name] = outcome
         }
-        return {
-          outcome: await executor.run({
-            db,
-            jobId,
-            projectId,
-            request,
-            step,
-            from,
-            ...(router === undefined ? {} : { router }),
-          }),
-        }
+        const answered = await executor.run({
+          db,
+          jobId,
+          projectId,
+          request,
+          step,
+          from,
+          ...(router === undefined ? {} : { router }),
+        })
+        // A step that says "not yet" stops the plan; one that says "no" is an
+        // outcome the steps after it can read.
+        return isLater(answered) ? { pause: answered.pause } : { outcome: answered }
       },
     }
   })

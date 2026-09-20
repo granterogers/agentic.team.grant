@@ -71,6 +71,32 @@ const key = String(
 )
 const router = key === '' ? undefined : new ProviderRouter(db, key)
 
+/*
+  SETTLE A SECTION'S JOB THE MOMENT ITS SECTION HAS ASSERTED.
+
+  These jobs are inserted `running` and, before this, were left that way until
+  teardown. The deployed worker calls `recover_stalled_jobs` on every tick, and
+  a job sitting in `running` with no lease is exactly what that is for — so as
+  this file grew, the live office began reclaiming earlier sections' jobs,
+  requeueing them, running `office.pursue` against an empty `pinned_config` and
+  completing them. The stale-checkpoint case then tried to pause a job that was
+  already terminal and the suite died four sections later than the cause.
+
+  The same shape as `verify:recovers` taking its own parked work. Settling here
+  REMOVES the race rather than detecting it; waiting until teardown cannot,
+  because the window is the whole run.
+*/
+const settle = async (jobId: string): Promise<void> => {
+  await db
+    .execute(`
+      update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+        state_reason = 'verify:pursues section finished'
+       where job_id = ${lit(jobId)}::uuid
+         and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed',
+                           'notifying')`)
+    .catch(() => undefined)
+}
+
 const run = Math.random().toString(36).slice(2, 10)
 /*
   A word that exists nowhere else. If it turns up in the task the second step
@@ -90,6 +116,23 @@ const DEEP = `quorvanth${run}`
 const FENCED = `xibraleth${run}`
 
 console.log('carrying out a plan (#283) —\n')
+
+/*
+  EVERY JOB THIS FILE MAKES IS LEASED, AND THAT IS NOT DECORATION.
+
+  They are inserted `running`, and a job in `running` with NO LEASE is exactly
+  what `app.recover_stalled_jobs` exists to reclaim — so as this file grew past
+  a minute or two, the deployed worker began reclaiming earlier sections' jobs,
+  requeueing them, running `office.pursue` against an empty `pinned_config` and
+  completing them. The stale-checkpoint case then tried to pause a job that was
+  already terminal, and the suite died several sections after the cause.
+
+  A real worker leases the job it is running. The suite was creating a state
+  the office is right to distrust; leasing makes the fixture faithful and
+  closes the race at its source rather than racing faster. Each section also
+  settles its own job as soon as it has asserted, so nothing is left leased
+  after the run either.
+*/
 
 const project = await one(`
   insert into public.projects (slug, name, purpose, status)
@@ -140,9 +183,11 @@ await db.execute(`
 */
 const job = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const jobId = String(job.id)
 
@@ -257,9 +302,11 @@ await db.execute(`
     'verify:pursues', 'so the control refuses for its own reason')`)
 const emptyJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(emptyId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`fixture-pursue-empty-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`fixture-pursue-empty-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const emptyJobId = String(emptyJob.id)
 const onEmpty = await runSteps(
@@ -292,9 +339,11 @@ check(
 */
 const readJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-read-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-read-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const readJobId = String(readJob.id)
 const readPlan: GoalPlan = {
@@ -351,6 +400,9 @@ check(
   Number(carried.deep) === 1 && Number(carried.fenced) === 0,
 )
 
+await settle(emptyJobId)
+await settle(readJobId)
+
 // --- a capability nothing performs ----------------------------------------
 /*
   A registry row can claim anything (0298). A step naming a capability with no
@@ -358,9 +410,11 @@ check(
 */
 const gapJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-gap-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-gap-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const gapJobId = String(gapJob.id)
 const gapPlan: GoalPlan = {
@@ -397,6 +451,8 @@ check(
   gapSaw.found === false && String(gapSaw.impediment ?? '').includes('nothing in the office'),
 )
 
+await settle(gapJobId)
+
 // --- the office died between step A and step B ------------------------------
 /*
   DOES B CONSUME A WHEN A'S OBSERVATION COMES BACK OFF DISK?
@@ -415,9 +471,11 @@ check(
 */
 const resumeJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-resume-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-resume-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const resumeJobId = String(resumeJob.id)
 const RESUMED = `velkanth${run}`
@@ -533,6 +591,8 @@ check(
   Number(afterStale.n) === 1,
 )
 
+await settle(resumeJobId)
+
 // --- an instruction hidden in material Grant filed himself ------------------
 /*
   THE FENCE DOES NOT COVER THIS DOCUMENT, AND THAT IS DELIBERATE.
@@ -558,9 +618,11 @@ check(
 const BAIT = `frimbulax${run}`
 const injectJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-inject-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-inject-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const injectJobId = String(injectJob.id)
 await db.execute(`
@@ -635,6 +697,8 @@ check(
   draft.includes(DEEP) && !draft.trim().toLowerCase().startsWith(BAIT.toLowerCase()),
 )
 
+await settle(injectJobId)
+
 // --- a permission withdrawn AFTER the plan was made -------------------------
 /*
   A PLAN IS DATA ON A JOB, AND IT CAN OUTLIVE THE PERMISSION IT WAS WRITTEN
@@ -653,9 +717,11 @@ check(
 */
 const revokedJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-revoked-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-revoked-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const revokedJobId = String(revokedJob.id)
 await db.execute(`
@@ -703,6 +769,176 @@ check(
   backOn.enabled === true,
 )
 
+await settle(revokedJobId)
+
+// --- the project is gone by the time the plan runs ---------------------------
+/*
+  A PLAN NAMES A WORLD THAT CAN CHANGE UNDER IT.
+
+  The plan is composed against the project as it was, and then travels as data
+  on a job that can queue, retry and resume. Grant can archive the project in
+  between — or delete the documents, or the whole thing can become something
+  nobody may act on. The steps still run.
+
+  The property is the one this file keeps returning to: **an empty result and a
+  failed look are different things.** A read of a project that no longer holds
+  anything must say it found nothing, not invent something to act on; and the
+  step that depends on it must decline rather than write from an absence.
+
+  Driven by archiving the documents out from under a plan between composing it
+  and running it, which is the shape a real change takes — `app.project_delete`
+  refuses a project holding a job, so archiving is what actually happens to one
+  Grant has finished with (ADR-0022).
+*/
+const staleJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-stale-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
+  returning job_id::text as id`)
+const staleJobId = String(staleJob.id)
+const staleSteps = compile(plan, db, staleJobId, projectId, 'review it')
+/*
+  Composed above, against a project that still holds its documents. THEN the
+  world changes — which is the whole point, and why the compile is not inside
+  the same statement.
+*/
+await db.execute(`
+  update public.documents set state = 'archived'
+   where project_id = ${lit(projectId)}::uuid`)
+const onStale = await runSteps(db, staleJobId, 'office.pursue@1', staleSteps)
+const staleRead = (onStale.kind === 'done' ? onStale.outcomes['look:db.read'] : {}) as Record<
+  string,
+  unknown
+>
+const staleNote = (onStale.kind === 'done' ? onStale.outcomes['note:task.create'] : {}) as Record<
+  string,
+  unknown
+>
+check(
+  'a read of a project emptied under the plan reports finding nothing, not a failure to look',
+  `found=${String(staleRead.found)}, ${String(staleRead.docs ?? 0)} document(s)`,
+  onStale.kind === 'done' && staleRead.found === false && Number(staleRead.docs ?? 0) === 0,
+)
+check(
+  'and the step that depended on it declines rather than writing from an absence',
+  staleNote.found === false
+    ? String(staleNote.impediment ?? '').slice(0, 70)
+    : 'IT WROTE SOMETHING ANYWAY',
+  staleNote.found === false,
+)
+await db.execute(`
+  update public.documents set state = 'approved'
+   where project_id = ${lit(projectId)}::uuid`)
+const restoredDocs = await one(`
+  select count(*)::int as n from public.documents
+   where project_id = ${lit(projectId)}::uuid and state = 'approved'`)
+check(
+  'CONTROL: the documents are back, so the sections after this one still have material',
+  `${String(restoredDocs.n)} approved document(s)`,
+  Number(restoredDocs.n) >= 2,
+)
+
+await settle(staleJobId)
+
+// --- the provider goes away between two steps --------------------------------
+/*
+  AN OUTAGE IS NOT AN ANSWER, AND THE FIRST DRAFT REPORTED IT AS ONE.
+
+  `draft.create` ended `.catch(() => null)`, so every provider failure became
+  "the provider returned nothing to write" — a verdict, handed to Grant as
+  though the office had tried and the answer was no. A thirty-second outage
+  produced a permanently incomplete plan.
+
+  `provider_unavailable` is one of the four reasons `app.resumable_now` wakes,
+  so the plan pauses and the office tries again on its own. Driven with a
+  router whose `complete` throws, which is what an unreachable provider
+  actually does.
+
+  Step A must still have happened: the point of pausing rather than failing is
+  that the work already done is kept.
+*/
+const outageJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-outage-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
+  returning job_id::text as id`)
+const outageJobId = String(outageJob.id)
+const deadRouter = {
+  complete: async () => Promise.reject(new Error('gateway timeout')),
+} as unknown as ProviderRouter
+const duringOutage = await runSteps(
+  db,
+  outageJobId,
+  'office.pursue@1',
+  compile(injectPlan, db, outageJobId, projectId, 'write it up', deadRouter),
+)
+check(
+  'a provider that goes away mid-plan PAUSES the plan rather than answering',
+  duringOutage.kind === 'paused'
+    ? `${duringOutage.pause.reason} at "${duringOutage.at}"`
+    : `it answered anyway: ${duringOutage.kind}`,
+  duringOutage.kind === 'paused' && duringOutage.pause.reason === 'provider_unavailable',
+)
+check(
+  'and the office will pick it up again by itself — no person is needed',
+  duringOutage.kind === 'paused'
+    ? `resumable=${String(duringOutage.pause.resumable)}`
+    : 'it did not pause',
+  duringOutage.kind === 'paused' && duringOutage.pause.resumable === true,
+)
+const keptStepA = await one(`
+  select count(*)::int as n from public.job_steps
+   where job_id = ${lit(outageJobId)}::uuid and finished_at is not null`)
+check(
+  'and the reading it already did is KEPT, which is the whole point of pausing',
+  `${String(keptStepA.n)} finished step(s) recorded`,
+  Number(keptStepA.n) === 1,
+)
+/*
+  CONTROL. A provider that ANSWERS BADLY is a verdict, not an outage — the
+  job's own retry loop is the right place for that, and pausing on it would
+  wait on a clock for something a clock cannot change. Without this the change
+  above would pass against an executor that paused on everything.
+*/
+const mumbleJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-mumble-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
+  returning job_id::text as id`)
+const mumbleJobId = String(mumbleJob.id)
+const emptyRouter = {
+  complete: async () => ({ content: '   ', model: 'test/model' }),
+} as unknown as ProviderRouter
+const mumbled = await runSteps(
+  db,
+  mumbleJobId,
+  'office.pursue@1',
+  compile(injectPlan, db, mumbleJobId, projectId, 'write it up', emptyRouter),
+)
+const mumbleOut = (mumbled.kind === 'done' ? mumbled.outcomes['write:draft.create'] : {}) as Record<
+  string,
+  unknown
+>
+check(
+  'CONTROL: a provider that answers with nothing is a verdict, not a pause',
+  mumbled.kind === 'done'
+    ? String(mumbleOut.impediment ?? 'it claimed to have written something')
+    : `it paused instead: ${mumbled.kind}`,
+  mumbled.kind === 'done' && mumbleOut.found === false,
+)
+
+await settle(outageJobId)
+await settle(mumbleJobId)
+
 // --- the dial that ASKS rather than refusing --------------------------------
 /*
   `suggest` IS A QUESTION, AND THE FIRST DRAFT ANSWERED IT WITH SILENCE.
@@ -722,9 +958,11 @@ check(
 */
 const askJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-ask-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-ask-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const askJobId = String(askJob.id)
 let asked: Awaited<ReturnType<typeof runSteps>> | null = null
@@ -827,6 +1065,8 @@ check(
   fromTheBlocker === 1 && fromThePlan === 0,
 )
 
+await settle(askJobId)
+
 // --- the dial Grant can turn -----------------------------------------------
 /*
   OBSERVE MEANS OBSERVE, AND NOTHING IN THIS PATH WAS ASKING.
@@ -843,9 +1083,11 @@ check(
 */
 const observeJob = await one(`
   insert into public.jobs
-    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
   values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
-          ${lit(`pursue-observe-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+          ${lit(`pursue-observe-${run}`)}, gen_random_uuid(), '{}'::jsonb,
+          'verify:pursues', app.now_utc() + interval '30 minutes')
   returning job_id::text as id`)
 const observeJobId = String(observeJob.id)
 let watched: Record<string, unknown> = {}
@@ -887,6 +1129,9 @@ check(
   watched.found === false && String(watched.impediment ?? '').includes('did not do this'),
 )
 
+await settle(observeJobId)
+await settle(jobId)
+
 // --- teardown --------------------------------------------------------------
 console.log('')
 for (const t of (
@@ -908,7 +1153,8 @@ await db.execute(`
    where job_id in (${lit(jobId)}::uuid, ${lit(emptyJobId)}::uuid, ${lit(gapJobId)}::uuid,
                     ${lit(revokedJobId)}::uuid, ${lit(observeJobId)}::uuid,
                     ${lit(injectJobId)}::uuid, ${lit(resumeJobId)}::uuid,
-                    ${lit(askJobId)}::uuid)
+                    ${lit(askJobId)}::uuid, ${lit(outageJobId)}::uuid,
+                    ${lit(mumbleJobId)}::uuid, ${lit(staleJobId)}::uuid)
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.documents where project_id = ${lit(projectId)}::uuid;
   delete from public.tasks where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid);
