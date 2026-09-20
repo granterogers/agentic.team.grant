@@ -37,11 +37,21 @@ import { howComposed } from '../agents/provenance.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 export interface PursueDeps {
   readonly db: SqlExecutor
+  /**
+   * For `draft.create`, the one executor that reasons rather than reads.
+   *
+   * Optional, so a pass built without a provider still runs every other step
+   * and reports the writing one as an honest impediment. A mocked default
+   * would turn "there was no model" into a plausible sentence, which is the
+   * failure direction.
+   */
+  readonly router?: ProviderRouter
 }
 
 /**
@@ -98,7 +108,7 @@ export function pursueHandler(deps: PursueDeps): Handler {
         db,
         job.jobId,
         VERSION,
-        compile(plan, db, job.jobId, job.projectId, request),
+        compile(plan, db, job.jobId, job.projectId, request, deps.router),
       )
 
       if (run.kind === 'paused') {
@@ -152,12 +162,21 @@ export function pursueHandler(deps: PursueDeps): Handler {
         announce: true,
         body: lines.length === 0 ? 'The plan ran and produced nothing.' : lines.join('\n'),
         shape: 'plan_carried_out',
+        /*
+          SNAKE_CASE, because `public.output_shapes` is the vocabulary and
+          every other declared shape speaks it (`suggested_collection`,
+          `looked_at`, `confidence_note`). 0526 declared this one and the
+          first draft here wrote `couldNot`, which the shape check correctly
+          refused — 0311's two-words-for-one-thing, caught before it could
+          become two.
+        */
         facts: {
           goal: plan.goal,
           steps: plan.steps.map((s) => ({ id: s.id, capability: s.capability })),
           done: did.map((s) => s.name),
-          couldNot: couldNot.map((s) => s.name),
+          could_not: couldNot.map((s) => s.name),
           receipts,
+          ...(run.kind === 'stopped' ? { stopped_at: run.at } : {}),
         },
         acted: did.length,
       }

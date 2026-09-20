@@ -487,10 +487,15 @@ export const buildPass = async (
     /*
       Carrying out a plan the office composed (#283).
 
-      No router: this handler runs capabilities and reads their receipts. The
-      thinking happened when the plan was written; doing is deterministic.
+      Carrying out a plan is deterministic — an executor reads or writes
+      canonical state and returns receipts — with ONE exception. `draft.create`
+      composes prose from what the earlier steps found, which is not a query
+      and cannot be assembled from columns, so the router is passed for that
+      step alone. Without one it reports an honest impediment rather than
+      writing something plausible, which is why it is optional rather than
+      mocked.
     */
-    pursueHandler({ db }),
+    pursueHandler({ db, ...(cannotThink ? {} : { router: new ProviderRouter(db, orKey) }) }),
     /*
       Turning a request into a finished file (#258).
 

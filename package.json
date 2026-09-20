@@ -280,6 +280,7 @@
     "verify:progress": "tsx scripts/verify/progress.ts",
     "verify:plans": "tsx scripts/verify/plans.ts",
     "verify:pursues": "tsx scripts/verify/pursues.ts",
+    "verify:composes": "tsx scripts/verify/composes.ts",
     "verify:understands": "tsx scripts/verify/understands.ts"
   },
   "devDependencies": {

@@ -43,6 +43,7 @@
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Outcome, Step } from '../jobs/checkpoint.ts'
 import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
+import type { ProviderRouter } from '../providers/router.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -58,6 +59,15 @@ export interface Doing {
   readonly step: PlanStep
   /** What the steps it depends on actually found. THE point of this file. */
   readonly from: Readonly<Record<string, Outcome>>
+  /**
+   * For the one kind of step that genuinely needs a model: composing prose.
+   *
+   * Absent rather than mocked when there is no provider, so an executor that
+   * needs one returns an honest impediment instead of a plausible sentence.
+   * Nothing that DECIDES anything may read this — the model writes, the
+   * registry and the validator rule, and those are different questions.
+   */
+  readonly router?: ProviderRouter
 }
 
 /**
@@ -238,6 +248,93 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
   },
 
   /**
+   * Working out what the observations MEAN, and saying it.
+   *
+   * ## Why this is the output and not a new document
+   *
+   * The registry's own `delivered_by` for `draft.create` is *"public.outputs —
+   * every handler's result is a draft until reviewed"*. So a `draft.create`
+   * step composes the answer; it does not manufacture a second durable
+   * surface. Writing a `documents` row here would put machine prose into
+   * `app.search_documents` — which excludes archived material and NOT drafts —
+   * and CLAUDE.md records three stray PDFs becoming citable sources exactly
+   * that way.
+   *
+   * ## The only step that spends a model, and the only thing it may use
+   *
+   * Every other executor reads or writes canonical state. This one reasons,
+   * which is the whole reason a plan is worth composing: *"work out what is
+   * out of date"* is not a query. The grounding rule is therefore absolute and
+   * stated to the model in as many words — the observations, and nothing else.
+   * A step that invents beyond them is the fabrication this office has paid
+   * for repeatedly, and here it would be laundered through a plan.
+   *
+   * `effect: 'none'` because it writes nothing itself. A restart re-composes,
+   * which costs a model call and duplicates nothing — the honest direction.
+   */
+  'draft.create': {
+    effect: 'none',
+    run: async ({ step, from, request, router }): Promise<Observation> => {
+      const upstream = step.needs
+        .map((id) => from[id] as Observation | undefined)
+        .filter((o): o is Observation => o !== undefined && o.found)
+      if (upstream.length === 0) {
+        return nothing(
+          'draft.create',
+          step.needs.length === 0
+            ? 'nothing was gathered for it to write from'
+            : 'the step it depends on found nothing, so there is nothing to write up',
+        )
+      }
+      if (router === undefined) {
+        return nothing('draft.create', 'no provider was available to write it')
+      }
+      const material = upstream
+        .map((o) => o.saw)
+        .join('\n\n')
+        .slice(0, 6_000)
+      const said = await router
+        .complete({
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are writing up what colleagues found, for Grant.\n\n' +
+                'THE ONLY THING YOU MAY USE IS THE MATERIAL BELOW. Do not add a ' +
+                'fact, a number, a date, a name or a recommendation that is not ' +
+                'in it. Where the material does not answer the request, say so ' +
+                'plainly and briefly rather than filling the gap.\n\n' +
+                'Two or three short paragraphs, one thought each. No preamble, ' +
+                'no headings, no bullet list unless the material is already a ' +
+                'list.\n\nWHAT THEY FOUND:\n' +
+                material,
+            },
+            { role: 'user', content: `What was asked: ${request.slice(0, 600)}` },
+          ],
+          maxTokens: 1_200,
+        })
+        .catch(() => null)
+      const body = (said?.content ?? '').trim()
+      if (body === '') {
+        return nothing('draft.create', 'the provider returned nothing to write')
+      }
+      return {
+        capability: 'draft.create',
+        found: true,
+        /*
+          No canonical id, because this step creates no row — the handler's own
+          output IS the draft. Saying so is better than inventing a receipt for
+          something that has none.
+        */
+        ids: [],
+        saw: body.slice(0, 4_000),
+        model: said?.model ?? null,
+        grounded: upstream.length,
+      }
+    },
+  },
+
+  /**
    * Grant's own list, which is a different question from a project's tasks and
    * has its own reader (ADR-0041).
    */
@@ -337,6 +434,7 @@ export const compile = (
   jobId: string,
   projectId: string | null,
   request: string,
+  router?: ProviderRouter,
 ): readonly Step[] =>
   plan.steps.map((step) => {
     const executor = EXECUTORS[step.capability]
@@ -371,7 +469,15 @@ export const compile = (
           from[name.split(':')[0] ?? name] = outcome
         }
         return {
-          outcome: await executor.run({ db, jobId, projectId, request, step, from }),
+          outcome: await executor.run({
+            db,
+            jobId,
+            projectId,
+            request,
+            step,
+            from,
+            ...(router === undefined ? {} : { router }),
+          }),
         }
       },
     }

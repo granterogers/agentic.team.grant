@@ -313,20 +313,86 @@ and confirmed green).
 
 `verify:pursues` **10/10**.
 
+## THE CHAIN, END TO END, THROUGH THE DOOR GRANT USES — `verify:composes` 12/12
+
+Three halves had never been joined by one run: `verify:plans` measures the
+planner, `verify:pursues` proves step B consumes step A, and six unit tests
+prove what the handler is allowed to START. So `verify:composes` enters where
+Grant enters — a row in `public.inbound_commands`, `app.enqueue_inbound`, the
+real handler, the real planner, the real child, the real executors — and
+asserts the whole chain against canonical state:
+
+    natural request
+      → the cascade declines it
+      → a constrained plan over the REAL registry
+      → a durable child job, the plan travelling as data
+      → notebook.read reads the material
+      → draft.create consumes what it found
+      → a durable row
+
+The proof is a token that exists **only inside a document's body**. Nothing in
+the sentence contains it and the planner never sees it, so if it is in
+canonical state every link held. The control runs through the same door in the
+same run: an ordinary question starts **no plan at all**.
+
+### IT FOUND THREE THINGS ON ITS FIRST RUN, AND ONE OF THEM WAS THE CHECK
+
+**1. The handler had never gone through the worker.** `office.pursue` returns
+`shape: 'plan_carried_out'` and nothing had declared it, so
+`outputs_match_their_shape` raised 23514 and the job FAILED at the output
+insert — after every step had run. `verify:pursues` calls `runSteps` directly,
+which is the right place for its own question and is not the place Grant's
+work goes through. Migration **0526** declares the shape, and drives it: a
+well-formed receipt is accepted, one missing `could_not` and `receipts` is
+refused, and a `receipts` given as a COUNT rather than the ids is refused.
+
+**2. A second vocabulary, caught before it could become two.** The handler
+emitted `couldNot` where every declared shape in `public.output_shapes` speaks
+snake_case. 0311's lesson, one migration early.
+
+**3. `draft.create` was granted with nothing behind it** — and it is what the
+planner proposes for *"work out what is out of date"*. It now has an executor,
+the only one that spends a model, because composing what observations MEAN is
+not a query. Its grounding rule is absolute and stated to the model in as many
+words: the observations, and nothing else. It writes no `documents` row —
+the registry's own `delivered_by` is `public.outputs`, and machine prose in
+`app.search_documents` is how three stray PDFs became citable sources.
+
+### AND THE CHECK ITSELF WAS WRONG, WHICH ONLY THE SABOTAGE SHOWED
+
+The first CHAIN HELD check looked for the token anywhere in the child's output
+body. With the B-consumes-A link **severed on purpose**, it stayed GREEN — the
+body is assembled from every observation, so step A's own text is in it whether
+or not step B read it. **It would have certified the invariant this entire run
+exists to prove.** #268's substring-satisfied-by-a-superstring, in a new place.
+
+It asks `public.job_steps` now: the token must be in the recorded outcome of a
+step that DEPENDS on another. Re-run with the sabotage still live — red. Restored
+— green. That order matters: the fix was validated against the defect, not
+against a hope.
+
+Gates: lint · typecheck · test 2171/2171 · check:migrations · check:secrets ·
+check:templates · check:callers · check:leaks all 0 · `verify:pursues` 10/10 ·
+`verify:composes` **12/12** · `verify:anchors` 15/15.
+
 ## WHAT IS STILL UNPROVED
 
-- A real message reaches the planner, but **no production-like acceptance has
-  driven it end to end through a real interface yet** — the wiring is proved by
-  unit tests and the execution by `verify:pursues`, which are two halves that
-  have not been joined by one run.
+- The end-to-end run enters at `inbound_commands`, which is the canonical
+  door every adapter writes to — but **not through Telegram or Slack
+  themselves**. §5's rule says an adapter may only translate, so the gap is
+  narrow; it is still a gap.
+- No bounded re-planning: a step that finds nothing ends the plan honestly
+  rather than causing the office to think again.
+- Goal-completion verification is untouched — a settled child is still taken
+  as the goal being met.
 - Goal-completion verification is untouched — a handler returning is still
   taken as the goal being met.
 - No bounded re-planning.
 - ContextPack not started.
 - No production-like acceptance through a real interface yet.
-- Only four executors exist (`db.read`, `notebook.read`, `task.create`,
-  `task.extract`), so most catalogue capabilities are still honest impediments
-  rather than work.
+- Five executors now exist (`db.read`, `notebook.read`, `draft.create`,
+  `task.create`, `task.extract`); the other nine granted capabilities are still
+  honest impediments rather than work.
 - `npm test` exited 1 once inside a back-to-back gate loop and 0 on four
   consecutive runs afterwards, with no failing test named in any of them. Not
   reproduced, and recorded rather than dismissed. This section is kept honest as the run proceeds —
