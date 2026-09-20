@@ -817,6 +817,25 @@ project, because nobody can act on such a project so a setting for it decides
 nothing — and both ASSERT the sweep, which is the half that stops it coming
 back a third time.
 
+## A DUPLICATE WEBHOOK MUST NOT START TWO PLANS
+
+Telegram retries a delivery it did not get an acknowledgement for, Slack does
+the same, and a person double-taps send. `inbound_commands.dedupe_key` and
+`jobs.idempotency_key` exist for it — and nothing had ever asked what a
+duplicate does to the **planner**, which is the expensive half: two plans means
+two model calls, two children, and two writes of whatever they do.
+
+Driven at the real boundary — the same command row enqueued twice, which is
+what a retried webhook produces. **One job, one command, at most one plan.**
+
+Two controls, because the headline assertion is weak on its own. *"The two ids
+are equal"* passes against a function that returns the same job for everything,
+so a DIFFERENT message must get a different job — it does. And *"at most one
+plan"* passes when the answer is none, so the second control asserts nothing
+downstream was doubled: one command row, one job on that idempotency key.
+
+`verify:composes` **18/18**.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical

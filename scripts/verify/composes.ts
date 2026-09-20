@@ -442,6 +442,106 @@ if (childId !== '') {
   )
 }
 
+// --- the same message, twice -------------------------------------------------
+/*
+  A DUPLICATE WEBHOOK MUST NOT START TWO PLANS.
+
+  Telegram retries a delivery it did not get an acknowledgement for, Slack does
+  the same, and a person double-taps send. The office has `dedupe_key` on
+  `inbound_commands` and `idempotency_key` on `jobs` for exactly this — but
+  nothing had ever asked what a duplicate does to the PLANNER, which is the
+  expensive half: two plans means two model calls, two children, and two
+  writes of whatever they do.
+
+  Driven at the real boundary. The same command row, enqueued twice, is what a
+  retried webhook produces — the adapter recomputes the same `dedupe_key` from
+  the same message, finds the row it already wrote, and asks
+  `app.enqueue_inbound` again.
+*/
+const twiceCommand = await one(`
+  insert into public.inbound_commands
+    (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+  values ('telegram', ${lit(`composes-${run}-twice`)}, 'verify-composes', ${lit(COMPOSED)},
+          ${lit(`telegram:message:composes-${run}-twice`)}, ${lit(projectId)}::uuid)
+  returning command_id::text as id`)
+const enqueuedTwice = await Promise.all([
+  one(`select app.enqueue_inbound(${lit(String(twiceCommand.id))}::uuid) as j`),
+  one(`select app.enqueue_inbound(${lit(String(twiceCommand.id))}::uuid) as j`),
+])
+const jobIds = enqueuedTwice.map((e) => {
+  const v = (typeof e.j === 'string' ? JSON.parse(e.j) : (e.j ?? {})) as { job_id?: string }
+  return String(v.job_id ?? e.j ?? '')
+})
+check(
+  'the same message enqueued twice is ONE job, not two',
+  `${jobIds[0]?.slice(0, 8)} and ${jobIds[1]?.slice(0, 8)}`,
+  jobIds[0] !== '' && jobIds[0] === jobIds[1],
+)
+/*
+  CONTROL, and it is not ceremony: without it "the two ids are equal" passes
+  against a function that returns the same job for everything. A DIFFERENT
+  message must get a different job.
+*/
+const otherCommand = await one(`
+  insert into public.inbound_commands
+    (origin_channel, origin_ref, actor, instruction, dedupe_key, project_id)
+  values ('telegram', ${lit(`composes-${run}-other`)}, 'verify-composes',
+          ${lit(`${COMPOSED} And separately, remind me about the kick-off.`)},
+          ${lit(`telegram:message:composes-${run}-other`)}, ${lit(projectId)}::uuid)
+  returning command_id::text as id`)
+const otherEnqueued = await one(
+  `select app.enqueue_inbound(${lit(String(otherCommand.id))}::uuid) as j`,
+)
+const otherJob = String(
+  (
+    (typeof otherEnqueued.j === 'string'
+      ? JSON.parse(otherEnqueued.j)
+      : (otherEnqueued.j ?? {})) as {
+      job_id?: string
+    }
+  ).job_id ?? '',
+)
+check(
+  'CONTROL: a DIFFERENT message gets its own job, so the dedupe is discriminating',
+  `${otherJob.slice(0, 8)} vs ${jobIds[0]?.slice(0, 8)}`,
+  otherJob !== '' && otherJob !== jobIds[0],
+)
+await db.execute(`
+  update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
+    state_reason = 'verify:composes control, not run'
+   where job_id = ${lit(otherJob)}::uuid
+     and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying')`)
+
+const twiceState = await drive(String(jobIds[0]))
+const twiceChildren = await one(`
+  select count(*)::int as n from public.jobs
+   where parent_job_id = ${lit(String(jobIds[0]))}::uuid and kind = 'office.pursue'`)
+check(
+  'and carrying it out starts at most one plan',
+  `${twiceState}, ${String(twiceChildren.n)} office.pursue child(ren)`,
+  Number(twiceChildren.n) <= 1,
+)
+/*
+  A CONTROL, because "at most one" passes when the answer is NONE.
+
+  The planner is stochastic about whether a request needs composing at all, so
+  zero children is a legitimate outcome of this turn and cannot be asserted
+  away. What can be asserted is that the duplicate did not double anything the
+  office spent: one command row, one job, and no more inference against that
+  correlation than a single turn makes.
+*/
+const spentTwice = await one(`
+  select (select count(*) from public.jobs
+           where idempotency_key = (select idempotency_key from public.jobs
+                                     where job_id = ${lit(String(jobIds[0]))}::uuid))::int as jobs,
+         (select count(*) from public.inbound_commands
+           where dedupe_key = ${lit(`telegram:message:composes-${run}-twice`)})::int as commands`)
+check(
+  'CONTROL: nothing downstream was doubled either — one command, one job',
+  `${String(spentTwice.commands)} command(s), ${String(spentTwice.jobs)} job(s) on that key`,
+  Number(spentTwice.commands) === 1 && Number(spentTwice.jobs) === 1,
+)
+
 // --- the control -----------------------------------------------------------
 console.log('\n  CONTROL — an ordinary message must NOT become an agent loop')
 
