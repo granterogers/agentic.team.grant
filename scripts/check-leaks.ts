@@ -287,6 +287,24 @@ const piles = await db.execute(`
     (select count(*) from public.knowledge_connectors
       where connector like 'fixture\\_%') as fixture_connectors,
     /*
+      AN AUTONOMY SETTING ON A PROJECT NOBODY CAN SEE.
+
+      The project_id foreign key on autonomy_settings is NO ACTION, not
+      CASCADE, so the row
+      survives its project and — worse — BLOCKS the project delete, which sends
+      a teardown down its archive branch while the check reports nothing left.
+      Forty-nine accumulated in one afternoon before anything was counting, and
+      a debris class with no witness is one that comes back: this is the sixth
+      table to prove it.
+
+      Counted for a fixture or archived project, because those are the two ways
+      a project stops being one Grant can act on. A row on a live project of his
+      is a SETTING, not debris, however it got there.
+    */
+    (select count(*) from public.autonomy_settings a
+       join public.projects p on p.project_id = a.project_id
+      where p.is_fixture or p.status = 'archived') as stranded_autonomy,
+    /*
       The roster Grant looks at, asked the way he sees it (#269).
 
       Counted on hq_team's OUTPUT rather than on public.staff, for the same
@@ -358,6 +376,13 @@ if (Number(pile.probe_providers ?? 0) > 0) {
       'breaker suite is not clearing up after itself',
   )
 }
+if (Number(pile.stranded_autonomy ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.stranded_autonomy)} autonomy setting(s) on a fixture or archived ` +
+      'project — the foreign key is NO ACTION, so each one also blocks its ' +
+      "project's delete and sends a teardown quietly down its archive branch",
+  )
+}
 if (Number(pile.fixture_connectors ?? 0) > 0) {
   noisy.push(
     `${String(pile.fixture_connectors)} fixture connector(s) in knowledge_connectors — ` +
@@ -370,6 +395,7 @@ console.log(
     `fixture tasks: ${String(pile.fixture_tasks)} · ` +
     `probe providers: ${String(pile.probe_providers)} · ` +
     `fixture connectors: ${String(pile.fixture_connectors)} · ` +
+    `stranded autonomy rows: ${String(pile.stranded_autonomy)} · ` +
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
