@@ -25,6 +25,33 @@ The clone is successful when an experienced Basecamp user recognises the same in
 - mobile preserves hierarchy while changing geometry;
 - Agentic Team's agents, jobs, provenance and relationships remain first-class.
 
+### 1.1 Product vision and initial surfaces
+
+Build a deliberately simple Basecamp-like project workspace with an AI agentic team living inside each project, not another generic project-management system. Tasks, calendars and files make the project useful; a team that understands the project, converses by text or voice and takes permitted action makes it distinct.
+
+The initial experience has six core surfaces:
+
+| Surface | Everyday purpose |
+|---|---|
+| Home | Clear project cards and a direct way into each project |
+| Project Overview | A live project home with useful tool previews and recent activity |
+| To-dos | Simple project lists, assignments and dates, including agent-created tasks |
+| Schedule | Project events, dated commitments and connected Google Calendar |
+| Docs & Files | Upload, read and search documents, including connected Google Drive |
+| Campfire / AI Team | Project-scoped text and voice conversation, delegation and agent outputs |
+
+These are six experience areas, not six new top-level tabs. Campfire/Chat and AI Team may have distinct previews and existing routes within one conversation-and-work surface. Labels such as Tasks and Documents & Assets in the implementation map refer to the existing objects behind To-dos and Docs & Files.
+
+Other existing capabilities remain reachable through contextual links, Jump, More tools or compatibility routes, but visually secondary. Their preservation is mandatory; redesigning every one is not part of this slice. The benchmark inventory in section 3 and secondary tool recipes describe reusable interaction patterns, not a requirement to give every tool equal prominence.
+
+### 1.2 Simplicity is an acceptance criterion
+
+- Hide implementation details from ordinary project flows; keep useful status, permissions, provenance and recovery visible in plain language.
+- Make obvious actions obvious: add a to-do, upload a file, connect a calendar and talk to the team should be discoverable where their results appear.
+- Remove unnecessary choices, duplicate navigation, setup noise and decorative chrome. Do not make users configure a dashboard before it is useful.
+- Anything added must look coherent immediately: a new task, uploaded file, connected calendar or agent output inherits the same spacing, typography, previews and states.
+- Keep sophisticated controls available through progressive disclosure without making them the starting experience.
+
 ## 2. Non-negotiable product rules
 
 1. Modify the existing `web/studio` product. Do not create a second frontend or restore retired `web/hq` work.
@@ -37,6 +64,7 @@ The clone is successful when an experienced Basecamp user recognises the same in
 8. Do not bundle Graphik unless Agentic Team owns a licence. Use the approved Agentic Team face or the metric-conscious system stack below.
 9. A new visual component is allowed only when an existing primitive cannot express the requirement.
 10. Stop after the reference slice passes the Definition of Done. Review it before expanding to the remaining screens.
+11. Treat existing Agentic Team backend, intelligence, document reading, orchestration and integrations as infrastructure beneath a radically simpler shell. Do not redesign them during this slice. Reuse existing APIs and state machines; any missing capability must be identified in Phase 0 and explicitly scoped before backend expansion, never concealed by a mock or a cosmetic control.
 
 ## 3. Reference surfaces inspected
 
@@ -174,7 +202,7 @@ Use a three-part sticky top row:
 
 At 1440 px, the observed grid was approximately 615.5 / 166.5 / 615.5 px with 8 px gaps. The exact middle width may adapt to Agentic Team's wordmark, but visual balance must remain centred.
 
-The bottom personal tray contains:
+The bottom personal tray provides access to the following destinations. Keep it visually quiet; group secondary destinations behind a labelled personal-tools control where needed, preserving direct access through Jump:
 
 - account/avatar;
 - My Tasks;
@@ -272,19 +300,38 @@ Every tool block contains:
 4. accessible name announcing the tool and preview summary;
 5. empty state with a direct create/configure action.
 
-Recommended Agentic Team tools:
-
-- Brief / Messages;
-- Tasks;
-- Work Board;
-- Documents & Assets;
-- Schedule;
-- Project Chat;
-- Agentic Team;
-- Sources & Integrations;
-- Activity.
+Default primary previews are Campfire/Chat, To-dos, Schedule and Docs & Files, with an AI Team preview into the same project-scoped conversation/work area. Links / Sources is a quieter supporting entry; Recent Activity sits below the tool grid rather than becoming another top-level tab. Brief / Messages and Work Board remain available through More tools, Jump and existing routes. Do not replace a user's saved layout or hide an existing action without a preservation route.
 
 Use existing underlying objects. The Agentic Team preview should show team state, running/waiting/blocked work and the latest meaningful output—not raw worker telemetry.
+
+#### Project-home concept
+
+This ASCII sketch adapts the discussion's project home to the existing Overview, tokens and responsive rules. It shows information hierarchy, not a new Canvas mode or a pixel-perfect template. Use Agentic Team branding; Campfire is a working conversation label, not permission to copy Basecamp branding.
+
+```text
++----------------------------------------------------------------+
+| Home / Projects                          Account / Project menu |
+|                                                                |
+|                         PROJECT TITLE                          |
+|               Everything about this project in one place       |
+|                                                                |
+| Campfire / Chat       To-dos                 Schedule           |
+| Team + AI, text/voice Lists and assignments  Events / Calendar  |
+|                                                                |
+| Docs & Files         AI Team                                   |
+| Uploads / Drive      Ask the team, work and outputs             |
+|                                                                |
+| Links / Sources                       More tools               |
+| Project resources                     Other existing tools     |
+|----------------------------------------------------------------|
+| RECENT ACTIVITY                                                |
+| An agent completed research -> View output                     |
+| You uploaded a project brief -> Open document                  |
+| A teammate updated a to-do -> View task                        |
++----------------------------------------------------------------+
+```
+
+Campfire and AI Team open the same project context, not disconnected chat histories. Links / Sources and More tools use quieter styling than the primary previews. Populate activity with real records, not the illustrative entries above.
 
 ### 8.3 Preview recipes
 
@@ -300,7 +347,7 @@ Use existing underlying objects. The Agentic Team preview should show team state
 
 ### 8.4 Empty project
 
-Use one calm empty state with explanatory copy and `Add a tool`. The menu may include Brief/Messages, Tasks, Documents, Schedule, Chat, Work Board, Agentic Team and Sources. Do not render nine empty analytics tiles.
+Use one calm empty state with a direct first action such as `Add a to-do`, plus quiet access to upload, connect and talk to the team. Keep the six core surfaces discoverable without requiring tool configuration. `Add a tool` exposes optional Brief/Messages, Work Board and other existing tools. Do not render nine empty analytics tiles.
 
 ## 9. Shared record-page grammar
 
@@ -418,11 +465,17 @@ Agent outputs that become documents must preserve origin and relationships. Neve
 - event detail follows the shared record grammar;
 - timezone is visible when participants differ or the time is otherwise ambiguous.
 
-### 10.6 Chat
+### 10.6 Campfire / Chat
 
 Continuous, day-grouped stream. Each entry exposes identity, time, mentions, links, reactions and contextual options. Composer supports text, emoji, attachment, voice note and formatting.
 
-Chat is not the project's organising spine. Any commitment, durable decision, asset or deliverable can be promoted/related to the appropriate project record.
+Conversation belongs to the current project. Text and live voice conversation use the same project context and history; a voice note alone does not satisfy the voice-conversation requirement. Provide an obvious microphone action, explicit listening/speaking/stopped states, stop/mute controls, a readable transcript and a text fallback when microphone permission or voice service is unavailable.
+
+Make the project's permitted brief, tasks, documents, sources, schedule and relevant conversation automatically available to agents through existing context/retrieval mechanisms. Users should not repeatedly paste context or choose a source for every message. Show concise context/source chips with inspectable provenance; automatic availability never bypasses project access controls or silently includes other projects.
+
+A request such as "Read this project's documents and tell me where we are" can lead to discussion, delegation to another agent or a permitted action using existing job mechanisms. Keep progress, required approvals, blocked states and results in the conversation with links to their underlying records. Conversation does not bypass permissions or merge job state into task completion.
+
+Chat is not the project's organising spine. Offer contextual promotion of a commitment to a to-do, a durable decision or output to a document, and a dated commitment to an event. Preview the proposed record and destination before saving, reuse the existing approval/import flow, preserve links to the originating conversation and job/task/sources, and make retries idempotent. A chat message or spoken suggestion alone is not a saved task, document or event.
 
 ### 10.7 Activity
 
@@ -435,7 +488,7 @@ Activity copy should say what changed and why it matters. Collapse repetitive st
 Use Basecamp's project-tool grammar but retain Agentic Team's unique value:
 
 - roster with role, state, current assignment and last meaningful output;
-- `Ask the team` composer with target and context/source chips;
+- `Ask the team` opens the project-scoped text/voice composer in section 10.6, with automatic project context and optional target/context/source chips;
 - active work grouped by Running, Waiting for input, Blocked and Completed;
 - output cards with Preview, Discuss, Add to project, Relate to task and Send back;
 - visible provenance;
@@ -443,6 +496,14 @@ Use Basecamp's project-tool grammar but retain Agentic Team's unique value:
 - explicit permissions and failure recovery.
 
 Do not present the ordinary project user with worker names, queue identifiers, JSON payloads or orchestration internals unless they open a diagnostic view.
+
+### 10.9 Connections that disappear into the work
+
+The ordinary flow is `Connect Google Calendar -> normal OAuth consent -> done`; the equivalent Drive flow is `Connect Google Drive -> normal OAuth consent -> done`. Ask for calendar/folder selection only when needed to establish what belongs to this project. Explain the requested access in ordinary language.
+
+After consent, connected calendars appear naturally in Schedule and its Overview preview; Drive files appear in Docs & Files and its preview, with source identity and permissions preserved. Reuse existing connector-backed records and relationships rather than creating an unrelated integration dashboard or silently duplicating external content.
+
+Credentials, access tokens, refresh tokens, client secrets and refresh mechanics stay invisible to ordinary users. Configuration belongs to deployment/admin infrastructure. Healthy connections show content, not setup instructions. Expired access offers `Reconnect`; cancelled consent, denied permission and sync failures preserve project content and offer clear recovery. Never imply external content has synced or an external write has succeeded before confirmation.
 
 ## 11. Menus, dialogs and forms
 
@@ -610,6 +671,7 @@ Architectural caution: `app.js` and `studio.css` are already large. Build focuse
 2. Run the existing verification suite relevant to routes, controls, map, tasks, documents, keyboard, accessibility, responsive width, space, motion, offline state and pressability.
 3. Create a preservation matrix for every current project tab and action.
 4. Do not remove or rename backend operations in this phase.
+5. Map the six core surfaces and verify existing project text/voice, context, delegation, record promotion and Calendar/Drive OAuth capabilities. Record concrete gaps and narrowly scope any required adapter work before implementation; do not turn this slice into a backend redesign. Missing required journeys block completion unless the scope is explicitly reviewed.
 
 ### Phase 1: foundations
 
@@ -629,8 +691,8 @@ Architectural caution: `app.js` and `studio.css` are already large. Build focuse
 
 1. Make Overview the project landing surface.
 2. Compress the mobile header so useful content appears above the fold.
-3. Render real previews for Tasks, Documents, Work Board, Schedule, Activity and Agentic Team.
-4. Preserve access to Contacts, Sources and Settings.
+3. Render real primary previews for Campfire/Chat, To-dos, Schedule, Docs & Files and AI Team; place Recent Activity below them as in section 8.
+4. Preserve secondary access to Links/Sources, Work Board, Brief/Messages, Contacts and Settings.
 5. Add tool-empty and project-empty states.
 
 ### Phase 4: task journey
@@ -641,16 +703,25 @@ Architectural caution: `app.js` and `studio.css` are already large. Build focuse
 4. Comments, relations and activity remain accessible.
 5. Verify no collision with Personal Tasks or agent jobs.
 
-### Phase 5: agent-output journey
+### Phase 5: project conversation and agent-output journey
 
 1. Overview Agentic Team preview opens team surface.
-2. Select/start a job using existing mechanisms.
+2. Converse with the team by text and live voice using automatic, permission-scoped project context; delegate/start a job from that conversation using existing mechanisms.
 3. Show progress and recoverable errors.
 4. Open one output and Add to project.
 5. Confirm the canonical document/asset exists with job/task/source provenance.
 6. Repeating the operation must not duplicate it.
+7. Promote conversation outcomes into one task, one document and one event through existing record/approval flows; verify persisted links and provenance without conflating tasks with jobs.
 
-### Phase 6: browser validation
+### Phase 6: files, schedule and connections
+
+1. Upload and read a real project file through Docs & Files.
+2. Connect Google Drive through normal OAuth consent and show permitted selected content in Docs & Files and its preview.
+3. Connect Google Calendar through normal OAuth consent and show permitted selected events in Schedule and its preview.
+4. Verify a saved project event, source identity, reload persistence and recovery from cancelled consent, denied permission and expired access.
+5. Confirm ordinary users never handle credentials or refresh mechanics and newly added content is immediately coherent with the project shell.
+
+### Phase 7: browser validation
 
 Run the acceptance matrix below, fix failures, record deliberate exceptions, then stop for review.
 
@@ -664,7 +735,12 @@ Run the acceptance matrix below, fix failures, record deliberate exceptions, the
 - Inline task creation can be completed and cancelled without losing context.
 - Task assignment/state/due date persists after reload.
 - Agent job/output -> Add to project -> document detail works once and remains idempotent.
-- Existing Contacts, Sources, Settings, documents, tasks and team actions remain reachable.
+- Project text and live voice conversations use the same permitted project context; an agent delegates/acts through existing job controls and returns a traceable result.
+- Microphone denial or voice failure retains conversation context and offers working text input.
+- Chat outcomes promote into a task, document and event with persisted provenance; retry does not duplicate records.
+- Upload -> read/search a project file works; Calendar and Drive consent -> connected content -> reload works without exposed credentials or token handling.
+- Cancelled consent, expired connections and permission failures have clear recovery without false success or lost content.
+- Existing Contacts, Sources, Settings, Work Board, Brief/Messages, documents, tasks and team actions remain reachable through the preservation matrix.
 
 ### Visual/responsive
 
@@ -673,6 +749,8 @@ Run the acceptance matrix below, fix failures, record deliberate exceptions, the
 - No page-level horizontal overflow.
 - At 390 × 844, title and first useful module appear before 40% of the viewport height; target materially better than the recorded 46% chrome defect.
 - Preview cards share spacing/radius/type rules and do not become generic blank metrics.
+- The six core surfaces dominate the initial experience; secondary tools and diagnostics do not crowd the project home.
+- A newly created task, upload, connected calendar/Drive item and agent output look coherent immediately; ordinary actions require no dashboard configuration or knowledge of backend terminology.
 - Popovers remain inside the viewport and point back to their invoker.
 - Bottom tray never covers final content or primary actions.
 
@@ -704,7 +782,7 @@ Run the acceptance matrix below, fix failures, record deliberate exceptions, the
 
 ### Automated gates
 
-Run the repository's existing checks for map, arrangement, map view, routes, controls desktop/phone, tasks, task UI, documents, files, artifacts/import, agents/jobs/stop, search, keyboard, accessibility, responsive width, space usage, motion, offline state and pressability. Add focused tests for new primitives, Overview landing, Jump shortcut, task persistence and artifact idempotency.
+Run the repository's existing checks for map, arrangement, map view, routes, controls desktop/phone, tasks, task UI, documents, files, artifacts/import, agents/jobs/stop, search, keyboard, accessibility, responsive width, space usage, motion, offline state and pressability. Add focused tests for new primitives, Overview landing, Jump shortcut, task persistence and artifact idempotency. Cover project-context isolation, text/voice fallback, delegation permissions, conversation-to-record provenance/idempotency and connection consent/recovery with focused regression tests; use real browser journeys for the corresponding acceptance evidence.
 
 ### Visual-regression rule
 
@@ -715,14 +793,14 @@ Establish approved Agentic Team baselines at all four viewports. Automated image
 The reference slice is done only when:
 
 1. all preservation-matrix entries have a reachable route or an explicitly approved retirement;
-2. the shell, Jump, Overview, task journey and agent-output journey use real data;
+2. the shell, Jump and all six core surfaces support the real-data journeys in Phases 2–6, including text/live voice, delegation, task/document/event promotion, file upload/read and Calendar/Drive connections;
 3. desktop and mobile evidence exists for every acceptance journey;
 4. loading, empty, error, permission and offline states have been exercised;
 5. keyboard, screen-reader semantics, reduced motion and 200% zoom pass;
 6. existing relevant verification passes and new regression coverage is committed;
 7. no Basecamp branding, assets, source or unlicensed fonts are present;
-8. known exceptions are written down with owner and consequence;
-9. the team conducts a review and explicitly chooses whether to expand the system;
+8. known exceptions are written down with owner and consequence; missing required voice, context, promotion or connection journeys cannot be called done merely by listing them as exceptions;
+9. simplicity criteria pass: ordinary flows hide implementation details, obvious actions are discoverable, secondary tools remain accessible without excess chrome, and added content looks coherent immediately; the team conducts a review and explicitly chooses whether to expand the system;
 10. work stops. Remaining screens become separately scoped slices.
 
 Not done means “looks close in one desktop screenshot.” Done means the interaction contract, responsive behaviour, data persistence, agent provenance and failure states all survive real browser use.
@@ -744,7 +822,7 @@ Do not maintain both full product directions indefinitely. Record one decision a
 
 ## 21. Coding-agent handoff prompt
 
-> Implement only the reference vertical slice in this specification inside the existing `web/studio` frontend. First inspect the current routes, components, tests and dirty worktree; preserve unrelated changes. Establish a passing baseline and a feature-preservation matrix before editing. Do not create a new frontend, Canvas tab, third Overview mode, second task system, or mock-only experience. Use real existing APIs and records. Build reusable tokens and primitives, then the shell and Jump, the live project Overview, one persisted task journey, and one provenance-preserving agent-output-to-document journey. Validate at 1440×900, 1024×768, 768×1024 and 390×844, including keyboard, screen-reader semantics, reduced motion, 200% zoom, loading/empty/error/permission/offline states and no page-level horizontal overflow. Run the relevant existing verification gates and add focused regression tests. Do not copy Basecamp branding, assets, source code or unlicensed fonts. Stop when the Definition of Done is met and report screenshots, tests, preserved routes and known exceptions; do not continue into a wholesale redesign.
+> Implement only the reference vertical slice in this specification inside the existing `web/studio` frontend. First inspect the current routes, components, tests and dirty worktree; preserve unrelated changes. Establish a passing baseline and a feature-preservation matrix before editing. Do not create a new frontend, Canvas tab, third Overview mode, second task system, or mock-only experience. Use real existing APIs and records. Build reusable tokens and primitives, then the shell and Jump and the six core surfaces: Home, Project Overview, To-dos, Schedule, Docs & Files and Campfire/AI Team. Complete the exact journeys in Phases 2–6: persisted tasks, project-scoped text/live voice with automatic permitted context, delegation, provenance-preserving promotion into tasks/documents/events, file upload/read and normal OAuth Calendar/Drive connections. Keep secondary capabilities reachable but quiet, credentials invisible, and the existing backend/intelligence as infrastructure; explicitly scope gaps rather than redesigning it. Validate at 1440×900, 1024×768, 768×1024 and 390×844, including keyboard, screen-reader semantics, reduced motion, 200% zoom, loading/empty/error/permission/offline states and no page-level horizontal overflow. Run the relevant existing verification gates and add focused regression tests. Do not copy Basecamp branding, assets, source code or unlicensed fonts. Stop when the Definition of Done is met and report screenshots, tests, preserved routes and known exceptions; do not continue into a wholesale redesign.
 
 ---
 
