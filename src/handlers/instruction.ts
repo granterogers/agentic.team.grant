@@ -92,6 +92,7 @@ import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
 import { assignedTo, dueOn } from '../agents/due.ts'
 import { extractionRequest } from '../agents/extract.ts'
+import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
 import { type Handoff, handoffIn } from '../agents/handoff.ts'
 import { classifyIntent } from '../agents/intent.ts'
@@ -99,6 +100,7 @@ import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../ag
 import { personalTaskChange, personalTaskRequest } from '../agents/mine.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
+import { performable } from '../agents/perform.ts'
 import {
   createsSomething,
   describePlan,
@@ -168,6 +170,86 @@ function hostForSaying(url: string): string {
 }
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+/**
+ * Work out what a goal actually requires, and start it as durable work (#283).
+ *
+ * ## Why this lives BELOW the cascade rather than beside it
+ *
+ * Two things deciding what a turn does is two things that will disagree, and
+ * the disagreement is invisible: both halves right alone. So the planner runs
+ * only where every recogniser above declined — today those turns produce prose
+ * and nothing else, which makes this strictly additive and makes a regression
+ * of the #282 semantic contract impossible by construction rather than by
+ * assertion.
+ *
+ * ## A plan is a proposal. It is never an authorization.
+ *
+ * `validate` has already refused anything at level 3 and anything the registry
+ * does not grant. This adds the second question, which is a different one:
+ * **is there code that performs it.** A plan made entirely of capabilities
+ * nothing executes would announce work and deliver a list of impediments, so
+ * it is not started at all and the turn answers as it does today. The external
+ * human-contact rule is untouched — nothing here performs one, and a step that
+ * named one would become an honest impediment rather than a message.
+ *
+ * Two steps is the floor because one step is precisely what the cascade above
+ * is for. The value the planner adds is composition, and nothing else.
+ *
+ * Returns the line to put in the confirmation, or null to leave the turn
+ * exactly as it is today.
+ */
+export const planAndPursue = async (
+  db: SqlExecutor,
+  router: ProviderRouter,
+  job: Job,
+  request: string,
+): Promise<string | null> => {
+  const [catalogue, roster] = await Promise.all([
+    planningCatalogue(db),
+    db
+      .execute(
+        `select slug, coalesce(title, '') as title
+           from public.staff where active order by slug`,
+      )
+      .then(({ rows }) =>
+        rows.map((r) => {
+          const row = r as { slug?: unknown; title?: unknown }
+          return { slug: String(row.slug ?? ''), title: String(row.title ?? '') }
+        }),
+      ),
+  ])
+  const plan = await planFor(request, catalogue as readonly Capability[], roster, router, {
+    jobId: job.jobId,
+    correlationId: job.correlationId,
+  })
+
+  const canDo = new Set(performable())
+  const doable = plan.steps.filter((s) => canDo.has(s.capability))
+  if (plan.steps.length < 2 || doable.length === 0) return null
+
+  await db.execute(`
+    select app.enqueue_child(
+      ${lit(job.jobId)}::uuid, 'office.pursue',
+      jsonb_build_object(
+        'plan', ${lit(JSON.stringify(plan))}::jsonb,
+        'request', ${lit(request.slice(0, 2000))}
+      ),
+      interval '0', true
+    )::text as id`)
+
+  /*
+    WHAT IT SAYS IT WILL DO, NOT WHAT IT HAS DONE.
+
+    Nothing has run yet, so every verb here is future tense and the receipts
+    come from `office.pursue` when the steps actually produce them. #259's
+    rule: never claim a thing happened unless canonical state proves it.
+  */
+  const steps = plan.steps
+    .map((s, i) => `${String(i + 1)}. ${s.why === '' ? s.capability : s.why}`)
+    .join('\n')
+  return `${plan.goal === '' ? 'Taking that on' : plan.goal} — in ${String(plan.steps.length)} steps:\n${steps}\n\nI will come back with what each one actually found.`
+}
 
 /**
  * The dashboard projects, as one sentence of canonical state (#231, ADR-0024).
@@ -3048,6 +3130,46 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               )
 
       /*
+        NOTHING ABOVE CLAIMED THE TURN, SO ASK WHAT THE GOAL ACTUALLY NEEDS.
+
+        The gate is the whole safety argument: where any recogniser acted, this
+        does not run, so no existing behaviour moves. `planFor` has its own fast
+        path for a short single-clause sentence, so an ordinary question never
+        reaches the model, and `planAndPursue` starts nothing it cannot perform.
+
+        Planning may never fail Grant's turn. A failure is recorded where the
+        office counts them and the turn answers as it would have anyway — a
+        swallowed write is indistinguishable from a feature nobody built, which
+        is why the catch writes rather than merely returning null.
+      */
+      const actedAlready = [
+        linked,
+        made,
+        filed,
+        noted,
+        changed,
+        extracting,
+        enumerating,
+        writingFile,
+        reading,
+      ].some((x) => x !== null)
+      const pursuing =
+        actedAlready || isBranch || requests.length === 0
+          ? null
+          : await planAndPursue(deps.db, deps.router, job, requests.join(' ')).catch(
+              async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'work out a plan for this', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              },
+            )
+
+      /*
         The rule he taught goes FIRST, because he said it first (#282, anchor
         A). `taught` is non-null here only when something else survived the
         message as well — the rule-only case returned above.
@@ -3064,6 +3186,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           enumerating,
           writingFile,
           reading,
+          pursuing,
         ]
           .filter((x) => x !== null)
           .join('\n\n') || null

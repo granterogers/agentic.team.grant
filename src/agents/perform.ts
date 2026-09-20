@@ -42,6 +42,7 @@
  */
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Outcome, Step } from '../jobs/checkpoint.ts'
+import { isUntrusted, retrieve } from '../knowledge/retrieval.ts'
 import type { GoalPlan, PlanStep } from './goal.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -162,6 +163,76 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
         docTitles: String(r.doc_titles ?? ''),
         taskTitles: String(r.task_titles ?? ''),
         newest: String(r.newest ?? ''),
+      }
+    },
+  },
+
+  /**
+   * What the project's material actually SAYS, rather than what it is called.
+   *
+   * `db.read` counts and titles; this reads. It is the step that makes a
+   * composed plan worth composing — "look through the pricing project and put
+   * whatever is out of date on my list" cannot be answered from titles, and a
+   * second step handed titles will invent the rest.
+   *
+   * ## Untrusted material does not travel downstream
+   *
+   * `isUntrusted` fences the open internet and inbound correspondence (#135,
+   * #172): material somebody OUTSIDE this office wrote and the office pulled
+   * in automatically. Retrieval hands it to a model behind a fence, which is
+   * right for an answer a person then reads. It is NOT right here, because an
+   * observation is consumed by the next step as fact — that is the whole point
+   * of this file — and a plan step is not a reader who can weigh it.
+   *
+   * So a hit from a fenced connector is COUNTED and NAMED and its text is
+   * withheld, which is the refusing direction. Widening it needs evidence that
+   * a downstream step can hold a fence, not the observation that the material
+   * would be useful.
+   */
+  'notebook.read': {
+    effect: 'none',
+    run: async ({ db, projectId, request, step }): Promise<Observation> => {
+      /*
+        The step's own `why` is what this step is looking for; the request is
+        the fallback, because a plan whose steps carry no reason is one the
+        validator let through with the request as the only thing said.
+      */
+      const asking = (step.why === '' ? request : step.why).slice(0, 400)
+      const hits = await retrieve(db, asking, projectId, 5).catch(() => null)
+      if (hits === null) {
+        return nothing('notebook.read', 'the knowledge index could not be searched')
+      }
+      const open = hits.filter((h) => !isUntrusted(h.connector))
+      const fenced = hits.length - open.length
+      if (open.length === 0) {
+        return {
+          capability: 'notebook.read',
+          /*
+            AN EMPTY SEARCH IS NOT A FAILED ONE, and the office has paid for
+            conflating them. `found` is false because there is nothing for a
+            later step to act on, and the reason says which of the two it was.
+          */
+          found: false,
+          ids: [],
+          saw: '',
+          impediment:
+            fenced === 0
+              ? `nothing in the project's material matches "${asking.slice(0, 80)}"`
+              : `the only matches (${String(fenced)}) are outside material, which does not travel into a later step`,
+          searched: asking,
+          fenced,
+        }
+      }
+      return {
+        capability: 'notebook.read',
+        found: true,
+        ids: open.map((h) => h.documentId),
+        saw: open
+          .map((h) => `"${h.title}": ${h.excerpt.replace(/\s+/g, ' ').trim().slice(0, 400)}`)
+          .join('\n'),
+        searched: asking,
+        documents: open.length,
+        fenced,
       }
     },
   },

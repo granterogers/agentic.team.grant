@@ -249,17 +249,87 @@ treated as unstated rather than as permission.
 
 Proved able to fail: with the guard removed, three go red.
 
+## A REAL MESSAGE NOW REACHES THE PLANNER — and what it is not allowed to start
+
+The planner and the executor were, until now, reachable only from a suite.
+`instruction.ts` calls `planAndPursue` and, on a composed plan, enqueues
+`office.pursue` with the plan travelling as data on the job.
+
+**The gate is the whole safety argument, and it is a construction rather than
+an assertion:** the planner runs ONLY where every recogniser in the cascade
+declined. Those turns produce prose and nothing else today, so no existing
+behaviour moves and a regression of the #282 semantic contract is impossible by
+construction. Three further conditions:
+
+| Condition | Why dropping it costs something |
+|---|---|
+| not a branch job | a specialist's hand-off already has its instructions |
+| at least two steps | one step is exactly what the cascade above is for; the planner's only contribution is composition |
+| at least one step the office can PERFORM | 0298 — a registry row can claim anything, and announcing work that can only produce impediments is worse than answering in prose |
+
+`planFor`'s own fast path means a short single-clause sentence never reaches
+the model at all, and `requests` holds only the four `MAY_ACT` readings, so an
+ordinary question is untouched. A planning failure is recorded through
+`app.cannot` and the turn answers as it would have anyway — a swallowed write
+is indistinguishable from a feature nobody built.
+
+**What it says is future tense.** Nothing has run when the confirmation is
+composed, so the line states the goal and the steps and promises to come back
+with what each one actually found. #259's rule, at the only moment it can be
+broken here.
+
+`tests/handlers/a-plan-is-a-proposal.test.ts` — six tests, and the two refusal
+gates were **proved able to fail**: with `plan.steps.length < 2 || doable.length
+=== 0` weakened to `< 1`, two go red (sabotage confirmed present by grep before
+the run, restored and confirmed green after).
+
+Gates run: `lint` 0 · `typecheck` 0 · `test` **2171/2171** ·
+`check:secrets` `check:templates` `check:migrations` `check:callers` all 0.
+
+## A FOURTH EXECUTOR, AND THE FENCE IT NEEDED
+
+`db.read` counts and titles; `notebook.read` **reads**. It is the step that
+makes composition worth anything — *"look through the pricing project and put
+whatever is out of date on my list"* cannot be answered from titles, and a
+second step handed titles will invent the rest.
+
+Proved by a second invented token that exists **only inside a document's
+body**: a step reading the index cannot carry it, and it appears in the task
+the next step wrote.
+
+**And it needed a security decision the other three did not.** `isUntrusted`
+fences the open internet and inbound correspondence (#135, #172). Retrieval
+hands fenced material to a model behind a warning, which is right for an answer
+a person then reads. It is wrong here, because an observation is consumed by
+the next step **as fact** — that is the whole point of `perform.ts` — and a
+plan step is not a reader who can weigh it.
+
+So a hit from a fenced connector is counted, named, and its text withheld.
+`verify:pursues` seeds a `browser` document carrying a third token, and asserts
+the search FINDS it, the observation withholds it, and the downstream task does
+not carry it. **Proved able to fail**: with the filter replaced by
+`hits.slice()`, two checks go red (sabotage confirmed present by grep, restored
+and confirmed green).
+
+`verify:pursues` **10/10**.
+
 ## WHAT IS STILL UNPROVED
 
-- The planner and executor are not yet reached from a real message: nothing
-  enqueues `office.pursue` from `instruction.ts`. **This is the next action.**
+- A real message reaches the planner, but **no production-like acceptance has
+  driven it end to end through a real interface yet** — the wiring is proved by
+  unit tests and the execution by `verify:pursues`, which are two halves that
+  have not been joined by one run.
 - Goal-completion verification is untouched — a handler returning is still
   taken as the goal being met.
 - No bounded re-planning.
 - ContextPack not started.
 - No production-like acceptance through a real interface yet.
-- Only three executors exist (`db.read`, `task.create`, `task.extract`), so
-  most catalogue capabilities are still honest impediments rather than work. This section is kept honest as the run proceeds —
+- Only four executors exist (`db.read`, `notebook.read`, `task.create`,
+  `task.extract`), so most catalogue capabilities are still honest impediments
+  rather than work.
+- `npm test` exited 1 once inside a back-to-back gate loop and 0 on four
+  consecutive runs afterwards, with no failing test named in any of them. Not
+  reproduced, and recorded rather than dismissed. This section is kept honest as the run proceeds —
 a claim only moves up once evidence exists for it.
 
 ---

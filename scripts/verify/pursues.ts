@@ -61,6 +61,16 @@ const run = Math.random().toString(36).slice(2, 10)
   route by which it could get there.
 */
 const TOKEN = `zelmirath${run}`
+/*
+  A word that appears ONLY inside a document's BODY, never in a title. A step
+  that reads titles cannot carry it; only one that reads the material can.
+*/
+const DEEP = `quorvanth${run}`
+/*
+  And one inside material somebody OUTSIDE the office wrote. It must be found
+  by the search and must NOT travel into a later step (#135, #172).
+*/
+const FENCED = `xibraleth${run}`
 
 console.log('carrying out a plan (#283) —\n')
 
@@ -77,8 +87,21 @@ await db.execute(`
      content_chars, fetched_at, state)
   values (${lit(projectId)}::uuid, 'upload', ${lit(`doc-${run}`)},
           ${lit(`The ${TOKEN} handbook`)},
-          ${lit(`The ${TOKEN} handbook is out of date and nobody owns it.`)},
+          ${lit(`The ${TOKEN} handbook is out of date and nobody owns it. The ${DEEP} clause has not been reviewed since it was written.`)},
           encode(sha256(${lit(`fp-${run}`)}::bytea), 'hex'), 60, app.now_utc(), 'approved')`)
+
+/*
+  Material from a fenced connector. `app.search_documents` will find it — it is
+  a document like any other — and `notebook.read` must withhold its text.
+*/
+await db.execute(`
+  insert into public.documents
+    (project_id, connector, external_ref, title, content, content_fingerprint,
+     content_chars, fetched_at, state)
+  values (${lit(projectId)}::uuid, 'browser', ${lit(`page-${run}`)},
+          ${lit(`The ${TOKEN} page`)},
+          ${lit(`The ${TOKEN} page says the ${FENCED} rate applies from Monday.`)},
+          encode(sha256(${lit(`fpb-${run}`)}::bytea), 'hex'), 60, app.now_utc(), 'approved')`)
 
 /*
   A REAL job, because `app.harness_job` and the readers filter fixtures and a
@@ -139,8 +162,8 @@ const look = (first.kind === 'done' ? first.outcomes['look:db.read'] : {}) as Re
 >
 check(
   'step A made a real observation of canonical state',
-  `${String(look.docs ?? 0)} document(s), saw: ${String(look.saw ?? '').slice(0, 70)}`,
-  Number(look.docs ?? 0) === 1 && String(look.saw ?? '').includes(TOKEN),
+  `${String(look.docs ?? 0)} document(s) (2 are seeded), saw: ${String(look.saw ?? '').slice(0, 70)}`,
+  Number(look.docs ?? 0) === 2 && String(look.saw ?? '').includes(TOKEN),
 )
 
 /*
@@ -219,6 +242,77 @@ check(
   noteOnEmpty.found === false,
 )
 
+// --- reading the material, not the index -----------------------------------
+/*
+  `db.read` counts and titles. `notebook.read` READS, and the difference is
+  provable: DEEP exists only inside a document's body, so a step handed titles
+  cannot carry it and a step that read the material must.
+
+  The same section is the security control. FENCED lives in a `browser`
+  document — material somebody outside this office wrote — which the search
+  WILL find and which must not travel into a later step.
+*/
+const readJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config)
+  values ('office.pursue', 'running', ${lit(projectId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-read-${run}`)}, gen_random_uuid(), '{}'::jsonb)
+  returning job_id::text as id`)
+const readJobId = String(readJob.id)
+const readPlan: GoalPlan = {
+  ...plan,
+  steps: [
+    {
+      id: 'study',
+      capability: 'notebook.read',
+      why: `${TOKEN} handbook page rate clause`,
+      needs: [],
+      specialist: null,
+      audience: 'grant',
+    },
+    {
+      id: 'note',
+      capability: 'task.create',
+      why: `Review the ${TOKEN} material`,
+      needs: ['study'],
+      specialist: null,
+      audience: 'grant',
+    },
+  ],
+}
+const reading = await runSteps(
+  db,
+  readJobId,
+  'office.pursue@1',
+  compile(readPlan, db, readJobId, projectId, `what does the ${TOKEN} material say`),
+)
+const studied = (reading.kind === 'done' ? reading.outcomes['study:notebook.read'] : {}) as Record<
+  string,
+  unknown
+>
+check(
+  'notebook.read reads the MATERIAL, not the index',
+  `${String(studied.documents ?? 0)} document(s), ${String(studied.fenced ?? 0)} fenced`,
+  studied.found === true && String(studied.saw ?? '').includes(DEEP),
+)
+check(
+  'SECURITY: outside material is found and WITHHELD, never handed to a later step',
+  `${String(studied.fenced ?? 0)} withheld; the outside token is ` +
+    `${String(studied.saw ?? '').includes(FENCED) ? 'PRESENT in the observation' : 'absent'}` +
+    `${Number(studied.fenced ?? 0) === 0 ? ' — and nothing was withheld, so either the fence is off or the search never found it' : ''}`,
+  Number(studied.fenced ?? 0) === 1 && !String(studied.saw ?? '').includes(FENCED),
+)
+const carried = await one(`
+  select count(*) filter (where detail like ${lit(`%${DEEP}%`)})::int as deep,
+         count(*) filter (where detail like ${lit(`%${FENCED}%`)})::int as fenced
+    from public.tasks
+   where assigned_to_human and created_at > now() - interval '10 minutes'`)
+check(
+  'the task carries what was READ, and nothing from outside material',
+  `deep: ${String(carried.deep)}, fenced: ${String(carried.fenced)}`,
+  Number(carried.deep) === 1 && Number(carried.fenced) === 0,
+)
+
 // --- a capability nothing performs ----------------------------------------
 /*
   A registry row can claim anything (0298). A step naming a capability with no
@@ -269,7 +363,9 @@ check(
 console.log('')
 for (const t of (
   await db.execute(
-    `select task_id::text as id from public.tasks where detail like ${lit(`%${TOKEN}%`)}`,
+    `select task_id::text as id from public.tasks
+       where detail like ${lit(`%${TOKEN}%`)} or detail like ${lit(`%${DEEP}%`)}
+          or title like ${lit(`%${TOKEN}%`)}`,
   )
 ).rows) {
   await db
@@ -299,8 +395,10 @@ const left = await one(`
   select (select count(*) from public.projects
            where project_id in (${lit(projectId)}::uuid, ${lit(emptyId)}::uuid)
              and status <> 'archived')::int as projects,
-         (select count(*) from public.tasks where detail like ${lit(`%${TOKEN}%`)}
-            and state <> 'done')::int as tasks`)
+         (select count(*) from public.tasks
+           where (detail like ${lit(`%${TOKEN}%`)} or detail like ${lit(`%${DEEP}%`)}
+                  or title like ${lit(`%${TOKEN}%`)})
+             and state <> 'done')::int as tasks`)
 check(
   'teardown — nothing of this run is left in his projects or on his list',
   `${String(left.projects)} live project(s), ${String(left.tasks)} task(s)`,
