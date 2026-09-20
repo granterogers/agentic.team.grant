@@ -72,6 +72,32 @@ const SHAPES: readonly RegExp[] = [
   // turn X into tasks · make tasks out of X
   new RegExp(`\\bturn\\s+(?<from>.+?)\\s+into\\s+(?:${PLURAL})\\b`, 'i'),
   new RegExp(`\\b(?:make|create|add)\\s+(?:the\\s+)?${PLURAL}\\s+${FROM}\\s+(?<from>.+)`, 'i'),
+  /*
+    READ SOMETHING, THEN MAKE TASKS FROM IT — the shape production actually
+    produced (#282, anchor B).
+
+      > "Scan the entirety of the Legacy Coaching Project and create
+      > appropriate tasks for me to review."
+
+    None of the four above reaches it. The source is named with a reading verb
+    rather than with `out of`, and the plural is qualified — "appropriate
+    tasks", "a few tasks", "the obvious next steps" — where every pattern above
+    allows only a bare `the`. So the sentence fell through to `taskRequest` and
+    became ONE personal task called "appropriate tasks for me to review",
+    which is the delegation performed as its own title.
+
+    It is a general shape rather than a phrase: a verb of READING a source, the
+    source, and a verb of MAKING several tasks out of it. The qualifier between
+    the two verbs is bounded so the pattern cannot swallow a sentence that
+    merely mentions both ideas a paragraph apart.
+  */
+  new RegExp(
+    `\\b(?:scan|read|go through|look through|review|go over|comb through)\\s+` +
+      `(?:the\\s+)?(?:entirety of\\s+|all of\\s+|the whole of\\s+)?(?:the\\s+)?` +
+      `(?<from>.+?)\\s+and\\s+(?:make|create|write|add|generate|draw up|put together)\\s+` +
+      `(?:\\w+\\s+){0,2}${PLURAL}\\b`,
+    'i',
+  ),
 ]
 
 /*

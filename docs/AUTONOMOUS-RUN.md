@@ -85,11 +85,93 @@ action happened · the report matched the action · every surviving clause ran �
 no abandoned clause ran · cross-channel state agrees · the semantic result is
 channel-independent.
 
+## THE HYPOTHESIS IS ANSWERED — 20 September 2026, ADR-0044
+
+**Supported, and half of it disproved.** Both halves matter and the second one
+saved a great deal of work.
+
+**Supported.** Every action decision in `handlers/instruction.ts` is made by
+regex between lines 2296 and 2723; the first model call that could have
+understood the sentence is at 3238. Meaning was decided by pattern matching and
+a model was then asked to write the reply about it. The forensic detail that
+settles it: `clauses.split` ALREADY returned the right clauses for both
+production anchors and **nothing downstream read them.** The splitter was right
+and its answer was thrown away.
+
+**Disproved.** The channels have NOT drifted. Telegram text, Telegram voice,
+Slack and Team HQ all converge on one
+`inbound_commands -> enqueue_inbound -> office.instruction` path, so one
+interpreter in that path fixes every door at once and §5 is intact. No
+per-channel interpretation exists to unify.
+
+### Measured, not asserted
+
+24 spoken cases, expectations written before anything ran
+(`docs/testing/spoken-corpus.json`), both layers scored over the same corpus:
+
+| | |
+|---|---|
+| today's deterministic cascade | **11 / 24** |
+| one semantic pass in front of it | **24 / 24** |
+| abandoned clauses counted correctly | 22 / 24 |
+| fell back to today's behaviour | 1 / 24 |
+| short-circuited on the fast path | 6 / 24 |
+
+`openai/gpt-oss-120b`, mean 9.2s, slowest 24.8s. The latency is the argument
+for keeping the fast path, and `npm run verify:understands` FAILS if the
+semantic layer stops beating the regexes it stands in front of — the bar is the
+baseline, not a number somebody liked.
+
+### What shipped
+
+- `src/agents/understand.ts` — rewrites one utterance into N clean standalone
+  requests and says which were abandoned. **Decides nothing.** Every failure
+  path returns the whole utterance as one reading, which is today's behaviour
+  exactly, so the change cannot be worse than the status quo.
+- `handlers/instruction.ts` — the cascade now reads one clean request at a
+  time. The model's `kind` is used in ONE direction, to SUBTRACT: `MAY_ACT`
+  keeps a rule or a question away from the writers, `HIS_OWN` keeps a
+  delegation off Grant's personal list. Neither can cause an action.
+- `taskSpine` — his own list as canonical state, so a question about it is
+  answerable without inventing. `projectSpine`'s argument, applied to
+  `public.tasks`.
+- `extract.ts` — one new SHAPE: read a source, then make tasks from it. A
+  general shape with six controls, not a phrase.
+
+### ANCHORS A AND B ARE CLOSED — `npm run verify:anchors`, 11/11
+
+Both production sentences driven through the real path, asserted on canonical
+state, with a control proving the ordinary case still makes exactly one task.
+
+**Anchor A took TWO fixes and only the real sentence found the second.**
+Separating the clauses was not enough, and neither was the early return in the
+teaching path: `confirmation !== null` short-circuits the WHOLE answering path,
+so the rule was stored, the confirmation composed, and the question discarded
+one layer further down. **An action taken must not swallow a question asked.**
+The first fix was present, compiled, unit-tested and INERT.
+
+Proved able to fail: with `alsoAsked` forced false the suite returns 168
+characters of preference confirmation, `model: null`, and goes red on exactly
+that check. Restored, green.
+
+**Anchor B** likewise had a second half. With the abandoned fragment removed,
+the surviving clause still became ONE personal task titled *"appropriate tasks
+for me to review"* — the delegation performed as its own title. Recorded as a
+real failing run rather than a synthetic one; both new checks (a child job
+exists, and nothing went on his list) were red on it.
+
+### Gates run
+
+`npm test` 2105/2105 · `verify:anchors` 11/11 · `verify:understands` 24 vs 11 ·
+`verify:extract` 11/11 · `verify:mytasks` 88/88 · lint, typecheck,
+`check:secrets`, `check:templates` clean.
+
 ## NEXT ACTION
 
-Map the real pipelines for all five ingresses and answer, in this file, from
-traced code rather than inference: **where does the system currently decide
-what Grant MEANS**, and **have Telegram, Slack and Team HQ drifted?**
+Anchor D — trace the suspicious clarification state *"Happy to add that. What
+should it be called?"* — then the cross-channel equivalence suite (Telegram
+text / Telegram voice / Slack / Team HQ over one corpus), then the held-out
+adversarial set written against a frozen commit.
 
 ---
 

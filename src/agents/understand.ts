@@ -343,6 +343,23 @@ const asOneThing = (utterance: string, why: string): Understanding => ({
 })
 
 /**
+ * The whole utterance as one reading, said out loud.
+ *
+ * Exported because a CALLER sometimes knows, without asking, that there is
+ * nothing to interpret — a fan-out branch carries the instruction verbatim and
+ * must not act on it at all, so spending a model call to be told what it
+ * already knows is latency bought for nothing. Same shape as every failure
+ * path, so a caller that takes this reads identically to one that fell back.
+ */
+export const oneReading = (utterance: string): Understanding => ({
+  surviving: [{ kind: 'other', text: utterance }],
+  abandoned: [],
+  how: 'trivial',
+  why: null,
+  model: null,
+})
+
+/**
  * Read one utterance.
  *
  * `router` may be undefined — several callers and every unit test have no

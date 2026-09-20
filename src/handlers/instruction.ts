@@ -122,6 +122,7 @@ import { nameSubjects } from '../agents/subject.ts'
 import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../agents/tasks.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
+import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
@@ -214,6 +215,70 @@ export function projectSpine(
       : ` There is also a reserved place called ${held.join(', ')}, where anything that names ` +
         'no project lands. It is not one of his projects and is not included in that count.')
   )
+}
+
+/** One of Grant's own to-dos, as `app.my_tasks` returns it. */
+interface HisTask {
+  readonly title: string
+  readonly due_on: string | null
+  readonly overdue: boolean
+}
+
+/**
+ * His own to-do list, as canonical state (#282, anchor A).
+ *
+ * ## The half of anchor A that the split alone does not fix
+ *
+ *   > "I've told you to always give your information in the form of clear
+ *   > bullet points. Also, I want you to tell me what my current tasks are."
+ *
+ * Separating the two clauses makes the question reach the answering path. It
+ * does not make it ANSWERABLE: this handler supplied documents, mail and the
+ * project spine and **nothing at all about `public.tasks`**, so the honest
+ * reply to "what are my current tasks" was that the office could not see them
+ * — and the dishonest one, which `provenance.ts` exists to stop, was a list
+ * made up out of the conversation.
+ *
+ * `projectSpine` is the precedent and the argument is identical: do not solve
+ * fabrication by making the office incapable. Supplying the list makes the
+ * honest answer and the useful answer the same sentence.
+ *
+ * ## Stated as a fact, never as an instruction
+ *
+ * `projectSpine` measured this and it cost two of three answers: a negative
+ * imperative beside the data it is about invites a model to over-obey it. So
+ * there is no "do not invent" here. The list is either accurate or it says
+ * there is nothing on it, and both are facts.
+ *
+ * ## Named buckets only
+ *
+ * `app.my_tasks` has an unnamed `else` branch meaning "not done", and reading
+ * through it would be a caller depending on a default nobody wrote down.
+ * Overdue, today and upcoming are the three he asks about and all three are
+ * named in the function's own case.
+ */
+export function taskSpine(
+  overdue: readonly HisTask[],
+  today: readonly HisTask[],
+  upcoming: readonly HisTask[],
+  counts: { readonly overdue?: number; readonly today?: number; readonly all?: number },
+): string {
+  const say = (t: HisTask): string => (t.due_on === null ? t.title : `${t.title} (${t.due_on})`)
+  const total = Number(counts.all ?? 0)
+  if (total === 0 && overdue.length === 0 && today.length === 0 && upcoming.length === 0) {
+    return 'His own to-do list is empty right now. Nothing is on it.'
+  }
+  const parts: string[] = []
+  if (overdue.length > 0)
+    parts.push(`Overdue, ${String(overdue.length)}: ${overdue.map(say).join('; ')}.`)
+  if (today.length > 0)
+    parts.push(`Due today or earlier, ${String(today.length)}: ${today.map(say).join('; ')}.`)
+  if (upcoming.length > 0)
+    parts.push(`Coming up, ${String(upcoming.length)}: ${upcoming.map(say).join('; ')}.`)
+  if (parts.length === 0) {
+    return `His own to-do list holds ${String(total)} item(s), none of them due or overdue.`
+  }
+  return `His own to-do list, read from the office's records just now. ${parts.join(' ')}`
 }
 
 /** Who is answering, and everything that makes them sound like themselves. */
@@ -2227,46 +2292,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       }
 
       /*
-        Is he teaching us something? (#48, #50)
-
-        Grant: *"all behaviours, skills, what I want them to do, it can all just
-        be told to them directly via Telegram or Slack."* Before this, both
-        tables could only be written by Claude in a coding session — which makes
-        the office's memory Claude's memory, not the office's.
-
-        Checked BEFORE the link and artifact readers, because "from now on,
-        always attach the notebook link" is a rule about attaching links and
-        would otherwise be executed as a request to attach one.
-
-        Only from Grant. An agent authoring its own procedures is the design
-        (ADR-0017) but it is not this path: this path is a person in a chat
-        window, and it stores what he says at high confidence because he said
-        it.
-      */
-      const teaching = readTeaching(instruction)
-      if (teaching !== null) {
-        const kept = await remember(
-          deps.db,
-          teaching,
-          'grant',
-          // Addressed to one person, or to the office. Getting this backwards
-          // means a rule for Ruby quietly governing Daniel.
-          (payload.addressed_to ?? '') === '' ? null : who.slug,
-          job.jobId,
-        )
-        return {
-          body: kept.said,
-          confidence: 'high',
-          // The write either happened or the sentence says it did not.
-          evidence: 'verified',
-          sources: [`job:${job.jobId}`],
-          contradictions: null,
-          path: await howComposed(deps.db, job.jobId),
-          model: null,
-        } satisfies HandlerOutput
-      }
-
-      /*
         A BRANCH CONTRIBUTES PROSE. IT NEVER PERFORMS THE REQUEST AGAIN.
 
         #233's fan-out gives every additional convened specialist a child
@@ -2290,9 +2315,213 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         branch, so a request Grant ADDRESSES to a specialist directly carries
         `addressed_to` without it and is untouched — which is the case that
         matters, because that one is still his request.
+
+        HOISTED above the semantic read as well as above the actions (#282): a
+        branch performs nothing, so asking a model what the sentence means is
+        several seconds spent to be told something this line already knows.
       */
       const isBranch = String(payload.handed_off_by ?? '') !== ''
 
+      /*
+        WHAT HE MEANS, BEFORE ANYTHING DECIDES WHAT TO DO (#282).
+
+        Every recogniser below is a regex over the WHOLE message, and two
+        production sentences show what that costs:
+
+          > "I've told you to always give your information in the form of clear
+          > bullet points. Also, I want you to tell me what my current tasks
+          > are."
+
+        The preference was stored and the turn RETURNED. The question vanished.
+
+          > "Create a task for me and the um... No actually, you know what?
+          > Scan the entirety of the Legacy Coaching Project and create
+          > appropriate tasks for me to review."
+
+        One task, titled with the remainder of the transcript — the abandoned
+        fragment and the filler included.
+
+        `clauses.split` already returned the right clauses for both. Nothing
+        downstream read them. So this is not a missing phrase, it is the
+        architecture: the splitter was right and its answer was thrown away.
+
+        `understand` rewrites the utterance into N clean standalone requests
+        and says which were abandoned. It DECIDES NOTHING. Each surviving
+        request then goes through the same deterministic cascade, carrying
+        every permission, capability, provenance, idempotency and approval
+        guard the office has. A reading that says "Grant wants a task" is a
+        description of an utterance, never a right to write a row.
+
+        Every failure path — no provider, invalid JSON, an ungrounded rewrite —
+        returns the whole utterance as one reading, which is exactly today's
+        behaviour. The change cannot be worse than the status quo.
+      */
+      const understood = isBranch
+        ? oneReading(instruction)
+        : await understand(instruction, deps.router, {
+            correlationId: job.correlationId,
+            jobId: job.jobId,
+          })
+
+      /*
+        WHICH READINGS MAY REACH AN ACTION, and why this filter only ever
+        SUBTRACTS.
+
+        The model's `kind` is not authorization and must not become it. It is
+        used here in one direction only: to keep a clause the model read as a
+        standing instruction or as a question away from the writers. A clause
+        it read as a request still has to satisfy the same recogniser it
+        satisfies today before anything is written.
+
+        So the worst this filter can do is decline to act, which is the cheap
+        direction — `mine.ts` already argues it: a miss costs a to-do Grant
+        adds himself and the office still answers; a false positive costs him
+        the WORK.
+      */
+      const MAY_ACT: ReadonlySet<ReadingKind> = new Set([
+        'task_create',
+        'task_change',
+        'delegate',
+        'other',
+      ])
+      const requests = understood.surviving.filter((r) => MAY_ACT.has(r.kind)).map((r) => r.text)
+
+      /*
+        Run one recogniser over each surviving request, in the order he said
+        them, and take the first that claims one.
+
+        The cascade is demonstrably good at ONE clear request and demonstrably
+        bad at a paragraph of speech, so this hands it the former. Where the
+        semantic layer fell back, `requests` is `[instruction]` and every call
+        below is byte-for-byte what it is today.
+      */
+      const firstOf = <T>(read: (text: string) => T | null): T | null => {
+        for (const text of requests) {
+          const got = read(text)
+          if (got !== null) return got
+        }
+        return null
+      }
+
+      /*
+        A DELEGATION IS NOT A TO-DO, and the difference is who performs it.
+
+        Anchor B's surviving clause — "Scan the entirety of the X and create
+        appropriate tasks for me to review" — is work for the office whose
+        RESULT is several tasks. Split out of the transcript it still reached
+        `taskRequest`, which filed one personal task called "appropriate tasks
+        for me to review": the delegation performed as its own title. The
+        abandoned fragment was gone and the remaining half was still wrong.
+
+        `extract.ts` now recognises the shape, which is the deterministic half
+        and the one that authorizes anything. This is the other half, and it
+        only ever SUBTRACTS: a clause the model read as work for the office may
+        not be written onto Grant's own list. If the recogniser declines it too
+        the turn answers in prose, which is today's behaviour for anything
+        nobody recognised.
+      */
+      const HIS_OWN: ReadonlySet<ReadingKind> = new Set(['task_create', 'task_change', 'other'])
+      const hisRequests = understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text)
+      const firstOfHis = <T>(read: (text: string) => T | null): T | null => {
+        for (const text of hisRequests) {
+          const got = read(text)
+          if (got !== null) return got
+        }
+        return null
+      }
+
+      /*
+        Is he teaching us something? (#48, #50)
+
+        Grant: *"all behaviours, skills, what I want them to do, it can all just
+        be told to them directly via Telegram or Slack."* Before this, both
+        tables could only be written by Claude in a coding session — which makes
+        the office's memory Claude's memory, not the office's.
+
+        Checked BEFORE the link and artifact readers, because "from now on,
+        always attach the notebook link" is a rule about attaching links and
+        would otherwise be executed as a request to attach one.
+
+        Only from Grant. An agent authoring its own procedures is the design
+        (ADR-0017) but it is not this path: this path is a person in a chat
+        window, and it stores what he says at high confidence because he said
+        it.
+      */
+      /*
+        THE CLAUSE THAT IS THE RULE, not the message that contains one (#282).
+
+        Production anchor A, verbatim:
+
+          > "I've told you to always give your information in the form of clear
+          > bullet points. Also, I want you to tell me what my current tasks
+          > are."
+
+        `readTeaching` correctly recognised a rule and the turn RETURNED. The
+        question was never answered and nothing anywhere recorded that half a
+        message had been dropped.
+
+        Two changes, and they are separable on purpose. This one narrows WHAT
+        is stored to the preference clause, so the rule kept is the rule he
+        stated rather than the rule plus a task query. The whole instruction is
+        still read when the semantic layer named no preference — a union, never
+        a substitution, so this can only ever store a rule it would have stored
+        anyway.
+      */
+      const asRules = understood.surviving.filter((r) => r.kind === 'preference').map((r) => r.text)
+      const teaching =
+        [...asRules, instruction].map((text) => readTeaching(text)).find((t) => t !== null) ?? null
+
+      /*
+        AND STORING IT DOES NOT END THE TURN.
+
+        The second change, and the one anchor A actually needed. An early
+        return here is right when the rule is ALL he said — a bare "from now on
+        use bullet points" wants exactly one sentence back. It is wrong the
+        moment he said something else too, because the something else is then
+        silently discarded.
+
+        So the return is conditional on there being nothing else to do, and
+        otherwise the confirmation joins the others at the bottom of this
+        block, in the order he spoke. `requests` is the same list the actions
+        run over, so the two cannot disagree about whether a second intent
+        exists.
+      */
+      const taught =
+        teaching === null
+          ? null
+          : await remember(
+              deps.db,
+              teaching,
+              'grant',
+              // Addressed to one person, or to the office. Getting this backwards
+              // means a rule for Ruby quietly governing Daniel.
+              (payload.addressed_to ?? '') === '' ? null : who.slug,
+              job.jobId,
+            )
+      /*
+        NOTHING ELSE SURVIVED, which is not the same as nothing else to WRITE.
+
+        The first version of this asked `requests.length === 0`, and `requests`
+        excludes `task_query` on purpose — reading his list writes nothing. So
+        anchor A, whose second clause is precisely a `task_query`, still
+        returned on the rule and the question still vanished: the fix was
+        present, compiled, unit-tested and inert, and only driving the real
+        sentence found it. The question is whether he said anything ELSE, not
+        whether that something else was an action.
+      */
+      const ruleWasAllHeSaid = understood.surviving.every((r) => r.kind === 'preference')
+      if (taught !== null && ruleWasAllHeSaid) {
+        return {
+          body: taught.said,
+          confidence: 'high',
+          // The write either happened or the sentence says it did not.
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: await howComposed(deps.db, job.jobId),
+          model: null,
+        } satisfies HandlerOutput
+      }
       const sent = isBranch ? null : linkRequest(instruction)
       const linked = sent === null ? null : await handleLinks(deps.db, job, sent)
 
@@ -2301,7 +2530,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       // Both, independently. "Add this video and make an audio overview" is
       // two instructions in one sentence, and the first version answered only
       // the half it noticed first.
-      const wanted = isBranch ? null : notebookRequest(instruction)
+      const wanted = isBranch ? null : firstOf(notebookRequest)
       const made =
         wanted === null ? null : await act(deps.db, job, wanted.kinds, wanted.instructions)
 
@@ -2350,7 +2579,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         traced like everything else. This turn goes quiet about it and the
         child speaks, so Grant gets one message rather than two.
       */
-      const listing = job.projectId === null || isBranch ? null : artifactListing(instruction)
+      const listing = job.projectId === null || isBranch ? null : firstOf(artifactListing)
       const enumerating =
         listing === null
           ? null
@@ -2419,7 +2648,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         The same guard, in the same shape, as `pullOut` two paragraphs below:
         whichever of the three claims the sentence first decides what he gets.
       */
-      const wantsFile = job.projectId === null || isBranch ? null : artifactRequest(instruction)
+      const wantsFile = job.projectId === null || isBranch ? null : firstOf(artifactRequest)
 
       /*
         A request to READ A PAGE (#135, #16).
@@ -2525,9 +2754,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               })
 
       const pullOut =
-        job.projectId === null || wantsFile !== null || isBranch
-          ? null
-          : extractionRequest(instruction)
+        job.projectId === null || wantsFile !== null || isBranch ? null : firstOf(extractionRequest)
       const extracting =
         pullOut === null
           ? null
@@ -2585,7 +2812,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         gets "I will add that" now and the task some seconds later.
       */
       // A request for a FILE is not a to-do, and it is decided above.
-      const forGrant = wantsFile !== null || isBranch ? null : personalTaskRequest(instruction)
+      const forGrant = wantsFile !== null || isBranch ? null : firstOfHis(personalTaskRequest)
       const noted =
         forGrant === null
           ? null
@@ -2660,7 +2887,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const asked =
         pullOut !== null || noted !== null || isBranch
           ? null
-          : taskRequest(instruction, classifyIntent(instruction))
+          : firstOfHis((text) => taskRequest(text, classifyIntent(text)))
 
       /*
         And the ANSWER to "what should it be called?", which is the other half.
@@ -2723,7 +2950,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const change =
         noted !== null || wantsFile !== null || namedLater !== null || isBranch
           ? null
-          : personalTaskChange(instruction)
+          : firstOfHis(personalTaskChange)
       const changed =
         change === null
           ? null
@@ -2792,10 +3019,57 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 deps.now?.() ?? new Date(),
               )
 
+      /*
+        The rule he taught goes FIRST, because he said it first (#282, anchor
+        A). `taught` is non-null here only when something else survived the
+        message as well — the rule-only case returned above.
+      */
       const confirmation =
-        [linked, made, filed, noted, changed, extracting, enumerating, writingFile, reading]
+        [
+          taught?.said ?? null,
+          linked,
+          made,
+          filed,
+          noted,
+          changed,
+          extracting,
+          enumerating,
+          writingFile,
+          reading,
+        ]
           .filter((x) => x !== null)
           .join('\n\n') || null
+
+      /*
+        AN ACTION TAKEN MUST NOT SWALLOW A QUESTION ASKED (#282, anchor A).
+
+        `confirmation !== null` short-circuits the whole answering path — no
+        retrieval, no mail, no capability sheet, no model call — and returns
+        the confirmation as the entire reply. That is right for a turn that is
+        only an action: "that is on your list" needs no research.
+
+        It is exactly wrong for a turn that is an action AND a question, which
+        is what anchor A is. Splitting the clauses was not enough on its own:
+        the rule was stored, the confirmation was composed, and the SECOND
+        clause was discarded one layer further down than the early return that
+        had been fixed for it. Two guards, one defect, and only driving the
+        real sentence found the second — the first fix was present, compiled,
+        unit-tested and inert.
+
+        `task_query` and `question` are the two readings that owe him an
+        answer. Neither writes anything, so consulting the model's reading here
+        is not authorization: the worst it can do is pay for a retrieval on a
+        turn that did not need one.
+      */
+      const alsoAsked = understood.surviving.some(
+        (r) => r.kind === 'question' || r.kind === 'task_query',
+      )
+      /*
+        One name for "this turn owes him an answer", so the fourteen gates
+        below cannot drift apart. CLAUDE.md records the cost of a list
+        assembled twice.
+      */
+      const answering = confirmation === null || alsoAsked
 
       /*
         How many things this turn actually DID (#248).
@@ -2952,7 +3226,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         } satisfies HandlerOutput
       }
 
-      const hits = confirmation !== null ? [] : await retrieve(deps.db, instruction, job.projectId)
+      const hits = !answering ? [] : await retrieve(deps.db, instruction, job.projectId)
       const context = contextBlock(hits)
 
       /*
@@ -2971,8 +3245,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         no project, and empty is the common case today because nothing matches
         an inbox of travel and clinic mail.
       */
-      const mail =
-        confirmation !== null ? [] : await correspondence(deps.db, job.projectId, instruction)
+      const mail = !answering ? [] : await correspondence(deps.db, job.projectId, instruction)
       /*
         And WHY it is empty, when it is (#172, #257).
 
@@ -2984,7 +3257,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         one — so this is the common case rather than an edge.
       */
       const mailCover =
-        job.projectId === null || confirmation !== null
+        job.projectId === null || !answering
           ? null
           : (((
               await deps.db
@@ -3008,7 +3281,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         the model a list of things to try. The office brings what belongs to
         the project and the model reads it or does not.
       */
-      const quiet = confirmation !== null ? [] : await awaiting(deps.db, job.projectId)
+      const quiet = !answering ? [] : await awaiting(deps.db, job.projectId)
       const waitingContext = waitingBlock(quiet)
 
       /*
@@ -3025,7 +3298,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         a sentence saying "I searched all of it" on every turn is noise that
         teaches a model to skim the block it sits in.
       */
-      const coverage = confirmation !== null ? null : await coverageOf(deps.db, job.projectId)
+      const coverage = !answering ? null : await coverageOf(deps.db, job.projectId)
       const gapNote = coverage === null ? '' : coverageNote(coverage)
 
       /*
@@ -3040,14 +3313,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Never fatal and never noisy: at most four, and an empty answer is the
         common case.
       */
-      const settledAlready =
-        confirmation !== null
-          ? []
-          : (((
-              await deps.db
-                .execute(`select app.decisions_about(${lit(instruction.slice(0, 500))}, 4) as d`)
-                .catch(() => ({ rows: [{ d: '[]' }] }))
-            ).rows[0]?.d as Decided[] | string | undefined) ?? [])
+      const settledAlready = !answering
+        ? []
+        : (((
+            await deps.db
+              .execute(`select app.decisions_about(${lit(instruction.slice(0, 500))}, 4) as d`)
+              .catch(() => ({ rows: [{ d: '[]' }] }))
+          ).rows[0]?.d as Decided[] | string | undefined) ?? [])
 
       const settled: Decided[] = Array.isArray(settledAlready)
         ? settledAlready
@@ -3175,6 +3447,57 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .catch(() => [] as { slug: string; name: string; reserved: boolean }[])
       const projectList = projectSpine(openNow)
 
+      /*
+        HIS OWN LIST, and only when he asked about it (#282, anchor A).
+
+        Four reads, so it is not paid for on every message — most turns are not
+        about his to-dos, and `projectSpine` is cheap enough to be
+        unconditional while this is four calls into a function that walks
+        subtasks.
+
+        `task_query` is the semantic layer saying he asked; it is not
+        authorization for anything, because reading his own list writes
+        nothing. The fallback path never sets it, so a turn where the model was
+        unavailable behaves exactly as it does today.
+      */
+      const asksAboutHisList = understood.surviving.some((r) => r.kind === 'task_query')
+      const hisList = !asksAboutHisList
+        ? ''
+        : await deps.db
+            .execute(`
+              select app.my_tasks('overdue', 15, null, 'smart') as overdue,
+                     app.my_tasks('today', 15, null, 'smart') as today,
+                     app.my_tasks('upcoming', 10, null, 'smart') as upcoming,
+                     app.my_tasks_counts() as counts`)
+            .then((r) => {
+              /*
+                The executor hands a jsonb column back as an OBJECT, and
+                CLAUDE.md records `JSON.parse(String(x))` on one producing
+                `"[object Object]" is not valid JSON` — a guessed shape that
+                reads like a corrupt payload.
+              */
+              const read = <T>(v: unknown, fallback: T): T =>
+                v === null || v === undefined
+                  ? fallback
+                  : ((typeof v === 'string' ? JSON.parse(v) : v) as T)
+              const row = r.rows[0] as Record<string, unknown> | undefined
+              if (row === undefined) return ''
+              return taskSpine(
+                read(row.overdue, [] as HisTask[]),
+                read(row.today, [] as HisTask[]),
+                read(row.upcoming, [] as HisTask[]),
+                read(row.counts, {} as { overdue?: number; today?: number; all?: number }),
+              )
+            })
+            /*
+              An empty list is not the same as a list nobody could read, and
+              CLAUDE.md records the UI getting this wrong in the direction that
+              lies. Returning '' here means the office was NOT shown his tasks,
+              so `consultedDomains` cannot claim it looked — which is the
+              honest outcome of a failed read.
+            */
+            .catch(() => '')
+
       // Asked once per answer rather than described in the prompt as a
       // constant: a connector switched off an hour ago must change what she
       // says she can do.
@@ -3188,7 +3511,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         hits a boundary has something to propose (#49) instead of asserting a
         limitation it does not have (#64).
       */
-      const cap = confirmation !== null ? EMPTY_CAPABILITY : await capabilityNow(deps.db, who.slug)
+      const cap = !answering ? EMPTY_CAPABILITY : await capabilityNow(deps.db, who.slug)
       const reach = cap.reach
 
       /*
@@ -3202,10 +3525,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Scoped to this person, this kind of job and this project, so a
         procedure written for research does not turn up in a finance answer.
       */
-      const guidance =
-        confirmation !== null
-          ? { lessons: [], skills: [] }
-          : await guidanceFor(deps.db, who.slug, job.kind, job.projectId)
+      const guidance = !answering
+        ? { lessons: [], skills: [] }
+        : await guidanceFor(deps.db, who.slug, job.kind, job.projectId)
       // At retrieval, not at completion: a skill shown to a job and then
       // ignored still shaped the prompt, so it still answers for the outcome.
       await recordSkillUse(deps.db, guidance.skills, job.jobId)
@@ -3232,35 +3554,34 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? '').trim())
               .catch(() => '')
 
-      const completion =
-        confirmation !== null
-          ? null
-          : await deps.router.complete({
-              messages: [
-                {
-                  role: 'system',
-                  content:
-                    // §9 records a `communication_style` for every one of these
-                    // people and this prompt ignored it, which is why Grant
-                    // said the messages read "a bit too robotic": eight
-                    // colleagues generated from one template with the name
-                    // swapped in. The style and the remit are what make Daniel
-                    // sound sceptical and Emma sound careful, and they are in
-                    // the database precisely so this is not written eight times.
-                    `You are ${who.name}, ${who.title} on a small team. ` +
-                    (who.responsibilities === null ? '' : `Your remit: ${who.responsibilities} `) +
-                    (who.communication_style === null
-                      ? ''
-                      : `How you talk: ${who.communication_style} `) +
-                    // After the remit and the style, and before anything about
-                    // the conversation: it is a standing fact about the work,
-                    // not an instruction about this reply.
-                    (localBrief === ''
-                      ? ''
-                      : `On this project specifically, Grant has told you: ${localBrief} `) +
-                    'You are replying to Grant, who runs the place, in a private chat. He is ' +
-                    'a colleague you know well, not a customer.\n\n' +
-                    /*
+      const completion = !answering
+        ? null
+        : await deps.router.complete({
+            messages: [
+              {
+                role: 'system',
+                content:
+                  // §9 records a `communication_style` for every one of these
+                  // people and this prompt ignored it, which is why Grant
+                  // said the messages read "a bit too robotic": eight
+                  // colleagues generated from one template with the name
+                  // swapped in. The style and the remit are what make Daniel
+                  // sound sceptical and Emma sound careful, and they are in
+                  // the database precisely so this is not written eight times.
+                  `You are ${who.name}, ${who.title} on a small team. ` +
+                  (who.responsibilities === null ? '' : `Your remit: ${who.responsibilities} `) +
+                  (who.communication_style === null
+                    ? ''
+                    : `How you talk: ${who.communication_style} `) +
+                  // After the remit and the style, and before anything about
+                  // the conversation: it is a standing fact about the work,
+                  // not an instruction about this reply.
+                  (localBrief === ''
+                    ? ''
+                    : `On this project specifically, Grant has told you: ${localBrief} `) +
+                  'You are replying to Grant, who runs the place, in a private chat. He is ' +
+                  'a colleague you know well, not a customer.\n\n' +
+                  /*
                       Say which constraint you set aside (#231).
 
                       Two turns of one session, the same shape. He asked for
@@ -3279,17 +3600,17 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       what a gate that fails into silence costs, and this is
                       the version that keeps answering.
                     */
-                    // Extracted to `say-what-you-dropped.ts` so #277 can MEASURE
-                    // a candidate against it rather than argue about it.
-                    `${SET_ASIDE_LINE}\n\n` +
-                    (turns.length === 0
-                      ? ''
-                      : 'You are mid-conversation. The turns before this one follow; the last ' +
-                        'message is what you are answering. He corrects himself, changes his ' +
-                        'mind and checks you have followed — read the latest message as a ' +
-                        'continuation, not as a fresh request, and do not repeat what you ' +
-                        'have already said.\n\n') +
-                    /*
+                  // Extracted to `say-what-you-dropped.ts` so #277 can MEASURE
+                  // a candidate against it rather than argue about it.
+                  `${SET_ASIDE_LINE}\n\n` +
+                  (turns.length === 0
+                    ? ''
+                    : 'You are mid-conversation. The turns before this one follow; the last ' +
+                      'message is what you are answering. He corrects himself, changes his ' +
+                      'mind and checks you have followed — read the latest message as a ' +
+                      'continuation, not as a fresh request, and do not repeat what you ' +
+                      'have already said.\n\n') +
+                  /*
                       Where the line is between what was said and what is true
                       (#231).
 
@@ -3301,86 +3622,86 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                       and CLAUDE.md records why a prompt alone is not enough —
                       the same build obeys one run and not the next.
                     */
-                    `${PROVENANCE_NOTE}\n\n` +
-                    // Grant: *"I want messages in general from everyone to be
-                    // more human and easier to read."* Two things, and the
-                    // second was the one being missed: the replies were
-                    // already conversational and they arrived as a single
-                    // 120-word block, which on a phone is a wall.
-                    'Write like a person messaging a person. Use contractions. Start with ' +
-                    'the answer, not a restatement of the question. Have an opinion where ' +
-                    'you have one and say so when you do not. A dry aside is fine if it is ' +
-                    'actually dry.\n\n' +
-                    'Make it EASY TO READ on a phone. Short sentences — if one has two ' +
-                    'halves joined by "and", it is usually two sentences. Break the reply ' +
-                    'into two or three short paragraphs with a blank line between them, one ' +
-                    'thought each. A single dense block is a message he will skim and ' +
-                    'misread. Under 120 words in total, first person, no headings, no ' +
-                    'bold.\n\n' +
-                    // Grant, 14 September: *"if our paragraph should be
-                    // separated by bullet points, enumerated bullet points. So
-                    // a numbered list, just to keep things easy to read and
-                    // easy to refer to."*
-                    //
-                    // This NARROWS #186 rather than undoing it. #186 banned
-                    // bullets outright because a bulleted reply to a
-                    // conversational question reads as a report, and that is
-                    // still true — hence "prose is the default", stated first
-                    // and stated as the default rather than as an option.
-                    //
-                    // What #186 got wrong is the case where the content
-                    // genuinely IS a list. Three options rendered as prose
-                    // with semicolons cannot be replied to with "do 2 and 4",
-                    // and that referability is the whole reason he asked.
-                    //
-                    // NUMBERED and not dashes, for the same reason: a dash is
-                    // as unreferenceable as a semicolon.
-                    'Prose is the default and most replies are prose. But when what you are ' +
-                    'saying genuinely IS a list — options he is choosing between, steps in ' +
-                    'an order, separate findings, things he needs to decide — write it as a ' +
-                    'NUMBERED list, one item per line, starting each line with "1. ", "2. " ' +
-                    'and so on. Numbered rather than dashes, so he can reply "do 2 and 4". ' +
-                    'Put a short line of context before the list and stop after it. Two ' +
-                    'items or fewer is a sentence, not a list.\n\n' +
-                    'Never write: "I hope this helps", "Let me know if", "Certainly", "As ' +
-                    'an AI", "I have drafted", "Here is a summary of". Do not sign your ' +
-                    'name — the chat already shows who you are. Do not thank him for ' +
-                    'asking. If you are inferring rather than reporting, say so inside the ' +
-                    'sentence rather than as a disclaimer at the end.' +
-                    // What the team can actually reach, from the registry that
-                    // knows. Placed immediately before the no-context branch
-                    // because that branch is where the false claim came from:
-                    // told to say she could not see a notebook, Claire
-                    // generalised to "I don't have integration access".
-                    `\n\n${capabilityBrief(cap)}` +
-                    // After what the office can reach, before what it holds on
-                    // this question: how we work sits between authority and
-                    // evidence, which is exactly what it is.
-                    (learned === '' ? '' : `\n\n${learned}`) +
-                    (context === ''
-                      ? // Nothing matched. The old wording here said "answer
-                        // from general knowledge", and that is how Grant asked
-                        // about a NotebookLM project we hold nothing on and
-                        // got four sentences about mindfulness, wellness
-                        // stipends and leadership buy-in — none of it from
-                        // anywhere, all of it plausible. §10 wants evidence;
-                        // an invented answer that opens with "our records had
-                        // nothing" still reads as an answer.
-                        //
-                        // So: general knowledge is permitted for a general
-                        // question, and refused for a specific one. If he
-                        // names a thing — a project, a document, a notebook —
-                        // and we hold nothing about it, the useful reply is
-                        // that we cannot see it and a question about where it
-                        // is. Not an essay about what it might contain.
-                        ' Nothing in our own records matched this. Say so first. ' +
-                        'If the message names something specific we do not hold — a ' +
-                        'project, a document, a notebook, a file — then do NOT describe ' +
-                        'or speculate about what it might contain. Say you cannot see it ' +
-                        'and ask where it is or how to reach it. Only answer from general ' +
-                        'knowledge if the question is a general one that does not depend ' +
-                        'on anything of ours.'
-                      : /*
+                  `${PROVENANCE_NOTE}\n\n` +
+                  // Grant: *"I want messages in general from everyone to be
+                  // more human and easier to read."* Two things, and the
+                  // second was the one being missed: the replies were
+                  // already conversational and they arrived as a single
+                  // 120-word block, which on a phone is a wall.
+                  'Write like a person messaging a person. Use contractions. Start with ' +
+                  'the answer, not a restatement of the question. Have an opinion where ' +
+                  'you have one and say so when you do not. A dry aside is fine if it is ' +
+                  'actually dry.\n\n' +
+                  'Make it EASY TO READ on a phone. Short sentences — if one has two ' +
+                  'halves joined by "and", it is usually two sentences. Break the reply ' +
+                  'into two or three short paragraphs with a blank line between them, one ' +
+                  'thought each. A single dense block is a message he will skim and ' +
+                  'misread. Under 120 words in total, first person, no headings, no ' +
+                  'bold.\n\n' +
+                  // Grant, 14 September: *"if our paragraph should be
+                  // separated by bullet points, enumerated bullet points. So
+                  // a numbered list, just to keep things easy to read and
+                  // easy to refer to."*
+                  //
+                  // This NARROWS #186 rather than undoing it. #186 banned
+                  // bullets outright because a bulleted reply to a
+                  // conversational question reads as a report, and that is
+                  // still true — hence "prose is the default", stated first
+                  // and stated as the default rather than as an option.
+                  //
+                  // What #186 got wrong is the case where the content
+                  // genuinely IS a list. Three options rendered as prose
+                  // with semicolons cannot be replied to with "do 2 and 4",
+                  // and that referability is the whole reason he asked.
+                  //
+                  // NUMBERED and not dashes, for the same reason: a dash is
+                  // as unreferenceable as a semicolon.
+                  'Prose is the default and most replies are prose. But when what you are ' +
+                  'saying genuinely IS a list — options he is choosing between, steps in ' +
+                  'an order, separate findings, things he needs to decide — write it as a ' +
+                  'NUMBERED list, one item per line, starting each line with "1. ", "2. " ' +
+                  'and so on. Numbered rather than dashes, so he can reply "do 2 and 4". ' +
+                  'Put a short line of context before the list and stop after it. Two ' +
+                  'items or fewer is a sentence, not a list.\n\n' +
+                  'Never write: "I hope this helps", "Let me know if", "Certainly", "As ' +
+                  'an AI", "I have drafted", "Here is a summary of". Do not sign your ' +
+                  'name — the chat already shows who you are. Do not thank him for ' +
+                  'asking. If you are inferring rather than reporting, say so inside the ' +
+                  'sentence rather than as a disclaimer at the end.' +
+                  // What the team can actually reach, from the registry that
+                  // knows. Placed immediately before the no-context branch
+                  // because that branch is where the false claim came from:
+                  // told to say she could not see a notebook, Claire
+                  // generalised to "I don't have integration access".
+                  `\n\n${capabilityBrief(cap)}` +
+                  // After what the office can reach, before what it holds on
+                  // this question: how we work sits between authority and
+                  // evidence, which is exactly what it is.
+                  (learned === '' ? '' : `\n\n${learned}`) +
+                  (context === ''
+                    ? // Nothing matched. The old wording here said "answer
+                      // from general knowledge", and that is how Grant asked
+                      // about a NotebookLM project we hold nothing on and
+                      // got four sentences about mindfulness, wellness
+                      // stipends and leadership buy-in — none of it from
+                      // anywhere, all of it plausible. §10 wants evidence;
+                      // an invented answer that opens with "our records had
+                      // nothing" still reads as an answer.
+                      //
+                      // So: general knowledge is permitted for a general
+                      // question, and refused for a specific one. If he
+                      // names a thing — a project, a document, a notebook —
+                      // and we hold nothing about it, the useful reply is
+                      // that we cannot see it and a question about where it
+                      // is. Not an essay about what it might contain.
+                      ' Nothing in our own records matched this. Say so first. ' +
+                      'If the message names something specific we do not hold — a ' +
+                      'project, a document, a notebook, a file — then do NOT describe ' +
+                      'or speculate about what it might contain. Say you cannot see it ' +
+                      'and ask where it is or how to reach it. Only answer from general ' +
+                      'knowledge if the question is a general one that does not depend ' +
+                      'on anything of ours.'
+                    : /*
                            Whose facts win, said out loud (#231).
 
                            This used to be "Prefer them", meaning prefer our
@@ -3406,18 +3727,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                            order. Documents still beat general knowledge, which
                            is what the line was always for.
                          */
-                        ' Numbered excerpts from our documents follow. Cite them as [1], [2], ' +
-                        'and say plainly when they do not answer the question. Prefer them ' +
-                        'over anything you merely know.\n\nBut what Grant states in his own ' +
-                        'message outranks every document. If he gives you a figure, a name or ' +
-                        'a fact, use HIS, even where a document says otherwise — and when a ' +
-                        'document disagrees with him, say so rather than quietly choosing ' +
-                        'one.'),
-                },
-                ...(context === ''
-                  ? []
-                  : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
-                /*
+                      ' Numbered excerpts from our documents follow. Cite them as [1], [2], ' +
+                      'and say plainly when they do not answer the question. Prefer them ' +
+                      'over anything you merely know.\n\nBut what Grant states in his own ' +
+                      'message outranks every document. If he gives you a figure, a name or ' +
+                      'a fact, use HIS, even where a document says otherwise — and when a ' +
+                      'document disagrees with him, say so rather than quietly choosing ' +
+                      'one.'),
+              },
+              ...(context === ''
+                ? []
+                : [{ role: 'system' as const, content: `Our documents:\n\n${context}` }]),
+              /*
                   The correspondence (#172).
 
                   After the documents and before the coverage note, which is
@@ -3425,11 +3746,11 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   the same question, and the note that follows is a statement
                   about how far all of it goes.
                 */
-                ...(mailContext === '' ? [] : [{ role: 'system' as const, content: mailContext }]),
-                ...(waitingContext === ''
-                  ? []
-                  : [{ role: 'system' as const, content: waitingContext }]),
-                /*
+              ...(mailContext === '' ? [] : [{ role: 'system' as const, content: mailContext }]),
+              ...(waitingContext === ''
+                ? []
+                : [{ role: 'system' as const, content: waitingContext }]),
+              /*
                   What the search could NOT see (#257).
 
                   Immediately after the documents, because it is a statement
@@ -3437,8 +3758,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   and the colleague's draft, because it changes how an absence
                   may be reported and both of those are about content.
                 */
-                ...(gapNote === '' ? [] : [{ role: 'system' as const, content: gapNote }]),
-                /*
+              ...(gapNote === '' ? [] : [{ role: 'system' as const, content: gapNote }]),
+              /*
                   What is already settled (#129).
 
                   Before the colleague's draft and after the documents: a
@@ -3447,10 +3768,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   messages is the order of authority the answer should give
                   them.
                 */
-                ...(decidedBlock === ''
-                  ? []
-                  : [{ role: 'system' as const, content: decidedBlock }]),
-                /*
+              ...(decidedBlock === '' ? [] : [{ role: 'system' as const, content: decidedBlock }]),
+              /*
                   The colleague's draft (#128).
 
                   AFTER the documents deliberately. The order of these system
@@ -3463,13 +3782,14 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   three system messages does not infer precedence from their
                   order.
                 */
-                ...(handedOverBlock === ''
-                  ? []
-                  : [{ role: 'system' as const, content: handedOverBlock }]),
-                // Canonical state, so a question about the office's own spine
-                // has an answer that is both honest and useful.
-                ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
-                /*
+              ...(handedOverBlock === ''
+                ? []
+                : [{ role: 'system' as const, content: handedOverBlock }]),
+              // Canonical state, so a question about the office's own spine
+              // has an answer that is both honest and useful.
+              ...(projectList === '' ? [] : [{ role: 'system' as const, content: projectList }]),
+              ...(hisList === '' ? [] : [{ role: 'system' as const, content: hisList }]),
+              /*
                   What this chat said before the window, and what is out of
                   view (#238).
 
@@ -3480,27 +3800,27 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   "there are 40 earlier turns and you can see 12" says so, and
                   one told nothing answers across the gap and sounds certain.
                 */
-                ...(memory.boundary === null
-                  ? []
-                  : [
-                      {
-                        role: 'system' as const,
-                        content: `${memory.boundary}${
-                          memory.recalled.length === 0
-                            ? ''
-                            : `\n\nEarlier in this conversation:\n${memory.recalled
-                                .map(
-                                  (m) =>
-                                    `- ${String(m.minutesAgo)} minutes ago he said: ${m.said}` +
-                                    (m.answered === ''
-                                      ? ''
-                                      : `\n  and the answer was: ${m.answered}`),
-                                )
-                                .join('\n')}`
-                        }`,
-                      },
-                    ]),
-                /*
+              ...(memory.boundary === null
+                ? []
+                : [
+                    {
+                      role: 'system' as const,
+                      content: `${memory.boundary}${
+                        memory.recalled.length === 0
+                          ? ''
+                          : `\n\nEarlier in this conversation:\n${memory.recalled
+                              .map(
+                                (m) =>
+                                  `- ${String(m.minutesAgo)} minutes ago he said: ${m.said}` +
+                                  (m.answered === ''
+                                    ? ''
+                                    : `\n  and the answer was: ${m.answered}`),
+                              )
+                              .join('\n')}`
+                      }`,
+                    },
+                  ]),
+              /*
                   What the coherence gate refused last time (#237).
 
                   A previous attempt at THIS job claimed a read that never
@@ -3512,54 +3832,54 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   answer rather than about the subject, and it should be the
                   last thing read before the conversation.
                 */
-                ...(coherenceNote === null
-                  ? []
+              ...(coherenceNote === null
+                ? []
+                : [
+                    {
+                      role: 'system' as const,
+                      content:
+                        'A previous attempt at this exact question was REJECTED before it ' +
+                        `reached anyone. The reason: ${coherenceNote}\n\n` +
+                        'Do not describe any lookup, read, query or search as having ' +
+                        'happened. Everything above is all you have. Answer from it, and ' +
+                        'where it does not cover the question say plainly that you have ' +
+                        'not looked.',
+                    },
+                  ]),
+              // The exchange, as an exchange. Replayed as real turns rather
+              // than pasted into the system prompt as a transcript: a model
+              // handed "here is what was said" reasons about the text, and a
+              // model handed the turns reasons about the conversation.
+              ...turns.flatMap((t) =>
+                t.answered === null
+                  ? [{ role: 'user' as const, content: t.said }]
                   : [
-                      {
-                        role: 'system' as const,
-                        content:
-                          'A previous attempt at this exact question was REJECTED before it ' +
-                          `reached anyone. The reason: ${coherenceNote}\n\n` +
-                          'Do not describe any lookup, read, query or search as having ' +
-                          'happened. Everything above is all you have. Answer from it, and ' +
-                          'where it does not cover the question say plainly that you have ' +
-                          'not looked.',
-                      },
-                    ]),
-                // The exchange, as an exchange. Replayed as real turns rather
-                // than pasted into the system prompt as a transcript: a model
-                // handed "here is what was said" reasons about the text, and a
-                // model handed the turns reasons about the conversation.
-                ...turns.flatMap((t) =>
-                  t.answered === null
-                    ? [{ role: 'user' as const, content: t.said }]
-                    : [
-                        { role: 'user' as const, content: t.said },
-                        { role: 'assistant' as const, content: t.answered },
-                      ],
-                ),
-                { role: 'user', content: instruction },
-              ],
-              // 2,000, and NOT the 400 that looked obviously better.
-              //
-              // The prompt asks for under 120 words — about 180 tokens — so a
-              // 400 ceiling read as generous and was tried, to cut the time
-              // Grant spends watching a typing indicator. It made every reply
-              // slower.
-              //
-              // `completion_tokens` on these models counts REASONING tokens as
-              // well as the answer. Capped at 400, `cohere/north-mini-code`
-              // spent the budget thinking and returned nothing: three
-              // `empty_completion` rows at exactly 400 tokens, each one six to
-              // nine seconds, each one failing over to the next model. A
-              // measure meant to save thirty seconds cost fifteen.
-              //
-              // 0150 added `latency_ms` precisely so this kind of change is
-              // decided by measurement rather than by how sensible it sounds.
-              maxTokens: 2_000,
-              correlationId: job.correlationId,
-              jobId: job.jobId,
-            })
+                      { role: 'user' as const, content: t.said },
+                      { role: 'assistant' as const, content: t.answered },
+                    ],
+              ),
+              { role: 'user', content: instruction },
+            ],
+            // 2,000, and NOT the 400 that looked obviously better.
+            //
+            // The prompt asks for under 120 words — about 180 tokens — so a
+            // 400 ceiling read as generous and was tried, to cut the time
+            // Grant spends watching a typing indicator. It made every reply
+            // slower.
+            //
+            // `completion_tokens` on these models counts REASONING tokens as
+            // well as the answer. Capped at 400, `cohere/north-mini-code`
+            // spent the budget thinking and returned nothing: three
+            // `empty_completion` rows at exactly 400 tokens, each one six to
+            // nine seconds, each one failing over to the next model. A
+            // measure meant to save thirty seconds cost fifteen.
+            //
+            // 0150 added `latency_ms` precisely so this kind of change is
+            // decided by measurement rather than by how sensible it sounds.
+            maxTokens: 2_000,
+            correlationId: job.correlationId,
+            jobId: job.jobId,
+          })
 
       // §5: the decision is recorded with its reason, through the same
       // `recordDecision` the office uses.
@@ -3648,9 +3968,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         message says exactly this: *"Mark it deterministic only on a code path
         that makes no inference call, or send it to review."*
       */
-      if (confirmation !== null) {
+      /*
+        ONLY when the confirmation is the whole of what he is owed (#282).
+
+        `answering` is the same boolean the fourteen gates above read, so the
+        turn cannot have skipped retrieval and then tried to answer, or paid
+        for retrieval and then returned without it.
+      */
+      if (!answering) {
         return {
-          body: confirmation,
+          body: confirmation ?? '',
           confidence: 'high',
           evidence: 'verified',
           sources: [`job:${job.jobId}`],
@@ -3729,7 +4056,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         `app.cannot` is where a write allowed to fail records that it did.
       */
       const offered = correction === null ? null : await offerRule(deps.db, correction, job)
-      const answer = offered === null ? answer0 : `${answer0}\n\n${offered}`
+      const answer0b = confirmation === null ? answer0 : `${confirmation}\n\n${answer0}`
+      const answer = offered === null ? answer0b : `${answer0b}\n\n${offered}`
 
       /*
         The context, tagged. Assembled from the same values that went into the
@@ -3766,6 +4094,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           ...(mailContext === '' ? [] : [mailContext]),
           ...(waitingContext === '' ? [] : [waitingContext]),
           ...(projectList === '' ? [] : [projectList]),
+          ...(hisList === '' ? [] : [hisList]),
         ],
         /*
           What was LOOKED AT, not what came back.
@@ -3789,7 +4118,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           the third state and `EPISTEMIC` protects it.
         */
         consultedDomains: [
-          ...(confirmation === null ? (['documents'] as const) : []),
+          ...(answering ? (['documents'] as const) : []),
           'projects' as const,
           /*
             Mail, but only when the office could actually read it (#172).
@@ -3800,7 +4129,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
             the reader is broken is exactly the lie #257 exists to stop, one
             corpus over.
           */
-          ...(confirmation === null && coverage !== null && !coverage.blank.includes('mail')
+          ...(answering && coverage !== null && !coverage.blank.includes('mail')
             ? (['mail'] as const)
             : []),
         ],
