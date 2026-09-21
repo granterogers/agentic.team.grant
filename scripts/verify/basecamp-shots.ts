@@ -119,6 +119,13 @@ for (const size of sizes) {
     })
     await shot('team', `${slug}/team`)
     await shot('documents', `${slug}/documents`)
+    /*
+      CONTACTS WAS IN NO CAPTURE AT ALL until this line. It is one of the six
+      tools this experience renders, it has a preview on the overview, and
+      nobody had ever looked at the surface behind it — which is exactly how
+      the Activity defect survived four capture runs.
+    */
+    await shot('contacts', `${slug}/contacts`)
     await shot('sources', `${slug}/sources`)
     await shot('activity', `${slug}/activity`)
   }

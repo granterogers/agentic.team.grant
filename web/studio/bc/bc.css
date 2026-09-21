@@ -643,7 +643,22 @@
   padding: var(--bc-3) var(--bc-2);
   border-bottom: 1px solid var(--bc-border-subtle);
 }
-.bcitem:hover { background: var(--bc-hover); }
+/*
+  A ROW ANSWERS THE POINTER ONLY IF IT CAN BE PRESSED.
+
+  Every `.bcitem` lit up on hover, including the four tools whose rows lead
+  nowhere — Contacts, Documents, Sources and Activity — so a Contacts row
+  promised a destination it does not have, right beside a Tasks row that
+  does. §13 asks a row to communicate clickability; a row that communicates
+  it and has none is the same statement told backwards, and it is the kind
+  of thing a capture shows and no assertion catches, because the hover state
+  is only in the stylesheet until a mouse lands on it.
+
+  `:has()` rather than a modifier class: the condition IS "does this row
+  contain something you can press", so asking that directly cannot drift
+  from the markup the way a hand-applied class does.
+*/
+.bcitem:has(button, a[href], input):hover { background: var(--bc-hover); }
 .bcitem .bcitembody { min-width: 0; display: grid; gap: 2px; }
 .bcitem .bcitemtitle { font: 600 15px/22px var(--bc-font); overflow-wrap: anywhere; }
 .bcitem .bcitemmeta { font: var(--bc-compact); color: var(--bc-text-muted); overflow-wrap: anywhere; }

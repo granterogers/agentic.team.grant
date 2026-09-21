@@ -222,6 +222,65 @@ for (const size of sizes) {
     }
   }
 
+  /*
+    A ROW ANSWERS THE POINTER ONLY IF IT CAN BE PRESSED.
+
+    Every list row lit up on hover, including the four tools whose rows lead
+    nowhere - Contacts, Documents, Sources and Activity - so a Contacts row
+    promised a destination it does not have, right beside a Tasks row that
+    does. A false affordance is invisible to every other check here: the
+    hover state lives in the stylesheet until a mouse lands on it, so no
+    static read and no ordinary capture can see it.
+  */
+  for (const tool of ['contacts', 'documents', 'sources', 'activity', 'tasks']) {
+    if (slug === '') break
+    await open(`${slug}/${tool}`)
+    const rows = page.locator('.bcitem')
+    if ((await rows.count()) === 0) continue
+    const row = rows.first()
+    /*
+      MEASURED THROUGH page.evaluate WITH A SELECTOR, not through
+      locator.evaluate with a stringified arrow function.
+
+      The first version passed an arrow function AS A STRING. Playwright
+      evaluates a string as an expression, so it handed back the function
+      itself both times - identical before and after, so nothing ever looked
+      like it answered the pointer and the check reported a defect on a row
+      that works. It said the same thing with the fix sabotaged, which is how
+      it was caught: a detector that reports the same result in both worlds
+      is measuring neither of them.
+    */
+    const bgOf = async (): Promise<string> =>
+      (await page.evaluate(
+        inPage(
+          "const e = document.querySelector('.bcitem'); return e === null ? '' : getComputedStyle(e).backgroundColor",
+        ),
+      )) as string
+    const pressable = (await page.evaluate(
+      inPage(
+        "const e = document.querySelector('.bcitem'); return e !== null && e.querySelector('button, a[href], input') !== null",
+      ),
+    )) as boolean
+    // Park the pointer away from the list first, so `before` is a resting read.
+    await page.mouse.move(4, 4)
+    await page.waitForTimeout(90)
+    const before = await bgOf()
+    await row.hover()
+    await page.waitForTimeout(190)
+    const after = await bgOf()
+    const lit = before !== after
+    if (lit && !pressable) {
+      findings.push(
+        `${size.id} ${slug}/${tool} - a row answers the pointer and contains nothing that can be pressed: a destination promised and not there`,
+      )
+    }
+    if (!lit && pressable) {
+      findings.push(
+        `${size.id} ${slug}/${tool} - a row CAN be pressed and does not answer the pointer: §13 asks a row to communicate clickability`,
+      )
+    }
+  }
+
   if (thrown.length > 0) {
     for (const t of new Set(thrown)) findings.push(`${size.id} — page error: ${t.slice(0, 200)}`)
   }
