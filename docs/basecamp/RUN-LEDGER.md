@@ -172,12 +172,14 @@ every owned surface rather than the overview alone.
 |---|---|---|
 | `verify:basecamp-classes` | clean | every class the markup names is defined in the stylesheet |
 | `verify:basecamp-actions` | 4 calls clean | every action and required argument exists at the gateway |
-| `verify:basecamp-routes` | 26/26 | both addresses boot, assets resolve, the default is untouched, no surface sits on a skeleton |
+| `verify:basecamp-covered` | clean | every rendered surface has a capture at every viewport |
+| `verify:basecamp-routes` | 50/50 | both addresses boot; every tool address renders what it names; hand-offs correct the URL; every Jump result goes somewhere of its own; a record round-trips through Back and a reload; no surface sits on a skeleton |
+| `verify:basecamp-controls` | 250 pressed, 0 findings | every visible control at desktop and phone changes something, or is marked current |
 | `verify:basecamp-journey` | 51/51 | the task journey, the record page and the agent-output journey, in a browser over real HTTP |
 | `verify:basecamp-keyboard` | 31/31 | skip link, focus, trap, keyboard map, full search, reduced motion, 200% zoom |
 | `verify:basecamp-preservation` | 26/26 | every destination reachable; hand-offs resolve; default unchanged |
 | `verify:basecamp-states` | 64/64 | adversarial content and the §12 states at three widths |
-| `basecamp:measure` | no violations | geometry at 1440×900, 1024×768, 768×1024, 390×844 |
+| `basecamp:measure` | no violations | geometry at four viewports; chips are chips; the card treatment and full bleed agree; one fixed bottom bar; the experience does not follow the studio's scheme |
 
 Repository gates, run on this branch:
 
@@ -242,6 +244,24 @@ Not one of these was found by reading the code.
 | 16 | emptying the assignee sent null, which `hq_task_update` treats as "leave it alone", so a cleared field saved nothing | reading the RPC signature |
 | 17 | the task record's Open control was drawn only where `t.id` existed, and no prototype task has one — the whole screen was in no capture on any viewport | a capture run reporting what it could not reach |
 | 18 | My Tasks showed a skeleton that never resolved: the read was kicked on navigation and by nothing on arrival, and signed out there is no list to read at all | opening the capture |
+| 19 | a status chip stretched to fill its grid cell at every viewport — 299px for the word "Blocked" — so it read as a progress bar | measuring |
+| 20 | at 1024 and 768 the main surface ran edge to edge while keeping a card's radius and shadow, destroying the canvas/surface relationship | opening the capture |
+| 21 | the Overview was six bordered boxes in a 3×2 grid — the card wall §14 forbids by name | comparing two variants side by side |
+| 22 | `/basecamp/p/:slug/settings` rendered the Overview **while the address went on saying `/settings`** — a bookmark permanently lying about what it opens | probing every address |
+| 23 | Contacts, one of six rendered tools, was in no capture at all | comparing the capture list against the tool list |
+| 24 | every list row answered the pointer, including the four tools whose rows lead nowhere — a destination promised and not there | opening the Contacts capture |
+| 25 | the experiment marked **nothing** as current: no `aria-current` anywhere, while the default studio's rail has carried it since it was written | the new control audit |
+| 26 | a task record was not in the address, so it could not be linked, a reload lost it, and Back left the application entirely | probing history behaviour |
+| 27 | **eight Jump results all navigated to the home page** — every specialist row, in the one surface built entirely out of destinations | opening the Jump capture |
+| 28 | Jump's four direct destinations sat below the fold of a 495px sheet, behind eight rows that were not destinations | opening the Jump capture |
+| 29 | the sticky shell named no project, so scrolling an overview lost the container entirely | measuring the scrolled state |
+| 30 | five repeated "Open" words down a task list, with the row's content pushed left | opening the capture |
+
+Two of my own regressions were caught by the geometry check on the run after
+I wrote them: the named jump control overlapping the attention control by
+15px at 768, and then overlapping both neighbours by 10px at 390 once it was
+centred at its natural width. That check measures overlap rather than only
+overflow, and this is what the distinction is for.
 
 Two findings were **read off a capture and were wrong**, and were discarded
 after measuring:
