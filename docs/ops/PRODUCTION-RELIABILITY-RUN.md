@@ -581,3 +581,60 @@ least the 20th, and a chore has been open on My Tasks for three days. Slack
 **NEXT AUTONOMOUS ACTION:** run the full 44-check gate in segments of about
 ten minutes each (it needs ~40 minutes and cannot be backgrounded); then
 nothing else here is blocked on anything but Grant.
+
+### FINAL PROOF PASS — against HEAD 9b8e6af, verification only
+
+Full write-up: **`docs/ops/evidence/final-proof-pass.md`**.
+
+**All 44 gate checks executed individually against this HEAD** in twelve
+segments with real exit codes. **41 green.** Three red, and **none is caused
+by this branch**:
+
+1. **`check:leaks`** — two harness deliveries **reached Grant** at 21:09
+   tonight during my gate run, from `verify:history`: Telegram msg `1265` to
+   his own chat and Slack `1790024968.041929`. 0523's guard is evaluated at
+   SEND time against an attribution the suite deliberately fakes until
+   teardown, so it permitted them; the teardown rewrite then made the escape
+   visible afterwards. `verify:history` reported 51/51. The rows were **not
+   deleted** — they are the only evidence the guard has a hole. The counter
+   is unwindowed, so this stays red until the hole is closed.
+2. **`verify:artifact-slack` 12/14** — the same guard, third instance.
+   Deliberately not fixed: verification pass, and unlike the two fixed
+   earlier this suite performs a real Slack send.
+3. **`verify:collaborates` 124** — waits on an `office.pursue` child paused
+   `awaiting_approval`; global autonomy is `suggest` (migration 0027), so the
+   approval never comes unattended.
+
+**My own gate debris swept, only mine** (2 draft tasks, 1 token task, 2
+paused jobs → all 0). The Shadow Grant session's in-flight task was left
+alone and cleared itself.
+
+**Deployed vs not:** every DB change (0535–0538, 0540) is live and confirmed;
+the `hq-api` kick is live and re-proved at **4 s**; **`src/db/executor.ts`'s
+5xx retry and `src/handlers/chores.ts`'s backup pass are NOT in the deployed
+worker** (v667, deployed 20:20 by another session; no branch but this one
+contains them). Nothing was deployed during this pass.
+
+**The alert path is PULL-ONLY, proven.** A terminally failed backup yields
+1 impediment, 1 chore, and **0 deliveries** — no Telegram, no Slack, no
+email, no push. `announce` is inert because a failed job writes no output.
+The morning briefing carries no chores; `raise_proposals` skips
+`not_capable`. **This corrects my earlier claim that the chore "reaches
+him".**
+
+**DR restated:** 9 m 46 s is database restore time, not RTO. Full recovery
+also needs 540 migrations, **36 vault secrets by hand**, 8 functions, the
+heartbeat and three re-authorisations. **With no offsite copy the backup
+covers logical corruption only — if the project is lost the backup is lost
+with it.**
+
+**VERDICT: NOT READY to claim a green gate.** This branch's own changes are
+all verified green; the gate is not, for three named pre-existing reasons.
+
+**MUST BE VERIFIED AFTER INTEGRATION** (each blocked on another branch or on
+Grant): close the `verify:history` send-time escape and decide what to do
+with the two escape rows; register `verify:artifact-slack`'s destination;
+give `verify:collaborates` a level-aware wait or an approval; **deploy the
+worker from a branch containing `executor.ts`'s `status >= 500`** and
+re-confirm the chores handler; and decide whether a raised backup chore
+should page.

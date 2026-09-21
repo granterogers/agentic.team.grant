@@ -120,3 +120,30 @@ schedule of its own: a second clock is a second thing that can silently stop.
 than asserting them: `backup_overdue` going true is a real finding and the
 chore is what should carry it, and a check that cries wolf is one somebody
 starts overriding.
+
+
+---
+
+# CORRECTION — 21 September, final proof pass
+
+Two claims above are overstated and are corrected in
+`docs/ops/evidence/final-proof-pass.md`. They are left in place rather than
+edited, because a document that quietly changes what it claimed is worse than
+one that says it was wrong.
+
+**1. "RTO, data round trip: 9 min 46 s" is DATABASE RESTORE TIME, not RTO.**
+Complete service recovery also needs a provisioned project, 540 migrations,
+**36 vault secrets re-entered by hand**, 8 edge functions redeployed, the
+pg_cron heartbeat re-created, and Telegram/Slack/Google re-authorised. The
+vault is the dominant term and it is gated on third parties.
+
+**2. The stated scenario coverage was too generous.** With no offsite copy,
+the backup covers **logical corruption only**. If the Supabase project or
+account is lost, the backup is lost with it and no RTO figure applies,
+because there is nothing to restore from.
+
+**3. "How Grant finds out" — the chore reaches his TASK LIST, not him.**
+Driven end to end: a terminally failed backup produces 1 impediment, 1 chore
+and **0 deliveries**. No Telegram, no Slack, no email, no push. The
+`announce` flag is inert because a failed job writes no output. See §4 of the
+final proof pass.
