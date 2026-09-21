@@ -93,6 +93,10 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 31 | 21 Sep | **#296 was a FALSE POSITIVE**, and uncovered a containment breach: 30 synthetic tasks on Grant's real list. Fixed, swept, closed | DONE |
 | 32 | 21 Sep | **#290 root cause found in the PROMPT**; fix measured as NOT sufficient (0 of 8 unseen). Reported open, safe design named | DONE |
 | 33 | 21 Sep | **ADR-0047** — migration numbering across concurrent branches; `npm run migrate:next` | DONE |
+| 34 | 21 Sep | Provenance audit generalised: `npm run check:provenance`. 5 historical gap classes, **0 current** | DONE |
+| 35 | 21 Sep | **task.indirect FIXED** — artifact-noun class; held-out 82% → 84% understanding | DONE |
+| 36 | 21 Sep | Approval variance: the state machine IS authoritative; the variance is route selection | DONE |
+| 37 | 21 Sep | **[#298](https://github.com/granterogers/agentic.team.grant/issues/298)** — 0523 defeated by attribution-after-the-fact; 2 harness messages reached Grant tonight | FILED |
 
 ## Decisions taken without asking
 
@@ -776,3 +780,83 @@ suite debris and have `job_id` null, so the provenance fix in
 deliberately — deleting another workstream's in-flight test data is not
 this one's business — and `check:leaks` names them, which is the witness
 working.
+
+
+---
+
+## Provenance audit — the general form of the missing `p_job`
+
+**The three leaked tasks were not a durable leak.** They were
+`verify:mytasks`'s own mid-run subjects; that suite sweeps BY CLASS rather
+than by its own run token, and by the time I looked the three were gone and
+a fourth was live. Its own comment records the identical history. No rows of
+theirs were touched.
+
+`npm run check:provenance` asks the general question. **The measure is not
+"how many rows are null"** — that number would have sent me fixing four
+things that are not broken:
+
+- `undoable_actions` is 280 of 280 without a job, and `correlation_id` is
+  present on every one, and **not one matches a job**. They are things Grant
+  did on the dashboard.
+- `blockers` is 392 without a job and **none in the last two days**.
+
+A row counts only when something ELSE proves a turn existed. And a gap with
+nothing recent in it is a **scar**: 70 rows across five tables, **zero in the
+last day**. Failing on those would make the check red for ever over rows
+nobody can change.
+
+## task.indirect — FIXED
+
+The mission's own example. `classifyIntent` read *"make me a note to ring
+Kevin"* as a confident `direct_command` on all three corpora;
+`personalTaskRequest` filed nothing.
+
+**Root cause: a class with three of its words in it.** The artifact nouns
+were `task`, `to-do`, `reminder`; `note`, `item`, `entry` and `line` were
+missing — and `note` was already in the VERB list of the same pattern.
+
+They are polysemous, and the **infinitive** is what admits them: a note TO DO
+something is an action, a note OF something is a record. Structural, so it
+holds for phrasings nobody listed. The first version tested `to` + any
+letter and matched a PREPOSITION in *"add a line about the discount to the
+draft"* — a negative control caught it, not the corpus.
+
+| corpus | understanding |
+|---|---|
+| development | 89% → 90% |
+| **frozen held-out** | 82% → **84%** |
+| **fresh seed 77** | 89% → **90%** |
+| fresh seed 313 | 88% → 88% — correct, its variants already filed via `I_MUST` |
+
+Live: `task.indirect` and `task.explicit` now pass understanding, reality
+AND completion, with the task carrying its job.
+
+## The fourth door constant
+
+`wouldFile` was hardcoded false on the canonical door, so `understanding`
+failed EVERY actionable scenario live including ones where a task
+demonstrably exists. After `clauses`, `reading`/`recognised` and `learned`.
+
+**The pattern, stated once: a door must declare what it OBSERVES and never
+return a plausible constant.** All four were reported as product findings
+before being caught.
+
+## Approval variance — answered
+
+**The state machine IS authoritative and consistent.** Every job that reached
+the approval path paused on `awaiting_approval` AND raised a blocker, 1:1,
+with no exceptions. What varies is upstream: whether the office takes the
+planning route at all. Two of twelve recent instruction jobs spawned an
+`office.pursue` child, and every one that did raised a blocker.
+
+So the scenario conflates *"the office should stop and ask"* with *"the
+office should take the planning route"*.
+
+**An adjacent finding, measured on REAL traffic over 30 days:** 57 turns
+ended with a question in the prose and **49 have nothing canonically
+pending**; 38 of those are short answers where the question IS the answer.
+So most of the office's questions are invisible to `needs_me` and the
+Governance page. Not implemented — it changes what Grant's Governance page
+shows, which is his call, and 38 per 30 days is small enough to be worth
+asking about rather than shipping.
