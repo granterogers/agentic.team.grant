@@ -38,6 +38,8 @@ import {
   ARC_RECIPES,
   type Arc,
   buildArc,
+  conversationFor,
+  isFirstAfterTheBreak,
   reactionFor,
   reactionText,
 } from '../../src/simulation/arcs.ts'
@@ -148,7 +150,6 @@ for (const recipe of chosen) {
     What must NOT go is anything the office STORED - a lesson is a row and
     survives, which is the whole distinction this arc exists to measure.
   */
-  let conversation = arc.id
 
   for (const [i, turn] of arc.turns.entries()) {
     /*
@@ -158,13 +159,13 @@ for (const recipe of chosen) {
       harness that never answers a clarification never tests what happens
       after one.
     */
-    if (arc.breaksAfter !== undefined && i === arc.breaksAfter + 1) {
+    if (isFirstAfterTheBreak(arc, i)) {
       history = []
       officeAsked = false
       hadAnswer = false
-      conversation = `${arc.id}-again`
       console.log(`   ...he goes away and comes back later, in a new conversation\n`)
     }
+    const conversation = conversationFor(arc, i)
 
     const rng = new Seeded(derive(arc.seed, 'react', i))
     const reacting = officeAsked && (turn.reactsBy !== undefined || rng.chance(0.7))

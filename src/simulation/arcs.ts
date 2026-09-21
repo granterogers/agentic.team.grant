@@ -457,3 +457,25 @@ export const buildArcs = (
   world: World,
   runSeed: number,
 ): readonly Arc[] => ARC_RECIPES.flatMap((r) => personas.map((p) => buildArc(r, p, world, runSeed)))
+
+/**
+ * Which conversation a turn belongs to.
+ *
+ * Extracted from the runner and exported so it is testable. It lived as
+ * three lines inside `scripts/shadow/grant.ts`, where nothing could reach
+ * it - and the whole point of `breaksAfter` is a distinction the
+ * comprehension door cannot exercise at all, so the offline sweep running
+ * green over it says nothing. A mechanism with no check behind it is the
+ * thing this repository records paying for most often.
+ *
+ * Turns up to and including `breaksAfter` are the first conversation.
+ * Everything after it is a second one, which the canonical door turns into
+ * a different chat, which is what makes `app.conversation_before` return
+ * nothing for it.
+ */
+export const conversationFor = (arc: Arc, turn: number): string =>
+  arc.breaksAfter === undefined || turn <= arc.breaksAfter ? arc.id : `${arc.id}-again`
+
+/** True on the first turn of the second conversation, where the thread is dropped. */
+export const isFirstAfterTheBreak = (arc: Arc, turn: number): boolean =>
+  arc.breaksAfter !== undefined && turn === arc.breaksAfter + 1
