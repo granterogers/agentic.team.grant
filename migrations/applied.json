@@ -532,5 +532,10 @@
   "0531_sweep_the_twenty_one_the_witness_could_not_see.sql": "5497d5beb841d82af6cc0f4283242816b6f1fe14962e5897738d50af3698a1d8",
   "0532_five_more_the_run_token_gives_away.sql": "4d978db76569157183d5809085b6c96cb9c4217f920a869d5da38423593b87c6",
   "0533_the_harness_can_ask_to_see_its_own_rows.sql": "cd78e088569f2a4aa2215893d57e4ac1b2cb999aeca4112f3c1133f00fc6fbb7",
-  "0534_the_harness_can_ask_to_see_its_own_projects.sql": "e696bf64402aa319d276262da64b9b8d90f14a25452a22ebfe0044e0f12c7079"
+  "0534_the_harness_can_ask_to_see_its_own_projects.sql": "e696bf64402aa319d276262da64b9b8d90f14a25452a22ebfe0044e0f12c7079",
+  "0535_a_job_that_dies_says_so_wherever_it_died.sql": "d585656e98b773d6c89b9f1059e50956074a2b503fde524039ee5a616421eb0e",
+  "0536_a_resumption_is_not_a_retry.sql": "f182eaed75fd7723d86605176635b692415a0e9dd25ee5af5531e14f0efccaaf",
+  "0537_the_reading_can_see_the_backup.sql": "9df0d221dcba0d603945d672a12d79c040f05faf012c7e5d44ef092c4c585d24",
+  "0538_the_health_reading_carries_the_backup.sql": "ed84af34e18118dd433ca63da44e262ccc113f57498e37b696cea407e040bc30",
+  "0539_a_lesson_a_harness_taught_is_not_a_lesson.sql": "846f6db42e91f3676bc7b7034eabb82b9320892476f23f5b13216ec81ae0790a"
 }
