@@ -274,6 +274,186 @@ check(
   planText.includes('Seq Scan') ? 'SEQUENTIAL SCAN' : 'index scan',
 )
 
+/*
+  ── The alert path, driven end to end ──────────────────────────────────────
+
+  Proven on 21 September: a terminally failed nightly backup produced
+  `impediments=1, chore=1, DELIVERIES=0`. Grant received nothing. 0543 makes
+  the office page him from the DATABASE over pg_net, because an alert emitted
+  by a job handler goes quiet exactly when the worker is what broke.
+
+  ## Nothing here sends him anything
+
+  `net.http_post` is transactional — measured, not assumed: a call inside a
+  transaction takes `net.http_request_queue` from 0 rows to 1, and a rollback
+  takes it back to 0. So every scenario below runs the REAL function, asserts
+  the REAL request was enqueued to api.telegram.org with Grant's real chat id,
+  and then rolls the whole thing back. The request never leaves.
+
+  That is also why the subjects can be real rather than fixtures, which
+  matters: a harness backup is excluded from paging BY DESIGN, so a fixture
+  could not exercise the paging path at all. #45's question, answered the
+  other way round.
+*/
+const PAGER = `
+do $pager$
+declare
+  jh uuid; jr uuid; jok uuid; j1 uuid; j2 uuid;
+  rh jsonb; rr jsonb; r1 jsonb; r2 jsonb; r3 jsonb; r4 jsonb;
+  q0 int; q1 int; q2 int;
+  body text;
+begin
+  /*
+    Ordered so that nothing has to be un-written. public.events is
+    append-only -- DELETE is refused by app.reject_ledger_mutation -- so the
+    two cases that must NOT page are proved BEFORE the case that does.
+    Each subject is made the newest office.backup job in turn.
+  */
+
+  -- 1. HARNESS NEVER PAGES. Excluded by app.harness_job, which since 0541
+  --    includes the immutable synthetic mark.
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+                           attempt, max_attempts, state, state_reason,
+                           created_at, finished_at, synthetic)
+  values (gen_random_uuid(), 'pager-probe-harness', 'office.backup',
+          'verify:backups', 5, 5, 'failed', 'a harness backup that failed',
+          now() + interval '1 minute', now() + interval '1 minute', true)
+  returning job_id into jh;
+  select count(*) into q0 from net.http_request_queue;
+  rh := app.page_backup_failure();
+  if (rh->>'paged')::int <> 0 then
+    raise exception 'PAGER-FAIL A HARNESS FAILURE PAGED GRANT: %', rh; end if;
+  if (select count(*) from net.http_request_queue) <> q0 then
+    raise exception 'PAGER-FAIL a harness failure enqueued an HTTP request'; end if;
+
+  -- 2. RECOVERY. A real failure that a later backup made good must not page.
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+                           attempt, max_attempts, state, state_reason, created_at, finished_at)
+  values (gen_random_uuid(), 'pager-probe-recovered', 'office.backup',
+          'duty:nightly-backup', 5, 5, 'failed', 'failed, but the next one worked',
+          now() + interval '2 minutes', now() + interval '2 minutes')
+  returning job_id into jr;
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+                           state, created_at, finished_at)
+  values (gen_random_uuid(), 'pager-probe-success', 'office.backup',
+          'duty:nightly-backup', 'complete',
+          now() + interval '3 minutes', now() + interval '3 minutes')
+  returning job_id into jok;
+  rr := app.page_backup_failure();
+  if (rr->>'paged')::int <> 0 then
+    raise exception 'PAGER-FAIL it paged about a failure already made good: %', rr; end if;
+  if (select count(*) from net.http_request_queue) <> q0 then
+    raise exception 'PAGER-FAIL a recovered failure enqueued an HTTP request'; end if;
+
+  -- 3. THE REAL THING. A terminal failure nothing has made good since.
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+                           attempt, max_attempts, state, state_reason, created_at, finished_at)
+  values (gen_random_uuid(), 'pager-probe-terminal', 'office.backup',
+          'duty:nightly-backup', 5, 5, 'failed',
+          'recovery: 5 attempts exhausted while in running',
+          now() + interval '4 minutes', now() + interval '4 minutes')
+  returning job_id into j1;
+  r1 := app.page_backup_failure();
+  select count(*) into q1 from net.http_request_queue;
+  select convert_from(q.body, 'utf8') into body
+    from net.http_request_queue q order by q.id desc limit 1;
+
+  if (r1->>'paged')::int <> 1 then
+    raise exception 'PAGER-FAIL a real unrecovered terminal failure did not page: %', r1; end if;
+  if q1 <> q0 + 1 then
+    raise exception 'PAGER-FAIL no HTTP request was enqueued (% -> %)', q0, q1; end if;
+  if coalesce(body, '') not like '%api.telegram.org%' and
+     coalesce((select convert_from(q.url::bytea, 'utf8') from net.http_request_queue q
+                order by q.id desc limit 1), '') not like '%api.telegram.org%' then
+    raise exception 'PAGER-FAIL the request does not go to Telegram'; end if;
+  if coalesce(body, '') not like '%1386648496%' then
+    raise exception 'PAGER-FAIL the request does not carry Grant chat id: %',
+      left(coalesce(body, ''), 160); end if;
+  if coalesce(body, '') not like '%backup:now%' then
+    raise exception 'PAGER-FAIL the message does not say what to do: %',
+      left(coalesce(body, ''), 200); end if;
+
+  -- 4. EXACTLY ONCE.
+  r2 := app.page_backup_failure();
+  select count(*) into q2 from net.http_request_queue;
+  if (r2->>'why') <> 'already paged' then
+    raise exception 'PAGER-FAIL a second call said [%] rather than already paged', r2->>'why'; end if;
+  if q2 <> q1 then
+    raise exception 'PAGER-FAIL a second request was enqueued (% -> %)', q1, q2; end if;
+
+  -- 5. NO STORM. A different failed night inside the cooldown.
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by,
+                           attempt, max_attempts, state, state_reason, created_at, finished_at)
+  values (gen_random_uuid(), 'pager-probe-second', 'office.backup',
+          'duty:nightly-backup', 5, 5, 'failed', 'another night, also failed',
+          now() + interval '5 minutes', now() + interval '5 minutes')
+  returning job_id into j2;
+  r3 := app.page_backup_failure();
+  if (r3->>'why') <> 'cooling down' then
+    raise exception 'PAGER-FAIL a second failed night said [%] rather than cooling down',
+      r3->>'why'; end if;
+  if (select count(*) from net.http_request_queue) <> q1 then
+    raise exception 'PAGER-FAIL the cooldown still enqueued a request'; end if;
+
+  /*
+    6. A PAGE THAT DID NOT LAND DOES NOT COUNT (0544).
+
+    The first real page timed out after 5000 ms on a cold DNS lookup and was
+    lost, while the ledger recorded it as paged. Exactly-once has to mean
+    exactly-once DELIVERED, so positive evidence of failure must re-open it.
+    Simulated by giving the recorded request a timed-out response row.
+  */
+  insert into net._http_response (id, status_code, content_type, headers, content,
+                                  timed_out, error_msg)
+  values ((r1->>'request_id')::bigint, null, null, null, null, true,
+          'Timeout of 5000 ms reached. Total time: 5000.263000 ms (DNS ...)')
+  ;
+
+  r4 := app.page_backup_failure();
+  if (r4->>'paged')::int <> 1 then
+    raise exception 'PAGER-FAIL a page that demonstrably TIMED OUT still counted as delivered: %', r4; end if;
+
+  raise exception 'PAGER-PASS harness=[%] recovered=[%] paged=% again=[%] storm=[%] retried_after_timeout=% to_grant=yes actionable=yes',
+    rh->>'why', rr->>'why', r1->>'paged', r2->>'why', r3->>'why', r4->>'paged';
+end
+$pager$;`
+
+let pagerSaid = ''
+try {
+  await db.execute(PAGER)
+  pagerSaid = 'the drive returned without raising, which it cannot do'
+} catch (error) {
+  pagerSaid = (error as Error).message.replace(/\s+/g, ' ')
+}
+const paged = pagerSaid.includes('PAGER-PASS')
+check(
+  paged,
+  'a terminal backup failure PAGES Grant — once, not in a storm, never for harness traffic',
+  paged ? pagerSaid.slice(pagerSaid.indexOf('PAGER-PASS')).slice(0, 190) : pagerSaid.slice(0, 320),
+)
+
+const nothingSent = await one(`select count(*)::int as n from net.http_request_queue`)
+check(
+  Number(nothingSent.n ?? -1) === 0,
+  'and the drive sent nothing — every request it made was rolled back',
+  `${String(nothingSent.n)} request(s) queued`,
+)
+
+/*
+  The alert rides pg_cron, not a duty. A page emitted by the worker is a page
+  that goes quiet when the worker is the thing that broke (invariant 14), so
+  its schedule is asserted here rather than assumed.
+*/
+const sched = await one(
+  `select coalesce((select schedule from cron.job where jobname = 'backup-pager'), '') as s,
+          coalesce((select active from cron.job where jobname = 'backup-pager'), false) as on`,
+)
+check(
+  String(sched.s) !== '' && sched.on === true,
+  'the pager runs on pg_cron, independent of the worker it watches',
+  String(sched.s) === '' ? 'NO SCHEDULE' : `${String(sched.s)}, active=${String(sched.on)}`,
+)
+
 // ── What the state actually is. Printed, deliberately not asserted. ────────
 console.log('\nbackup posture right now:')
 console.log(`  newest finished backup     ${String(health.newest_backup_age_hours)}h ago`)
