@@ -277,3 +277,95 @@ compaction in the first hour cannot erase the mission.
 with `supabase/functions/worker/index.ts`, `.github/workflows/`, the
 `package.json` script inventory, and the question of what performs unattended
 backups today.
+
+### T+1:00 — baseline established. Backup reality answered.
+
+**What actually runs unattended.** Every one of the nine GitHub workflows is
+`workflow_dispatch` only — confirmed by reading each `on:` block, not the
+prose. `ci.yml` and `worker.yml` additionally accept `repository_dispatch`.
+**No schedule trigger exists anywhere in this repository.** The brief's
+premise is correct on that point.
+
+The unattended layer is therefore entirely `pg_cron -> worker -> duties`:
+
+| | |
+|---|---|
+| `cron.job` | exactly one entry, `worker-heartbeat`, `* * * * *`, active |
+| `cron.job_run_details` | **19,381 runs, 19,381 succeeded, 0 failed**, since 8 Sept |
+| Does the HTTP actually leave? | Yes — `net._http_response` 357×200, latest matching the cron run to the millisecond |
+| `worker.kick_secret` | present in vault; `db.project_ref` set |
+| Live queue | 0 queued / 0 retrying / 0 running; newest completion 1 min old |
+| `app.office_health(24)` | 393 finished, 0 failed, 0 stalled, 0 waiting |
+
+**FALSE GREEN, pinned:** `app.kick_worker()` returns `null` *silently* when
+the secret or the project ref is missing — the comment says so deliberately.
+`cron.job_run_details` records `succeeded / 1 row` in **both** cases. A green
+heartbeat table is therefore not evidence that anything was kicked. Today it
+genuinely is kicking; that had to be proved from `net._http_response`, not
+from the cron log.
+
+**17 duties exist.** Backups, slack rotation, notion sync, drive watch,
+mail/calendar, task reminders all run through the worker. Two are off:
+`vault-export` (**disabled, never run**) and `vikunja-sync`.
+
+#### Backup reality — the high-priority question, answered
+
+There **is** an unattended backup: duty `nightly-backup` -> `office.backup` ->
+`src/handlers/backup.ts` -> per-table gzip + sha256 into the private
+`backups` bucket. It is real, not aspirational:
+
+| | |
+|---|---|
+| Newest | `run-5264258d…`, 21 Sept 12:34, **246 objects, 12 MB**, 4.8 h old |
+| Cadence | daily, 18/19/20/21 Sept in the current per-table format |
+| Verified | all 123 objects checksum-clean, decompress, 122/122 tables present |
+| Retention | nothing ever deleted (deliberate); 26 runs held |
+| Location | **the same Supabase project it protects. No offsite copy.** |
+| **Observed gap** | **17 Sept is missing entirely** |
+
+#### DEFECTS FOUND (T+1:00)
+
+**DEFECT-1 — a terminal failure reached by the SQL recovery path tells nobody.
+SYSTEMIC.** `app.recover_stalled_jobs()` moves an attempt-exhausted job to
+`failed` writing only `state_reason`, a column Grant never reads. No
+impediment, no delivery, no alert. **This is what removed the 17 Sept backup:
+`recovery: 5 attempts exhausted while in running`, zero deliveries, zero
+impediments — a day with no backup and nothing said so.** Across 14 days:
+56 real failed jobs, **0 produced any delivery**, 6 recorded nothing at all.
+`src/jobs/worker.ts` learned this lesson in three places (#211/#231) and two
+TS sites plus the whole SQL path never did:
+`worker.ts:1309` (`in notifying with no output to deliver` — invariant 7
+exactly) and `worker.ts:1140` (review rejected with attempts exhausted).
+
+**DEFECT-2 — `office_health()` cannot see the backup.** It reports finished,
+failed, stalled, waiting, open breakers and budget holds. It has no backup
+age, no restore-rehearsal age, no last-progress timestamp and no delivery
+outcome. **If backups stopped tonight the reading would stay exactly as green
+as it is now** — which is precisely what happened on 17 Sept.
+
+**DEFECT-3 — restore has never been proven on a schedule.**
+`backup:rehearse` exists, is honest about what it proves, and is a **manual
+command that records nothing anywhere**. Nothing invokes it unattended.
+"Last successful restore rehearsal" is therefore **unknown and unknowable**.
+Invariant 13 requires a recent backup AND a proven restore; half of it is
+unmet.
+
+**DEFECT-4 — an interrupted rehearsal leaks a schema into production.**
+Reproduced: killed at 9 min, left `restore_rehearsal` with 82 scratch tables
+in the live database. Dropped by hand; confirmed 0 left. A timeout, a
+cancelled CI job or a crash all produce this.
+
+#### RPO / RTO — first real numbers
+
+- **RPO ≈ 24 h** by design; **observed worst case 48 h** (the 17 Sept gap).
+- **RTO (data load) ≈ 13–14 min** extrapolated: 82 of 122 tables loaded in 9
+  min for 12 MB / 135 k rows. Plus migrations from git first, since the
+  archive carries rows and a column list, not DDL.
+- **Vault is excluded from the backup and `vault-export` is disabled and has
+  never run**, so a real restore today yields a working database with an
+  **empty vault** — every credential re-entered by hand. That is the dominant
+  term in RTO and nothing measures it.
+
+**NEXT AUTONOMOUS ACTION:** fix DEFECT-1 at the class level (every terminal
+failure records an impediment, whichever layer causes it), then DEFECT-2/3
+(backup + rehearsal age in the health reading, rehearsal as a recorded duty).
