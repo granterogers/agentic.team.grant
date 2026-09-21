@@ -290,7 +290,8 @@
     "verify:basecamp-actions": "tsx scripts/verify/basecamp-actions.ts",
     "verify:basecamp-journey": "tsx scripts/verify/basecamp-journey.ts",
     "verify:basecamp-keyboard": "tsx scripts/verify/basecamp-keyboard.ts",
-    "verify:basecamp-preservation": "tsx scripts/verify/basecamp-preservation.ts"
+    "verify:basecamp-preservation": "tsx scripts/verify/basecamp-preservation.ts",
+    "verify:basecamp-classes": "tsx scripts/verify/basecamp-classes.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

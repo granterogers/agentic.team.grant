@@ -41,6 +41,30 @@ type Task = { id: string; title: string; who: string | null; due: string | null;
 const tasks: Task[] = [
   { id: 't-1', title: 'An existing commitment', who: 'claire', due: null, state: 'todo' },
 ]
+/*
+  ONE OUTPUT, AND THE DOCUMENTS IT HAS BECOME.
+
+  `documents` is a list rather than a flag so that a duplicate is
+  REPRESENTABLE: a stand-in that could not create two could not prove the page
+  does not ask for two, which is the found-nothing shape. Importing the same
+  output twice appends nothing because the real index does not — the four
+  migrations that got that right are recorded in CLAUDE.md — and the check
+  below reads the length, not a boolean somebody set.
+*/
+const requests = [
+  {
+    id: 'job-1',
+    ask: 'Turn the six modules into a one-page outline',
+    from: 'Grant · chat',
+    who: 'oliver',
+    asked: '2 days ago',
+    state: 'review',
+    delivered: '2 days ago',
+    output: { id: 'out-1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4' },
+    derived: ['WS01 — Legacy Opening Assessment', 'Journey VS Destination'],
+  },
+]
+const documents: { id: string; fromOutput: string; job: string; producedBy: string }[] = []
 const seen: { action: string; args: Record<string, unknown> }[] = []
 /* Set to make the NEXT write fail, so the rollback path can be driven. */
 let failNext: string | null = null
@@ -79,13 +103,18 @@ const office = createServer((req, res) => {
                   name: 'Journey subject',
                   purpose: 'The project this check drives. Nothing here is Grant’s.',
                   tasks,
-                  documents: [],
+                  documents: documents.map((d) => ({
+                    title: 'Course one-pager',
+                    kind: 'made',
+                    origin: d.producedBy,
+                    size: 'A4',
+                  })),
                   contacts: [],
                   sources: [],
                   activity: [],
                   waiting: [],
                   modules: [],
-                  requests: [],
+                  requests,
                 },
               ],
             },
@@ -132,6 +161,34 @@ const office = createServer((req, res) => {
       })
       res.writeHead(200, cors)
       res.end(JSON.stringify({ result: { id } }))
+      return
+    }
+    if (action === 'output_import') {
+      const output = String(args.p_output ?? '')
+      const already = documents.some((d) => d.fromOutput === output)
+      if (!already) {
+        /*
+          Provenance travels WITH the document, which is the whole point of
+          §9's addition: the job that produced it and who ran it, recorded at
+          the moment it becomes canonical. Afterwards nobody can reconstruct
+          it, which is why Failure L is about this instant and not about
+          storage in general.
+        */
+        const req = requests.find((r) => r.output.id === output)
+        documents.push({
+          id: `doc-${String(documents.length + 1)}`,
+          fromOutput: output,
+          job: req?.id ?? '',
+          producedBy: req?.who ?? '',
+        })
+        if (req !== undefined) req.output.imported = true
+      }
+      res.writeHead(200, cors)
+      res.end(
+        JSON.stringify({
+          result: { document_id: documents.find((d) => d.fromOutput === output)?.id, already },
+        }),
+      )
       return
     }
     if (action === 'task_state') {
@@ -340,6 +397,97 @@ check(
 )
 check('and nothing was sent', seen.length === sentBefore)
 await ro.close()
+
+/* ------------------------------------------- the agent-output journey (§17.5) */
+
+await open('/basecamp/p/journey-subject')
+const preview = await page.locator('.bctool', { hasText: 'Agentic Team' }).innerText()
+check(
+  'the overview preview names the latest output and that it is waiting',
+  preview.includes('Course one-pager') && preview.includes('Ready for you'),
+  preview.replace(/\n/g, ' / ').slice(0, 160),
+)
+
+await page.locator('.bctool', { hasText: 'Agentic Team' }).locator('.bcpreview').click()
+await page.waitForTimeout(700)
+check('the preview opens the team surface', page.url().endsWith('/team'), page.url())
+
+const outRow = page.locator('[data-bc-output]').first()
+const outText = await outRow.innerText()
+/*
+  §9: an agent output always names the originating job, the instruction, the
+  input sources and the time. All four, because three of four is how a trail
+  becomes unreconstructable — and the one that goes missing is always the
+  instruction.
+*/
+check('the output names who produced it', outText.includes('oliver'), outText.replace(/\n/g, ' / '))
+check('the output names the instruction it came from', outText.includes('Turn the six modules'))
+check('the output names where the instruction came from', outText.includes('Grant · chat'))
+check('the output names what it was derived from', outText.includes('WS01'))
+check('the output names when', outText.includes('2 days ago'))
+
+check(
+  'Add to project is offered once',
+  (await page.locator('[data-bc-addtoproject]').count()) === 1,
+)
+await page.locator('[data-bc-addtoproject]').first().click()
+await page.waitForTimeout(900)
+
+const imported = seen.filter((s2) => s2.action === 'output_import')
+check('Add to project reached the office as output_import', imported.length === 1)
+check('it carried the output', imported[0]?.args.p_output === 'out-1')
+check(
+  'a canonical document now exists',
+  documents.length === 1,
+  `${String(documents.length)} document(s)`,
+)
+check(
+  'the document carries its provenance — the job and who ran it',
+  documents[0]?.job === 'job-1' && documents[0]?.producedBy === 'oliver',
+  JSON.stringify(documents[0] ?? {}),
+)
+
+await open('/basecamp/p/journey-subject/team')
+check(
+  'the output now says it is in the project',
+  (await page.locator('[data-bc-output]').first().innerText()).includes('In the project'),
+)
+check(
+  'and Add to project is no longer offered',
+  (await page.locator('[data-bc-addtoproject]').count()) === 0,
+  'an idempotent operation offered a second time is a control that appears to act and does not',
+)
+
+await open('/basecamp/p/journey-subject/documents')
+check(
+  'the document is on the project’s Documents surface',
+  (await page.locator('.bcitemtitle', { hasText: 'Course one-pager' }).count()) === 1,
+)
+
+/*
+  THE IDEMPOTENCY PROOF, driven rather than reasoned about.
+
+  The page no longer offers the press, which is the product behaving — but
+  "the button is gone" is not the same claim as "doing it twice makes one
+  document". So the second import is sent through the same client the page
+  uses, at the same address, and the document count is read afterwards.
+*/
+const second = await page.evaluate(
+  `fetch(window.HQ_API, {
+     method: 'POST',
+     headers: { Authorization: 'Bearer journey-token', 'Content-Type': 'application/json' },
+     body: JSON.stringify({ action: 'output_import', args: { p_output: 'out-1' } }),
+   }).then((r) => r.json())`,
+)
+check(
+  'importing the same output twice makes one document, not two',
+  documents.length === 1,
+  `${String(documents.length)} document(s) after a second import; the office said ${JSON.stringify(second)}`,
+)
+check(
+  'and the second import returns the same document',
+  (second as { result?: { document_id?: string } }).result?.document_id === documents[0]?.id,
+)
 
 check('nothing was thrown anywhere in the journey', thrown.length === 0, thrown.join(' | '))
 

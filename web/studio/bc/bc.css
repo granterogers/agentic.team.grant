@@ -779,3 +779,138 @@
     margin: 8px;
   }
 }
+
+/* ========================================================================
+   8. Two rules that must outrank their neighbours
+   ======================================================================== */
+
+/*
+  A MEASURE FOR EXPLANATORY PROSE.
+
+  Without one, the team surface's paragraph ran 170 characters across the full
+  1008px desktop measure as a single line — legible, and nothing anybody would
+  choose to read. Only prose gets it: a meta line under a title is a fragment
+  and wrapping it early would look broken.
+
+  The first attempt at this rule was written against an anchor that an earlier
+  edit had already renamed, so it was never added at all while five call sites
+  went on naming it. A class that does not exist is not an error, and the
+  capture is the only thing that says so.
+*/
+[data-experience='basecamp'] .bcprose { max-width: 62ch; }
+
+/*
+  The inline-creation form (§10.2) and the skeleton's wrapper.
+
+  Both were named in the markup and defined nowhere — found by
+  `verify:basecamp-classes` on its first run, which is the check earning its
+  place immediately. The form's geometry was inline styles in a template
+  literal, which is the same value in a worse place: unreadable next to the
+  markup, unreachable from a media query, and invisible to any audit that
+  reads the stylesheet.
+*/
+[data-experience='basecamp'] .bcaddform {
+  display: grid;
+  gap: var(--bc-3);
+  margin-bottom: var(--bc-6);
+  padding: var(--bc-4);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+}
+[data-experience='basecamp'] .bcaddform .bcrow {
+  display: flex;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+}
+[data-experience='basecamp'] .bcskelwrap { display: block; }
+
+/*
+  A heading inside a tool surface — the same 18/24 semibold accent as a tool
+  heading on the overview, because §9's whole argument is that records feel
+  related through one grammar. It was three identical inline `font:` and
+  `color:` declarations before this.
+*/
+[data-experience='basecamp'] .bcsubhead {
+  margin: var(--bc-8) 0 var(--bc-2);
+  font: var(--bc-tool-heading);
+  letter-spacing: -0.1px;
+  color: var(--bc-section-accent);
+}
+[data-experience='basecamp'] .bcsubhead:first-of-type { margin-top: 0; }
+
+/* Spacing utilities, so a template never carries a margin inline. */
+[data-experience='basecamp'] .bcgap { margin: 0 0 var(--bc-2); }
+[data-experience='basecamp'] .bcgap-l { margin: 0 0 var(--bc-4); }
+[data-experience='basecamp'] .bcflat { margin: 0; }
+/*
+  A ROW OF LINKS, WHICH IS NOT THE PERSONAL TRAY.
+
+  This was written as `class="bctray bcinline-list"`, borrowing the tray's
+  control styling — and the phone rules turn EVERY `.bctray` into a fixed
+  bottom bar. So on a 390px screen the project's hand-off links were lifted
+  out of the page and stacked underneath the real tray, where they were
+  invisible and unreachable: two different things sharing one class name, and
+  the collision only shows at the width where the class means something else.
+
+  CLAUDE.md records the same shape about `.stage`, which was a status pill and
+  a pannable surface until a grid blockified one of them and pushed a row
+  660px down the page. Grep for a class name before you reuse it, and prefer
+  a name of your own over a good one somebody else is using.
+*/
+[data-experience='basecamp'] .bcinline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bc-1);
+  padding: 0;
+  margin: 0;
+  justify-content: flex-start;
+}
+[data-experience='basecamp'] .bcinline-list a,
+[data-experience='basecamp'] .bcinline-list button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--bc-8);
+  padding: 0 var(--bc-3);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  background: transparent;
+  color: var(--bc-text);
+  font: var(--bc-compact);
+  text-decoration: none;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcinline-list a:hover,
+[data-experience='basecamp'] .bcinline-list button:hover {
+  background: var(--bc-hover);
+}
+
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcinline-list a,
+  [data-experience='basecamp'] .bcinline-list button {
+    min-height: 44px;
+  }
+}
+[data-experience='basecamp'] .bcblock { margin-top: var(--bc-8); }
+
+/* §10.2: completed work collapses behind a count rather than disappearing. */
+[data-experience='basecamp'] .bcdone { margin-top: var(--bc-4); }
+[data-experience='basecamp'] .bcdone > summary { cursor: pointer; }
+
+/*
+  ASK THE TEAM IS RENDERED TWICE AND SHOWN ONCE.
+
+  `.bctray button` is one class and one type, which outranks a bare
+  `.bcnarrow-only` — so the tray copy was visible on the desktop alongside the
+  top-row one, two identical controls on one screen. Scoping both helpers to
+  the experience root puts them at two classes and settles it, and writing
+  them at the END of the file settles the order as well: a media query adds no
+  specificity, and this repository has twice shipped a phone rule that a base
+  rule below it silently overrode.
+*/
+[data-experience='basecamp'] .bcnarrow-only { display: none; }
+[data-experience='basecamp'] .bcwide-only { display: inline-flex; }
+
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bcnarrow-only { display: inline-flex; }
+  [data-experience='basecamp'] .bcwide-only { display: none; }
+}

@@ -258,9 +258,38 @@ const teamPreview = (p) => {
         .join(''),
     )
   }
+  /*
+    §8.3 asks the Agentic Team preview for the latest meaningful OUTPUT as
+    well as the roster and the blockers. Without it the preview says who is
+    here and never what they produced, which is the half Grant is actually
+    waiting for.
+  */
+  const made = outputsOf(p)[0]
+  if (made !== undefined) {
+    bits.push(
+      row(
+        made.output.title,
+        [made.who, made.delivered].filter(Boolean).join(' · '),
+        made.output.imported === true ? status('In the project', 'done') : status('Ready for you', 'waiting'),
+      ),
+    )
+  }
   if (bits.length === 0) return nothing('Nobody is assigned to this project yet.')
   return bits.join('')
 }
+
+/**
+ * What the team has produced on this project, newest first.
+ *
+ * Read off the project's own `requests`, which is where a job, its
+ * instruction, who did it, what it was derived from and the output it
+ * produced all live together. That togetherness is the point: §9 requires an
+ * agent output to name its originating job, its instruction, its input
+ * sources and its time, and a reader that had to join four things would be a
+ * reader that eventually shows three of them.
+ */
+const outputsOf = (p) =>
+  (p.requests ?? []).filter((r) => r.output !== undefined && r.output !== null && r.output.id)
 
 /** §8.3 Documents: latest document, title and what it is. */
 const documentsPreview = (p) => {
@@ -346,13 +375,13 @@ const overview = (p) => {
         })
         .join('')}
     </div>
-    <section class="bctool" style="margin-top:var(--bc-8)">
+    <section class="bctool bcblock">
       <h2>Everything else on this project</h2>
-      <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-2)">
+      <p class="bcpmeta bcprose bcgap">
         These open in the current Team HQ. Nothing has moved; this experience
         has not built its own surface for them yet.
       </p>
-      <div class="bctray" style="justify-content:flex-start;padding:0">
+      <div class="bcinline-list">
         ${others
           .map(
             (t) =>
@@ -443,7 +472,7 @@ const portfolio = () => {
             (p.documents ?? []).length
           } documents. Opens the project.`,
           body: `${p.purpose ? `<div class="bcpexcerpt">${esc(p.purpose)}</div>` : ''}
-            ${waiting === 0 ? '' : `<div style="margin:var(--bc-2) 0">${status(waiting === 1 ? '1 thing waiting on you' : `${waiting} things waiting on you`, 'waiting')}</div>`}
+            ${waiting === 0 ? '' : `<div class="bcgap">${status(waiting === 1 ? '1 thing waiting on you' : `${waiting} things waiting on you`, 'waiting')}</div>`}
             ${tasksPreview(p)}`,
         })
       }).join('')}
@@ -477,15 +506,15 @@ const tasksSurface = (p) => {
       <h1>Tasks</h1>
       <span class="bcactions">${button('Add a task', { kind: 'primary', 'data-bc-addtask': '1' })}</span>
     </div>
-    <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-4)">
+    <p class="bcpmeta bcprose bcgap-l">
       What this project has committed to. Your own list is under My Tasks, and
       what the team is running is under Agentic Team — three different things.
     </p>
-    <form class="bcaddform" data-bc-taskform hidden style="display:grid;gap:var(--bc-3);margin-bottom:var(--bc-6);padding:var(--bc-4);border:1px solid var(--bc-border-control);border-radius:var(--bc-r-control)">
+    <form class="bcaddform" data-bc-taskform hidden>
       ${input({ id: 'bc-task-title', label: 'What needs doing', name: 'title', autocomplete: 'off' })}
       ${input({ id: 'bc-task-due', label: 'Due date', name: 'due', type: 'date' })}
       ${input({ id: 'bc-task-who', label: 'Assigned to', name: 'who', autocomplete: 'off', hint: 'A team member’s name, or leave it unassigned.' })}
-      <div style="display:flex;gap:var(--bc-2)">
+      <div class="bcrow">
         ${button('Add this task', { kind: 'primary', 'data-bc-tasksave': '1' })}
         ${button('Cancel', { 'data-bc-taskcancel': '1' })}
       </div>
@@ -504,8 +533,8 @@ const tasksSurface = (p) => {
             ${
               done.length === 0
                 ? ''
-                : `<details style="margin-top:var(--bc-4)">
-                    <summary class="bcmore" style="cursor:pointer">${esc(
+                : `<details class="bcdone">
+                    <summary class="bcmore">${esc(
                       done.length === 1 ? '1 completed task' : `${done.length} completed tasks`,
                     )}</summary>
                     ${done.map((t) => taskRow(t)).join('')}
@@ -540,7 +569,7 @@ const teamSurface = (p) => {
   const waiting = p.waiting ?? []
   return `${crumbFor(p, 'team')}
     <div class="bcrecordhead"><h1>Agentic Team</h1></div>
-    <h2 style="font:var(--bc-tool-heading);color:var(--bc-section-accent);margin:0 0 var(--bc-2)">Who is on this</h2>
+    <h2 class="bcsubhead">Who is on this</h2>
     ${
       crew.length === 0
         ? empty({ title: 'Nobody assigned yet', body: 'Assign a specialist and their work appears here.' })
@@ -563,10 +592,10 @@ const teamSurface = (p) => {
             )
             .join('')}</div>`
     }
-    <h2 style="font:var(--bc-tool-heading);color:var(--bc-section-accent);margin:var(--bc-8) 0 var(--bc-2)">Waiting for you</h2>
+    <h2 class="bcsubhead">Waiting for you</h2>
     ${
       waiting.length === 0
-        ? `<p class="bcpmeta">Nothing is waiting on a decision from you.</p>`
+        ? `<p class="bcpmeta bcprose">Nothing is waiting on a decision from you.</p>`
         : `<div class="bclist">${waiting
             .map(
               (w) => `<div class="bcitem">
@@ -580,19 +609,68 @@ const teamSurface = (p) => {
             )
             .join('')}</div>`
     }
-    <h2 style="font:var(--bc-tool-heading);color:var(--bc-section-accent);margin:var(--bc-8) 0 var(--bc-2)">Running work</h2>
-    <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-2)">
+    <h2 class="bcsubhead">What the team has made</h2>
+    ${
+      outputsOf(p).length === 0
+        ? `<p class="bcpmeta bcprose">Nothing produced on this project yet.</p>`
+        : `<div class="bclist">${outputsOf(p).map((r) => outputRow(r)).join('')}</div>`
+    }
+    <h2 class="bcsubhead">Running work</h2>
+    <p class="bcpmeta bcprose bcgap">
       The team board, the team chat, running jobs with their stop controls and
       the outputs they produce are all in the current Team HQ. This experience
       has not built its own surface for them yet, so it sends you to the real
       one rather than showing a copy.
     </p>
-    <div class="bctray" style="justify-content:flex-start;padding:0">
+    <div class="bcinline-list">
       ${TEAM_SUBVIEWS.map(
         (v) =>
           `<a href="/p/${esc(p.slug)}/team" data-bc-leave="/p/${esc(p.slug)}/team">${esc(v.name)}</a>`,
       ).join('')}
     </div>`
+}
+
+/**
+ * One output, with its provenance and the one thing you can do with it.
+ *
+ * §9's agentic addition, in full: the originating job's instruction, who ran
+ * it, what it was derived from, and when. An output card that names only its
+ * title is the provenance loss the run's pre-mortem calls Failure L — and the
+ * moment it becomes a project document is exactly when that trail has to
+ * survive, because afterwards nobody can reconstruct it.
+ *
+ * ADD TO PROJECT IS OFFERED ONCE. An output already in the project says so
+ * and offers nothing, which is the honest reading of an idempotent operation:
+ * pressing again would succeed and change nothing, and a control that appears
+ * to act and does not is worse than one that is not there. The database
+ * enforces the idempotency (a partial unique index, 0317 through 0322); this
+ * is the page not asking for something it has already been given.
+ */
+const outputRow = (r) => {
+  const done = r.output.imported === true
+  const ready = r.state === 'review' && !done
+  return `<div class="bcitem" data-bc-output="${esc(r.output.id)}">
+    <span></span>
+    <div class="bcitembody">
+      <span class="bcitemtitle">${esc(r.output.title)}</span>
+      <span class="bcitemmeta">${esc(
+        [r.who, r.output.kind, r.output.size, r.delivered].filter(Boolean).join(' · '),
+      )}</span>
+      ${r.ask ? `<span class="bcitemmeta">Asked: ${esc(r.ask)}${r.from ? ` — ${esc(r.from)}` : ''}</span>` : ''}
+      ${
+        (r.derived ?? []).length === 0
+          ? ''
+          : `<span class="bcitemmeta">From ${esc((r.derived ?? []).join(', '))}</span>`
+      }
+    </div>
+    <span>${
+      done
+        ? status('In the project', 'done')
+        : ready
+          ? button('Add to project', { kind: 'primary', 'data-bc-addtoproject': r.output.id })
+          : status('Running', 'running')
+    }</span>
+  </div>`
 }
 
 const documentsSurface = (p) => {
@@ -727,7 +805,7 @@ const myTasks = () => {
   */
   const trouble = ctx.myTasksTrouble?.() === true
   return `<h1 class="bcsectiontitle">My Tasks</h1>
-    <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-4)">
+    <p class="bcpmeta bcprose bcgap-l">
       Your own list. Separate from what any project has committed to, and from
       what the team is running.
     </p>

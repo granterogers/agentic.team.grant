@@ -91,6 +91,43 @@ export const wire = (root) => {
   }
 
   wireTasks(root)
+  wireOutputs(root)
+}
+
+/* ---------------------------------------------------------------- outputs */
+
+/**
+ * Add to project (§9, §17 phase 5).
+ *
+ * One action, `output_import`, which is the path the current Team HQ already
+ * uses — not a second import. It is idempotent in the DATABASE, by a partial
+ * unique index whose four migrations are recorded in CLAUDE.md, so the page's
+ * job is not to enforce that but to stop offering a press that has already
+ * happened, and to show the office's own words if it refuses.
+ */
+const wireOutputs = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-addtoproject]')) {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.bcAddtoproject
+      if (id === undefined || id === '') return
+      const done = await attempt(
+        b,
+        'Adding…',
+        /*
+          The output and nothing else. The current Team HQ opens a sheet here
+          and asks for a collection, tags, a task and a source — deliberately,
+          because that is the only moment anybody chooses them. This
+          experience does not yet have that sheet, so it imports with nothing
+          chosen, which `import_output` accepts and which means "yes, and I
+          have nothing to add". Offering the sheet is the next slice; offering
+          a half-built sheet would be worse than offering none.
+        */
+        () => act('output_import', { p_output: id }),
+        'Added to the project.',
+      )
+      if (done !== null) await ctx.refresh()
+    })
+  }
 }
 
 /* ------------------------------------------------------------------ tasks */

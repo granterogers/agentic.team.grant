@@ -135,6 +135,26 @@ for (const size of SIZES) {
     problems.push(`${size.id}: top row collision — ${collide.join('; ')}`)
   }
 
+  /*
+    EXACTLY ONE FIXED BOTTOM BAR.
+
+    `.bctray` is the personal tray, and the phone rules make it fixed. Reusing
+    the class for a row of links lifted those links out of the page and
+    stacked them invisibly under the real tray — a collision that exists only
+    at the width where the class means something else, which is precisely the
+    width nobody checks a stylesheet at.
+  */
+  const fixedBars = (await page.evaluate(
+    inPage(`return [...document.querySelectorAll('.bctray')]
+         .filter((el) => getComputedStyle(el).position === 'fixed').length`),
+  )) as number
+  console.log(`  fixed bottom bars  ${String(fixedBars)}`)
+  if (fixedBars > 1) {
+    problems.push(
+      `${size.id}: ${String(fixedBars)} elements are fixed bottom bars — the tray class has been reused for something that is not the tray`,
+    )
+  }
+
   /* --- the fold, on the phone only (§6.2 and the acceptance matrix) --- */
   if (size.id === 'phone') {
     const fold = (await page.evaluate(
