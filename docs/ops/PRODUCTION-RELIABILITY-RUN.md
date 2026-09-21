@@ -530,3 +530,54 @@ copy is worse than a named gap. It closes the moment either branch merges.
 **NEXT AUTONOMOUS ACTION:** run the full 44-check gate in segments; then the
 two HUMAN_BLOCKED items are Grant's (offsite target, vault export) and the
 Vercel token needs rotating.
+
+### T+10:45 — final state, and the two checks that are red for reasons that are not this branch's
+
+**Every standing check green:** lint 0 · typecheck 0 · check:secrets clean ·
+check:templates 0 · **2,219 tests / 141 files** · check:callers ·
+check:pressable · check:tokens · check:icons · check:reachable ·
+check:one-brain all 0. Working tree clean, 10 commits pushed.
+
+**verify:journals, verify:resumes, verify:backups** — all green on a final
+run. **My own debris: zero** on every class, asserted rather than assumed —
+suite jobs left live 0, chores on his list 0, test destinations 0, rehearsal
+schema 0, latency probe jobs unsettled 0, probe tasks on his list 0.
+
+Two checks are red and **neither is this branch's**:
+
+1. **`check:migrations` — 2 findings, both `[sequence/gap]`:** 0533→0535 and
+   0538→0540. `0534` and `0539` belong to
+   `claude/human-simulation-harness`, are applied to the shared live
+   database, and are deliberately absent here. That branch has taken
+   0535–0538 **byte-identical** (verified with `git hash-object`), so the two
+   merge cleanly and both gaps close on the first merge. Not resolved by
+   copying their files: this branch would then no longer represent only its
+   own work, and carrying a copy that could go stale is worse than a named
+   gap.
+
+2. **`check:leaks` — 1 harness task on Grant's list:**
+   `task.create — chase the letter`, `requested_by =
+   teamhq:verify-shadow-bnhlk6sn`, created 19:21 — **the Shadow Grant
+   session's harness, in flight as this run closed.** Deliberately not
+   cleared: it may be the live subject of their running suite, and completing
+   it could break their run. An identical pair appeared and cleared itself
+   earlier in this session, so their teardown does handle it. Recorded as a
+   cross-workstream observation, not fixed in their files.
+
+**HUMAN_BLOCKED, three items, each with the exact action:**
+
+| Item | Why blocked | Exact action |
+|---|---|---|
+| **No offsite backup** | Needs a vendor account or Grant's whole database emailed to himself — `src/handlers/backup.ts` already records it as his decision | Fund an offsite target (Cloudflare R2 free tier, 10 GB, £0) or accept single-project durability. Reported in every `backup_health()` read now. |
+| **Vault export never run** | `vault-export` is `enabled = false` by Grant's own choice — each run puts an encrypted copy of every credential in a Telegram chat | `update public.responsibilities set enabled = true where slug = 'vault-export';` — this is the dominant term in real RTO and nothing measured it before |
+| **Vercel token exposed by me** | A mistake of mine, not a product defect | Rotate at <https://vercel.com/account/tokens>. It reached no file, commit or log — verified by grep across the tree and scratchpad, `check:secrets` clean over 1,445 files — but it is in this session's transcript. |
+
+Plus one pre-existing item awaiting Grant since 18 September, correctly
+surfaced by the office itself: the **Slack config token (12 h)** is `dead`,
+Slack has refused rotation with `internal_error` every four hours since at
+least the 20th, and a chore has been open on My Tasks for three days. Slack
+**messaging is unaffected** — only app-manifest changes are blocked.
+
+**NEXT AUTONOMOUS ACTION:** run the full 44-check gate in segments of about
+ten minutes each (it needs ~40 minutes and cannot be backgrounded); then
+nothing else here is blocked on anything but Grant.
