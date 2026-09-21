@@ -2609,7 +2609,15 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const asRules = understood.surviving.filter((r) => r.kind === 'preference').map((r) => r.text)
       const teaching =
-        [...asRules, instruction].map((text) => readTeaching(text)).find((t) => t !== null) ?? null
+        /*
+          A clause the meaning-reader already called a preference is passed
+          as one (#290). The whole instruction is still read WITHOUT that
+          flag, so the union can only ever store a rule it would have
+          stored anyway.
+        */
+        [...asRules.map((text) => readTeaching(text, true)), readTeaching(instruction)].find(
+          (t) => t !== null,
+        ) ?? null
 
       /*
         AND STORING IT DOES NOT END THE TURN.

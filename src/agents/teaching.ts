@@ -171,7 +171,34 @@ const nameFrom = (condition: string | null, procedure: string): string => {
  * Order matters: a message can look like both, and a procedure read as a
  * preference loses everything after the first full stop.
  */
-export function readTeaching(instruction: string): Teaching | null {
+/**
+ * A preference the person marked as lasting only this once.
+ *
+ * The one thing that must still be refused when a meaning-reader has
+ * already called a clause a preference. `preference.one-off-override` is a
+ * real family: "keep it short on this one" shapes a single answer and
+ * storing it would change every answer afterwards.
+ */
+const JUST_THIS_ONCE =
+  /\b(?:on this one|this one time|just this once|for this one|just now|for now|this time|on this occasion)\b/i
+
+/**
+ * @param alreadyAPreference
+ *   A reader that can judge MEANING has already classified this clause as a
+ *   preference.
+ *
+ *   `understand.ts` returns a `kind` per surviving clause and `preference`
+ *   is one of them, and the handler has been filtering on it and then
+ *   handing the clause here — where `STANDING`, a list of lexical markers,
+ *   demanded the evidence a second time. So "lead with the conclusion, I
+ *   will read the why underneath" was understood as a preference and then
+ *   discarded for not saying "always", which is #290: recognised only with
+ *   an explicit persistence marker.
+ *
+ *   The marker is how a preference is spotted when nothing can read
+ *   meaning. It is the WEAKER evidence, and it was gating the stronger.
+ */
+export function readTeaching(instruction: string, alreadyAPreference = false): Teaching | null {
   const text = instruction.trim()
   if (text.length < 20) return null
 
@@ -220,9 +247,22 @@ export function readTeaching(instruction: string): Teaching | null {
     }
   }
 
-  // A preference. Short, and only when the message marks itself as standing —
-  // otherwise every "send me the report" becomes a rule about reports.
-  if (standing || asked) {
+  /*
+    A preference. Short, and marked as standing — by a phrase, by an
+    explicit ask to store it, or by a reader that judged the MEANING.
+
+    The lexical marker alone is why "send me the report" does not become a
+    rule about reports: nothing in that sentence says it is about how the
+    office should work. A meaning-reader that has already said "this clause
+    is a preference" has answered the same question better, and requiring
+    the marker on top of it discarded the preference (#290).
+
+    `JUST_THIS_ONCE` is the guard that keeps the one-off family working,
+    and it applies only to the semantic route: a person who says BOTH
+    "from now on" and "just this once" has contradicted themselves, and the
+    explicit marker is the one to believe.
+  */
+  if (standing || asked || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
     const body = firstSentence(text)
     if (body.length < 8 || body.length > 280) return null
     return { kind: 'lesson', body }
