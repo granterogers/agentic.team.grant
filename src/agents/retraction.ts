@@ -149,7 +149,7 @@ const HAS_A_COMPLEMENT =
   /^\s+(?:where|with|alone|as|until|till|for|in|on|to|up|at|by|near|inside|running|open|be)\b/i
 
 const NOT_A_PIVOT =
-  /(?:\b(?:do ?n[o']?t|don't|never|please|remember to|must|should|will|would|can|could|to)\s+)$/i
+  /(?:\b(?:do ?n[o']?t|don't|never|remember to|must|should|will|would|can|could|to)\s+)$/i
 
 /**
  * Retracting with no verb at all.
@@ -164,7 +164,17 @@ const NOT_A_PIVOT =
  * would throw away the sentence it is correcting. The pair is unambiguous
  * in a way neither half is.
  */
-const BARE_PIVOTS = ['actually no', 'no actually', 'actually not', 'wait no', 'no wait']
+/**
+ * Exported for the same reason as `CANCELS`, and it was missed the first
+ * time - which is the point.
+ *
+ * The simulator's protection list was derived from `CANCELS` alone, so
+ * `ignore` was fixed and `actually` was not. Five of the eleven withdrawal
+ * complaints on the next sweep were `actuallly`, `atually` and `actulaly`:
+ * the identical defect, one list over, found the identical way. When a fix
+ * removes a whole class for one caller, grep for the other callers.
+ */
+export const BARE_PIVOTS = ['actually no', 'no actually', 'actually not', 'wait no', 'no wait']
 
 const PIVOT = new RegExp(`\\b(?:${[...BARE_PIVOTS, ...CANCELS].join('|')})\\b`, 'gi')
 

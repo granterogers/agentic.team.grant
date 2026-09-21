@@ -158,9 +158,20 @@ export const withdrawalWasSent = (sent: string, withdrawn: readonly string[]): b
   const said = sent.toLowerCase()
   return withdrawn.some((clause) => {
     const words = contentWords(clause)
-    // A withdrawal too short to have content words is taken at face value:
-    // refusing to score it would be a silent exemption.
-    if (words.length === 0) return true
+    /*
+      A withdrawn clause with no content words at all - "that one", "it" -
+      cannot be located in the message, so the precondition cannot be
+      ESTABLISHED. It used to be taken at face value, and the reaction
+      "yes" was then failed for not separating a withdrawal it could not
+      possibly contain.
+
+      An unestablished precondition may not produce a failure. This can in
+      principle hide a real case, unlike 0304's one-directional witness, so
+      it is bounded rather than free: a withdrawal a person actually
+      utters has words in it, and a family whose withdrawn clause is two
+      pronouns is a scenario that cannot be scored either way.
+    */
+    if (words.length === 0) return false
     return words.filter((w) => said.includes(w)).length >= Math.min(2, words.length)
   })
 }

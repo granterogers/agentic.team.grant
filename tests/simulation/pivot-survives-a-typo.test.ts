@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { CANCELS, readRetraction } from '../../src/agents/retraction.ts'
+import { BARE_PIVOTS, CANCELS, readRetraction } from '../../src/agents/retraction.ts'
 import { GRANT_LIKE } from '../../src/simulation/persona.ts'
 import { Seeded } from '../../src/simulation/random.ts'
 import { roughen } from '../../src/simulation/roughen.ts'
@@ -54,7 +54,7 @@ const stillSeesIt = (op: string, seed: number): boolean => {
 const TYPIST = { ...GRANT_LIKE, typos: 1 }
 
 describe('the simulator never misspells an operator that takes something back', () => {
-  for (const op of CANCELS) {
+  for (const op of [...CANCELS, ...BARE_PIVOTS]) {
     it(`leaves "${op}" still readable as a withdrawal`, () => {
       const lost: number[] = []
       for (let seed = 0; seed < 60; seed++) if (!stillSeesIt(op, seed)) lost.push(seed)

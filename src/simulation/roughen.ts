@@ -29,7 +29,7 @@
  * avoids being wrong in that specific way by construction.
  */
 
-import { CANCELS } from '../agents/retraction.ts'
+import { BARE_PIVOTS, CANCELS } from '../agents/retraction.ts'
 import type { Persona } from './persona.ts'
 import { Seeded } from './random.ts'
 
@@ -149,7 +149,7 @@ const NEVER_RESPELL = new Set([
     contributes each of its words: the typo operator works per word, so
     protecting "hold off on" means protecting "hold", "off" and "on".
   */
-  ...CANCELS.flatMap((op) =>
+  ...[...CANCELS, ...BARE_PIVOTS].flatMap((op) =>
     op
       .replace(/[()?:|]|\\ /g, ' ')
       .split(/[^a-z']+/i)
