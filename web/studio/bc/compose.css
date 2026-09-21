@@ -719,3 +719,194 @@
   transform: rotate(40deg);
 }
 [data-experience='basecamp'] .bcitemwho { display: inline-flex; align-items: center; }
+
+/* ======================================================================== *
+ * §10 — the full Card Table
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcboard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcbcol { min-width: 0; }
+[data-experience='basecamp'] .bcbcolhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcbcolhead h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcbcol[data-stage='blocked'] .bcbcolhead { border-bottom-color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bcbcol[data-stage='done'] .bcbcolhead { border-bottom-color: var(--bc-accent); }
+[data-experience='basecamp'] .bcbcard {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-row);
+  padding: 11px 12px 12px;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcbcard .bcitemtitle { text-align: left; font-size: 13.5px; line-height: 1.35; }
+[data-experience='basecamp'] .bcbmeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcbwhere,
+[data-experience='basecamp'] .bcbdue {
+  font-size: 11.5px;
+  color: var(--bc-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcbwhere {
+  background: var(--bc-canvas);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  max-width: 100%;
+}
+/*
+  The Move control is present but quiet: it is how a card moves, and it is not
+  what a person reads the board for. The label is visible rather than an
+  aria-label, because §11.3 forbids placeholder-only labelling on anything
+  consequential and this changes a record.
+*/
+[data-experience='basecamp'] .bcbmove { display: grid; gap: 3px; }
+[data-experience='basecamp'] .bcbmove .bcinput { font-size: 12.5px; padding: 5px 7px; }
+/*
+  44px ON A TOUCH DEVICE. Measured at 42 after the phone rule tightened the
+  row - two pixels under the floor, which is exactly the size of finding that
+  never shows up in a screenshot and always shows up in somebody's thumb.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcbmove .bcinput { min-height: 44px; }
+}
+
+/* ======================================================================== *
+ * §9 — the full Schedule
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcmonth {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  margin: 0 0 34px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcmonth:last-of-type { border-bottom: 0; }
+[data-experience='basecamp'] .bcmonth .bccal-day,
+[data-experience='basecamp'] .bcmonth .bccal-pad { font-size: 12.5px; }
+[data-experience='basecamp'] .bcmonth .bcagendaitem { padding: 9px 0; }
+[data-experience='basecamp'] .bcmonth .bcagendawhat { text-align: left; }
+[data-experience='basecamp'] .bcundated { margin-top: 8px; }
+[data-experience='basecamp'] .bcundated h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--bc-text-muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+
+/* ======================================================================== *
+ * Narrower than a desktop, for §9 and §10. LAST in the file, because a media
+ * query adds no specificity and the rules above are the ones being overridden.
+ * ======================================================================== */
+
+@media (max-width: 1100px) {
+  [data-experience='basecamp'] .bcboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-experience='basecamp'] .bcmonth { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+}
+
+@media (max-width: 760px) {
+  /*
+    ONE COLUMN, not two. Four stage columns at 390px is 78px each and a card
+    title has nowhere to go; two is 170px, which is still not a card. A board
+    on a phone is a board read one column at a time, and the column heading
+    carries its own count so the shape of the work is still legible.
+  */
+  [data-experience='basecamp'] .bcboard { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  /*
+    THE MOVE CONTROL STOPS SETTING THE CARD'S SIZE.
+
+    Stacked label over full-width select, a card was 165px of which most was
+    its own secondary control - so a phone screen held three cards and read as
+    a form rather than as a board. The label stays VISIBLE, because §11.3's
+    rule is about a label surviving a screenshot and this changes a record;
+    it just sits beside the control instead of above it.
+  */
+  [data-experience='basecamp'] .bcbmove {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+  [data-experience='basecamp'] .bcbmove .bclabel { white-space: nowrap; }
+  /*
+    The month grid goes, the dated agenda stays - the same decision as the
+    miniature's, for the same reason: a 7x6 grid of small numbers is
+    orientation rather than information, and it costs a third of the fold.
+  */
+  [data-experience='basecamp'] .bcmonth .bccal { display: none; }
+  [data-experience='basecamp'] .bcmonth { padding-bottom: 18px; margin-bottom: 22px; }
+}
+
+/* ======================================================================== *
+ * Touch targets on the tool surfaces
+ *
+ * The 44px floor was being met on the project home and missed on every tool
+ * behind it: a task title is the row's primary action and measured 18-24px
+ * tall, and the tick measured 28. Both are TEXT-SIZED elements inside a
+ * comfortable row, so the fix is hit area rather than size - padding with a
+ * matching negative margin, so nothing moves and the target grows.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bctickhit {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bctickhit {
+    min-width: 44px;
+    min-height: 44px;
+    margin: -8px -11px;
+  }
+  /*
+    The breadcrumb is navigation and measured 21px tall, so the way BACK out
+    of a tool was the smallest target on the screen. Same treatment: the text
+    keeps its size, the target grows around it.
+  */
+  [data-experience='basecamp'] .bccrumb a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  [data-experience='basecamp'] .bcitemtitle,
+  [data-experience='basecamp'] .bcagendawhat {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    margin: -11px 0;
+  }
+}

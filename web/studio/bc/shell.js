@@ -84,6 +84,15 @@ export const TOOLS = [
     one-thing arriving through a page title. One list, every caller.
   */
   { id: 'tasks', name: 'To-dos', own: true },
+  /*
+    §10 and §9. Two more views of the SAME to-dos, with their own addresses,
+    because §5's two-level pattern means a miniature leads to the full tool
+    and the board's full tool is not the to-do list. They hold no data of
+    their own: the stages are the real `state` enum and the dates are
+    `due_on` and `starts_on`, both already on every row.
+  */
+  { id: 'board', name: 'Card Table', own: true },
+  { id: 'schedule', name: 'Schedule', own: true },
   { id: 'team', name: 'Agentic Team', own: true },
   { id: 'documents', name: 'Documents & Assets', own: true },
   { id: 'activity', name: 'Activity', own: true },
@@ -434,8 +443,24 @@ const PREVIEW = {
  * ======================================================================== */
 
 const overview = (p) => {
-  const owned = TOOLS.filter((t) => t.own)
-  const others = TOOLS.filter((t) => !t.own)
+  /*
+    ONLY THE TOOLS THIS GRID HAS A TILE FOR.
+
+    This is the pre-§21 home, kept reachable so the two compositions can be
+    compared - and it read `TOOLS.filter(t => t.own)` straight into
+    `PREVIEW[t.id]`, so the moment §10 and §9 added the Card Table and the
+    Schedule it threw "PREVIEW[t.id] is not a function" and rendered NOTHING.
+    Found because the capture harness prints page errors; no check would have
+    caught it, because a screen that throws has no overflow, no contrast
+    failure and no dead control.
+
+    Filtered rather than given two new tiles: this grid is the BEFORE in a
+    comparison, and quietly improving it would spoil the only evidence for
+    what §21 changed. The tools it has no tile for are listed below with the
+    other hand-offs, which is where anything without a surface here belongs.
+  */
+  const owned = TOOLS.filter((t) => t.own && PREVIEW[t.id] !== undefined)
+  const others = TOOLS.filter((t) => !t.own || PREVIEW[t.id] === undefined)
   const acts = p.activity ?? []
   const latest = acts[0]
   return `<div class="bchome">${projectHeader(p, latest)}
@@ -460,11 +485,19 @@ const overview = (p) => {
       </p>
       <div class="bcinline-list">
         ${others
-          .map(
-            (t) =>
-              `<a href="${esc(toolPath(p.slug, t.id))}" data-bc-leave="${esc(
-                toolPath(p.slug, t.id),
-              )}">${esc(t.name)}</a>`,
+          .map((t) =>
+            t.own === true
+              ? /*
+                  A tool this experience DOES serve gets its own address, not
+                  the hand-off. Sending the Card Table to the current Team HQ
+                  would be a link that lies about where it goes - the defect
+                  the route audit exists for, arriving through a list that was
+                  written when everything here was a hand-off.
+                */
+                `<a href="${esc(at(`/p/${p.slug}/${t.id}`))}" data-bc-go="${esc(at(`/p/${p.slug}/${t.id}`))}">${esc(t.name)}</a>`
+              : `<a href="${esc(toolPath(p.slug, t.id))}" data-bc-leave="${esc(
+                  toolPath(p.slug, t.id),
+                )}">${esc(t.name)}</a>`,
           )
           .join('')}
       </div>
@@ -776,10 +809,19 @@ const taskRow = (t, i = 0, listName = '') => {
   const id = t.id ?? ''
   const key = taskKey(t, i)
   return `<div class="bcitem${isDone ? ' bcitem--done' : ''}" data-bc-task="${esc(key)}">
-    <input type="checkbox" class="bccheck" ${isDone ? 'checked' : ''}
-      ${id === '' ? 'disabled' : ''}
-      data-bc-tick="${esc(id)}"
-      aria-label="${esc(`${isDone ? 'Completed' : 'Not completed'}: ${t.title}`)}">
+    <!--
+      THE TICK IS WRAPPED so its hit area can be 44px without the tick itself
+      being 44px. Measured at 28x28 on a phone, which is the size of finding
+      that never shows in a screenshot and always shows in somebody's thumb.
+      A label containing its own input toggles it on press, so this is the
+      hit area growing rather than a second control being introduced.
+    -->
+    <label class="bctickhit">
+      <input type="checkbox" class="bccheck" ${isDone ? 'checked' : ''}
+        ${id === '' ? 'disabled' : ''}
+        data-bc-tick="${esc(id)}"
+        aria-label="${esc(`${isDone ? 'Completed' : 'Not completed'}: ${t.title}`)}">
+    </label>
     <div class="bcitembody">
       <!--
         THE TITLE IS THE LINK, which is both the grammar section 10.2 describes
@@ -1124,6 +1166,243 @@ const activitySurface = (p) => {
     }`
 }
 
+
+/* ======================================================================== *
+ * §10 — the Card Table
+ *
+ * The stages are `public.tasks.state`: todo, doing, blocked, done, cancelled.
+ * Nothing here is invented vocabulary and there is no board table - a card IS
+ * a task, and where it sits IS its state, which is why moving one is
+ * `task_state` and not a new writer.
+ *
+ * BLOCKING IS NOT OFFERED HERE, deliberately. `hq_task_state` refuses
+ * `blocked` without a reason - "a blocked task with no reason cannot be
+ * unblocked by anyone but the person who blocked it" - so a Move control that
+ * offered it would be an offer the press cannot perform, which is the defect
+ * this repository has recorded five times. Blocking happens on the task,
+ * where there is room to say what it is blocked on, and the column says so.
+ * ======================================================================== */
+
+const STAGE = [
+  { id: 'todo', name: 'Not started' },
+  { id: 'doing', name: 'In progress' },
+  { id: 'blocked', name: 'Stuck' },
+  { id: 'done', name: 'Done' },
+]
+
+const MOVABLE = [
+  { id: 'todo', name: 'Not started' },
+  { id: 'doing', name: 'In progress' },
+  { id: 'done', name: 'Done' },
+]
+
+const stageOf = (t) => {
+  const raw = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
+  if (raw === 'blocked' || (t.blocked && raw !== 'done')) return 'blocked'
+  return raw === 'cancelled' ? 'done' : raw
+}
+
+const card = (p, t, i) => {
+  const id = t.id ?? ''
+  const key = taskKey(t, i)
+  const list = (p.modules ?? []).find((m) => (m.id ?? m.name) === t.parent)
+  return `<article class="bcbcard" data-bc-card="${esc(key)}">
+    <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
+    <div class="bcbmeta">
+      ${list === undefined ? '' : `<span class="bcbwhere">${esc(list.name)}</span>`}
+      ${t.due ? `<span class="bcbdue">${esc(t.due)}</span>` : ''}
+      ${t.who ? bcMini.face({ ...((ctx?.crew ?? []).find((c) => c.slug === t.who) ?? {}), name: whoName(t.who) }) : ''}
+    </div>
+    <!--
+      DISABLED, NOT ABSENT, when the row has no canonical id - which is the
+      precedent the tick above already sets, and for the same reason. Drawing
+      it only for a row that can be written meant §10's whole interaction
+      appeared in no capture on any viewport, because the prototype rows a
+      signed-out browser falls back to carry no ids. A screen with no capture
+      is a screen nobody is watching, and a CONTROL with no capture is the
+      same thing one level down.
+    -->
+    <label class="bcbmove">
+      <span class="bclabel">Where this is</span>
+      <select class="bcinput" ${id === '' ? 'disabled' : ''} data-bc-move="${esc(id)}">
+        ${MOVABLE.map(
+          (m) =>
+            `<option value="${esc(m.id)}" ${stageOf(t) === m.id ? 'selected' : ''}>${esc(m.name)}</option>`,
+        ).join('')}
+      </select>
+    </label>
+  </article>`
+}
+
+const boardSurface = (p) => {
+  const all = (p.tasks ?? []).filter((t) => t.milestone !== true)
+  return `${crumbFor(p, 'board')}
+    <div class="bcrecordhead">
+      <h1>${esc(toolById('board')?.name ?? 'Card Table')}</h1>
+      <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
+    </div>
+    <p class="bcpmeta bcprose bcgap-l">
+      The same to-dos, by where the work has got to. Moving a card changes the
+      to-do — there is one set of records behind both views.
+    </p>
+    ${
+      all.length === 0
+        ? empty(
+            {
+              title: 'Nothing on the board yet',
+              body: 'A card is a to-do, and the column it is in is how far it has got. Add the first to-do and it appears here.',
+            },
+            button('Go to the to-dos', { kind: 'primary', 'data-bc-go': at(`/p/${p.slug}/tasks`) }),
+          )
+        : `<div class="bcboard">
+            ${STAGE.map((st) => {
+              const items = all.filter((t) => stageOf(t) === st.id)
+              return `<section class="bcbcol" data-stage="${esc(st.id)}">
+                <header class="bcbcolhead">
+                  <h2>${esc(st.name)}</h2>
+                  <span class="bccolcount">${items.length}</span>
+                </header>
+                ${
+                  items.length === 0
+                    ? `<p class="bcpmeta">${esc(
+                        st.id === 'blocked'
+                          ? 'Nothing is stuck. A to-do is blocked from its own page, where there is room to say what it is waiting on.'
+                          : 'Nothing here.',
+                      )}</p>`
+                    : items.map((t) => card(p, t, all.indexOf(t))).join('')
+                }
+              </section>`
+            }).join('')}
+          </div>`
+    }`
+}
+
+/* ======================================================================== *
+ * §9 — the Schedule
+ *
+ * Temporal, and honest about what it is: the office has dated WORK and no
+ * events table, so this shows scheduled work and says so rather than looking
+ * like a diary Grant can trust for his appointments. The dates are `due_on`
+ * and `starts_on`, both already returned by `app.studio_tasks`.
+ * ======================================================================== */
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+
+const monthGrid = (ym, marks, today) => {
+  const [y, m] = ym.split('-').map(Number)
+  const first = new Date(Date.UTC(y, m - 1, 1))
+  const lead = (first.getUTCDay() + 6) % 7
+  const len = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const cells = []
+  for (let i = 0; i < lead; i += 1) cells.push('<span class="bccal-pad"></span>')
+  for (let d = 1; d <= len; d += 1) {
+    const iso = `${ym}-${String(d).padStart(2, '0')}`
+    const n = marks.get(iso) ?? 0
+    const cls = ['bccal-day']
+    if (n > 0) cls.push('bccal-day--has')
+    if (iso === today) cls.push('bccal-day--today')
+    cells.push(
+      `<span class="${cls.join(' ')}"${n > 0 ? ` title="${esc(n === 1 ? '1 thing due' : `${n} things due`)}"` : ''}>${d}</span>`,
+    )
+  }
+  return `<div class="bccal">
+    <div class="bccalmonth">${esc(`${MONTHS[m - 1]} ${String(y)}`)}</div>
+    <div class="bccalgrid">
+      ${DOW.map((d) => `<span class="bccal-dow">${esc(d)}</span>`).join('')}
+      ${cells.join('')}
+    </div>
+  </div>`
+}
+
+const scheduleSurface = (p) => {
+  const all = (p.tasks ?? []).filter((t) => t.milestone !== true)
+  const dated = all
+    .map((t) => ({ t, iso: String(t.due_on ?? t.starts_on ?? '').slice(0, 10) }))
+    .filter((x) => x.iso !== '' && !Number.isNaN(new Date(`${x.iso}T00:00:00Z`).getTime()))
+    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))
+  const undated = all.filter((t) => String(t.due_on ?? t.starts_on ?? '') === '')
+  const now = new Date()
+  const today = now.toISOString().slice(0, 10)
+  const marks = new Map()
+  for (const { iso } of dated) marks.set(iso, (marks.get(iso) ?? 0) + 1)
+  /*
+    The months that HAVE something in them, plus this one. A month stepper
+    would need state the router does not carry, and scrolling a short list of
+    real months is a better answer than paging through empty ones.
+  */
+  const months = [...new Set([today.slice(0, 7), ...dated.map((x) => x.iso.slice(0, 7))])].sort()
+  const byMonth = new Map()
+  for (const d of dated) {
+    const k = d.iso.slice(0, 7)
+    if (!byMonth.has(k)) byMonth.set(k, [])
+    byMonth.get(k).push(d)
+  }
+  return `${crumbFor(p, 'schedule')}
+    <div class="bcrecordhead">
+      <h1>${esc(toolById('schedule')?.name ?? 'Schedule')}</h1>
+      <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
+    </div>
+    <p class="bcpmeta bcprose bcgap-l">
+      When this project's work is due. The office keeps no separate diary, so
+      everything here is scheduled work rather than an appointment — and a
+      to-do with no date is at the foot of the page rather than invented onto
+      one.
+    </p>
+    ${
+      dated.length === 0 && undated.length === 0
+        ? empty(
+            {
+              title: 'Nothing is scheduled',
+              body: 'A to-do with a date appears here, on its day. Give one a date and this fills in.',
+            },
+            button('Go to the to-dos', { kind: 'primary', 'data-bc-go': at(`/p/${p.slug}/tasks`) }),
+          )
+        : months
+            .map((ym) => {
+              const items = byMonth.get(ym) ?? []
+              return `<section class="bcmonth">
+                ${monthGrid(ym, marks, today)}
+                <div class="bcagenda">
+                  ${
+                    items.length === 0
+                      ? `<p class="bcpmeta">Nothing is due this month.</p>`
+                      : items
+                          .map(
+                            ({ t, iso }) => `<div class="bcagendaitem${bcMini.isLate(t) ? ' bcagendaitem--late' : ''}">
+                              <span class="bcagendadate">
+                                <span class="bcagendadd">${esc(String(Number(iso.slice(8, 10))))}</span>
+                                <span class="bcagendamm">${esc(MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3))}</span>
+                              </span>
+                              <button type="button" class="bcitemtitle bcitemlink bcagendawhat"
+                                data-bc-task-open="${esc(taskKey(t, all.indexOf(t)))}">${esc(t.title)}</button>
+                              <!--
+                                IN WORDS AS WELL AS IN COLOUR. A date box with
+                                a different border is not a statement anybody
+                                can read out, and the one thing a schedule owes
+                                a person is which of these is already late.
+                              -->
+                              ${bcMini.isLate(t) ? status('Overdue', 'blocked') : ''}
+                              ${t.who ? bcMini.face({ ...((ctx?.crew ?? []).find((c) => c.slug === t.who) ?? {}), name: whoName(t.who) }) : ''}
+                            </div>`,
+                          )
+                          .join('')
+                  }
+                </div>
+              </section>`
+            })
+            .join('') +
+          (undated.length === 0
+            ? ''
+            : `<section class="bcundated">
+                <h2>No date yet</h2>
+                <div class="bclist">
+                  ${undated.map((t) => taskRow(t, all.indexOf(t))).join('')}
+                </div>
+              </section>`)
+    }`
+}
+
 const SURFACE = {
   overview,
   tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
@@ -1132,6 +1411,8 @@ const SURFACE = {
   contacts: contactsSurface,
   sources: sourcesSurface,
   activity: activitySurface,
+  board: boardSurface,
+  schedule: scheduleSurface,
 }
 
 /* ======================================================================== *

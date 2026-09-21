@@ -790,6 +790,67 @@ controls green, measure with no absolute violations. `lint`, `typecheck`,
 and 0 findings.
 
 ---
+## §10 and §9: the Card Table and the Schedule, as their own tools
+
+Two more views of the same to-dos, with their own addresses, because §5's
+two-level pattern means a miniature leads to the full tool and the board's full
+tool is not the to-do list. **Neither holds data of its own**: the stages are
+`public.tasks.state` (`todo | doing | blocked | done | cancelled`) and the
+dates are `due_on` and `starts_on`, all already on every row `app.studio_tasks`
+returns. Moving a card is `task_state` — the same writer the tick uses, which
+is ADR-0041's one set of writers.
+
+**Blocking is deliberately not offered on the board.** `hq_task_state` refuses
+`blocked` without a reason — *"a blocked task with no reason cannot be
+unblocked by anyone but the person who blocked it"* — so a Move control
+offering it would be an offer the press cannot perform, which is the defect
+this file records five times. It happens on the task, where there is room to
+say what it is waiting on, and the Stuck column says so when it is empty.
+
+**The Schedule says what it is.** The office has dated work and no events
+table, so the page says in its own first paragraph that everything on it is
+scheduled work rather than an appointment, and a to-do with no date is at the
+foot of the page rather than invented onto one. There is no month stepper:
+the months that HAVE something in them are rendered in order, because a
+stepper needs state the router does not carry and paging through empty months
+is worse than scrolling a short list of real ones.
+
+### Defects 50–54
+
+| # | Found | Defect |
+|---|---|---|
+| 50 | opening the capture | **§10's central interaction was in no capture at all.** The Move control was drawn only for a row with a canonical id, and the prototype rows a signed-out browser falls back to carry none — so on every viewport the board photographed as a board you cannot use. It renders DISABLED now, which is the precedent the tick beside it already set. A screen with no capture is a screen nobody is watching, and a control with no capture is the same thing one level down. |
+| 51 | opening the capture | **The Schedule did not mark the overdue item** the miniature marks, so the two disagreed about the one fact a schedule exists to state. `isLate` is exported and shared rather than restated, and the row says "Overdue" in words as well as in colour. |
+| 52 | measuring | **The phone card was mostly its own Move control** — 165px of which most was a stacked label over a full-width select, so a phone screen held three cards and read as a form rather than a board. Label beside the control: 131px. The label stays visible; §11.3's rule is about a label surviving a screenshot, and this changes a record. |
+| 53 | measuring | **The 44px floor was met on the home and missed on every tool behind it.** The task title measured 18px, the tick 28 and the breadcrumb 21 — the row's primary action, its only mutation and the way back out, all under the floor on the device the floor exists for. Fixed as hit area rather than size, so nothing moves. |
+| 54 | the capture harness printing page errors | **Adding the two tools broke the shipped grid.** `overview()` read `TOOLS.filter(t => t.own)` straight into `PREVIEW[t.id]`, so the new ids threw `PREVIEW[t.id] is not a function` and the comparison view rendered NOTHING. No check would have caught it: a screen that throws has no overflow, no contrast failure and no dead control. Filtered rather than given two new tiles — that grid is the BEFORE in a comparison and quietly improving it would spoil the only evidence for what §21 changed. |
+
+And one that fell out of 54: the hand-off list sent **every** tool without a
+tile to the current Team HQ, including two this experience now serves — a link
+that lies about where it goes, which is what the route audit exists for,
+arriving through a list written when everything here was a hand-off.
+
+### The touch-target check was wrong in two ways, and both are fixed
+
+It measured the **element**, so a checkbox inside a 44px label read as 28px
+and the fix for a real finding would have looked like the finding persisting.
+It measures the label that owns the control now. And it ran on the project
+**home only** — which is where the floor was being met — so every tool behind
+it was unmeasured. It walks the home, the to-dos, the board and the schedule.
+
+**Proved by sabotage, with the sabotage's own effect printed first:** dropping
+`.bcitemtitle`'s `min-height` from 44px to 18px turned it red with **58
+findings across three routes and both device legs**; restoring it returned all
+four legs to none.
+
+### State
+
+`basecamp:gate` exit 0 — 52/52 routes (two new), 51/51, 31/31, 26/26, 64/64,
+classes, controls and coverage green. All four viewports captured for both new
+screens, because the coverage audit refused the commit until they were: it
+listed six gaps by name the first time it ran.
+
+---
 ## NEXT ACTION
 
 **The full tools behind the miniatures, and §14's configurability.** The

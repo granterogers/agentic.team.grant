@@ -272,23 +272,50 @@ for (const size of SIZES) {
 
   /* --- touch targets on the narrow legs --- */
   if (size.touch) {
-    const small = (await page.evaluate(
-      inPage(`const out = []
-         for (const el of document.querySelectorAll('button, a, input, summary')) {
-           const r = el.getBoundingClientRect()
+    /*
+      THE HIT AREA, AND EVERY TOOL — two corrections to one check.
+
+      It measured the ELEMENT, so a checkbox wrapped in a 44px label reads as
+      28px and the fix for a real finding would have looked like the finding
+      persisting. It measures the label that OWNS the control now, which is
+      what a finger lands on.
+
+      And it ran on the project HOME only, which is where the floor was being
+      met. Every tool behind it was unmeasured, and the moment it walked them
+      it found the task title at 18px, the tick at 28 and the breadcrumb at
+      21 — the row's primary action, its only mutation and the way back out,
+      all under the floor, on the device the floor exists for. An audit that
+      has never opened a surface says nothing about it.
+    */
+    const HIT =
+      'const hit = (el) => { const lab = el.closest("label"); ' +
+      'return lab !== null && lab.querySelector("input, select, textarea") === el ? lab : el }'
+    for (const leg of ['', '/tasks', '/board', '/schedule']) {
+      await page.goto(url(`${slug ?? '/basecamp'}${leg}`), { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('.bcmain')
+      await page.waitForTimeout(400)
+      const small = (await page.evaluate(
+        inPage(`${HIT}
+         const out = []
+         for (const el of document.querySelectorAll('button, a, input, select, summary')) {
+           const r = hit(el).getBoundingClientRect()
            if (r.width === 0 || r.height === 0) continue
            if (r.height >= 43.5 && r.width >= 43.5) continue
            const name = (el.textContent ?? el.getAttribute('aria-label') ?? '').trim().slice(0, 28)
            out.push(el.tagName.toLowerCase() + ' "' + name + '" ' + Math.round(r.width) + 'x' + Math.round(r.height))
          }
-         return out`),
-    )) as string[]
-    console.log(`  under 44px     ${small.length === 0 ? 'none' : String(small.length)}`)
-    for (const s of small) console.log(`    ${s}`)
-    if (small.length > 0)
-      problems.push(
-        `${size.id}: ${String(small.length)} control(s) under 44px — ${small.join('; ')}`,
+         return [...new Set(out)]`),
+      )) as string[]
+      const where = leg === '' ? 'the project home' : leg.slice(1)
+      console.log(
+        `  under 44px     ${where}: ${small.length === 0 ? 'none' : String(small.length)}`,
       )
+      for (const s of small) console.log(`    ${s}`)
+      if (small.length > 0)
+        problems.push(
+          `${size.id} ${where}: ${String(small.length)} control(s) under 44px — ${small.join('; ')}`,
+        )
+    }
   }
 
   await ctx.close()

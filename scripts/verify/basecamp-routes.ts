@@ -230,7 +230,13 @@ if (slug !== null) {
     }
   }
 
-  for (const bogus of ['nonsense', 'board', 'chat']) {
+  /*
+    `board` came off this list when §10 gave the Card Table its own address.
+    It is here as a reminder of what the list is FOR: an address this
+    experience does not serve must correct itself rather than render the
+    overview while the URL goes on promising something else.
+  */
+  for (const bogus of ['nonsense', 'messages', 'chat']) {
     await open(`${slug}/${bogus}`)
     const url = (await page.evaluate(inPage('return location.pathname'))) as string
     check(

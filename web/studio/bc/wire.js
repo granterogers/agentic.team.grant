@@ -323,6 +323,41 @@ const wireTasks = (root) => {
     })
   }
 
+  /*
+    §10: MOVING A CARD IS CHANGING THE TO-DO.
+
+    One writer, `task_state`, which is the same one the tick uses - ADR-0041's
+    "one set of writers". The select is put back to what the office still
+    believes when the write fails, for the reason the tick is: a card that
+    stays where you dropped it after a failed write is the product lying about
+    canonical state.
+
+    `blocked` is not in the options, because `hq_task_state` refuses it
+    without a reason and an offer may only promise what the press can perform.
+  */
+  for (const sel of root.querySelectorAll('[data-bc-move]')) {
+    const was = sel.value
+    sel.addEventListener('change', async () => {
+      const id = sel.dataset.bcMove
+      if (id === undefined || id === '') return
+      const wanted = sel.value
+      const cardEl = sel.closest('[data-bc-card]')
+      cardEl?.classList.add('bcitem--pending')
+      const done = await attempt(
+        sel,
+        'Moving…',
+        () => act('task_state', { p_task_id: id, p_state: wanted }),
+        'Moved.',
+      )
+      cardEl?.classList.remove('bcitem--pending')
+      if (done === null) {
+        sel.value = was
+        return
+      }
+      await ctx.refresh()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-task-open]')) {
     b.addEventListener('click', () => {
       ctx.openTask(b.dataset.bcTaskOpen)

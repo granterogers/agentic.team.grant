@@ -169,8 +169,8 @@ export const compositionA = (p) => `<div class="bchome bccomp bccomp--a">
     ${head(p)}
     ${mod(p, { id: 'tasks', name: toolName('tasks', 'To-dos'), body: todosMini(p, { lists: 3, per: 4 }), wide: true })}
     <div class="bcpair">
-      ${mod(p, { id: 'tasks', name: 'Schedule', body: calendarMini(p, { items: 4 }) })}
-      ${mod(p, { id: 'tasks', name: 'Where the work is', body: cardsMini(p) })}
+      ${mod(p, { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 4 }) })}
+      ${mod(p, { id: 'board', name: 'Where the work is', body: cardsMini(p) })}
     </div>
     ${mod(p, {
       id: 'team',
@@ -202,8 +202,8 @@ export const compositionB = (p) => `<div class="bchome bccomp bccomp--b">
     <div class="bcwork">
       <div class="bcworkmain">
         ${mod(p, { id: 'tasks', name: toolName('tasks', 'To-dos'), body: todosMini(p, { lists: 3, per: 4 }) })}
-        ${mod(p, { id: 'tasks', name: 'Where the work is', body: cardsMini(p) })}
-        ${mod(p, { id: 'tasks', name: 'Schedule', body: calendarMini(p, { items: 5 }) })}
+        ${mod(p, { id: 'board', name: 'Where the work is', body: cardsMini(p) })}
+        ${mod(p, { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 5 }) })}
         ${mod(p, { id: 'documents', name: toolName('documents', 'Documents'), body: docsMini(p, { items: 4 }) })}
       </div>
       <aside class="bcrail" aria-label="Who is here and what has happened">

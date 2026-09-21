@@ -117,6 +117,13 @@ for (const size of sizes) {
       await page.waitForSelector('#bc-edit-who', { timeout: 5000 })
       await page.waitForTimeout(300)
     })
+    /*
+      §10 and §9's own surfaces. A screen with no capture is a screen nobody
+      is watching, and both of these were reachable the moment they had a
+      route - so they get a capture in the same commit as the route.
+    */
+    await shot('board', `${slug}/board`)
+    await shot('schedule', `${slug}/schedule`)
     await shot('team', `${slug}/team`)
     await shot('documents', `${slug}/documents`)
     /*

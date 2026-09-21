@@ -93,7 +93,13 @@ const dueWords = (t) => {
   return label
 }
 
-const isLate = (t) => {
+/*
+  EXPORTED, because §9's full Schedule needs the same answer and a second
+  copy of "is this late" is a second thing to get wrong. The reader and the
+  miniature disagreeing about which row is overdue would be the two-sources
+  defect on the one fact a schedule exists to state.
+*/
+export const isLate = (t) => {
   const iso = t.due_on ?? null
   if (isDone(t) || iso === null || iso === undefined || iso === '') return false
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`)
