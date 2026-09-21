@@ -101,7 +101,38 @@ const understanding = (turn: ScenarioTurn, o: Observation): Finding => {
       'read as a direct command when the person was asking a question or thinking aloud',
     )
   }
-  return finding('understanding', 'pass', `read as "${o.reading}"`)
+  /*
+    The two matchers disagree, and the disagreement is the defect.
+
+    The office is confident this is an instruction, and the matcher that
+    decides whether anything is filed will file nothing. Neither half is
+    wrong alone: the intent classifier has read the mood correctly, and
+    `personalTaskRequest` is deliberately narrow because a false positive
+    costs Grant the work while a miss costs him a to-do he adds himself.
+
+    What is wrong is that the turn now ends with the office having
+    understood an instruction it has no path to carry out - the condition
+    Issue #289 documents, where it went on to say it would. CLAUDE.md names
+    this shape the hardest kind to see: both halves right alone, only their
+    disagreement wrong, recorded three times already.
+
+    Reported as a distinct, named finding rather than folded into the pass
+    above, because the fix is neither "widen the matcher" (which #289 argues
+    against, correctly) nor "narrow the classifier".
+  */
+  if (wantsWork && !o.wouldFile && o.reading === 'direct_command') {
+    return finding(
+      'understanding',
+      'fail',
+      'the office reads this as a direct command and the matcher that files tasks will file nothing, so the turn ends understanding an instruction it has no path to carry out (see #289)',
+    )
+  }
+
+  return finding(
+    'understanding',
+    'pass',
+    `read as "${o.reading}"${o.wouldFile ? ', and something would be filed' : ''}`,
+  )
 }
 
 /**

@@ -49,6 +49,7 @@ import {
   needsClarification,
   onlyAnAcknowledgement,
 } from '../agents/intent.ts'
+import { personalTaskRequest } from '../agents/mine.ts'
 import { excludesASubject, rejectsWithoutSaying } from '../agents/negation.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import type { Utterance } from './scenario.ts'
@@ -89,6 +90,23 @@ export interface Observation {
   readonly corrected: boolean
   /** A request to pull tasks out of prose was recognised. */
   readonly extraction: boolean
+  /**
+   * The office would actually FILE something from this message.
+   *
+   * The most consequential field offline, and the one that connects a
+   * comprehension reading to a real-world outcome. `personalTaskRequest` is
+   * the grammatical matcher that decides whether a task appears on Grant's
+   * own list, and it is deliberately narrow: its own comment argues that a
+   * miss costs a to-do he adds himself while a false positive costs him the
+   * WORK. That trade is right and is not what this measures.
+   *
+   * What this measures is the DISAGREEMENT between this matcher and the
+   * intent classifier. When the office is confident a message is a direct
+   * command and nothing will be filed from it, the turn ends with the office
+   * having understood an instruction it has no path to carry out - which is
+   * the condition #289 documents, where it then said it would.
+   */
+  readonly wouldFile: boolean
   /** The message was read as nothing but an acknowledgement. */
   readonly acknowledgementOnly: boolean
   /** The message was read as a contentless rejection of the last answer. */
@@ -159,6 +177,7 @@ export const comprehensionDoor = (): Transport => ({
     const correction = readCorrection(said, context.hadAnswer)
     const teaching = readTeaching(said)
     const extraction = extractionRequest(said)
+    const filing = personalTaskRequest(said)
 
     return {
       door: 'comprehension',
@@ -174,6 +193,7 @@ export const comprehensionDoor = (): Transport => ({
       learned: teaching !== null,
       corrected: correction !== null,
       extraction: extraction !== null,
+      wouldFile: filing !== null,
       acknowledgementOnly: onlyAnAcknowledgement(said),
       bareRejection: rejectsWithoutSaying(said),
       exclusionSeen: excludesASubject(said),
