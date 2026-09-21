@@ -254,13 +254,15 @@ describe('completion - the wanted effect, in canonical state', () => {
     ['task_changed', { tasksChanged: 1 }],
     ['document', { documentsCreated: 1 }],
     ['preference', { lessonsLearned: 1 }],
+    ['preference-as-an-offer', { offersMade: 1 }],
     ['blocked', { blockersRaised: 1 }],
   ]
 
   for (const [effect, present] of cases) {
+    const cls = effect === 'preference-as-an-offer' ? 'preference' : effect
     it(`PASSES "${effect}" when the row exists, FAILS when it does not`, () => {
-      expect(verdict(turn(effect), seen('ok', present), 'completion')).toBe('pass')
-      expect(verdict(turn(effect), seen('ok', {}), 'completion')).toBe('fail')
+      expect(verdict(turn(cls), seen('ok', present), 'completion')).toBe('pass')
+      expect(verdict(turn(cls), seen('ok', {}), 'completion')).toBe('fail')
     })
   }
 

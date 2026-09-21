@@ -45,7 +45,19 @@ const REQUIRES: Record<EffectClass, (e: CanonicalEffects) => boolean> = {
   task: (e) => e.tasksCreated > 0,
   task_changed: (e) => e.tasksChanged > 0 || e.tasksCreated > 0,
   document: (e) => e.documentsCreated > 0,
-  preference: (e) => e.lessonsLearned > 0,
+  /*
+    A lesson OR an offer. #290.
+
+    An unmarked preference - one the person never said was lasting - is
+    OFFERED on the Governance page rather than stored, deliberately, because
+    recognition is unreliable (0 of 8 through the prompt, 2 of 12 through a
+    lexicon) and a wrong silent rule changes every future answer.
+
+    Not a weaker test: an office that ignores the preference records
+    neither and still fails. What this stops is requiring the office to
+    ASSUME permanence the person did not state.
+  */
+  preference: (e) => e.lessonsLearned > 0 || e.offersMade > 0,
   // A blocker row OR a job that paused to ask. The office has two ways of
   // stopping correctly and a test that knew only one reported the approval
   // boundary working as the wanted effect never appearing.

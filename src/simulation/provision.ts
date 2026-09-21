@@ -252,5 +252,23 @@ export const sweepHarnessWork = async (
     await db.execute(`select app.undo_tasks_from_job(${lit(row.id)}::uuid)`).catch(() => undefined)
   }
 
+  /*
+    And the OFFERS a harness turn made.
+
+    #290 routes an unmarked preference through #147's offer instead of
+    storing it, so a Shadow Grant sentence can now be PROPOSED to Grant as
+    a standing rule. 0543 hides those from his Governance page and
+    `check:leaks` counts them - but a hidden pile that grows is the same
+    debris class with the evidence turned off, which five tables in this
+    repository have already proved comes back.
+
+    `app.harness_suggestion` is the same predicate the reader and the
+    witness use, so the three cannot disagree about what a harness offer
+    is.
+  */
+  await db
+    .execute('delete from public.suggestions g where app.harness_suggestion(g.offer_args)')
+    .catch(() => undefined)
+
   return { tasksBefore, tasksAfter: await count(), jobs: rows.length }
 }

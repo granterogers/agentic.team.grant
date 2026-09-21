@@ -57,6 +57,17 @@ export interface CanonicalEffects {
   /** Jobs in the family stopped, correctly, to ask a person. */
   readonly awaitingApproval: number
   /**
+   * Standing rules the office OFFERED rather than assumed.
+   *
+   * #290: an unmarked preference - "keep it short", where the person never
+   * said it was lasting - is offered on the Governance page instead of
+   * stored. Counting it is not softening the test: an office that ignores
+   * the preference still records neither a lesson nor an offer and still
+   * fails. What it stops is demanding that the office ASSUME permanence,
+   * which is what put 34 junk lessons into every prompt.
+   */
+  readonly offersMade: number
+  /**
    * The titles of what this turn actually created.
    *
    * Needed because "did the office act" is the wrong question for a
@@ -89,6 +100,7 @@ export const NO_EFFECTS: CanonicalEffects = {
   delegationDepth: 0,
   settled: false,
   awaitingApproval: 0,
+  offersMade: 0,
   createdTitles: [],
   anyFailed: false,
   evidence: '',
@@ -141,6 +153,9 @@ export const readEffects = async (
           and dl.sent_at is not null) as deliveries_sent,
       (select count(*)::int from public.lessons l
         where l.from_job in (select job_id from family)) as lessons_learned,
+      (select count(*)::int from public.suggestions g
+        where g.kind = 'standing_rule'
+          and g.raised_at >= ${lit(since)}::timestamptz) as offers_made,
       (select count(*)::int from public.consultations c
         where c.job_id in (select job_id from family)) as consultations,
       (select count(*)::int from public.job_impediments i
@@ -204,6 +219,7 @@ export const readEffects = async (
     delegationDepth: n('delegation_depth'),
     settled: r.settled === true || String(r.settled) === 'true',
     awaitingApproval: n('awaiting_approval'),
+    offersMade: n('offers_made'),
     createdTitles: list('created_titles'),
     anyFailed: r.any_failed === true || String(r.any_failed) === 'true',
     evidence: String(r.evidence ?? ''),

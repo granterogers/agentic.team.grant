@@ -537,5 +537,9 @@
   "0536_a_resumption_is_not_a_retry.sql": "f182eaed75fd7723d86605176635b692415a0e9dd25ee5af5531e14f0efccaaf",
   "0537_the_reading_can_see_the_backup.sql": "9df0d221dcba0d603945d672a12d79c040f05faf012c7e5d44ef092c4c585d24",
   "0538_the_health_reading_carries_the_backup.sql": "ed84af34e18118dd433ca63da44e262ccc113f57498e37b696cea407e040bc30",
-  "0539_a_lesson_a_harness_taught_is_not_a_lesson.sql": "846f6db42e91f3676bc7b7034eabb82b9320892476f23f5b13216ec81ae0790a"
+  "0539_a_lesson_a_harness_taught_is_not_a_lesson.sql": "846f6db42e91f3676bc7b7034eabb82b9320892476f23f5b13216ec81ae0790a",
+  "0540_the_backup_chore_runs_without_waiting_for_a_deploy.sql": "fb1e0df0f565ec31ac339c94da8c5a306a49d249c0b2511b3aa36f14573da596",
+  "0541_synthetic_work_cannot_cross_a_real_boundary.sql": "039f602cb454f4f8f9f617dbd015165f694a2c9abc65de97ac0c4a65ecdfb282",
+  "0542_a_job_inherits_whether_it_is_real.sql": "fdaab209c8d140e520de972c2a5ba945aecf96ad77b611c79240b21d45efdb89",
+  "0543_an_offer_a_harness_made_is_not_an_offer.sql": "a87c4098bca9fde37781ba33e8dd86fa4d5737a8568048be4e19729ea1ba733e"
 }

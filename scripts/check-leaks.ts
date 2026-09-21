@@ -317,6 +317,18 @@ const piles = await db.execute(`
     (select count(*) from public.knowledge_connectors
       where connector like 'fixture\\_%') as fixture_connectors,
     /*
+      AN OFFER A HARNESS MADE, sitting on his Governance page.
+
+      New the moment #290 routed an unmarked preference through #147's
+      offer instead of storing it: the route is right, and it meant a
+      Shadow Grant sentence could be proposed to him as a standing rule.
+      0543 filters the reader; this counts what the reader is hiding, so
+      the pile cannot grow unwatched. A debris class with no witness is
+      one that comes back - five tables have proved it.
+    */
+    (select count(*) from public.suggestions g
+      where app.harness_suggestion(g.offer_args)) as harness_offers,
+    /*
       AN AUTONOMY SETTING ON A PROJECT NOBODY CAN SEE.
 
       The project_id foreign key on autonomy_settings is NO ACTION, not
@@ -444,6 +456,7 @@ console.log(
     `fixture connectors: ${String(pile.fixture_connectors)} · ` +
     `stranded autonomy rows: ${String(pile.stranded_autonomy)} · ` +
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
+    `harness offers on the Governance page: ${String(pile.harness_offers)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
 /*

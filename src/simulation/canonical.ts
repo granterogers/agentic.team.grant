@@ -218,11 +218,27 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
             async () =>
               await one(`
                 begin;
+                /*
+                  MARKED SYNTHETIC AT THE DOOR (0541, 0542).
+
+                  Production Reliability built this for #298: the guard asks
+                  at SEND time, and a suite that corrects its attribution in
+                  teardown answers twenty seconds too late. A command stamped
+                  synthetic carries the mark onto its job by trigger, and onto
+                  every child, so app.deliverable_to has the truth before the
+                  first delivery rather than after it.
+
+                  This door already produced fixture-shaped requested_by, so
+                  nothing here was leaking. Adopting their mechanism rather
+                  than relying on the generated column alone means the
+                  containment does not depend on a naming convention holding.
+                */
                 insert into public.inbound_commands
-                  (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at)
+                  (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at,
+                   synthetic)
                 values ('teamhq', ${lit(key)},
                         ${lit(`verify-shadow-${options.runToken}`)},
-                        ${lit(utterance.text)}, ${lit(key)}, app.now_utc())
+                        ${lit(utterance.text)}, ${lit(key)}, app.now_utc(), true)
                 on conflict (dedupe_key) do nothing;
                 create temp table _j as
                   select coalesce(
