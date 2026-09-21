@@ -1093,3 +1093,105 @@ Across 8 sessions (4 personas × seeds 77 and 4242):
 Neither of the first two has been established as PRODUCT rather than
 INSTRUMENT. The next step is the same discipline: read the answers, not the
 tally.
+
+---
+
+## Two more reading defects, and the frequency that decides which to fix
+
+The sweep's biggest remaining class — *"asked for something and the office
+did not register a request at all"* — triaged into three groups by driving
+`readClause` and `classifyIntent` directly.
+
+**Fixed, because it is in his traffic.** `do` was in the function-word list
+unconditionally, so *"do what you think is best and let me know"* and *"do
+whatever makes sense to move the other one along"* were unrecognised
+thoughts. `INVERTED` already reads *"do you think"*, *"do we need"*, *"do
+the trains run"* as questions one branch above, so `do` needed no entry
+there at all — it needed a subject test and there already was one. Both
+halves sabotage-proved separately (`INVERTED` was also missing *you*).
+
+**Filed, not fixed — [#301](https://github.com/granterogers/agentic.team.grant/issues/301).**
+`&` is a coordinator to nobody in the office: `BOUNDARY` in `clauses.ts`
+spells every coordinator out as a word and `&` appears nowhere in
+`src/agents/`. *"…due the tenth **and** can you move the write-up"* is an
+assignment; the same sentence with `&` is an unrecognised thought and the
+request is lost.
+
+**Left as a negative finding.** The declarative obligation — *"the funding
+officer is going to want that paperwork before the tenth"*, *"we still owe
+the funding officer the paperwork"* — seven of the fourteen. Treating every
+statement of fact as a task is the #290 judgement and is not being forced.
+
+### The frequency question, asked structurally
+
+`inbound_commands.synthetic` only exists since 0541, so it cannot say what
+was real last month. The filter that can is the one the replay work
+established: **a real job whose answer was actually delivered to
+somebody.**
+
+| over 60 days | count |
+|---|---|
+| real, delivered messages | **123** |
+| `do whatever` / `do what you` | **4** |
+| a prohibition in a purpose clause | **1** |
+| `&` | **0** |
+
+That is what decided which two shipped. The unfiltered query said `&`
+appeared four times and `do whatever` nine — every one of them Shadow
+Grant's own output from before `synthetic` existed.
+
+### And the instrument was crediting incomprehension as judgement
+
+Held-out `agency` appeared to drop when the `do` fix landed. It had not.
+*"do whatever makes sense to move that thing along but do not contact
+anyone"* used to classify as an unrecognised `thought`, so the office
+flagged ambiguity — and `agency` **passed** it for having intended to ask.
+It had intended nothing; it had failed to read the verb.
+
+`agency` declines to score a turn the office never recognised now —
+unreached, not failed, because it may still ask for the right reason once
+the referent resolves, and that is a layer this door cannot see. #232 built
+`recognised` for exactly this distinction and the same asymmetry applies to
+asking. **The correction alone moved held-out agency from 35 passes to 24:
+eleven of them were the office being confused.**
+
+Measured both ways on identical material, on the corrected instrument:
+
+| | without | with |
+|---|---|---|
+| understanding | 84% | **85%** |
+| agency | 83% | **80%** |
+| context | 96% | 96% |
+| safety | 100% | 100% |
+
+The one agency loss is real and is not papered over: the office is now
+confident about a message whose referent is vague, where before it was
+merely confused. The family's expectations are untouched.
+
+### The live probe, and what it did and did not establish
+
+`npm run shadow:probe-live` is new — one sentence through the real office,
+canonical effects printed beside the reply.
+
+**Live verification of a behaviour fix is BLOCKED on this branch.** The
+deployed worker predates every fix here and deploying a feature branch into
+Grant's live office is not a call to make unilaterally.
+
+The run was not wasted. Four attempts, all refused by #185's coherence gate
+with *"incoherent output metadata: body"*, job failed, **empty reply**.
+Before filing that as #211 reopened, the frequency was asked:
+
+| 14 days | failures with that reason |
+|---|---|
+| harness | **77** |
+| real | **3** — and those three are the ones #211 was filed about |
+
+**Zero real jobs have hit it since #211 shipped.** No Issue filed. Seventh
+instance in this repository of harness traffic about to be reported as the
+office failing, and it was one query away from being the eighth.
+
+Containment held: `is_fixture`, `harness_job` and `synthetic` all true,
+`announce` false, no delivery attributable to the run. The twelve tasks
+today's live runs left were swept and every `check:leaks` counter is zero.
+`check:leaks` still fails on **#298**, which is Production Reliability's
+and deliberately untouched here.
