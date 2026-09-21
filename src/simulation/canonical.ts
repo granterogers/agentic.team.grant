@@ -234,6 +234,26 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
               select j.state::text as state,
                      app.harness_job(j.job_id) as fixture,
                      coalesce(j.recipient_agent, '') as agent,
+                     /*
+                       The office's READING of the mood, which is what the
+                       understanding dimension scores - not who answered.
+                       No backticks in here: this comment is inside a
+                       template literal and one backtick ends the string.
+
+                       This door used to report recipient_agent as the
+                       reading, and the evaluator compares a reading against
+                       the vocabulary classifyIntent produces: assignment,
+                       direct_command, light_investigation, question,
+                       thought. An agent slug is in none of them, so
+                       understanding FAILED for every actionable scenario on
+                       the live door, systematically, against a product that
+                       had read the message correctly. routing_decisions
+                       records the real class. jobs.intent_class is null on
+                       every row, which is a separate finding.
+                     */
+                     coalesce((select rd.intent_class from public.routing_decisions rd
+                                where rd.job_id = j.job_id
+                                order by rd.decided_at desc limit 1), '') as reading,
                      coalesce((select left(o.body, 4000) from public.outputs o
                                 where o.job_id = j.job_id
                                 order by o.created_at desc limit 1), '') as answered,
@@ -274,7 +294,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         // instrument for this and is asked separately.
         asked: /\?/.test(answered),
         recognised: answered !== '',
-        reading: String(row.agent ?? ''),
+        reading: String(row.reading ?? ''),
         confident: String(row.state) === 'complete',
         clauses: [utterance.text],
         learned: false,

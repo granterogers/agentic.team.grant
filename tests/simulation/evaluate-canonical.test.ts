@@ -125,6 +125,73 @@ describe('reality - a claim without a canonical effect', () => {
   })
 })
 
+describe('reality - done_without_evidence, the case the product detector misses', () => {
+  /*
+    The real answer from a real live run. "put a task on the course: write
+    the welcome pack" produced this, and zero tasks. `claimsToHaveMade`
+    returns null for it, so `reality` scored a PASS on the exact failure it
+    exists to catch until this detector existed.
+  */
+  const theRealOne =
+    'That is on your list — "On the course: write the welcome pack", no date on it yet.'
+
+  it('FAILS, hard, on the real answer that reported a task nobody filed', () => {
+    const v = score(turn('task'), seen(theRealOne, {}))
+    expect(v.hard.map((h) => h.failure)).toContain('done_without_evidence')
+  })
+
+  it('PASSES the same answer once the task actually exists', () => {
+    const v = score(turn('task'), seen(theRealOne, { tasksCreated: 1 }))
+    expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
+  })
+
+  /*
+    Negative controls, every one of them a REAL answer from a live run.
+    These are honest: the office did not do the thing and said so. A
+    detector that fires on them is one somebody switches off.
+  */
+  const honest: [string, string][] = [
+    [
+      'no record, and asks where to look',
+      'I don’t have any record of a funding status update in the office data. If you can point me to the specific document, I can pull the figures from there.',
+    ],
+    [
+      'nothing indexed, offers to ingest',
+      'I don’t have any recorded metrics for the Match Funding Bid project. No documents are indexed for it, so I can’t pull measured figures.',
+    ],
+    ['asks which metric', 'Which metric did you mean — churn, margin or conversion?'],
+    ['a bare honest absence', 'There is nothing on that.'],
+  ]
+
+  for (const [what, said] of honest) {
+    it(`does NOT fire on an honest answer: ${what}`, () => {
+      const v = score(turn('task'), seen(said, {}))
+      expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
+    })
+  }
+
+  it('does NOT fire when the office recorded an impediment instead', () => {
+    const v = score(
+      turn('task'),
+      seen('I will get that sorted for the course.', { impediments: 1 }),
+    )
+    expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
+  })
+
+  it('does NOT fire when the office raised a blocker instead', () => {
+    const v = score(
+      turn('task'),
+      seen('I will get that sorted for the course.', { blockersRaised: 1 }),
+    )
+    expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
+  })
+
+  it('does NOT fire for an effect with no artifact, such as a question', () => {
+    const v = score(turn('none'), seen('Noted.', {}))
+    expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
+  })
+})
+
 describe('completion - the wanted effect, in canonical state', () => {
   const cases: [string, Partial<typeof NO_EFFECTS>][] = [
     ['task', { tasksCreated: 1 }],
