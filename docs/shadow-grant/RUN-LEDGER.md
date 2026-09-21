@@ -964,3 +964,132 @@ force it — lowering the planning threshold, or routing more intents to
 `office.pursue` — either changes autonomy semantics, which Grant excluded,
 or makes the office plan work it could simply answer. **Recorded, not
 fixed.**
+
+---
+
+# 21 September, later — the multi-turn sweep
+
+## The arcs had never run live, and every conversation was the same one
+
+Two defects, each of which made every multi-turn claim this workstream has
+made a measurement of something else.
+
+**Cross-scenario threading.** The canonical door passed the dedupe key as
+`origin_ref`, and `app.conversation_before` threads on
+`split_part(origin_ref, ':', 1)` — which was `teamhq` for every turn of
+every scenario. Scenario 3's first turn opened with scenarios 1 and 2
+behind it, and a referent test answered a question nobody had asked.
+Measured `prior_turns: 2` on a turn that had none. `TurnContext` carries
+`conversation` now; proved live — three scenarios, three chats, all
+`prior: 0`.
+
+**`scripts/shadow/grant.ts` was hardcoded to the comprehension door.** So
+every arc measurement was of the office's reading and none of its memory.
+`--live`, `--from`, `--count`, `--deadline`. The first live arc ran six
+turns before the sixth failed to settle in 200s — reported unrun, and the
+rest of the conversation abandoned, which `runCorpus` already did and this
+runner did not.
+
+**Live throughput is ~2.4 minutes a turn.** A 29-arc live sweep is not
+available in a foreground session. The split that follows from it: the
+comprehension door finds candidates at scale, and the live door verifies
+the strongest.
+
+## 40 of 66 goal families had never appeared in a conversation
+
+The arcs covered 26. Specialist hand-offs, conflicting preferences, a
+deliberate project switch, a mixed question-and-instruction, an honest
+absence, a duplicate request, a revision chain and every capability wall
+but one had only ever been measured as isolated sentences. **29 arcs now,
+66 of 66 families.** No new probes — existing families put where a person
+would actually say them.
+
+`breaksAfter` is new and is the one that could not be expressed at all: the
+person goes away and comes back in a **second conversation**. A preference
+is a lesson — stored, durable, and it must still hold in a conversation
+that has never heard it said. A bare referent is a thread fact, windowed at
+thirty minutes, and after a break the office should **ask** rather than
+guess. Those have opposite right answers and only a break tells them apart.
+
+## Three instrument defects before one product defect
+
+Seed 313 reported **41 complaints. Six survived.** Every reduction is a
+control, not a weakened expectation — `understanding` stayed at 17 of 112
+turns throughout, which is the check that says so.
+
+1. **The withdrawal complaint was the stale proxy.** `grant.ts` asked
+   `o.clauses.length < 2`. #291 made the handler REMOVE the withdrawn half,
+   so the kept half legitimately has fewer clauses and **the proxy got
+   worse as the product got better**: 35 of the 41. `transport.ts` had
+   already carried the correction to the evaluator; nobody carried it here.
+2. **A reacting turn's intent is not about the message sent.** When the
+   office asks something the person answers it — "the pricing one" — and
+   the turn's own sentence is never sent. Its `withdrawn` went with it, and
+   two scorers failed the office for missing a withdrawal nobody uttered.
+   `safety` already tested the negation against the SENT text for exactly
+   this reason. `withdrawalWasSent` is shared now.
+3. **The harness was misspelling the word under test.** `roughen.ts`
+   refuses to respell negations and numerals. Its hand-written list held
+   `forget`, `scrap`, `drop`, `hold` and `cancel` — and missed **`ignore`**,
+   the one Grant's own messages use most. Then, one list over, **`actually`**:
+   the protection was derived from `CANCELS` and `BARE_PIVOTS` was not
+   exported. `igore`, `ignoore`, `ignoer`, `inore`, `actuallly`, `atually`,
+   `actulaly` — the harness testing its own spelling and reporting it as
+   the class Grant ranks highest. Both lists are derived from the office
+   now, and `tests/simulation/pivot-survives-a-typo.test.ts` asks the
+   property end to end: after roughening, does the office still read a
+   withdrawal. Sabotage: derive from nothing, eight operators red, restore,
+   green.
+
+## The product defect: a courtesy word swallowed every polite retraction
+
+    "send that to the funding officer please leave it I will do it"
+
+read as **no retraction at all** — almost verbatim one of the three live
+cases #291 was written for, with "please" added.
+
+`NOT_A_PIVOT` exists so an operator being ASKED FOR is not read as one
+being PERFORMED, and its own comment states the rule: *a negative or a
+modal immediately in front*. `please` is neither. Removed; the two shapes
+it appeared to protect are both already covered by guards written for them
+(nothing precedes the operator; `remember to` is doing the work), and both
+are controls.
+
+**Seven positives, eight negatives, sabotage-proved** — put `please` back,
+seven red, negatives unaffected, restore, green.
+
+**No held-out improvement is claimed.** The frozen corpus scores
+identically with and without the fix — 84/96/88/100 both ways — because the
+generator never places a courtesy marker in front of a pivot. That is a
+**coverage gap**, recorded, and deliberately NOT closed now: a shape added
+after the fix whose outcome is already known is not evidence for it.
+
+Fresh seeds 901/902/903 after the fix: understanding 90/90/90, context
+95/93/94, agency 90/86/91, safety 100. No regression.
+
+## The held-out corpus is re-frozen — `27f3b93972980a66` → `b98b6cf030e75970`
+
+Because the **generator** changed, not because a number was inconvenient.
+Proved to be the only cause: reverting `roughen.ts` alone returns the old
+value exactly, so neither the seventeen new arcs nor the evaluator nor the
+retraction fix touches the frozen text. **Any comparison across that
+boundary is invalid**, which is what the fingerprint exists to say, and the
+superseded value is kept beside the new one so the boundary stays visible.
+
+New reference, taken immediately after re-freezing and before any further
+production change: **understanding 84%, context 96%, agency 88%, safety
+100%**, over 132 turns and 66 families.
+
+## Still open, from the same sweep — not yet established as product
+
+Across 8 sessions (4 personas × seeds 77 and 4242):
+
+| n | complaint | status |
+|---|---|---|
+| 34 | a preference was stated and not stored | the #290 negative finding, preserved — **do not force green** |
+| 18 | a request was not registered at all | `task.implied` / `task.indirect`; several have a false start in front |
+| 6 | read as an instruction with nothing to file | #289, known and open |
+
+Neither of the first two has been established as PRODUCT rather than
+INSTRUMENT. The next step is the same discipline: read the answers, not the
+tally.
