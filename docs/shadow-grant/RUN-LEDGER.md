@@ -97,6 +97,9 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 35 | 21 Sep | **task.indirect FIXED** — artifact-noun class; held-out 82% → 84% understanding | DONE |
 | 36 | 21 Sep | Approval variance: the state machine IS authoritative; the variance is route selection | DONE |
 | 37 | 21 Sep | **[#298](https://github.com/granterogers/agentic.team.grant/issues/298)** — 0523 defeated by attribution-after-the-fact; 2 harness messages reached Grant tonight | FILED |
+| 38 | 21 Sep | **#290: marked stores, unmarked OFFERS.** Lexical recogniser built, measured **2/12 on fresh**, deleted | DONE |
+| 39 | 21 Sep | **0543** — harness offers kept off the Governance page; door adopts Production Reliability's `synthetic` mark | DONE |
+| 40 | 21 Sep | **[#300](https://github.com/granterogers/agentic.team.grant/issues/300)** — the canonical pending-decision distinction: 5 per 30 days, not 49 | FILED |
 
 ## Decisions taken without asking
 
@@ -860,3 +863,104 @@ So most of the office's questions are invisible to `needs_me` and the
 Governance page. Not implemented — it changes what Grant's Governance page
 shows, which is his call, and 38 per 30 days is small enough to be worth
 asking about rather than shipping.
+
+
+---
+
+## #290 — the answer, and the negative result that produced it
+
+### A lexical recogniser does not generalise, measured
+
+Built from the DOMAIN — what an answer has: an order, a length, a format, a
+register, a stance on its own confidence — deliberately not from the eight
+failing statements.
+
+| set | score |
+|---|---|
+| the known eight, held out from the build | 7/8 |
+| "unseen" positives | 12/12 |
+| negatives | 12/12 |
+| **a THIRD set, written afterwards and never used to tune** | **2/12** |
+
+The 12/12 was an illusion created by tuning against that set. **Agreement
+across sets I had touched proved nothing** — the #296 discipline applied to
+my own work. The module is deleted rather than left as dead code.
+
+Together with the prompt rewrite measured at **0 of 8**, recognition is
+unreliable by two independent routes.
+
+### So the ROUTE carries the safety, not the reader
+
+| what the PERSON said | route |
+|---|---|
+| marked — *"from now on"*, *"always"*, *"never"*, or an explicit ask to store | **stored**, exactly as today |
+| unmarked — *"keep it short"* | **OFFERED** on the Governance page |
+| one-off — *"on this one"* | neither |
+
+That is the answer to *is explicit confirmation always necessary*: **no**,
+and the line is what the person said rather than what a reader inferred.
+Backward compatible by construction — the marked path is untouched.
+
+#147's chain already existed and `verify:rules` proves all 26 steps
+including the browser press.
+
+### The complete chain, driven live and in a rollback
+
+Recognise → **offer** (the live office answered *"I have not changed
+anything, but I could make that a standing rule…"*) → press
+(`decide_suggestion`) → **stored** → **retrieved by a real prompt** →
+**isolation correct** (`is_fixture` false, because a person pressed it) →
+offer settled `acted`. Nothing persisted.
+
+### And the route created a containment gap within the hour
+
+A Shadow Grant sentence appeared on Grant's Governance page as an open
+offer. `public.suggestions` has no `is_fixture` and no job column, and
+`hq_governance` read it unfiltered — but `propose_standing_rule` already
+stored `from_job` in `offer_args`. Dial-with-no-reader again; **0543** is
+the reader, once. Witness added to `check:leaks`, sweep added to
+`shadow:world --sweep`, both through the same predicate.
+
+## Cross-workstream: adopting #298's mechanism
+
+`npm run migrate:next` surfaced **0541** and **0542** from
+`claude/production-reliability` — `inbound_commands.synthetic`, carried onto
+the job and its children by trigger. That is attribution at the DOOR, which
+is what a teardown can never be early enough to provide.
+
+The canonical door now stamps it. Proved live: `synthetic true`,
+`is_fixture true`, `harness_job true`, `deliverable_to(telegram, Grant)`
+**false**. Their delivery architecture is untouched.
+
+## Untracked questions — the canonical distinction
+
+**5 per 30 days, not 49.** A question is waiting on Grant when all three
+hold, each canonical:
+
+1. the intent was actionable (`direct_command` or `assignment`)
+2. no effect exists in the correlation family
+3. the answer asks rather than reports
+
+| intent | asked | produced nothing |
+|---|---|---|
+| suggestion | 14 | 14 |
+| thought | 14 | 14 |
+| question | 13 | 13 |
+| (none — mostly greetings) | 12 | 4 |
+| **direct_command** | **3** | **3** |
+| **assignment** | **2** | **2** |
+
+The other 44 are the office being conversational, and putting them on the
+page would bury the 5 that matter. Filed as
+[#300](https://github.com/granterogers/agentic.team.grant/issues/300) and
+**not shipped** — it adds rows to what Grant sees and that is his call.
+
+## Planning route selection — investigated, no safe fix found
+
+The approval state machine is consistent (proved earlier: pause and blocker
+1:1, no exceptions). The variance is whether the office takes the PLANNING
+route at all, and that decision is model-driven. Every lever that would
+force it — lowering the planning threshold, or routing more intents to
+`office.pursue` — either changes autonomy semantics, which Grant excluded,
+or makes the office plan work it could simply answer. **Recorded, not
+fixed.**
