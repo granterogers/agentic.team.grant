@@ -293,7 +293,8 @@
     "shadow:sabotage": "tsx scripts/shadow/sabotage.ts",
     "shadow:channels": "tsx scripts/shadow/channels.ts",
     "shadow:world": "tsx scripts/shadow/world.ts",
-    "shadow:matrix": "tsx scripts/shadow/matrix.ts"
+    "shadow:matrix": "tsx scripts/shadow/matrix.ts",
+    "migrate:next": "tsx scripts/migration-number.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

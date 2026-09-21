@@ -186,11 +186,27 @@ export function checkMigrations(
   }
   for (const name of Object.keys(recorded).sort()) {
     if (!present.has(name)) {
+      /*
+        TWO causes, and naming only one of them costs time.
+
+        Deleted history is the dangerous case. The COMMON case, in a repo
+        where three Claude sessions write migrations to one shared
+        database from isolated checkouts, is that another branch applied
+        it and this checkout has never seen it. On 21 September that
+        happened and this message sent somebody looking for a deletion
+        that had not occurred.
+
+        CLAUDE.md: a failure message that names the wrong cause is worse
+        than a bare count, because it points somewhere and somewhere is
+        wrong. So it names both and says which tool distinguishes them.
+      */
       err(
         name,
         'checksum/missing',
-        'a migration that has already been applied is no longer in migrations/. ' +
-          'Deleting applied history makes the database unreproducible.',
+        'applied to the database and not in migrations/. Either another branch ' +
+          'wrote it and this checkout has never seen it - run npm run migrate:next, ' +
+          'which names the branch-collision case and how to copy the file in - or ' +
+          'applied history was deleted here, which makes the database unreproducible.',
       )
     }
   }
