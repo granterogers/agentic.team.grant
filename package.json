@@ -284,7 +284,8 @@
     "verify:composes": "tsx scripts/verify/composes.ts",
     "verify:chief": "tsx scripts/verify/chief.ts",
     "verify:understands": "tsx scripts/verify/understands.ts",
-    "shadow:baseline": "tsx scripts/shadow/baseline.ts"
+    "shadow:baseline": "tsx scripts/shadow/baseline.ts",
+    "shadow:preferences": "tsx scripts/shadow/preferences.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

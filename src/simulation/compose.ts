@@ -181,8 +181,26 @@ const asFragment = (d: Draft): Draft => {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * A second request to bolt on, or to replace the first with.
+ *
+ * History-dependent families are excluded, and the reason is not a detail.
+ * *"Draft the note for the funding officer - no scrap that, yes"* is not a
+ * message anybody sends: "yes" only means something as a reply, so it cannot
+ * be the thing a person changes their mind TO, in any position.
+ *
+ * Found by the arc invariant rather than by reading this function - an arc
+ * built on a first turn that had been replaced this way opened with a
+ * message whose correct answer depended on a conversation that had not
+ * happened. The scenario would have scored, and the office could not have
+ * passed it.
+ */
 const drawOther = (world: World, rng: Seeded, notFamily: string): Draft => {
-  const pool = GOAL_FAMILIES.filter((f) => f.id !== notFamily)
+  const pool = GOAL_FAMILIES.filter(
+    (f) =>
+      f.id !== notFamily &&
+      (f.draft(world, new Seeded(1)).intent.turnsOn ?? 'comprehension') !== 'history',
+  )
   const pick = pool[rng.int(pool.length)] ?? GOAL_FAMILIES[0]
   return (pick as GoalFamily).draft(world, rng)
 }
