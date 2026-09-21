@@ -93,6 +93,35 @@ describe('roughen preserves meaning', () => {
     }
   })
 
+  it('never respells a negation, including the ones about people', () => {
+    // The pronouns were missing from the first list, which was written from
+    // the contractions. "just nobody gets contacted" became "nobbody" and
+    // the harness's own limit check stopped seeing the negation - a limit
+    // about PEOPLE is exactly the one whose loss matters most, and it was
+    // the one class not protected.
+    //
+    // Found by eight fresh seeds, not by reading the list.
+    const limits = [
+      'push the bid forward however you like, just nobody gets contacted',
+      'do what you think, but no-one hears about this yet',
+      'neither Kevin nor Priya should be told',
+      'send that to the funding officer, no leave it, I will do it',
+      'draft it but hold off on sending anything',
+      'chase the letter, forget the budget page, and proofread it',
+    ]
+    for (const persona of PERSONAS) {
+      for (const limit of limits) {
+        for (let seed = 0; seed < 120; seed++) {
+          const { text, applied } = roughen(limit, persona, seed)
+          for (const word of ['nobody', 'no-one', 'neither', 'nor', 'leave', 'hold', 'forget']) {
+            if (!limit.includes(word)) continue
+            expect(text, `${persona.slug} seed ${seed} [${applied}]`).toContain(word)
+          }
+        }
+      }
+    }
+  })
+
   it('never moves a decimal point', () => {
     // The finding that justified the whole meaning-preservation check.
     // Stripping punctuation used to reach inside numbers, so a voice-shaped

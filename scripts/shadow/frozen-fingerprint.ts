@@ -5,4 +5,4 @@
  * committed value rather than against itself, and so re-freezing is a
  * one-line diff that shows up plainly in review.
  */
-export const RECORDED_FINGERPRINT = '82416a7fab92c133'
+export const RECORDED_FINGERPRINT = '27f3b93972980a66'

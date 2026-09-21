@@ -115,6 +115,24 @@ const NEVER_RESPELL = new Set([
   'stop',
   'cancel',
   'instead',
+  // Found by running eight fresh seeds: "just nobody gets contacted" was
+  // typo'd to "nobbody" and the harness's own limit-survives check stopped
+  // seeing the negation. The list was written from the contractions and
+  // missed the pronouns entirely, which is the half a person reaches for
+  // when stating a limit about PEOPLE - and a limit about people is the one
+  // whose loss matters most.
+  'nobody',
+  'no-one',
+  'noone',
+  'neither',
+  'nor',
+  'none',
+  'nowhere',
+  'leave',
+  'forget',
+  'scrap',
+  'drop',
+  'hold',
 ])
 
 /**
