@@ -195,19 +195,42 @@ costs two, the regex wins.
 
 ## Where the live door goes
 
-Everything above runs with no credentials. With `SUPABASE_ACCESS_TOKEN` set,
-`--live` selects the canonical door, and the work to finish it is bounded and
-named:
+`src/simulation/canonical.ts` is written and **has never been run.** It is a
+separate module on purpose: it is the only part of this harness that writes to
+shared infrastructure, and a file that can create rows in Grant's Supabase
+should be one somebody has to open deliberately.
 
-- `canonicalDoor().ask` currently throws. It should enqueue through
-  `public.inbound_commands` → `app.enqueue_inbound` exactly as
-  `scripts/sessions/run.ts` does — including `announce = false`, which is what
-  stops synthetic traffic reaching a real person.
-- The three unreached dimensions then become answerable from canonical state:
-  the task row, the delivery, the job's terminal state.
-- **Do not import `scripts/sessions/run.ts`.** It calls `process.exit(2)` at
-  module scope when the token is unset, so importing it would kill every run
-  in an environment without one.
-- §2's safety rules apply in full the moment that door opens: fixture
-  identities, `is_fixture` attribution corrected in teardown, and
-  `npm run check:leaks` counting whatever new class the run creates.
+It refuses to run without `--i-have-checked-the-first-run`, and prints
+`firstRunChecklist()` instead. The checklist is not caution for its own sake —
+each step corresponds to something this repository has already done by
+accident: fixture projects that can never be deleted, permanent Slack
+channels, 740 jobs in twelve hours, and harness traffic reported to Grant as
+his office collapsing.
+
+```
+npm run shadow:baseline -- --live --family noaction.acknowledgement --i-have-checked-the-first-run
+```
+
+One scenario. `"thanks"` is the cheapest message there is and creates nothing.
+Then check the job is marked as harness traffic and that nothing was
+delivered, and only then widen.
+
+**What it will unlock.** The three dimensions currently unreached — did the
+row appear, did the prose read well, did the goal complete — all become
+answerable from canonical state, and `src/eval/judge.ts` becomes usable for
+the conversational half, which offline has no prose to judge.
+
+**What has been checked, and what has not.** The `is_fixture` attribution was
+verified against migration 0342 (`like '%:verify-%'`) rather than remembered,
+and `announce = false` is set in the same statement that creates the job
+rather than after it, because the worker ticks every minute and a job that is
+announceable for a second can be delivered. Everything else is read code.
+Reading is not driving, and CLAUDE.md records four independent defects in one
+feature that a migration applying cleanly had hidden.
+
+**Do not import `scripts/sessions/run.ts`.** It calls `process.exit(2)` at
+module scope when the token is unset, so importing it kills every run in an
+environment without one — [#294](https://github.com/granterogers/agentic.team.grant/issues/294).
+The SQL here is deliberately the same shape as its proved `askOnce`, copied
+rather than imported for that one reason, and the duplication should go when
+#294 does.

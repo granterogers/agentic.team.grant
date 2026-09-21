@@ -19,7 +19,11 @@ import { DIMENSIONS, type Dimension, rate, tally } from '../../src/simulation/di
 import { HELD_OUT_SEED } from '../../src/simulation/frozen.ts'
 import { GOAL_FAMILIES } from '../../src/simulation/goals.ts'
 import { runCorpus } from '../../src/simulation/run.ts'
-import { canonicalDoor, comprehensionDoor } from '../../src/simulation/transport.ts'
+import {
+  canonicalDoor,
+  comprehensionDoor,
+  firstRunChecklist,
+} from '../../src/simulation/transport.ts'
 import { DEFAULT_WORLD } from '../../src/simulation/world.ts'
 
 const arg = (name: string, fallback: string): string => {
@@ -45,7 +49,16 @@ const world = DEFAULT_WORLD
 const all = generateCorpus(world, seed, per)
 const corpus = only === '' ? all : all.filter((s) => s.family.includes(only))
 
-const transport = wantLive ? canonicalDoor() : comprehensionDoor()
+const transport = wantLive
+  ? canonicalDoor({ runToken: Math.random().toString(36).slice(2, 10) })
+  : comprehensionDoor()
+
+if (wantLive && !transport.reachable) {
+  // Printed in full rather than summarised. This door writes to the
+  // Supabase Grant's real office runs on and has never been exercised.
+  console.log(`\n  ${transport.blockedBecause ?? 'unreachable'}`)
+  if (!process.argv.includes('--i-have-checked-the-first-run')) console.log(firstRunChecklist())
+}
 
 console.log(`\nShadow Grant - behavioural baseline`)
 console.log(

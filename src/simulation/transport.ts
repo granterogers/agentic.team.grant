@@ -205,31 +205,17 @@ export const comprehensionDoor = (): Transport => ({
 })
 
 /**
- * The live door, when a credential exists.
+ * The live door.
  *
- * Not wired to `scripts/sessions/run.ts` by import, deliberately: that file
- * calls `process.exit(2)` at module scope when `SUPABASE_ACCESS_TOKEN` is
- * unset, so importing it would kill any run in an environment without one —
- * including every run in this session. Exactly the shape CLAUDE.md warns
- * about, where a pre-condition shared by two suites becomes a coupling that
- * only fails when somebody runs both.
+ * Implemented in `./canonical.ts` and re-exported here so callers have one
+ * place to ask for a door. It is a separate module because it is the only
+ * part of this harness that writes to shared infrastructure, and a file
+ * that can create rows in Grant's Supabase should be a file somebody has to
+ * open on purpose.
  *
- * It reports itself unreachable rather than throwing, so a corpus run in an
- * environment without credentials produces an honest UNREACHED report rather
- * than a crash — §25 again: block the affected proof, continue everything
- * else.
+ * **It has never been run.** It refuses without
+ * `--i-have-checked-the-first-run`, and `firstRunChecklist()` says what to
+ * check. See Issue #294 for why it cannot simply import the session
+ * runner's proved version of the same SQL.
  */
-export const canonicalDoor = (): Transport => {
-  const token = process.env.SUPABASE_ACCESS_TOKEN
-  const has = token !== undefined && token !== ''
-  return {
-    door: 'canonical',
-    reachable: has,
-    ...(has ? {} : { blockedBecause: 'SUPABASE_ACCESS_TOKEN is not set in this environment' }),
-    async ask(): Promise<Observation> {
-      throw new Error(
-        'the canonical door is not wired in this build: run the harness where SUPABASE_ACCESS_TOKEN is set, and see docs/shadow-grant/README.md',
-      )
-    },
-  }
-}
+export { canonicalDoor, firstRunChecklist } from './canonical.ts'
