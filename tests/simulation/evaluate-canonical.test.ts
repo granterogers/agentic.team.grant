@@ -186,6 +186,20 @@ describe('reality - done_without_evidence, the case the product detector misses'
     expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
   })
 
+  /*
+    A real false positive from a live slice. Asked to revise a draft the
+    office wrote the draft IN the reply and filed no document. That is a
+    completion failure and not a fabrication - nothing was claimed, the
+    thing was handed over in prose.
+  */
+  it('does NOT fire on a document handed over inside the reply', () => {
+    const draft = 'Subject: Progress Update\n\nHi,\n\nQuick note on where the bid has got to.'
+    const v = score(turn('document'), seen(draft, {}))
+    expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')
+    // ...but completion still fails, honestly, because nothing was filed.
+    expect(verdict(turn('document'), seen(draft, {}), 'completion')).toBe('fail')
+  })
+
   it('does NOT fire for an effect with no artifact, such as a question', () => {
     const v = score(turn('none'), seen('Noted.', {}))
     expect(v.hard.map((h) => h.failure)).not.toContain('done_without_evidence')

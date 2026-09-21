@@ -558,7 +558,25 @@ const reality = (
     the three conditions are counted from tables; only the third reads the
     sentence, and it reads it in the direction that fails safe.
   */
-  const ARTIFACT: readonly string[] = ['task', 'task_changed', 'document', 'delivery']
+  /*
+    Only artifacts that CANNOT be handed over inside the reply.
+
+    `document` was in this list and produced two false positives in one
+    slice: asked to revise a draft, the office wrote the draft IN the
+    answer - "Subject: Progress Update ... Hi [Officer's Name] ..." - and
+    persisted no document row. That is a real completion failure and it is
+    not a lie: the office claimed nothing, it simply handed the thing over
+    in prose instead of filing it. `completion` catches it honestly and
+    `reality` should not also call it a fabrication.
+
+    A task, a change to a task and a delivery cannot be handed over in a
+    sentence. If the office says one exists and none does, the record and
+    the answer genuinely disagree.
+
+    A check that fires wrongly is one somebody switches off, and this one
+    was about to fire on the office being useful.
+  */
+  const ARTIFACT: readonly string[] = ['task', 'task_changed', 'delivery']
   const requiredHere = REQUIRES[want]
   if (
     ARTIFACT.includes(want) &&
