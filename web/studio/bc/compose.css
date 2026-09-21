@@ -361,6 +361,72 @@
 [data-experience='basecamp'] .bcmate--asks,
 [data-experience='basecamp'] .bcmate--made { border-top: 1px solid var(--bc-border-subtle); }
 
+/* ------------------------------------------------------------- sources -- */
+
+/*
+  A healthy connection has almost nothing to say, so a quiet row is quiet:
+  the name carries the ink and the rest is muted. Only a row that needs Grant
+  raises its voice, and it does so with the section accent rather than with
+  size, so the page does not shout at him about something that is fine.
+*/
+[data-experience='basecamp'] .bcsources { display: grid; gap: 2px; }
+[data-experience='basecamp'] .bcsource {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name when' 'what what';
+  gap: 1px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcsource:last-of-type { border-bottom: 0; }
+[data-experience='basecamp'] .bcsourcename {
+  grid-area: name;
+  font-size: 13.5px;
+  color: var(--bc-text-strong);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcsourcewhat {
+  grid-area: what;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcsourcewhen { grid-area: when; font-size: 11.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsource--trouble .bcsourcewhen { color: var(--bc-section-accent); font-weight: 600; }
+
+/* ------------------------------------------------------------- a person -- */
+
+[data-experience='basecamp'] .bcnext {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--bc-text-muted);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------- what is elsewhere - */
+
+/*
+  Quiet on purpose. It exists so that a tool this experiment has not built is
+  still reachable, which is a different job from presenting the project - and
+  giving it the same weight as a tool would say the hand-off matters as much
+  as the work.
+*/
+[data-experience='basecamp'] .bcmod--quiet {
+  background: transparent;
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* ----------------------------------------------------------- documents -- */
 
 [data-experience='basecamp'] .bcdocs {
@@ -369,18 +435,32 @@
   gap: 14px;
 }
 [data-experience='basecamp'] .bcdoc { margin: 0; min-width: 0; }
+/*
+  The "N more filed" line is a row of its own, not a grid cell. As a cell it
+  took a thumbnail's place - sitting beside the fourth document with a hole
+  where the fifth would be, which reads as a missing document rather than as a
+  count.
+*/
+[data-experience='basecamp'] .bcdocs > .bcmore { grid-column: 1 / -1; }
 [data-experience='basecamp'] .bcpage {
   display: grid;
   align-content: start;
   gap: 4px;
   aspect-ratio: 3 / 4;
   padding: 10px 9px;
-  background: var(--bc-text-strong);
+  /*
+    PAPER, NOT A LIGHT SOURCE. `--bc-text-strong` as a fill made four
+    thumbnails the loudest thing on a dark page - brighter than the project
+    name, which is the one element §16 says must dominate. A document should
+    read as paper and paper in a dim room is not white.
+  */
+  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  border: 1px solid var(--bc-border-subtle);
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
   overflow: hidden;
 }
-[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.32; }
+[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.38; }
 [data-experience='basecamp'] .bcpline:first-child { height: 6px; opacity: 0.6; }
 [data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
 [data-experience='basecamp'] .bcdoctitle {
@@ -392,7 +472,20 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-[data-experience='basecamp'] .bcdocmeta { font-size: 11.5px; color: var(--bc-text-muted); }
+/*
+  ONE LINE. The meta wrapped - "Document 27,841" then "words" on its own line -
+  so one caption was three lines while its neighbours were two, and the extra
+  line sat under the next row's thumbnail. A title may take two lines because a
+  title is the content; a word count may not, because the wrap says nothing the
+  first line did not.
+*/
+[data-experience='basecamp'] .bcdocmeta {
+  font-size: 11.5px;
+  color: var(--bc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ------------------------------------------------------------ timeline -- */
 
@@ -435,6 +528,14 @@
   stack at the top level; only what is IN the stack differs, so the gap
   belongs to the base and not to each variant.
 */
+/*
+  `bchome` is what a check asserts when it means "the project home rendered".
+  A gate that named `.bcgrid` was asserting the ARTEFACT, and this repository
+  has now paid four times for a check that goes red on a correct change
+  because it named the mechanism. It carries no appearance of its own on
+  purpose: the three homes style themselves.
+*/
+[data-experience='basecamp'] .bchome { min-width: 0; }
 [data-experience='basecamp'] .bccomp { display: grid; gap: 20px; }
 [data-experience='basecamp'] .bccomp .bchead { margin-bottom: 0; }
 /*
@@ -457,12 +558,25 @@
   align-items: start;
 }
 [data-experience='basecamp'] .bcworkmain { display: grid; gap: 18px; min-width: 0; }
+/*
+  NOT STICKY, and the claim was removed rather than the measurement
+  explained away. `position: sticky` was here with a comment saying presence
+  is never scrolled away; measured at scrollY 1400 the rail's top was -477,
+  because a sticky element TALLER than the viewport scrolls with the page
+  until its own bottom arrives. The rail is 1209px and the viewport is 900.
+  Making it pin would mean an inner scroll container in a rail, which is
+  #108's territory for the sake of a promise nobody asked for.
+
+  What was worth fixing is the dead space the claim was hiding: the rail ended
+  686px above the main column, so the lower right of the page was empty. The
+  material source list moved here from the main column - it is a project-level
+  fact, which is this rail's whole job - and the two columns now end within
+  about a hundred pixels of each other.
+*/
 [data-experience='basecamp'] .bcrail {
   display: grid;
   gap: 18px;
   min-width: 0;
-  position: sticky;
-  top: 60px;
 }
 /*
   The rail's modules are quieter than the main column's. Presence is meant to
@@ -481,7 +595,6 @@
 
 @media (max-width: 1100px) {
   [data-experience='basecamp'] .bcwork { grid-template-columns: minmax(0, 1fr); }
-  [data-experience='basecamp'] .bcrail { position: static; }
   /*
     B's rail becomes a two-up band rather than a third stacked column, so the
     tablet does not simply become a very long phone.
@@ -529,5 +642,7 @@
   [data-experience='basecamp'] .bccomp--b .bcworkmain { order: 0; }
   [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='crew'] { order: 1; }
   [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='chat'] { order: 2; }
-  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='activity'] { order: 3; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='contacts'] { order: 3; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='sources'] { order: 4; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='activity'] { order: 5; }
 }

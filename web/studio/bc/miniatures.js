@@ -512,3 +512,85 @@ export const stateLine = (p) => {
     )}</span>
   </div>`
 }
+
+/* ======================================================================== *
+ * Contacts: the people the project is about  (§9's record grammar)
+ * ======================================================================== */
+
+/**
+ * People, as people.
+ *
+ * A face and a name, and beneath it the two things a person is actually asked:
+ * who is this, and what happens next. The stage, the email and the phone
+ * belong on the record, not on the home.
+ */
+export const contactsMini = (p, { items = 4 } = {}) => {
+  const cs = p.contacts ?? []
+  if (cs.length === 0) return `<p class="bcmpty">Nobody is recorded against this project yet.</p>`
+  return `<div class="bccrew">
+    ${cs
+      .slice(0, items)
+      .map(
+        (c) => `<div class="bcmate">
+          ${face({ name: c.name }, 'md')}
+          <div class="bcmatebody">
+            <span class="bcmatename">${esc(c.name)}</span>
+            <span class="bcmatedoing">${esc([c.role, c.org].filter(Boolean).join(' · '))}</span>
+          </div>
+          ${c.next ? `<span class="bcnext">${esc(c.next)}</span>` : ''}
+        </div>`,
+      )
+      .join('')}
+    ${cs.length > items ? `<p class="bcmore">${esc(`${cs.length - items} more`)}</p>` : ''}
+  </div>`
+}
+
+/* ======================================================================== *
+ * Sources: where the material comes from  (§15)
+ * ======================================================================== */
+
+/*
+  A PERSON'S WORDS, NOT A RECORD'S. `kind` is `connector`, `reference`,
+  `upload`; §15 forbids developer terminology on a project surface and the
+  first slice printed the column raw. Anything unmapped falls back to the
+  service's own name rather than to the word `connector`, because a name a
+  person recognises is better than a category they do not.
+*/
+const SOURCEWORD = {
+  connector: 'Connected',
+  reference: 'Something to read',
+  upload: 'Uploaded here',
+}
+
+/**
+ * §15. What the office can see, said plainly.
+ *
+ * A healthy connection has very little to say, which is the point — so a
+ * quiet row is one word and a date, and the only row that raises its voice is
+ * one that needs Grant. No keys, no scopes, no OAuth vocabulary: none of
+ * those belong on a project surface and there is nowhere here they could
+ * appear from.
+ */
+export const sourcesMini = (p, { items = 4 } = {}) => {
+  const ss = p.sources ?? []
+  if (ss.length === 0) {
+    return `<p class="bcmpty">Nothing is connected to this project yet, so the team is
+      working from what is filed here.</p>`
+  }
+  return `<div class="bcsources">
+    ${ss
+      .slice(0, items)
+      .map((s) => {
+        const trouble = s.health === 'blocked' || s.trouble
+        return `<div class="bcsource${trouble ? ' bcsource--trouble' : ''}">
+          <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
+          <span class="bcsourcewhat">${esc(s.what ?? '')}</span>
+          <span class="bcsourcewhen">${esc(
+            trouble ? (s.problem ?? 'Needs attention') : [SOURCEWORD[s.kind] ?? '', s.last].filter(Boolean).join(' · '),
+          )}</span>
+        </div>`
+      })
+      .join('')}
+    ${ss.length > items ? `<p class="bcmore">${esc(`${ss.length - items} more`)}</p>` : ''}
+  </div>`
+}

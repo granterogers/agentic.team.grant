@@ -38,7 +38,19 @@
 */
 
 import { esc } from './parts.js'
-import { calendarMini, cardsMini, chatMini, crewMini, docsMini, face, stateLine, timelineMini, todosMini } from './miniatures.js'
+import {
+  calendarMini,
+  cardsMini,
+  chatMini,
+  contactsMini,
+  crewMini,
+  docsMini,
+  face,
+  sourcesMini,
+  stateLine,
+  timelineMini,
+  todosMini,
+} from './miniatures.js'
 
 let ctx = null
 export const mount = (c) => {
@@ -47,21 +59,30 @@ export const mount = (c) => {
 
 const at = (p = '') => `/basecamp${p}`
 
-/** Which composition this viewer is looking at. '' is the shipped build. */
+/**
+ * Which composition this viewer is looking at.
+ *
+ * B IS THE PROJECT HOME NOW - §21 chose it and the evidence is in the ledger.
+ * The other two are kept reachable rather than deleted, because the comparison
+ * is the argument: `bc.compose` set to `a` gives the briefing, and `grid`
+ * gives the equal-weight build §20 is about, which is the single clearest
+ * statement of what changed. Anything else, including nothing, is B.
+ */
 export const chosen = () => {
   try {
     const v = globalThis.localStorage?.getItem('bc.compose') ?? ''
-    return v === 'a' || v === 'b' ? v : ''
+    if (v === 'grid') return 'grid'
+    return v === 'a' ? 'a' : 'b'
   } catch {
-    return ''
+    return 'b'
   }
 }
 
 export const choose = (v) => {
   try {
-    globalThis.localStorage?.setItem('bc.compose', v === 'a' || v === 'b' ? v : '')
+    globalThis.localStorage?.setItem('bc.compose', v === 'a' || v === 'grid' ? v : 'b')
   } catch {
-    /* A viewer who cannot store a preference still gets a working page. */
+    /* A viewer who cannot store a preference still gets the chosen home. */
   }
 }
 
@@ -101,11 +122,41 @@ const head = (p) => {
   </header>`
 }
 
+
+/**
+ * The tools this experience has not built its own surface for.
+ *
+ * Quiet, at the foot of the home, and NOT omitted: a home that silently drops
+ * a tool makes work that is reachable today unreachable, which the route audit
+ * caught within a run of composition B shipping without Contacts, Sources or
+ * the way to Project Settings. Whether a tool has a surface here is this
+ * experiment's business; whether Grant can get to his own project's settings
+ * is not.
+ */
+const elsewhere = (p) => {
+  const others = (ctx?.tools ?? []).filter((t) => t.own !== true)
+  if (others.length === 0) return ''
+  return `<section class="bcmod bcmod--quiet" data-mod="elsewhere" data-slot="elsewhere">
+    <header class="bcmodhead"><h2>Elsewhere on this project</h2></header>
+    <div class="bcmodbody">
+      <p class="bcmpty">These open in the current Team HQ. Nothing has moved.</p>
+      <div class="bcinline-list">
+        ${others
+          .map(
+            (t) =>
+              `<a href="${esc(`/p/${p.slug}/${t.id}`)}" data-bc-leave="${esc(`/p/${p.slug}/${t.id}`)}">${esc(t.name)}</a>`,
+          )
+          .join('')}
+      </div>
+    </div>
+  </section>`
+}
+
 /* ======================================================================== *
  * A — the briefing
  * ======================================================================== */
 
-export const compositionA = (p) => `<div class="bccomp bccomp--a">
+export const compositionA = (p) => `<div class="bchome bccomp bccomp--a">
     ${head(p)}
     ${mod(p, { id: 'tasks', name: 'To-dos', body: todosMini(p, { lists: 3, per: 4 }), wide: true })}
     <div class="bcpair">
@@ -125,14 +176,19 @@ export const compositionA = (p) => `<div class="bccomp bccomp--a">
       wide: true,
     })}
     ${mod(p, { id: 'documents', name: 'Documents', body: docsMini(p, { items: 4 }), wide: true })}
+    <div class="bcpair">
+      ${mod(p, { id: 'contacts', name: 'People', body: contactsMini(p, { items: 3 }) })}
+      ${mod(p, { id: 'sources', name: 'Where the material comes from', body: sourcesMini(p, { items: 3 }) })}
+    </div>
     ${mod(p, { id: 'activity', name: 'What has happened', body: timelineMini(p, { items: 6 }), wide: true })}
+    ${elsewhere(p)}
   </div>`
 
 /* ======================================================================== *
  * B — the workspace
  * ======================================================================== */
 
-export const compositionB = (p) => `<div class="bccomp bccomp--b">
+export const compositionB = (p) => `<div class="bchome bccomp bccomp--b">
     ${head(p)}
     <div class="bcwork">
       <div class="bcworkmain">
@@ -144,9 +200,12 @@ export const compositionB = (p) => `<div class="bccomp bccomp--b">
       <aside class="bcrail" aria-label="Who is here and what has happened">
         ${mod(p, { id: 'team', slot: 'crew', name: 'The team', body: crewMini(p, { people: 5 }) })}
         ${mod(p, { id: 'team', slot: 'chat', name: 'Chat', body: chatMini(p, { lines: 3 }) })}
+        ${mod(p, { id: 'contacts', name: 'People', body: contactsMini(p, { items: 4 }) })}
+        ${mod(p, { id: 'sources', slot: 'sources', name: 'Where the material comes from', body: sourcesMini(p, { items: 4 }) })}
         ${mod(p, { id: 'activity', name: 'Activity', body: timelineMini(p, { items: 5 }) })}
       </aside>
     </div>
+    ${elsewhere(p)}
   </div>`
 
 export const COMPOSITIONS = { a: compositionA, b: compositionB }

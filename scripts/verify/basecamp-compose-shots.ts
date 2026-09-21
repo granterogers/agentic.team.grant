@@ -25,7 +25,7 @@ const SIZES = [
   { id: 'phone', width: 390, height: 844, touch: true },
 ] as const
 
-const PICKS = ['', 'a', 'b'] as const
+const PICKS = ['grid', 'a', 'b'] as const
 
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const thrown: string[] = []
@@ -52,9 +52,9 @@ for (const size of SIZES) {
     await ctx.addInitScript(`try { localStorage.setItem('bc.compose', '${pick}') } catch {}`)
     const page = await ctx.newPage()
     page.on('pageerror', (e) => {
-      thrown.push(`${size.id}/${pick === '' ? 'shipped' : pick}: ${e.message}`)
+      thrown.push(`${size.id}/${pick}: ${e.message}`)
     })
-    const name = `${pick === '' ? 'shipped' : `comp-${pick}`}-${size.id}`
+    const name = `${pick === 'grid' ? 'shipped' : `comp-${pick}`}-${size.id}`
     try {
       await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
       await page.waitForTimeout(400)
@@ -64,7 +64,7 @@ for (const size of SIZES) {
       )) as string
       if (slug === '') throw new Error('no project link on the portfolio')
       await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
-      await page.waitForSelector(pick === '' ? '.bcgrid' : '.bccomp', { timeout: 6000 })
+      await page.waitForSelector(pick === 'grid' ? '.bcgrid' : '.bccomp', { timeout: 6000 })
       await page.waitForTimeout(450)
       await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false })
       await page.screenshot({ path: `${OUT}/${name}-full.png`, fullPage: true })

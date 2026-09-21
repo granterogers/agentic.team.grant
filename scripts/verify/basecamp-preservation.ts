@@ -88,7 +88,7 @@ const slug = (await page.evaluate(
      return el === null ? '' : (el.dataset.bcGo ?? '')`),
 )) as string
 await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
-await page.waitForSelector('.bcgrid')
+await page.waitForSelector('.bchome')
 await page.waitForTimeout(500)
 
 /* --- 1. every project section has a route from the overview ------------- */
@@ -113,7 +113,7 @@ for (const s of sections) {
     */
     check(
       'Overview (overview) is where a project opens, so it needs no link to itself',
-      (await page.locator('.bcgrid').count()) > 0 && page.url().endsWith(bare),
+      (await page.locator('.bchome').count()) > 0 && page.url().endsWith(bare),
       page.url(),
     )
     continue

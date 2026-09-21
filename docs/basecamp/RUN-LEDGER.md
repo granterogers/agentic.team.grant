@@ -657,29 +657,101 @@ prototype's overdue work does not become overdue merely because the file is
 old.
 
 ---
+## B became the project home, and what that cost
+
+`bc.compose` now defaults to **B**. The other two are kept reachable rather
+than deleted, because the comparison is the argument: `a` gives the briefing
+and `grid` gives the equal-weight build §20 is about. That is one line in
+`compose.js` and it is worth keeping — the clearest possible statement of what
+changed is the two screens side by side.
+
+### The gates were asserting the ARTEFACT, and said so loudly
+
+Five suites named `.bcgrid` to mean "the project home rendered". That is the
+mechanism, not the property, and this file already records four occasions
+where naming the mechanism made a check fail on a correct change. A `bchome`
+class now marks the project home in **all three** of the things that can draw
+one, and the suites assert that. Two more of the same kind, both retargeted:
+
+- `basecamp-routes` asked for six elements of class `bcpreview`. What it means
+  is that the home presents the project's tools rather than links to them, so
+  it counts modules OR previews.
+- `basecamp-journey` located the team tile as `.bctool` containing the words
+  "Agentic Team" — a class that has changed and a heading somebody may
+  reasonably rename. It finds the module that leads to the team surface, and
+  the way out of it, by structure.
+
+`basecamp-measure`'s column reading was worse than stale: it read `.bcgrid`
+and printed `n/a` for anything else, so the day the home stopped being that
+grid the rhythm went unmeasured **and the line still looked like an answer**.
+It tries each home in turn, prints which one it measured to, and fails if it
+matched nothing — the found-nothing rule this repository has now paid for
+three times.
+
+### The route audit caught a real product defect within a run
+
+**Composition B shipped without Contacts, Sources, or the way to Project
+Settings.** Three of the nine things reachable from the shipped home were
+simply not on the new one, and two of them had no miniature at all. A home
+that silently drops a tool makes work that is reachable today unreachable —
+and whether a tool has a surface in this experiment is the experiment's
+business, while whether Grant can reach his own project's settings is not.
+
+Fixed with the grammars they were owed rather than by putting the old rows
+back: **People** are faces with what happens next; **Where the material comes
+from** says `Connected · 6 Sep` and `Something to read` rather than printing
+`connector` and `reference` raw, which is §15's rule and which the first slice
+broke by rendering the column straight out of the record. A quiet
+**Elsewhere on this project** footer carries anything this experience has not
+built, derived from `TOOLS` so a tool added later cannot be dropped by
+forgetting.
+
+### Defects 37–41, all found by measuring or by opening the capture
+
+| # | Found | Defect |
+|---|---|---|
+| 37 | the route audit | Contacts, Sources and the Project Settings hand-off were missing from the new home entirely. |
+| 38 | measuring | **The rail was not sticky, and a comment claimed it was.** `position: sticky` with a comment saying presence is never scrolled away; measured at scrollY 1400 the rail's top was **-477**, because a sticky element taller than the viewport scrolls with the page. The rail is 1209px and the viewport is 900. The claim was removed, not explained away. |
+| 39 | measuring | **686px of dead space** down the lower right, which the sticky claim was hiding. The material source list moved to the rail — it is a project-level fact, which is the rail's whole job — and the two columns now end 86px apart. |
+| 40 | opening the capture | A document's word count **wrapped onto a third line** and sat under the next row's thumbnail. A title may take two lines because a title is the content; a word count may not. |
+| 41 | opening the capture | **Four white thumbnails were the loudest thing on the page** — brighter than the project name, which §16 says must dominate. Paper in a dim room is not white. |
+| 42 | opening the capture | "N more filed" took a grid CELL, so it sat beside the fourth document with a hole where the fifth would be — which reads as a missing document rather than as a count. |
+
+### A capture artifact, recorded so nobody fixes it
+
+The phone full-page capture shows the fixed bottom tray **in the middle of the
+page**, across the card table. A `position: fixed` element paints once, at the
+scroll position the capture started from, so a full-page image always puts it
+somewhere it never is. CLAUDE.md records this; the near-viewport captures are
+the judgeable ones for anything the tray can cover.
+
+### State
+
+`basecamp:gate` exit 0 — 50/50 routes, 51/51 journey, 31/31 keyboard, 26/26
+preservation, 64/64 states, classes and controls green, measure with no
+absolute violations and the phone's first module at 25% of the viewport.
+`lint`, `typecheck`, `check:templates` and `check:secrets` clean. The one
+failing test file in `npm run test` is #294 and is environmental — this branch
+has never touched either file in it.
+
+---
 ## NEXT ACTION
 
-**Implement the winner's remaining tools, in B's arrangement.** The
-composition is chosen and the miniatures exist; what is not built is the full
-tool behind each of them and the configurability §14 asks for:
+**The full tools behind the miniatures, and §14's configurability.** The
+composition is chosen, it is the home, and every tool on it is now a
+miniature of something. What is not built is the full tool behind four of
+them and the ability to change the home:
 
-1. **§6** the full To-dos tool with real lists — the hierarchy is derived from
-   `is_milestone` and `parent_task_id`, so this is a renderer, not a contract.
+1. **§6** the full To-dos tool with real lists — derived from `is_milestone`
+   and `parent_task_id`, so a renderer rather than a contract.
 2. **§10** the full Card Table from `state_raw`, and moving a card, which
    needs `task_state` and nothing new.
-3. **§9** the full Calendar, saying on the surface that it shows scheduled
-   work — there is no events table and it must not look like a diary.
+3. **§9** the full Calendar, saying on its face that it shows scheduled work.
 4. **§7** the full project Chat against `conversation_history`.
-5. **§14** add, remove and reorder the tools on the project home, through
+5. **§14** add, remove and reorder the modules on the home, through
    `plane_layout` / `plane_layout_set` / `plane_layout_reset`, with removal
    structurally unable to reach a delete path.
-6. **§15** the external-services chooser, in a person's words, with nothing
-   offered that is not connectable and no key, scope or OAuth vocabulary on a
-   project surface.
-
-Then §26: `shell.js` is the file to split, by responsibility, once the full
-tools land — `compose.js`, `miniatures.js` and `compose.css` were written
-outside it for that reason.
+6. **§26** split `shell.js` by responsibility once those land.
 
 Still not to be merged, still not promoted to the default route, and the
 default Team HQ stays untouched.

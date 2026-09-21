@@ -501,16 +501,31 @@ check('the tasks list still renders after every edit', (await page.locator('.bci
 /* ------------------------------------------- the agent-output journey (§17.5) */
 
 await open('/basecamp/p/journey-subject')
-const preview = await page.locator('.bctool', { hasText: 'Agentic Team' }).innerText()
+/*
+  THE MODULE THAT LEADS TO THE TEAM, not the class that used to draw it.
+  This named `.bctool` with the text "Agentic Team", which was one of three
+  things that have drawn a project home here and is also a heading somebody
+  may reasonably rename. What it means is that the home's team module says
+  what the team produced and that pressing it arrives at the team surface.
+*/
+const teamMod =
+  (await page.locator('.bchome [data-slot="crew"]').count()) > 0
+    ? page.locator('.bchome [data-slot="crew"]')
+    : page.locator('.bctool', { hasText: 'Agentic Team' })
+const preview = await teamMod.innerText()
 check(
-  'the overview preview names the latest output and that it is waiting',
+  'the home names the latest output and that it is waiting',
   preview.includes('Course one-pager') && preview.includes('Ready for you'),
   preview.replace(/\n/g, ' / ').slice(0, 160),
 )
 
-await page.locator('.bctool', { hasText: 'Agentic Team' }).locator('.bcpreview').click()
+const teamWay =
+  (await teamMod.locator('.bcmodhead h2 a').count()) > 0
+    ? teamMod.locator('.bcmodhead h2 a')
+    : teamMod.locator('.bcpreview')
+await teamWay.click()
 await page.waitForTimeout(700)
-check('the preview opens the team surface', page.url().endsWith('/team'), page.url())
+check('the home opens the team surface', page.url().endsWith('/team'), page.url())
 
 const outRow = page.locator('[data-bc-output]').first()
 const outText = await outRow.innerText()

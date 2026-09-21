@@ -110,13 +110,19 @@ if (slug !== null) {
   await open(slug)
   check(
     `a project opens on its overview at ${slug}`,
-    (await page.locator('.bcgrid').count()) > 0,
+    (await page.locator('.bchome').count()) > 0,
     'the overview is the landing surface; there must be no extra view-selection step',
   )
   check(
     'the overview draws tool previews',
-    (await page.locator('.bcpreview').count()) >= 6,
-    `found ${String(await page.locator('.bcpreview').count())} previews`,
+    /*
+      THE PROPERTY, NOT THE ARTEFACT. This asked for six elements of class
+      `bcpreview`, which is one of three things that have drawn a project home
+      here. What it means is that the home presents the project's tools rather
+      than a link to them, and a tool on the home is a module either way.
+    */
+    (await page.locator('.bchome [data-mod], .bchome .bcpreview').count()) >= 6,
+    `found ${String(await page.locator('.bchome [data-mod], .bchome .bcpreview').count())} tool module(s) on the home`,
   )
 
   await open(`${slug}/tasks`)

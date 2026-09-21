@@ -65,7 +65,7 @@ for (const size of SIZES) {
          return { w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.x), y: Math.round(r.y) }`),
     )) as Box | null
 
-  for (const sel of ['.bcmain', '.bctop', '.bcprojhead', '.bcgrid', '.bcpreview', '.bctray']) {
+  for (const sel of ['.bcmain', '.bctop', '.bchome', '.bchead', '.bcwork', '.bcrail', '.bctray']) {
     const b = await box(sel)
     console.log(
       `  ${sel.padEnd(14)} ${b === null ? 'NOT PRESENT' : `${String(b.w)}x${String(b.h)} at ${String(b.x)},${String(b.y)}`}`,
@@ -73,15 +73,30 @@ for (const size of SIZES) {
   }
 
   /* --- the grid's own rhythm (§4.3: three columns, ~325px, 16px gutters) --- */
+  /*
+    A MEASURE NAMES WHAT IT MEASURED TO. This read `.bcgrid` and printed "n/a"
+    for anything else, so the day the home stopped being that grid the rhythm
+    went unmeasured and the line still looked like an answer.
+  */
   const grid = (await page.evaluate(
-    inPage(`const g = document.querySelector('.bcgrid')
-       if (g === null) return null
-       const cs = getComputedStyle(g)
-       return { cols: cs.gridTemplateColumns, gap: cs.gap }`),
-  )) as { cols: string; gap: string } | null
+    inPage(`for (const sel of ['.bcwork', '.bcgrid', '.bccomp']) {
+         const g = document.querySelector(sel)
+         if (g === null) continue
+         const cs = getComputedStyle(g)
+         return { sel, cols: cs.gridTemplateColumns, gap: cs.gap }
+       }
+       return null`),
+  )) as { sel: string; cols: string; gap: string } | null
   console.log(
-    `  grid columns   ${grid === null ? 'n/a' : grid.cols}  gap ${grid === null ? '' : grid.gap}`,
+    grid === null
+      ? '  columns        NO LAYOUT FOUND — the measure matched nothing'
+      : `  columns        ${grid.cols}  gap ${grid.gap}  (measured to ${grid.sel})`,
   )
+  if (grid === null) {
+    problems.push(
+      `${size.id}: the column measure matched nothing, which is not the same as a good score`,
+    )
+  }
 
   /* --- page-level horizontal overflow, an absolute --- */
   const over = (await page.evaluate(
@@ -232,7 +247,7 @@ for (const size of SIZES) {
   /* --- the fold, on the phone only (§6.2 and the acceptance matrix) --- */
   if (size.id === 'phone') {
     const fold = (await page.evaluate(
-      inPage(`const first = document.querySelector('.bcgrid .bctool h2')
+      inPage(`const first = document.querySelector('.bchome [data-mod] h2, .bcgrid .bctool h2')
          if (first === null) return null
          const r = first.getBoundingClientRect()
          return { y: Math.round(r.top + window.scrollY), name: (first.textContent ?? '').trim() }`),
@@ -305,7 +320,7 @@ for (const size of SIZES) {
     )
     const page = await ctx.newPage()
     await page.goto(url('/basecamp/p/legacy-coaching-course'), { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('.bcgrid')
+    await page.waitForSelector('.bchome')
     await page.waitForTimeout(600)
     const seen = (await page.evaluate(
       inPage(`const out = []

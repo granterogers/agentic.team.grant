@@ -234,7 +234,7 @@ await page.keyboard.press('Enter')
 await page.waitForTimeout(600)
 check(
   'keyboard only: Jump, filter, Enter opened a project overview',
-  (await page.locator('.bcgrid').count()) > 0 && page.url().includes('/basecamp/p/'),
+  (await page.locator('.bchome').count()) > 0 && page.url().includes('/basecamp/p/'),
   page.url(),
 )
 

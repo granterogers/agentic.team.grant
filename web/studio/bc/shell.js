@@ -432,7 +432,7 @@ const overview = (p) => {
   const others = TOOLS.filter((t) => !t.own)
   const acts = p.activity ?? []
   const latest = acts[0]
-  return `${projectHeader(p, latest)}
+  return `<div class="bchome">${projectHeader(p, latest)}
     <div class="bcgrid">
       ${owned
         .map((t) => {
@@ -462,7 +462,7 @@ const overview = (p) => {
           )
           .join('')}
       </div>
-    </section>`
+    </section></div>`
 }
 
 /** The accessible summary a preview announces. §8.2 point 4. */
@@ -1247,7 +1247,7 @@ const body = () => {
     */
     if (s.tab === 'overview') {
       const pick = compose.chosen()
-      if (pick !== '') return compose.COMPOSITIONS[pick](p)
+      if (pick !== 'grid') return compose.COMPOSITIONS[pick](p)
     }
     const render = SURFACE[s.tab] ?? overview
     return render(p)
