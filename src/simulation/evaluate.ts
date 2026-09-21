@@ -240,6 +240,20 @@ const agency = (turn: ScenarioTurn, o: Observation): Finding => {
       `whether to ask here is settled by ${layer === 'referent' ? 'project resolution' : layer === 'history' ? 'the thread resolver' : 'actually attempting the work'}, which the ${o.door} door does not reach`,
     )
   }
+  /*
+    `asked` is derived from the reply on the live door, so an empty reply
+    reads as "did not intend to ask" - and an unsettled turn has an empty
+    reply. Scoring that as a failure to clarify reports a turn nothing has
+    decided as a product defect, which is the same mistake CLAUDE.md
+    records the session runner making.
+  */
+  if (o.effects !== undefined && !o.effects.settled)
+    return finding(
+      'agency',
+      'unreached',
+      'the job had not settled, so there is no answer to read an intention off',
+    )
+
   const mayAsk = (turn.intent.mayAskAbout ?? []).length > 0
   const knows = (turn.intent.alreadyKnows ?? []).length > 0
 

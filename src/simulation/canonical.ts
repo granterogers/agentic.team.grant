@@ -257,16 +257,35 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
                      coalesce((select left(o.body, 4000) from public.outputs o
                                 where o.job_id = j.job_id
                                 order by o.created_at desc limit 1), '') as answered,
-                     (select count(*) from public.deliveries d where d.job_id = j.job_id) as delivered
+                     (select count(*) from public.deliveries d where d.job_id = j.job_id) as delivered,
+                     /*
+                       Whether the whole CORRELATION FAMILY has finished,
+                       not just this job.
+
+                       A turn spawns children - one approval scenario made
+                       three artifact.report jobs - and a child carries its
+                       parent's correlation_id. Waiting only for the parent
+                       read the effects while the children were still
+                       running, so settled came back false and reality,
+                       conversation and completion all reported "the job had
+                       not settled" about a turn that had answered. That is
+                       the unreached-for-the-wrong-reason shape, and it is
+                       also how a child's deposited document would be missed.
+                     */
+                     (select bool_and(k.state in ('complete','failed','cancelled'))
+                        from public.jobs k
+                       where k.job_id = j.job_id
+                          or k.parent_job_id = j.job_id
+                          or k.correlation_id = j.correlation_id) as family_settled
                 from public.jobs j
                where j.job_id = ${lit(jobId)}::uuid`),
         )
-        if (['complete', 'failed', 'cancelled'].includes(String(row.state))) break
+        if (row.family_settled === true || String(row.family_settled) === 'true') break
         await new Promise((r) => setTimeout(r, 10_000))
       }
 
       const answered = String(row.answered ?? '')
-      const settled = ['complete', 'failed', 'cancelled'].includes(String(row.state))
+      const settled = row.family_settled === true || String(row.family_settled) === 'true'
 
       /*
         A turn that has not answered YET is not a turn that answered nothing.
@@ -279,7 +298,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
       */
       if (!settled) {
         throw new Error(
-          `job ${jobId} had not settled after ${Math.round(deadlineMs / 1000)}s - nothing has decided yet, which is not the same as the office answering nothing`,
+          `job ${jobId} and its spawned work had not settled after ${Math.round(deadlineMs / 1000)}s - nothing has decided yet, which is not the same as the office answering nothing`,
         )
       }
 
