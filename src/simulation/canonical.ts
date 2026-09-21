@@ -40,12 +40,27 @@ import type { Observation, Transport, TurnContext } from './transport.ts'
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 /**
- * The Management API throttles, and a throttle is not an answer.
+ * The Management API throttles and its gateway sometimes 502s, and neither
+ * is an answer.
  *
  * CLAUDE.md, from #232: a 429 falling through as a result turns a correct
  * decision into a miss and moves a headline figure for reasons that have
  * nothing to do with the office.
  */
+const TRANSIENT = [
+  'Too Many Requests',
+  'Bad gateway',
+  'bad gateway',
+  '502',
+  '503',
+  '504',
+  'Service Unavailable',
+  'Gateway Timeout',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'fetch failed',
+]
+
 const patiently = async <T>(what: () => Promise<T>): Promise<T> => {
   let last: unknown
   for (const wait of [0, 2_000, 5_000, 12_000, 25_000]) {
@@ -54,7 +69,8 @@ const patiently = async <T>(what: () => Promise<T>): Promise<T> => {
       return await what()
     } catch (error) {
       last = error
-      if (!String((error as Error).message).includes('Too Many Requests')) throw error
+      const message = String((error as Error).message)
+      if (!TRANSIENT.some((t) => message.includes(t))) throw error
     }
   }
   throw last
