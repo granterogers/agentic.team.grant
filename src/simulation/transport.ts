@@ -52,6 +52,7 @@ import {
 import { personalTaskRequest } from '../agents/mine.ts'
 import { excludesASubject, rejectsWithoutSaying } from '../agents/negation.ts'
 import { readTeaching } from '../agents/teaching.ts'
+import type { CanonicalEffects } from './effects.ts'
 import type { Layer, Utterance } from './scenario.ts'
 
 /**
@@ -135,6 +136,17 @@ export interface Observation {
    * two-thirds of the corpus.
    */
   readonly reaches: readonly Layer[]
+  /**
+   * What canonically HAPPENED, where a door can see it.
+   *
+   * Counted from tables, never read off the reply. `reality` and
+   * `completion` exist to catch the case where the prose and the rows
+   * disagree, so a field derived from the prose would make both dimensions
+   * unable to fail for the only reason they were written.
+   *
+   * Absent on the comprehension door, which executes nothing.
+   */
+  readonly effects?: CanonicalEffects
   readonly unreached: readonly string[]
   /** Wall-clock, for §19. */
   readonly ms: number

@@ -33,6 +33,7 @@
  */
 
 import { ManagementApiExecutor, type SqlExecutor } from '../db/executor.ts'
+import { readEffects } from './effects.ts'
 import type { Utterance } from './scenario.ts'
 import type { Observation, Transport, TurnContext } from './transport.ts'
 
@@ -165,6 +166,10 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
     reachable: true,
     async ask(utterance: Utterance, _context: TurnContext): Promise<Observation> {
       const started = Date.now()
+      // Bounds every count to THIS turn. Without it a later turn in the same
+      // conversation inherits the earlier one's rows and effects appear to
+      // grow for free.
+      const since = new Date(Date.now() - 5_000).toISOString()
       nth++
       /*
         `inbound_dedupe_key_shaped` is `^[a-z]+:[a-z_]+:[A-Za-z0-9:_.-]+$`, so
@@ -258,9 +263,12 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         )
       }
 
+      const effects = await patiently(async () => await readEffects(db, jobId, since))
+
       return {
         door: 'canonical',
         reply: answered,
+        effects,
         // Read from the answer, because on this door the office's question
         // IS its prose. Deliberately crude: the semantic judge is the right
         // instrument for this and is asked separately.
