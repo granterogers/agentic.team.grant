@@ -527,5 +527,9 @@
   "0526_a_handler_that_never_went_through_the_worker.sql": "2bd64a5daba5e72d3504fd45d448debab7eb4cb3d51891b52509f8f6fc116d71",
   "0527_a_column_the_stale_check_never_read.sql": "ea28964c90930eb38c30353cbf54fdc53cd54b33a35213e3a5b13d7b7c58b0a2",
   "0528_two_webhooks_at_once_must_not_error.sql": "ad3043dc18b99614167929d1d18cff2424bf28a58faad3893f234ba30699e425",
-  "0529_a_plan_receipt_learns_where_it_got_to.sql": "1881ca6613e011758463fe51993b4adf5957a4a3f5df2bf8d2fb796fb63fdbdc"
+  "0529_a_plan_receipt_learns_where_it_got_to.sql": "1881ca6613e011758463fe51993b4adf5957a4a3f5df2bf8d2fb796fb63fdbdc",
+  "0530_a_task_the_office_made_remembers_which_job_made_it.sql": "6997c9ffca8db153d713de60d17362df30e3df08e4ff7e4b55d8844e1b4ea397",
+  "0531_sweep_the_twenty_one_the_witness_could_not_see.sql": "5497d5beb841d82af6cc0f4283242816b6f1fe14962e5897738d50af3698a1d8",
+  "0532_five_more_the_run_token_gives_away.sql": "4d978db76569157183d5809085b6c96cb9c4217f920a869d5da38423593b87c6",
+  "0533_the_harness_can_ask_to_see_its_own_rows.sql": "cd78e088569f2a4aa2215893d57e4ac1b2cb999aeca4112f3c1133f00fc6fbb7"
 }

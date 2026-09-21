@@ -719,14 +719,42 @@ check(
   Number(separate.jobs) === 1 && Number(separate.tasks) === 1,
 )
 
+/*
+  `p_include_harness` (0533), and the suite must say why it is entitled to it.
+
+  This task carries THIS SUITE'S job, and 0530 hides a task whose job is a
+  harness job — correctly: two tasks reading "draft.create — report outdated
+  items" sat on Grant's real list for a day because nothing did. #45 says a
+  suite testing a filter should use a real subject, and here it cannot: the
+  subject is made by the suite's own job, and giving that job a real-looking
+  requester would manufacture the debris 0531 swept.
+
+  So the flag is asked for, and the NEGATIVE is asserted immediately below it.
+  A reader parameter with only the positive check is an untested filter.
+*/
 const onList = await one(`
-  select count(*)::int as n from jsonb_array_elements(app.my_tasks('all', 200)) x
+  select count(*)::int as n
+    from jsonb_array_elements(app.my_tasks('all', 200, null, 'smart', true)) x
    where x ->> 'title' = ${lit(`Authorize Google Drive ${run}`)}
      and x ->> 'for_job' is not null`)
 check(
   'it appears in My Tasks, saying the team is waiting on it',
   `${String(onList.n)} row(s) with for_job set`,
   Number(onList.n) === 1,
+)
+
+/*
+  THE NEGATIVE, and the reason the parameter above is not a hole. The same row,
+  asked for the way Grant's dashboard asks, is not there — because the job that
+  raised it is a verification job and he is owed no question by it.
+*/
+const notOnHisList = await one(`
+  select count(*)::int as n from jsonb_array_elements(app.my_tasks('all', 200)) x
+   where x ->> 'title' = ${lit(`Authorize Google Drive ${run}`)}`)
+check(
+  'and it does NOT reach his list, because the job that raised it is a harness job',
+  `${String(notOnHisList.n)} row(s) without the flag`,
+  Number(notOnHisList.n) === 0,
 )
 
 // Ticking it.
@@ -803,11 +831,28 @@ check(
 // --- teardown ---------------------------------------------------------------
 
 console.log('')
+/*
+  SWEPT BY CLASS, not by this run's token.
+
+  A teardown keyed to its own token can never collect an earlier run's, and a
+  crashed run leaves exactly the rows a tidy one would have removed. Five of
+  this suite's tasks — two "Ring the venue", one "Ring the printers" and two
+  reminders — were on Grant's personal list for days, and nothing counted them
+  because tasks.is_fixture is generated from added_by and app.my_task_add
+  writes 'grant' (0530, and 0532 swept them).
+
+  The titles below are this suite's own vocabulary, so it owns them and may
+  sweep them whatever token they carry. This suite cannot label its subjects as
+  fixtures instead: it exists to prove that my_tasks SHOWS them, and #45's rule
+  is that a suite testing a filter may not name its subjects the way the filter
+  matches.
+*/
 await db.execute(`
   delete from public.tasks
    where project_id = ${lit(projectId)}::uuid
       or title like ${lit(`%${run}%`)}
-      or title ilike '%rollout numbers%';
+      or title ilike '%rollout numbers%'
+      or title ~ '^(Ring the venue|Ring the printers|Projected|Kept) [a-z0-9]{6,12}$';
   update public.jobs set state = 'cancelled', finished_at = app.now_utc(),
     state_reason = 'verify:mytasks teardown'
    where requested_by = ${lit(`teamhq:verify-mytasks-${run}`)}

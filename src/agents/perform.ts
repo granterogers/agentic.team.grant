@@ -418,7 +418,7 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
       what tells `step_begin` that repeating it is unsafe without a record.
     */
     effect: 'local',
-    run: async ({ db, step, from, request }): Promise<Observation> => {
+    run: async ({ db, jobId, step, from, request }): Promise<Observation> => {
       /*
         THE DEPENDENCY, MADE REAL.
 
@@ -443,9 +443,17 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
               .map((o) => o.saw)
               .join('\n')
               .slice(0, 600)
+      /*
+        The job goes with it (0530). A personal task Grant types carries no
+        job and must not — the public wrapper does not take one. A task the
+        OFFICE made carries the job that made it, which is what lets
+        `app.undo_tasks_from_job` take it back, and what lets a reader tell
+        harness traffic from his own list without reading the title.
+      */
       const { rows } = await db.execute(`
         select app.my_task_add(p_title => ${lit(title)},
-                               p_detail => ${lit(detail)}) as t`)
+                               p_detail => ${lit(detail)},
+                               p_job => ${lit(jobId)}::uuid) as t`)
       const raw = (rows[0] as { t?: unknown })?.t
       const got = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
         ok?: boolean

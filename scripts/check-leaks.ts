@@ -253,6 +253,36 @@ if (corpus.length > 0) {
 const piles = await db.execute(`
   select
     (select count(*) from public.tasks where is_fixture) as fixture_tasks,
+    /*
+      The sixth debris class, and the one the witness above could not see
+      (0530, 0531, 0532). public.tasks.is_fixture is GENERATED from added_by,
+      and app.my_task_add hardcodes added_by to grant -- correctly, for a
+      personal task -- so twenty-six tasks written by suites through the real
+      product path sat on Grant's list while this file reported zero fixture
+      tasks.
+
+      DERIVED, the way 0355 derives it for jobs: a task whose JOB is a harness
+      job is harness traffic, whatever the row says about who added it. This
+      one FAILS the check, because it can only ever exclude and so cannot hide
+      a task of his.
+    */
+    (select count(*) from public.tasks t
+      where t.assigned_to_human and t.state <> 'done'
+        and t.job_id is not null and app.harness_job(t.job_id)) as harness_tasks_on_his_list,
+    /*
+      And a REPORTED count beside it, which deliberately does not fail.
+
+      Every suite here builds its run token as eight characters of base 36, so
+      a title carrying a standalone eight-character word that mixes letters and
+      digits is probably a suite's. Probably is the operative word: an order
+      number would match, and a check that hides Grant's own work is worse than
+      the debris it removes. So it is a number with a name, for a person to
+      look at -- never a filter, and never a failure.
+    */
+    (select count(*) from public.tasks t
+      where t.assigned_to_human and t.state <> 'done' and t.job_id is null
+        and t.title ~ '\\m[a-z0-9]{8}\\M' and t.title ~ '\\m[a-z]*[0-9][a-z0-9]*\\M')
+      as tasks_with_a_run_token,
     (select jsonb_array_length((app.hq_governance(400))->'lessons')) as live_lessons,
     /*
       Counted on the PAGE, not in the view (0389).
@@ -355,6 +385,12 @@ const noisy: string[] = []
 if (Number(pile.fixture_tasks ?? 0) > 0) {
   noisy.push(`${String(pile.fixture_tasks)} fixture task(s) — npm run purge:fixtures -- --go`)
 }
+if (Number(pile.harness_tasks_on_his_list ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.harness_tasks_on_his_list)} task(s) on Grant's personal list were made by a ` +
+      'harness job — the suite that wrote them is not tearing down (0530)',
+  )
+}
 if (Number(pile.harness_lessons ?? 0) > 0) {
   noisy.push(
     `${String(pile.harness_lessons)} harness lesson(s) on the Governance page — the ` +
@@ -402,6 +438,8 @@ if (Number(pile.fixture_connectors ?? 0) > 0) {
 console.log(
   `\n  lessons on the Governance page: ${String(pile.live_lessons)} · ` +
     `fixture tasks: ${String(pile.fixture_tasks)} · ` +
+    `harness tasks on his list: ${String(pile.harness_tasks_on_his_list)} · ` +
+    `personal tasks carrying a run token: ${String(pile.tasks_with_a_run_token)} · ` +
     `probe providers: ${String(pile.probe_providers)} · ` +
     `fixture connectors: ${String(pile.fixture_connectors)} · ` +
     `stranded autonomy rows: ${String(pile.stranded_autonomy)} · ` +
