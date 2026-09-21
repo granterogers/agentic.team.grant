@@ -42,7 +42,7 @@ import {
   reactionText,
 } from '../../src/simulation/arcs.ts'
 import type { Verdicts } from '../../src/simulation/dimensions.ts'
-import { evaluate } from '../../src/simulation/evaluate.ts'
+import { evaluate, withdrawalWasSent } from '../../src/simulation/evaluate.ts'
 import { HiddenIntentLeak, sealed } from '../../src/simulation/isolation.ts'
 import { GRANT_LIKE, personaBySlug } from '../../src/simulation/persona.ts'
 import { derive, Seeded } from '../../src/simulation/random.ts'
@@ -137,9 +137,18 @@ for (const recipe of chosen) {
   console.log(`── ${arc.id}`)
   console.log(`   ${arc.about}\n`)
 
-  const history: { who: 'person' | 'office'; text: string }[] = []
+  let history: { who: 'person' | 'office'; text: string }[] = []
   let officeAsked = false
   let hadAnswer = false
+  /*
+    The break is a SECOND conversation, not a pause in this one.
+
+    Everything the thread carried goes: the history the resolver reads, the
+    question the office was waiting on an answer to, and the chat itself.
+    What must NOT go is anything the office STORED - a lesson is a row and
+    survives, which is the whole distinction this arc exists to measure.
+  */
+  let conversation = arc.id
 
   for (const [i, turn] of arc.turns.entries()) {
     /*
@@ -149,6 +158,14 @@ for (const recipe of chosen) {
       harness that never answers a clarification never tests what happens
       after one.
     */
+    if (arc.breaksAfter !== undefined && i === arc.breaksAfter + 1) {
+      history = []
+      officeAsked = false
+      hadAnswer = false
+      conversation = `${arc.id}-again`
+      console.log(`   ...he goes away and comes back later, in a new conversation\n`)
+    }
+
     const rng = new Seeded(derive(arc.seed, 'react', i))
     const reacting = officeAsked && (turn.reactsBy !== undefined || rng.chance(0.7))
     const reaction = turn.reactsBy ?? reactionFor(persona, rng)
@@ -174,7 +191,7 @@ for (const recipe of chosen) {
     try {
       o = await door.ask(
         { text: sent, channel: arc.channel },
-        { conversation: arc.id, history, standing: arc.standing ?? [], hadAnswer },
+        { conversation, history, standing: arc.standing ?? [], hadAnswer },
       )
     } catch (e) {
       unrun.push({ arc: arc.id, turn: i, because: (e as Error).message })
@@ -256,10 +273,25 @@ for (const recipe of chosen) {
         what: 'told the office how he wants things and it was not stored, so he will have to say it again and it will look like being ignored',
       })
     }
-    // Not gated on the layer: whether a withdrawal is SEPARABLE is decided
-    // by the clause splitter, which is comprehension, whatever the turn
-    // otherwise turns on.
-    if ((turn.intent.withdrawn?.length ?? 0) > 0 && o.clauses.length < 2) {
+    /*
+      Not gated on the layer - whether a withdrawal was NOTICED is decided
+      in comprehension, whatever the turn otherwise turns on. But gated on
+      the door being able to see it, and asked as the DIRECT question.
+
+      This complaint used to read `o.clauses.length < 2`, as a proxy for
+      "two halves were never separated, so the withdrawal cannot have been
+      noticed". #291 made the handler REMOVE the withdrawn half, so the
+      kept half legitimately has fewer clauses - and the proxy therefore
+      got worse as the product got better. On the 29-arc sweep it produced
+      35 of 41 complaints, every one of them about a message whose
+      withdrawal the office had in fact seen.
+
+      `transport.ts` already carried the correction to the evaluator and it
+      was never carried here. CLAUDE.md: when a fix removes a whole class
+      for one caller, grep for the other callers.
+    */
+    const withdrawn = turn.intent.withdrawn ?? []
+    if (withdrawn.length > 0 && withdrawalWasSent(sent, withdrawn) && o.withdrawalSeen === false) {
       complaints.push({
         kind: 'misled',
         said: sent,

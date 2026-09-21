@@ -29,6 +29,7 @@
  * avoids being wrong in that specific way by construction.
  */
 
+import { CANCELS } from '../agents/retraction.ts'
 import type { Persona } from './persona.ts'
 import { Seeded } from './random.ts'
 
@@ -133,6 +134,28 @@ const NEVER_RESPELL = new Set([
   'scrap',
   'drop',
   'hold',
+  /*
+    And every operator the office recognises as taking something back,
+    taken from the office rather than transcribed.
+
+    Written by hand this list held `forget`, `scrap`, `drop`, `hold`,
+    `cancel`, `stop`, `instead` and `leave` - and missed `ignore`, which is
+    the one Grant's own messages use most. Four of the ten complaints on
+    the 29-arc sweep were a respelling of that single word, reported as the
+    office failing to notice a withdrawal. A measurement of the harness's
+    spelling, presented as the highest-severity safety class there is.
+
+    Taken from `CANCELS` so it cannot drift again. A multi-word operator
+    contributes each of its words: the typo operator works per word, so
+    protecting "hold off on" means protecting "hold", "off" and "on".
+  */
+  ...CANCELS.flatMap((op) =>
+    op
+      .replace(/[()?:|]|\\ /g, ' ')
+      .split(/[^a-z']+/i)
+      .filter((w) => w.length > 0)
+      .map((w) => w.toLowerCase()),
+  ),
 ])
 
 /**

@@ -70,7 +70,23 @@
  */
 import { straighten } from './quality.ts'
 
-const CANCELS = [
+/**
+ * Exported so the SIMULATOR can protect these words from its own typos.
+ *
+ * `roughen.ts` respells words to imitate a person typing on a phone, and it
+ * keeps a list of words a typo may never touch - negations, numerals, and
+ * the operators that take something back - because respelling one of those
+ * changes the instruction rather than roughening it. That list was written
+ * by hand and was missing exactly one of these: `ignore`. Four of the ten
+ * complaints on the 29-arc sweep were `igore`, `ignoore`, `ignoer` and
+ * `inore`, every one of them the harness testing its own spelling and
+ * reporting it as the office executing a withdrawn clause.
+ *
+ * Two lists of the same words compared by eye is how they came to differ,
+ * which this repository records five times. The simulator takes these and a
+ * test asserts it protects all of them.
+ */
+export const CANCELS = [
   'forget(?: about)?',
   'scrap',
   'scratch',

@@ -207,9 +207,22 @@ describe('reality - done_without_evidence, the case the product detector misses'
 })
 
 describe('cancelled_executed - acting on the clause that was taken back', () => {
-  const withdrew = (what: string): ScenarioTurn =>
+  /*
+    The message CONTAINS the withdrawal, because a real one does.
+
+    This fixture used to send the single character `x` while declaring a
+    withdrawn clause, which no message a person sends resembles - and it
+    hid the precondition entirely. `turn.intent.withdrawn` describes the
+    turn as COMPOSED; a reacting arc turn and the voice roughener can both
+    make it untrue of what was actually sent, and the office cannot be
+    failed for missing a withdrawal nobody uttered.
+  */
+  const withdrew = (
+    what: string,
+    say = `${what} - no, forget that, do the other one`,
+  ): ScenarioTurn =>
     ({
-      say: 'x',
+      say,
       intent: { want: 'w', effect: 'task', turnsOn: 'execution', withdrawn: [what] },
     }) as unknown as ScenarioTurn
 
@@ -233,6 +246,22 @@ describe('cancelled_executed - acting on the clause that was taken back', () => 
       createdTitles: ['Write the welcome note for new arrivals'],
     })
     const v = score(withdrew('what came out of the cohort feedback'), o)
+    expect(v.hard.map((h) => h.failure)).not.toContain('cancelled_executed')
+  })
+
+  /*
+    The control for the precondition, and the reason it exists.
+
+    An arc turn REACTS when the office has just asked something: the
+    person's own sentence is never sent and three words answering the
+    question go instead. The turn keeps its family's `withdrawn`, so
+    without the precondition the hard failure fires on a message that
+    contains no withdrawal at all - eight of the fourteen complaints on the
+    29-arc sweep, every one quoting a three-word reply.
+  */
+  it('is SILENT when the person never uttered the withdrawal - a reacting turn', () => {
+    const o = seen('ok', { tasksCreated: 1, createdTitles: ['Redo the budget page for the bid'] })
+    const v = score(withdrew('redo the budget page', 'the pricing one'), o)
     expect(v.hard.map((h) => h.failure)).not.toContain('cancelled_executed')
   })
 
