@@ -394,7 +394,20 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         learnedObserved: false,
         corrected: false,
         extraction: false,
-        wouldFile: false,
+        /*
+          What was ACTUALLY filed, not a constant.
+
+          The fourth door constant found this session, after clauses,
+          reading/recognised and learned. `understanding` fails a turn when
+          the office read a direct command and the task matcher would file
+          nothing - and with this hardcoded false it failed EVERY actionable
+          scenario live, including the ones where a task now demonstrably
+          exists.
+
+          Canonical state answers it directly, which is the whole point of
+          this door.
+        */
+        wouldFile: effects.tasksCreated > 0 || effects.documentsCreated > 0,
         acknowledgementOnly: false,
         bareRejection: false,
         exclusionSeen: false,
