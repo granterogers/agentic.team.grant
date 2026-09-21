@@ -89,6 +89,8 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 27 | 21 Sep | **Full corpus live** — all 66 scenarios in 14 slices | DONE |
 | 28 | 21 Sep | **0539** — harness traffic had taught the office 34 of the 49 standing instructions in every prompt. Fixed at the reader, proved before and after. [#297](https://github.com/granterogers/agentic.team.grant/issues/297) | DONE |
 | 29 | 21 Sep | Frozen held-out and fresh seed 77, live. Both headline defects reproduce on material nobody wrote to find them | DONE |
+| 30 | 21 Sep | **#291 FIXED.** `retraction.ts`; measured on three unseen corpora: context 69% → 96%, cancelled_executed 37 → 1 | DONE |
+| 31 | 21 Sep | **#296 was a FALSE POSITIVE**, and uncovered a containment breach: 30 synthetic tasks on Grant's real list. Fixed, swept, closed | DONE |
 
 ## Decisions taken without asking
 
@@ -628,3 +630,80 @@ and the existing gate sees one.
 - **28 duplicate `verify-anchors` lessons** remain in the table. Invisible
   to prompts since 0539, so tidiness rather than urgency, and `check:leaks`
   has no witness for them.
+
+
+---
+
+## Remediation — 21 September
+
+### #291 — executing a withdrawn clause. FIXED.
+
+**Root cause.** Three readers existed and none covered intra-message
+retraction. `correction.ts` reads a correction of a PREVIOUS answer and
+requires `hadAnswer`. `negation.ts` reads an excluded subject. `clauses.ts`
+splits for SUBJECT LOOKUP — its boundaries are coordinators and its
+twelve-character floor silently discarded *"no leave it"*, eleven
+characters, so the pivot was thrown away by a rule written for another
+purpose.
+
+**The fix.** `src/agents/retraction.ts`. The cancellation operator ITSELF is
+the boundary, because punctuation cannot help a dictated message. Applied
+above `resolveAgainstThread`, for the reason that file already gives about
+corrections. Two refinements came from measuring, not reading:
+
+- a pivot that NAMES its object withdraws only that object. A whole-message
+  rule threw away the two asks `multi.partial-cancel` kept.
+- ten of the twelve remaining misses retracted with **no verb at all**
+  (*"actually no"*). `actually` alone is excluded and has its own negative
+  control.
+
+**Measured, three unseen corpora, counterfactual proved to land:**
+
+| corpus | context | cancelled_executed |
+|---|---|---|
+| frozen held-out | 69% → **96%** | 37 → **1** |
+| fresh seed 77 | 70% → **95%** | 37 → **4** |
+| fresh seed 313 (never generated before) | 69% → **96%** | 37 → **1** |
+
+**An instrument correction on the way.** `context` asserted a PROXY — two or
+more clauses seen — and once the handler began REMOVING the withdrawn half
+the proxy got worse as the product got better: 19 failures became 24 on an
+unchanged corpus. It asserts `withdrawalSeen` now. Fifth instance in this
+repository of assert-the-property-not-the-artefact.
+
+35 tests; three new sabotage entries, 11 detectors → **14**.
+
+### #296 — NOT a defect, and what it uncovered is worse
+
+**The office was not lying.** The tasks exist — ten of them, every title
+matching the corpus. My `reality` oracle counted tasks by `job_id` and they
+carried none, so I filed a defect against an office that had done exactly
+what it said. Both "confirming" corpora confirmed my blind spot.
+**Unseen material cannot rescue a broken instrument.**
+
+**What it uncovered.** `app.my_task_add` has taken `p_job` since it existed
+and the caller never passed it — 33 of 41 tasks had no provenance. Three
+things depend on that link and all three were blind: ADR-0041's boundary
+`app.harness_task`, the reversal `app.undo_tasks_from_job`, and
+`check:leaks`.
+
+**So thirty synthetic tasks were on Grant's real personal list**, reading
+`added_by = 'grant'`, while every witness reported it clean. The
+containment invariant was broken and reported as holding.
+
+Cleaned: enumerated by id, each title verified corpus-derived, removed
+through `app.my_task_delete`. His four real tasks untouched. Fixed by
+passing `p_job`; proved live on worker v663 — `has_job` true,
+`harness_task` true, off his list, sweep reaches it, `check:leaks` green,
+and `reality`/`completion` now correctly PASS.
+
+`understanding` still fails there, citing **#289** — the intent classifier
+and the matcher that files disagree about the same sentence. Separate,
+pre-existing, correctly attributed.
+
+### A guard that cannot see its own commonest case
+
+Backticks in a comment inside a template literal, **eighth** time. This
+time `check:templates` reported CLEAN over it: once the backtick closes the
+literal, the rest is no longer a comment inside one, so the guard cannot
+see the shape it exists for. `tsc` caught it. Worth fixing in the guard.
