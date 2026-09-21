@@ -340,6 +340,24 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     and then said nothing at all. And backup:rehearse printed a report and
     exited, so "when did a restore last work" had no answer anywhere.
   */
+  /*
+    The escape that reported green.
+
+    verify:history sent a real Telegram message to Grant's own chat and a real
+    Slack message while reporting 51/51, exit 0. 0523's guard asked
+    app.harness_job, which was DERIVED from an attribution the suite controls,
+    so at send time it said false. 0541 moves the mark onto the door the work
+    came through and makes it immutable; 0542 carries it down the lineage.
+
+    Every attempt here runs through the real DeliveryService with a transport
+    that counts its own invocations, so "0" is a claim about whether the
+    sending code was reached at all -- and a positive control proves a
+    permitted delivery still reaches it.
+  */
+  [
+    'verify:escapes',
+    'synthetic work cannot cross a real external boundary, proved by attempting it (0541, 0542)',
+  ],
   [
     'verify:backups',
     'a recent FINISHED backup and a PROVEN restore, and a chore when either is missing (0537, 0538)',
