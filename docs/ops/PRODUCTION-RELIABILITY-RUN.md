@@ -487,3 +487,46 @@ the weekly vault export should be switched on; it is one row —
 **NEXT AUTONOMOUS ACTION:** brief §12 — idempotency and delivery. Invariants
 4, 5, 7, 8 and 20: duplicate inbound, duplicate outbound, delivery retry not
 re-running substantive work, completed-but-undelivered recovery.
+
+### T+9:45 — closing state
+
+`docs/ops/failure-domains.md` is the brief's §4 deliverable: every inbound,
+core and dependency failure mode with what Grant sees, the loss risk, what
+detects it, how fast, and where the monitoring is still blind.
+
+**Live state at close:** queue drained (0 runnable, 0 in flight), work moved
+1 minute ago, newest finished backup 6.7 h old and not overdue, restore
+proven 0.9 h ago, **0 silent failures since 0535**, 1 open chore (the Slack
+config token, awaiting Grant since 18 Sept), 0 test destinations registered.
+
+**Suites: 11 reliability suites plus 7 static checks, all green.**
+waiting 21/21 · budget 8/8 · fallback 16/16 · checkpoints 27/27 · drains 8/8
+· chaos **29/29** (was 28/29) · security 20/20 · recovers 19/19 · transport
+**23/23** (was 14/23) · progress 10/10 · jobs 34/34 · hq 47/47 ·
+transitions identical · journals green · resumes green · backups 10/10 ·
+check:leaks green · templates/callers/pressable/tokens/icons/reachable/
+one-brain all 0 · lint 0 · typecheck 0 · secrets clean · 2,219 tests.
+
+`verify:latency` is 4/5 and the one red is **not** reproducible as a product
+defect: its 227 s Telegram sample was taken while `verify:progress` debris
+was in the queue, and the honest seven-day median for a real delivered
+Telegram instruction is **0 s to pickup, 22 s end to end**.
+
+**The gate is 44 checks and runs well past ten minutes** (one suite alone
+takes 198 s). Split per Grant's standing instruction rather than backgrounded:
+the static family and the affected suites were run individually, with real
+exit codes. A full 44-check sweep needs about 40 minutes and is the next
+autonomous action for anyone continuing.
+
+**Integration: READY WITH ONE NAMED ARTEFACT.** main never moved from
+`3c94150`. `claude/human-simulation-harness` has taken migrations
+0535–0538 **byte-identical** (verified by `git hash-object`) and continued at
+0539, so the branches merge cleanly. The single artefact is
+`[sequence/gap] gap between 0533 and 0535` on this branch, because 0534
+belongs to that branch. Deliberately not resolved by copying their file:
+this branch would then no longer represent only its own work, and a stale
+copy is worse than a named gap. It closes the moment either branch merges.
+
+**NEXT AUTONOMOUS ACTION:** run the full 44-check gate in segments; then the
+two HUMAN_BLOCKED items are Grant's (offsite target, vault export) and the
+Vercel token needs rotating.
