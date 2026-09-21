@@ -14,6 +14,17 @@
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 
+/*
+  Browser code travels as a STRING, which is this repository's existing
+  convention for every check that drives Chromium. tsconfig carries no DOM
+  library — deliberately, because `src/` is Node and Deno and adding one would
+  hand those files a second definition of fetch — so a `document` written
+  inside a typed callback fails the typecheck. A string body is never
+  typechecked, which is the trade every other browser check here already
+  makes.
+*/
+const inPage = (body: string): string => `(() => { ${body} })()`
+
 const PORT = 4631
 const server = await serveStudio(PORT)
 const url = (p: string): string => `http://127.0.0.1:${String(PORT)}${p}`
@@ -47,7 +58,7 @@ check(
 )
 check(
   'the default experience carries no experience attribute',
-  (await page.evaluate(() => document.documentElement.dataset.experience)) === undefined,
+  (await page.evaluate(inPage('return document.documentElement.dataset.experience'))) === undefined,
   'a stray attribute on the root is what would let the experimental stylesheet reach the product',
 )
 const defaultBc = await page.locator('.bctop').count()
@@ -63,7 +74,8 @@ check(
 )
 check(
   'the experimental experience sets the scope attribute',
-  (await page.evaluate(() => document.documentElement.dataset.experience)) === 'basecamp',
+  (await page.evaluate(inPage('return document.documentElement.dataset.experience'))) ===
+    'basecamp',
 )
 check(
   'the experimental experience does not draw the default rail',
@@ -78,7 +90,7 @@ check(
   A computed background of the canvas token proves the experimental stylesheet
   both loaded and applied.
 */
-const canvas = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+const canvas = await page.evaluate(inPage('return getComputedStyle(document.body).backgroundColor'))
 check(
   'the experimental stylesheet loaded and applied',
   canvas === 'rgb(11, 21, 27)',
@@ -87,10 +99,10 @@ check(
 
 /* ------------------------------------------- deep addresses under the prefix */
 
-const slug = await page.evaluate(() => {
-  const first = document.querySelector('[data-bc-go^="/basecamp/p/"]')
-  return first === null ? null : (first as HTMLElement).dataset.bcGo
-})
+const slug = (await page.evaluate(
+  inPage(`const first = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+     return first === null ? null : first.dataset.bcGo`),
+)) as string | null
 check('the home surface offers a project', slug !== null)
 
 if (slug !== null) {
@@ -115,15 +127,21 @@ if (slug !== null) {
 }
 
 await open('/basecamp/tasks')
-check('the personal list opens at /basecamp/tasks', (await page.locator('.bcsectiontitle').count()) > 0)
+check(
+  'the personal list opens at /basecamp/tasks',
+  (await page.locator('.bcsectiontitle').count()) > 0,
+)
 
 /* ------------------------------------------------- the default is still fine */
 
 await open('/')
-check('the default Team HQ still opens after the experiment has been visited', (await page.locator('.rail').count()) > 0)
+check(
+  'the default Team HQ still opens after the experiment has been visited',
+  (await page.locator('.rail').count()) > 0,
+)
 check(
   'the scope attribute is removed again on the default route',
-  (await page.evaluate(() => document.documentElement.dataset.experience)) === undefined,
+  (await page.evaluate(inPage('return document.documentElement.dataset.experience'))) === undefined,
   'it must be deleted rather than set to another value: an attribute-presence selector would still match',
 )
 
@@ -135,7 +153,9 @@ server.close()
 let bad = 0
 for (const c of checks) {
   if (!c.ok) bad += 1
-  console.log(`${c.ok ? 'ok  ' : 'FAIL'}  ${c.name}${c.ok || c.detail === '' ? '' : `\n        ${c.detail}`}`)
+  console.log(
+    `${c.ok ? 'ok  ' : 'FAIL'}  ${c.name}${c.ok || c.detail === '' ? '' : `\n        ${c.detail}`}`,
+  )
 }
 console.log(`\n${String(checks.length - bad)}/${String(checks.length)} passed`)
 process.exit(bad === 0 ? 0 : 1)

@@ -192,15 +192,25 @@ const wireTasks = (root) => {
       const rowEl = c.closest('.bcitem')
       rowEl?.classList.add('bcitem--pending')
       /*
-        A DIFFERENT RPC from the project task above, on purpose. §2.4: a
-        person's own list and a project's commitments are distinct domains with
-        distinct ownership, and sharing one writer is how two domains quietly
-        become one.
+        THE SAME WRITER as the project task above, and that is deliberate.
+
+        The first draft of this called `my_task_state`, reasoning that two
+        domains need two writers. There is no such action: the gateway would
+        have refused it, so the tick on a personal task could never have
+        worked - an offer promising what no press can perform, which is the
+        defect this repository keeps paying for.
+
+        ADR-0041 decided the opposite and says why: a personal task IS a row
+        in `public.tasks` with `assigned_to_human = true`, so there is no
+        second id space and no second set of writers. What stays distinct is
+        OWNERSHIP and LIFECYCLE - whose list it is on, who may change it, and
+        which surface it appears on - and §2.4 asks for exactly that, not for
+        a duplicated write path. `task_state` already does both kinds.
       */
       const done = await attempt(
         c,
         'Saving…',
-        () => act('my_task_state', { p_task_id: id, p_state: wanted ? 'done' : 'todo' }),
+        () => act('task_state', { p_task_id: id, p_state: wanted ? 'done' : 'todo' }),
         wanted ? 'Done.' : 'Put back.',
       )
       rowEl?.classList.remove('bcitem--pending')

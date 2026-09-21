@@ -286,7 +286,9 @@
     "verify:understands": "tsx scripts/verify/understands.ts",
     "verify:basecamp-routes": "tsx scripts/verify/basecamp-routes.ts",
     "basecamp:shots": "tsx scripts/verify/basecamp-shots.ts",
-    "basecamp:measure": "tsx scripts/verify/basecamp-measure.ts"
+    "basecamp:measure": "tsx scripts/verify/basecamp-measure.ts",
+    "verify:basecamp-actions": "tsx scripts/verify/basecamp-actions.ts",
+    "verify:basecamp-journey": "tsx scripts/verify/basecamp-journey.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

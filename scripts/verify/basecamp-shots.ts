@@ -51,7 +51,6 @@ for (const size of sizes) {
       finding about the harness.
     */
     ...(size.touch ? devices['Pixel 7'] : {}),
-    viewportSize: undefined,
     deviceScaleFactor: 1,
     isMobile: size.touch,
     hasTouch: size.touch,
@@ -73,17 +72,19 @@ for (const size of sizes) {
       await page.screenshot({ path: `${OUT}/${name}-${size.id}-full.png`, fullPage: true })
       taken += 1
     } catch (e) {
-      missed.push(`${name}-${size.id}: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`)
+      missed.push(
+        `${name}-${size.id}: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`,
+      )
     }
   }
 
   const slug = await (async (): Promise<string> => {
     await page.goto(url('/basecamp'), { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(500)
-    return await page.evaluate(() => {
-      const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
-      return el === null ? '' : ((el as HTMLElement).dataset.bcGo ?? '')
-    })
+    return (await page.evaluate(
+      `(() => { const el = document.querySelector('[data-bc-go^="/basecamp/p/"]')
+         return el === null ? '' : (el.dataset.bcGo ?? '') })()`,
+    )) as string
   })()
 
   await shot('home', '/basecamp')
