@@ -129,8 +129,52 @@ const REMIND_SOMEBODY_ELSE = /\b(?:remind|nudge|ping)\s+(?!me\b)\w+/i
   and "make the deck" is work for the team; what distinguishes these is that he
   said the word task, to-do or reminder.
 */
+/*
+  "to" followed by a VERB, not by a noun phrase.
+
+  The discriminator that lets `note`, `item`, `entry` and `line` into the
+  to-do class at all: a note TO DO something is an action, a note OF
+  something is a record.
+
+  The first version tested `to` followed by any lower-case letter, and
+  "add a line ABOUT THE DISCOUNT TO THE DRAFT" matched on a PREPOSITION -
+  it would have filed a task called "The draft" from a request to edit a
+  document. Excluding the determiners and pronouns is what makes it an
+  infinitive test rather than a "to" test, and it was a negative control
+  that caught it rather than the corpus.
+*/
+const BARE_INFINITIVE =
+  '(?!(?:the|a|an|my|our|your|his|her|its|this|that|these|those|it|them|him|me|us)\\b)[a-z]'
+
 const MAKE_A_TASK =
   /\b(?:set\s+aside|put|add|create|make|stick|note)\s+(?:me\s+)?(?:a|an|another)\s+(?:task|to-?do|reminder)\b/i
+
+/*
+  THE SAME REQUEST WITH A WORD THAT ALSO MEANS SOMETHING ELSE.
+
+  "Make me a note to ring Kevin back" is the mission's own example of
+  indirect future-action intent, and it filed nothing: the verb list above
+  contains `note` and the NOUN list does not, so the one construction where
+  `note` is unmistakably a to-do fell through. `item`, `entry` and `line`
+  were missing the same way - the class is "a thing on my list" and only
+  three of its words were in it.
+
+  They are not in the list above because they are polysemous. "Make a note
+  OF the price" is a record and must stay out, and so must "I made a note
+  about that yesterday".
+
+  The INFINITIVE is what separates them, and it is structural rather than
+  lexical: a note TO DO something is an action, a note OF something is a
+  record. That also means this generalises to phrasings nobody listed -
+  "leave me a note to...", "drop an item on to..." - while "note of",
+  "note about" and "note on the pricing" are excluded by grammar rather
+  than by being enumerated.
+*/
+const MAKE_AN_ITEM_TO = new RegExp(
+  `\\b(?:set\\s+aside|put|add|create|make|stick|leave|drop|chuck|bung)\\s+(?:me\\s+)?` +
+    `(?:a|an|another)\\s+(?:note|item|entry|line|memo)\\b[^.?!]{0,20}?\\bto\\s+${BARE_INFINITIVE}`,
+  'i',
+)
 
 /*
   And the self-commitment that does not start with "I".
@@ -338,7 +382,36 @@ const stripFraming = (said: string): string =>
   withoutOpeningAffirmation(said)
     .replace(REMIND_ME, ' ')
     .replace(I_MUST, ' ')
+    /*
+      The infinitive belongs to the framing, not to the title.
+
+      "Put a to-do ON TO check the numbers" was titling itself "On to check
+      the numbers" - a pre-existing defect in this older path, the same
+      shape as the one below and worth fixing with it rather than leaving
+      one of two identical bugs standing.
+    */
+    .replace(new RegExp(`${MAKE_A_TASK.source}\\b[^.?!]{0,12}?\\b(?:on\\s+)?to\\s+`, 'i'), ' ')
     .replace(MAKE_A_TASK, ' ')
+    /*
+      "Make me a note to ring Kevin" is a task called "Ring Kevin".
+
+      The whole framing comes off - verb, article, artifact noun and the
+      infinitive "to" - leaving the action. Stripping only the noun would
+      title it "Make me to ring Kevin"; leaving the framing on titles it
+      with the request rather than the work, which is what the list is for.
+
+      The `to` is consumed here rather than by the leading-word pass below,
+      because that pass runs once and there are two of them in "put an
+      entry ON TO email the officer".
+    */
+    .replace(
+      new RegExp(
+        `\\b(?:set\\s+aside|put|add|create|make|stick|leave|drop|chuck|bung)\\s+(?:me\\s+)?` +
+          `(?:a|an|another)\\s+(?:note|item|entry|line|memo)\\b[^.?!]{0,20}?\\bto\\s+(?=${BARE_INFINITIVE})`,
+        'i',
+      ),
+      ' ',
+    )
     /*
       "Stick X on my list" keeps X and loses everything around it.
 
@@ -457,7 +530,10 @@ export function personalTaskRequest(text: string, now: Date = new Date()): Perso
   const commit =
     I_MUST.test(said) ||
     ADD_COLON.test(said) ||
-    ((MAKE_A_TASK.test(said) || MAKE_SURE_I.test(said) || ON_MY_LIST.test(said)) &&
+    ((MAKE_A_TASK.test(said) ||
+      MAKE_AN_ITEM_TO.test(said) ||
+      MAKE_SURE_I.test(said) ||
+      ON_MY_LIST.test(said)) &&
       !A_TASK_FOR_SOMEBODY_ELSE.test(said))
   if (!remind && !commit) return null
 
