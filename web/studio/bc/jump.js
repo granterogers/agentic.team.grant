@@ -151,7 +151,22 @@ export const show = (from = null) => {
   open = true
   query = ''
   picked = 0
-  invoker = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+  /*
+    WHO TO GIVE FOCUS BACK TO, which is not always who opened it.
+
+    §7.1 says focus returns to the invoker. Opened from the shortcut there is
+    no invoker: `document.activeElement` is the body, because nothing in the
+    shell had focus when Shift+J was pressed. Restoring to the body sends a
+    keyboard user back to the top of the document after every Escape, with
+    nothing anywhere reporting a fault — the shape #147 already records about
+    a redraw taking focus with it.
+
+    So the fallback is the control the sheet visually comes out of, which is
+    where a person would expect to be standing when it closes.
+  */
+  const active = document.activeElement
+  const real = active instanceof HTMLElement && active !== document.body ? active : null
+  invoker = from ?? real ?? document.querySelector('[data-bc-jump]')
 
   const scrim = document.createElement('div')
   scrim.className = 'bcscrim'

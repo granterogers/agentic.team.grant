@@ -13121,6 +13121,20 @@ const bcContext = {
   myTasksTrouble: () => mine.trouble[mineKey()] === true,
   refresh: () => refresh(),
   render,
+  /*
+    THE TEAM CONVERSATION (#103), reachable from the experiment too.
+
+    The dock lives outside #root, so it already SURVIVES the experimental
+    render — but surviving is not the same as being reachable, and a
+    capability that exists in code and cannot be found is the regression the
+    run's pre-mortem calls Failure E. The experience gets the same door the
+    default rail has rather than a second conversation.
+  */
+  openDock: () => {
+    rememberDock(true)
+    paintDock()
+  },
+  dockIsOpen: () => dockOpen(),
   go: (path) => {
     goToPath(path)
     render()

@@ -71,6 +71,12 @@ export const wire = (root) => {
     })
   }
 
+  for (const b of root.querySelectorAll('[data-bc-dock]')) {
+    b.addEventListener('click', () => {
+      ctx.openDock()
+    })
+  }
+
   for (const b of root.querySelectorAll('[data-bc-attention]')) {
     b.addEventListener('click', () => {
       /*

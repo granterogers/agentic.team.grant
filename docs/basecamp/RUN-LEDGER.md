@@ -129,47 +129,134 @@ shell is a different renderer over the same canonical model, not a fork.
 Every destination reachable in the default experience today. The experimental
 experience must reach each one, or record an explicit exception.
 
-| Destination | Default route | Status in experiment |
+| Destination | Default route | In the experiment |
 |---|---|---|
-| Portfolio / home board | `/` | pending |
-| Cross-project Tasks | `/tasks` | pending |
-| Activity / Lately | `/activity` | pending |
-| Project Overview | `/p/:slug` | pending |
-| Project — AI Team | `/p/:slug/team` | pending |
-| Project — Documents | `/p/:slug/documents` | pending |
-| Project — Tasks | `/p/:slug/tasks` | pending |
-| Project — Contacts | `/p/:slug/contacts` | pending |
-| Project — Sources | `/p/:slug/sources` | pending |
-| Project — Project Settings | `/p/:slug/settings` | pending |
-| Project — Team board | `/p/:slug/board` | pending |
-| Project — Chat | `/p/:slug/chat` | pending |
-| Project — Active jobs | `/p/:slug/jobs` | pending |
-| Project — Outputs | `/p/:slug/outputs` | pending |
-| Dock (team conversation) | persistent, outside `#root` | pending |
-| Undo bar | persistent, outside `#root` | pending |
-| Settings page | page, not route (#158) | pending |
-| Document viewer | persistent `#viewer` | pending |
-| Drop-to-upload layer | persistent `droplayer` | pending |
+| Portfolio / home board | `/` | `/basecamp/` — own surface |
+| Cross-project Tasks | `/tasks` | `/basecamp/tasks` — own surface, distinct domain |
+| Activity / Lately | `/activity` | `/basecamp/activity` — own surface |
+| Project Overview | `/p/:slug` | `/basecamp/p/:slug` — the landing surface |
+| Project — AI Team | `/p/:slug/team` | own surface |
+| Project — Documents | `/p/:slug/documents` | own surface |
+| Project — Tasks | `/p/:slug/tasks` | own surface, full journey |
+| Project — Contacts | `/p/:slug/contacts` | own surface |
+| Project — Sources | `/p/:slug/sources` | own surface |
+| Project — Project Settings | `/p/:slug/settings` | hand-off to the current Team HQ |
+| Team board / chat / jobs / outputs | sub-views of `team` | hand-off to `/p/:slug/team` |
+| Dock (team conversation) | persistent, outside `#root` | **Ask the team**, top row on desktop, tray on phone |
+| Undo bar | persistent, outside `#root` | survives the render — asserted |
+| Settings page | page, not route (#158) | reachable from the default experience; not duplicated |
+| Document viewer | persistent `#viewer` | survives the render — asserted |
+| Drop-to-upload layer | persistent `droplayer` | survives the render — asserted |
+
+Verified by `npm run verify:basecamp-preservation` — 26/26, including that every
+hand-off names a destination the default router actually has, swept across
+every owned surface rather than the overview alone.
+
+**Two defects this matrix caught**, both of which looked finished:
+
+1. The dock survived the experimental render and had no door into it. A
+   capability that exists in code and cannot be found is Failure E.
+2. Work Board, Project Chat, Active jobs and Outputs were listed as project
+   tools with hand-offs to `/p/:slug/board` and friends. None of those is a
+   section — they are `TEAM_VIEWS`, sub-views of AI Team — so the default
+   router dropped all four on the project overview. Four links, four wrong
+   destinations, all rendered and pressable.
+
+---
+
+## Gates
+
+| Gate | Result | What it covers |
+|---|---|---|
+| `verify:basecamp-routes` | 15/15 | both addresses boot, assets resolve, the default is untouched |
+| `verify:basecamp-actions` | 3/3 calls | every action and required argument exists at the gateway |
+| `verify:basecamp-journey` | 23/23 | the task journey end to end in a browser, over real HTTP |
+| `verify:basecamp-keyboard` | 25/25 | skip link, focus, trap, keyboard map, reduced motion, 200% zoom |
+| `verify:basecamp-preservation` | 26/26 | every destination reachable; hand-offs resolve; default unchanged |
+| `basecamp:measure` | no violations | geometry at 1440×900, 1024×768, 768×1024, 390×844 |
+| `smoke` · `lint` · `typecheck` | exit 0 | |
+| `npm test` | 2207/2207 tests | one FILE fails to load: `tests/sessions/weather-is-not-a-failure.test.ts` needs `SUPABASE_ACCESS_TOKEN`; sessions harness, untouched here |
+| `verify:design` | 18/20 | identical on this branch and on the baseline; both failures need credentials |
+
+Every detector added by this run has been **proved able to fail** by a
+sabotage whose own effect was printed first — a sabotage that does not apply
+is not a passing control.
+
+| Detector | Sabotage | Result |
+|---|---|---|
+| `verify:basecamp-actions` | call a non-existent action | red, naming it |
+| `verify:basecamp-actions` | misspell a required argument | red, naming it |
+| `verify:basecamp-journey` | remove the optimistic rollback | red, 22/23 |
+| `verify:basecamp-preservation` | point the team sub-views at their own ids | red, naming all four |
+| `tests/studio/command.test.ts` | push a dead-view row into the command bar | red, naming `desk` |
+
+---
+
+## Defects found, and how
+
+Not one of these was found by reading the code.
+
+| # | Defect | Found by |
+|---|---|---|
+| 1 | phone top row collided by 26px — a fixed 166px centre column against 108px sides | measuring |
+| 2 | 19 controls between 22 and 37px on a 768px tablet — the 44px floor was scoped to a width, not a pointer | measuring |
+| 3 | `.bcpmeta`/`.bcptitle`/`.bcpexcerpt` written as descendant selectors, used by six callers outside that descendant — every caption rendered as 16px body text | opening the capture |
+| 4 | `.bcpreview` as `display:block` — a button centres its content, so sparse previews floated in the middle of a 324px tile | opening the capture |
+| 5 | the portfolio borrowed the overview's 324px tile height and gave a two-line project 300px of nothing | opening the capture |
+| 6 | `act('my_task_state')` — no such action; that control could never have worked, and the comment above it asserted a design ADR-0041 rejects | reading the gateway |
+| 7 | Escape after Shift+J dropped focus on `body`, because opened by shortcut there is no invoker | the keyboard sweep |
+| 8 | the dock survived the render with no way to open it | the preservation check |
+| 9 | four hand-off links named routes the default router does not have | the preservation check |
+| 10 | the "Running work" paragraph ran 170 characters across the full desktop measure | opening the capture |
+| 11 | the phone top row collapsed the jump control to "J…" once a fourth control joined it | opening the capture |
+
+Two findings were **read off a capture and were wrong**, and were discarded
+after measuring:
+
+- the overview's second row of tiles looked unequal in height; they are
+  identical at 366px;
+- the phone's fixed tray looked as though it overlapped the task list; that is
+  an artefact of a full-page capture of a fixed element, and the viewport
+  capture shows it correctly at the foot.
 
 ---
 
 ## Evidence index
 
-Captures land in `.out/basecamp/`. Each entry below is written only after the
-image has been **opened and inspected**, per §14A — an unreviewed capture is a
-failed visual-verification phase.
+Captures land in `.out/basecamp/`, 44 per run — eleven screens at four
+viewports, each as a viewport shot and a full-page shot. Screens: home,
+project overview, tasks, tasks mid-creation, team, documents, sources,
+activity, my tasks, jump closed and jump filtered.
 
-_(none yet)_
+`npm run basecamp:shots` passes and fails nothing. It reports page errors and
+names any screen it could not capture rather than dying on the first one — a
+screen with no capture is a screen nobody is watching.
+
+Inspected this run at desktop and phone: home, overview, team, tasks
+mid-creation, jump filtered. Each finding above records which.
 
 ---
 
 ## HUMAN_BLOCKED
 
-_(none yet)_
+Each of these needs one credential, not more work. Everything else continued.
+
+| Item | Why | What unblocks it |
+|---|---|---|
+| Proving the journey against the **production office** | no `HQ_API_TOKEN` in this environment | a token; then run `verify:basecamp-journey` against the real gateway |
+| A **public preview URL** | no `VERCEL_TOKEN` | a token; the experience is already part of `deploy:hq`'s upload — `web/studio/bc/**` is walked with everything else, so no deploy change is needed |
+| `verify:design`'s two failures | one needs the deployed site, one needs `SUPABASE_ACCESS_TOKEN` | identical on the baseline; not caused here |
+| `tests/sessions/weather-is-not-a-failure.test.ts` | needs `SUPABASE_ACCESS_TOKEN` to load | sessions harness — Shadow Grant's ground, untouched |
+
+**Harness caveat, not a product defect.** Chromium in this sandbox renders a
+native date input as `mm/dd/yyyy` regardless of the context locale or
+`--lang=en-GB`. The format is the browser's, not the page's; Grant's own
+browser will show `dd/mm/yyyy`. Captures of the task form misrepresent that
+one field.
 
 ---
 
 ## NEXT ACTION
 
-Establish the `/basecamp` route and prove both addresses boot, before any
-visual work.
+Phase 5 — the agent-output journey — then the adversarial and edge-state
+sweep, then the old-frontend regression pass.

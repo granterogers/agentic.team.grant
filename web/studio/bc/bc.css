@@ -710,6 +710,9 @@
     font: 500 10px/14px var(--bc-font);
   }
 
+  .bcwide-only { display: none; }
+  .bcnarrow-only { display: inline-flex; }
+
   /* §11.2: a wide centre dialog becomes a bottom sheet on a phone. */
   .bcsheet {
     top: auto;

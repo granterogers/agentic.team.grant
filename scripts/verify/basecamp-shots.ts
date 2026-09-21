@@ -36,7 +36,16 @@ const SIZES = [
 const only = process.env.SIZE ?? ''
 const sizes = only === '' ? SIZES : SIZES.filter((s) => s.id === only)
 
-const browser = await chromium.launch()
+/*
+  --lang, as well as the context locale.
+
+  Playwright's `locale` sets Accept-Language and navigator.language; Chromium
+  renders a native date input using its own UI language, which is a separate
+  setting — so every capture of the task form showed mm/dd/yyyy for a person
+  who will only ever see dd/mm/yyyy. Not a product defect, but a screenshot
+  that misrepresents the product is one Grant would reasonably read as one.
+*/
+const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const missed: string[] = []
 const thrown: string[] = []
 let taken = 0
@@ -44,6 +53,14 @@ let taken = 0
 for (const size of sizes) {
   const ctx = await browser.newContext({
     viewport: { width: size.width, height: size.height },
+    /*
+      en-GB, because the browser decides how a date input renders and the
+      harness was showing mm/dd/yyyy in every capture of a form Grant will
+      only ever see as dd/mm/yyyy. A screenshot in the wrong locale is a
+      screenshot of something nobody uses.
+    */
+    locale: 'en-GB',
+    timezoneId: 'Europe/London',
     /*
       TOUCH EMULATION ON for the narrow legs. A control measures 50x29 in a
       bare 390px viewport and 58x52 in a real touch context, because the phone

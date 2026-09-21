@@ -74,11 +74,28 @@ export const TOOLS = [
   { id: 'activity', name: 'Activity', own: true },
   { id: 'contacts', name: 'Contacts', own: true },
   { id: 'sources', name: 'Sources & Integrations', own: true },
-  { id: 'board', name: 'Work Board', own: false },
-  { id: 'chat', name: 'Project Chat', own: false },
-  { id: 'jobs', name: 'Active jobs', own: false },
-  { id: 'outputs', name: 'Outputs', own: false },
   { id: 'settings', name: 'Project Settings', own: false },
+]
+
+/*
+  WORK BOARD, PROJECT CHAT, ACTIVE JOBS AND OUTPUTS ARE NOT SECTIONS.
+
+  They were listed here as four more tools with compatibility links to
+  /p/:slug/board and friends — and none of those addresses exists. The default
+  studio's `goToPath` only accepts a tab that is in SECTIONS, so all four fell
+  through to the project overview: four links promising a destination, each
+  one quietly delivering somewhere else. An offer may only promise what the
+  press can perform, and a link is an offer.
+
+  They are `TEAM_VIEWS` in app.js — the four sub-views of the AI Team section,
+  and §10.8's own hierarchy says the same thing: two levels, never three. So
+  they are reached through the team surface, which is where they live.
+*/
+export const TEAM_SUBVIEWS = [
+  { id: 'board', name: 'Team board' },
+  { id: 'chat', name: 'Team chat' },
+  { id: 'jobs', name: 'Active jobs' },
+  { id: 'outputs', name: 'Outputs' },
 ]
 
 const toolById = (id) => TOOLS.find((t) => t.id === id) ?? null
@@ -99,6 +116,24 @@ const trayItems = () => [
   { name: 'Activity', to: at('/activity'), glyph: '≡' },
 ]
 
+/*
+  ASK THE TEAM APPEARS TWICE, and exactly one of them is ever visible.
+
+  On a phone the top row has to hold Home, Jump and Attention in 390px; adding
+  a fourth collapsed the centre column until the jump control read "J...". §6.1
+  puts personal destinations in the tray, and the conversation is one - so the
+  narrow layout moves it there rather than shrinking everything.
+
+  Two elements rather than a conditional render because `wire()` queries the
+  whole shell: both carry the same attribute, both get the same handler, and
+  CSS decides which one exists at this width. A render-time branch would have
+  to know the viewport, which is the thing CSS is for.
+*/
+const dockButton = (cls) =>
+  `<button type="button" class="${cls}" data-bc-dock>
+    <span aria-hidden="true">✎</span><span>Ask the team</span>
+  </button>`
+
 /**
  * §6.1: a three-part sticky top row, and a persistent personal tray below the
  * content.
@@ -118,6 +153,7 @@ const topRow = () => {
       <span>Jump to…</span><kbd>Shift J</kbd>
     </button>
     <div class="bcright">
+      ${dockButton('bcbtn bcwide-only')}
       <button type="button" class="bcbtn" data-bc-attention
         aria-label="${esc(
           waiting === 0 ? 'Attention: nothing is waiting' : `Attention: ${waiting} waiting on you`,
@@ -130,6 +166,7 @@ const topRow = () => {
 
 const tray = () =>
   `<nav class="bctray" aria-label="Your things">
+    ${dockButton('bcnarrow-only')}
     ${trayItems()
       .map(
         (i) =>
@@ -311,7 +348,7 @@ const overview = (p) => {
     </div>
     <section class="bctool" style="margin-top:var(--bc-8)">
       <h2>Everything else on this project</h2>
-      <p class="bcpmeta" style="margin:0 0 var(--bc-2)">
+      <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-2)">
         These open in the current Team HQ. Nothing has moved; this experience
         has not built its own surface for them yet.
       </p>
@@ -440,7 +477,7 @@ const tasksSurface = (p) => {
       <h1>Tasks</h1>
       <span class="bcactions">${button('Add a task', { kind: 'primary', 'data-bc-addtask': '1' })}</span>
     </div>
-    <p class="bcpmeta" style="margin:0 0 var(--bc-4)">
+    <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-4)">
       What this project has committed to. Your own list is under My Tasks, and
       what the team is running is under Agentic Team — three different things.
     </p>
@@ -543,11 +580,19 @@ const teamSurface = (p) => {
             )
             .join('')}</div>`
     }
-    <p class="bcmore" style="margin-top:var(--bc-8)">
-      Running jobs, stop controls and outputs stay in the current Team HQ:
-      <a href="/p/${esc(p.slug)}/jobs" data-bc-leave="/p/${esc(p.slug)}/jobs">Active jobs</a> ·
-      <a href="/p/${esc(p.slug)}/outputs" data-bc-leave="/p/${esc(p.slug)}/outputs">Outputs</a>
-    </p>`
+    <h2 style="font:var(--bc-tool-heading);color:var(--bc-section-accent);margin:var(--bc-8) 0 var(--bc-2)">Running work</h2>
+    <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-2)">
+      The team board, the team chat, running jobs with their stop controls and
+      the outputs they produce are all in the current Team HQ. This experience
+      has not built its own surface for them yet, so it sends you to the real
+      one rather than showing a copy.
+    </p>
+    <div class="bctray" style="justify-content:flex-start;padding:0">
+      ${TEAM_SUBVIEWS.map(
+        (v) =>
+          `<a href="/p/${esc(p.slug)}/team" data-bc-leave="/p/${esc(p.slug)}/team">${esc(v.name)}</a>`,
+      ).join('')}
+    </div>`
 }
 
 const documentsSurface = (p) => {
@@ -682,7 +727,7 @@ const myTasks = () => {
   */
   const trouble = ctx.myTasksTrouble?.() === true
   return `<h1 class="bcsectiontitle">My Tasks</h1>
-    <p class="bcpmeta" style="margin:0 0 var(--bc-4)">
+    <p class="bcpmeta bcprose" style="margin:0 0 var(--bc-4)">
       Your own list. Separate from what any project has committed to, and from
       what the team is running.
     </p>
