@@ -125,3 +125,93 @@ turned everything red could not have shown.
 `verify:failures` then passed **16/16**. Causation is not claimed — the
 gateway may simply have recovered — but the behaviour is pinned by the unit
 test either way.
+
+---
+
+# Evidence — why the backup was dying: a resumption was being counted as a retry
+
+0535 made the death visible. This is the cause.
+
+## The trend, from `public.jobs` itself
+
+| date | slices used | worker deaths | rows in the database |
+|---|---|---|---|
+| 12–16 Sep | 1 | 0 | 35k → 78k |
+| **17 Sep** | **5 — FAILED** | 4 | ~90k |
+| 18 Sep | 2 | 1 | 107k |
+| 19 Sep | 2 | 1 | 119k |
+| 20 Sep | 2 | 1 | 135k |
+| **21 Sep** | **3** | 2 | 135k |
+
+The 17 September job has **zero rows in `job_steps`** — 0436's checkpointing
+did not exist yet, so every attempt restarted from nothing and none of the
+five finished. Checkpointing is why the 18th onwards succeed at all.
+
+The 17 Sept transition log, in full:
+
+```
+22:19:00  queued  -> running    attempt 1  dequeued by edge-4ad731f3
+22:24:00  running -> retrying   attempt 1  recovery: worker edge-4ad731f3 died holding this in running
+22:24:01  retrying-> queued     attempt 1  requeued after retry
+22:24:01  queued  -> running    attempt 2  dequeued by edge-5b9a43ef
+22:30:21  running -> retrying   attempt 2  recovery: worker edge-5b9a43ef died holding this in running
+   … three more, identically …
+22:54:00  running -> failed     attempt 5  recovery: 5 attempts exhausted while in running
+```
+
+## The defect
+
+`app.dequeue_job` does `attempt = attempt + 1` on every dequeue, and
+`jobs.lease_seconds` is 300. An edge worker is killed by its runtime long
+before a 122-table backup finishes. So `attempt` carries two meanings —
+how many times the job FAILED, which is what a retry cap is for, and how many
+times it was PICKED UP, which for a checkpointed job is just how far it got.
+
+Two slices of headroom remained, with the work growing daily and nothing
+anywhere watching the margin.
+
+## The fix, and the two ways the obvious version was wrong
+
+A slice is granted by **raising `max_attempts`**, not by ignoring it. The
+first draft simply requeued and left the ceiling alone. It applied cleanly and
+could never have worked:
+
+1. `jobs_attempt_within_max` is `attempt <= max_attempts`, so the next
+   `dequeue_job` would have raised a CHECK violation.
+2. `app.requeue_retrying` only moves rows `where attempt < max_attempts`, so
+   the job would have sat in `retrying` **for ever** — never requeued, never
+   failed, invisible to every reading of the queue.
+
+The second is worse than the defect being fixed: a backup that fails loudly
+becomes one that silently stops. Both were found by **driving** the function;
+reading the migration showed nothing. CLAUDE.md's recorded rule covers it
+exactly — loosening a rule does not loosen the function that pre-checks it,
+so grep for the other function that enforces the same thing.
+
+## Controls
+
+| Control | Asserts | Result |
+|---|---|---|
+| P | at the ceiling, having finished a checkpoint → resumes, ceiling raised | `retrying`, max_attempts 5 → **6** |
+| round trip | `requeue_retrying` then `dequeue_job` actually take it | `queued` → **`running`** |
+| N | at the ceiling, having finished nothing → still dies | **`failed`** |
+| C | past `jobs.max_dequeues` while progressing → dies anyway | **`failed`** |
+
+Three independent bounds, so nothing can run for ever: progress is monotonic,
+an attempt that finishes nothing spends normally, and `jobs.max_dequeues`
+(60) ends it regardless.
+
+### Harness audit
+
+| Step | Read back | Result |
+|---|---|---|
+| sabotage: `jobs.max_dequeues = 1` | value read back as `1` | **`RESUMES-FAIL a job that finished a checkpoint became [failed] instead of retrying`** |
+| restore: `jobs.max_dequeues = 60` | value read back as `60` | **green** |
+
+Debris after every run: `0` jobs. The drive ends by raising, so it rolls back
+— and `app.recover_stalled_jobs()` is global by design, so wrapping the CALL
+rather than the assertion is the only safe way to drive it.
+
+`npm run verify:resumes`, in the gate. It prints the real backup's slice count
+against its ceiling every run, because that margin is the thing nobody was
+watching.

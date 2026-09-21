@@ -331,6 +331,19 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     looks. The one that mattered was in SQL, so no amount of care in
     `worker.ts` could have covered it.
   */
+  /*
+    And the other half of the same night's finding.
+
+    0535 made the backup's death visible. This is why it was dying: a
+    checkpointed job that runs out of wall clock is picked up again, and every
+    pickup spent one of five attempts. The backup needed one attempt on 16
+    September and three on the 21st as the database grew 78k -> 135k rows. Two
+    of headroom left, with nothing anywhere watching the margin.
+  */
+  [
+    'verify:resumes',
+    'a job that ran out of time resumes without spending a retry, and one that failed still dies (0536)',
+  ],
   [
     'verify:journals',
     'a job that dies says so, whichever layer killed it — a silent backup failure cost Grant a day of backups (0535)',

@@ -369,3 +369,56 @@ cancelled CI job or a crash all produce this.
 **NEXT AUTONOMOUS ACTION:** fix DEFECT-1 at the class level (every terminal
 failure records an impediment, whichever layer causes it), then DEFECT-2/3
 (backup + rehearsal age in the health reading, rehearsal as a recorded duty).
+
+### T+2:45 — the backup's root cause, and a migration that had to be driven twice
+
+**DEFECT-1 fixed** (0535, `verify:journals`, in the gate). Every terminal job
+failure now leaves a durable trace, whichever of the six paths caused it.
+Proved by sabotage: trigger disabled (`tgenabled` read back as `D`), control
+went red, restored (`O`), green. `verify:proposes` 26/26 and
+`verify:governs` 25/25 with it live.
+
+**DEFECT-5 found and fixed** — `ManagementApiExecutor.RETRY_ON` was
+`[429, 503]`, so a **502 with an HTML body** was raised as though Postgres had
+answered. Found because `verify:failures` died on it twice at two different
+call sites while single-statement probes succeeded. **The production worker
+falls back to this executor** when the direct Postgres connection is
+unavailable (`worker/index.ts:264`), so a transient 502 there burns a job
+attempt. Fixed as a property — Postgres answers as a 400 carrying a message,
+anything 5xx is the transport — not as a longer list. Six tests; the sabotage
+turned exactly the three 5xx cases red and left the throttle, the 400 and the
+401 green, so the test discriminates.
+
+**DEFECT-6, the root cause of the silent backup failure, fixed** (0536,
+`verify:resumes`, in the gate). `app.dequeue_job` increments `attempt` on
+every dequeue and the lease is 300s; an edge worker is killed long before a
+122-table backup finishes. So a *resumption* was being counted as a *retry*,
+and the backup went from 1 slice on 16 Sept to 3 on the 21st as the database
+grew 78k → 135k rows. **Two slices of headroom, nothing watching the margin.**
+A slice is now granted by raising `max_attempts`.
+
+**My own fix was wrong twice and driving it is what found that.** The first
+draft requeued without raising the ceiling. `jobs_attempt_within_max` would
+have refused the next dequeue, and `app.requeue_retrying` only moves rows
+`where attempt < max_attempts` — so the job would have sat in `retrying` FOR
+EVER. That is worse than the defect: a backup that fails loudly becomes one
+that silently stops. 0536 was applied, found broken, its
+`app.schema_migrations` row deleted, corrected and re-applied — the recovery
+CLAUDE.md prescribes for a migration minutes old whose applied version is
+broken, and it is said out loud here and in the commit.
+
+**KNOWN CROSS-WORKSTREAM ARTEFACT — not a defect in this work.**
+`npm run check:migrations` is RED on this branch with one finding:
+`[sequence/gap] gap between 0533 and 0535`. `0534` belongs to
+`claude/human-simulation-harness`, is already applied to the shared live
+database, and is deliberately absent from this branch. It closes the moment
+that branch merges. `npm run migrate` therefore refuses on this branch, which
+is why `scripts/scratch/apply-one.ts` exists and says so in its own header.
+
+lint 0 · typecheck 0 · check:secrets clean · 2,219 tests · verify:failures
+16/16 · verify:journals green · verify:resumes green.
+
+**NEXT AUTONOMOUS ACTION:** DEFECT-2 and DEFECT-3 — the operational reading
+cannot see the backup at all, and no restore has ever been recorded as
+proven. Add backup age, rehearsal age and last-progress to
+`app.office_health()`, and make the rehearsal record a durable verdict.

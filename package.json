@@ -159,6 +159,7 @@
     "verify:review": "tsx scripts/verify/review.ts",
     "verify:organising": "tsx scripts/verify/organising.ts",
     "verify:recovery": "tsx scripts/verify/recovery.ts",
+    "verify:resumes": "tsx scripts/verify/resumes.ts",
     "verify:mytasks": "tsx scripts/verify/mytasks.ts",
     "verify:schema": "tsx scripts/verify/schema.ts",
     "slack:rename-channels": "tsx scripts/slack/rename-channels.ts",
