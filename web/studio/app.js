@@ -8574,9 +8574,20 @@ function pathNow() {
   */
   const at = state.experience === 'basecamp' ? '/basecamp' : ''
   if (state.view === 'project' && state.project !== null) {
-    return state.tab === 'overview'
-      ? `${at}/p/${state.project}`
-      : `${at}/p/${state.project}/${state.tab}`
+    if (state.tab === 'overview') return `${at}/p/${state.project}`
+    /*
+      A RECORD IS A PLACE, so it goes in the address.
+
+      It was held only on the state, which cost three things at once: the
+      record could not be linked or bookmarked, a reload lost it, and Back
+      out of one left the app entirely rather than returning to the list —
+      §18 requires the record-to-tool return path to always be clear, and
+      Back is the commonest way anybody takes it.
+    */
+    if (state.tab === 'tasks' && state.bcTask !== null && state.bcTask !== undefined) {
+      return `${at}/p/${state.project}/tasks/${encodeURIComponent(String(state.bcTask))}`
+    }
+    return `${at}/p/${state.project}/${state.tab}`
   }
   if (state.view === 'bcsearch') return `${at}/search`
   if (state.view === 'tasks') return `${at}/tasks`
@@ -8663,6 +8674,14 @@ function goToPath(path) {
         ? bc.TOOLS.filter((t) => t.own).map((t) => t.id)
         : SECTIONS.map((x) => x.id)
     state.tab = known.includes(tab) ? tab : 'overview'
+    /*
+      And the record after it, if the address names one. Only under the
+      experiment and only under its Tasks tool, so the default studio's
+      four-segment addresses are unaffected.
+    */
+    if (state.experience === 'basecamp' && state.tab === 'tasks' && bits[3] !== undefined) {
+      state.bcTask = decodeURIComponent(bits[3])
+    }
     return true
   }
   state.view = 'portfolio'
@@ -13217,6 +13236,8 @@ const bcContext = {
   */
   openTask: (id) => {
     state.bcTask = id
+    // `keepUrl()` pushes from the state on the next paint, so opening a
+    // record becomes a history entry and Back returns to the list.
     render()
   },
   openDock: () => {

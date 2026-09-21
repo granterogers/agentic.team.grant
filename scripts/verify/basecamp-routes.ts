@@ -235,6 +235,57 @@ if (slug !== null) {
   }
 }
 
+/* --------------------- a record is a place you can return to --------------- */
+
+/*
+  A RECORD PAGE THAT IS NOT IN THE ADDRESS COSTS THREE THINGS AT ONCE, and
+  only the third one is loud: it cannot be linked or bookmarked, a reload
+  loses it, and Back out of it leaves the application entirely instead of
+  returning to the list.
+
+  That last one is what a person hits first. §18 requires the
+  record-to-tool return path to always be clear, and Back is the commonest
+  way anybody takes it — so this asserts the whole round trip rather than
+  just that the address changed.
+*/
+if (slug !== null) {
+  await open(`${slug}/tasks`)
+  const listUrl = await page.evaluate(inPage('return location.pathname'))
+  await page.locator('[data-bc-task-open]').first().click()
+  await page.waitForTimeout(500)
+  const recUrl = (await page.evaluate(inPage('return location.pathname'))) as string
+  check(
+    'opening a record gives it its own address',
+    recUrl !== listUrl && recUrl.startsWith(`${slug}/tasks/`),
+    recUrl,
+  )
+
+  const recTitle = (await page.evaluate(
+    inPage(
+      "const h = document.querySelector('.bcrecordhead h1'); return h === null ? '' : (h.textContent ?? '').trim()",
+    ),
+  )) as string
+  await page.goBack()
+  await page.waitForTimeout(600)
+  check(
+    'Back from a record returns to the list, not out of the application',
+    (await page.evaluate(inPage('return location.pathname'))) === listUrl,
+    `landed on ${String(await page.evaluate(inPage('return location.pathname')))}`,
+  )
+
+  /* And the address survives a reload, which is what makes it shareable. */
+  await open(recUrl)
+  check(
+    'a record address opens that record after a full reload',
+    (await page.evaluate(
+      inPage(
+        "const h = document.querySelector('.bcrecordhead h1'); return h === null ? '' : (h.textContent ?? '').trim()",
+      ),
+    )) === recTitle,
+    `expected "${recTitle}"`,
+  )
+}
+
 /* ------------------------------------- no surface sits on a skeleton for ever */
 
 /*
