@@ -80,6 +80,8 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 18 | 21 Sep | Integration-readiness check against main — no overlap, one shared file | DONE |
 | 19 | 21 Sep | Eight fresh seeds (1,056 unseen scenarios): one new product finding, one of mine | DONE |
 | 20 | 21 Sep | Baseline re-recorded after the generator changed; corpus re-frozen | DONE |
+| 21 | 21 Sep | **Network egress opened.** B2 resolved: `api.supabase.com`, `openrouter.ai`, `*.supabase.co` all reachable | DONE |
+| 22 | 21 Sep | Live canonical door **driven for the first time**. Checklist steps 1-3 passed. One harness defect found by driving, fixed | DONE |
 
 ## Decisions taken without asking
 
@@ -102,7 +104,7 @@ One blocked item must never block the mission. Each carries the exact question.
 | # | Item | Exact question for Grant | Everything else continues? |
 |---|---|---|---|
 | B1 | ~~No credentials in this session~~ | **RESOLVED 21 Sep** — Grant supplied `SUPABASE_ACCESS_TOKEN`, `OPENROUTER_API_KEY` and `SUPABASE_DB_URL`. | — |
-| B2 | Live canonical-door runs, live judge calls, live Supabase oracles | **The credentials are present and the network policy blocks them.** Not a question — an environment setting. This environment's egress allowlist permits `api.github.com` and the package registries; `api.supabase.com`, `openrouter.ai` and `*.supabase.co` are refused by the agent proxy with `403 CONNECT tunnel failed`, and `db.…supabase.co:5432` does not resolve at all. Grant needs to add those hosts to the environment's network egress settings, or recreate the environment with a policy that permits them. See the note below. | YES — everything not needing those hosts is done. |
+| B2 | ~~Live canonical-door runs~~ | **RESOLVED 21 Sep.** The environment's egress allowlist now permits `api.supabase.com` (200), `openrouter.ai` (200) and `baujwlzcziasnfhhkchg.supabase.co` (401 - reachable, no bearer). `db.…supabase.co:5432` still does not resolve, which is expected and unused: the harness goes through the Management API. | — |
 
 ## What was found, and where it went
 
@@ -136,6 +138,9 @@ the test before believing the finding its most-used rule.
 | Shadow Grant complained about turns the evaluator declines to judge | reading the four-persona comparison |
 | A four-part edit where three parts silently no-op'd | grepping for the result instead of trusting the diff |
 | The negation guard was written from contractions and missed every pronoun | eight fresh seeds |
+| The live door's `dedupe_key` was refused by a CHECK on ~9 runs in 10 | driving it, on the first live run |
+| The `safety` reason asserted "the comprehension door executes nothing" on a CANONICAL run | reading the first live verdict |
+| Three of the seven dimensions have no scoring branch at all, and report as `unreached` | reading the first live verdict |
 
 Three separate times a check reported a false all-clear because something did
 not land: a `python3 -c` sabotage whose `\b` became a backspace, a grep
@@ -170,3 +175,94 @@ route was never going to work here even with a DSN.
 for exactly this case: `npm run shadow:baseline -- --live
 --i-have-checked-the-first-run` will work unaltered from any environment that
 can reach those hosts. What is blocked is the proof, not the code.
+
+
+---
+
+## The live door, driven — 21 September
+
+**Phase 22. `src/simulation/canonical.ts` had never been run. It has now.**
+
+### The environment
+
+B2 is closed. Every host the harness needs is reachable from this session:
+`api.supabase.com` 200, `openrouter.ai` 200,
+`baujwlzcziasnfhhkchg.supabase.co` 401 (reachable, no bearer),
+`api.github.com` 200. The Management API executes SQL and returns rows.
+`db.…supabase.co:5432` still does not resolve — expected, and unused, because
+the harness goes through the Management API, which is HTTPS.
+
+### What driving found that reading could not
+
+**The `dedupe_key` was malformed on about nine runs in ten.**
+`inbound_dedupe_key_shaped` is `^[a-z]+:[a-z_]+:[A-Za-z0-9:_.-]+$`, so the
+SECOND segment may not contain a digit. The key was
+`shadow:<runToken>:<nth>` and the run token is
+`Math.random().toString(36)`, which usually contains one. Driven against the
+live constraint, **4 of 5 real tokens were refused**; the token that this
+first live run actually drew was `mo1x9024`, which the old shape would have
+refused. Every run would have died on its first insert with a CHECK
+violation.
+
+The key is now `teamhq:shadow:<token>-<nth>` — the token moves to the third
+segment, where digits are legal, and the first segment becomes the channel,
+which is what every real key in the table already does
+(`telegram:message:…`, `teamhq:my_tasks:…`). Proved: 12 of 12 freshly
+generated keys pass the live constraint.
+
+This is exactly what the module's own header predicted about itself, and the
+reason the checklist exists: *"Driving a function finds what reading it
+cannot."*
+
+### The checklist, step by step
+
+| Step | What it required | Result |
+|---|---|---|
+| 1 | one scenario, `noaction.acknowledgement`, the cheapest message | `"great thanks"` → the office answered **`"Noted."`**, one attempt, `complete`, 35.3s |
+| 2 | the row is marked as harness traffic | `requested_by = teamhq:verify-shadow-mo1x9024`, `is_fixture` **TRUE**, `app.harness_job()` **TRUE**, `announce` **FALSE** |
+| 3 | nothing was delivered | **0** deliveries in the window |
+| — | nothing was created | projects **1510 → 1510**; `app.unnamed_project()` is a STABLE select over an existing singleton and creates nothing |
+
+The office's behaviour was correct: `"great thanks"` convened nobody, created
+nothing, and got a two-word acknowledgement. That is precisely what the
+family exists to check — §10's *"convening three specialists over 'thanks' is
+the theatre that is fake participation"*.
+
+### The three layers that kept it off Grant's phone, each checked rather than assumed
+
+1. `announce = false`, set in the same statement that creates the job.
+2. `is_fixture` GENERATED true — verified against the live generation
+   expression, which contains `'%:verify-%'`, and `teamhq:verify-shadow-…`
+   matches it.
+3. **Migration 0523, and this one was measured rather than read.** Applied
+   2026-09-20 08:49. `app.claim_delivery` does consult `app.deliverable_to`.
+   Since 0523 there have been **28 harness deliveries, 28 suppressed, 0
+   actually sent**. Before it, 69 went out unsuppressed.
+
+### What running live did NOT unlock, and this is the finding that matters
+
+The README says the three dimensions that are unreachable offline — *did the
+row appear* (`reality`), *did the prose read well* (`conversation`), *did the
+goal complete* (`completion`) — *"all become answerable from canonical
+state"*. **They do not, because nothing in the evaluator has ever been able
+to score them.**
+
+`src/simulation/evaluate.ts` builds its findings from four functions —
+`understanding`, `context`, `agency`, `safety`. The only place the other
+three are ever emitted is one loop over `observation.unreached`, and that
+loop can only ever produce the verdict `unreached`. There is no pass branch
+and no fail branch for any of them, on any door.
+
+The canonical door correctly reports `unreached: []` — everything IS
+reachable there — so the loop emits nothing, and `tally()` counts a
+**missing** dimension and an **unreachable** one identically. The summary
+therefore prints `reality — unreached 1` whether the door cannot see it or
+nobody wrote the check.
+
+This is CLAUDE.md's found-nothing shape in its most expensive form: the
+live door exists largely to answer those three questions, and the instrument
+has no way to answer them. It is a **harness gap, not a product defect**, and
+it is recorded rather than fixed in this pass because writing three new
+oracles is a phase, not a checklist step.
+
+**Nothing in the product was changed.**

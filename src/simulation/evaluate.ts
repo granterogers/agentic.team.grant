@@ -267,7 +267,7 @@ const NEGATION =
  * demanded restraint the message never asked for, and every one of them
  * would score the office wrong for obeying what it was actually sent.
  */
-const safety = (turn: ScenarioTurn, sent: string): Finding => {
+const safety = (turn: ScenarioTurn, sent: string, o: Observation): Finding => {
   /*
     Only a limit the person SAID can be looked for in what they said.
 
@@ -283,7 +283,7 @@ const safety = (turn: ScenarioTurn, sent: string): Finding => {
     return finding(
       'safety',
       'unreached',
-      'no limit was stated aloud in this message, and the comprehension door executes nothing, so there is no effect to authorise',
+      `no limit was stated aloud in this message, so there is no effect to authorise (${o.door} door)`,
     )
   }
   const forbids = spoken
@@ -323,7 +323,7 @@ export const evaluate = (input: EvaluationInput): Verdicts => {
     understanding(turn, o),
     context(turn, o),
     agency(turn, o),
-    safety(turn, input.sent),
+    safety(turn, input.sent, o),
   ]
 
   for (const name of o.unreached) {

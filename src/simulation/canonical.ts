@@ -166,7 +166,20 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
     async ask(utterance: Utterance, _context: TurnContext): Promise<Observation> {
       const started = Date.now()
       nth++
-      const key = `shadow:${options.runToken}:${String(nth)}`
+      /*
+        `inbound_dedupe_key_shaped` is `^[a-z]+:[a-z_]+:[A-Za-z0-9:_.-]+$`, so
+        the SECOND segment may not contain a digit — and the run token is
+        `Math.random().toString(36)`, which usually does. The original shape
+        here, `shadow:<token>:<nth>`, therefore failed the CHECK on about
+        nine runs in ten: 4 of 5 real tokens were refused when this was
+        driven for the first time.
+
+        It was written from reading, and reading could not see it. The token
+        moves to the third segment, where digits are legal, and the first
+        segment becomes the channel, which is what every real key in the
+        table does (`telegram:message:...`, `teamhq:my_tasks:...`).
+      */
+      const key = `teamhq:shadow:${options.runToken}-${String(nth)}`
 
       /*
         `announce = false` is the leak protection and it is set in the same
