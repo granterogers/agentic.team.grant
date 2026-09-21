@@ -86,6 +86,8 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 24 | 21 Sep | `reality`, `conversation`, `completion` given real oracles reading canonical state; 34 paired tests; sabotage-proved | DONE |
 | 25 | 21 Sep | Live representative matrix, 15 areas, one scenario at a time. **7 clean, 8 with failures.** Six instrument defects found and fixed on the way | DONE |
 | 26 | 21 Sep | Teardown (`shadow:world --sweep`) and the announce hole children fell through; `check:leaks` green | DONE |
+| 27 | 21 Sep | **Full corpus live** — all 66 scenarios in 14 slices | DONE |
+| 28 | 21 Sep | **0539** — harness traffic had taught the office 34 of the 49 standing instructions in every prompt. Fixed at the reader, proved before and after. [#297](https://github.com/granterogers/agentic.team.grant/issues/297) | DONE |
 
 ## Decisions taken without asking
 
@@ -489,3 +491,85 @@ Two gaps were found and both are closed:
 changes are the resolver scope and the project spine, both gated on
 `app.harness_job`, both byte-identical for Grant, and both made so the
 harness could ASK a question rather than so the office could pass one.
+
+
+---
+
+## The full corpus, live — 21 September
+
+All **66 scenarios** through the real inbound door, the real worker and the
+real handler, in fourteen slices because this repository does not background
+work.
+
+### What it found, by class
+
+| class | where | evidence |
+|---|---|---|
+| **The office reports a task that does not exist** | `task.explicit` ×2, `conversation.unnecessary-question`, `multi.independent` | [#296](https://github.com/granterogers/agentic.team.grant/issues/296). Reproduced identically across slices — deterministic, not a one-off. Two phrasings: *"That is on your list"*, which the product's own `claimsToHaveMade` misses, and *"I've added a task to the Coaching Programme project"*, which it catches. |
+| **A withdrawn clause is executed** | `project.by-nickname`, `multi.partial-cancel`, `multi.abandoned-clause` | **The escalation of [#291](https://github.com/granterogers/agentic.team.grant/issues/291).** Not merely *"the withdrawal was invisible"* but *"…AND the office acted — 1 task(s) created, 1 blocker(s)"*. Three confirmed real events; ten more where the precondition held and nothing was written. |
+| **The job fails and the person receives nothing** | `task.indirect` | `conversation: the job failed and the person received nothing at all`. The #211 family, one level worse: the turn did not merely swallow a gate's refusal, it produced no answer at all. |
+| **A standing instruction is not registered** | `preference.establish` ×2, `approval.standing`, `preference.conflict` | Corroborates [#290](https://github.com/granterogers/agentic.team.grant/issues/290). |
+| **The approval boundary varies run to run** | `approval.write-under-review` | One run paused a child on `awaiting_approval`; another answered in prose with no blocker recorded, so nothing was canonically pending and the Governance page shows nothing. `approval.modified` and `approval.paused-resume` the same. |
+
+`reality` and `conversation` were at or near 100% in most slices;
+`completion` and `context` carried the failures. That asymmetry is the
+useful part: **the office usually tells the truth about what it did, and
+often does not do it.**
+
+### The instrument was wrong twice more, and one was a false positive
+
+- **`done_without_evidence` fired on the office being useful.** Asked to
+  revise a draft, the office wrote the draft IN the reply and filed no
+  document. That is a completion failure and not a fabrication: nothing was
+  claimed, the thing was handed over in prose. The detector is now
+  restricted to artifacts that cannot be handed over inside a reply — task,
+  task_changed, delivery. A check that fires wrongly is one somebody
+  switches off.
+- **A 502 from `api.supabase.com` cost four scenarios.** Reported honestly as
+  *"could not be attempted"* rather than scored, which is right — and
+  `patiently()` only retried throttles. Gateway errors, resets and timeouts
+  retry on the same backoff now: an infra failure should cost a wait, not a
+  finding.
+
+---
+
+## The contamination that predated the run — 0539, #297
+
+**The most serious thing found, and it was not the harness's doing.**
+
+`app.lessons_for` puts standing instructions into every prompt. Measured
+before anything changed, for a real project:
+
+    HARNESS  34
+    real     15
+
+including, at GLOBAL scope, learned from simulated messages:
+
+> *"just do that kind of thing without asking me in the future"*
+
+A test sentence had become a standing instruction telling Grant's real
+office to stop asking him before acting. Oldest contaminating row 20
+September, some from the 16th — so this is not something this run
+introduced, though this run added four and retracted them.
+
+`lessons.is_fixture` is GENERATED and has always been correct. Six functions
+read `public.lessons`; exactly one consults it, and it is not the one that
+feeds prompts. **0523's defect with the direction reversed:** 0523 stopped
+harness traffic reaching a production DESTINATION; nothing stopped it
+reaching a production PROMPT.
+
+Fixed at the reader, once, with 0297/0533/0534's parameter. After:
+**15 real, 0 harness**, the flag still widens to 45, the public wrapper sees
+0, and all three of Grant's own "bullet points" preferences are preserved.
+
+### The migration numbering collided, as D5 predicted
+
+`npm run migrate` refused: four migrations were applied to the shared
+database and absent from this tree. They belong to
+`claude/production-reliability`, a **third** session — not the Basecamp one
+the ledger names. The check is correct and was not weakened; mine is
+renumbered **0539** and their four already-applied files are copied in so
+this tree matches the database it migrates. Checksums verified identical.
+
+**There are at least three sessions writing to this Supabase.** Anything
+that reads a global count from it is reading their work too.
