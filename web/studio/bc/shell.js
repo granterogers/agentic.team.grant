@@ -529,7 +529,7 @@ const tasksSurface = (p) => {
             button('Add a task', { kind: 'primary', 'data-bc-addtask': '1' }),
           )
         : `<div class="bclist">
-            ${open.map((t) => taskRow(t)).join('')}
+            ${open.map((t) => taskRow(t, (p.tasks ?? []).indexOf(t))).join('')}
             ${
               done.length === 0
                 ? ''
@@ -537,17 +537,36 @@ const tasksSurface = (p) => {
                     <summary class="bcmore">${esc(
                       done.length === 1 ? '1 completed task' : `${done.length} completed tasks`,
                     )}</summary>
-                    ${done.map((t) => taskRow(t)).join('')}
+                    ${done.map((t) => taskRow(t, (p.tasks ?? []).indexOf(t))).join('')}
                   </details>`
             }
           </div>`
     }`
 }
 
-const taskRow = (t) => {
+/*
+  A STABLE LOCAL KEY, which is not the same thing as the office's id.
+
+  Every task can be OPENED, because a record page is a view of data already in
+  hand. Not every task can be CHANGED: the prototype projects this studio
+  falls back to when there is no token carry no ids, and a write needs one.
+
+  Conflating the two cost a whole screen. The Open control was drawn only when
+  `t.id` existed, so in a signed-out browser it never rendered — and the
+  record page was therefore in no capture at all, on any viewport. A screen
+  with no capture is a screen nobody is watching, and this one had been
+  written, wired and checked without anybody ever looking at it.
+
+  So the key is the id where there is one and the position where there is
+  not, and the controls that need canonical identity say so themselves.
+*/
+const taskKey = (t, i) => String(t.id ?? `at-${String(i)}`)
+
+const taskRow = (t, i = 0) => {
   const isDone = t.state === 'done'
   const id = t.id ?? ''
-  return `<div class="bcitem${isDone ? ' bcitem--done' : ''}" data-bc-task="${esc(id)}">
+  const key = taskKey(t, i)
+  return `<div class="bcitem${isDone ? ' bcitem--done' : ''}" data-bc-task="${esc(key)}">
     <input type="checkbox" class="bccheck" ${isDone ? 'checked' : ''}
       ${id === '' ? 'disabled' : ''}
       data-bc-tick="${esc(id)}"
@@ -559,9 +578,117 @@ const taskRow = (t) => {
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
     </div>
-    <span></span>
+    <button type="button" class="bcbtn" data-bc-task-open="${esc(key)}"
+      aria-label="${esc(`Open ${t.title}`)}">Open</button>
   </div>`
 }
+
+/**
+ * One task, as a record page (§9, §17 phase 4).
+ *
+ * THE SHARED RECORD GRAMMAR, in the order §9 sets: breadcrumb and actions,
+ * title and status, who and when, the content, then the structured metadata
+ * and the relationships. A message, a document, an event and an agent output
+ * would all use this order — that sameness is the point, and is why the order
+ * is written down rather than chosen per object.
+ *
+ * Assignment and the due date are edited HERE rather than in a settings maze,
+ * which is §8.1's argument applied one level down: the controls belong beside
+ * the thing they change.
+ */
+const taskRecord = (p) => {
+  const wanted = String(state().bcTask ?? '')
+  const t = (p.tasks ?? []).find((x, i) => taskKey(x, i) === wanted)
+  if (t === undefined) {
+    return `${crumbFor(p, 'tasks')}
+      ${errorState(
+        'That task is not on this project any more. It may have been removed, or the list may have moved on.',
+        button('Back to Tasks', { 'data-bc-go': at(`/p/${p.slug}/tasks`) }),
+      )}`
+  }
+  const done = t.state === 'done'
+  return `${breadcrumb([
+    { name: p.name, to: at(`/p/${p.slug}`) },
+    { name: 'Tasks', to: at(`/p/${p.slug}/tasks`) },
+    { name: t.title },
+  ])}
+    <div class="bcrecordhead">
+      <h1>${esc(t.title)}</h1>
+      <span class="bcactions">
+        ${
+          t.blocked
+            ? status('Blocked', 'blocked')
+            : done
+              ? status('Done', 'done')
+              : status('Open')
+        }
+      </span>
+    </div>
+    <p class="bcpmeta bcprose bcgap-l">
+      A commitment on ${esc(p.name)}. Not a job the team is running, and not
+      an item on your own list — those are different things with different
+      owners.
+    </p>
+
+    <h2 class="bcsubhead">Details</h2>
+    <form class="bcaddform bcgap-l" data-bc-taskedit="${esc(String(t.id ?? ''))}">
+      ${input({
+        id: 'bc-edit-who',
+        label: 'Assigned to',
+        name: 'who',
+        value: t.who ?? '',
+        autocomplete: 'off',
+        hint: 'A team member’s name, or leave it unassigned.',
+      })}
+      ${input({ id: 'bc-edit-due', label: 'Due date', name: 'due', type: 'date', value: isoDay(t.due) })}
+      <div class="bcrow">
+        ${button('Save', {
+          kind: 'primary',
+          'data-bc-tasksave-edit': String(t.id ?? ''),
+          disabled: t.id === undefined || t.id === null || t.id === '',
+        })}
+        ${button(done ? 'Reopen' : 'Mark done', {
+          'data-bc-taskdone': String(t.id ?? ''),
+          'data-bc-want': done ? 'todo' : 'done',
+          disabled: t.id === undefined || t.id === null || t.id === '',
+        })}
+      </div>
+      ${
+        t.id === undefined || t.id === null || t.id === ''
+          ? `<p class="bcpmeta bcprose">These are the studio's example projects, which have no
+             records behind them, so there is nothing to change. Sign in and the
+             same controls write to the real project.</p>`
+          : ''
+      }
+    </form>
+
+    ${
+      t.note || t.blocked
+        ? `<h2 class="bcsubhead">Notes</h2>
+           ${t.note ? `<p class="bcpmeta bcprose">${esc(t.note)}</p>` : ''}
+           ${t.blocked ? `<p class="bcpmeta bcprose">${status('Blocked', 'blocked')} ${esc(t.blocked)}</p>` : ''}`
+        : ''
+    }
+
+    <h2 class="bcsubhead">Discussion and history</h2>
+    <p class="bcpmeta bcprose">
+      Comments on a task, and its relations to documents and jobs, live in the
+      current Team HQ. This experience has not built its own surface for them,
+      so it sends you there rather than showing a copy that could disagree.
+    </p>
+    <div class="bcinline-list">
+      <a href="/p/${esc(p.slug)}/tasks" data-bc-leave="/p/${esc(p.slug)}/tasks">Open in the current Team HQ</a>
+    </div>`
+}
+
+/*
+  A date input wants yyyy-mm-dd, and the payload's `due` is prose — "Due 16
+  September" — because that is what the list renders. Anything that is not
+  already a machine date is left empty rather than guessed at: a wrong date
+  silently pre-filled into a form is worse than an empty one, because it is
+  the value that gets saved when somebody presses Save without looking.
+*/
+const isoDay = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : '')
 
 /** §10.8 Agentic Team, as a project tool. */
 const teamSurface = (p) => {
@@ -775,7 +902,7 @@ const activitySurface = (p) => {
 
 const SURFACE = {
   overview,
-  tasks: tasksSurface,
+  tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
   team: teamSurface,
   documents: documentsSurface,
   contacts: contactsSurface,

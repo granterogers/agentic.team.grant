@@ -191,6 +191,24 @@ const office = createServer((req, res) => {
       )
       return
     }
+    if (action === 'task_update') {
+      const t = tasks.find((x) => x.id === args.p_task_id)
+      if (t !== undefined) {
+        const clear = (args.p_clear as string[] | undefined) ?? []
+        /*
+          `p_clear` is how the office is told to EMPTY a field: null means
+          "leave it alone" to hq_task_update, so a stand-in that treated null
+          as a clear would let a page that never sends p_clear look correct.
+        */
+        if (clear.includes('assignee')) t.who = null
+        else if (args.p_assignee != null) t.who = String(args.p_assignee)
+        if (clear.includes('due_on')) t.due = null
+        else if (args.p_due_on != null) t.due = String(args.p_due_on)
+      }
+      res.writeHead(200, cors)
+      res.end(JSON.stringify({ result: { ok: true } }))
+      return
+    }
     if (action === 'task_state') {
       const t = tasks.find((x) => x.id === args.p_task_id)
       if (t !== undefined) t.state = String(args.p_state ?? 'todo')
@@ -397,6 +415,88 @@ check(
 )
 check('and nothing was sent', seen.length === sentBefore)
 await ro.close()
+
+/* ---------------------------------- the task record page (§9, §17 phase 4) */
+
+await open('/basecamp/p/journey-subject/tasks')
+check(
+  'every task row offers a way into its record',
+  (await page.locator('[data-bc-task-open]').count()) >= 1,
+)
+await page.locator('[data-bc-task-open]').first().click()
+await page.waitForTimeout(500)
+const rec = await page.locator('.bcmain').innerText()
+/*
+  §9's order, asserted as presence rather than as pixels: breadcrumb and
+  actions, title and status, then the details and the relationships. The
+  breadcrumb is the one that matters most here — §18 requires the
+  preview → tool → record → project return path to always be clear, and a
+  record with no way back is where that path stops.
+*/
+check(
+  'the record page draws a breadcrumb back to the tool and the project',
+  (await page.locator('.bccrumb a').count()) === 2,
+)
+check('the record names the task', rec.includes('An existing commitment'))
+check('the record carries a status', (await page.locator('.bcstatus').count()) >= 1)
+check(
+  'the record exposes assignment and the due date beside the task',
+  (await page.locator('#bc-edit-who').count()) === 1 &&
+    (await page.locator('#bc-edit-due').count()) === 1,
+)
+
+/* Assignment and the due date persist through a reload — §18. */
+await page.locator('#bc-edit-who').fill('emma')
+await page.locator('#bc-edit-due').fill('2026-11-13')
+await page.locator('[data-bc-tasksave-edit]').click()
+await page.waitForTimeout(900)
+const upd = seen.filter((x) => x.action === 'task_update')
+check(
+  'the edit reached the office as task_update',
+  upd.length === 1,
+  JSON.stringify(upd[0]?.args ?? {}),
+)
+check(
+  'the assignee and the due date persisted',
+  tasks[0]?.who === 'emma' && tasks[0]?.due === '2026-11-13',
+  JSON.stringify(tasks[0] ?? {}),
+)
+await open('/basecamp/p/journey-subject/tasks')
+check(
+  'and they are there after a full reload',
+  (await page.locator('.bcitemmeta').first().innerText()).includes('emma'),
+  await page.locator('.bcitemmeta').first().innerText(),
+)
+
+/*
+  CLEARING A FIELD IS NOT THE SAME AS LEAVING IT ALONE, and the office's own
+  contract says so: null means "leave it" to hq_task_update, and p_clear is
+  how a field is emptied. A page that sent null for an emptied box would look
+  correct and silently save nothing.
+*/
+await page.locator('[data-bc-task-open]').first().click()
+await page.waitForTimeout(500)
+await page.locator('#bc-edit-who').fill('')
+await page.locator('[data-bc-tasksave-edit]').click()
+await page.waitForTimeout(900)
+const cleared = seen.filter((x) => x.action === 'task_update').at(-1)
+/*
+  Read once into a local rather than chained through a cast. The first draft
+  wrote `(cleared?.args.p_clear as string[])`, where the assertion defeats the
+  optional chain: with no matching call the whole check THROWS instead of
+  failing, which reports as a crashed suite rather than as a red line.
+*/
+const clearList = Array.isArray(cleared?.args.p_clear) ? (cleared.args.p_clear as string[]) : []
+check(
+  'emptying the assignee sends p_clear rather than a null the office ignores',
+  clearList.includes('assignee'),
+  JSON.stringify(cleared?.args ?? {}),
+)
+check('and the assignee is actually gone', tasks[0]?.who === null, JSON.stringify(tasks[0] ?? {}))
+
+/* The list is still whole after all of that. */
+await open('/basecamp/p/journey-subject/tasks')
+check('the tasks list still renders after every edit', (await page.locator('.bcitem').count()) >= 1)
 
 /* ------------------------------------------- the agent-output journey (§17.5) */
 

@@ -236,6 +236,53 @@ const wireTasks = (root) => {
     })
   }
 
+  for (const b of root.querySelectorAll('[data-bc-task-open]')) {
+    b.addEventListener('click', () => {
+      ctx.openTask(b.dataset.bcTaskOpen)
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-tasksave-edit]')) {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.bcTasksaveEdit
+      const who = String(root.querySelector('#bc-edit-who')?.value ?? '').trim()
+      const due = String(root.querySelector('#bc-edit-due')?.value ?? '').trim()
+      /*
+        `p_clear` is how the office is told to EMPTY a field, because null
+        means "leave it alone" to `hq_task_update` — so clearing the assignee
+        by sending null would silently do nothing and look like a failed save.
+      */
+      const clear = []
+      if (who === '') clear.push('assignee')
+      if (due === '') clear.push('due_on')
+      const done = await attempt(
+        b,
+        'Saving…',
+        () =>
+          act('task_update', {
+            p_task_id: id,
+            p_assignee: who === '' ? null : who,
+            p_due_on: due === '' ? null : due,
+            p_clear: clear,
+          }),
+        'Saved.',
+      )
+      if (done !== null) await ctx.refresh()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-taskdone]')) {
+    b.addEventListener('click', async () => {
+      const done = await attempt(
+        b,
+        'Saving…',
+        () => act('task_state', { p_task_id: b.dataset.bcTaskdone, p_state: b.dataset.bcWant }),
+        b.dataset.bcWant === 'done' ? 'Done.' : 'Put back.',
+      )
+      if (done !== null) await ctx.refresh()
+    })
+  }
+
   for (const c of root.querySelectorAll('[data-bc-tick]')) {
     c.addEventListener('change', async () => {
       const id = c.dataset.bcTick

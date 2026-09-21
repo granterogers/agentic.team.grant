@@ -112,6 +112,11 @@ for (const size of sizes) {
       await page.locator('[data-bc-addtask]').first().click()
       await page.waitForTimeout(250)
     })
+    await shot('task-record', `${slug}/tasks`, async () => {
+      await page.locator('[data-bc-task-open]').first().click()
+      await page.waitForSelector('#bc-edit-who', { timeout: 5000 })
+      await page.waitForTimeout(300)
+    })
     await shot('team', `${slug}/team`)
     await shot('documents', `${slug}/documents`)
     await shot('sources', `${slug}/sources`)

@@ -307,6 +307,14 @@ const state = {
   bcQuery: '',
   bcKind: 'Everything',
   bcOnly: null,
+  /*
+    Which task's record page is open, or null for the list (§9, §17 phase 4).
+
+    Cleared by goToPath on every navigation rather than by each caller, so a
+    stale id cannot survive a move to another project and open a record that
+    belongs to somebody else's list.
+  */
+  bcTask: null,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8602,6 +8610,8 @@ function goToPath(path) {
   */
   state.experience = bits[0] === 'basecamp' ? 'basecamp' : 'default'
   if (state.experience === 'basecamp') bits.shift()
+  // Cleared here, once, rather than at each of the callers that navigate.
+  state.bcTask = null
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   /*
     The experiment's full search (§7.4). Its own view, reachable only under
@@ -13146,6 +13156,15 @@ const bcContext = {
     run's pre-mortem calls Failure E. The experience gets the same door the
     default rail has rather than a second conversation.
   */
+  /*
+    Open one task's record page. The tab stays `tasks`, so the address stays
+    the tool's — the record is a state of the tool rather than a route of its
+    own, which keeps §10.8's two-levels-never-three true of tasks as well.
+  */
+  openTask: (id) => {
+    state.bcTask = id
+    render()
+  },
   openDock: () => {
     rememberDock(true)
     paintDock()
