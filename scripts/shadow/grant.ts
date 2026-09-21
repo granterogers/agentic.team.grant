@@ -135,7 +135,39 @@ for (const recipe of recipes) {
 
     // ---- what would have irritated him -----------------------------------
 
-    if (!o.recognised && ['task', 'task_changed', 'document'].includes(turn.intent.effect)) {
+    /*
+      The same layer discipline the evaluator uses.
+
+      A turn whose meaning IS the previous turn - "yes but take the last
+      paragraph out", "hold off on that" - is resolved by the thread
+      resolver, not by reading the message. Reporting "the office did not
+      register a request" about one of those overstates what this door can
+      see, and the first multi-persona run did exactly that: three of the
+      clean control's complaints were about replies whose referent lives in
+      a conversation the comprehension door does not carry.
+      
+      An instrument that declines to SCORE something and then COMPLAINS
+      about it is inconsistent with itself, and the complaint is the half
+      people read.
+    */
+    const layer = turn.intent.turnsOn ?? 'comprehension'
+    /*
+      And a REACTING turn is a reply whatever its family declares.
+
+      The family says what the turn would be if the person said it cold.
+      When the office has just asked something, the words become an answer
+      to that question - "hold off on that", "the coaching thing" - and the
+      referent is in the conversation, not the sentence. The first version
+      gated on the family alone and still complained about three of those,
+      because the family underneath was an ordinary comprehension case.
+    */
+    const judgeable = layer === 'comprehension' && !reacting
+
+    if (
+      judgeable &&
+      !o.recognised &&
+      ['task', 'task_changed', 'document'].includes(turn.intent.effect)
+    ) {
       complaints.push({
         kind: 'annoyed',
         said: sent,
@@ -143,6 +175,7 @@ for (const recipe of recipes) {
       })
     }
     if (
+      judgeable &&
       o.reading === 'direct_command' &&
       !o.wouldFile &&
       ['task', 'task_changed'].includes(turn.intent.effect)
@@ -160,6 +193,9 @@ for (const recipe of recipes) {
         what: 'told the office how he wants things and it was not stored, so he will have to say it again and it will look like being ignored',
       })
     }
+    // Not gated on the layer: whether a withdrawal is SEPARABLE is decided
+    // by the clause splitter, which is comprehension, whatever the turn
+    // otherwise turns on.
     if ((turn.intent.withdrawn?.length ?? 0) > 0 && o.clauses.length < 2) {
       complaints.push({
         kind: 'misled',
@@ -168,6 +204,7 @@ for (const recipe of recipes) {
       })
     }
     if (
+      judgeable &&
       o.asked &&
       (turn.intent.alreadyKnows?.length ?? 0) > 0 &&
       (turn.intent.mayAskAbout?.length ?? 0) === 0
