@@ -47,7 +47,15 @@ const wantLive = process.argv.includes('--live')
 
 const world = DEFAULT_WORLD
 const all = generateCorpus(world, seed, per)
-const corpus = only === '' ? all : all.filter((s) => s.family.includes(only))
+const selected = only === '' ? all : all.filter((s) => s.family.includes(only))
+/*
+  A window over the corpus, because the whole thing live is hours and this
+  repository does not background work: CLAUDE.md says to split a run that
+  cannot finish in ten minutes rather than hide it.
+*/
+const from = Number(arg('from', '0'))
+const count = Number(arg('count', String(selected.length)))
+const corpus = selected.slice(from, from + count)
 
 const transport = wantLive
   ? canonicalDoor({ runToken: Math.random().toString(36).slice(2, 10) })
@@ -66,7 +74,7 @@ console.log(
 )
 console.log(`  seed      ${seed}${heldOut ? '  (FROZEN HELD-OUT - not tuned against)' : ''}`)
 console.log(
-  `  corpus    ${corpus.length} scenarios across ${new Set(corpus.map((s) => s.family)).size} families`,
+  `  corpus    ${corpus.length} of ${selected.length} scenarios across ${new Set(corpus.map((s) => s.family)).size} families, from index ${String(from)}`,
 )
 console.log(`  personas  ${[...new Set(corpus.map((s) => s.persona))].join(', ')}\n`)
 

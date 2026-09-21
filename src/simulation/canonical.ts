@@ -308,7 +308,9 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
                where j.job_id = ${lit(jobId)}::uuid`),
         )
         if (row.family_settled === true || String(row.family_settled) === 'true') break
-        await new Promise((r) => setTimeout(r, 10_000))
+        // 5s rather than 10s: most turns settle between 25 and 70 seconds,
+        // so a 10s poll spent a third of the run waiting past the answer.
+        await new Promise((r) => setTimeout(r, 5_000))
       }
 
       const answered = String(row.answered ?? '')
