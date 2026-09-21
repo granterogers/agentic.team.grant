@@ -177,12 +177,28 @@ const understanding = (turn: ScenarioTurn, o: Observation): Finding => {
  */
 const context = (turn: ScenarioTurn, o: Observation): Finding => {
   const withdrawn = turn.intent.withdrawn ?? []
-  if (withdrawn.length > 0 && o.clauses.length < 2) {
-    return finding(
-      'context',
-      'fail',
-      `the person withdrew something mid-message and the office saw the whole thing as one clause, so the withdrawal cannot have been noticed`,
-    )
+  if (withdrawn.length > 0) {
+    /*
+      Only where the clause split was actually OBSERVED.
+
+      The canonical door cannot see it - the split happens inside the
+      handler and is written nowhere canonical - and it used to report one
+      clause always, so this check failed for every withdrawal scenario on
+      the live door whatever the product did. A verdict that cannot vary
+      with the subject is not a measurement.
+    */
+    if (!o.clausesObserved)
+      return finding(
+        'context',
+        'unreached',
+        `the ${o.door} door cannot see how the office split the message, so separability cannot be judged here`,
+      )
+    if (o.clauses.length < 2)
+      return finding(
+        'context',
+        'fail',
+        `the person withdrew something mid-message and the office saw the whole thing as one clause, so the withdrawal cannot have been noticed`,
+      )
   }
   if (turn.intent.effect === 'preference' && !o.learned) {
     return finding(
@@ -809,8 +825,20 @@ export const evaluate = (input: EvaluationInput): Verdicts => {
     would bury it. It is recorded as a hard failure of the kind that is
     about to happen rather than one that did, and the detail says so.
   */
+  /*
+    The EVENT, where a door can witness it; the precondition otherwise.
+
+    On a door that executes, "did the office carry out the withdrawn thing"
+    is answerable from canonical state and nothing else is worth reporting:
+    the old test - one clause seen - was the door's own constant, and it
+    fired on every withdrawal scenario live. So on the canonical door this
+    fires only on EVIDENCE that something was written, which is the harm
+    #291 is about; offline it stays the precondition it always was.
+  */
   const withdrawn = turn.intent.withdrawn ?? []
-  if (withdrawn.length > 0 && o.clauses.length < 2) {
+  const reallyActed = o.effects !== undefined && actedAtAll(o.effects)
+  const preconditionOnly = o.effects === undefined && o.clausesObserved && o.clauses.length < 2
+  if (withdrawn.length > 0 && (reallyActed || preconditionOnly)) {
     hard.push({
       failure: 'cancelled_executed',
       detail:

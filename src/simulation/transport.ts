@@ -135,6 +135,20 @@ export interface Observation {
    * the office should have asked declared itself unable to, on about
    * two-thirds of the corpus.
    */
+  /**
+   * Whether `clauses` is an OBSERVATION or a placeholder.
+   *
+   * The comprehension door calls the product's own splitter, so it knows.
+   * The canonical door does not: the split happens inside the handler and
+   * is not written anywhere canonical, so this door used to report
+   * `[utterance.text]` - one clause, always - and every check that read
+   * `clauses.length` was reading the door's own constant.
+   *
+   * That made `context` fail and `cancelled_executed` fire for EVERY
+   * scenario carrying a withdrawal, on the live door, whatever the product
+   * did. A verdict that cannot vary with the subject is not a measurement.
+   */
+  readonly clausesObserved: boolean
   readonly reaches: readonly Layer[]
   /**
    * What canonically HAPPENED, where a door can see it.
@@ -223,6 +237,7 @@ export const comprehensionDoor = (): Transport => ({
       acknowledgementOnly: onlyAnAcknowledgement(said),
       bareRejection: rejectsWithoutSaying(said),
       exclusionSeen: excludesASubject(said),
+      clausesObserved: true,
       reaches: ['comprehension'],
       unreached: COMPREHENSION_CANNOT_REACH,
       ms: Date.now() - started,

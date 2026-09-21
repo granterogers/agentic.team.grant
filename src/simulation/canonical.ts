@@ -370,7 +370,14 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         recognised: String(row.reading ?? '') !== '',
         reading: String(row.reading ?? ''),
         confident: String(row.state) === 'complete',
+        /*
+          NOT an observation. The office's clause split happens inside the
+          handler and is written nowhere canonical, so this door cannot see
+          it and says so rather than reporting a constant that every caller
+          would read as a measurement.
+        */
         clauses: [utterance.text],
+        clausesObserved: false,
         learned: false,
         corrected: false,
         extraction: false,
