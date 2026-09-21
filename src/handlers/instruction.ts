@@ -3002,7 +3002,36 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                     job.projectId === null
                       ? 'null'
                       : `(select slug from public.projects where project_id = ${lit(job.projectId)}::uuid)`
-                  }
+                  },
+                  /*
+                    WHICH JOB MADE IT.
+
+                    my_task_add has taken p_job since it existed and this
+                    caller never passed it, so every task the office put on
+                    Grant's own list carried no link to the turn that created
+                    it: 33 of 41 rows. Three things depend on that link and
+                    all three were blind.
+
+                    app.harness_task(is_fixture, job_id) is ADR-0041's
+                    boundary, the one place that keeps the office's own work
+                    off his personal list - and with a null job it cannot
+                    tell. Thirty tasks from simulated messages were sitting on
+                    his list, indistinguishable from his own, reading
+                    added_by = 'grant' because that is who the office
+                    believed it was acting for.
+
+                    app.undo_tasks_from_job is the reversal a person gets
+                    when they say "take that back", and it matches on job_id,
+                    so none of those thirty could be undone.
+
+                    And check:leaks counts harness tasks the same way, so it
+                    reported a clean list while they were on it.
+
+                    One argument. It is not a harness accommodation: a task
+                    with no provenance is one nobody can undo, attribute or
+                    explain, and that is worth having for his own work too.
+                  */
+                  p_job => ${lit(job.jobId)}::uuid
                 ) as t`)
               .then((r) => {
                 const answer = (r.rows[0] as { t?: unknown })?.t
