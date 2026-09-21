@@ -288,7 +288,8 @@
     "shadow:preferences": "tsx scripts/shadow/preferences.ts",
     "shadow:freeze": "tsx scripts/shadow/freeze.ts",
     "shadow:variance": "tsx scripts/shadow/variance.ts",
-    "shadow:grant": "tsx scripts/shadow/grant.ts"
+    "shadow:grant": "tsx scripts/shadow/grant.ts",
+    "shadow:intake": "tsx scripts/shadow/intake.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
