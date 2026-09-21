@@ -1,4 +1,4 @@
-# ADR-0042 — Migration numbering across concurrent branches
+# ADR-0047 — Migration numbering across concurrent branches
 
 **Status:** accepted, 21 September 2026
 **Context:** three Claude sessions writing migrations to one Supabase
