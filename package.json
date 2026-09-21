@@ -287,7 +287,8 @@
     "shadow:baseline": "tsx scripts/shadow/baseline.ts",
     "shadow:preferences": "tsx scripts/shadow/preferences.ts",
     "shadow:freeze": "tsx scripts/shadow/freeze.ts",
-    "shadow:variance": "tsx scripts/shadow/variance.ts"
+    "shadow:variance": "tsx scripts/shadow/variance.ts",
+    "shadow:grant": "tsx scripts/shadow/grant.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
