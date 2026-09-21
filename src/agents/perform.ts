@@ -564,11 +564,24 @@ export const compile = (
   projectId: string | null,
   request: string,
   router?: ProviderRouter,
+  /**
+   * Which round of planning this is, 1 for the first.
+   *
+   * `runSteps` keys a checkpoint by STEP NAME, so a second round proposing a
+   * step the first round already recorded would be SKIPPED as done — the
+   * office would re-plan, decide to try something, and silently not try it.
+   * The round namespaces the name so a retry is a new step, while a genuine
+   * resume of the SAME round still skips what it finished.
+   */
+  round = 1,
 ): readonly Step[] =>
   plan.steps.map((step) => {
     const executor = EXECUTORS[step.capability]
     return {
-      name: `${step.id}:${step.capability}`,
+      name:
+        round === 1
+          ? `${step.id}:${step.capability}`
+          : `r${String(round)}:${step.id}:${step.capability}`,
       effect: executor?.effect ?? 'none',
       run: async (done): Promise<{ outcome?: Outcome; pause?: Paused }> => {
         /*
@@ -695,9 +708,18 @@ export const compile = (
           dependencies use. Re-keyed here so an executor reads `from[id]`
           rather than having to know the compiled name.
         */
+        /*
+          Keyed by the plan's step id, which is what a dependency names. A
+          round prefix is stripped first: a later round may legitimately depend
+          on what an earlier one found, and `needs` has no way to say which
+          round it meant — the id is the identity.
+        */
         const from: Record<string, Outcome> = {}
         for (const [name, outcome] of Object.entries(done)) {
-          from[name.split(':')[0] ?? name] = outcome
+          const parts = name.split(':')
+          const id =
+            (parts[0]?.startsWith('r') === true && parts.length === 3 ? parts[1] : parts[0]) ?? name
+          from[id] = outcome
         }
         const answered = await executor.run({
           db,

@@ -461,12 +461,29 @@ const SYSTEM = (sheet: string, roster: string): string =>
 /**
  * Ask what this goal requires. Never throws; every failure is today's behaviour.
  */
+/**
+ * What a second round of planning is told, and the whole of what it may act on.
+ *
+ * `unmet` comes from `assess()` and is built only from steps that did not
+ * produce and work the first plan already said it could not reach — so a
+ * re-plan is another attempt at what Grant asked and can never be a widening
+ * of it. `learned` is what the first round actually observed, because
+ * re-planning on a NEW OBSERVATION is the whole point; re-planning because the
+ * model changed its mind is a loop.
+ */
+export interface Again {
+  readonly unmet: readonly string[]
+  readonly learned: readonly string[]
+  readonly alreadyTried: readonly string[]
+}
+
 export async function planFor(
   request: string,
   catalogue: readonly Capability[],
   roster: readonly { readonly slug: string; readonly title: string }[],
   router: ProviderRouter | undefined,
   trace: { readonly jobId?: string; readonly correlationId?: string } = {},
+  again?: Again,
 ): Promise<GoalPlan> {
   const said = request.trim()
   if (said === '') return fellBack('nothing was said')
@@ -485,7 +502,11 @@ export async function planFor(
     the corpus are under sixty characters and every genuinely composed request
     is far longer, so the split is cheap and measurable rather than a guess.
   */
-  if (said.length <= 60 && !/\b(also|then|and|after|once|so that|before)\b/i.test(said)) {
+  if (
+    again === undefined &&
+    said.length <= 60 &&
+    !/\b(also|then|and|after|once|so that|before)\b/i.test(said)
+  ) {
     return fellBack('short and single-clause — the cascade is faster and enough')
   }
   if (router === undefined) return fellBack('no provider was available')
@@ -501,7 +522,28 @@ export async function planFor(
             roster.map((r) => `- ${r.slug} (${r.title})`).join('\n'),
           ),
         },
-        { role: 'user', content: said.slice(0, 2_000) },
+        {
+          role: 'user',
+          content:
+            again === undefined
+              ? said.slice(0, 2_000)
+              : [
+                  `What was asked: ${said.slice(0, 1_200)}`,
+                  '',
+                  'A FIRST ATTEMPT HAS ALREADY RUN. What it found:',
+                  ...again.learned.map((l) => `- ${l.slice(0, 300)}`),
+                  '',
+                  'What it did NOT achieve, and the only thing you may plan for:',
+                  ...again.unmet.map((u) => `- ${u.slice(0, 200)}`),
+                  '',
+                  'Already tried, and not worth repeating unchanged:',
+                  ...again.alreadyTried.map((t) => `- ${t}`),
+                  '',
+                  'Plan ONLY another route to the unachieved part. Do not widen what was',
+                  'asked, do not redo what already worked, and if no other route exists',
+                  'answer with no steps and say so in unreachable.',
+                ].join('\n'),
+        },
       ],
       temperature: 0,
       /*

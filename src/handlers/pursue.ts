@@ -30,10 +30,17 @@
  * instead of being quietly dropped. The brief's rule: *"created task" requires
  * a real task receipt.*
  */
-import type { GoalPlan } from '../agents/goal.ts'
+import {
+  type Again,
+  type Capability,
+  type GoalPlan,
+  planFor,
+  planningCatalogue,
+} from '../agents/goal.ts'
 import type { Observation } from '../agents/perform.ts'
-import { compile } from '../agents/perform.ts'
+import { compile, performable } from '../agents/perform.ts'
 import { howComposed } from '../agents/provenance.ts'
+import { assess, RECONSIDERED } from '../agents/satisfied.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import { runSteps } from '../jobs/checkpoint.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
@@ -63,6 +70,65 @@ export interface PursueDeps {
  * steps is not the code reading them.
  */
 const VERSION = 'office.pursue@1'
+
+/**
+ * Compose another route to what is still unmet.
+ *
+ * Deliberately a thin wrapper rather than a second planner: the catalogue, the
+ * roster, the validator and the closed vocabulary are all the ones the first
+ * round used, so a re-plan cannot reach a capability the first plan could not.
+ * The only thing that differs is what the model is TOLD — the unmet part, what
+ * was actually observed, and what has already been tried.
+ */
+const planAgain = async (
+  db: SqlExecutor,
+  router: ProviderRouter,
+  job: Job,
+  request: string,
+  last: GoalPlan,
+  outcome: { readonly unmet: readonly string[] },
+  seen: Readonly<Record<string, Observation>>,
+): Promise<GoalPlan | null> => {
+  const granted = await planningCatalogue(db)
+  const roster = (
+    await db.execute(
+      `select slug, coalesce(title, '') as title from public.staff where active order by slug`,
+    )
+  ).rows.map((r) => {
+    const row = r as { slug?: unknown; title?: unknown }
+    return { slug: String(row.slug ?? ''), title: String(row.title ?? '') }
+  })
+  const canDo = new Set(performable())
+  const catalogue: readonly Capability[] = granted.map((c) => ({
+    ...c,
+    performable: canDo.has(c.tool),
+  }))
+  const again: Again = {
+    unmet: outcome.unmet,
+    learned: Object.values(seen)
+      .filter((o) => o.found)
+      .map((o) => o.saw)
+      .filter((line) => line !== ''),
+    alreadyTried: last.steps.map((st) => st.capability),
+  }
+  const next = await planFor(
+    request,
+    catalogue,
+    roster,
+    router,
+    { jobId: job.jobId, correlationId: job.correlationId },
+    again,
+  ).catch(() => null)
+  if (next === null || next.how === 'fallback') return null
+  /*
+    A ROUTE THAT REPEATS THE LAST ONE IS NOT ANOTHER ROUTE. The model is told
+    what was tried; this is what happens when it says it anyway.
+  */
+  const same =
+    next.steps.length === last.steps.length &&
+    next.steps.every((st, i) => st.capability === last.steps[i]?.capability)
+  return same ? null : next
+}
 
 export function pursueHandler(deps: PursueDeps): Handler {
   const { db } = deps
@@ -104,12 +170,96 @@ export function pursueHandler(deps: PursueDeps): Handler {
         }
       }
 
-      const run = await runSteps(
+      /*
+        THE BOUNDED LOOP.
+
+        A step finding nothing must not always end the goal — the office may
+        consider another REAL route. It may not consider one for ever, and it
+        may not consider one because a model changed its mind.
+
+        Every bound the brief asks for is here and each is a real limit rather
+        than a gesture:
+
+          ROUNDS      at most two extra attempts. The third has never found
+                      anything the second did not, and an unbounded loop is the
+                      failure mode that makes an agent frightening.
+          NEW REASON  a round runs only if `assess` says another route could
+                      conceivably help — a permission refusal and a missing
+                      capability answer the same way however often they are
+                      asked.
+          FINGERPRINT the goal plus what is unmet. If a round would address
+                      exactly what the last one addressed, it is the model
+                      going round rather than learning, and it stops.
+          TIME        a wall-clock ceiling, because a plan that takes longer
+                      than Grant will wait for has failed whatever it returns.
+          MODEL       each round costs one planning call; the ceiling on rounds
+                      is therefore also the ceiling on spend.
+
+        Authorization is not among the bounds because re-planning cannot touch
+        it: every step of every round compiles through the same `mayAct`,
+        the same registry check and the same executor gate as the first. A
+        second round is a second PROPOSAL, never a second permission.
+      */
+      const MOST_ROUNDS = 3
+      const LONGEST_MS = 120_000
+      const startedAt = Date.now()
+      const tried = new Set<string>()
+      let round = 1
+      let working = plan
+      let run = await runSteps(
         db,
         job.jobId,
         VERSION,
-        compile(plan, db, job.jobId, job.projectId, request, deps.router),
+        compile(working, db, job.jobId, job.projectId, request, deps.router, round),
       )
+      let outcome = assess(
+        working,
+        (run.kind === 'done' ? run.outcomes : {}) as Record<string, Observation>,
+        { kind: run.kind, ...(run.kind === 'paused' ? { pauseReason: run.pause.reason } : {}) },
+      )
+      const everySeen: Record<string, Observation> =
+        run.kind === 'done' ? ({ ...run.outcomes } as Record<string, Observation>) : {}
+      const rounds: string[] = []
+
+      while (
+        outcome.worthAnotherRoute &&
+        round < MOST_ROUNDS &&
+        Date.now() - startedAt < LONGEST_MS &&
+        deps.router !== undefined
+      ) {
+        /*
+          THE FINGERPRINT. Re-planning is allowed because an OBSERVATION
+          changed what should happen; if the unmet part is what it was last
+          time, nothing was learned and another round is a loop.
+        */
+        const shape = `${working.goal}|${[...outcome.unmet].sort().join('|')}`
+        if (tried.has(shape)) {
+          rounds.push(RECONSIDERED.sameAgain)
+          break
+        }
+        tried.add(shape)
+
+        const next = await planAgain(db, deps.router, job, request, working, outcome, everySeen)
+        if (next === null || next.steps.length === 0) {
+          rounds.push(RECONSIDERED.noneLeft)
+          break
+        }
+        round += 1
+        working = next
+        run = await runSteps(
+          db,
+          job.jobId,
+          VERSION,
+          compile(next, db, job.jobId, job.projectId, request, deps.router, round),
+        )
+        if (run.kind === 'done') Object.assign(everySeen, run.outcomes)
+        outcome = assess(
+          next,
+          (run.kind === 'done' ? run.outcomes : {}) as Record<string, Observation>,
+          { kind: run.kind, ...(run.kind === 'paused' ? { pauseReason: run.pause.reason } : {}) },
+        )
+        rounds.push(RECONSIDERED.tookAnother(next.steps.map((st) => st.capability).join(' → ')))
+      }
 
       if (run.kind === 'paused') {
         /*
@@ -163,7 +313,16 @@ export function pursueHandler(deps: PursueDeps): Handler {
         }
       }
 
-      const seen = Object.entries(run.outcomes).map(([name, o]) => ({
+      /*
+        EVERY ROUND, not the last one.
+
+        `run` holds only the final round's outcomes, so narrating from it would
+        report the second attempt and silently drop what the first one found —
+        the same defect as a pause swallowing completed work, one layer up.
+        `everySeen` accumulates across rounds.
+      */
+      if (run.kind === 'done') Object.assign(everySeen, run.outcomes)
+      const seen = Object.entries(everySeen).map(([name, o]) => ({
         name,
         o: o as unknown as Observation,
       }))
@@ -197,7 +356,20 @@ export function pursueHandler(deps: PursueDeps): Handler {
               ${lit(request.slice(0, 280))})`)
           .catch(() => undefined)
       }
-      for (const u of plan.unreachable) lines.push(`I have no way to ${u}.`)
+      for (const u of working.unreachable) lines.push(`I have no way to ${u}.`)
+      /*
+        SAY THAT IT TRIED AGAIN. A second route that Grant cannot see is a
+        second route he cannot judge — and if it was not worth telling him
+        about, it was not worth spending a model call on.
+      */
+      for (const r of rounds) lines.push(r)
+      /*
+        AND SAY WHERE IT GOT TO. "All the steps ended" is not "your goal was
+        met", and the whole point of `assess` is that the office can tell the
+        difference — so it says which, in a sentence, rather than leaving him
+        to infer it from a list of receipts.
+      */
+      if (outcome.verdict !== 'satisfied') lines.push(outcome.because)
 
       return {
         ...base,
@@ -214,8 +386,11 @@ export function pursueHandler(deps: PursueDeps): Handler {
           become two.
         */
         facts: {
-          goal: plan.goal,
-          steps: plan.steps.map((s) => ({ id: s.id, capability: s.capability })),
+          goal: working.goal,
+          verdict: outcome.verdict,
+          rounds: round,
+          unmet: outcome.unmet,
+          steps: working.steps.map((s) => ({ id: s.id, capability: s.capability })),
           done: did.map((s) => s.name),
           could_not: couldNot.map((s) => s.name),
           receipts,

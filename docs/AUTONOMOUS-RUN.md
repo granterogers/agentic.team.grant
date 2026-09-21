@@ -18,7 +18,13 @@ CONTINUE AUTONOMOUSLY.**
 
 ---
 
-# ⭐ CURRENT MISSION — GOAL PLANNING, CAPABILITY COMPOSITION & PRODUCTION USABILITY (8h)
+# ⭐ CURRENT MISSION — GOAL PLANNING, CAPABILITY COMPOSITION & PRODUCTION USABILITY
+
+**THIS PHASE HAS A FINISHING BOUNDARY.** Bounded re-planning, goal completion,
+a focused adversarial pass, realistic deployed workflows, broad gates, clean
+production and a verified deployment — then it ENDS, and the next phase is
+driven by Grant using the product and reporting genuine failures. Not another
+indefinite architecture programme.
 
 **Supersedes the semantic run below it, which it continues rather than
 replaces: every invariant that run established still holds.**
@@ -1078,6 +1084,115 @@ mentioning it in passing, leaves the write-up. **Re-proved**: fence off, 36
 characters once stripped, red; fence on, 348, green.
 
 `verify:pursues` **37/37** · `verify:composes` 18/18 · gate clean.
+
+## BOUNDED RE-PLANNING
+
+`GOAL → PLAN → VALIDATE → ACT → OBSERVE → IS THE GOAL MET? → maybe one more
+route`. A step finding nothing no longer always ends the goal.
+
+### What decides whether to try again
+
+`src/agents/satisfied.ts` — `assess()` — deterministic, no model. Seven
+verdicts, because "not satisfied" covers outcomes that want completely
+different things next: **satisfied · partially satisfied · blocked · awaiting
+Grant · impossible here · temporarily unavailable · failed**. A pause waiting on
+Grant is not a failure; a provider outage is neither; a capability nobody built
+is not a blocked permission.
+
+It never authorizes anything. It says what happened, and every action in a
+second round goes through the same capability, registry, `mayAct`, autonomy and
+approval gates as the first. **A second round is a second PROPOSAL, never a
+second permission.**
+
+### The bounds, each a real limit
+
+| | |
+|---|---|
+| **rounds** | at most two extra; also the ceiling on planning spend, since each round is one call |
+| **a new reason** | only when `assess` says another route could conceivably help |
+| **fingerprint** | goal + unmet. Addressing exactly what the last round addressed is going round, not learning |
+| **time** | a wall-clock ceiling — a plan slower than Grant will wait for has failed whatever it returns |
+
+### And what a re-plan may address
+
+Only `unmet`: the steps that did not produce, plus work the first plan already
+said it could not reach. It is told what was observed, what is still wanted and
+what was already tried, and instructed to plan **only** another route to the
+unachieved part. It cannot widen the goal because it is never given anything
+wider.
+
+### The bound that matters most, found by its own check
+
+The first `assess` applied finality only where NOTHING produced — so a plan
+that read successfully and was then REFUSED the write came back *"partially
+satisfied, worth another go"*, and the suite caught the office re-planning
+around `observe`. **If a refusal can be routed around, the autonomy dial is a
+suggestion.** A partial success does not make a refusal negotiable, and a
+capability nobody built answers the same way however it is approached.
+
+### Three harness corrections before the product was wrong once
+
+1. The first subject was an EMPTY project — which has no other route, so the
+   office correctly answered *"there was no other route available"* and the
+   check read correct behaviour as a failure to re-plan.
+2. The replacement searched for *"zzqqxx nothing in this project will ever
+   match"* — and `search_documents` is called with `'any'`, so "project" and
+   "word" matched the material and the step succeeded. One nonsense word only.
+3. The refusal case demanded the verdict `blocked` and got
+   `partially_satisfied` — correctly, because under `observe` the read
+   succeeds and only the write is refused. **Rounds** is the property; the
+   verdict was my expectation.
+
+### Asserting the mechanism, reporting the model
+
+The headline check first demanded two rounds and went red when the office
+reconsidered and the model declined to propose anything — correct behaviour,
+and on a free model not reliable. What is deterministic, and what actually
+matters, is that the office **reconsiders and says so**. Whether a second route
+exists is the model's judgement about the request; whether the office will look
+for one is the architecture.
+
+Migration **0529** teaches the receipt its verdict, and makes `verdict`
+REQUIRED rather than optional — a receipt that may omit where the office got to
+is one that reads as success by default.
+
+## A MIGRATION IS NOT A DEPLOY — and I did it in the wrong order
+
+0529 made `verdict` REQUIRED on a plan receipt. The deployed worker was v643,
+built before the handler wrote one. So the next `office.pursue` the live worker
+picked up failed at the output insert with *"a plan_carried_out output is
+missing verdict"* — the job ran every step and then could not record them.
+
+**The order was wrong and the rule is the one CLAUDE.md already states.** A
+migration that TIGHTENS a contract must ship with or after the code that
+satisfies it; a migration that loosens one may go first. I had it backwards.
+
+Blast radius checked before anything else: **one job, `telegram:verify-chief`,
+harness traffic, no real work touched.** Fixed by deploying (v645), which is
+what should have happened first.
+
+## SEVERAL ORDINARY SENTENCES, THROUGH THE REAL DOOR — `verify:chief`
+
+The product question, which is the only one that decides whether this phase is
+finished: **can Grant say an ordinary sentence and have the office carry it
+through to something he can trust?**
+
+Three workflows of different shapes, each naming a class rather than a phrasing
+— inspect and prepare the next work; read and then use what was actually
+discovered; find nothing and choose another route. What is asserted is the
+contract he relies on, never a wording:
+
+- the turn settles rather than dying;
+- the office says where it got to, from the seven verdicts;
+- every completion claim has a canonical receipt behind it;
+- the whole run is harness traffic that can never reach him.
+
+**10/10.** The first workflow — *"Have a proper look through the onboarding
+material and work out what is out of date, so I have something concrete to pick
+up on Monday"* — came back **satisfied with 2 canonical receipts.**
+
+`npm test` **2213** · `verify:pursues` 41/41 on two consecutive runs, one
+taking a second route and one correctly finding none.
 
 ## WHAT IS STILL UNPROVED
 
