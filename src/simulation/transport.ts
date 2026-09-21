@@ -52,7 +52,7 @@ import {
 import { personalTaskRequest } from '../agents/mine.ts'
 import { excludesASubject, rejectsWithoutSaying } from '../agents/negation.ts'
 import { readTeaching } from '../agents/teaching.ts'
-import type { Utterance, Layer } from './scenario.ts'
+import type { Layer, Utterance } from './scenario.ts'
 
 /**
  * What came back, in terms the evaluator can score.
@@ -212,7 +212,7 @@ export const comprehensionDoor = (): Transport => ({
       bareRejection: rejectsWithoutSaying(said),
       exclusionSeen: excludesASubject(said),
       reaches: ['comprehension'],
-    unreached: COMPREHENSION_CANNOT_REACH,
+      unreached: COMPREHENSION_CANNOT_REACH,
       ms: Date.now() - started,
       modelCalls: 0,
     }
