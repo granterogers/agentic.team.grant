@@ -857,11 +857,148 @@ const allActivity = () => {
 }
 
 /* ======================================================================== *
+ * Full search (§7.4)
+ * ======================================================================== */
+
+/*
+  WHY THIS EXISTS RATHER THAN A REDIRECT.
+
+  Shift+Enter promoted the query to `/?q=…` in the default studio. Nothing
+  there reads `q` — and `keepUrl()` strips the query on the first paint
+  anyway — so the keystroke navigated home and dropped what had been typed.
+  An offer may only promise what the press can perform, and a search box that
+  silently discards a search is the worst version of that: it looks like it
+  worked.
+
+  §7.4's requirements, and what each is met by here:
+
+  - filters for object type and project: both, as chips;
+  - results show type, project, title, a useful excerpt, owner and date;
+  - spans documents, project tasks, contacts, sources, agents and outputs.
+
+  Everything searched is already in hand from the studio payload, so this adds
+  no fetch and cannot disagree with what the rest of the experience is
+  showing. Access control is the office's: this searches what it sent us.
+*/
+
+const KINDS = ['Everything', 'Tasks', 'Documents', 'People', 'Sources', 'Outputs', 'Projects']
+
+const searchHits = (q, kind, only) => {
+  const needle = q.trim().toLowerCase()
+  if (needle === '') return []
+  const hits = []
+  const want = (k) => kind === 'Everything' || kind === k
+  const match = (...bits) => bits.filter(Boolean).join(' ').toLowerCase().includes(needle)
+
+  for (const p of PROJECTS) {
+    if (only !== null && p.slug !== only) continue
+    if (want('Projects') && match(p.name, p.purpose)) {
+      hits.push({ kind: 'Project', project: p.name, title: p.name, excerpt: p.purpose ?? '', who: '', when: '', to: at(`/p/${p.slug}`) })
+    }
+    if (want('Tasks')) {
+      for (const t of p.tasks ?? []) {
+        if (!match(t.title, t.note, t.who)) continue
+        hits.push({ kind: 'Task', project: p.name, title: t.title, excerpt: t.note ?? '', who: t.who ?? '', when: t.due ?? '', to: at(`/p/${p.slug}/tasks`) })
+      }
+    }
+    if (want('Documents')) {
+      for (const d of p.documents ?? []) {
+        if (!match(d.title, d.kind, d.origin)) continue
+        hits.push({ kind: 'Document', project: p.name, title: d.title, excerpt: [d.kind, d.size].filter(Boolean).join(' · '), who: d.origin ?? '', when: d.when ?? '', to: at(`/p/${p.slug}/documents`) })
+      }
+    }
+    if (want('People')) {
+      for (const c of p.contacts ?? []) {
+        if (!match(c.name, c.role, c.org)) continue
+        hits.push({ kind: 'Contact', project: p.name, title: c.name, excerpt: [c.role, c.org].filter(Boolean).join(' · '), who: '', when: c.last ?? '', to: at(`/p/${p.slug}/contacts`) })
+      }
+    }
+    if (want('Sources')) {
+      for (const so of p.sources ?? []) {
+        const name = so.name ?? so.title ?? so.kind ?? ''
+        if (!match(name, so.kind, so.detail)) continue
+        hits.push({ kind: 'Source', project: p.name, title: name, excerpt: so.detail ?? so.kind ?? '', who: '', when: so.last ?? '', to: at(`/p/${p.slug}/sources`) })
+      }
+    }
+    if (want('Outputs')) {
+      for (const r of outputsOf(p)) {
+        if (!match(r.output.title, r.ask, r.who)) continue
+        hits.push({ kind: 'Output', project: p.name, title: r.output.title, excerpt: r.ask ?? '', who: r.who ?? '', when: r.delivered ?? '', to: at(`/p/${p.slug}/team`) })
+      }
+    }
+  }
+
+  if (want('People')) {
+    for (const c of ctx.crew ?? []) {
+      if (!match(c.name, c.role, (c.expertise ?? []).join(' '))) continue
+      hits.push({ kind: 'Specialist', project: '', title: c.name, excerpt: c.role ?? '', who: '', when: '', to: at('/') })
+    }
+  }
+  return hits
+}
+
+const search = () => {
+  const s = state()
+  const q = s.bcQuery ?? ''
+  const kind = s.bcKind ?? 'Everything'
+  const only = s.bcOnly ?? null
+  const hits = searchHits(q, kind, only)
+  return `<h1 class="bcsectiontitle">Search</h1>
+    <form class="bcaddform bcgap-l" data-bc-searchform>
+      ${input({ id: 'bc-search-q', label: 'Search everything', name: 'q', value: q, autocomplete: 'off' })}
+      <div class="bcinline-list" role="group" aria-label="Filter by type">
+        ${KINDS.map(
+          (k) =>
+            `<button type="button" data-bc-kind="${esc(k)}" aria-pressed="${k === kind ? 'true' : 'false'}">${esc(k)}</button>`,
+        ).join('')}
+      </div>
+      <div class="bcinline-list" role="group" aria-label="Filter by project">
+        <button type="button" data-bc-only="" aria-pressed="${only === null ? 'true' : 'false'}">Every project</button>
+        ${PROJECTS.map(
+          (p) =>
+            `<button type="button" data-bc-only="${esc(p.slug)}" aria-pressed="${only === p.slug ? 'true' : 'false'}">${esc(p.name)}</button>`,
+        ).join('')}
+      </div>
+    </form>
+    ${
+      q.trim() === ''
+        ? empty({
+            title: 'Search everything',
+            body: 'Projects, their tasks and documents, the people on them, what they are connected to, and what the team has produced.',
+          })
+        : hits.length === 0
+          ? empty({
+              title: 'Nothing matches that',
+              body: `No project, task, document, person, source or output matches “${q.trim()}”. This searches what the office has sent this browser — it is not a claim about what does not exist anywhere.`,
+            })
+          : `<p class="bcpmeta bcprose bcgap-l">${esc(
+              hits.length === 1 ? '1 result' : `${hits.length} results`,
+            )}</p>
+            <div class="bclist">${hits
+              .map(
+                (h) => `<button type="button" class="bcitem bcresult" data-bc-go="${esc(h.to)}">
+                  <span class="bcstatus">${esc(h.kind)}</span>
+                  <span class="bcitembody">
+                    <span class="bcitemtitle">${esc(h.title)}</span>
+                    ${h.excerpt ? `<span class="bcitemmeta">${esc(h.excerpt)}</span>` : ''}
+                    <span class="bcitemmeta">${esc(
+                      [h.kind === 'Project' ? '' : h.project, h.who, h.when].filter(Boolean).join(' · '),
+                    )}</span>
+                  </span>
+                  <span></span>
+                </button>`,
+              )
+              .join('')}</div>`
+    }`
+}
+
+/* ======================================================================== *
  * Body selection
  * ======================================================================== */
 
 const body = () => {
   const s = state()
+  if (s.view === 'bcsearch') return search()
   if (s.view === 'tasks') return myTasks()
   if (s.view === 'lately') return allActivity()
   if (s.view === 'project') {

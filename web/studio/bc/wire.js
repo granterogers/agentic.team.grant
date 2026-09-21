@@ -92,6 +92,44 @@ export const wire = (root) => {
 
   wireTasks(root)
   wireOutputs(root)
+  wireSearch(root)
+}
+
+/* ----------------------------------------------------------------- search */
+
+const wireSearch = (root) => {
+  const box = root.querySelector('#bc-search-q')
+  if (box !== null) {
+    /*
+      Filters as you type (§7.1's "immediately"), and the caret is put back
+      where it was: `render()` replaces every node, so a redraw on each
+      keystroke would otherwise send the cursor to the start of the box after
+      the first letter.
+    */
+    box.addEventListener('input', () => {
+      const where = box.selectionStart
+      ctx.state.bcQuery = box.value
+      ctx.render()
+      const again = document.querySelector('#bc-search-q')
+      if (again !== null) {
+        again.focus()
+        if (where !== null) again.setSelectionRange(where, where)
+      }
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-kind]')) {
+    b.addEventListener('click', () => {
+      ctx.state.bcKind = b.dataset.bcKind
+      ctx.render()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-only]')) {
+    b.addEventListener('click', () => {
+      const v = b.dataset.bcOnly
+      ctx.state.bcOnly = v === '' ? null : v
+      ctx.render()
+    })
+  }
 }
 
 /* ---------------------------------------------------------------- outputs */

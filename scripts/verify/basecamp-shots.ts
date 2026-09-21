@@ -122,6 +122,16 @@ for (const size of sizes) {
     await page.locator('[data-bc-jump]').first().click()
     await page.waitForTimeout(250)
   })
+  await shot('search-empty', '/basecamp/search')
+  await shot('search-results', '/basecamp', async () => {
+    await page.locator('[data-bc-jump]').first().click()
+    await page.waitForTimeout(200)
+    await page.locator('#bcjumpq').fill('interview')
+    await page.waitForTimeout(200)
+    await page.keyboard.press('Shift+Enter')
+    await page.waitForSelector('#bc-search-q', { timeout: 5000 })
+    await page.waitForTimeout(350)
+  })
   await shot('jump-typed', '/basecamp', async () => {
     await page.locator('[data-bc-jump]').first().click()
     await page.waitForTimeout(200)

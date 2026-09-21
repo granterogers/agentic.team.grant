@@ -297,6 +297,16 @@ const state = {
     string would be erased by the first render after arrival.
   */
   experience: 'default',
+  /*
+    The experiment's full-search query and its two filters (§7.4).
+
+    On the state rather than in the address for the same reason the drafts
+    are: `keepUrl()` writes the path from the state on every paint and drops
+    the query string, so anything held there is gone at the next render.
+  */
+  bcQuery: '',
+  bcKind: 'Everything',
+  bcOnly: null,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8560,6 +8570,7 @@ function pathNow() {
       ? `${at}/p/${state.project}`
       : `${at}/p/${state.project}/${state.tab}`
   }
+  if (state.view === 'bcsearch') return `${at}/search`
   if (state.view === 'tasks') return `${at}/tasks`
   if (state.view === 'lately') return `${at}/activity`
   return at === '' ? '/' : at
@@ -8592,6 +8603,11 @@ function goToPath(path) {
   state.experience = bits[0] === 'basecamp' ? 'basecamp' : 'default'
   if (state.experience === 'basecamp') bits.shift()
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
+  /*
+    The experiment's full search (§7.4). Its own view, reachable only under
+    the prefix, so the default studio's router is untouched by it.
+  */
+  if (state.experience === 'basecamp' && bits[0] === 'search') { state.view = 'bcsearch'; return true }
   if (bits[0] === 'tasks') { state.view = 'tasks'; return true }
   if (bits[0] === 'activity') { state.view = 'lately'; return true }
   if (bits[0] === 'p' && bits[1] !== undefined) {
@@ -13164,8 +13180,22 @@ const bcContext = {
     with access controls applied, and a parallel implementation would be a
     second answer to one question.
   */
+  /*
+    §7.3: Shift+Enter promotes the typed text into full search.
+
+    This used to navigate to `/?q=…` in the default studio. NOTHING THERE
+    READS `q` — and `keepUrl()` strips the query on the first paint anyway —
+    so the keystroke went home and dropped what had been typed, which looks
+    exactly like a search that found nothing. The experiment has its own
+    search surface now and the query is carried on the state rather than in
+    the address, because the address is rewritten from the state on every
+    paint.
+  */
   fullSearch: (q) => {
-    window.location.assign(`/?q=${encodeURIComponent(q)}`)
+    state.bcQuery = q
+    state.view = 'bcsearch'
+    state.project = null
+    render()
   },
 }
 bc.mount(bcContext)

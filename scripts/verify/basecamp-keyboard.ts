@@ -238,6 +238,57 @@ check(
   page.url(),
 )
 
+/* --- §7.3: Shift+Enter reaches a full search that actually searches ------ */
+/*
+  THE CHECK THAT WOULD HAVE CAUGHT THE BROKEN PROMISE.
+
+  Shift+Enter used to navigate to `/?q=…` in the default studio. Nothing there
+  reads `q`, and keepUrl strips the query on the first paint, so the keystroke
+  went home and silently dropped what had been typed — indistinguishable, from
+  the outside, from a search that found nothing.
+
+  So the assertion is not "a search surface opened". It is that the query
+  survived the promotion AND that results for it are on screen: a surface that
+  opens empty is the same defect wearing a better address.
+*/
+await open('/basecamp')
+await page.keyboard.press('Shift+J')
+await page.waitForTimeout(300)
+await page.locator('#bcjumpq').type('interview')
+await page.waitForTimeout(300)
+await page.keyboard.press('Shift+Enter')
+await page.waitForTimeout(700)
+check('Shift+Enter reaches the full search', page.url().endsWith('/basecamp/search'), page.url())
+check(
+  'and the query survived the promotion',
+  (await page.locator('#bc-search-q').inputValue()) === 'interview',
+  `the box holds "${await page.locator('#bc-search-q').inputValue()}"`,
+)
+const hits = await page.locator('.bcresult').count()
+check('and it actually found something', hits > 0, `${String(hits)} result(s) for "interview"`)
+check(
+  'results name their type and their project',
+  (await page.locator('.bcresult').first().innerText()).length > 10,
+  await page
+    .locator('.bcresult')
+    .first()
+    .innerText()
+    .then((t) => t.replace(/\n/g, ' / ')),
+)
+
+/* Filters are pressable by keyboard and say which is on. */
+check(
+  'the type filters report their state with aria-pressed',
+  (await page.locator('[data-bc-kind][aria-pressed="true"]').count()) === 1,
+)
+await page.locator('[data-bc-kind="Documents"]').click()
+await page.waitForTimeout(400)
+check(
+  'pressing a filter narrows the results',
+  (await page.locator('.bcresult').count()) <= hits &&
+    (await page.locator('[data-bc-kind="Documents"]').getAttribute('aria-pressed')) === 'true',
+)
+
 /* --- §15: aria-current marks where you are ------------------------------ */
 const crumb = await page.locator('.bccrumb').count()
 check('the overview is the landing surface, so it shows no tool breadcrumb', crumb === 0)

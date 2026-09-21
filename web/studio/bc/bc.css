@@ -914,3 +914,35 @@
   [data-experience='basecamp'] .bcnarrow-only { display: inline-flex; }
   [data-experience='basecamp'] .bcwide-only { display: none; }
 }
+
+/*
+  A search result is a row you press, so it is a button — and a button needs
+  the row's grid put back, because a button's own layout centres its children
+  and would stack the type chip on top of the title.
+*/
+[data-experience='basecamp'] .bcresult {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcresult .bcitembody { display: grid; gap: 2px; min-width: 0; }
+/*
+  The type chip takes a fixed column so every result title starts at the same
+  x. Ragged by one word is what makes a list read as assembled rather than
+  designed, and §9's whole argument is that records share one grammar.
+*/
+[data-experience='basecamp'] .bcresult > .bcstatus {
+  min-width: 84px;
+  justify-content: center;
+  margin-top: 2px;
+}
+[data-experience='basecamp'] .bcinline-list button[aria-pressed='true'] {
+  background: var(--bc-surface-selected);
+  border-color: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+}
