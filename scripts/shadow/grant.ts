@@ -47,7 +47,12 @@ import { HiddenIntentLeak, sealed } from '../../src/simulation/isolation.ts'
 import { GRANT_LIKE, personaBySlug } from '../../src/simulation/persona.ts'
 import { derive, Seeded } from '../../src/simulation/random.ts'
 import { utteranceOf } from '../../src/simulation/scenario.ts'
-import { comprehensionDoor } from '../../src/simulation/transport.ts'
+import {
+  canonicalDoor,
+  comprehensionDoor,
+  firstRunChecklist,
+  type Observation,
+} from '../../src/simulation/transport.ts'
 import { DEFAULT_WORLD } from '../../src/simulation/world.ts'
 
 const arg = (name: string, fallback: string): string => {
@@ -59,7 +64,41 @@ const persona = personaBySlug(arg('persona', 'grant-like')) ?? GRANT_LIKE
 const seed = Number(arg('seed', '1'))
 const only = arg('arc', '')
 const recipes = only === '' ? ARC_RECIPES : ARC_RECIPES.filter((r) => r.id.includes(only))
-const door = comprehensionDoor()
+/*
+  The arcs have never been run LIVE.
+
+  This runner was hardcoded to the comprehension door, so every multi-turn
+  measurement in this workstream was of the office's reading and none of
+  its memory: whether turn 4 knows what turn 1 said is decided by
+  `app.conversation_before`, which the offline door does not have.
+
+  A slice, because a live arc is several turns and this repository does not
+  background work.
+*/
+const live = process.argv.includes('--live')
+const door = live
+  ? canonicalDoor({
+      runToken: Math.random().toString(36).slice(2, 10),
+      /*
+        Tighter than the baseline's seven minutes, because an arc is several
+        turns and this repository does not background work. A turn that has
+        not settled in this window is reported as unrun rather than scored -
+        which is the honest verdict and is itself worth seeing, since a
+        person waiting two minutes for a reply has already given up.
+      */
+      deadlineMs: Number(arg('deadline', '150')) * 1000,
+    })
+  : comprehensionDoor()
+
+if (live && !door.reachable) {
+  console.log(`\n  ${door.blockedBecause ?? 'unreachable'}`)
+  if (!process.argv.includes('--i-have-checked-the-first-run')) console.log(firstRunChecklist())
+  process.exit(0)
+}
+
+const from = Number(arg('from', '0'))
+const count = Number(arg('count', String(recipes.length)))
+const chosen = recipes.slice(from, from + count)
 
 /** One thing that would have irritated a person, with the turn that caused it. */
 interface Complaint {
@@ -70,15 +109,30 @@ interface Complaint {
 
 const complaints: Complaint[] = []
 const allVerdicts: Verdicts[] = []
+/*
+  A turn the door could not complete is reported, never thrown.
+
+  `runCorpus` already had this rule and this runner did not, so one live
+  turn that did not settle inside the deadline ended the whole session with
+  a stack trace - and a crash is not a verdict about the office. It is also
+  the more interesting half of a live arc: a turn that never settles is a
+  person waiting, which is exactly what this session exists to notice.
+
+  The REST OF THE ARC goes with it. A conversation whose third turn never
+  happened cannot be asked whether its fourth turn remembered the third, so
+  scoring on would be measuring the harness's own gap.
+*/
+const unrun: { arc: string; turn: number; because: string }[] = []
 let turns = 0
 
 console.log(`\nShadow Grant - a working session`)
 console.log(`  as        ${persona.slug}  (${persona.about})`)
 console.log(`  door      ${door.door}`)
 console.log(`  seed      ${seed}`)
-console.log(`  arcs      ${recipes.length}\n`)
+console.log(`  arcs      ${chosen.length} of ${recipes.length}, from ${String(from)}`)
+console.log(`  door      ${door.door}\n`)
 
-for (const recipe of recipes) {
+for (const recipe of chosen) {
   const arc: Arc = buildArc(recipe, persona, DEFAULT_WORLD, seed)
   console.log(`── ${arc.id}`)
   console.log(`   ${arc.about}\n`)
@@ -116,10 +170,19 @@ for (const recipe of recipes) {
       throw e
     }
 
-    const o = await door.ask(
-      { text: sent, channel: arc.channel },
-      { history, standing: arc.standing ?? [], hadAnswer },
-    )
+    let o: Observation
+    try {
+      o = await door.ask(
+        { text: sent, channel: arc.channel },
+        { conversation: arc.id, history, standing: arc.standing ?? [], hadAnswer },
+      )
+    } catch (e) {
+      unrun.push({ arc: arc.id, turn: i, because: (e as Error).message })
+      console.log(`   "${sent}"`)
+      console.log(`      UNRUN - ${(e as Error).message}`)
+      console.log(`      the rest of this conversation is abandoned\n`)
+      break
+    }
     turns++
     const v = evaluate({ scenario: { ...arc, compositions: [] }, turn, sent, observation: o })
     allVerdicts.push(v)
@@ -257,15 +320,36 @@ const notUnderstood = allVerdicts.filter((v) =>
   v.findings.some((f) => f.dimension === 'understanding' && f.verdict === 'fail'),
 ).length
 
-console.log(`  ${turns} turns across ${recipes.length} conversations.`)
+console.log(`  ${turns} turns across ${chosen.length} conversations.`)
 console.log(`  ${notUnderstood} of them the office did not understand well enough to act on.`)
-console.log(`  ${complaints.length} moments a person would have noticed.\n`)
-console.log('  Nothing was sent anywhere. No project was touched. No model was called.\n')
+console.log(`  ${complaints.length} moments a person would have noticed.`)
+if (unrun.length > 0) {
+  console.log(
+    `  ${unrun.length} turns the office never finished, so the rest of those conversations was abandoned:`,
+  )
+  for (const u of unrun) console.log(`    - ${u.arc} turn ${String(u.turn)}: ${u.because}`)
+}
+console.log()
+/*
+  The offline door's claim was true of the offline door and is a lie about
+  the live one, which writes to the real Supabase and spends real model
+  calls. A closing line that always says nothing happened is exactly the
+  fabricated narration this workstream exists to find.
+*/
+console.log(
+  live
+    ? '  LIVE: real jobs, real model calls, harness-attributed and undeliverable.\n'
+    : '  Nothing was sent anywhere. No project was touched. No model was called.\n',
+)
 
 mkdirSync('.out', { recursive: true })
-const path = `.out/shadow-grant-${persona.slug}-${seed}.json`
+const path = `.out/shadow-grant-${persona.slug}-${seed}${live ? `-live-${String(from)}` : ''}.json`
 writeFileSync(
   path,
-  JSON.stringify({ persona: persona.slug, seed, complaints, verdicts: allVerdicts }, null, 2),
+  JSON.stringify(
+    { persona: persona.slug, seed, live, complaints, unrun, verdicts: allVerdicts },
+    null,
+    2,
+  ),
 )
 console.log(`  Full record: ${path}\n`)

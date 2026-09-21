@@ -180,7 +180,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
   return {
     door: 'canonical',
     reachable: true,
-    async ask(utterance: Utterance, _context: TurnContext): Promise<Observation> {
+    async ask(utterance: Utterance, context: TurnContext): Promise<Observation> {
       const started = Date.now()
       // Bounds every count to THIS turn. Without it a later turn in the same
       // conversation inherits the earlier one's rows and effects appear to
@@ -201,6 +201,29 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         table does (`telegram:message:...`, `teamhq:my_tasks:...`).
       */
       const key = `teamhq:shadow:${options.runToken}-${String(nth)}`
+
+      /*
+        THE CHAT, which is what threads a conversation.
+
+        `app.conversation_before` keys on origin_channel + the first
+        segment of origin_ref + the speaker, within a window. This door
+        used the dedupe key as the origin_ref, so that segment was
+        `teamhq` on every turn and every scenario in a run threaded into
+        one conversation - measured at 2 prior turns, a turn from one
+        scenario appearing in the history of the next.
+
+        Invisible in a single-scenario run, which is how it survived, and
+        fatal to any multi-turn measurement.
+
+        One chat per scenario: turns within a scenario thread, and two
+        scenarios are two different conversations. The dedupe key keeps
+        its own shape, which the CHECK constraint requires and which has
+        nothing to do with threading.
+      */
+      const chat = `shadow-${options.runToken}-${context.conversation}`
+        .replace(/[^A-Za-z0-9_-]+/g, '-')
+        .slice(0, 80)
+      const ref = `${chat}:${String(nth)}`
 
       /*
         `announce = false` is the leak protection and it is set in the same
@@ -236,7 +259,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
                 insert into public.inbound_commands
                   (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at,
                    synthetic)
-                values ('teamhq', ${lit(key)},
+                values ('teamhq', ${lit(ref)},
                         ${lit(`verify-shadow-${options.runToken}`)},
                         ${lit(utterance.text)}, ${lit(key)}, app.now_utc(), true)
                 on conflict (dedupe_key) do nothing;

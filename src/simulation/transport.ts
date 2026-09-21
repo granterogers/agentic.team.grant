@@ -194,6 +194,26 @@ export interface Observation {
 
 /** Everything the office is allowed to know besides the message itself. */
 export interface TurnContext {
+  /**
+   * WHICH CONVERSATION this turn belongs to.
+   *
+   * The canonical door does not pass `history` to the office - it cannot,
+   * and should not: the office reconstructs a thread itself from
+   * `app.conversation_before`, which keys on channel + chat + speaker
+   * within a window. Handing it a history would test a path nobody uses.
+   *
+   * What the door DOES have to get right is the chat, and it was getting
+   * it wrong. Every turn shared `origin_ref` of `teamhq:...`, so
+   * `split_part(origin_ref, ':', 1)` was `teamhq` for all of them and one
+   * run's scenarios threaded into each other: a turn from
+   * `task.explicit` appeared in the history of the turn after it. Measured
+   * at 2 prior turns on a multi-scenario run.
+   *
+   * That is invisible in a single-scenario run, which is how it survived,
+   * and it is fatal to any multi-turn measurement - every continuity
+   * scenario would be reading somebody else's conversation.
+   */
+  readonly conversation: string
   /** Earlier turns in this conversation, as they were actually exchanged. */
   readonly history: readonly { readonly who: 'person' | 'office'; readonly text: string }[]
   /** Standing instructions in force. */

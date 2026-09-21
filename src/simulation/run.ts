@@ -67,6 +67,9 @@ export const runCorpus = async (
 
     for (const turn of scenario.turns) {
       const context: TurnContext = {
+        // One conversation per SCENARIO. Two scenarios in one run are two
+        // different people talking, as far as the office is concerned.
+        conversation: scenario.id,
         history,
         standing: scenario.standing ?? [],
         hadAnswer,
