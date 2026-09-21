@@ -77,7 +77,9 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 15 | 21 Sep | Channel translation coverage through the real Telegram adapter | DONE |
 | 16 | 21 Sep | Live canonical door written, gated behind a first-run checklist, never run | DONE |
 | 17 | 21 Sep | Documentation; #294 filed (repo test suite cannot pass without a token) | DONE |
-| 18 | 21 Sep | Integration-readiness check against main | IN PROGRESS |
+| 18 | 21 Sep | Integration-readiness check against main — no overlap, one shared file | DONE |
+| 19 | 21 Sep | Eight fresh seeds (1,056 unseen scenarios): one new product finding, one of mine | DONE |
+| 20 | 21 Sep | Baseline re-recorded after the generator changed; corpus re-frozen | DONE |
 
 ## Decisions taken without asking
 
@@ -109,6 +111,7 @@ One blocked item must never block the mission. Each carries the exact question.
 | A dash is not a clause boundary, so a withdrawal is invisible | [#291](https://github.com/granterogers/agentic.team.grant/issues/291) |
 | An implied obligation, and work stated as prose, read as idle thoughts | [#292](https://github.com/granterogers/agentic.team.grant/issues/292) |
 | A question with an instruction attached is read as a question | [#293](https://github.com/granterogers/agentic.team.grant/issues/293) |
+| A message that is entirely a cancellation reads as an instruction | comment on [#291](https://github.com/granterogers/agentic.team.grant/issues/291) |
 | `npm run test` cannot pass without a Supabase token | [#294](https://github.com/granterogers/agentic.team.grant/issues/294) |
 | The two task matchers disagree — reproduced offline | comment on [#289](https://github.com/granterogers/agentic.team.grant/issues/289) |
 
@@ -131,6 +134,7 @@ the test before believing the finding its most-used rule.
 | A sabotage that landed textually and did nothing | the same |
 | Shadow Grant complained about turns the evaluator declines to judge | reading the four-persona comparison |
 | A four-part edit where three parts silently no-op'd | grepping for the result instead of trusting the diff |
+| The negation guard was written from contractions and missed every pronoun | eight fresh seeds |
 
 Three separate times a check reported a false all-clear because something did
 not land: a `python3 -c` sabotage whose `\b` became a backspace, a grep

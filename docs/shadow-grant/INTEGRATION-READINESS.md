@@ -9,7 +9,7 @@ branch has not been merged and must not be self-merged.**
 | **Latest main SHA integrated** | `3c9415084f4b2664bf8147d995412609e58a24f8` — **main has not moved** |
 | **Branch** | `claude/human-simulation-harness` |
 | **Final branch SHA** | see `git rev-parse claude/human-simulation-harness` |
-| **Commits** | 21 |
+| **Commits** | 24 |
 | **Migrations added** | **none** |
 | **Production deployments performed** | **none** |
 
@@ -58,9 +58,10 @@ a diff that cannot break anything.
 | `npm run shadow:freeze -- --check` | unchanged — the held-out corpus is comparable across this branch |
 | `npm run shadow:channels` | 132 messages, 0 altered, 0 refused, 4 / 4 controls |
 | `npm run shadow:baseline` | 132 scenarios, **0 hidden-intent leaks** |
+| 8 fresh seeds | 1,056 unseen scenarios, **0 leaks**, one new product finding |
 | `npm run shadow:grant` | 10 conversations × 4 personas |
 | `npm run shadow:preferences` | §9's eleven steps, reported as a chain |
-| `npx vitest run tests/simulation` | 49 passed |
+| `npx vitest run tests/simulation` | 50 passed |
 
 ## Broad gates
 
