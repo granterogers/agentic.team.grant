@@ -63,7 +63,13 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 1 | 21 Sep | Mission persisted verbatim to `docs/spec/shadow-grant-simulation-2026-09-21.md`; this ledger created | DONE |
 | 2 | 21 Sep | Repository mapping — §3's claims verified against real code | DONE |
 | 3 | 21 Sep | Credential reality established: this session holds **no** Supabase / OpenRouter / HQ token | DONE |
-| 4 | 21 Sep | Harness foundations — scenario core, hidden-intent isolation | IN PROGRESS |
+| 4 | 21 Sep | Harness foundations — scenario core, hidden-intent firewall, sabotage-proved | DONE |
+| 5 | 21 Sep | Four personas, seeded meaning-preserving roughener, sabotage-proved | DONE |
+| 6 | 21 Sep | 66 goal families across 11 groups; compositional generator | DONE |
+| 7 | 21 Sep | Seven dimensions, deterministic evaluator, transport seam, `npm run shadow:baseline` | DONE |
+| 8 | 21 Sep | First honest baseline; 3 harness defects found and fixed; 5 product findings | DONE |
+| 9 | 21 Sep | Findings filed: #290, #291, #292, #293; #289 commented rather than duplicated | DONE |
+| 10 | 21 Sep | Multi-turn reactive simulation, preference continuity end to end | IN PROGRESS |
 
 ## Decisions taken without asking
 
