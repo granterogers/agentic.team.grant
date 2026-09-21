@@ -735,6 +735,61 @@ failing test file in `npm run test` is #294 and is environmental — this branch
 has never touched either file in it.
 
 ---
+## §6 The full To-dos tool: PROJECT → LIST → TASK
+
+Implemented, and **it needed no new backend contract** — the finding this run
+keeps returning to. A list is a MILESTONE task (`is_milestone`, 0171, whose own
+comment says "a milestone is a task with no work of its own that others hang
+off, rather than a separate table"); a task names its list through
+`parent_task_id`; `app.studio_modules` has returned the milestones per project
+since 0286 and `app.studio_tasks` has returned `milestone` and `parent` since
+0530. `listsOf` derives the hierarchy rather than storing it again, which is
+0310's rule.
+
+Lists are real, not decorative: each has its name, its progress, its own tasks
+and **its own inline Add**, and "Add a list" creates a milestone through
+`hq_task_add(p_milestone: true)` — the path 0287 built.
+
+**The one place the office's API does not line up**, stated rather than hidden:
+`hq_task_add` takes no parent and `hq_task_update` does, so adding into a list
+is two calls. If the second fails the task exists and is unlisted, which is
+visible on that very screen under "Not in a list" and is the recoverable
+direction. The alternative was not offering it.
+
+### Defects 43–49
+
+| # | Found | Defect |
+|---|---|---|
+| 43 | the journey suite | **No way to add a task on a project with no lists.** `listsOf` returns a "Not in a list" group for loose work — correctly — so a project with no lists comes back with exactly ONE group, and the loose group deliberately carries no Add control. The guard was on `groups.length === 0` and therefore never fired. "No lists" is not "no groups"; what decides is whether any NAMED list exists. |
+| 44 | the states suite | **§12's empty state was lost.** The rewrite replaced it with "Nothing in this list yet", which says what is absent rather than what the area is for. A bare sentence is not an empty state. |
+| 45 | the route audit | **The heading said "To-dos" while the breadcrumb and the jump index said "Tasks".** 0311's two-words-for-one-thing arriving through a page title. Fixed in `TOOLS` — the one list every caller reads — and the heading and the crumb now read it rather than restating it. |
+| 46 | opening the capture | **Every row repeated its own list** — "emma · Ideal Client Avatar" ten times inside the list called Ideal Client Avatar. The deeper defect: `note` was carrying the parent, which is the same fact in two places (0310), and it predates the hierarchy existing. Removed from the data; a normalising prefix guard stays for the near-miss ("Client Vision & Journey Mapping" under "Client Vision & Journey"), which an exact comparison let through. |
+| 47 | opening the capture | **Ten native checkboxes were the brightest thing on the page.** A checkbox on a dark surface renders as a pale square; §16 says the project dominates. It stays a real input — keyboard, label, state — with only its appearance taken over, and its size untouched because `bc.css` already grows it for touch and a decorative change must not shrink a target. |
+| 48 | opening the capture | **"Everything in this list is done." above "2 completed tasks"** — the same fact twice, on a completed list. |
+| 49 | opening the capture | **The assignee rendered as a raw slug** — "emma", "oliver" — while the project home two clicks away said "Emma" and "Oliver", because the miniatures resolve through the roster and this surface printed the column. Same defect as printing `connector` on a sources tile: the record is not the vocabulary. A face travels with the name now, so the tool and its miniature agree about what a person looks like. |
+
+### Two suites were retargeted onto properties, again
+
+Adding a form per list — which is what §10.2's "expands in place" actually
+requires — turned five bare selectors into strict-mode violations, and the
+field ids now carry their list. Nothing was loosened: the journey and the
+keyboard suite address **the open form** and **its own fields by their role in
+it** (`[data-bc-taskform]:not([hidden]) input[name="title"]`), which is what
+those checks always meant and which survives the next change to how a list is
+addressed. `wire.js` had the matching defect in the product: `form(root)`
+returned the FIRST form on the page, so pressing any list's Add would have
+opened the first list's — perfect with one list on screen and wrong with two,
+which is exactly the shape a prototype with one list hides.
+
+### State
+
+`basecamp:gate` exit 0 — 50/50, 51/51, 31/31, 26/26, 64/64, classes and
+controls green, measure with no absolute violations. `lint`, `typecheck`,
+`check:templates`, `check:secrets` clean. Default Team HQ unchanged:
+`verify:wired` 77 attributes across 21 screens, `verify:layouts` 64 states
+and 0 findings.
+
+---
 ## NEXT ACTION
 
 **The full tools behind the miniatures, and §14's configurability.** The
@@ -742,9 +797,7 @@ composition is chosen, it is the home, and every tool on it is now a
 miniature of something. What is not built is the full tool behind four of
 them and the ability to change the home:
 
-1. **§6** the full To-dos tool with real lists — derived from `is_milestone`
-   and `parent_task_id`, so a renderer rather than a contract.
-2. **§10** the full Card Table from `state_raw`, and moving a card, which
+1. **§10** the full Card Table from `state_raw`, and moving a card, which
    needs `task_state` and nothing new.
 3. **§9** the full Calendar, saying on its face that it shows scheduled work.
 4. **§7** the full project Chat against `conversation_history`.

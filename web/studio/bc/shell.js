@@ -33,7 +33,7 @@
 import { PROJECTS, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
-import * as miniatures from './miniatures.js'
+import * as bcMini from './miniatures.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
 /*
@@ -48,7 +48,7 @@ export const mount = (c) => {
     them here rather than from app.js keeps the experiment's surface area to
     the files inside bc/ - which is what makes it deletable in one commit.
   */
-  miniatures.mount(c)
+  bcMini.mount(c)
   compose.mount(c)
 }
 
@@ -77,7 +77,13 @@ const project = () => PROJECTS.find((p) => p.slug === state().project) ?? PROJEC
  * gap - which is what keeps the preservation matrix honest.
  */
 export const TOOLS = [
-  { id: 'tasks', name: 'Tasks', own: true },
+  /*
+    TO-DOS, not Tasks. §6's rename, and it belongs HERE rather than on the
+    surface: the route audit caught the heading saying "To-dos" while the
+    breadcrumb and the jump index said "Tasks", which is 0311's two-words-for-
+    one-thing arriving through a page title. One list, every caller.
+  */
+  { id: 'tasks', name: 'To-dos', own: true },
   { id: 'team', name: 'Agentic Team', own: true },
   { id: 'documents', name: 'Documents & Assets', own: true },
   { id: 'activity', name: 'Activity', own: true },
@@ -568,50 +574,154 @@ const crumbFor = (p, toolId) =>
  * both forbid merging them, and the two surfaces deliberately look related
  * without sharing a record.
  */
+/*
+  §6 — A PROJECT HAS LISTS, AND A LIST HAS TASKS.
+
+  This surface was a flat bag of rows with completed work at the bottom, which
+  is not what a to-do tool is: the real thing groups work under named lists,
+  and the list is how a person finds anything once a project has more than a
+  dozen tasks.
+
+  IT NEEDED NO NEW BACKEND CONTRACT, which is the finding worth keeping. A
+  list is a MILESTONE task (`is_milestone`, 0171) and a task names its list
+  through `parent_task_id`; `app.studio_modules` has returned the milestones
+  per project since 0286 and `app.studio_tasks` has returned `milestone` and
+  `parent` on every row since 0530. The hierarchy has been in the database for
+  months. `listsOf` derives it rather than storing it a second time, which is
+  0310's rule.
+
+  The one place the office's API does not line up: `hq_task_add` takes no
+  parent and `hq_task_update` does. So adding to a list is two calls, and if
+  the second fails the task exists and is simply unlisted - which is visible,
+  recoverable and honest, and better than not offering it at all.
+*/
+
+/** One list's add-a-task form. Per list, because §10.2 expands IN PLACE. */
+const taskAddForm = (listId) => {
+  const k = listId === '' ? 'loose' : listId
+  return `<form class="bcaddform" data-bc-taskform="${esc(k)}" hidden>
+    ${input({ id: `bc-task-title-${k}`, label: 'What needs doing', name: 'title', autocomplete: 'off' })}
+    ${input({ id: `bc-task-due-${k}`, label: 'Due date', name: 'due', type: 'date' })}
+    ${input({ id: `bc-task-who-${k}`, label: 'Assigned to', name: 'who', autocomplete: 'off', hint: 'A team member’s name, or leave it unassigned.' })}
+    <div class="bcrow">
+      ${button('Add this task', { kind: 'primary', 'data-bc-tasksave': esc(k) })}
+      ${button('Cancel', { 'data-bc-taskcancel': esc(k) })}
+    </div>
+  </form>`
+}
+
+const taskList = (p, g, whole = false) => {
+  const all = p.tasks ?? []
+  const open = g.items.filter((t) => (t.state_raw ?? t.state) !== 'done' && (t.state_raw ?? '') !== 'cancelled')
+  const done = g.items.filter((t) => (t.state_raw ?? t.state) === 'done' || t.state_raw === 'cancelled')
+  const k = g.id === '' ? 'loose' : g.id
+  return `<section class="bctasklist" data-bc-tasklist="${esc(k)}">
+    <header class="bctasklisthead">
+      <h2>${esc(g.name)}</h2>
+      <span class="bclistcount">${esc(`${done.length}/${g.items.length}`)}</span>
+      ${
+        g.loose === true || (whole && g.items.length === 0)
+          ? ''
+          : `<span class="bcactions">${button('Add a task', { 'data-bc-addtask': esc(k) })}</span>`
+      }
+    </header>
+    ${g.loose === true ? `<p class="bcpmeta">Work that is not in a list yet.</p>` : taskAddForm(g.id)}
+    <div class="bclist">
+      ${open.map((t) => taskRow(t, all.indexOf(t), g.name)).join('')}
+      ${
+        g.items.length === 0
+          ? whole
+            ? /*
+                §12: AN EMPTY TOOL SAYS WHAT THE AREA IS FOR and offers one
+                next action. The list rewrite replaced the real empty state
+                with the line "Nothing in this list yet", which says what is
+                absent and not what the area is for - and the states audit
+                caught it in one run. A bare sentence is not an empty state.
+              */
+              empty(
+                {
+                  title: 'No to-dos yet',
+                  body: 'To-dos are what this project has committed to doing — each one with somebody on it and a date if it has one. Lists are how they divide up once there are enough to need dividing.',
+                },
+                button('Add a task', { kind: 'primary', 'data-bc-addtask': esc(g.id === '' ? 'loose' : g.id) }),
+              )
+            : `<p class="bcpmeta">Nothing in this list yet.</p>`
+          : open.length === 0 && done.length === 0
+            ? `<p class="bcpmeta">Everything in this list is done.</p>`
+            : ''
+      }
+      ${
+        done.length === 0
+          ? ''
+          : `<details class="bcdone">
+              <summary class="bcmore">${esc(
+                done.length === 1 ? '1 completed task' : `${done.length} completed tasks`,
+              )}</summary>
+              ${done.map((t) => taskRow(t, all.indexOf(t), g.name)).join('')}
+            </details>`
+      }
+    </div>
+  </section>`
+}
+
 const tasksSurface = (p) => {
   const all = p.tasks ?? []
-  const open = all.filter((t) => t.state !== 'done')
-  const done = all.filter((t) => t.state === 'done')
+  const groups = bcMini.listsOf(p)
+  /*
+    "NO LISTS" IS NOT "NO GROUPS".
+
+    `listsOf` returns a group called "Not in a list" for work that belongs to
+    none - correct, because a task in no list is still work. So a project with
+    no lists at all comes back with exactly one group, the loose one, and the
+    loose group deliberately carries no Add control: adding INTO "not in a
+    list" is not a thing a person means.
+
+    The first draft guarded on `groups.length === 0`, which therefore never
+    fired, and the surface offered no way to add a task on any project without
+    lists - the journey found it in one run. What decides is whether any NAMED
+    list exists.
+  */
+  const named = groups.filter((g) => g.loose !== true)
   return `${crumbFor(p, 'tasks')}
     <div class="bcrecordhead">
-      <h1>Tasks</h1>
-      <span class="bcactions">${button('Add a task', { kind: 'primary', 'data-bc-addtask': '1' })}</span>
+      <h1>${esc(toolById('tasks')?.name ?? 'To-dos')}</h1>
+      <span class="bcactions">${button('Add a list', { 'data-bc-addlist': '1' })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      What this project has committed to. Your own list is under My Tasks, and
-      what the team is running is under Agentic Team — three different things.
+      What this project has committed to, in its lists. Your own list is under
+      My Tasks, and what the team is running is under Agentic Team — three
+      different things.
     </p>
-    <form class="bcaddform" data-bc-taskform hidden>
-      ${input({ id: 'bc-task-title', label: 'What needs doing', name: 'title', autocomplete: 'off' })}
-      ${input({ id: 'bc-task-due', label: 'Due date', name: 'due', type: 'date' })}
-      ${input({ id: 'bc-task-who', label: 'Assigned to', name: 'who', autocomplete: 'off', hint: 'A team member’s name, or leave it unassigned.' })}
+    <form class="bcaddform" data-bc-listform hidden>
+      ${input({ id: 'bc-list-name', label: 'What is this list called', name: 'name', autocomplete: 'off', hint: 'A stage, a workstream, a module — whatever the work actually divides into.' })}
       <div class="bcrow">
-        ${button('Add this task', { kind: 'primary', 'data-bc-tasksave': '1' })}
-        ${button('Cancel', { 'data-bc-taskcancel': '1' })}
+        ${button('Add this list', { kind: 'primary', 'data-bc-listsave': '1' })}
+        ${button('Cancel', { 'data-bc-listcancel': '1' })}
       </div>
     </form>
     ${
-      all.length === 0
-        ? empty(
+      named.length === 0
+        ? /*
+            NO LISTS YET, and a task must still be addable.
+
+            The first draft put an empty state here whose only control was Add
+            a list, so a project with no to-dos could not be given a to-do
+            without first being given a structure - and the journey suite hit
+            it in one run. Basecamp does put every task in a list; making the
+            list COMPULSORY before the first task is a different decision, and
+            a worse one. So there is always one group, named for what it is,
+            and organising later is the person's business.
+          */
+          taskList(
+            p,
             {
-              title: 'No tasks yet',
-              body: 'Tasks are what this project has committed to doing. Add the first one.',
+              name: 'Everything on this project',
+              id: '',
+              items: all.filter((t) => t.milestone !== true),
             },
-            button('Add a task', { kind: 'primary', 'data-bc-addtask': '1' }),
+            true,
           )
-        : `<div class="bclist">
-            ${open.map((t) => taskRow(t, (p.tasks ?? []).indexOf(t))).join('')}
-            ${
-              done.length === 0
-                ? ''
-                : `<details class="bcdone">
-                    <summary class="bcmore">${esc(
-                      done.length === 1 ? '1 completed task' : `${done.length} completed tasks`,
-                    )}</summary>
-                    ${done.map((t) => taskRow(t, (p.tasks ?? []).indexOf(t))).join('')}
-                  </details>`
-            }
-          </div>`
+        : groups.map((g) => taskList(p, g)).join('')
     }`
 }
 
@@ -633,7 +743,35 @@ const tasksSurface = (p) => {
 */
 const taskKey = (t, i) => String(t.id ?? `at-${String(i)}`)
 
-const taskRow = (t, i = 0) => {
+/*
+  A PERSON'S NAME, NOT THEIR SLUG. The rows read "emma" and "oliver" while
+  the project home two clicks away read "Emma" and "Oliver", because the
+  miniatures resolve the slug through the roster and this surface printed the
+  column. Same defect as printing `connector` on the sources tile: the record
+  is not the vocabulary.
+*/
+const whoName = (slug) =>
+  slug === null || slug === undefined || slug === ''
+    ? ''
+    : ((ctx?.crew ?? []).find((c) => c.slug === slug)?.name ?? slug)
+
+const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const repeatsList = (note, listName) => {
+  const a = norm(note)
+  const b = norm(listName)
+  if (a === '' || b === '') return false
+  return a === b || a.startsWith(b) || b.startsWith(a)
+}
+
+/*
+  THE ROW DOES NOT REPEAT ITS LIST.
+
+  Every row read "emma - Ideal Client Avatar" inside the list called Ideal
+  Client Avatar, ten times down the page, because the note carries the module
+  name. The list is the heading above it; saying it again on each child spends
+  the whole meta line on something already known.
+*/
+const taskRow = (t, i = 0, listName = '') => {
   const isDone = t.state === 'done'
   const id = t.id ?? ''
   const key = taskKey(t, i)
@@ -653,11 +791,19 @@ const taskRow = (t, i = 0) => {
       -->
       <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
       <span class="bcitemmeta">${esc(
-        [t.who, t.due, t.note].filter((x) => x !== undefined && x !== null && x !== '').join(' · '),
+        /*
+          The guard stays for the near-miss case: a note that merely BEGINS
+          with the list's name ("Client Vision & Journey Mapping" under
+          "Client Vision & Journey") is the same repetition with four extra
+          characters, and an exact comparison let all of those through.
+        */
+        [whoName(t.who), t.due, repeatsList(t.note, listName) ? '' : t.note]
+          .filter((x) => x !== undefined && x !== null && x !== '')
+          .join(' · '),
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
     </div>
-    <span></span>
+    <span class="bcitemwho">${t.who ? bcMini.face({ ...((ctx?.crew ?? []).find((c) => c.slug === t.who) ?? {}), name: whoName(t.who) }) : ''}</span>
   </div>`
 }
 
@@ -687,7 +833,7 @@ const taskRecord = (p) => {
   const done = t.state === 'done'
   return `${breadcrumb([
     { name: p.name, to: at(`/p/${p.slug}`) },
-    { name: 'Tasks', to: at(`/p/${p.slug}/tasks`) },
+    { name: toolById('tasks')?.name ?? 'To-dos', to: at(`/p/${p.slug}/tasks`) },
     { name: t.title },
   ])}
     <div class="bcrecordhead">

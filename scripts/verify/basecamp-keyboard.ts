@@ -205,7 +205,7 @@ const slug = (await page.evaluate(
 await open(`${slug}/tasks`)
 await page.locator('[data-bc-addtask]').first().click()
 await page.waitForTimeout(200)
-await page.locator('#bc-task-title').focus()
+await page.locator('[data-bc-taskform] input[name="title"]').first().focus()
 await page.keyboard.press('Shift+J')
 await page.waitForTimeout(250)
 check(
@@ -215,8 +215,8 @@ check(
 )
 check(
   'and the letter was typed instead',
-  (await page.locator('#bc-task-title').inputValue()).includes('J'),
-  `the field holds "${await page.locator('#bc-task-title').inputValue()}"`,
+  (await page.locator('[data-bc-taskform] input[name="title"]').first().inputValue()).includes('J'),
+  `the field holds "${await page.locator('[data-bc-taskform] input[name="title"]').first().inputValue()}"`,
 )
 
 /* --- §10E: a core journey completed with the keyboard only -------------- */

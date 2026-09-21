@@ -170,23 +170,34 @@ const wireOutputs = (root) => {
 
 /* ------------------------------------------------------------------ tasks */
 
-const form = (root) => root.querySelector('[data-bc-taskform]')
+/*
+  THE FORM IN THE SAME LIST, not the first one on the page.
+
+  §6 gave the surface a form per list, because §10.2's "expands in place" is
+  only true if the place is the list you pressed. `root.querySelector` would
+  have opened the first list's form whichever list was pressed - the kind of
+  defect that works perfectly with one list on screen and is wrong with two,
+  which is exactly the shape a prototype with one list hides.
+*/
+const form = (el, root) =>
+  el.closest('[data-bc-tasklist]')?.querySelector('[data-bc-taskform]') ??
+  root.querySelector('[data-bc-taskform]')
 
 const wireTasks = (root) => {
   for (const b of root.querySelectorAll('[data-bc-addtask]')) {
     b.addEventListener('click', () => {
-      const f = form(root)
-      if (f === null) return
+      const f = form(b, root)
+      if (f === null || f === undefined) return
       f.hidden = false
       // §10.2: inline Add expands in place and focuses the name field.
-      f.querySelector('#bc-task-title')?.focus()
+      f.querySelector('input')?.focus()
     })
   }
 
   for (const b of root.querySelectorAll('[data-bc-taskcancel]')) {
     b.addEventListener('click', () => {
-      const f = form(root)
-      if (f === null) return
+      const f = form(b, root)
+      if (f === null || f === undefined) return
       /*
         §10.2: Cancel restores the collapsed state and the previous focus
         WITHOUT creating a record. Clearing the fields matters as much as
@@ -195,38 +206,114 @@ const wireTasks = (root) => {
       */
       for (const i of f.querySelectorAll('input')) i.value = ''
       f.hidden = true
-      root.querySelector('[data-bc-addtask]')?.focus()
+      b.closest('[data-bc-tasklist]')?.querySelector('[data-bc-addtask]')?.focus()
     })
   }
 
   for (const b of root.querySelectorAll('[data-bc-tasksave]')) {
     b.addEventListener('click', async () => {
-      const f = form(root)
-      if (f === null) return
-      const title = String(f.querySelector('#bc-task-title')?.value ?? '').trim()
+      const f = form(b, root)
+      if (f === null || f === undefined) return
+      const key = String(f.dataset.bcTaskform ?? '')
+      const titleField = `bc-task-title-${key}`
+      const title = String(f.querySelector(`#${titleField}`)?.value ?? '').trim()
       if (title === '') {
         /*
           §11.3: validation appears by the field. The message is placed rather
           than thrown into a toast, and focus moves to what has to be fixed.
         */
-        showFieldError(f, 'bc-task-title', 'Say what needs doing.')
+        showFieldError(f, titleField, 'Say what needs doing.')
         return
       }
-      clearFieldError(f, 'bc-task-title')
-      const due = String(f.querySelector('#bc-task-due')?.value ?? '').trim()
-      const who = String(f.querySelector('#bc-task-who')?.value ?? '').trim()
+      clearFieldError(f, titleField)
+      const due = String(f.querySelector(`#bc-task-due-${key}`)?.value ?? '').trim()
+      const who = String(f.querySelector(`#bc-task-who-${key}`)?.value ?? '').trim()
+      const done = await attempt(
+        b,
+        'Adding…',
+        async () => {
+          const made = await act('task_add', {
+            p_project: ctx.state.project,
+            p_title: title,
+            p_due_on: due === '' ? null : due,
+            p_assignee: who === '' ? null : who,
+            p_milestone: false,
+          })
+          /*
+            TWO CALLS, because `hq_task_add` takes no parent and
+            `hq_task_update` does. Only when the form belongs to a real list:
+            `loose` is the group for work that is in none, and nothing there
+            should be given a parent.
+
+            If the second call fails the task EXISTS and is unlisted, which is
+            visible on this very screen under "Not in a list" and is the
+            recoverable direction. The alternative was not offering it.
+          */
+          const id = made?.id ?? made?.task_id ?? ''
+          if (key !== 'loose' && key !== '' && id !== '') {
+            await act('task_update', { p_task_id: id, p_parent: key })
+          }
+          return made
+        },
+        'Added.',
+      )
+      if (done !== null) {
+        for (const i of f.querySelectorAll('input')) i.value = ''
+        f.hidden = true
+        await ctx.refresh()
+      }
+    })
+  }
+
+  /* ----------------------------------------------------- a list (§6) ----- */
+
+  const listForm = () => root.querySelector('[data-bc-listform]')
+
+  for (const b of root.querySelectorAll('[data-bc-addlist]')) {
+    b.addEventListener('click', () => {
+      const f = listForm()
+      if (f === null) return
+      f.hidden = false
+      f.querySelector('#bc-list-name')?.focus()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-listcancel]')) {
+    b.addEventListener('click', () => {
+      const f = listForm()
+      if (f === null) return
+      for (const i of f.querySelectorAll('input')) i.value = ''
+      f.hidden = true
+      root.querySelector('[data-bc-addlist]')?.focus()
+    })
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-listsave]')) {
+    b.addEventListener('click', async () => {
+      const f = listForm()
+      if (f === null) return
+      const name = String(f.querySelector('#bc-list-name')?.value ?? '').trim()
+      if (name === '') {
+        showFieldError(f, 'bc-list-name', 'Give the list a name.')
+        return
+      }
+      clearFieldError(f, 'bc-list-name')
+      /*
+        A LIST IS A MILESTONE TASK. `p_milestone: true` is the whole of it -
+        0171's own comment says a milestone is "a task with no work of its own
+        that others hang off, rather than a separate table", and 0287 taught
+        `hq_task_add` to create one. No new contract, no second table.
+      */
       const done = await attempt(
         b,
         'Adding…',
         () =>
           act('task_add', {
             p_project: ctx.state.project,
-            p_title: title,
-            p_due_on: due === '' ? null : due,
-            p_assignee: who === '' ? null : who,
-            p_milestone: false,
+            p_title: name,
+            p_milestone: true,
           }),
-        'Added.',
+        'List added.',
       )
       if (done !== null) {
         for (const i of f.querySelectorAll('input')) i.value = ''

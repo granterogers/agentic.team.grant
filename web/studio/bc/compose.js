@@ -59,6 +59,15 @@ export const mount = (c) => {
 
 const at = (p = '') => `/basecamp${p}`
 
+/*
+  A module that IS a tool takes the TOOL's name, from the one list `shell.js`
+  keeps. The derived views - the board, the schedule - keep their own words,
+  because they are not the tool: three miniatures come out of one to-do list
+  and calling all three "To-dos" would say less, not more.
+*/
+const toolName = (id, fallback) =>
+  (ctx?.tools ?? []).find((t) => t.id === id)?.name ?? fallback
+
 /**
  * Which composition this viewer is looking at.
  *
@@ -158,7 +167,7 @@ const elsewhere = (p) => {
 
 export const compositionA = (p) => `<div class="bchome bccomp bccomp--a">
     ${head(p)}
-    ${mod(p, { id: 'tasks', name: 'To-dos', body: todosMini(p, { lists: 3, per: 4 }), wide: true })}
+    ${mod(p, { id: 'tasks', name: toolName('tasks', 'To-dos'), body: todosMini(p, { lists: 3, per: 4 }), wide: true })}
     <div class="bcpair">
       ${mod(p, { id: 'tasks', name: 'Schedule', body: calendarMini(p, { items: 4 }) })}
       ${mod(p, { id: 'tasks', name: 'Where the work is', body: cardsMini(p) })}
@@ -175,9 +184,9 @@ export const compositionA = (p) => `<div class="bchome bccomp bccomp--a">
       body: `${crewMini(p, { people: 4 })}${chatMini(p, { lines: 3 })}`,
       wide: true,
     })}
-    ${mod(p, { id: 'documents', name: 'Documents', body: docsMini(p, { items: 4 }), wide: true })}
+    ${mod(p, { id: 'documents', name: toolName('documents', 'Documents'), body: docsMini(p, { items: 4 }), wide: true })}
     <div class="bcpair">
-      ${mod(p, { id: 'contacts', name: 'People', body: contactsMini(p, { items: 3 }) })}
+      ${mod(p, { id: 'contacts', name: toolName('contacts', 'People'), body: contactsMini(p, { items: 3 }) })}
       ${mod(p, { id: 'sources', name: 'Where the material comes from', body: sourcesMini(p, { items: 3 }) })}
     </div>
     ${mod(p, { id: 'activity', name: 'What has happened', body: timelineMini(p, { items: 6 }), wide: true })}
@@ -192,17 +201,17 @@ export const compositionB = (p) => `<div class="bchome bccomp bccomp--b">
     ${head(p)}
     <div class="bcwork">
       <div class="bcworkmain">
-        ${mod(p, { id: 'tasks', name: 'To-dos', body: todosMini(p, { lists: 3, per: 4 }) })}
+        ${mod(p, { id: 'tasks', name: toolName('tasks', 'To-dos'), body: todosMini(p, { lists: 3, per: 4 }) })}
         ${mod(p, { id: 'tasks', name: 'Where the work is', body: cardsMini(p) })}
         ${mod(p, { id: 'tasks', name: 'Schedule', body: calendarMini(p, { items: 5 }) })}
-        ${mod(p, { id: 'documents', name: 'Documents', body: docsMini(p, { items: 4 }) })}
+        ${mod(p, { id: 'documents', name: toolName('documents', 'Documents'), body: docsMini(p, { items: 4 }) })}
       </div>
       <aside class="bcrail" aria-label="Who is here and what has happened">
         ${mod(p, { id: 'team', slot: 'crew', name: 'The team', body: crewMini(p, { people: 5 }) })}
         ${mod(p, { id: 'team', slot: 'chat', name: 'Chat', body: chatMini(p, { lines: 3 }) })}
-        ${mod(p, { id: 'contacts', name: 'People', body: contactsMini(p, { items: 4 }) })}
+        ${mod(p, { id: 'contacts', name: toolName('contacts', 'People'), body: contactsMini(p, { items: 4 }) })}
         ${mod(p, { id: 'sources', slot: 'sources', name: 'Where the material comes from', body: sourcesMini(p, { items: 4 }) })}
-        ${mod(p, { id: 'activity', name: 'Activity', body: timelineMini(p, { items: 5 }) })}
+        ${mod(p, { id: 'activity', name: toolName('activity', 'Activity'), body: timelineMini(p, { items: 5 }) })}
       </aside>
     </div>
     ${elsewhere(p)}

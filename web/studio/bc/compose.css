@@ -646,3 +646,76 @@
   [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='sources'] { order: 4; }
   [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='activity'] { order: 5; }
 }
+
+/* ======================================================================== *
+ * §6 — the full To-dos tool: a project's lists
+ *
+ * Lives here rather than in bc.css because it is part of the same correction:
+ * the tool grammar the reference slice did not have. `bc.css`'s phone block
+ * comes before this file, so a phone rule for these classes belongs at the
+ * very end of THIS file.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bctasklist { margin: 0 0 34px; }
+[data-experience='basecamp'] .bctasklisthead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bctasklisthead h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--bc-text-strong);
+  min-width: 0;
+}
+/*
+  The count sits next to the name and the Add control goes to the far end, so
+  the list's identity and its progress read as one phrase and the action does
+  not come between them.
+*/
+[data-experience='basecamp'] .bctasklisthead .bcactions { margin-left: auto; }
+
+/*
+  THE TICK IS NOT A LIGHT SOURCE.
+
+  A native checkbox on a dark surface renders as a bright pale square, and ten
+  of them down a list were the most eye-catching thing on the page - the same
+  defect as the document thumbnails, and the same reason: §16 says the project
+  dominates, and a column of white boxes dominates instead.
+
+  It stays a real `input[type=checkbox]`, so it keeps the keyboard, the label
+  and the accessible state; only its appearance is taken over. The size is
+  left exactly as it is, because bc.css already grows it for a touch device
+  and a decorative change must not shrink a target.
+*/
+[data-experience='basecamp'] .bctasklist .bccheck {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+  cursor: pointer;
+  position: relative;
+}
+[data-experience='basecamp'] .bctasklist .bccheck:disabled { cursor: default; opacity: 0.55; }
+[data-experience='basecamp'] .bctasklist .bccheck:checked {
+  background: var(--bc-accent);
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bctasklist .bccheck:checked::after {
+  content: '';
+  position: absolute;
+  left: 34%;
+  top: 22%;
+  width: 26%;
+  height: 46%;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+[data-experience='basecamp'] .bcitemwho { display: inline-flex; align-items: center; }

@@ -269,10 +269,21 @@ await page.locator('[data-bc-addtask]').first().click()
 await page.waitForTimeout(200)
 check(
   'inline Add expands in place and focuses the name field',
-  (await page.evaluate(inPage("return document.activeElement?.id === 'bc-task-title'"))) === true,
+  /*
+    THE FORM'S OWN FIRST FIELD. §6 gave every list its own add form, so the
+    id now carries the list - `bc-task-title-m4`. What §10.2 asks for is that
+    Add focuses the field you type the name into, which is a property of the
+    form and survives the next change to how a list is addressed.
+  */
+  (await page.evaluate(
+    inPage(`const f = document.querySelector('[data-bc-taskform]:not([hidden])')
+       return f !== null && document.activeElement === f.querySelector('input')`),
+  )) === true,
 )
-await page.locator('#bc-task-title').fill('Abandoned before saving')
-await page.locator('[data-bc-taskcancel]').click()
+await page
+  .locator('[data-bc-taskform]:not([hidden]) input[name="title"]')
+  .fill('Abandoned before saving')
+await page.locator('[data-bc-taskform]:not([hidden]) [data-bc-taskcancel]').click()
 await page.waitForTimeout(200)
 check('Cancel collapses the form', await page.locator('[data-bc-taskform]').isHidden())
 check(
@@ -290,11 +301,11 @@ await page.locator('[data-bc-addtask]').first().click()
 await page.waitForTimeout(150)
 check(
   'a reopened form does not hold the abandoned text',
-  (await page.locator('#bc-task-title').inputValue()) === '',
+  (await page.locator('[data-bc-taskform]:not([hidden]) input[name="title"]').inputValue()) === '',
 )
 
 /* --- validation appears by the field (§11.3) --- */
-await page.locator('[data-bc-tasksave]').click()
+await page.locator('[data-bc-taskform]:not([hidden]) [data-bc-tasksave]').click()
 await page.waitForTimeout(200)
 check(
   'an empty title is refused by the field, not by a toast',
@@ -306,10 +317,12 @@ check(
 )
 
 /* --- a real write --- */
-await page.locator('#bc-task-title').fill('Write the acceptance evidence')
-await page.locator('#bc-task-due').fill('2026-10-02')
-await page.locator('#bc-task-who').fill('claire')
-await page.locator('[data-bc-tasksave]').click()
+await page
+  .locator('[data-bc-taskform]:not([hidden]) input[name="title"]')
+  .fill('Write the acceptance evidence')
+await page.locator('[data-bc-taskform]:not([hidden]) input[name="due"]').fill('2026-10-02')
+await page.locator('[data-bc-taskform]:not([hidden]) input[name="who"]').fill('claire')
+await page.locator('[data-bc-taskform]:not([hidden]) [data-bc-tasksave]').click()
 await page.waitForTimeout(900)
 
 const add = seen.find((s) => s.action === 'task_add')
@@ -406,12 +419,16 @@ await rp.waitForTimeout(700)
 const sentBefore = seen.length
 await rp.locator('[data-bc-addtask]').first().click()
 await rp.waitForTimeout(150)
-await rp.locator('#bc-task-title').fill('Should never be created')
-await rp.locator('[data-bc-tasksave]').click()
+await rp
+  .locator('[data-bc-taskform]:not([hidden]) input[name="title"]')
+  .fill('Should never be created')
+await rp.locator('[data-bc-taskform]:not([hidden]) [data-bc-tasksave]').click()
 await rp.waitForTimeout(500)
 check(
   'a browser with no token is told it is read-only rather than failing silently',
-  (await rp.locator('[data-bc-taskform]').innerText()).toLowerCase().includes('read-only'),
+  (await rp.locator('[data-bc-taskform]:not([hidden])').innerText())
+    .toLowerCase()
+    .includes('read-only'),
 )
 check('and nothing was sent', seen.length === sentBefore)
 await ro.close()
