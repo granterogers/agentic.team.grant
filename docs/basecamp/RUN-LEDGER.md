@@ -272,51 +272,59 @@ mid-creation, jump filtered. Each finding above records which.
 
 ## HUMAN_BLOCKED
 
-Each of these needs one credential, not more work. Everything else continued.
+Re-checked on 21 September 2026 at commit `e15f13d`. **Both items are blocked
+twice over**, and the second blocker is the one that matters: even handing
+this session a token would not unblock it.
 
-| Item | Why | What unblocks it |
+| Item | Missing credential | And also |
 |---|---|---|
-| Proving the journey against the **production office** | no `HQ_API_TOKEN` in this environment | a token; then run `verify:basecamp-journey` against the real gateway |
-| A **public preview URL** | no `VERCEL_TOKEN` | a token; the experience is already part of `deploy:hq`'s upload — `web/studio/bc/**` is walked with everything else, so no deploy change is needed |
-| `verify:design`'s two failures | one needs the deployed site, one needs `SUPABASE_ACCESS_TOKEN` | identical on the baseline; not caused here |
-| `tests/sessions/weather-is-not-a-failure.test.ts` | needs `SUPABASE_ACCESS_TOKEN` to load | sessions harness — Shadow Grant's ground, untouched |
+| Deploy a Vercel preview | no `VERCEL_TOKEN` | the environment's egress policy refuses `api.vercel.com` and `vercel.app` — `403` at CONNECT |
+| Exercise the real backend | no `HQ_API_TOKEN`, no `SUPABASE_ACCESS_TOKEN` | the same policy refuses `baujwlzcziasnfhhkchg.supabase.co` and `supabase.com` |
+
+Verified rather than assumed: `registry.npmjs.org` returns 200 and GitHub is
+reachable through the same proxy, so the network works and these four hosts
+specifically are denied. The proxy's own status endpoint lists each refusal by
+host. Its README says to report a policy denial rather than work around it.
+
+**What this prevents, exactly:**
+
+- there is no live URL for the experimental experience, and none for a
+  preview of this branch;
+- no journey has been run against Grant's real projects, tasks, documents or
+  outputs — every capture and every check uses the studio's example projects
+  or an in-process stand-in that speaks the gateway's contract;
+- `verify:design`'s deployed-page check and `verify:arrangement` cannot run.
+
+**What unblocks it:** a session whose egress policy permits `vercel.app` and
+`supabase.co`, carrying `VERCEL_TOKEN` and `HQ_API_TOKEN`. No code change is
+needed — `deploy:hq` already walks `web/studio/**` recursively, so
+`web/studio/bc/**` ships with everything else.
+
+**In the meantime**, the captures are published as a review gallery so the
+§19.9 decision can be made by looking:
+<https://claude.ai/artifact/3syBAAQ7DqFMDuB9SUhhsn>. It states on its face
+that it is screenshots and not a running app.
 
 **Three generated audit reports were reverted, deliberately.** Running
-`verify:controls` on this branch rewrote
-`docs/testing/controls-*.md`, and the only differences were caused by this
-environment rather than by this branch: the provenance line degraded from
-`web/hq read from: 16/16 live projections` to
-`empty (no SUPABASE_ACCESS_TOKEN)`, and one report's count moved 72 → 71.
-Committing them would have replaced a record made with credentials by a worse
-one made without, so they are restored to the baseline. Re-generate them in an
-environment that has the token; the counts on this branch were 37 / 21 / 71
-pressed with 0 unpressable and 0 findings throughout, and `verify:wired`
-(77 attributes, 21 screens) and `verify:layouts` (64 states, 0 findings) are
-unchanged.
+`verify:controls` on this branch rewrites `docs/testing/controls-*.md`, and
+the only differences were caused by this environment rather than by this
+branch: the provenance line degrades from
+`web/hq read from: 16/16 live projections` to `empty (no SUPABASE_ACCESS_TOKEN)`.
+Committing them would replace a record made with credentials by a worse one
+made without, so they are restored to the baseline each time. Re-generate them
+where the token exists. The counts on this branch were 37 / 21 / 72 controls
+pressed with 0 unpressable and 0 findings, and `verify:wired` (77 attributes,
+21 screens) and `verify:layouts` (64 states, 0 findings) are unchanged.
+
+_(A run on 21 September briefly showed 71 rather than 72 on one route. A later
+run of the same command on the same commit showed 72 again, so that was
+run-to-run variance in the audit and not an effect of this branch.)_
 
 **Harness caveat, not a product defect.** Chromium in this sandbox renders a
 native date input as `mm/dd/yyyy` regardless of the context locale or
 `--lang=en-GB`. The format is the browser's, not the page's; Grant's own
 browser will show `dd/mm/yyyy`. Captures of the task form misrepresent that
 one field.
-
----
-
-## What is deliberately NOT built
-
-§2.10 and §19.10 of the specification both say to stop after the reference
-slice and review it before expanding. These are named here so the gaps are
-decisions rather than omissions.
-
-| Not built | Why | Where it goes instead |
-|---|---|---|
-| Message Board / Brief (§10.1) | outside the reference slice | — |
-| Work Board / Card Table (§10.3) | outside the slice; it is a `TEAM_VIEWS` sub-view | hand-off to the team section |
-| Schedule (§10.5) | the studio payload carries no dated events, so a preview would have to invent them | — |
-| Project Chat (§10.6) | outside the slice | hand-off, and the dock is reachable |
-| The import sheet's four fields (collection, tags, task, source) | the current Team HQ asks for them at the moment of import, which is the only moment anybody chooses them. Offering a half-built sheet would be worse than none | Add to project imports with nothing chosen, which `import_output` accepts and which means "yes, and I have nothing to add" |
-| Task comments and relations | not in the studio payload | hand-off to the current Team HQ, labelled |
-| Project Settings | irreversible controls belong in the focused settings surface (§16) | hand-off |
 
 ---
 
