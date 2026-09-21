@@ -118,7 +118,21 @@
 /* --- Main surface (§4.3, §14) ------------------------------------------- */
 
 .bcmain {
-  width: min(var(--bc-measure), 100%);
+  /*
+    QUIET MARGINS SURVIVE UNTIL THE PHONE, which is what §14 asks for: reduce
+    the outer margins and the main padding BEFORE shrinking readable content.
+
+    This was `min(1088px, 100%)`, so at 1024 and at 768 the surface ran edge
+    to edge — while keeping its 16px radius and its shadow. A rounded,
+    shadowed card pressed flat against both viewport edges is worse than
+    either choice, and it destroys the canvas/surface relationship §4.3 is
+    built on: at 1024 the page read as a flat dark dashboard, which is
+    Failure A of this run's pre-mortem arriving through a media query.
+
+    The phone block below takes the margins away properly, and takes the
+    radius and the shadow with them.
+  */
+  width: min(var(--bc-measure), 100% - 32px);
   margin: 0 auto;
   padding: var(--bc-main-pad) var(--bc-main-pad) var(--bc-main-pad-bottom);
   background: var(--bc-surface);
@@ -278,6 +292,21 @@
 /* --- Status (§15: never colour alone) ------------------------------------ */
 
 .bcstatus {
+  /*
+    A CHIP, NOT A BAR — and it was a bar everywhere until a measurement said
+    so. `inline-flex` is what it should be, but as a GRID CHILD an item
+    stretches to its column by default, so a one-word status rendered 299px
+    wide on the desktop overview, 454px at 1024 and 332px on the phone. It
+    read as a progress bar or a disabled input rather than as a state, and it
+    had been that way on every screen since the first commit: no overflow, no
+    contrast failure, no dead control, and nothing in any audit that looks at
+    a box's SIZE rather than at what the size says.
+
+    `justify-self` and `align-self` are inert outside a grid or flex parent,
+    so this is safe everywhere it is used.
+  */
+  justify-self: start;
+  align-self: start;
   display: inline-flex;
   align-items: center;
   gap: var(--bc-1);
@@ -463,9 +492,25 @@
   gap: var(--bc-4);
 }
 
-.bctool { min-width: 0; }
+/*
+  A TOOL BLOCK FILLS ITS ROW.
+
+  §4.3 specifies a ~324x324 preview tile and §14 a three-column overview
+  rhythm; with the tiles sized only by their content the bottom edge of each
+  row was ragged by thirty or forty pixels, which reads as a grid that has
+  not quite settled. The heading stays its own height and the preview takes
+  the rest, so every tile in a row ends on the same line.
+*/
+.bctool {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.bctool > .bcpreview { flex: 1; }
 .bctool > h2 {
-  margin: 0 0 var(--bc-2);
+  margin: 0 0 var(--bc-1);
+  padding-bottom: var(--bc-2);
+  border-bottom: 1px solid var(--bc-border-subtle);
   font: var(--bc-tool-heading);
   letter-spacing: -0.1px;
   color: var(--bc-section-accent);
@@ -494,10 +539,27 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  min-height: 324px;
-  padding: var(--bc-3);
-  border: 1px solid var(--bc-border-subtle);
-  border-radius: var(--bc-2);
+  /*
+    A RULE UNDER THE HEADING, NOT A BOX AROUND THE CONTENT.
+
+    Six bordered, rounded boxes in a three-by-two grid is the
+    sidebar-plus-uniform-card-grid the specification forbids by name, and
+    §14's WOW gate calls "clean" a fail. Held up side by side, the boxed
+    version read as a dashboard of cards and this one reads as a live table
+    of contents — which is what §8 says the overview IS. §4.3 agrees from the
+    other direction: hierarchy should come mainly from spacing, borders,
+    content and surface changes, not from putting everything in a card.
+
+    The rule lives on the heading (below), so the preview keeps a hover and
+    focus shape of its own: negative horizontal margin against matching
+    padding, so the text still aligns to the column edge while the
+    highlight has somewhere to be.
+  */
+  min-height: 300px;
+  padding: var(--bc-2);
+  margin: 0 calc(var(--bc-2) * -1);
+  border: 0;
+  border-radius: var(--bc-r-control);
   background: transparent;
   color: inherit;
   text-align: left;
@@ -669,7 +731,14 @@
     rather than as part of the header. On a narrow screen it simply follows
     the chips.
   */
-  .bcprojhead .bcactions { margin-left: 0; }
+  /*
+    The project options control wraps onto its own line here, and a button
+    carries 12px of internal padding — so its label sat 12px in from the
+    16px page gutter every other line starts on, which reads as an accident
+    rather than as alignment. The negative margin cancels exactly that
+    padding, so the text edge lines up and the touch target does not shrink.
+  */
+  .bcprojhead .bcactions { margin-left: calc(var(--bc-3) * -1); }
   .bcprojhead h1 { font: var(--bc-title-mobile); }
   .bcprojhead .bcdesc {
     display: -webkit-box;

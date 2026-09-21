@@ -1114,7 +1114,10 @@ const search = () => {
     ${
       q.trim() === ''
         ? empty({
-            title: 'Search everything',
+            // Not "Search everything" — that is the field's own label eighty
+            // pixels above it, and the same four words twice reads as nobody
+            // having looked at the screen.
+            title: 'What you can search',
             body: 'Projects, their tasks and documents, the people on them, what they are connected to, and what the team has produced.',
           })
         : hits.length === 0

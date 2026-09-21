@@ -136,6 +136,80 @@ for (const size of SIZES) {
   }
 
   /*
+    A CHIP IS NOT A BAR.
+
+    `.bcstatus` is inline-flex, which is right — and as a grid child an item
+    stretches to its column anyway, so a one-word status rendered 299px wide
+    on the desktop overview and 454px at 1024. It read as a progress bar or a
+    disabled input, on every screen, from the first commit. No audit that
+    looks at overflow, contrast, type size or dead controls can see it,
+    because a stretched chip is none of those things.
+  */
+  const stretched = (await page.evaluate(
+    inPage(`const out = []
+       for (const el of document.querySelectorAll('.bcstatus')) {
+         const r = el.getBoundingClientRect()
+         if (r.width === 0) continue
+         const p2 = el.parentElement
+         if (p2 === null) continue
+         const pr = p2.getBoundingClientRect()
+         /* Only meaningful where the parent is meaningfully wider than the text. */
+         if (pr.width < 160) continue
+         if (r.width > pr.width - 8) {
+           out.push((el.textContent ?? '').trim().slice(0, 24) + ' ' + Math.round(r.width) + 'px in ' + Math.round(pr.width) + 'px')
+         }
+       }
+       return out`),
+  )) as string[]
+  console.log(`  stretched chips  ${stretched.length === 0 ? 'none' : String(stretched.length)}`)
+  if (stretched.length > 0) {
+    problems.push(
+      `${size.id}: ${String(stretched.length)} status chip(s) stretched to fill their container — ${stretched.join('; ')}`,
+    )
+  }
+
+  /*
+    THE CARD TREATMENT AND FULL BLEED MUST AGREE.
+
+    §4.3's canvas/surface relationship is the quiet margin around a distinct
+    work surface, and §14 says to reduce that margin before shrinking
+    content. At 1024 and 768 the surface ran edge to edge WHILE keeping its
+    16px radius and its shadow — a rounded, shadowed card pressed flat
+    against both viewport edges, which is worse than either choice and reads
+    as a flat dark dashboard. The phone is deliberately full-bleed and
+    deliberately drops both.
+  */
+  const surface = (await page.evaluate(
+    inPage(`const m = document.querySelector('.bcmain')
+       if (m === null) return null
+       const r = m.getBoundingClientRect()
+       const cs = getComputedStyle(m)
+       return {
+         left: Math.round(r.x),
+         right: Math.round(window.innerWidth - r.right),
+         radius: Number.parseFloat(cs.borderTopLeftRadius),
+         shadow: cs.boxShadow !== 'none' && cs.boxShadow !== '',
+       }`),
+  )) as { left: number; right: number; radius: number; shadow: boolean } | null
+  if (surface !== null) {
+    const bleeds = surface.left === 0 && surface.right === 0
+    const carded = surface.radius > 0 || surface.shadow
+    console.log(
+      `  surface        gutters ${String(surface.left)}/${String(surface.right)}, radius ${String(surface.radius)}, shadow ${surface.shadow ? 'yes' : 'no'}`,
+    )
+    if (bleeds && carded) {
+      problems.push(
+        `${size.id}: the main surface runs edge to edge but still carries a radius (${String(surface.radius)}px) or a shadow — a card pressed flat against the viewport`,
+      )
+    }
+    if (!bleeds && (surface.left < 8 || surface.right < 8)) {
+      problems.push(
+        `${size.id}: the quiet margin is only ${String(surface.left)}/${String(surface.right)}px`,
+      )
+    }
+  }
+
+  /*
     EXACTLY ONE FIXED BOTTOM BAR.
 
     `.bctray` is the personal tray, and the phone rules make it fixed. Reusing
