@@ -1238,39 +1238,48 @@ often enough to notice.
 
 ## WHAT IS STILL UNPROVED
 
-- The end-to-end run enters at `inbound_commands`, which is the canonical
-  door every adapter writes to — but **not through Telegram or Slack
-  themselves**. §5's rule says an adapter may only translate, so the gap is
-  narrow; it is still a gap.
-- **Nothing has yet been observed on one of Grant's own projects**, where the
-  dial is `suggest` and the write steps will ask. The asking path is proved by
-  `verify:pursues`' `observe` control, not by a real turn of his.
-- No bounded re-planning: a step that finds nothing ends the plan honestly
-  rather than causing the office to think again.
+Rewritten at the close of the architecture phase (2026-09-21, `957cbe0`). Items
+that were on this list and are now proved have been removed with the evidence
+named in the section above; what is left is honest.
+
+**Proved since the last revision of this list:** bounded re-planning, with the
+loop driven by a deliberately hostile model; deterministic goal-completion
+assessment over seven verdicts; the autonomy dial consulted at execution time
+on every round; and several fresh, naturally worded Chief-of-Staff sentences
+end to end through the deployed worker (`verify:chief`, 10/10).
+
+Still unproved, in the order that matters:
+
+- **Nothing has yet been observed on one of Grant's own live projects.** Every
+  end-to-end run has used a project this harness provisioned. The dial is
+  `suggest` globally, so his write steps will ASK — and that asking path is
+  proved by a control, not by a turn of his. This is the first thing real
+  usage settles and no amount of further synthetic work can.
+- **Not through Telegram or Slack themselves.** The run enters at
+  `inbound_commands`, the canonical door every adapter writes to. §5 says an
+  adapter may only translate, so the gap is narrow; it is still a gap.
 - **The planner's crossing rate is measured and still not pinned.** Two passes
-  of `verify:plan-stability` gave 1/15 and 4/15, so the instrument is noisier
-  than the thing it measures. More passes would settle it; a prompt change
-  before that would be tuning against a coin.
+  of `verify:plan-stability` gave 1/15 and 4/15 — the instrument is noisier
+  than the thing it measures, so no reliability percentage should be quoted
+  from it. More passes would settle it; a prompt change before that would be
+  tuning against a coin.
+- **The composition rate is stable on a handful of sentences, not on all
+  sentences.** Four end-to-end runs, eight paired direct calls and ten
+  Chief-of-Staff sentences. The held-out corpus was spent before the fixes
+  existed, so nothing frozen has scored the current planner.
+- **Five executors exist** (`db.read`, `notebook.read`, `draft.create`,
+  `task.create`, `task.extract`). The other nine granted capabilities are
+  honest impediments rather than work — the office refuses them clearly, which
+  is correct, and they are not yet things it can do.
+- **ContextPack not started.**
 - One earlier `verify:composes` run reported 13/14 and the next 14/14, and the
   failing line was not captured. Recorded rather than dismissed.
-- The composition rate is now stable on ONE sentence over four end-to-end runs
-  and eight paired direct calls. That is not a claim about every sentence, and
-  the held-out corpus was spent before these fixes existed, so nothing frozen
-  has scored them.
-- Goal-completion verification is untouched — a settled child is still taken
-  as the goal being met.
-- Goal-completion verification is untouched — a handler returning is still
-  taken as the goal being met.
-- No bounded re-planning.
-- ContextPack not started.
-- No production-like acceptance through a real interface yet.
-- Five executors now exist (`db.read`, `notebook.read`, `draft.create`,
-  `task.create`, `task.extract`); the other nine granted capabilities are still
-  honest impediments rather than work.
-- `npm test` exited 1 once inside a back-to-back gate loop and 0 on four
+- `npm test` exited 1 once inside a back-to-back gate loop and 0 on five
   consecutive runs afterwards, with no failing test named in any of them. Not
-  reproduced, and recorded rather than dismissed. This section is kept honest as the run proceeds —
-a claim only moves up once evidence exists for it.
+  reproduced, and recorded rather than dismissed.
+
+This section is kept honest as work proceeds — a claim only moves off it once
+evidence exists.
 
 ---
 
