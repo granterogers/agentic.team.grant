@@ -82,6 +82,10 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 20 | 21 Sep | Baseline re-recorded after the generator changed; corpus re-frozen | DONE |
 | 21 | 21 Sep | **Network egress opened.** B2 resolved: `api.supabase.com`, `openrouter.ai`, `*.supabase.co` all reachable | DONE |
 | 22 | 21 Sep | Live canonical door **driven for the first time**. Checklist steps 1-3 passed. One harness defect found by driving, fixed | DONE |
+| 23 | 21 Sep | #295 closed at the resolver: 0534 + the world, resolvable by harness traffic only, no real project created | DONE |
+| 24 | 21 Sep | `reality`, `conversation`, `completion` given real oracles reading canonical state; 34 paired tests; sabotage-proved | DONE |
+| 25 | 21 Sep | Live representative matrix, 15 areas, one scenario at a time. **7 clean, 8 with failures.** Six instrument defects found and fixed on the way | DONE |
+| 26 | 21 Sep | Teardown (`shadow:world --sweep`) and the announce hole children fell through; `check:leaks` green | DONE |
 
 ## Decisions taken without asking
 
@@ -350,3 +354,138 @@ Filed as [#295](https://github.com/granterogers/agentic.team.grant/issues/295) r
 into a shared production database is a phase with its own teardown proof,
 not a checklist step, and §2 of the mission plus the parallel Basecamp
 session make a migration the last resort rather than the first.
+
+
+---
+
+## The live evaluation system — 21 September
+
+### #295 is closed, and the alias lead was dead
+
+`app.add_project_alias` does not filter fixtures, but
+`app.resolve_project_by_name` filters at the PROJECT level: its `live` CTE
+is `active and not is_fixture` and all four scoring branches join it. An
+alias on a fixture project can never be reached.
+
+**0534** gives the resolver `p_include_fixtures`, which is exactly what
+`app.impediments_tally` gained in 0297 and `app.my_tasks` in 0533 — eight
+hours earlier, for the same reason. The three properties 0533 names are all
+kept. The production handler passes `app.harness_job(job_id)`, so the
+HANDLER does not decide and does not learn a mode: the database answers,
+from the same canonical fact that already decides whether a delivery may
+reach a destination (0523) and whether a task reaches Grant's list (0530).
+
+**No simulator fork.** Same resolver, same scoring, same planning, routing,
+execution and persistence. Only the visible set differs, on a fact about
+the asker the office already computes and which is false for every message
+a person sends.
+
+**No real project was created.** Four `fixture-simgrant-*` projects, made
+ONCE and reused; `is_fixture` is GENERATED from the slug, so the prefix is
+what the database reads rather than a convention this code maintains.
+Fixtures are exempt from 0419, so no Slack channel is ever earned.
+
+Proved live: 8 of 9 world nicknames resolve for harness traffic at 0.99, the
+archived one correctly resolves to nothing, and what GRANT sees is
+unchanged — "the coaching thing" still reaches his own
+`legacy-coaching-course` at 0.57 by trigram and every other world nickname
+resolves to nothing for him.
+
+**The resolver was not enough.** The office still recited Grant's four real
+projects, because the list the model is SHOWN is built by a different query.
+CLAUDE.md's *"a payload gains a key and THREE places have to learn it"*,
+with the third place being the prompt.
+
+### The three dimensions are real now
+
+`src/simulation/effects.ts` counts what happened from tables — for the whole
+CORRELATION FAMILY, because the office spawns children. A claimed action
+with no canonical effect is a HARD failure, using the PRODUCT's own claim
+detectors rather than reimplementations.
+
+34 paired tests. Every detector proved able to go red AND green, each
+sabotage printing its own grep count before its verdict.
+
+### The instrument was wrong SIX times before the product was wrong once
+
+The ratio is the point, and every one was found by running rather than
+reading.
+
+| The instrument was wrong | How it was caught |
+|---|---|
+| The `dedupe_key` was refused on ~9 runs in 10 | the first live run |
+| `reading` was the AGENT on the live door, so `understanding` failed for every actionable scenario | reading a live verdict that contradicted itself |
+| `recognised` meant "the answer is non-empty", so a FAILED job reported "did not recognise a request at all — it fell through to direct_command" | the same |
+| `safety` and `cancelled_executed` asserted the offline door while running on the live one | reading the live reasons |
+| The door waited for the PARENT, so a turn that spawned children read as never settled | a family of 3 |
+| A job paused on `awaiting_approval` counted as unsettled — the approval boundary working, reported as a hang | a 420s timeout on a correct turn |
+| `REQUIRES` was keyed on `string` and silently omitted `delivery` | typing it `Record<EffectClass, …>` |
+| The matrix shell loop copied a stale `.out` file, printing one family's result under another's heading | a family that timed out |
+
+### And one FALSE GREEN, in the dimension written to catch exactly it
+
+Asked *"put a task on the course: write the welcome pack"* the office
+answered:
+
+> *"That is on your list — "On the course: write the welcome pack", no date
+> on it yet."*
+
+and created **nothing**. `reality` scored PASS. The product's own
+`claimsToHaveMade` returns null for it — it has a pattern for *"Done, that
+is on your list now"* and requires the "done", so the bare assertion slips
+past.
+
+`done_without_evidence` decides it from canonical state now: the wanted
+artifact is absent AND no impediment AND no blocker, and only then does it
+ask whether the prose admitted as much. Two of three conditions are counted
+from tables. The first version of the third swallowed its own finding —
+the absence markers were bare words including "no", and *"no date on it
+yet"* matched.
+
+### The live matrix, 15 areas, seed 1
+
+| area | family | result |
+|---|---|---|
+| no action | `noaction.acknowledgement` | **all pass** |
+| a question | `noaction.pure-question` | **all pass** |
+| deterministic action | `task.explicit` | understanding, reality, completion FAIL · **HARD `done_without_evidence`** |
+| the same, indirect | `task.indirect` | understanding, conversation, completion FAIL — **the job FAILED and the person received nothing at all** |
+| referent by name | `project.lookup` | **all pass** |
+| referent by nickname | `project.by-nickname` | understanding, context, agency, completion FAIL · HARD `cancelled_executed` |
+| cancellation | `noaction.cancelled-outright` | understanding, context FAIL · HARD `cancelled_executed` |
+| correction | `multi.partial-cancel` | context, completion FAIL · HARD `cancelled_executed` |
+| approval boundary | `approval.write-under-review` | agency, completion FAIL — and **it varies**: one run paused on `awaiting_approval`, another asked in prose with no blocker recorded |
+| specialist routing | `specialist.appropriate` | **all pass** |
+| recovery | `specialist.failure` | **all pass** |
+| preference persistence | `preference.establish` | context, completion FAIL (corroborates #290) |
+| preference application | `preference.applied-later` | **all pass** |
+| truthful narration, nothing | `knowledge.no-result` | **all pass** |
+| truthful narration, something | `knowledge.grounded` | **all pass** |
+
+**Seven clean, eight with failures.** That is the instrument discriminating
+rather than failing everything — which is the thing to check before
+believing any of it.
+
+### Containment, measured after every pass
+
+55 shadow jobs: **all fixture, all `harness_job()`, none announceable, 0
+delivered.** Real projects 1510 unchanged; the four world projects are
+fixtures.
+
+Two gaps were found and both are closed:
+
+1. **`check:leaks` FAILED** on three tasks the matrix created. 0530 hid them
+   from Grant's list so he never saw them, but a debris class with no
+   teardown comes back. `npm run shadow:world -- --sweep` reverses them
+   through `app.undo_tasks_from_job`, the office's own reversal. 3 to 0,
+   and `check:leaks` is green.
+2. **Six child jobs were announceable.** The door sets `announce = false` on
+   the job it creates and a child does not exist yet, so it takes the
+   column default. Nothing was delivered — 0523 refused 31 and sent 0 — but
+   a guard that depends on a second guard is not a guard. The wait loop
+   holds it across the family now, proved on a run that spawns children.
+
+**No product behaviour was changed to satisfy a test.** The two production
+changes are the resolver scope and the project spine, both gated on
+`app.harness_job`, both byte-identical for Grant, and both made so the
+harness could ASK a question rather than so the office could pass one.
