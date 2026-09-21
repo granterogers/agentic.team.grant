@@ -30,6 +30,7 @@ The honest starting position is
 | `npm run shadow:variance` | how much a baseline percentage is actually worth |
 | `npm run shadow:sabotage` | break every detector, require each to go red |
 | `npm run shadow:freeze -- --check` | has the generator changed under the corpus? |
+| `npm run shadow:channels` | every generated message through the real Telegram adapter |
 | `npm run shadow:intake` | turn something odd into permanent coverage, in two minutes |
 
 None of them fails a build. They report. §18's deliverable is *"the

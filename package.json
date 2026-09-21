@@ -290,7 +290,8 @@
     "shadow:variance": "tsx scripts/shadow/variance.ts",
     "shadow:grant": "tsx scripts/shadow/grant.ts",
     "shadow:intake": "tsx scripts/shadow/intake.ts",
-    "shadow:sabotage": "tsx scripts/shadow/sabotage.ts"
+    "shadow:sabotage": "tsx scripts/shadow/sabotage.ts",
+    "shadow:channels": "tsx scripts/shadow/channels.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
