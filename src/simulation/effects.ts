@@ -45,8 +45,17 @@ export interface CanonicalEffects {
   /** The roster actually recorded, so delegation is measured not guessed. */
   readonly roster: readonly string[]
   readonly delegationDepth: number
-  /** Every job in the family reached a terminal state. */
+  /**
+   * The family is AT REST - every job terminal, or waiting on a person.
+   *
+   * Not the same as terminal. A job paused on `awaiting_approval` has
+   * decided: it decided to ask, which is the approval boundary working.
+   * Treating it as unsettled made the runner wait 420 seconds and then
+   * report a correctly-behaving turn as one that never finished.
+   */
   readonly settled: boolean
+  /** Jobs in the family stopped, correctly, to ask a person. */
+  readonly awaitingApproval: number
   /** Any job in the family ended `failed`. */
   readonly anyFailed: boolean
   /** The office's own provenance label on the answer. */
@@ -70,6 +79,7 @@ export const NO_EFFECTS: CanonicalEffects = {
   roster: [],
   delegationDepth: 0,
   settled: false,
+  awaitingApproval: 0,
   anyFailed: false,
   evidence: '',
   sources: [],
@@ -92,7 +102,7 @@ export const readEffects = async (
 ): Promise<CanonicalEffects> => {
   const { rows } = await db.execute(`
     with family as (
-      select j.job_id, j.state, j.correlation_id
+      select j.job_id, j.state, j.state_reason, j.correlation_id
         from public.jobs j
        where j.job_id = ${lit(jobId)}::uuid
           or j.parent_job_id = ${lit(jobId)}::uuid
@@ -133,7 +143,14 @@ export const readEffects = async (
       coalesce((select rd.delegation_depth from public.routing_decisions rd
                  where rd.job_id = ${lit(jobId)}::uuid
                  order by rd.decided_at desc limit 1), 0) as delegation_depth,
-      (select bool_and(f.state in ('complete','failed','cancelled')) from family f) as settled,
+      (select bool_and(
+                f.state in ('complete','failed','cancelled')
+                or f.state = 'waiting_user'
+                or (f.state = 'paused' and coalesce(f.state_reason,'') like 'awaiting_approval%'))
+         from family f) as settled,
+      (select count(*)::int from family f
+        where f.state = 'paused'
+          and coalesce(f.state_reason,'') like 'awaiting_approval%') as awaiting_approval,
       (select bool_or(f.state = 'failed') from family f) as any_failed,
       coalesce((select o.evidence::text from public.outputs o
                  where o.job_id = ${lit(jobId)}::uuid
@@ -172,6 +189,7 @@ export const readEffects = async (
     roster: list('roster'),
     delegationDepth: n('delegation_depth'),
     settled: r.settled === true || String(r.settled) === 'true',
+    awaitingApproval: n('awaiting_approval'),
     anyFailed: r.any_failed === true || String(r.any_failed) === 'true',
     evidence: String(r.evidence ?? ''),
     sources: list('sources'),

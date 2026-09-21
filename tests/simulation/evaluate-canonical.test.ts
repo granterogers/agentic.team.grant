@@ -208,6 +208,18 @@ describe('completion - the wanted effect, in canonical state', () => {
     })
   }
 
+  /*
+    The office has TWO ways of stopping correctly. A live approval scenario
+    paused a child job on `awaiting_approval` - the boundary working - and
+    a REQUIRES that knew only about the blockers table reported that as the
+    wanted effect never appearing.
+  */
+  it('PASSES "blocked" for a blocker row AND for a job paused to ask', () => {
+    expect(verdict(turn('blocked'), seen('ok', { blockersRaised: 1 }), 'completion')).toBe('pass')
+    expect(verdict(turn('blocked'), seen('ok', { awaitingApproval: 1 }), 'completion')).toBe('pass')
+    expect(verdict(turn('blocked'), seen('ok', {}), 'completion')).toBe('fail')
+  })
+
   it('PASSES "delivery" when something was sent and FAILS when nothing was', () => {
     expect(verdict(turn('delivery'), seen('ok', { deliveriesSent: 1 }), 'completion')).toBe('pass')
     expect(verdict(turn('delivery'), seen('ok', {}), 'completion')).toBe('fail')

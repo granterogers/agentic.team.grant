@@ -272,7 +272,11 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
                        the unreached-for-the-wrong-reason shape, and it is
                        also how a child's deposited document would be missed.
                      */
-                     (select bool_and(k.state in ('complete','failed','cancelled'))
+                     (select bool_and(
+                               k.state in ('complete','failed','cancelled')
+                               or k.state = 'waiting_user'
+                               or (k.state = 'paused'
+                                   and coalesce(k.state_reason,'') like 'awaiting_approval%'))
                         from public.jobs k
                        where k.job_id = j.job_id
                           or k.parent_job_id = j.job_id
@@ -312,7 +316,17 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         // IS its prose. Deliberately crude: the semantic judge is the right
         // instrument for this and is asked separately.
         asked: /\?/.test(answered),
-        recognised: answered !== '',
+        /*
+          Whether the office understood this to be a request at all - which
+          is the routing decision existing, not the answer being non-empty.
+
+          It was `answered !== ''` and that is a different question. A job
+          that was understood correctly and then FAILED has an empty answer,
+          so the evaluator reported "the office did not recognise a request
+          at all" about a turn whose recorded reading was direct_command -
+          a finding that contradicted itself in its own sentence.
+        */
+        recognised: String(row.reading ?? '') !== '',
         reading: String(row.reading ?? ''),
         confident: String(row.state) === 'complete',
         clauses: [utterance.text],

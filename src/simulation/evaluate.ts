@@ -46,7 +46,10 @@ const REQUIRES: Record<EffectClass, (e: CanonicalEffects) => boolean> = {
   task_changed: (e) => e.tasksChanged > 0 || e.tasksCreated > 0,
   document: (e) => e.documentsCreated > 0,
   preference: (e) => e.lessonsLearned > 0,
-  blocked: (e) => e.blockersRaised > 0,
+  // A blocker row OR a job that paused to ask. The office has two ways of
+  // stopping correctly and a test that knew only one reported the approval
+  // boundary working as the wanted effect never appearing.
+  blocked: (e) => e.blockersRaised > 0 || e.awaitingApproval > 0,
   // A decline is the office saying no. The evidence is that it answered and
   // did NOT act - an impediment is a fine second witness but not required,
   // because an honest refusal in prose is a legitimate decline.

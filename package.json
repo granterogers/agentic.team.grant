@@ -292,7 +292,8 @@
     "shadow:intake": "tsx scripts/shadow/intake.ts",
     "shadow:sabotage": "tsx scripts/shadow/sabotage.ts",
     "shadow:channels": "tsx scripts/shadow/channels.ts",
-    "shadow:world": "tsx scripts/shadow/world.ts"
+    "shadow:world": "tsx scripts/shadow/world.ts",
+    "shadow:matrix": "tsx scripts/shadow/matrix.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
