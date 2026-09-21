@@ -175,6 +175,22 @@ const topRow = () => {
     pretending: §13 asks a disabled control to explain itself where the
     ambiguity would block work.
   */
+  /*
+    WHICH PROJECT YOU ARE IN, carried by the shell rather than only by the
+    title.
+
+    The top row is sticky and the project title is not: scrolled down an
+    overview, the shell read "Home / Jump to… / Ask the team / Attention" and
+    nothing anywhere said which project this was. For a model whose central
+    claim is that projects are stable containers (§1, §8), losing the
+    container's name on scroll is the difference between a project-centred
+    product and a dashboard with a large heading.
+
+    §6.1 puts the jump control in the centre of the shell, which is where
+    Basecamp carries this too — the control you press to go elsewhere is the
+    one that should say where you are now.
+  */
+  const here = state().view === 'project' && state().project !== null ? project() : null
   const firstWaiting = PROJECTS.find((p) => (p.waiting ?? []).length > 0)
   const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
   return `<header class="bctop">
@@ -182,9 +198,14 @@ const topRow = () => {
       <button type="button" class="bcbtn" data-bc-go="${at('/')}"
         aria-current="${isHere(at('/')) ? 'page' : 'false'}">Home</button>
     </div>
-    <button type="button" class="bcjump" data-bc-jump
-      aria-haspopup="dialog" aria-label="Jump to a project, tool or record">
-      <span>Jump to…</span><kbd>Shift J</kbd>
+    <button type="button" class="bcjump${here === null ? '' : ' bcjump--in'}" data-bc-jump
+      aria-haspopup="dialog"
+      aria-label="${esc(
+        here === null
+          ? 'Jump to a project, tool or record'
+          : `You are in ${here.name}. Jump to a project, tool or record`,
+      )}">
+      <span>${esc(here === null ? 'Jump to…' : here.name)}</span><kbd>Shift J</kbd>
     </button>
     <div class="bcright">
       ${dockButton('bcbtn bcwide-only')}

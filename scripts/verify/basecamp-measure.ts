@@ -279,8 +279,75 @@ for (const size of SIZES) {
   await ctx.close()
 }
 
-await browser.close()
-server.close()
+/* ---------------- the experience does not follow the studio's scheme ------- */
+
+/*
+  §4.1 supplies ONE palette, the observed dark one, and every token in
+  bc/tokens.css is a literal scoped to the experience root. So choosing light
+  in the studio must not half-lighten the experiment: what would break is not
+  the tokens but a rule that inherits a STUDIO token, and that failure looks
+  like one element flipping while everything around it stays put — dark text
+  on dark, or a lone white card.
+
+  Asked through the stored preference rather than through `colorScheme`,
+  because the studio's default is an explicit choice and the media query
+  stopped deciding anything; scripts/verify/seed-appearance.ts records what
+  that cost the last time an audit got it wrong.
+*/
+{
+  const readColours = async (scheme: 'light' | 'dark'): Promise<string> => {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      colorScheme: scheme,
+    })
+    await ctx.addInitScript(
+      `try { localStorage.setItem('studio.appearance', ${JSON.stringify(JSON.stringify({ scheme }))}) } catch {}`,
+    )
+    const page = await ctx.newPage()
+    await page.goto(url('/basecamp/p/legacy-coaching-course'), { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.bcgrid')
+    await page.waitForTimeout(600)
+    const seen = (await page.evaluate(
+      inPage(`const out = []
+         for (const el of document.querySelectorAll('.bcmain *')) {
+           const cs = getComputedStyle(el)
+           out.push(cs.color + ';' + cs.backgroundColor + ';' + cs.borderTopColor)
+         }
+         return document.documentElement.dataset.scheme + '::' + out.join('|')`),
+    )) as string
+    await ctx.close()
+    return seen
+  }
+  const light = await readColours('light')
+  const dark = await readColours('dark')
+  const lightAsked = light.startsWith('light::')
+  const darkAsked = dark.startsWith('dark::')
+  console.log(`\n=== scheme independence ===`)
+  console.log(
+    `  preference applied   light:${lightAsked ? 'yes' : 'NO'} dark:${darkAsked ? 'yes' : 'NO'}`,
+  )
+  if (!lightAsked || !darkAsked) {
+    /*
+      If the preference did not take, the comparison below passes for the
+      wrong reason — two identical runs of the same scheme. This repository
+      has shipped that exact vacuous pass before.
+    */
+    problems.push(
+      'the stored appearance preference did not apply, so scheme independence was not actually tested',
+    )
+  } else {
+    const same = light.slice(light.indexOf('::')) === dark.slice(dark.indexOf('::'))
+    console.log(`  colours identical    ${same ? 'yes' : 'NO'}`)
+    if (!same) {
+      problems.push(
+        'an element inside the experience changes colour with the studio scheme — a studio token has leaked into a rule that should use a bc token',
+      )
+    }
+  }
+
+  await browser.close()
+  server.close()
+}
 
 if (problems.length === 0) {
   console.log('\nno absolute violations')

@@ -106,6 +106,20 @@
   cursor: pointer;
 }
 .bcjump:hover { background: var(--bc-hover); color: var(--bc-text); }
+/*
+  Inside a project the jump control carries the project's name, so it reads
+  as context first and a control second: the name takes the body ink while
+  the generic placeholder stays muted.
+*/
+.bcjump--in > span:first-child {
+  color: var(--bc-text-strong);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bcjump--in { max-width: 340px; }
+
 .bcjump kbd {
   margin-left: auto;
   padding: 1px var(--bc-1);
@@ -699,6 +713,30 @@
   .bctop { padding: var(--bc-2); }
 }
 
+/*
+  THE CENTRE COLUMN STOPS BEING RIGID BEFORE THE PHONE DOES.
+
+  §6.1's balanced `1fr auto 1fr` is right where there is room: the centre
+  takes what it needs and the two sides always match. Once the jump control
+  carries a project name it needs a great deal more, and at 768 it overran
+  the attention control by 15px — a collision the geometry check caught on
+  the run after the name was added, which is the whole reason that check
+  measures overlap rather than only overflow.
+
+  So the flexible grid starts at 900px rather than at the phone breakpoint,
+  and the name is capped to whatever is left.
+*/
+@media (max-width: 900px) {
+  .bctop { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .bcjump { min-width: 0; }
+  .bcjump--in { max-width: none; }
+  .bcjump > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 /* Phone — 390x844 (§6.2, §14). */
 @media (max-width: 760px) {
   /*
@@ -726,7 +764,21 @@
     gap: var(--bc-1);
   }
   .bcjump { min-width: 0; }
-  .bcjump kbd { display: none; }
+  /*
+  Inside a project the jump control carries the project's name, so it reads
+  as context first and a control second: the name takes the body ink while
+  the generic placeholder stays muted.
+*/
+.bcjump--in > span:first-child {
+  color: var(--bc-text-strong);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bcjump--in { max-width: 340px; }
+
+.bcjump kbd { display: none; }
   .bcjump > span:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
