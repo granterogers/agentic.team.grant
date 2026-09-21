@@ -262,6 +262,30 @@ check(
   Number(made.n) === 1,
 )
 
+/*
+  AND THE TASK SAYS WHICH JOB FILED IT (0530).
+
+  Twenty-six tasks written by suites sat on Grant's personal list because
+  `tasks.is_fixture` is generated from `added_by`, which `app.my_task_add`
+  hardcodes to 'grant'. The job is what tells them apart, it is what
+  `app.undo_tasks_from_job` needs to take a task back, and it is asserted here
+  because this is the one place in the run where a task the PLAN filed is
+  known to exist.
+*/
+const attributed = await one(`
+  select count(*)::int as n,
+         count(*) filter (where job_id = ${lit(jobId)}::uuid)::int as mine,
+         count(*) filter (where app.harness_task(is_fixture, job_id))::int as derived
+    from public.tasks
+   where assigned_to_human and detail like ${lit(`%${TOKEN}%`)}`)
+check(
+  'and it records the job that filed it, so the office can take it back',
+  `${String(attributed.mine)} of ${String(attributed.n)} carry this job, ${String(attributed.derived)} derived as harness`,
+  Number(attributed.n) >= 1 &&
+    Number(attributed.mine) === Number(attributed.n) &&
+    Number(attributed.derived) === Number(attributed.n),
+)
+
 // --- restart --------------------------------------------------------------
 /*
   The same steps again. `step_begin` must SKIP what is recorded, which for a

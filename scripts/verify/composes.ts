@@ -432,6 +432,29 @@ if (childId !== '') {
            (select count(*) from public.outputs
              where job_id = ${lit(childId)}::uuid
                and body like ${lit(`%${DEEP}%`)})::int as outputs`)
+  /*
+    AND IF IT ENDED IN A TASK, the task says which job filed it (0530).
+
+    Asserted only when the plan took that route — a plan ending in a draft has
+    no task and must not be failed for it, which is the "assert the property,
+    not the mechanism" correction this file already carries twenty lines above.
+    In `--deployed` mode this is the one check that can tell whether the
+    RUNNING worker passes `p_job`, because a migration existing in Git is not
+    proof the deployed worker implements its semantics.
+  */
+  const attributed = await one(`
+    select count(*)::int as n from public.tasks
+     where (detail like ${lit(`%${DEEP}%`)} or title like ${lit(`%${DEEP}%`)})
+       and created_at > now() - interval '20 minutes'
+       and job_id is not null`)
+  check(
+    'and a task it filed carries the job that filed it (0530)',
+    Number(carried.tasks) === 0
+      ? 'the plan ended in a draft, so there is no task to attribute'
+      : `${String(attributed.n)} of ${String(carried.tasks)} task(s) carry a job`,
+    Number(carried.tasks) === 0 || Number(attributed.n) === Number(carried.tasks),
+  )
+
   const reached = Number(carried.tasks) + Number(carried.outputs)
   check(
     'and it reached a durable row, so the chain ends in canonical state',
