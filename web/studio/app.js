@@ -13145,6 +13145,24 @@ const bcContext = {
     return Array.isArray(rows) ? rows : null
   },
   myTasksTrouble: () => mine.trouble[mineKey()] === true,
+  /*
+    START THE FETCH, from the renderer, the way the default studio's review
+    block does.
+
+    Without this, opening /basecamp/tasks directly showed a skeleton that
+    never resolved: `goAnywhere` kicked the read when you NAVIGATED there and
+    nothing kicked it when you ARRIVED there, so a reload or a pasted link sat
+    on shimmering bars for ever. CLAUDE.md is blunt about it — a skeleton that
+    never resolves is broken, and the page has no way to tell a slow office
+    from a dead one except by somebody having asked.
+
+    `needMine` guards on the cache key and repaints when it lands, so calling
+    it from a render is safe and cannot loop.
+  */
+  askForMyTasks: () => {
+    void needMine(mine.bucket)
+  },
+  canWrite: () => canWrite(),
   refresh: () => refresh(),
   render,
   /*

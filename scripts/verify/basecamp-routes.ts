@@ -145,6 +145,41 @@ check(
   'it must be deleted rather than set to another value: an attribute-presence selector would still match',
 )
 
+/* ------------------------------------- no surface sits on a skeleton for ever */
+
+/*
+  A SKELETON THAT NEVER RESOLVES IS BROKEN, and it is the most convincing
+  broken thing a page can show: it says "coming" for ever and looks like work
+  in progress rather than a fault.
+
+  My Tasks did exactly that in a signed-out browser. The read was kicked when
+  you NAVIGATED to the surface and by nothing when you ARRIVED at it, so a
+  reload or a pasted link shimmered indefinitely — and there is no list to
+  read without a token anyway, so the honest answer was never a skeleton at
+  all. It was in a capture for several runs before anybody opened it.
+
+  The property, rather than that one screen: after a surface has settled,
+  nothing on it is still claiming to be loading. Signed out, because that is
+  the state every capture in this sandbox is in and therefore the state a
+  defect can hide in longest.
+*/
+const surfaces = ['/basecamp', '/basecamp/tasks', '/basecamp/activity', '/basecamp/search']
+if (slug !== null) {
+  for (const t of ['', '/tasks', '/team', '/documents', '/contacts', '/sources', '/activity']) {
+    surfaces.push(`${slug}${t}`)
+  }
+}
+for (const where of surfaces) {
+  await open(where)
+  await page.waitForTimeout(1400)
+  const skeletons = await page.locator('.bcskel').count()
+  check(
+    `${where}: nothing is still claiming to be loading once the surface has settled`,
+    skeletons === 0,
+    `${String(skeletons)} skeleton row(s) remain`,
+  )
+}
+
 check('nothing was thrown on any route', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

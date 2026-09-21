@@ -166,29 +166,55 @@ every owned surface rather than the overview alone.
 
 ## Gates
 
+`npm run basecamp:gate` runs the eight this workstream owns, in order.
+
 | Gate | Result | What it covers |
 |---|---|---|
-| `verify:basecamp-routes` | 15/15 | both addresses boot, assets resolve, the default is untouched |
-| `verify:basecamp-actions` | 3/3 calls | every action and required argument exists at the gateway |
-| `verify:basecamp-journey` | 23/23 | the task journey end to end in a browser, over real HTTP |
-| `verify:basecamp-keyboard` | 25/25 | skip link, focus, trap, keyboard map, reduced motion, 200% zoom |
+| `verify:basecamp-classes` | clean | every class the markup names is defined in the stylesheet |
+| `verify:basecamp-actions` | 4 calls clean | every action and required argument exists at the gateway |
+| `verify:basecamp-routes` | 26/26 | both addresses boot, assets resolve, the default is untouched, no surface sits on a skeleton |
+| `verify:basecamp-journey` | 51/51 | the task journey, the record page and the agent-output journey, in a browser over real HTTP |
+| `verify:basecamp-keyboard` | 31/31 | skip link, focus, trap, keyboard map, full search, reduced motion, 200% zoom |
 | `verify:basecamp-preservation` | 26/26 | every destination reachable; hand-offs resolve; default unchanged |
+| `verify:basecamp-states` | 64/64 | adversarial content and the §12 states at three widths |
 | `basecamp:measure` | no violations | geometry at 1440×900, 1024×768, 768×1024, 390×844 |
-| `smoke` · `lint` · `typecheck` | exit 0 | |
-| `npm test` | 2207/2207 tests | one FILE fails to load: `tests/sessions/weather-is-not-a-failure.test.ts` needs `SUPABASE_ACCESS_TOKEN`; sessions harness, untouched here |
-| `verify:design` | 18/20 | identical on this branch and on the baseline; both failures need credentials |
 
-Every detector added by this run has been **proved able to fail** by a
-sabotage whose own effect was printed first — a sabotage that does not apply
-is not a passing control.
+Repository gates, run on this branch:
+
+| Gate | Result |
+|---|---|
+| `smoke` · `lint` (`biome ci`) · `typecheck` | exit 0 |
+| `npm test` | 2207/2207 tests; one FILE cannot load without `SUPABASE_ACCESS_TOKEN` |
+| `verify:wired` | 77 control attributes across 21 screens, no dead controls |
+| `verify:layouts` | 64 states, 0 findings |
+| `verify:controls` | 37 + 21 + 71 pressed, 0 unpressable, 0 findings |
+| `space` | clean |
+| `verify:design` | 18/20 — identical on the baseline; both failures need credentials |
+| `verify:arrangement` | could not run — needs `SUPABASE_ACCESS_TOKEN` |
+
+### Every detector was proved able to fail
+
+A sabotage that does not apply is not a passing control, so each one printed
+its own effect before the check ran.
 
 | Detector | Sabotage | Result |
 |---|---|---|
 | `verify:basecamp-actions` | call a non-existent action | red, naming it |
 | `verify:basecamp-actions` | misspell a required argument | red, naming it |
-| `verify:basecamp-journey` | remove the optimistic rollback | red, 22/23 |
+| `verify:basecamp-journey` | remove the optimistic rollback | red, 1 check |
+| `verify:basecamp-journey` | make the office non-idempotent | red, 1 check |
 | `verify:basecamp-preservation` | point the team sub-views at their own ids | red, naming all four |
+| `verify:basecamp-classes` | misspell one class | red, naming it |
+| `verify:basecamp-states` | clamp `.bcitemtitle` to 20px | red, 9 checks |
+| `basecamp:measure` | reuse the tray class for a link row | red, naming it |
+| `verify:basecamp-routes` | stop kicking the My Tasks read | red, naming the surface |
 | `tests/studio/command.test.ts` | push a dead-view row into the command bar | red, naming `desk` |
+
+**One sabotage did not prove anything and was replaced.** Forcing
+`signedIn = true` on My Tasks left the skeleton check green, because the read
+then ran, failed and rendered an error state. Only removing the call that
+kicks the read reproduced the original defect. A sabotage has to exercise the
+path the check claims to cover, not a neighbour of it.
 
 ---
 
@@ -209,6 +235,13 @@ Not one of these was found by reading the code.
 | 9 | four hand-off links named routes the default router does not have | the preservation check |
 | 10 | the "Running work" paragraph ran 170 characters across the full desktop measure | opening the capture |
 | 11 | the phone top row collapsed the jump control to "J…" once a fourth control joined it | opening the capture |
+| 12 | `.bcprose` was written against an anchor an earlier edit had renamed, so the rule never existed while five callers named it | opening the capture |
+| 13 | `.bcskelwrap` and `.bcaddform` named and never defined | the new class check, on its first run |
+| 14 | the project's hand-off links reused `.bctray`, which the phone rules make a fixed bottom bar — so at 390px they were lifted out of the page and hidden under the real tray | opening the phone capture |
+| 15 | `Shift+Enter` promoted the query to `/?q=`, which nothing reads and `keepUrl` strips — the search was silently discarded | reading the default studio |
+| 16 | emptying the assignee sent null, which `hq_task_update` treats as "leave it alone", so a cleared field saved nothing | reading the RPC signature |
+| 17 | the task record's Open control was drawn only where `t.id` existed, and no prototype task has one — the whole screen was in no capture on any viewport | a capture run reporting what it could not reach |
+| 18 | My Tasks showed a skeleton that never resolved: the read was kicked on navigation and by nothing on arrival, and signed out there is no list to read at all | opening the capture |
 
 Two findings were **read off a capture and were wrong**, and were discarded
 after measuring:
@@ -256,7 +289,31 @@ one field.
 
 ---
 
+## What is deliberately NOT built
+
+§2.10 and §19.10 of the specification both say to stop after the reference
+slice and review it before expanding. These are named here so the gaps are
+decisions rather than omissions.
+
+| Not built | Why | Where it goes instead |
+|---|---|---|
+| Message Board / Brief (§10.1) | outside the reference slice | — |
+| Work Board / Card Table (§10.3) | outside the slice; it is a `TEAM_VIEWS` sub-view | hand-off to the team section |
+| Schedule (§10.5) | the studio payload carries no dated events, so a preview would have to invent them | — |
+| Project Chat (§10.6) | outside the slice | hand-off, and the dock is reachable |
+| The import sheet's four fields (collection, tags, task, source) | the current Team HQ asks for them at the moment of import, which is the only moment anybody chooses them. Offering a half-built sheet would be worse than none | Add to project imports with nothing chosen, which `import_output` accepts and which means "yes, and I have nothing to add" |
+| Task comments and relations | not in the studio payload | hand-off to the current Team HQ, labelled |
+| Project Settings | irreversible controls belong in the focused settings surface (§16) | hand-off |
+
+---
+
 ## NEXT ACTION
 
-Phase 5 — the agent-output journey — then the adversarial and edge-state
-sweep, then the old-frontend regression pass.
+The reference slice is complete and every gate is green. §19.9 is the next
+step and it is Grant's, not an agent's: **review the experience at
+`/basecamp` and decide explicitly whether to expand the system.** Nothing
+here should be merged to `main` or promoted to the default route before that.
+
+If the answer is expand, the first slices are the import sheet's four fields
+and the Work Board, in that order: the first closes a known gap in a journey
+that already works, the second is the largest surface still handed off.

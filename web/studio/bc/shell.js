@@ -922,7 +922,26 @@ const SURFACE = {
  * domains; relationships may connect them and their ownership does not merge.
  */
 const myTasks = () => {
-  const mine = ctx.myTasks?.() ?? null
+  /*
+    THREE ANSWERS, AND THEY ARE NOT THE SAME ANSWER.
+
+    Not signed in: there is no list to read, and saying so is honest. A
+    skeleton here would be a promise of something that is never coming, and
+    an empty list would be a claim about a list nobody looked at.
+
+    Still coming: a skeleton, because the shape is predictable.
+
+    Could not be read: say that. You may say you could not look; you may not
+    say there is nothing there.
+
+    The first version of this had only the middle two, so a signed-out browser
+    sat on shimmering bars for ever — which is what a skeleton that never
+    resolves looks like from the outside, and it was in a capture nobody had
+    opened.
+  */
+  const signedIn = ctx.canWrite?.() === true
+  if (signedIn) ctx.askForMyTasks?.()
+  const mine = signedIn ? (ctx.myTasks?.() ?? null) : []
   /*
     A READ THAT FAILED IS NOT AN EMPTY LIST.
 
@@ -930,16 +949,21 @@ const myTasks = () => {
     fetch rendered as "Nothing due today" under a tab reading "Today 3". You
     may say you could not look; you may not say there is nothing there.
   */
-  const trouble = ctx.myTasksTrouble?.() === true
+  const trouble = signedIn && ctx.myTasksTrouble?.() === true
   return `<h1 class="bcsectiontitle">My Tasks</h1>
     <p class="bcpmeta bcprose bcgap-l">
       Your own list. Separate from what any project has committed to, and from
       what the team is running.
     </p>
     ${
-      trouble
-        ? errorState('Your list could not be read just now.', button('Try again', { 'data-bc-go': at('/tasks') }))
-        : mine === null
+      !signedIn
+        ? empty({
+            title: 'Sign in to see your list',
+            body: 'My Tasks is your own list, kept by the office. This browser has no token, so there is nothing to read — the projects above are the studio’s examples.',
+          })
+        : trouble
+          ? errorState('Your list could not be read just now.', button('Try again', { 'data-bc-go': at('/tasks') }))
+          : mine === null
         ? skeleton(4)
         : mine.length === 0
           ? empty({ title: 'Nothing on your list', body: 'Things you take on yourself collect here.' })
