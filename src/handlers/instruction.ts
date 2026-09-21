@@ -3652,7 +3652,23 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .execute(`
           select slug, name, reserved_reason is not null as reserved
             from public.projects
-           where status = 'active' and not is_fixture
+           where status = 'active'
+             /*
+               The same question the resolver asks, asked of the same fact.
+               No backticks in here: this comment sits inside a template
+               literal, and one backtick ends the string.
+
+               #295: the spine is what the model recites when asked what is
+               open, and it is the reader that kept the simulated world
+               invisible even after the resolver could see it. The office
+               resolved nothing and then listed Grant's real projects, which
+               is CLAUDE.md's "a payload gains a key and THREE places have to
+               learn it" with the third place being the prompt.
+
+               app.harness_job is false for every message a person sends, so
+               this is byte-identical to the old filter for Grant.
+             */
+             and (app.harness_job(${lit(job.jobId)}::uuid) or not is_fixture)
            order by reserved, updated_at desc limit 25`)
         .then((r) => r.rows as { slug: string; name: string; reserved: boolean }[])
         .catch(() => [] as { slug: string; name: string; reserved: boolean }[])
