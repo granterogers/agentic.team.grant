@@ -92,6 +92,12 @@ export const TOOLS = [
     `due_on` and `starts_on`, both already on every row.
   */
   { id: 'board', name: 'Card Table', own: true },
+  /*
+    §7. The project's conversation, which `web/studio/chat.js` already reads,
+    sends and asks - `conversation_history` per project (#192). Another tool
+    whose whole contract existed before this experience did.
+  */
+  { id: 'chat', name: 'Chat', own: true },
   { id: 'schedule', name: 'Schedule', own: true },
   { id: 'team', name: 'Agentic Team', own: true },
   { id: 'documents', name: 'Documents & Assets', own: true },
@@ -1403,6 +1409,65 @@ const scheduleSurface = (p) => {
     }`
 }
 
+
+/* ======================================================================== *
+ * §7 — the project's Chat
+ *
+ * The team, present: a face, a name and a time against every line, which is
+ * what makes a room feel occupied. A list of assignees does not.
+ *
+ * NO NEW CONTRACT AND NO SECOND STORE. `web/studio/chat.js` is the studio's
+ * own conversation module - it reads the office's `conversation_history` for
+ * a project, keeps the optimistic tail, and sends through the same path the
+ * default Team HQ uses. This surface renders it. A second chat store would be
+ * the copy that rots, which is 0310's whole argument.
+ * ======================================================================== */
+
+const chatSurface = (p) => {
+  const said = ctx?.chatFor?.(p.slug) ?? []
+  const shown = said.length > 0 ? said : (p.chat ?? [])
+  const real = ctx?.chatIsReal?.(p.slug) === true
+  return `${crumbFor(p, 'chat')}
+    <div class="bcrecordhead">
+      <h1>${esc(toolById('chat')?.name ?? 'Chat')}</h1>
+    </div>
+    <p class="bcpmeta bcprose bcgap-l">
+      What has been said about ${esc(p.name)}. The same conversation the team
+      sees, wherever it was said from — here, Telegram or Slack.
+    </p>
+    ${
+      shown.length === 0
+        ? empty(
+            {
+              title: 'Nothing has been said here yet',
+              body: 'Ask the team something about this project and it starts the conversation. Everything said about it, on any surface, appears here.',
+            },
+            '',
+          )
+        : `<div class="bcchat bcchat--full">
+            ${shown.map((m) => bcMini.said_(m)).join('')}
+          </div>`
+    }
+    ${
+      real || shown.length === 0
+        ? ''
+        : /*
+            SAYING SO, because the alternative is a fiction presented as his
+            conversation. A signed-out browser has no thread to read, and the
+            prototype one stands in for the shape; §11's rule is that the page
+            says which it is rather than letting him assume.
+          */
+          `<p class="bcpmeta bcgap">This is an example conversation. Sign in and the
+            office's own record replaces it.</p>`
+    }
+    <form class="bcaddform bcsay" data-bc-sayform>
+      ${input({ id: 'bc-say', label: `Ask the team about ${p.name}`, name: 'say', autocomplete: 'off' })}
+      <div class="bcrow">
+        ${button('Send', { kind: 'primary', 'data-bc-say': '1' })}
+      </div>
+    </form>`
+}
+
 const SURFACE = {
   overview,
   tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
@@ -1413,6 +1478,7 @@ const SURFACE = {
   activity: activitySurface,
   board: boardSurface,
   schedule: scheduleSurface,
+  chat: chatSurface,
 }
 
 /* ======================================================================== *

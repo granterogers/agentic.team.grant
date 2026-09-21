@@ -122,6 +122,7 @@ for (const size of sizes) {
       is watching, and both of these were reachable the moment they had a
       route - so they get a capture in the same commit as the route.
     */
+    await shot('chat', `${slug}/chat`)
     await shot('board', `${slug}/board`)
     await shot('schedule', `${slug}/schedule`)
     await shot('team', `${slug}/team`)

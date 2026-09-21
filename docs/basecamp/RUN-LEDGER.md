@@ -851,6 +851,34 @@ screens, because the coverage audit refused the commit until they were: it
 listed six gaps by name the first time it ran.
 
 ---
+## §7 The full project Chat
+
+The team, present: a face, a name and a time against every line. **No new
+contract and no second store** — `web/studio/chat.js` is the studio's own
+conversation module, reading the office's `conversation_history` per project
+(#192), keeping the optimistic tail, and sending through the path the default
+Team HQ already uses. This surface renders it and `bcContext` exposes it. A
+second chat store would be the copy that rots, which is 0310's whole argument.
+
+**One bubble renderer**, shared by the miniature and the tool. `chat.js`
+speaks `from` and `at`; the prototype thread speaks `who` and `when` — two
+vocabularies for one thing, which is 0311, and the answer is not a translation
+table on each caller. The renderer takes either and the callers stop knowing.
+
+**The office's own thread wins whenever it has one.** The miniature falls back
+to the invented thread only when there is none, which is every capture this
+repository takes, because a signed-out browser has nothing to read. Falling
+back over a REAL conversation would be showing Grant a fiction about what his
+team said. The full surface says which it is rather than letting him assume.
+
+The composer refuses politely in a read-only browser instead of sending into
+nothing, and the draft clears on send, which #197 established.
+
+`chat` came off the route audit's bogus list the moment it became an address,
+and got a capture at all four viewports in the same commit — the rule this run
+has now applied three times.
+
+---
 ## NEXT ACTION
 
 **The full tools behind the miniatures, and §14's configurability.** The

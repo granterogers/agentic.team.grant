@@ -265,6 +265,42 @@ const wireTasks = (root) => {
     })
   }
 
+  /* ------------------------------------------------------- saying (§7) --- */
+
+  /*
+    ONE SEND PATH, the studio's own. `chatSend` puts the message on screen
+    immediately and `chatAsk` asks the office; both come from `chat.js`, which
+    already owns the optimistic tail, the retry row and the rule that the
+    office's copy wins when it lands. Re-implementing either here would be the
+    second copy that drifts.
+
+    The draft is cleared on send, which #197 established, and the answer
+    arrives through the same repaint the default Team HQ uses.
+  */
+  for (const b of root.querySelectorAll('[data-bc-say]')) {
+    b.addEventListener('click', async () => {
+      const f = root.querySelector('[data-bc-sayform]')
+      if (f === null) return
+      const box = f.querySelector('#bc-say')
+      const text = String(box?.value ?? '').trim()
+      if (text === '') {
+        showFieldError(f, 'bc-say', 'Say something first.')
+        return
+      }
+      clearFieldError(f, 'bc-say')
+      if (!canWrite()) {
+        showFieldError(f, 'bc-say', 'This browser is read-only — sign in to ask the team.')
+        return
+      }
+      if (box !== null) box.value = ''
+      ctx.chatSend?.(ctx.state.project, text)
+      ctx.render()
+      await ctx.chatAsk?.(ctx.state.project, text, () => {
+        ctx.render()
+      })
+    })
+  }
+
   /* ----------------------------------------------------- a list (§6) ----- */
 
   const listForm = () => root.querySelector('[data-bc-listform]')

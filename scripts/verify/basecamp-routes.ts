@@ -236,7 +236,7 @@ if (slug !== null) {
     experience does not serve must correct itself rather than render the
     overview while the URL goes on promising something else.
   */
-  for (const bogus of ['nonsense', 'messages', 'chat']) {
+  for (const bogus of ['nonsense', 'messages', 'files']) {
     await open(`${slug}/${bogus}`)
     const url = (await page.evaluate(inPage('return location.pathname'))) as string
     check(

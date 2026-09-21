@@ -13152,6 +13152,18 @@ const backFromGoogle = cameBackFromGoogle()
 const bcContext = {
   state,
   projects: () => PROJECTS,
+  /*
+    The project's conversation, from the studio's own chat module (#192).
+
+    Exposed rather than reimplemented: `chat.js` holds the office's copy, the
+    optimistic tail and the rule that the office's copy wins. A second reader
+    in the experiment would be a second thing to keep in step.
+  */
+  chatFor: (slug) => chat.thread(slug),
+  chatIsReal: (slug) => chat.isReal(slug),
+  chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, token.get()),
+  chatSend: (slug, text) => chat.send(slug, text, null),
+  chatAsk: (slug, text, onState) => chat.ask(slug, text, null, token.get(), undefined, undefined, onState),
   crew: CREW,
   tools: bc.TOOLS,
   /*

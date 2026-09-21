@@ -325,8 +325,40 @@ export const calendarMini = (p, { items = 4 } = {}) => {
  * §7. Speech, with a face, a name and a time against every line — which is
  * what makes a room feel occupied. A name in a meta string does not.
  */
+/*
+  ONE BUBBLE RENDERER for the miniature and the tool.
+
+  `chat.js` speaks `from` and `at`; the prototype thread speaks `who` and
+  `when`. Two vocabularies for one thing is 0311's lesson, and the answer is
+  not a translation table on each caller: the renderer takes either and the
+  callers stop knowing about it.
+*/
+export const said_ = (m) => {
+  const who = m.who ?? m.from ?? ''
+  const mine = who === 'grant'
+  const when = m.when ?? m.at ?? ''
+  return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
+    ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
+    <div class="bcsaidbody">
+      <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>
+      <span class="bcsaidwhen">${esc(when)}</span>
+      <p class="bcsaidtext">${esc(m.text ?? '')}</p>
+    </div>
+  </div>`
+}
+
 export const chatMini = (p, { lines = 3 } = {}) => {
-  const said = (p.chat ?? []).slice(-lines)
+  /*
+    THE OFFICE'S OWN THREAD when there is one, the prototype's when there is
+    not. `chat.thread` is the record - a message Grant sent from Slack is in
+    it and was never in this browser - and it is empty in a signed-out
+    browser, which is every capture this repository takes. Falling back to the
+    invented thread is what keeps §7's grammar visible in a capture; falling
+    back to it when a REAL one exists would be showing him a fiction over his
+    own conversation, which is why the real one wins whenever it has anything.
+  */
+  const real = ctx?.chatFor?.(p.slug) ?? []
+  const said = (real.length > 0 ? real : (p.chat ?? [])).slice(-lines)
   if (said.length === 0) {
     return `<p class="bcmpty">Nothing has been said on this project yet. Ask the team a
       question and it starts here.</p>`
@@ -334,14 +366,7 @@ export const chatMini = (p, { lines = 3 } = {}) => {
   return `<div class="bcchat">
     ${said
       .map(
-        (m) => `<div class="bcsaid${m.who === 'grant' ? ' bcsaid--mine' : ''}">
-          ${face(m.who === 'grant' ? { name: 'Grant', slug: 'grant' } : person(m.who))}
-          <div class="bcsaidbody">
-            <span class="bcsaidwho">${esc(m.who === 'grant' ? 'You' : named(m.who) || m.who)}</span>
-            <span class="bcsaidwhen">${esc(m.when ?? '')}</span>
-            <p class="bcsaidtext">${esc(m.text ?? '')}</p>
-          </div>
-        </div>`,
+        (m) => said_(m),
       )
       .join('')}
   </div>`
