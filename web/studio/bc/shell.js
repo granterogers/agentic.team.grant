@@ -634,14 +634,21 @@ const taskRow = (t, i = 0) => {
       data-bc-tick="${esc(id)}"
       aria-label="${esc(`${isDone ? 'Completed' : 'Not completed'}: ${t.title}`)}">
     <div class="bcitembody">
-      <span class="bcitemtitle">${esc(t.title)}</span>
+      <!--
+        THE TITLE IS THE LINK, which is both the grammar section 10.2 describes
+        and a far larger target than a word at the other end of the row.
+
+        It was a separate Open control, and five of them stacked read as a
+        column of the same word repeated - the row's actual content pushed
+        left while the thing you press said nothing about where it goes.
+      -->
+      <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
       <span class="bcitemmeta">${esc(
         [t.who, t.due, t.note].filter((x) => x !== undefined && x !== null && x !== '').join(' · '),
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
     </div>
-    <button type="button" class="bcbtn" data-bc-task-open="${esc(key)}"
-      aria-label="${esc(`Open ${t.title}`)}">Open</button>
+    <span></span>
   </div>`
 }
 

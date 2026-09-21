@@ -675,6 +675,28 @@
 .bcitem:has(button, a[href], input):hover { background: var(--bc-hover); }
 .bcitem .bcitembody { min-width: 0; display: grid; gap: 2px; }
 .bcitem .bcitemtitle { font: 600 15px/22px var(--bc-font); overflow-wrap: anywhere; }
+/*
+  A title that IS the link. A button rather than an anchor because navigation
+  here goes through the router, and a bare href would reload the page — but it
+  keeps a link's affordance: an underline on hover and focus, inherited ink so
+  it does not become a second accent, and the row's own hover doing the rest.
+*/
+[data-experience='basecamp'] .bcitemlink {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  justify-self: start;
+  max-width: 100%;
+}
+[data-experience='basecamp'] .bcitemlink:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+[data-experience='basecamp'] .bcitem--done .bcitemlink { color: var(--bc-text-muted); }
 .bcitem .bcitemmeta { font: var(--bc-compact); color: var(--bc-text-muted); overflow-wrap: anywhere; }
 .bcitem--done .bcitemtitle { color: var(--bc-text-muted); text-decoration: line-through; }
 
@@ -728,7 +750,13 @@
 */
 @media (max-width: 900px) {
   .bctop { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .bcjump { min-width: 0; }
+  /*
+    Centred at its natural width rather than stretched across the column.
+    A grid item fills its track by default, so the named control grew to
+    407px on a tablet and dominated a row whose whole job is to be quiet.
+    §6.1 asks for visual balance, not for the centre to take the slack.
+  */
+  .bcjump { min-width: 0; max-width: 100%; }
   .bcjump--in { max-width: none; }
   .bcjump > span:first-child {
     overflow: hidden;
@@ -738,6 +766,23 @@
 }
 
 /* Phone — 390x844 (§6.2, §14). */
+/*
+  In the tablet band the centre sits at its natural width rather than
+  stretching across its track. A grid item fills its track by default, so the
+  named jump control grew to 407px on a tablet and dominated a row whose whole
+  job is to be quiet - section 6.1 asks for visual balance, not for the centre
+  to absorb the slack.
+
+  NOT ON THE PHONE. Centring at natural width lets an item overflow its own
+  track, and at 390px the project name is longer than the space: the first
+  version of this rule overlapped BOTH neighbours by 10px, which the geometry
+  check reported on the next run. There, stretching with an ellipsis is the
+  right answer.
+*/
+@media (min-width: 761px) and (max-width: 900px) {
+  .bctop .bcjump { justify-self: center; }
+}
+
 @media (max-width: 760px) {
   /*
     §14: full-width surface, 16px padding, no quiet margins. The radius and the
