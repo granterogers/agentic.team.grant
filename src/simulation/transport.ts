@@ -51,6 +51,7 @@ import {
 } from '../agents/intent.ts'
 import { personalTaskRequest } from '../agents/mine.ts'
 import { excludesASubject, rejectsWithoutSaying } from '../agents/negation.ts'
+import { readRetraction } from '../agents/retraction.ts'
 import { readTeaching } from '../agents/teaching.ts'
 import type { CanonicalEffects } from './effects.ts'
 import type { Layer, Utterance } from './scenario.ts'
@@ -149,6 +150,21 @@ export interface Observation {
    * did. A verdict that cannot vary with the subject is not a measurement.
    */
   readonly clausesObserved: boolean
+  /**
+   * The office saw that something was taken back.
+   *
+   * The DIRECT question. `context` used to ask whether two or more clauses
+   * were seen, as a proxy for "the withdrawal cannot have been noticed" -
+   * and once #291 made the handler REMOVE the withdrawn half, the kept
+   * half legitimately has fewer clauses, so the proxy got worse as the
+   * product got better: 19 hard failures became 24 on an unchanged corpus.
+   *
+   * Assert the property, not the artefact that used to imply it. This
+   * repository lists that correction five times.
+   *
+   * Undefined where a door cannot see it.
+   */
+  readonly withdrawalSeen?: boolean
   readonly reaches: readonly Layer[]
   /**
    * What canonically HAPPENED, where a door can see it.
@@ -212,6 +228,7 @@ export const comprehensionDoor = (): Transport => ({
   async ask(utterance: Utterance, context: TurnContext): Promise<Observation> {
     const started = Date.now()
     const said = utterance.text
+    const withdrawal = readRetraction(said)
 
     const classification: Classification = classifyIntent(said)
     const correction = readCorrection(said, context.hadAnswer)
@@ -229,7 +246,18 @@ export const comprehensionDoor = (): Transport => ({
       recognised: classification.recognised,
       reading: classification.intent,
       confident: classification.confident,
-      clauses: clauses(said),
+      /*
+        What the HANDLER sees, which since #291 is the message with a
+        retraction already taken out of it.
+
+        The offline door exists to drive the product's real comprehension
+        layer, and after #291 that layer begins with `readRetraction`. A
+        door that split the raw message would report a withdrawal as
+        invisible on every scenario the handler now handles correctly -
+        the same disagreement-between-two-halves defect this repository
+        keeps paying for, with the halves being the two doors.
+      */
+      clauses: clauses(withdrawal === null ? said : withdrawal.kept),
       learned: teaching !== null,
       corrected: correction !== null,
       extraction: extraction !== null,
@@ -238,6 +266,7 @@ export const comprehensionDoor = (): Transport => ({
       bareRejection: rejectsWithoutSaying(said),
       exclusionSeen: excludesASubject(said),
       clausesObserved: true,
+      withdrawalSeen: withdrawal !== null,
       reaches: ['comprehension'],
       unreached: COMPREHENSION_CANNOT_REACH,
       ms: Date.now() - started,

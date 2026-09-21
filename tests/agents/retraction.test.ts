@@ -148,6 +148,53 @@ describe('a pivot that NAMES what it withdraws takes only that', () => {
   })
 })
 
+describe('retracting with no verb at all', () => {
+  /*
+    The commonest shape in the corpus by a distance, and the one the verb
+    list missed: ten of the twelve remaining failures were a bare marker.
+  */
+  const bare: [string, string][] = [
+    [
+      'what is left on the grant thing actually no do the coaching thing instead',
+      'do the coaching thing instead',
+    ],
+    [
+      'stick something on the newsletter for next week — actually no, what came out of the cohort feedback',
+      'what came out of the cohort feedback',
+    ],
+    [
+      'right give me that as a list actually no what is outstanding on the funding one',
+      'what is outstanding on the funding one',
+    ],
+    [
+      'book the room for thursday, no wait, tell me who is coming first',
+      'tell me who is coming first',
+    ],
+    [
+      'send the invoice today wait no check the amount with me first',
+      'check the amount with me first',
+    ],
+  ]
+
+  for (const [said, kept] of bare) {
+    it(`reads: ${said.slice(0, 44)}`, () => {
+      expect(readRetraction(said)?.kept).toBe(kept)
+    })
+  }
+
+  /*
+    The negative control that decides whether the pair may be in the list
+    at all. "actually" alone corrects a FACT and retracts nothing, and
+    reading it as a pivot would throw away the sentence it is correcting.
+  */
+  it('does NOT fire on "actually" alone, which corrects a fact', () => {
+    expect(
+      readRetraction('the middle tier is forty pounds, actually it is sixty-three fifty'),
+    ).toBeNull()
+    expect(readRetraction('I looked at the bid, actually the deadline is the tenth')).toBeNull()
+  })
+})
+
 describe('what must NOT be read as a retraction', () => {
   const silent: [string, string][] = [
     ['a negative in an answer', 'there is no entry for that in the notebook'],

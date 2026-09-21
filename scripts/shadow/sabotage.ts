@@ -167,6 +167,36 @@ const SABOTAGES: readonly Sabotage[] = [
     replacement: '  if (false) {',
     check: 'tests/simulation/evaluate-canonical.test.ts',
   },
+
+  /*
+    #291's reader and the property `context` now asserts. Added with the
+    fix, because a detector proved once by hand is a detector nobody
+    re-proves.
+  */
+  {
+    name: 'retraction-read',
+    proves: 'a clause withdrawn mid-message is seen as withdrawn',
+    file: 'src/agents/retraction.ts',
+    anchor: '  if (chosen === null) return null',
+    replacement: '  if (chosen !== null) return null',
+    check: 'tests/agents/retraction.test.ts',
+  },
+  {
+    name: 'retraction-target',
+    proves: 'a pivot that names its object withdraws only that object',
+    file: 'src/agents/retraction.ts',
+    anchor: '  if (target !== null) {',
+    replacement: '  if (false) {',
+    check: 'tests/agents/retraction.test.ts',
+  },
+  {
+    name: 'retraction-not-a-pivot',
+    proves: 'an instruction to remember is never read as a retraction',
+    file: 'src/agents/retraction.ts',
+    anchor: '    if (NOT_A_PIVOT.test(said.slice(0, m.index))) continue',
+    replacement: '    if (false) continue',
+    check: 'tests/agents/retraction.test.ts',
+  },
 ]
 
 const only = ((): string => {

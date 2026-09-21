@@ -135,7 +135,22 @@ const HAS_A_COMPLEMENT =
 const NOT_A_PIVOT =
   /(?:\b(?:do ?n[o']?t|don't|never|please|remember to|must|should|will|would|can|could|to)\s+)$/i
 
-const PIVOT = new RegExp(`\\b(?:${CANCELS.join('|')})\\b`, 'gi')
+/**
+ * Retracting with no verb at all.
+ *
+ * "what is left on the grant thing, actually no, do the coaching thing
+ * instead" carries no cancellation verb: the pivot is the bare marker. It
+ * is how English changes its mind out loud, and it was the commonest shape
+ * in the corpus by a distance - ten of the twelve the verb list missed.
+ *
+ * `actually` ALONE is deliberately not here. "actually the price is forty
+ * pounds" corrects a fact and retracts nothing, and reading it as a pivot
+ * would throw away the sentence it is correcting. The pair is unambiguous
+ * in a way neither half is.
+ */
+const BARE_PIVOTS = ['actually no', 'no actually', 'actually not', 'wait no', 'no wait']
+
+const PIVOT = new RegExp(`\\b(?:${[...BARE_PIVOTS, ...CANCELS].join('|')})\\b`, 'gi')
 
 export interface Retraction {
   /** The instruction with the withdrawn part removed, in his own words. */

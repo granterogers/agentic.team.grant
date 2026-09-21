@@ -217,17 +217,17 @@ const context = (turn: ScenarioTurn, o: Observation): Finding => {
       the live door whatever the product did. A verdict that cannot vary
       with the subject is not a measurement.
     */
-    if (!o.clausesObserved)
+    if (o.withdrawalSeen === undefined)
       return finding(
         'context',
         'unreached',
-        `the ${o.door} door cannot see how the office split the message, so separability cannot be judged here`,
+        `the ${o.door} door cannot see whether the office noticed the withdrawal`,
       )
-    if (o.clauses.length < 2)
+    if (!o.withdrawalSeen)
       return finding(
         'context',
         'fail',
-        `the person withdrew something mid-message and the office saw the whole thing as one clause, so the withdrawal cannot have been noticed`,
+        'the person took something back mid-message and the office did not see that anything had been withdrawn',
       )
   }
   if (turn.intent.effect === 'preference' && !o.learned) {
@@ -892,7 +892,7 @@ export const evaluate = (input: EvaluationInput): Verdicts => {
       return withdrawnWords.filter((w) => t.includes(w)).length >= 2
     })
   const reallyActed = actedOnTheWithdrawn
-  const preconditionOnly = o.effects === undefined && o.clausesObserved && o.clauses.length < 2
+  const preconditionOnly = o.effects === undefined && o.withdrawalSeen === false
   if (withdrawn.length > 0 && (reallyActed || preconditionOnly)) {
     hard.push({
       failure: 'cancelled_executed',
