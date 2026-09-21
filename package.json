@@ -289,7 +289,8 @@
     "shadow:freeze": "tsx scripts/shadow/freeze.ts",
     "shadow:variance": "tsx scripts/shadow/variance.ts",
     "shadow:grant": "tsx scripts/shadow/grant.ts",
-    "shadow:intake": "tsx scripts/shadow/intake.ts"
+    "shadow:intake": "tsx scripts/shadow/intake.ts",
+    "shadow:sabotage": "tsx scripts/shadow/sabotage.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

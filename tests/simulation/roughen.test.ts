@@ -108,6 +108,40 @@ describe('roughen preserves meaning', () => {
     }
   })
 
+  it('never splits a hyphenated word', () => {
+    // The gap the sabotage suite found. Hyphens were handled correctly and
+    // nothing asserted it, so the guard was one refactor from silently
+    // going away: "twenty-five" becoming "twenty five" and
+    // "high-performing" becoming "high performing" are content words
+    // changing, which is the one thing the roughener may not do.
+    //
+    // Verified by hand when the guard was written, and a thing verified by
+    // hand is a thing nobody will verify again.
+    for (const persona of PERSONAS) {
+      for (let seed = 0; seed < 300; seed++) {
+        const { text, applied } = roughen(
+          'a high-performing cohort of twenty-five, all well-run',
+          persona,
+          seed,
+        )
+        // The property, stated directly and negatively: a compound must
+        // never arrive as two space-separated words. That survives every
+        // legitimate mutation - a respelling ("twenty-fvie"), a doubled
+        // hyphen ("twenty--five"), a false start that repeats the opening -
+        // and fails on exactly the thing being guarded, which is the dash
+        // rule reading an in-word hyphen as a separator.
+        //
+        // Two earlier versions of this assertion went red on correct
+        // behaviour: one named the words and a typo broke it, one counted
+        // hyphens and a doubled hyphen broke it. Both would have sent
+        // somebody to weaken the mutator over a guard that was working.
+        for (const split of ['high performing', 'twenty five', 'well run']) {
+          expect(text, `${persona.slug} seed ${seed} [${applied}]`).not.toContain(split)
+        }
+      }
+    }
+  })
+
   it('never alters a figure', () => {
     for (const persona of PERSONAS) {
       for (let seed = 0; seed < 300; seed++) {
