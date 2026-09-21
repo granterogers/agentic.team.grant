@@ -1,0 +1,778 @@
+/*
+  The experimental Basecamp-inspired Team HQ — shell, primitives and surfaces.
+
+  Scoped throughout to `[data-experience="basecamp"]`. See bc/tokens.css for
+  why that scope is not optional.
+
+  Geometry here is the measured geometry of §4.3 and §14, not a guess at it:
+  1088px main surface at 1440, 40px padding, 144px bottom clearance, 40px
+  sticky nav, three 325px overview columns with 16px gutters.
+*/
+
+/* ========================================================================
+   1. Shell
+   ======================================================================== */
+
+:root[data-experience='basecamp'] {
+  color-scheme: dark;
+}
+
+[data-experience='basecamp'] body {
+  margin: 0;
+  background: var(--bc-canvas);
+  color: var(--bc-text);
+  font: var(--bc-body);
+  letter-spacing: -0.1px;
+  transition: background var(--bc-t-colour) var(--bc-ease-out);
+}
+
+/*
+  The studio's own shell class sets a grid with a left rail. This experience is
+  shallow-navigation by definition — §6 puts navigation in a 40px sticky top
+  row and a personal tray, and §8 makes the project overview the landing
+  surface — so the rail's grid is unset rather than overridden piecemeal.
+*/
+[data-experience='basecamp'] #root.shell {
+  display: block;
+  grid-template-columns: none;
+  min-height: 100vh;
+  background: var(--bc-canvas);
+}
+
+.bcskip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--bc-4);
+  background: var(--bc-accent);
+  color: var(--bc-accent-ink);
+  border-radius: var(--bc-r-control);
+  font: 600 14px/21px var(--bc-font);
+}
+.bcskip:focus {
+  left: var(--bc-2);
+  top: var(--bc-2);
+}
+
+/* --- Top row (§6.1): left Home, centre jump, right attention ------------ */
+
+.bctop {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--bc-2);
+  align-items: center;
+  /*
+    §4.3: a 40px navigation band inside a 16px vertical / 8px horizontal outer
+    margin. The band is the CHILDREN's height, not the element's — with
+    border-box the padding is inside, so a min-height of 40 here would have
+    produced a 32px band and a measurement that quietly disagreed with the
+    specification it was written from.
+  */
+  padding: var(--bc-4) var(--bc-2);
+  background: var(--bc-canvas);
+}
+.bctop .bcbtn,
+.bctop .bcjump { height: var(--bc-nav-h); }
+
+.bctop > * { min-width: 0; }
+.bctop .bcright { justify-self: end; display: flex; gap: var(--bc-2); align-items: center; }
+.bctop .bcleft { justify-self: start; display: flex; gap: var(--bc-2); align-items: center; }
+
+/*
+  §6.1 observed 615.5 / 166.5 / 615.5 at 1440 and allows the middle to adapt to
+  the wordmark, provided the balance stays centred. `1fr auto 1fr` is that
+  statement in grid: the centre takes what it needs and the two sides always
+  match, at every width, without a media query per breakpoint.
+*/
+.bcjump {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  min-width: 166px;
+  height: var(--bc-8);
+  padding: 0 var(--bc-3);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  background: var(--bc-surface);
+  color: var(--bc-text-muted);
+  font: var(--bc-compact);
+  cursor: pointer;
+}
+.bcjump:hover { background: var(--bc-hover); color: var(--bc-text); }
+.bcjump kbd {
+  margin-left: auto;
+  padding: 1px var(--bc-1);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-1);
+  font: 600 11px/1.4 var(--bc-font);
+  color: var(--bc-text-muted);
+}
+
+/* --- Main surface (§4.3, §14) ------------------------------------------- */
+
+.bcmain {
+  width: min(var(--bc-measure), 100%);
+  margin: 0 auto;
+  padding: var(--bc-main-pad) var(--bc-main-pad) var(--bc-main-pad-bottom);
+  background: var(--bc-surface);
+  border-radius: var(--bc-r-sheet);
+  box-shadow: var(--bc-shadow-surface);
+}
+
+/* --- Personal tray (§6.1) ----------------------------------------------- */
+
+.bctray {
+  display: flex;
+  justify-content: center;
+  gap: var(--bc-1);
+  flex-wrap: wrap;
+  padding: var(--bc-4) var(--bc-2) var(--bc-6);
+}
+.bctray a,
+.bctray button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bc-2);
+  min-height: var(--bc-8);
+  padding: 0 var(--bc-3);
+  border: 0;
+  border-radius: var(--bc-r-control);
+  background: transparent;
+  color: var(--bc-text-muted);
+  font: var(--bc-compact);
+  cursor: pointer;
+}
+.bctray a:hover,
+.bctray button:hover { background: var(--bc-hover); color: var(--bc-text); }
+
+/* ========================================================================
+   2. Primitives (§17 phase 1)
+   ======================================================================== */
+
+/* --- Button -------------------------------------------------------------- */
+
+.bcbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bc-2);
+  height: var(--bc-8);
+  padding: 0 var(--bc-3);
+  border: 1px solid transparent;
+  border-radius: var(--bc-r-control);
+  background: transparent;
+  color: var(--bc-text);
+  font: 600 14px/21px var(--bc-font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--bc-t-focus) var(--bc-ease-out);
+}
+.bcbtn:hover { background: var(--bc-hover); }
+.bcbtn--primary { background: var(--bc-accent); color: var(--bc-accent-ink); }
+.bcbtn--primary:hover { background: color-mix(in srgb, var(--bc-accent) 88%, white); }
+.bcbtn--outline { border-color: var(--bc-border-control); }
+.bcbtn--danger { color: var(--bc-danger); }
+.bcbtn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/*
+  §4.3: a visually smaller 32px desktop control must keep an expanded hit
+  target. The pseudo-element grows the target to 44px without growing the box,
+  so the layout stays at the measured 32px and the finger still lands.
+*/
+.bcbtn::after,
+.bcicon::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 100%;
+  height: 44px;
+  min-width: 44px;
+  transform: translate(-50%, -50%);
+}
+.bcbtn,
+.bcicon { position: relative; }
+
+.bcicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bc-8);
+  height: var(--bc-8);
+  border: 0;
+  border-radius: var(--bc-r-control);
+  background: transparent;
+  color: var(--bc-text-muted);
+  cursor: pointer;
+}
+.bcicon:hover { background: var(--bc-hover); color: var(--bc-text); }
+
+/* --- Focus (§13) --------------------------------------------------------- */
+
+[data-experience='basecamp'] :focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+  background-color: var(--bc-focus-fill);
+}
+
+/* --- Input (§11.3) ------------------------------------------------------- */
+
+.bcfield { display: grid; gap: var(--bc-1); }
+.bclabel { font: var(--bc-compact); color: var(--bc-text-muted); }
+.bcinput {
+  width: 100%;
+  min-height: 42px;
+  padding: var(--bc-2) var(--bc-3);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  background: var(--bc-surface);
+  color: var(--bc-text);
+  /*
+    16px, never smaller: iOS Safari zooms the whole page when a focused input is
+    under 16px, and the page never zooms back. The studio already enforces this
+    in verify:ui and the experiment inherits the requirement.
+  */
+  font: var(--bc-body);
+  transition: border-color var(--bc-t-focus) var(--bc-ease-out),
+    box-shadow var(--bc-t-focus) var(--bc-ease-out);
+}
+.bcinput:focus {
+  outline: none;
+  border-color: var(--bc-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-accent) 35%, transparent);
+}
+.bcerror { font: var(--bc-compact); color: var(--bc-danger); }
+
+/* --- Breadcrumb and record actions (§6.3) -------------------------------- */
+
+.bccrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+  font: var(--bc-compact);
+  color: var(--bc-text-muted);
+  margin-bottom: var(--bc-3);
+}
+.bccrumb a { color: var(--bc-text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.bccrumb a:hover { color: var(--bc-text); }
+.bccrumb .bcsep { opacity: 0.6; }
+
+.bcactions { display: flex; align-items: center; gap: var(--bc-1); margin-left: auto; }
+
+.bcrecordhead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bc-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--bc-6);
+}
+.bcrecordhead h1 { font: var(--bc-title); margin: 0; color: var(--bc-text-strong); }
+
+/* --- Status (§15: never colour alone) ------------------------------------ */
+
+.bcstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bc-1);
+  padding: 2px var(--bc-2);
+  border: 1px solid var(--bc-border-control);
+  border-radius: 999px;
+  font: 600 12px/18px var(--bc-font);
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+.bcstatus .bcdot { width: 6px; height: 6px; border-radius: 50%; background: currentcolor; }
+.bcstatus--running { color: var(--bc-accent); }
+.bcstatus--blocked { color: var(--bc-danger); }
+.bcstatus--done { color: var(--bc-success); }
+.bcstatus--waiting { color: var(--bc-section-accent); }
+
+/* --- Empty, error, skeleton (§12) ---------------------------------------- */
+
+.bcempty,
+.bcerrorstate {
+  display: grid;
+  gap: var(--bc-3);
+  justify-items: start;
+  padding: var(--bc-6);
+  border: 1px dashed var(--bc-border-subtle);
+  border-radius: var(--bc-r-control);
+  color: var(--bc-text-muted);
+  font: var(--bc-compact);
+}
+.bcempty b,
+.bcerrorstate b { color: var(--bc-text); font: 600 15px/22px var(--bc-font); }
+.bcerrorstate { border-style: solid; border-color: color-mix(in srgb, var(--bc-danger) 40%, transparent); }
+
+.bcskel {
+  border-radius: var(--bc-r-row);
+  background: linear-gradient(
+    90deg,
+    var(--bc-hover) 25%,
+    var(--bc-focus-fill) 37%,
+    var(--bc-hover) 63%
+  );
+  background-size: 400% 100%;
+  animation: bcshimmer 1.4s ease infinite;
+}
+@keyframes bcshimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bcskel { animation: none; }
+}
+
+/* --- Menu and sheet (§11.1, §11.2) --------------------------------------- */
+
+.bcmenu {
+  position: absolute;
+  z-index: 60;
+  min-width: 218px;
+  padding: var(--bc-2);
+  border: 1px solid var(--bc-border-popover);
+  border-radius: var(--bc-r-menu);
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-menu);
+}
+.bcmenu button {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  width: 100%;
+  min-height: var(--bc-8);
+  padding: 0 var(--bc-2);
+  border: 0;
+  border-radius: var(--bc-r-row);
+  background: transparent;
+  color: var(--bc-text);
+  font: var(--bc-compact);
+  text-align: left;
+  cursor: pointer;
+}
+.bcmenu button:hover { background: var(--bc-hover); }
+.bcmenu hr { border: 0; border-top: 1px solid var(--bc-border-subtle); margin: var(--bc-1) 0; }
+
+.bcscrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(0 0 0 / 0.4);
+  animation: bcfade var(--bc-t-in) var(--bc-ease-out);
+}
+@keyframes bcfade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bcscrim { animation: none; } }
+
+.bcsheet {
+  position: fixed;
+  z-index: 51;
+  left: 50%;
+  top: 20px;
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(495px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-sheet);
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-sheet);
+  overflow: hidden;
+}
+
+/* ========================================================================
+   3. Jump (§7)
+   ======================================================================== */
+
+.bcjumphead {
+  position: sticky;
+  top: 0;
+  padding: var(--bc-3) var(--bc-3) var(--bc-2);
+  background: var(--bc-surface);
+}
+.bcjumpresults { overflow-y: auto; padding: 0 var(--bc-3) var(--bc-3); }
+.bcjumpgroup {
+  padding: var(--bc-2) var(--bc-2) var(--bc-1);
+  font: var(--bc-day);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bc-text-muted);
+}
+.bcjumprow {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  width: 100%;
+  min-height: var(--bc-8);
+  padding: 0 var(--bc-2);
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--bc-text);
+  font: var(--bc-compact);
+  text-align: left;
+  cursor: pointer;
+}
+.bcjumprow[aria-selected='true'] { background: var(--bc-surface-selected); }
+.bcjumprow .bckind { margin-left: auto; color: var(--bc-text-muted); font-size: 12px; }
+.bcjumpempty { padding: var(--bc-4) var(--bc-2); color: var(--bc-text-muted); font: var(--bc-compact); }
+
+/* ========================================================================
+   4. Project overview (§8)
+   ======================================================================== */
+
+.bcprojhead { margin-bottom: var(--bc-8); }
+.bcprojhead .bceyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--bc-2);
+  font: var(--bc-compact);
+  color: var(--bc-text-muted);
+}
+.bcprojhead h1 {
+  margin: 0 0 var(--bc-2);
+  font: var(--bc-title);
+  color: var(--bc-text-strong);
+}
+.bcprojhead .bcdesc { margin: 0 0 var(--bc-2); color: var(--bc-text-muted); max-width: 62ch; }
+/*
+  §8.1 asks for a CONCISE recent-activity sentence. Unclamped it wrapped to
+  two lines on a phone at the same size and colour as the description above
+  it, so the header carried two paragraphs of grey where it should carry one
+  line of context — and on a 844px screen that is the fold.
+*/
+.bcprojhead .bclatest {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bcgrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--bc-4);
+}
+
+.bctool { min-width: 0; }
+.bctool > h2 {
+  margin: 0 0 var(--bc-2);
+  font: var(--bc-tool-heading);
+  letter-spacing: -0.1px;
+  color: var(--bc-section-accent);
+}
+.bctool > h2 a { color: inherit; text-decoration: none; }
+.bctool > h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/*
+  §4.3's preview tile is ~324x324. `min-height` rather than a fixed height: a
+  preview whose content is taller must grow rather than clip, and clipped
+  content is the defect the acceptance matrix checks for by name.
+*/
+.bcpreview {
+  /*
+    FLEX-COLUMN, NOT BLOCK, and the reason is that a button centres its content.
+
+    Written as `display: block` first, on the reasoning that a block box stacks
+    from the top — which is true of a div and not of a button: Chromium lays a
+    button's children out in an anonymous box that is centred on both axes, so
+    a sparse preview floated in the middle of a 324px tile with equal dead
+    space above and below it. It looked deliberate, which is why it survived a
+    capture; it is the wrong reading of the content entirely, because the point
+    of a preview is that the newest thing is at the top.
+  */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-height: 324px;
+  padding: var(--bc-3);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-2);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+  container-type: inline-size;
+}
+.bcpreview:hover { background: var(--bc-hover); }
+
+/*
+  A PROJECT tile is not a TOOL preview, and should not borrow its height.
+
+  §4.3's ~324x324 tile is the overview's preview recipe. Applied to the
+  portfolio it gave a two-line project three hundred pixels of nothing, which
+  §8 calls out by name: empty space has to be purposeful rather than evidence
+  of missing information. A project tile sizes to its content with a floor
+  that keeps the row from looking ragged.
+*/
+.bcgrid--projects .bcpreview { min-height: 160px; }
+
+.bcprow {
+  display: grid;
+  gap: 2px;
+  padding: var(--bc-2) 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+.bcprow:last-child { border-bottom: 0; }
+/*
+  STANDALONE, NOT DESCENDANT-SCOPED — and the reason is a defect found by
+  opening a capture, not by reading this file.
+
+  These three were first written as `.bcprow .bcpmeta` and friends. Six callers
+  use them OUTSIDE a preview row: the latest-activity sentence, the
+  nothing-here lines, the two explanatory paragraphs and the portfolio
+  excerpt. Every one of those rendered at 16px full-ink body text instead of
+  12px muted, so a caption under a heading read as a second heading and the
+  quiet hierarchy the specification is mostly made of simply was not there.
+
+  CLAUDE.md already records this exact trap about `.m` and `li .m`. A class is
+  only styled where its rule says it is.
+*/
+.bcptitle {
+  font: 600 14px/20px var(--bc-font);
+  color: var(--bc-text);
+  overflow-wrap: anywhere;
+}
+.bcpmeta {
+  font: 400 12px/18px var(--bc-font);
+  color: var(--bc-text-muted);
+  overflow-wrap: anywhere;
+}
+.bcpexcerpt {
+  font: 400 13px/19px var(--bc-font);
+  color: var(--bc-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bcprow--done .bcptitle { color: var(--bc-text-muted); text-decoration: line-through; }
+
+.bcmore {
+  display: inline-block;
+  margin-top: var(--bc-2);
+  font: var(--bc-compact);
+  color: var(--bc-text-muted);
+}
+
+/* ========================================================================
+   5. Lists and records
+   ======================================================================== */
+
+.bclist { display: grid; }
+.bcitem {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--bc-3);
+  align-items: start;
+  padding: var(--bc-3) var(--bc-2);
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+.bcitem:hover { background: var(--bc-hover); }
+.bcitem .bcitembody { min-width: 0; display: grid; gap: 2px; }
+.bcitem .bcitemtitle { font: 600 15px/22px var(--bc-font); overflow-wrap: anywhere; }
+.bcitem .bcitemmeta { font: var(--bc-compact); color: var(--bc-text-muted); overflow-wrap: anywhere; }
+.bcitem--done .bcitemtitle { color: var(--bc-text-muted); text-decoration: line-through; }
+
+.bccheck {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  accent-color: var(--bc-accent);
+  cursor: pointer;
+}
+.bcitem--pending { opacity: 0.55; }
+
+.bcsectiontitle { font: var(--bc-section-title); color: var(--bc-text-strong); margin: 0 0 var(--bc-4); }
+
+/* ========================================================================
+   6. Responsive (§14)
+   ======================================================================== */
+
+/*
+  PHONE RULES LIVE AT THE END OF THE FILE.
+
+  A media query adds no specificity, so where it is written decides whether it
+  applies. This repository has been bitten by that twice — every phone rule in
+  an early block was silently overridden by a base rule three hundred lines
+  below it, through a full capture run that reported no errors.
+*/
+
+/* Tablet portrait — 768x1024: two columns for compact previews (§14). */
+@media (max-width: 1100px) {
+  .bcgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bcmain { padding: var(--bc-6) var(--bc-6) var(--bc-main-pad-bottom); }
+}
+
+/* Compact desktop — 1024x768: shrink margins before content (§14). */
+@media (max-width: 1140px) {
+  .bctop { padding: var(--bc-2); }
+}
+
+/* Phone — 390x844 (§6.2, §14). */
+@media (max-width: 760px) {
+  /*
+    §14: full-width surface, 16px padding, no quiet margins. The radius and the
+    shadow go with them — a rounded card inset by nothing is a rounded card
+    against the viewport edge, which reads as a rendering fault.
+  */
+  .bcmain {
+    width: 100%;
+    padding: var(--bc-4) var(--bc-4) 96px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /*
+    MEASURED COLLISION, not a guess: at 390px the `1fr auto 1fr` grid gave the
+    centre its 166px minimum and left 108px for each side, while the attention
+    control needs 122 — so it overlapped the jump box by 26px. The centre
+    column takes what is left instead, and the keyboard hint goes: a phone has
+    no Shift key to advertise.
+  */
+  .bctop {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: var(--bc-2) var(--bc-4);
+    gap: var(--bc-1);
+  }
+  .bcjump { min-width: 0; }
+  .bcjump kbd { display: none; }
+  .bcjump > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /*
+    §6.2 and the acceptance matrix: the title and the first useful module must
+    appear before 40% of an 844px viewport, against a recorded 46% defect. The
+    header is the thing that spends that room, so the title steps down and the
+    block below it loses its top margin.
+  */
+  .bcprojhead { margin-bottom: var(--bc-4); }
+  /*
+    `margin-left: auto` on the actions pushed the project options control to
+    the far right of a wrapped line of its own, where it read as a stray
+    rather than as part of the header. On a narrow screen it simply follows
+    the chips.
+  */
+  .bcprojhead .bcactions { margin-left: 0; }
+  .bcprojhead h1 { font: var(--bc-title-mobile); }
+  .bcprojhead .bcdesc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .bcgrid { grid-template-columns: 1fr; gap: var(--bc-6); }
+  .bcpreview { min-height: 0; }
+
+  .bcsectiontitle { font: 800 22px/28px var(--bc-font); }
+
+  /*
+    The tray is fixed at the foot on a phone, so the main surface reserves
+    clearance for it above (96px bottom padding) — §6.2 requires that the tray
+    never covers the last actionable row, and a fixed element that overlaps
+    content is the commonest way that promise is broken.
+  */
+  .bctray {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 40;
+    gap: 0;
+    padding: var(--bc-1) var(--bc-2) calc(var(--bc-1) + env(safe-area-inset-bottom));
+    background: var(--bc-canvas);
+    border-top: 1px solid var(--bc-border-subtle);
+    justify-content: space-around;
+  }
+  .bctray a,
+  .bctray button {
+    flex-direction: column;
+    gap: 2px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 var(--bc-1);
+    font: 500 10px/14px var(--bc-font);
+  }
+
+  /* §11.2: a wide centre dialog becomes a bottom sheet on a phone. */
+  .bcsheet {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    max-height: 80vh;
+    border-radius: var(--bc-r-sheet) var(--bc-r-sheet) 0 0;
+  }
+
+}
+
+/* ========================================================================
+   7. Touch targets, by POINTER rather than by width (§4.3, §14, §15)
+   ======================================================================== */
+
+/*
+  §4.3 says 44x44 "on touch layouts" — a capability, not a width. Scoping the
+  floor to `max-width: 760px` left a 768px tablet portrait with nineteen
+  controls between 22 and 37px, every one of them a real finger target, and a
+  measurement pass found them on its first run. A pointer query asks the
+  question the specification actually asks.
+
+  LAST IN THE FILE, after every base rule, because a media query adds no
+  specificity and this repository has twice shipped a phone rule that a base
+  rule three hundred lines below it silently overrode.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcbtn,
+  [data-experience='basecamp'] .bcjump,
+  [data-experience='basecamp'] .bcjumprow,
+  [data-experience='basecamp'] .bcmenu button,
+  [data-experience='basecamp'] .bctray a,
+  [data-experience='basecamp'] .bctray button,
+  [data-experience='basecamp'] summary {
+    min-height: 44px;
+  }
+  [data-experience='basecamp'] .bcicon {
+    width: 44px;
+    height: 44px;
+  }
+  [data-experience='basecamp'] .bctop .bcbtn,
+  [data-experience='basecamp'] .bctop .bcjump {
+    height: 44px;
+  }
+
+  /*
+    A tool heading is a link, and a 22px line of text is not a target. Padding
+    rather than the pseudo-element trick the buttons use: these sit directly
+    above their own preview tile, so an invisible 44px box would overlap the
+    tile and steal the press that was meant for it.
+  */
+  [data-experience='basecamp'] .bctool > h2 a {
+    display: inline-block;
+    padding-block: 11px;
+  }
+  [data-experience='basecamp'] .bctool > h2 { margin-bottom: 0; }
+
+  /* The completion control, which is the most-pressed thing on the page. */
+  [data-experience='basecamp'] .bccheck {
+    width: 28px;
+    height: 28px;
+    margin: 8px;
+  }
+}

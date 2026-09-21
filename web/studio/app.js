@@ -9,6 +9,18 @@
 
 import { CREW, FROM_OFFICE, PROJECTS, WAITING, byId, crewBy, health, hydrate, source } from './data.js'
 import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './office.js'
+/*
+  The experimental Basecamp-inspired Team HQ (basecamp_clone.md).
+
+  Imported unconditionally and rendered only at the /basecamp prefix. Three
+  small modules rather than another few thousand lines in this file: the spec
+  warns by name against appending a second all-screen implementation to a file
+  that is already 600 KB, and a separate module is also the only way the two
+  presentations can be diffed against one another.
+*/
+import * as bc from './bc/shell.js'
+import * as bcJump from './bc/jump.js'
+import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
 import { DENSITIES, PALETTES, TEXTURES, SCHEMES, appearance, apply, hydrate as hydrateAppearance, readTexture, saveWith, toggleScheme, activeScheme } from './appearance.js'
@@ -268,6 +280,23 @@ const unseen = {}
 const teamWork = {}
 
 const state = {
+  /*
+    WHICH PRESENTATION OF THE OFFICE IS ON SCREEN.
+
+    'default' is everything this studio has always been. 'basecamp' is the
+    experimental Basecamp-inspired Team HQ described by the top-level
+    basecamp_clone.md, reached only at the /basecamp path prefix.
+
+    A FLAG ON THE STATE RATHER THAN A SECOND FRONTEND. Same state object, same
+    data adapters, same mutations, same canonical records - only the renderer
+    differs. Two frontends is the thing ADR-0019 was spent removing, and a
+    forked copy of a 607 KB file would drift from the real one within a day.
+
+    It is deliberately NOT a query parameter: keepUrl() writes the path and
+    discards the query on every paint, so an experience carried in the query
+    string would be erased by the first render after arrival.
+  */
+  experience: 'default',
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8520,14 +8549,20 @@ function restoreFocus(key) {
   relative `./app.js` is a different file as far as a static host is concerned.
 */
 function pathNow() {
+  /*
+    The experimental experience keeps its own addresses under one prefix, so a
+    link into it stays in it across a reload, a Back and a bookmark - and the
+    default addresses below are byte-for-byte what they have always been.
+  */
+  const at = state.experience === 'basecamp' ? '/basecamp' : ''
   if (state.view === 'project' && state.project !== null) {
     return state.tab === 'overview'
-      ? `/p/${state.project}`
-      : `/p/${state.project}/${state.tab}`
+      ? `${at}/p/${state.project}`
+      : `${at}/p/${state.project}/${state.tab}`
   }
-  if (state.view === 'tasks') return '/tasks'
-  if (state.view === 'lately') return '/activity'
-  return '/'
+  if (state.view === 'tasks') return `${at}/tasks`
+  if (state.view === 'lately') return `${at}/activity`
+  return at === '' ? '/' : at
 }
 
 /**
@@ -8540,6 +8575,22 @@ function pathNow() {
  */
 function goToPath(path) {
   const bits = String(path ?? '/').split('/').filter((x) => x !== '')
+  /*
+    THE EXPERIMENTAL EXPERIENCE, read off the front of the path (basecamp_clone.md).
+
+    A prefix rather than a separate deployment: vercel.json already rewrites any
+    dotless path outside api/, studio/, samples/ and fonts/ to index.html, and
+    index.html asks for root-absolute assets - so /basecamp and /basecamp/p/x
+    boot the same page with the same stylesheets and need no routing change at
+    all. Everything after the prefix is then parsed exactly as it always was,
+    which is what keeps the two experiences one router rather than two.
+
+    Sticky within a visit and nowhere else: the flag is set only by the address,
+    so a default URL always lands in the default experience even after the
+    experiment has been open in the same tab.
+  */
+  state.experience = bits[0] === 'basecamp' ? 'basecamp' : 'default'
+  if (state.experience === 'basecamp') bits.shift()
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   if (bits[0] === 'tasks') { state.view = 'tasks'; return true }
   if (bits[0] === 'activity') { state.view = 'lately'; return true }
@@ -9035,6 +9086,35 @@ function wirePlane(root) {
 
 function drawShell() {
   const root = $('#root')
+  /*
+    THE EXPERIMENTAL EXPERIENCE, and the only branch into it in this file.
+
+    Everything below this point is the default studio and is untouched by the
+    experiment. The early return is what makes that true structurally rather
+    than by inspection: there is no path on which both shells draw, and no way
+    for the experiment to half-apply to the product Grant uses.
+
+    The document attribute is what scopes bc/*.css. It is REMOVED rather than
+    set to 'default' on the other branch, because an attribute that is present
+    with a different value still matches an attribute-presence selector, and
+    somebody will eventually write one.
+  */
+  if (state.experience === 'basecamp') {
+    document.documentElement.dataset.experience = 'basecamp'
+    root.classList.remove('shut')
+    root.innerHTML = bc.html()
+    bcWire.wire(root)
+    /*
+      Returns WITHOUT calling keepUrl or restoreFocus: render() does both after
+      drawShell in every case, and a redraw that replaces every node takes the
+      keyboard with it unless restoreFocus runs. Doing the address here and
+      skipping the focus restore is exactly the defect #147 records - a
+      keyboard user returned to the top of the document after every action,
+      with nothing anywhere reporting a fault.
+    */
+    return
+  }
+  delete document.documentElement.dataset.experience
   root.classList.toggle('shut', railShut())
   root.innerHTML = commandBar() + rail() + (
     state.view === 'project' ? dashboard()
@@ -12978,6 +13058,105 @@ if (typeof window !== 'undefined') {
   `connection_health`, which is the card underneath.
 */
 const backFromGoogle = cameBackFromGoogle()
+
+/*
+  HAND THE EXPERIMENTAL EXPERIENCE WHAT IT NEEDS, once, before the first paint.
+
+  Dependency injection rather than an import back into this file: bc/* already
+  imports office.js and data.js directly, and the only things it cannot reach
+  on its own are this module's state, its repaint and its navigation. Passing
+  them keeps the dependency one-way and keeps the branch in drawShell the only
+  coupling in the other direction.
+*/
+const bcContext = {
+  state,
+  projects: () => PROJECTS,
+  crew: CREW,
+  tools: bc.TOOLS,
+  /*
+    Who is actually on a project, derived from its rows rather than stored.
+
+    The payload carries no per-project roster, and the studio's own team
+    surface derives it the same way (from who appears in the work). Deriving
+    it twice is better than a second place for it to rot, which is the lesson
+    0310 was spent on.
+  */
+  crewFor: (slug) => {
+    const p = PROJECTS.find((x) => x.slug === slug)
+    if (p === undefined) return []
+    const slugs = new Set(
+      [
+        ...(p.tasks ?? []).map((t) => t.who),
+        ...(p.activity ?? []).map((a) => a.who),
+        ...(p.waiting ?? []).map((w) => w.who),
+      ].filter((x) => typeof x === 'string' && x !== ''),
+    )
+    const seen = new Set()
+    const out = []
+    for (const s2 of slugs) {
+      const person = crewBy(s2)
+      if (person === undefined || seen.has(person.slug)) continue
+      seen.add(person.slug)
+      out.push(person)
+    }
+    return out
+  },
+  /*
+    The personal list, or null while it is still coming.
+
+    NULL AND EMPTY ARE DIFFERENT ANSWERS and the difference is the whole point:
+    null draws a skeleton, an empty array says there is nothing on your list.
+    `mine.trouble` is the third case - a read that FAILED - and it must never
+    render as "nothing due", which is the defect #?? records about this exact
+    store. The experience asks for the trouble flag and says it could not look.
+  */
+  myTasks: () => {
+    // `mineKey()` takes no arguments — it reads `mine.bucket`, the query and
+    // the sort, because the cache is keyed on the whole request (#259).
+    const key = mineKey()
+    const rows = mine.lists[key]
+    if (mine.trouble[key] === true) return []
+    return Array.isArray(rows) ? rows : null
+  },
+  myTasksTrouble: () => mine.trouble[mineKey()] === true,
+  refresh: () => refresh(),
+  render,
+  go: (path) => {
+    goToPath(path)
+    render()
+  },
+  /*
+    Navigate anywhere, in or out of the experience.
+
+    A path that does not carry the prefix leaves the experiment, and leaving is
+    a real page load rather than a router hop - the two presentations put
+    different attributes on the document root and the default studio expects to
+    boot into its own shell.
+  */
+  goAnywhere: (path) => {
+    if (String(path).startsWith('/basecamp')) {
+      goToPath(path)
+      if (state.view === 'tasks') void needMine(mine.bucket)
+      render()
+      return
+    }
+    window.location.assign(path)
+  },
+  /*
+    Full search (§7.3, Shift+Enter).
+
+    Promotes into the default studio's search rather than building a second
+    one: search already spans documents, tasks, contacts, sources and outputs
+    with access controls applied, and a parallel implementation would be a
+    second answer to one question.
+  */
+  fullSearch: (q) => {
+    window.location.assign(`/?q=${encodeURIComponent(q)}`)
+  },
+}
+bc.mount(bcContext)
+bcJump.mount(bcContext)
+bcWire.mount(bcContext)
 
 render()
 
