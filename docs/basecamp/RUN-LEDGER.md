@@ -281,6 +281,19 @@ Each of these needs one credential, not more work. Everything else continued.
 | `verify:design`'s two failures | one needs the deployed site, one needs `SUPABASE_ACCESS_TOKEN` | identical on the baseline; not caused here |
 | `tests/sessions/weather-is-not-a-failure.test.ts` | needs `SUPABASE_ACCESS_TOKEN` to load | sessions harness — Shadow Grant's ground, untouched |
 
+**Three generated audit reports were reverted, deliberately.** Running
+`verify:controls` on this branch rewrote
+`docs/testing/controls-*.md`, and the only differences were caused by this
+environment rather than by this branch: the provenance line degraded from
+`web/hq read from: 16/16 live projections` to
+`empty (no SUPABASE_ACCESS_TOKEN)`, and one report's count moved 72 → 71.
+Committing them would have replaced a record made with credentials by a worse
+one made without, so they are restored to the baseline. Re-generate them in an
+environment that has the token; the counts on this branch were 37 / 21 / 71
+pressed with 0 unpressable and 0 findings throughout, and `verify:wired`
+(77 attributes, 21 screens) and `verify:layouts` (64 states, 0 findings) are
+unchanged.
+
 **Harness caveat, not a product defect.** Chromium in this sandbox renders a
 native date input as `mm/dd/yyyy` regardless of the context locale or
 `--lang=en-GB`. The format is the browser's, not the page's; Grant's own
