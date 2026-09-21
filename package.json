@@ -228,6 +228,7 @@
     "verify:google-live": "tsx scripts/verify/google-live.ts",
     "q": "tsx scripts/q.ts",
     "verify:drains": "tsx scripts/verify/drains.ts",
+    "verify:escapes": "tsx scripts/verify/escapes.ts",
     "verify:roster": "tsx scripts/verify/roster.ts",
     "breadth": "tsx scripts/breadth.ts",
     "session": "tsx scripts/sessions/cli.ts",
