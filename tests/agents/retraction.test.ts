@@ -55,7 +55,7 @@ describe('a clause withdrawn in the same message', () => {
       'do the budget, no scrap that, do the summary, actually forget it, just the total',
     )
     expect(r?.kept).toBe('just the total')
-    expect(r?.pivot).toBe('forget it')
+    expect(r?.pivot).toBe('forget')
   })
 
   /*
@@ -116,6 +116,36 @@ describe('a clause withdrawn in the same message', () => {
       expect(readRetraction(said)?.kept).toBe(kept)
     })
   }
+})
+
+describe('a pivot that NAMES what it withdraws takes only that', () => {
+  /*
+    The live multi.partial-cancel failure, verbatim. The office was asked
+    to chase a letter, redo a budget and note some paperwork, changed its
+    mind about the budget alone, and the first version of this file - a
+    whole-message rule - threw away the two asks that were kept.
+  */
+  it('keeps the asks that were not withdrawn', () => {
+    const r = readRetraction(
+      'right chase sorry right chase the letter redo the budget no leave the budget and proofread it and the funding officer is going to want that paperwork before the tenth',
+    )
+    expect(r?.target).toBe('the budget')
+    expect(r?.withdrawn).toBe('redo the budget')
+    expect(r?.kept).toContain('chase the letter')
+    expect(r?.kept).toContain('proofread')
+    expect(r?.kept).toContain('paperwork')
+    expect(r?.kept).not.toContain('redo the budget')
+  })
+
+  it('a pronoun names nothing, so the whole of what came before goes', () => {
+    const r = readRetraction('chase the letter and redo the budget, scrap that, just the total')
+    expect(r?.target).toBeNull()
+    expect(r?.kept).toBe('just the total')
+  })
+
+  it('names something that was never asked for, so nothing is being taken back', () => {
+    expect(readRetraction('chase the letter and proofread it, forget the invoice')).toBeNull()
+  })
 })
 
 describe('what must NOT be read as a retraction', () => {

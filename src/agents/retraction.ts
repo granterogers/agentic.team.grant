@@ -71,27 +71,43 @@
 import { straighten } from './quality.ts'
 
 const CANCELS = [
-  'forget (?:that|it|the|about)',
-  'forget',
-  'scrap (?:that|it|the)',
-  'scratch (?:that|it)',
-  'strike that',
-  'ignore (?:that|it|the)',
-  'disregard (?:that|it|the)?',
+  'forget(?: about)?',
+  'scrap',
+  'scratch',
+  'strike',
+  'ignore',
+  'disregard',
   'never ?mind',
   'nevermind',
-  'leave (?:that|it)',
-  'hold off(?: on (?:that|it|the))?',
-  'cancel (?:that|it|the)',
-  'skip (?:that|it|the)',
-  'drop (?:that|it|the)',
-  'undo (?:that|it|the)',
-  "don'?t bother(?: with (?:that|it|the))?",
-  'no need(?: for (?:that|it|the))?',
+  'leave',
+  'hold off(?: on)?',
+  'cancel',
+  'skip',
+  'drop',
+  'undo',
+  "don'?t bother(?: with)?",
+  'no need(?: for)?',
   'on second thoughts?',
   'as you were',
-  'belay that',
+  'belay',
 ]
+
+/**
+ * What the pivot says to drop, when it says.
+ *
+ * "scrap that" names nothing and withdraws everything said before it.
+ * "no leave the budget" names the budget, and only the budget goes - the
+ * rest of the message stands. Reading them the same way is how
+ * `multi.partial-cancel` kept failing after the first fix: the office was
+ * told to chase a letter, redo a budget and proofread, changed its mind
+ * about the budget alone, and a whole-message rule would have thrown away
+ * the two asks it kept.
+ *
+ * A pronoun is not a name. `that`, `it`, `this`, `those` and a bare
+ * operator all mean "everything up to here".
+ */
+const OBJECT =
+  /^\s*(?:(that|it|this|those|them)\b|((?:the|that|this|my|our|your)\s+[a-z][a-z0-9'-]*(?:\s+(?:page|note|email|report|deck|doc|document|list|bid|draft|budget|letter|paperwork|invoice|thing|one))?))/i
 
 /**
  * A cancellation that is being ASKED FOR rather than performed.
@@ -128,6 +144,14 @@ export interface Retraction {
   readonly withdrawn: string
   /** The operator that did it, for a report that names its evidence. */
   readonly pivot: string
+  /**
+   * The thing the pivot named, where it named one.
+   *
+   * Null for a bare pivot, which withdraws everything before it. A name
+   * means only that thing goes and the rest of the message stands - the
+   * distinction `multi.partial-cancel` turns on.
+   */
+  readonly target: string | null
 }
 
 /**
@@ -162,7 +186,19 @@ export const readRetraction = (text: string): Retraction | null => {
   PIVOT.lastIndex = 0
   for (let m = PIVOT.exec(said); m !== null; m = PIVOT.exec(said)) {
     if (NOT_A_PIVOT.test(said.slice(0, m.index))) continue
-    if (HAS_A_COMPLEMENT.test(said.slice(m.index + m[0].length))) continue
+    /*
+      The complement test has to look past the OBJECT, not past the verb.
+
+      When the operator and its object were one pattern this read the text
+      after "leave it"; splitting them so a target could be named made it
+      read the text after "leave", which is " it where it is" - no
+      complement introducer at the front, so "leave it where it is" became
+      a pivot again. The guard and the thing it guards have to move
+      together.
+    */
+    const rest = said.slice(m.index + m[0].length)
+    const obj = OBJECT.exec(rest)
+    if (HAS_A_COMPLEMENT.test(rest.slice(obj === null ? 0 : obj[0].length))) continue
     chosen = { index: m.index, length: m[0].length, text: m[0] }
   }
   if (chosen === null) return null
@@ -181,21 +217,75 @@ export const readRetraction = (text: string): Retraction | null => {
     .trim()
   if (strippedBefore.replace(/[^a-z0-9]/gi, '').length < 8) return null
 
-  const after = said
-    .slice(chosen.index + chosen.length)
-    .replace(/^[\s,.;:—–-]+/, '')
+  const afterOperator = said.slice(chosen.index + chosen.length)
+  const named = OBJECT.exec(afterOperator)
+  // Group 1 is a pronoun, which names nothing. Group 2 is a real noun phrase.
+  const target = named?.[2] !== undefined ? named[2].trim() : null
+  const consumed = named === null ? 0 : named[0].length
+
+  const after = afterOperator
+    .slice(consumed)
+    .replace(/^[\s,.;:\u2014\u2013-]+/, '')
     .trim()
+
+  /*
+    The words that introduced the pivot belong to the pivot, not to the
+    thing being withdrawn. "redo the budget page, actually" reads as an
+    unfinished sentence when the office repeats it back.
+  */
+  const cleanedBefore = before
+    .replace(/[\s,;:\u2014\u2013-]*\b(?:no|actually|wait|erm|um)\b[\s,;:\u2014\u2013-]*$/gi, '')
+    .trim()
+
+  /*
+    A named target withdraws ITSELF, not everything before it.
+
+    "no leave the budget" in a message that also asked for a letter to be
+    chased and a page proofread means the budget goes and the other two
+    stand. A whole-message rule threw both away, which is why
+    multi.partial-cancel kept failing after the first version of this file.
+
+    The span removed is the noun phrase plus the word in front of it, which
+    is the verb that asked for it: "redo the budget" goes, "chase the
+    letter" stays. Crude on purpose - the alternative is a parser, and the
+    cost of being crude is one extra word dropped from a clause the
+    say-back then shows the person, against the cost of the whole-message
+    rule, which was discarding asks they had kept.
+  */
+  if (target !== null) {
+    const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const span = new RegExp(`(?:\\b[a-z][a-z0-9'-]*\\s+)?${escaped}\\b`, 'gi')
+    let last: { index: number; length: number } | null = null
+    for (let m = span.exec(cleanedBefore); m !== null; m = span.exec(cleanedBefore)) {
+      last = { index: m.index, length: m[0].length }
+    }
+    /*
+      The named thing is not in what came before, so nothing is being taken
+      back - this is an instruction ABOUT that thing, not a retraction of
+      it. "cancel the Thursday booking" is the task, not a pivot.
+    */
+    if (last === null) return null
+
+    const survives =
+      `${cleanedBefore.slice(0, last.index)} ${cleanedBefore.slice(last.index + last.length)}`
+        .replace(/\s+/g, ' ')
+        .replace(/\s+([,.;:])/g, '$1')
+        .trim()
+    return {
+      kept: [survives, after]
+        .filter((x) => x !== '')
+        .join(' ')
+        .trim(),
+      withdrawn: cleanedBefore.slice(last.index, last.index + last.length).trim(),
+      pivot: chosen.text.toLowerCase(),
+      target,
+    }
+  }
 
   return {
     kept: after,
-    /*
-      The words that introduced the pivot belong to the pivot, not to the
-      thing being withdrawn. "redo the budget page, actually" reads as an
-      unfinished sentence when the office repeats it back.
-    */
-    withdrawn: before
-      .replace(/[\s,;:—–-]*\b(?:no|actually|wait|erm|um)\b[\s,;:—–-]*$/gi, '')
-      .trim(),
+    withdrawn: cleanedBefore,
     pivot: chosen.text.toLowerCase(),
+    target: null,
   }
 }
