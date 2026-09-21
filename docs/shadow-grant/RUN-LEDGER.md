@@ -117,6 +117,7 @@ One blocked item must never block the mission. Each carries the exact question.
 | A message that is entirely a cancellation reads as an instruction | comment on [#291](https://github.com/granterogers/agentic.team.grant/issues/291) |
 | `npm run test` cannot pass without a Supabase token | [#294](https://github.com/granterogers/agentic.team.grant/issues/294) |
 | The two task matchers disagree — reproduced offline | comment on [#289](https://github.com/granterogers/agentic.team.grant/issues/289) |
+| The live door cannot test 52% of the corpus: the simulated world is not in the live office, and the 3 dimensions that would catch it have no scoring branch | [#295](https://github.com/granterogers/agentic.team.grant/issues/295) |
 
 **Nothing in the product was changed.** §18: the baseline comes before any fix.
 
@@ -266,3 +267,86 @@ it is recorded rather than fixed in this pass because writing three new
 oracles is a phase, not a checklist step.
 
 **Nothing in the product was changed.**
+
+
+---
+
+## The blocker the live door actually has — 21 September
+
+The checklist's steps 1-3 passed and containment held on every run. The
+thing that stops the corpus going live is not safety. It is that **the world
+the corpus asks about does not exist in the live office**, and the two ways
+to make it exist are mutually exclusive.
+
+### What was observed
+
+`project.lookup/grant-like/0` said *"ok so give me the satte of play on the
+funding one"*. The office answered:
+
+> *"I don't have any record of a funding status update in the office data…
+> If you can point me to the specific document or project where the funding
+> info lives, I can pull the measured or calculated figures from there."*
+
+That is **correct behaviour**. `DEFAULT_WORLD` contains
+`simgrant Match Funding Bid` (nicknames *the bid*, *the funding one*, *the
+grant thing*); the live office's active non-fixture projects are
+`legacy-coaching-course`, `unnamed`, `ai-team-hq-test`,
+`learning-my-ai-team`, `ai-learning`. There is no funding project, so there
+is nothing to resolve, and saying so is the office being honest.
+
+The evaluator scored the turn **understanding pass, context pass, agency
+pass**. Nothing was wrong with those verdicts either. The turn is green and
+it measured nothing about referent resolution.
+
+### How much of the corpus this is
+
+| | |
+|---|---|
+| scenarios naming a simulated project, or declaring one in intent | **68 of 132 — 52%** |
+| families affected | **40 of 66** |
+| declared layers | referent 12, history 25, execution 56, comprehension 39 |
+
+Run the whole corpus live today and roughly half of it produces a green
+report about a world the office has never heard of — with the three
+dimensions that would have caught it (`reality`, `conversation`,
+`completion`) having no scoring branch at all. That is the found-nothing
+shape with a plausible number in front of it.
+
+### Why provisioning the world is not a small job
+
+The two available options contradict each other, and the contradiction is
+enforced in the database:
+
+- **Fixture projects** (`fixture-…`) are safe — `app.provision_missing_channels`
+  (0419) only fires for a project that is active, attached, **not a fixture**
+  and **more than fifteen minutes old**, so no Slack channel is created. But
+  `app.resolve_project_by_name` filters `not p.is_fixture` — **verified
+  against the live definition, not remembered** — so a fixture project
+  cannot be resolved by the nickname the referent families exist to test.
+  Every one of them would fail for the wrong reason.
+- **Real projects** resolve correctly and are **permanent debris**: a project
+  that gathers a job can never be deleted, `project_delete` refuses it for
+  ever, and after fifteen minutes it earns a real Slack channel that Slack
+  cannot delete. CLAUDE.md records this exact pile being built twice, once
+  by somebody quoting the rule that caused it.
+
+This is #45 in its sharpest form: *a suite testing a feature that filters
+fixtures cannot name its subjects the way the filter matches.*
+
+One lead, not yet followed: `app.add_project_alias` does **not** filter
+fixtures, while `resolve_project_by_name` does. Whether resolution can reach
+a fixture project through an alias is worth one query before any design is
+chosen.
+
+### What this means for the instruction "run the checklist one scenario at a time"
+
+Steps 1-4 were followed and four live scenarios were run, one at a time,
+with containment verified after each. Widening further is **not blocked on
+safety** — it is blocked on validity, and running the remaining families
+would produce numbers that look like findings and are not. CLAUDE.md's
+most-used rule applies: validate the test before believing the finding.
+
+Filed as [#295](https://github.com/granterogers/agentic.team.grant/issues/295) rather than fixed here. Provisioning a simulated world
+into a shared production database is a phase with its own teardown proof,
+not a checklist step, and §2 of the mission plus the parallel Basecamp
+session make a migration the last resort rather than the first.
