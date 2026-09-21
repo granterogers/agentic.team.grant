@@ -91,6 +91,8 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 29 | 21 Sep | Frozen held-out and fresh seed 77, live. Both headline defects reproduce on material nobody wrote to find them | DONE |
 | 30 | 21 Sep | **#291 FIXED.** `retraction.ts`; measured on three unseen corpora: context 69% → 96%, cancelled_executed 37 → 1 | DONE |
 | 31 | 21 Sep | **#296 was a FALSE POSITIVE**, and uncovered a containment breach: 30 synthetic tasks on Grant's real list. Fixed, swept, closed | DONE |
+| 32 | 21 Sep | **#290 root cause found in the PROMPT**; fix measured as NOT sufficient (0 of 8 unseen). Reported open, safe design named | DONE |
+| 33 | 21 Sep | **ADR-0047** — migration numbering across concurrent branches; `npm run migrate:next` | DONE |
 
 ## Decisions taken without asking
 
@@ -707,3 +709,70 @@ Backticks in a comment inside a template literal, **eighth** time. This
 time `check:templates` reported CLEAN over it: once the backtick closes the
 literal, the rest is no longer a comment inside one, so the guard cannot
 see the shape it exists for. `tsc` caught it. Worth fixing in the guard.
+
+
+---
+
+## #290 — root cause found, fix measured as insufficient. STILL OPEN.
+
+**The binding constraint is one line of the prompt**, not `readTeaching`:
+
+> *8. … Only a rule about how the office should behave in future is a
+> preference — "from now on", "always", "never", "stop doing X".*
+
+The prompt TEACHES the model to require a marker, so the semantic layer
+never returned `preference` for a plain manner statement and the
+`readTeaching` change had nothing to act on.
+
+Two changes made, both correct, neither sufficient:
+
+1. `readTeaching(text, alreadyAPreference)` — the semantic classification
+   satisfies the standing test on its own, with `JUST_THIS_ONCE` keeping
+   `preference.one-off-override` working.
+2. Rule 8 replaced with a functional definition — would it still make sense
+   applied to the next unrelated request? Its original purpose is preserved
+   and verified.
+
+**Measured on eight unseen manner statements through the live layer: 0 of 8.**
+The single case that flipped was variance.
+
+**What was deliberately NOT shipped.** A deterministic manner recogniser
+would catch all eight, and `remember` STORES rather than offers — so a
+false positive becomes a permanent standing rule Grant never saw created.
+After 0539, where 34 of 49 prompt lessons were junk, a heuristic writing
+silently to that table is the wrong trade. The safe design is #147's:
+recognise → offer → store on a press. That is a phase.
+
+## The third door constant
+
+`learned` was hardcoded false on the canonical door, so `context` failed
+for EVERY preference scenario live whatever the product did. Third of
+three: `clauses`, `reading`/`recognised`, and now `learned`. **The lesson
+generalises — a door must declare what it OBSERVES, never return a
+plausible constant**, and every one of these was reported as a product
+finding before it was caught.
+
+## Live regression after all fixes, worker v667
+
+Cancellation, correction and approval: **zero hard failures.** Both
+`cancelled_executed` events gone; `multi.partial-cancel` now completes.
+What remains live is `#289` (the two task matchers disagreeing) and the
+approval-boundary variance, which is untouched.
+
+## Containment at the end
+
+| | |
+|---|---|
+| shadow jobs | **234**, all fixture, **0 announceable** |
+| tasks / documents / deliveries SENT | **0 / 0 / 0** |
+| Grant's own list | his 4, plus 3 that are **not mine** |
+| what a real prompt sees | **15 real lessons, 0 harness** |
+| `check:leaks` | green |
+
+**Three tasks on his list carry a `verify:mytasks`-style run token
+(`hstpsc1g`), not a `verify-shadow-` one.** They are another session's
+suite debris and have `job_id` null, so the provenance fix in
+`handlers/instruction.ts` does not cover whatever wrote them. Left alone
+deliberately — deleting another workstream's in-flight test data is not
+this one's business — and `check:leaks` names them, which is the witness
+working.
