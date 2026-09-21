@@ -8626,7 +8626,23 @@ function goToPath(path) {
     state.view = 'project'
     state.project = p.slug
     const tab = bits[2] === undefined ? 'overview' : decodeURIComponent(bits[2])
-    state.tab = SECTIONS.some((x) => x.id === tab) ? tab : 'overview'
+    /*
+      WHICH TAB LIST DECIDES depends on which experience you are in.
+
+      This validated against SECTIONS alone, which is the DEFAULT studio's
+      list — and Activity was removed from it in #222. The experiment has an
+      Activity tool with a heading, a preview and a link, so
+      /basecamp/p/:slug/activity was accepted by the rewrite, rejected here,
+      and silently rewritten to the overview: a link that took you back to
+      the page you pressed it on. Four capture runs photographed the overview
+      under the name "activity" without anybody noticing, and it surfaced
+      only because two published files had identical byte counts.
+
+      An offer may only promise what the press can perform, and a link is an
+      offer. The experiment's own tools decide its own routes.
+    */
+    const known = state.experience === 'basecamp' ? bc.TOOLS.map((t) => t.id) : SECTIONS.map((x) => x.id)
+    state.tab = known.includes(tab) ? tab : 'overview'
     return true
   }
   state.view = 'portfolio'

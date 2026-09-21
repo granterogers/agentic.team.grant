@@ -145,6 +145,52 @@ check(
   'it must be deleted rather than set to another value: an attribute-presence selector would still match',
 )
 
+/* ------------------- every owned tool's address opens THAT tool ------------- */
+
+/*
+  A LINK THAT LANDS SOMEWHERE ELSE IS THE WORST KIND OF DEAD CONTROL, because
+  it looks like it worked.
+
+  /basecamp/p/:slug/activity was accepted by the SPA rewrite and then
+  rewritten to the overview by the router, which validated the tab against
+  the DEFAULT studio's SECTIONS — and Activity was removed from that list in
+  #222. So the Activity preview linked back to the page it sat on. Four
+  capture runs photographed the overview under the name "activity", and it
+  surfaced only because two published files had identical byte counts.
+
+  So the property is not "the address renders something". It is that the
+  address renders THE TOOL IT NAMES, read off the breadcrumb the surface
+  draws for itself.
+*/
+if (slug !== null) {
+  const owned: [string, string][] = [
+    ['tasks', 'Tasks'],
+    ['team', 'Agentic Team'],
+    ['documents', 'Documents & Assets'],
+    ['activity', 'Activity'],
+    ['contacts', 'Contacts'],
+    ['sources', 'Sources & Integrations'],
+  ]
+  for (const [id, name] of owned) {
+    await open(`${slug}/${id}`)
+    const crumb = (await page.evaluate(
+      inPage(
+        "const c = document.querySelector('.bccrumb'); return c === null ? '' : (c.textContent ?? '').trim()",
+      ),
+    )) as string
+    const heading = (await page.evaluate(
+      inPage(
+        "const h = document.querySelector('.bcrecordhead h1'); return h === null ? '' : (h.textContent ?? '').trim()",
+      ),
+    )) as string
+    check(
+      `${slug}/${id} opens the ${name} tool, not something else`,
+      crumb.includes(name) && heading === name,
+      `breadcrumb "${crumb}", heading "${heading}" — an address that silently lands on the overview is a link back to the page you pressed it on`,
+    )
+  }
+}
+
 /* ------------------------------------- no surface sits on a skeleton for ever */
 
 /*
