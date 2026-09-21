@@ -322,6 +322,19 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     instrument than a real one that fails when the weather does — and this runs
     when the provider is out, which is exactly when somebody wants to know.
   */
+  /*
+    The 17 September backup died with nothing said (0535).
+
+    `verify:recovers` proves a recovered job does not fabricate, duplicate or
+    strand. It says nothing about the job that simply DIES — and six paths
+    reach `failed`, of which three used to write no record anywhere a person
+    looks. The one that mattered was in SQL, so no amount of care in
+    `worker.ts` could have covered it.
+  */
+  [
+    'verify:journals',
+    'a job that dies says so, whichever layer killed it — a silent backup failure cost Grant a day of backups (0535)',
+  ],
   [
     'verify:recovers',
     'no fabricated success, no duplicate action, no lost mutation, no stranded work (#231)',
