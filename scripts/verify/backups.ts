@@ -189,6 +189,62 @@ check(
   `backup.rehearsal_max_age_hours = ${String(threshold.v)}`,
 )
 
+/*
+  And it is reachable from the door that is actually DEPLOYED (0540).
+
+  The check that would otherwise be missing, and the one this repository's
+  whole check:callers family exists for: chores_for_backups could be perfect
+  and called by nothing. The handler that should call it is in
+  src/handlers/chores.ts on an unmerged branch, and the worker was last
+  deployed from a different branch entirely -- a migration is not a deploy.
+  So app.chores_for_credentials, which office.chores calls by name every
+  hour, delegates to it.
+
+  Asserted through THAT function rather than the one under test, because
+  "the pass works" and "the pass runs" are different claims and only the
+  second one is about tonight.
+*/
+const REACH = `
+do $reach$
+declare r jsonb; open1 int;
+begin
+  update public.system_config set value = '0'::jsonb
+   where key = 'backup.rehearsal_max_age_hours';
+
+  r := app.chores_for_credentials();
+
+  select count(*) into open1 from public.tasks
+   where chore_key = 'backup:unproven' and state <> 'done';
+
+  update public.system_config set value = '192'::jsonb
+   where key = 'backup.rehearsal_max_age_hours';
+
+  if r->'backup' is null then
+    raise exception 'REACH-FAIL the deployed door does not report the backup pass at all'; end if;
+  if open1 <> 1 then
+    raise exception 'REACH-FAIL the deployed door raised % backup chores, expected 1', open1; end if;
+
+  raise exception 'REACH-PASS the hourly credential pass reached the backup pass and raised %',
+    r->'backup'->>'raised';
+end
+$reach$;`
+
+let reachSaid = ''
+try {
+  await db.execute(REACH)
+  reachSaid = 'the drive returned without raising, which it cannot do'
+} catch (error) {
+  reachSaid = (error as Error).message.replace(/\s+/g, ' ')
+}
+const reached = reachSaid.includes('REACH-PASS')
+check(
+  reached,
+  'the hourly duty that IS deployed reaches the backup pass',
+  reached
+    ? reachSaid.slice(reachSaid.indexOf('REACH-PASS')).slice(0, 130)
+    : reachSaid.slice(0, 300),
+)
+
 // ── 5. It is in the reading Grant's dashboard actually asks for ────────────
 const office = jsonOf((await one(`select app.office_health(24) as r`)).r)
 check(
