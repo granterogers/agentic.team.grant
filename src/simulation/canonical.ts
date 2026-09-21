@@ -378,7 +378,20 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         */
         clauses: [utterance.text],
         clausesObserved: false,
+        /*
+          NOT an observation, and it used to be read as one.
+
+          Whether a standing instruction was registered is decided inside
+          the handler; this door reported a constant false, so `context`
+          FAILED for every preference scenario on the live door whatever
+          the product did - the same defect as the clause count above.
+
+          What IS canonical is the lesson row, which `effects` counts, so
+          `completion` can answer this honestly and `context` should not
+          pretend to.
+        */
         learned: false,
+        learnedObserved: false,
         corrected: false,
         extraction: false,
         wouldFile: false,

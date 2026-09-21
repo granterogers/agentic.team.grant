@@ -230,12 +230,21 @@ const context = (turn: ScenarioTurn, o: Observation): Finding => {
         'the person took something back mid-message and the office did not see that anything had been withdrawn',
       )
   }
-  if (turn.intent.effect === 'preference' && !o.learned) {
-    return finding(
-      'context',
-      'fail',
-      'the person stated a standing instruction and the office did not register it as one, so there is nothing for a later turn to retrieve',
-    )
+  if (turn.intent.effect === 'preference') {
+    // Only where it was actually observed. On a door that cannot see the
+    // handler's decision, `completion` answers this from the lesson row.
+    if (o.learnedObserved === false)
+      return finding(
+        'context',
+        'unreached',
+        `the ${o.door} door cannot see whether a standing instruction was registered; the lesson row is what says so here`,
+      )
+    if (!o.learned)
+      return finding(
+        'context',
+        'fail',
+        'the person stated a standing instruction and the office did not register it as one, so there is nothing for a later turn to retrieve',
+      )
   }
   return finding(
     'context',

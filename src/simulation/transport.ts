@@ -165,6 +165,14 @@ export interface Observation {
    * Undefined where a door cannot see it.
    */
   readonly withdrawalSeen?: boolean
+  /**
+   * Whether `learned` is an OBSERVATION or a placeholder.
+   *
+   * Same reason as `clausesObserved`: the canonical door cannot see the
+   * handler's decision, and a constant read as a measurement made
+   * `context` fail for every preference scenario live.
+   */
+  readonly learnedObserved?: boolean
   readonly reaches: readonly Layer[]
   /**
    * What canonically HAPPENED, where a door can see it.
@@ -266,6 +274,7 @@ export const comprehensionDoor = (): Transport => ({
       bareRejection: rejectsWithoutSaying(said),
       exclusionSeen: excludesASubject(said),
       clausesObserved: true,
+      learnedObserved: true,
       withdrawalSeen: withdrawal !== null,
       reaches: ['comprehension'],
       unreached: COMPREHENSION_CANNOT_REACH,
