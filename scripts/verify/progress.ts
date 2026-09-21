@@ -287,6 +287,41 @@ check(
   Number(left.n) === 0 && Number(notes.n) === 0,
 )
 
+/*
+  And hand back the attribution, now that the assertions are finished.
+
+  The subject above MUST be a real job while the suite runs — sayStillWorking
+  filters harness traffic through app.harness_job, so a fixture would make the
+  whole thing vacuous, which is #45's rule. What #45 does not license is
+  leaving it looking real for ever afterwards.
+
+  It was not left in the queue: teardown cancels it. It was left with
+  requested_by 'telegram:grant', so is_fixture generated FALSE and
+  app.harness_job said false, and the rows are indistinguishable from messages
+  Grant sent. A latency reading taken on 21 September found Telegram
+  averaging 921 seconds to be picked up and reaching 2,686 -- every slow job
+  was this suite, cancelled by the teardown above, and the real median is one
+  second. A measurement that cries wolf is one Grant learns to ignore.
+
+  This is the correction 0342 made for verify:addressing and 0351 for gate-3,
+  and the shape verify:transport already uses: where the actor is part of what
+  is being asserted, the suite corrects its own attribution at the end and
+  ASSERTS the correction, because is_fixture is GENERATED from requested_by
+  and a silent update would be a claim with nothing behind it.
+*/
+await db.execute(`
+  update public.jobs set requested_by = 'verify:progress'
+   where job_id in (${lit(jobId)}::uuid, ${lit(fixtureId)}::uuid, ${lit(raceId)}::uuid)`)
+const owned = await one(`
+  select count(*)::int as n from public.jobs
+   where job_id in (${lit(jobId)}::uuid, ${lit(fixtureId)}::uuid, ${lit(raceId)}::uuid)
+     and is_fixture and app.harness_job(job_id)`)
+check(
+  'teardown — and this run stops looking like traffic Grant sent',
+  `${String(owned.n)} of 3 now count as harness traffic`,
+  Number(owned.n) === 3,
+)
+
 const failed = checks.filter((c) => !c.ok)
 console.log(`\n${String(checks.length - failed.length)}/${String(checks.length)} checks passed`)
 process.exit(failed.length === 0 ? 0 : 1)

@@ -156,6 +156,94 @@ check(
   passed ? said.slice(said.indexOf('RESUMES-PASS')).slice(0, 190) : said.slice(0, 320),
 )
 
+/*
+  And the other dequeue property nothing asserted: a message Grant is waiting
+  on is taken before routine duty work that was already queued.
+
+  `app.enqueue_inbound` sets priority 10 for `office.instruction`, and its own
+  comment records why: *"10, not 150. Lower is sooner, and at 150 every
+  routine duty in the building was claimed ahead of a message Grant was
+  waiting on."* Duties sit at 100, and `drive.watch` alone has 1,416 rows.
+
+  So the defect already happened once, was fixed, and **was protected by
+  nothing** — `verify:worker` enqueues every one of its jobs at priority 100
+  and never tests ordering at all. Invariant 19 of this run's brief: backlog
+  recovery must not indefinitely starve fresh conversational work.
+
+  Asserted as the RELATIONSHIP rather than the literal 10, so a future change
+  that moves both numbers is free and one that inverts them is not. The
+  negative control is the half that makes it mean something: within one
+  priority the queue must still be first-in-first-out, or "the instruction
+  won" would prove nothing about priority.
+*/
+const FAIR = `
+do $fair$
+declare
+  backlog uuid; fresh uuid; older uuid; newer uuid;
+  took1 text; took2 text; prio int;
+begin
+  -- A duty job queued first, then a message queued after it.
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority, created_at)
+  values (gen_random_uuid(), 'verify-resumes-backlog', 'drive.watch', 'verify:resumes', 100,
+          now() - interval '10 minutes')
+  returning job_id into backlog;
+
+  select coalesce((regexp_match(pg_get_functiondef(p.oid),
+           'office.instruction'',[^0-9]{0,200}?([0-9]+),'))[1]::int, -1)
+    into prio
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'app' and p.proname = 'enqueue_inbound';
+
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority, created_at)
+  values (gen_random_uuid(), 'verify-resumes-fresh', 'office.instruction', 'verify:resumes',
+          coalesce(nullif(prio, -1), 10), now())
+  returning job_id into fresh;
+
+  select job_id::text into took1 from app.dequeue_job(
+    p_worker => 'verify-fairness', p_can_transcribe => true, p_can_subprocess => true,
+    p_kinds => null, p_requested_by => 'verify:resumes');
+
+  if took1 is distinct from fresh::text then
+    raise exception 'FAIRNESS-FAIL the queue took % first, not the fresh message (instruction priority read as %)',
+      coalesce(took1, '(nothing)'), prio; end if;
+
+  -- CONTROL: within one priority, oldest first. Without this, "the
+  -- instruction won" could simply be "the newest won".
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority, created_at)
+  values (gen_random_uuid(), 'verify-resumes-fifo-old', 'drive.watch', 'verify:resumes', 100,
+          now() - interval '20 minutes')
+  returning job_id into older;
+  insert into public.jobs (correlation_id, idempotency_key, kind, requested_by, priority, created_at)
+  values (gen_random_uuid(), 'verify-resumes-fifo-new', 'drive.watch', 'verify:resumes', 100,
+          now() - interval '1 minute')
+  returning job_id into newer;
+
+  select job_id::text into took2 from app.dequeue_job(
+    p_worker => 'verify-fairness', p_can_transcribe => true, p_can_subprocess => true,
+    p_kinds => null, p_requested_by => 'verify:resumes');
+
+  if took2 is distinct from older::text then
+    raise exception 'FAIRNESS-FAIL within one priority the queue is not first-in-first-out: took %',
+      coalesce(took2, '(nothing)'); end if;
+
+  raise exception 'FAIRNESS-PASS the message (priority %) was taken before a 10-minute-old duty, and FIFO holds within a priority', prio;
+end
+$fair$;`
+
+let fairSaid = ''
+try {
+  await db.execute(FAIR)
+  fairSaid = 'the drive returned without raising, which it cannot do'
+} catch (error) {
+  fairSaid = (error as Error).message.replace(/\s+/g, ' ')
+}
+const fair = fairSaid.includes('FAIRNESS-PASS')
+check(
+  fair,
+  'a message Grant is waiting on is taken before a backlog of routine duties',
+  fair ? fairSaid.slice(fairSaid.indexOf('FAIRNESS-PASS')).slice(0, 150) : fairSaid.slice(0, 300),
+)
+
 const debris = await db.execute(
   `select count(*)::int as n from public.jobs where requested_by = 'verify:resumes'`,
 )
