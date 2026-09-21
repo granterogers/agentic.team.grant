@@ -916,6 +916,49 @@ Filed with the evidence and two ways to unblock it as
 [#299](https://github.com/granterogers/agentic.team.grant/issues/299).
 
 ---
+## §31 What is true at the end of this run, by level of evidence
+
+The prompt asks for the six levels kept apart. They are, and the distinction
+matters more than the tally.
+
+| | |
+|---|---|
+| **Implemented** | the §20 analysis; both §21 compositions and the choice; composition B as the project home; §6 To-dos with real lists and a per-list Add; §10 the Card Table with a working Move; §9 the Schedule; §7 Chat; §15's vocabulary on Sources; §12's timeline on Activity; §8's team as participants; §11's documents as documents; §16's project-dominant head; §18's phone order |
+| **Visually verified** | every one of the above, opened at 1440×900 and 390×844, and the whole set captured at four viewports. 19 of the defects below were found this way and by measuring — **none by reading code** |
+| **Interaction verified** | in a real browser, against an in-process office speaking the gateway's contract: the task journey, the record round-trip, the agent-output journey with idempotency, the keyboard map, and every control the audits can reach pressed |
+| **Stand-in verified** | every write path — `task_add`, `task_update` with `p_parent`, `task_state`, `output_import`, the chat send — exercised against that stand-in, which speaks the real action names, the real argument names and the real error contract |
+| **Real-backend verified** | **nothing.** No credential and no route to one: the sandbox's egress policy refuses `supabase.com` and the project host at CONNECT, and this session holds no `SUPABASE_ACCESS_TOKEN`, `HQ_API_TOKEN` or `VERCEL_TOKEN` |
+| **Human approved** | **nothing.** The gallery is the ask |
+
+**Not built, and said so rather than faked:** §14's configurable home, blocked
+on a contract, filed as
+[#299](https://github.com/granterogers/agentic.team.grant/issues/299) with the
+evidence and two ways to unblock it.
+
+### What this run actually changed about how it is checked
+
+Five suites were asserting the artefact rather than the property and would have
+gone red on any correct change to the home; they assert `bchome` now. The
+coverage audit could not see a new stylesheet, so 40 working classes read as
+undefined. The touch-target check measured the element rather than the hit
+area, and ran on the one surface where the floor was already met. The column
+measure printed `n/a` for anything that was not the old grid — an answer that
+looked like an answer.
+
+Every one of those was found by the audits disagreeing with a correct change,
+which is the failure mode this repository has paid for four times and now
+catches by default.
+
+### The count, and why it is not the point
+
+**28 defects (31–58) in this run.** Nineteen were found by opening a capture or
+by measuring; five by an audit; three by a suite; one by the capture harness
+printing a page error. One "finding" was wrong and is recorded as wrong —
+"In progress" does not render as "Inprogress", measured at 67px unclipped —
+because three out of four findings off a PNG usually are, and the discipline of
+writing down the wrong one is what keeps the other twenty-seven trustworthy.
+
+---
 ## NEXT ACTION
 
 **Grant's review.** Every section of the redesign prompt that this workstream
