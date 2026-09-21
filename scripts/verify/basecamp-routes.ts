@@ -11,6 +11,7 @@
  * resolve under a nested path — because both fail as a blank page that a
  * screenshot of the right size makes look plausible.
  */
+import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 
@@ -145,48 +146,91 @@ check(
   'it must be deleted rather than set to another value: an attribute-presence selector would still match',
 )
 
-/* ------------------- every owned tool's address opens THAT tool ------------- */
+/* ------------------- every tool address renders what it names ------------- */
 
 /*
   A LINK THAT LANDS SOMEWHERE ELSE IS THE WORST KIND OF DEAD CONTROL, because
-  it looks like it worked.
+  it looks like it worked. This property has now caught the same defect twice
+  in two places, so it is asserted in BOTH directions and the tool list is
+  read out of the source rather than restated here.
 
-  /basecamp/p/:slug/activity was accepted by the SPA rewrite and then
+  First time: /basecamp/p/:slug/activity was accepted by the SPA rewrite and
   rewritten to the overview by the router, which validated the tab against
   the DEFAULT studio's SECTIONS — and Activity was removed from that list in
-  #222. So the Activity preview linked back to the page it sat on. Four
-  capture runs photographed the overview under the name "activity", and it
-  surfaced only because two published files had identical byte counts.
+  #222. The Activity preview linked back to the page it sat on. It surfaced
+  only because two published capture files had identical byte counts.
 
-  So the property is not "the address renders something". It is that the
-  address renders THE TOOL IT NAMES, read off the breadcrumb the surface
-  draws for itself.
+  Second time, in the fix for the first: the router then accepted the whole
+  of TOOLS, which is the list of what the overview LINKS TO — including
+  Project Settings, a hand-off rather than a surface. So /settings rendered
+  the overview while the address went on saying /settings, which is worse:
+  the first defect corrected the URL on its way past and this one left a
+  bookmark permanently lying about what it opens.
+
+  Hence both halves. An owned tool renders itself. Anything else falls back
+  to the overview AND the address is corrected to match what is on screen.
 */
+const SHELL = await readFile('web/studio/bc/shell.js', 'utf8')
+const tools = (() => {
+  const from = SHELL.indexOf('export const TOOLS = [')
+  const to = SHELL.indexOf('\n]', from)
+  const block = SHELL.slice(from, to)
+  return [...block.matchAll(/\{ id: '([a-z-]+)', name: '([^']+)', own: (true|false) \}/g)].map(
+    (m) => ({
+      id: m[1] as string,
+      name: m[2] as string,
+      own: m[3] === 'true',
+    }),
+  )
+})()
+
+if (tools.length < 5 || !tools.some((t) => t.own) || !tools.some((t) => !t.own)) {
+  console.error(
+    `parsed ${String(tools.length)} tool(s) out of bc/shell.js, ${String(tools.filter((t) => t.own).length)} owned — the shape has changed and this check has gone blind`,
+  )
+  process.exit(2)
+}
+
 if (slug !== null) {
-  const owned: [string, string][] = [
-    ['tasks', 'Tasks'],
-    ['team', 'Agentic Team'],
-    ['documents', 'Documents & Assets'],
-    ['activity', 'Activity'],
-    ['contacts', 'Contacts'],
-    ['sources', 'Sources & Integrations'],
-  ]
-  for (const [id, name] of owned) {
-    await open(`${slug}/${id}`)
-    const crumb = (await page.evaluate(
-      inPage(
-        "const c = document.querySelector('.bccrumb'); return c === null ? '' : (c.textContent ?? '').trim()",
-      ),
+  for (const t of tools) {
+    await open(`${slug}/${t.id}`)
+    const seen = (await page.evaluate(
+      inPage(`const c = document.querySelector('.bccrumb')
+         const h = document.querySelector('.bcrecordhead h1')
+         return JSON.stringify({
+           crumb: c === null ? '' : (c.textContent ?? '').replace(/\\s+/g, ' ').trim(),
+           heading: h === null ? '' : (h.textContent ?? '').trim(),
+           url: location.pathname,
+         })`),
     )) as string
-    const heading = (await page.evaluate(
-      inPage(
-        "const h = document.querySelector('.bcrecordhead h1'); return h === null ? '' : (h.textContent ?? '').trim()",
-      ),
-    )) as string
+    const o = JSON.parse(seen) as { crumb: string; heading: string; url: string }
+
+    if (t.own) {
+      check(
+        `${slug}/${t.id} opens the ${t.name} tool, not something else`,
+        o.crumb.includes(t.name) && o.heading === t.name,
+        `breadcrumb "${o.crumb}", heading "${o.heading}"`,
+      )
+    } else {
+      /*
+        A hand-off is not a route of this experience. Landing on the overview
+        is correct; keeping the address is not.
+      */
+      check(
+        `${slug}/${t.id} is a hand-off, so it falls back and CORRECTS the address`,
+        o.url === slug,
+        `the address stayed at "${o.url}" while the overview rendered — a bookmark to it would lie about what it opens`,
+      )
+    }
+  }
+
+  for (const bogus of ['nonsense', 'board', 'chat']) {
+    await open(`${slug}/${bogus}`)
+    const url = (await page.evaluate(inPage('return location.pathname'))) as string
     check(
-      `${slug}/${id} opens the ${name} tool, not something else`,
-      crumb.includes(name) && heading === name,
-      `breadcrumb "${crumb}", heading "${heading}" — an address that silently lands on the overview is a link back to the page you pressed it on`,
+      `${slug}/${bogus} falls back and corrects the address`,
+      url === slug,
+      `stayed at "${url}"`,
     )
   }
 }

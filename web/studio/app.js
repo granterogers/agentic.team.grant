@@ -8641,7 +8641,27 @@ function goToPath(path) {
       An offer may only promise what the press can perform, and a link is an
       offer. The experiment's own tools decide its own routes.
     */
-    const known = state.experience === 'basecamp' ? bc.TOOLS.map((t) => t.id) : SECTIONS.map((x) => x.id)
+    /*
+      ONLY THE TOOLS THIS EXPERIENCE ACTUALLY RENDERS.
+
+      The first fix here used the whole of `bc.TOOLS`, and that list answers a
+      DIFFERENT question: what the overview links to. It includes Project
+      Settings, which is a hand-off into the current Team HQ rather than a
+      surface this experience draws — so /basecamp/p/:slug/settings was
+      accepted by the router, found no renderer, fell back to the overview,
+      and left the address saying `/settings`.
+
+      Worse than the Activity defect it was written to fix: that one at least
+      corrected the URL on the way past. This one rendered one page while the
+      address named another, so a bookmark to it was permanently wrong.
+
+      One list, two questions, and they differ for exactly one entry. The
+      router asks the narrower one.
+    */
+    const known =
+      state.experience === 'basecamp'
+        ? bc.TOOLS.filter((t) => t.own).map((t) => t.id)
+        : SECTIONS.map((x) => x.id)
     state.tab = known.includes(tab) ? tab : 'overview'
     return true
   }

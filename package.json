@@ -293,7 +293,8 @@
     "verify:basecamp-preservation": "tsx scripts/verify/basecamp-preservation.ts",
     "verify:basecamp-classes": "tsx scripts/verify/basecamp-classes.ts",
     "verify:basecamp-states": "tsx scripts/verify/basecamp-states.ts",
-    "basecamp:gate": "npm run verify:basecamp-classes && npm run verify:basecamp-actions && npm run verify:basecamp-routes && npm run verify:basecamp-journey && npm run verify:basecamp-keyboard && npm run verify:basecamp-preservation && npm run verify:basecamp-states && npm run basecamp:measure"
+    "basecamp:gate": "npm run verify:basecamp-classes && npm run verify:basecamp-actions && npm run verify:basecamp-routes && npm run verify:basecamp-journey && npm run verify:basecamp-keyboard && npm run verify:basecamp-preservation && npm run verify:basecamp-states && npm run verify:basecamp-controls && npm run basecamp:measure",
+    "verify:basecamp-controls": "tsx scripts/verify/basecamp-controls.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

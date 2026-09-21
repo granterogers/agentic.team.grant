@@ -1015,3 +1015,31 @@
   border-color: var(--bc-surface-selected);
   color: var(--bc-text-strong);
 }
+
+/* ========================================================================
+   9. Where you are
+   ======================================================================== */
+
+/*
+  §13: active navigation uses `aria-current`. Styling the ATTRIBUTE rather
+  than a class means the visual state and the announced state can never
+  disagree — a class can be added without the attribute, and then the screen
+  reader and the screen say different things.
+
+  Found by a press-everything audit reporting five controls that "changed
+  nothing". They were navigation controls at their own destination, which is
+  correctly a no-op and was indistinguishable from broken.
+*/
+[data-experience='basecamp'] .bctop [aria-current='page'],
+[data-experience='basecamp'] .bctray [aria-current='page'] {
+  color: var(--bc-text-strong);
+  background: var(--bc-focus-fill);
+}
+[data-experience='basecamp'] .bctray [aria-current='page'] { color: var(--bc-accent); }
+
+/* A control with nowhere to go says so, rather than looking pressable. */
+[data-experience='basecamp'] .bctop .bcbtn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+[data-experience='basecamp'] .bctop .bcbtn[disabled]:hover { background: transparent; }

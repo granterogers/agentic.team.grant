@@ -129,6 +129,30 @@ const trayItems = () => [
   CSS decides which one exists at this width. A render-time branch would have
   to know the viewport, which is the thing CSS is for.
 */
+/*
+  WHICH DESTINATION IS THE ONE ON SCREEN.
+
+  The experiment marked nothing as current — no `aria-current` anywhere —
+  while the default studio's rail has marked it since it was written. Two
+  costs, and the second is the one that was visible: a screen reader could
+  not tell which destination it was standing in (§13 asks for `aria-current`
+  on active navigation by name), and a press-everything audit found five
+  controls that "changed nothing", because taking you where you already are
+  IS nothing. A navigation control at its own destination should look like
+  it is there, not like it is broken.
+*/
+const currentPath = () => {
+  const s = state()
+  if (s.view === 'tasks') return at('/tasks')
+  if (s.view === 'lately') return at('/activity')
+  if (s.view === 'bcsearch') return at('/search')
+  if (s.view === 'project' && s.project !== null) {
+    return s.tab === 'overview' ? at(`/p/${s.project}`) : at(`/p/${s.project}/${s.tab}`)
+  }
+  return at('/')
+}
+const isHere = (to) => currentPath() === to
+
 const dockButton = (cls) =>
   `<button type="button" class="${cls}" data-bc-dock>
     <span aria-hidden="true">✎</span><span>Ask the team</span>
@@ -144,9 +168,19 @@ const dockButton = (cls) =>
  */
 const topRow = () => {
   const waiting = PROJECTS.reduce((n, p) => n + (p.waiting?.length ?? 0), 0)
+  /*
+    Where Attention would take you, computed here so the control can say
+    whether you are already standing in it. With nothing waiting there is
+    nowhere to go, and a control that cannot act says so rather than
+    pretending: §13 asks a disabled control to explain itself where the
+    ambiguity would block work.
+  */
+  const firstWaiting = PROJECTS.find((p) => (p.waiting ?? []).length > 0)
+  const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
   return `<header class="bctop">
     <div class="bcleft">
-      <button type="button" class="bcbtn" data-bc-go="${at('/')}">Home</button>
+      <button type="button" class="bcbtn" data-bc-go="${at('/')}"
+        aria-current="${isHere(at('/')) ? 'page' : 'false'}">Home</button>
     </div>
     <button type="button" class="bcjump" data-bc-jump
       aria-haspopup="dialog" aria-label="Jump to a project, tool or record">
@@ -155,8 +189,14 @@ const topRow = () => {
     <div class="bcright">
       ${dockButton('bcbtn bcwide-only')}
       <button type="button" class="bcbtn" data-bc-attention
+        ${attentionTo === null ? 'disabled' : ''}
+        aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
         aria-label="${esc(
-          waiting === 0 ? 'Attention: nothing is waiting' : `Attention: ${waiting} waiting on you`,
+          waiting === 0
+            ? 'Attention: nothing is waiting on you'
+            : attentionTo !== null && isHere(attentionTo)
+              ? `Attention: ${waiting} waiting on you, and you are looking at it`
+              : `Attention: ${waiting} waiting on you`,
         )}">
         Attention${waiting === 0 ? '' : ` <span class="bcstatus bcstatus--waiting">${waiting}</span>`}
       </button>
@@ -170,7 +210,8 @@ const tray = () =>
     ${trayItems()
       .map(
         (i) =>
-          `<button type="button" data-bc-go="${esc(i.to)}"><span aria-hidden="true">${
+          `<button type="button" data-bc-go="${esc(i.to)}"
+            aria-current="${isHere(i.to) ? 'page' : 'false'}"><span aria-hidden="true">${
             i.glyph
           }</span><span>${esc(i.name)}</span></button>`,
       )
