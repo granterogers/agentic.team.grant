@@ -422,3 +422,68 @@ lint 0 · typecheck 0 · check:secrets clean · 2,219 tests · verify:failures
 cannot see the backup at all, and no restore has ever been recorded as
 proven. Add backup age, rehearsal age and last-progress to
 `app.office_health()`, and make the rehearsal record a durable verdict.
+
+### T+4:30 — backup observability closed, and the restore PROVEN
+
+**DEFECT-2 fixed** (0537 + 0538). `app.backup_health()` and
+`app.last_progress()` exist; 0538 splices both into `app.office_health()`
+from its LIVE definition, raising if its anchor has moved rather than letting
+a no-op look like success. The reading now answers: is there a recent
+FINISHED backup (a manifest is what makes a run complete — measured, the
+manifest is written last), has a restore been PROVEN, when did work last
+actually MOVE, and what are the two gaps nobody was measuring.
+
+**DEFECT-3 fixed, and the restore is proven for the first time.**
+`npm run backup:rehearse` ran to completion: **8/8, 153,259 of 153,259 rows
+restored**, verdict recorded in `public.events` as `backup.rehearsed`. It
+records both outcomes, because a ledger of successes cannot tell "the last one
+failed" from "nobody ran one". No new table: the event ledger already holds
+exactly this kind of fact.
+
+**DEFECT-4 fixed.** The rehearsal swept its scratch schema only in a
+`finally`, which cannot run if the process is killed — reproduced at T+0:50.
+The sweep moved to the START of the run, which is the only place that covers
+SIGKILL, plus signal handlers for the polite cases.
+
+**DEFECT-7 found and fixed before shipping it.** `last_progress()`'s three
+`max(occurred_at)` by `to_state` were **1,227 ms sequential scans** each —
+I measured before embedding them, and would otherwise have added ~4s to
+every health reading on a table growing 6,000 rows a day. With an index:
+**2.1 ms**. The brief lists this failure by name.
+
+**DEFECT-8 found and fixed.** The rehearsal exceeded the ten-minute
+foreground ceiling *after* the restore had succeeded, in two loops of 122
+sequential `count(*)` calls. 244 round trips became 2.
+
+**How Grant finds out:** a chore on My Tasks, raised and cleared by the
+hourly `office.chores` duty, deduped by `chore_key` — invariant 18 by
+construction. Not a message: he has asked twice not to be narrated at.
+
+**RPO/RTO, measured:** RPO ~24h by design, **48h observed** (17 Sept). RTO
+data round trip **9m46s**; plus migrations from git; **plus every credential
+by hand, because `vault-export` is disabled and has never run.** That last
+term is the largest and nothing had ever measured it.
+
+lint 0 · typecheck 0 · secrets clean · 2,219 tests · verify:backups 10/10.
+
+**HUMAN_BLOCKED — offsite copy.** The only copy is a private bucket in the
+same Supabase project it protects. It survives losing the code, this machine
+and every other vendor account; it does not survive losing the project.
+Anywhere else needs a new vendor account or Grant's whole database emailed to
+himself, and `src/handlers/backup.ts` already records that as his decision
+rather than mine. **The reading now states it every single time** instead of
+leaving it to be discovered during a recovery. EXACT ACTION NEEDED: Grant
+decides whether to fund an offsite target (e.g. a Cloudflare R2 free-tier
+bucket, 10 GB, £0) or accepts single-project durability.
+
+**HUMAN_BLOCKED — the empty vault.** `vault-export` is `enabled = false` and
+has never run, so a restore yields a working database with no credentials.
+Not enabled unilaterally: each run puts an encrypted copy of every credential
+in a Telegram chat, and CLAUDE.md records that Grant chose weekly-and-by-hand
+deliberately for exactly that reason. EXACT ACTION NEEDED: Grant says whether
+the weekly vault export should be switched on; it is one row —
+`update public.responsibilities set enabled = true where slug = 'vault-export'`.
+
+**NEXT AUTONOMOUS ACTION:** brief §12 — idempotency and delivery. Invariants
+4, 5, 7, 8 and 20: duplicate inbound, duplicate outbound, delivery retry not
+re-running substantive work, completed-but-undelivered recovery.

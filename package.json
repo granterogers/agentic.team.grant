@@ -285,7 +285,8 @@
     "verify:pursues": "tsx scripts/verify/pursues.ts",
     "verify:composes": "tsx scripts/verify/composes.ts",
     "verify:chief": "tsx scripts/verify/chief.ts",
-    "verify:understands": "tsx scripts/verify/understands.ts"
+    "verify:understands": "tsx scripts/verify/understands.ts",
+    "verify:backups": "tsx scripts/verify/backups.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

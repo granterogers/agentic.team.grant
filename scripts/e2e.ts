@@ -332,6 +332,19 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     `worker.ts` could have covered it.
   */
   /*
+    Invariant 13, both halves, and the reading that could not see either.
+
+    app.office_health() reported failed, stalled, waiting, breakers and budget
+    holds and had NO idea whether a backup existed -- so the night the nightly
+    backup died it read `failed: 1` for 24 hours in a window nobody watches,
+    and then said nothing at all. And backup:rehearse printed a report and
+    exited, so "when did a restore last work" had no answer anywhere.
+  */
+  [
+    'verify:backups',
+    'a recent FINISHED backup and a PROVEN restore, and a chore when either is missing (0537, 0538)',
+  ],
+  /*
     And the other half of the same night's finding.
 
     0535 made the backup's death visible. This is why it was dying: a

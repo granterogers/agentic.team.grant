@@ -24,6 +24,24 @@
  * A to-do list that fills up and never empties is one he stops trusting, and
  * clearing is the half nobody sees working — so it is said out loud in the
  * output rather than left to be inferred from a shorter list.
+ *
+ * ## Two sources now: credentials, and the backup (0537)
+ *
+ * On 17 September the nightly backup failed, there was no copy of the
+ * database from that date, and nothing told him. `app.office_health()` said
+ * `failed: 1` for twenty-four hours in a reading nobody was watching, and
+ * then the window moved and it said nothing at all — which is what it says
+ * now and what it would say tonight if backups stopped for good.
+ *
+ * `app.chores_for_backups` is the same shape as the credential pass for the
+ * same reason: a chore on My Tasks rather than a message, `chore_key`
+ * deduping to one row instead of one an hour, cleared by the pass that
+ * raises. It covers the two halves of invariant 13 — a recent FINISHED
+ * backup, and a restore somebody has actually proven.
+ *
+ * This duty already runs hourly, which is why the check lives here rather
+ * than getting a schedule of its own. CLAUDE.md's rule about new clocks is
+ * the argument: a second schedule is a second thing that can silently stop.
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
@@ -37,7 +55,7 @@ export function choresHandler(db: SqlExecutor): Handler {
       const base = {
         confidence: 'high' as const,
         evidence: 'verified' as const,
-        sources: [`job:${job.jobId}`, 'db:connection_health'],
+        sources: [`job:${job.jobId}`, 'db:connection_health', 'db:backup_health'],
         contradictions: null,
         path: 'deterministic_retrieval' as const,
         model: null,
@@ -64,6 +82,38 @@ export function choresHandler(db: SqlExecutor): Handler {
         it, and reporting only the delta would say "nothing new" on the
         fiftieth hour of a credential nobody has fixed.
       */
+      /*
+        The backup pass, beside the credential one.
+
+        Its own try/catch: a duty that reports credentials must not stop
+        reporting them because the backup reading threw. The failure is said
+        out loud rather than swallowed — an unreported backup check looks
+        exactly like a backup that is fine, which is the whole defect this was
+        written for.
+      */
+      let backupNote = ''
+      try {
+        const bRow = (await db.execute(`select app.chores_for_backups() as r`)).rows[0] as
+          | { r?: unknown }
+          | undefined
+        const bRaw = bRow?.r
+        const b = (typeof bRaw === 'string' ? JSON.parse(bRaw) : (bRaw ?? {})) as {
+          raised?: number
+          cleared?: number
+          about?: string[]
+        }
+        const bRaised = Number(b.raised ?? 0)
+        const bCleared = Number(b.cleared ?? 0)
+        const bAbout = Array.isArray(b.about) ? b.about : []
+        if (bRaised > 0) {
+          backupNote = ` The backup needs you: ${bAbout.join(', ')}.`
+        } else if (bCleared > 0) {
+          backupNote = ' The backup is healthy again.'
+        }
+      } catch (error) {
+        backupNote = ` The backup check could not run: ${(error as Error).message.slice(0, 160)}.`
+      }
+
       const open = Number(
         (
           (
@@ -91,7 +141,7 @@ export function choresHandler(db: SqlExecutor): Handler {
               .filter((x) => x !== '')
               .join('. ') + `. ${count(open, 'open', 'open')} in all.`
 
-      return { ...base, body } satisfies HandlerOutput
+      return { ...base, body: body + backupNote } satisfies HandlerOutput
     },
   }
 }
