@@ -235,6 +235,71 @@ if (slug !== null) {
   }
 }
 
+/* ------------------- every Jump result goes where it says ----------------- */
+
+/*
+  JUMP IS MADE ENTIRELY OF DESTINATIONS, so it is the surface where a link
+  that lands somewhere plausible and wrong does the most damage: you press
+  it, you arrive somewhere real, and you conclude the SEARCH is broken
+  rather than the link.
+
+  It had eight. Every specialist row navigated to the home page, so Jump
+  offered eight results reading "Claire · Chief of Staff" and every one of
+  them dropped you on the projects list. The same defect as the Activity
+  tool, in the one place built out of nothing but addresses — and invisible
+  to the control audit, which scopes itself to the shell and the main
+  surface rather than to an open dialog.
+
+  The property: no result may point at the home page except the row that IS
+  Home, and every result must point somewhere this experience routes to.
+*/
+await open('/basecamp')
+await page.keyboard.press('Shift+J')
+await page.waitForTimeout(350)
+const jumpRows = (await page.evaluate(
+  inPage(`const out = []
+     let group = ''
+     for (const el of document.querySelectorAll('#bcjumplist > *')) {
+       if (el.classList.contains('bcjumpgroup')) { group = (el.textContent ?? '').trim(); continue }
+       const name = (el.querySelector('span')?.textContent ?? '').trim()
+       out.push({ group, name, i: el.dataset.bcJumpi })
+     }
+     return out`),
+)) as { group: string; name: string; i: string }[]
+
+check('Jump offers results to check', jumpRows.length >= 6, `${String(jumpRows.length)} row(s)`)
+
+/*
+  Read the destination by PRESSING each row and seeing where it lands, not by
+  reading an attribute. The attribute is what the code intended; the address
+  is what a person gets.
+*/
+const landed: { name: string; group: string; url: string }[] = []
+for (const r of jumpRows) {
+  await open('/basecamp')
+  await page.keyboard.press('Shift+J')
+  await page.waitForTimeout(280)
+  const row = page.locator(`[data-bc-jumpi="${r.i}"]`)
+  if ((await row.count()) === 0) continue
+  await row.click()
+  await page.waitForTimeout(500)
+  landed.push({
+    name: r.name,
+    group: r.group,
+    url: (await page.evaluate(inPage('return location.pathname'))) as string,
+  })
+}
+
+for (const l of landed) {
+  if (l.name === 'Home') continue
+  if (l.group === 'Leaves this experience' || l.name === 'Current Team HQ') continue
+  check(
+    `Jump result "${l.name}" (${l.group}) goes somewhere of its own`,
+    l.url !== '/basecamp' && l.url !== '/basecamp/',
+    `landed on ${l.url} — the home page, which is where a result that has no real destination ends up`,
+  )
+}
+
 /* --------------------- a record is a place you can return to --------------- */
 
 /*

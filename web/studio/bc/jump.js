@@ -76,12 +76,42 @@ const candidates = () => {
     }
   }
 
-  for (const c of ctx.crew ?? []) push('People', c.name, at('/'), c.role ?? 'Person', `${c.name} ${c.role ?? ''}`)
+  /*
+    DIRECT DESTINATIONS BEFORE PEOPLE.
 
+    An empty Jump listed three projects, then eight specialists, then the
+    places — so the four things somebody opens Jump to reach were below the
+    fold of a 495px sheet, behind eight rows that were not destinations at
+    all. §7.1 lists places among what Jump offers; it does not say to bury
+    them.
+  */
   push('Go to', 'Home', at('/'), 'Place', 'home projects')
   push('Go to', 'My Tasks', at('/tasks'), 'Place', 'my tasks personal')
   push('Go to', 'Activity', at('/activity'), 'Place', 'activity recent')
+  push('Go to', 'Search everything', at('/search'), 'Place', 'search find everything')
   push('Go to', 'Current Team HQ', '/', 'Leaves this experience', 'default studio current hq')
+
+  /*
+    A PERSON GOES WHERE THAT PERSON IS, and is not offered when that is
+    nowhere.
+
+    Every specialist row used to navigate to `at('/')` — so Jump offered
+    eight results reading "Claire · Chief of Staff" and every one of them
+    dropped you on the projects list. A destination that is plausible and
+    wrong is worse than one that is missing: you press it, you arrive
+    somewhere real, and you conclude the search is broken rather than the
+    link. It is the same defect the Activity tool had, in the one surface
+    built entirely out of destinations.
+
+    Where somebody appears on a project, the honest destination is that
+    project's team surface. Where they appear on none, they are not a place
+    and Jump does not pretend otherwise.
+  */
+  for (const c of ctx.crew ?? []) {
+    const on = PROJECTS.find((p2) => (ctx.crewFor?.(p2.slug) ?? []).some((x) => x.slug === c.slug))
+    if (on === undefined) continue
+    push('People', c.name, at(`/p/${on.slug}/team`), `${c.role ?? 'Person'} · ${on.name}`, `${c.name} ${c.role ?? ''}`)
+  }
 
   return out
 }
