@@ -32,6 +32,8 @@
 
 import { PROJECTS, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
+import * as compose from './compose.js'
+import * as miniatures from './miniatures.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
 /*
@@ -41,6 +43,13 @@ import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, to
 let ctx = null
 export const mount = (c) => {
   ctx = c
+  /*
+    The miniatures and the compositions need the same context, and mounting
+    them here rather than from app.js keeps the experiment's surface area to
+    the files inside bc/ - which is what makes it deletable in one commit.
+  */
+  miniatures.mount(c)
+  compose.mount(c)
 }
 
 const state = () => ctx.state
@@ -1228,6 +1237,17 @@ const body = () => {
     const p = project()
     if (p === undefined) {
       return errorState('That project could not be found.', button('Back to your projects', { 'data-bc-go': at('/') }))
+    }
+    /*
+      The overview is the surface under §21's experiment, so a viewer who has
+      chosen a composition gets it INSTEAD of the shipped grid - through the
+      real shell, the real header and the real routing, because a composition
+      judged in a harness is a composition judged somewhere nobody stands.
+      Every other tab is untouched.
+    */
+    if (s.tab === 'overview') {
+      const pick = compose.chosen()
+      if (pick !== '') return compose.COMPOSITIONS[pick](p)
     }
     const render = SURFACE[s.tab] ?? overview
     return render(p)

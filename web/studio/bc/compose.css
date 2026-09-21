@@ -1,0 +1,533 @@
+/*
+  The tool miniatures and the two §21 compositions.
+
+  Its own file rather than another thousand lines in `bc.css`, because §26
+  forbids a second frontend monolith and because an experiment that can be
+  deleted in one file is an experiment that will actually be deleted when it
+  has answered its question.
+
+  Loaded AFTER bc.css, so its phone block at the end of this file wins on
+  source order. A media query adds no specificity and this repository has been
+  bitten twice by writing phone rules above the base rules they override.
+
+  Everything is scoped to the experiment. Nothing here can reach the default
+  Team HQ.
+*/
+
+/* ---------------------------------------------------------------- people -- */
+
+[data-experience='basecamp'] .bcface {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcface--md { width: 32px; height: 32px; font-size: 13px; }
+[data-experience='basecamp'] .bcface img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* The monogram sits underneath, so a face that never loads is still a person. */
+[data-experience='basecamp'] .bcfacemono { line-height: 1; }
+
+[data-experience='basecamp'] .bcpresence {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+[data-experience='basecamp'] .bcpresence .bcface { margin-left: -6px; box-shadow: 0 0 0 2px var(--bc-surface); }
+[data-experience='basecamp'] .bcpresence .bcface:first-child { margin-left: 0; }
+
+/* ------------------------------------------------------------- the head -- */
+
+[data-experience='basecamp'] .bchead { margin: 0 0 28px; }
+[data-experience='basecamp'] .bcheadtop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+[data-experience='basecamp'] .bchead h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcheadwhy {
+  margin: 8px 0 0;
+  max-width: 62ch;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcstate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+[data-experience='basecamp'] .bcstatecount { color: var(--bc-text-muted); font-size: 13px; }
+
+/* ----------------------------------------------------------- a module --- */
+
+[data-experience='basecamp'] .bcmod {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-sheet);
+  padding: 16px 18px 18px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcmodbody { min-width: 0; }
+[data-experience='basecamp'] .bctaskwho { display: inline-flex; flex: 0 0 auto; }
+[data-experience='basecamp'] .bcmodhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcmodhead h2 { margin: 0; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+[data-experience='basecamp'] .bcmodhead h2 a { color: var(--bc-text-muted); text-decoration: none; }
+[data-experience='basecamp'] .bcmodhead h2 a:hover,
+[data-experience='basecamp'] .bcmodhead h2 a:focus-visible { color: var(--bc-accent); text-decoration: underline; }
+/*
+  THE HEADING LINK IS THE ONLY CONTROL IN A COMPOSITION, and it measured
+  18px high on a phone - so every one of them failed the 44px floor, on the
+  device where the floor exists. `bc.css` has a coarse-pointer rule and it
+  names the controls it knew about; a new control is not covered by it.
+
+  The target is padded rather than made taller, so the heading's position in
+  the module does not move: the row it sits in already has the height, and
+  what was missing was the link claiming it.
+*/
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcmodhead h2 a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding-right: 12px;
+    margin: -13px 0;
+  }
+  [data-experience='basecamp'] .bcmodhead { padding-bottom: 4px; }
+}
+
+[data-experience='basecamp'] .bcmpty { margin: 0; color: var(--bc-text-muted); font-size: 13px; }
+[data-experience='basecamp'] .bcmore { margin: 8px 0 0; color: var(--bc-text-muted); font-size: 12.5px; }
+
+/* --------------------------------------------------------- to-do lists -- */
+
+[data-experience='basecamp'] .bclists { display: grid; gap: 18px; }
+[data-experience='basecamp'] .bclisthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+[data-experience='basecamp'] .bclisthead h4 { margin: 0; font-size: 15px; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bclistcount {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bctasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+[data-experience='basecamp'] .bctask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bctick {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bctick--on {
+  background: var(--bc-accent);
+  box-shadow: none;
+  position: relative;
+}
+[data-experience='basecamp'] .bctick--on::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 4px;
+  height: 7px;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+[data-experience='basecamp'] .bctasktitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bctask--done .bctasktitle { color: var(--bc-text-muted); text-decoration: line-through; }
+[data-experience='basecamp'] .bctaskdue {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+[data-experience='basecamp'] .bctaskdue--late { color: var(--bc-section-accent); font-weight: 600; }
+
+/* --------------------------------------------------------- card table --- */
+
+[data-experience='basecamp'] .bccols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+[data-experience='basecamp'] .bccol { min-width: 0; }
+[data-experience='basecamp'] .bccolhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bccolhead h4 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--bc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bccolcount { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bccol[data-stage='blocked'] .bccolhead { border-bottom-color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bccol[data-stage='done'] .bccolhead { border-bottom-color: var(--bc-accent); }
+[data-experience='basecamp'] .bccard {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--bc-canvas);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 8px;
+  padding: 8px 9px;
+  margin-bottom: 6px;
+}
+[data-experience='basecamp'] .bccardtitle { flex: 1 1 auto; min-width: 0; font-size: 12.5px; line-height: 1.35; }
+[data-experience='basecamp'] .bccolempty { margin: 0; color: var(--bc-text-muted); }
+
+/* ------------------------------------------------------------ calendar -- */
+
+[data-experience='basecamp'] .bccalwrap {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bccalmonth {
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+  margin-bottom: 8px;
+}
+[data-experience='basecamp'] .bccalgrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+[data-experience='basecamp'] .bccal-dow {
+  font-size: 10px;
+  color: var(--bc-text-muted);
+  text-align: center;
+  padding-bottom: 2px;
+}
+[data-experience='basecamp'] .bccal-day,
+[data-experience='basecamp'] .bccal-pad {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  font-size: 11px;
+  color: var(--bc-text-muted);
+  border-radius: 4px;
+}
+[data-experience='basecamp'] .bccal-day--has {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+  font-weight: 600;
+}
+[data-experience='basecamp'] .bccal-day--today { box-shadow: inset 0 0 0 1.5px var(--bc-accent); color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcagenda { min-width: 0; }
+[data-experience='basecamp'] .bcagendaitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcagendaitem:last-of-type { border-bottom: 0; }
+[data-experience='basecamp'] .bcagendadate {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  padding: 3px 0;
+  border-radius: 6px;
+  background: var(--bc-canvas);
+  box-shadow: inset 0 0 0 1px var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcagendadd { font-size: 14px; font-weight: 600; line-height: 1; color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcagendamm { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcagendawhat {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcagendaitem--late .bcagendadate { box-shadow: inset 0 0 0 1.5px var(--bc-section-accent); }
+[data-experience='basecamp'] .bccalnote { margin: 10px 0 0; font-size: 12px; color: var(--bc-text-muted); }
+
+/* ---------------------------------------------------------------- chat -- */
+
+[data-experience='basecamp'] .bcchat { display: grid; gap: 12px; }
+[data-experience='basecamp'] .bcsaid { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+[data-experience='basecamp'] .bcsaidbody { min-width: 0; }
+[data-experience='basecamp'] .bcsaidwho { font-weight: 600; color: var(--bc-text-strong); font-size: 13px; }
+[data-experience='basecamp'] .bcsaidwhen { margin-left: 8px; font-size: 11.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsaidtext { margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; max-width: 60ch; }
+
+/* -------------------------------------------------------------- people -- */
+
+[data-experience='basecamp'] .bccrew { display: grid; gap: 4px; }
+[data-experience='basecamp'] .bcmate {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 0;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcmatebody { flex: 1 1 auto; min-width: 0; display: grid; }
+[data-experience='basecamp'] .bcmatename {
+  font-size: 13.5px;
+  color: var(--bc-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcmatedoing {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/*
+  A HANDED-BACK DOCUMENT IS NOT A COLLEAGUE.
+  The output row carried its author's face, so a one-pager appeared in a list
+  of people with a monogram beside it. A page glyph says thing where a face
+  says person, and the author stays in the meta line where they belong.
+*/
+[data-experience='basecamp'] .bcmadepage {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--bc-text-strong);
+  opacity: 0.85;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+[data-experience='basecamp'] .bcmate--asks,
+[data-experience='basecamp'] .bcmate--made { border-top: 1px solid var(--bc-border-subtle); }
+
+/* ----------------------------------------------------------- documents -- */
+
+[data-experience='basecamp'] .bcdocs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 14px;
+}
+[data-experience='basecamp'] .bcdoc { margin: 0; min-width: 0; }
+[data-experience='basecamp'] .bcpage {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  aspect-ratio: 3 / 4;
+  padding: 10px 9px;
+  background: var(--bc-text-strong);
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+  overflow: hidden;
+}
+[data-experience='basecamp'] .bcpline { height: 3px; border-radius: 2px; background: var(--bc-canvas); opacity: 0.32; }
+[data-experience='basecamp'] .bcpline:first-child { height: 6px; opacity: 0.6; }
+[data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
+[data-experience='basecamp'] .bcdoctitle {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--bc-text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+[data-experience='basecamp'] .bcdocmeta { font-size: 11.5px; color: var(--bc-text-muted); }
+
+/* ------------------------------------------------------------ timeline -- */
+
+[data-experience='basecamp'] .bctimeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+[data-experience='basecamp'] .bcday {
+  display: grid;
+  grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcdaywhen {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  padding-top: 3px;
+  text-align: right;
+}
+[data-experience='basecamp'] .bcdayitems {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  display: grid;
+  gap: 8px;
+  border-left: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcevent { display: flex; gap: 9px; align-items: center; min-width: 0; }
+[data-experience='basecamp'] .bceventwhat { font-size: 13px; line-height: 1.4; min-width: 0; }
+[data-experience='basecamp'] .bceventwhat b { color: var(--bc-text-strong); font-weight: 600; }
+[data-experience='basecamp'] .bcdot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--bc-border-subtle);
+}
+
+/* ==================================================== A — the briefing == */
+
+/*
+  The composition's own spacing, shared. Both arrangements are a vertical
+  stack at the top level; only what is IN the stack differs, so the gap
+  belongs to the base and not to each variant.
+*/
+[data-experience='basecamp'] .bccomp { display: grid; gap: 20px; }
+[data-experience='basecamp'] .bccomp .bchead { margin-bottom: 0; }
+/*
+  A's two-up row, scoped to A. It is the one thing about A's arrangement that
+  is not simply a stack, so it belongs to A rather than to the shared base -
+  and scoping it means the class cannot leak into B by being named there.
+*/
+[data-experience='basecamp'] .bccomp--a .bcpair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* =================================================== B — the workspace == */
+
+[data-experience='basecamp'] .bcwork {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 306px);
+  gap: 24px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcworkmain { display: grid; gap: 18px; min-width: 0; }
+[data-experience='basecamp'] .bcrail {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  position: sticky;
+  top: 60px;
+}
+/*
+  The rail's modules are quieter than the main column's. Presence is meant to
+  be there rather than looked at, and two equally loud columns is the
+  equal-weight failure again with one fewer column.
+*/
+[data-experience='basecamp'] .bcrail .bcmod { background: transparent; border-color: transparent; padding: 0 0 4px; }
+[data-experience='basecamp'] .bcrail .bcmodhead { border-bottom-color: var(--bc-border-subtle); }
+[data-experience='basecamp'] .bcrail .bcsaidtext { font-size: 12.5px; }
+[data-experience='basecamp'] .bcrail .bcday { grid-template-columns: minmax(0, 62px) minmax(0, 1fr); gap: 10px; }
+
+/* ======================================================================== *
+ * Narrower than a desktop. These are LAST on purpose: a media query adds no
+ * specificity, so the rules it overrides must come before it.
+ * ======================================================================== */
+
+@media (max-width: 1100px) {
+  [data-experience='basecamp'] .bcwork { grid-template-columns: minmax(0, 1fr); }
+  [data-experience='basecamp'] .bcrail { position: static; }
+  /*
+    B's rail becomes a two-up band rather than a third stacked column, so the
+    tablet does not simply become a very long phone.
+  */
+  [data-experience='basecamp'] .bcrail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-top: 6px;
+    border-top: 1px solid var(--bc-border-subtle);
+  }
+}
+
+@media (max-width: 760px) {
+  [data-experience='basecamp'] .bchead h1 { font-size: 23px; }
+  [data-experience='basecamp'] .bccomp--a .bcpair,
+  [data-experience='basecamp'] .bcrail { grid-template-columns: minmax(0, 1fr); }
+  [data-experience='basecamp'] .bccalwrap { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  /*
+    The month grid goes away on a phone and the dated agenda stays. §18 asks
+    for what is happening first; a 7x6 grid of small numbers is orientation,
+    not information, and it costs a third of the fold.
+  */
+  [data-experience='basecamp'] .bccal { display: none; }
+  /*
+    Two stage columns rather than four, so a card title has room to be read.
+    Four columns at 390px is 78px each, which is the clipped-content defect
+    arriving through a layout instead of a guard.
+  */
+  [data-experience='basecamp'] .bccols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  [data-experience='basecamp'] .bcday { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  [data-experience='basecamp'] .bcdaywhen { text-align: left; }
+  [data-experience='basecamp'] .bcdayitems { padding-left: 0; border-left: 0; }
+  [data-experience='basecamp'] .bcdocs { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }
+  [data-experience='basecamp'] .bcmod { padding: 14px 14px 16px; }
+  /*
+    B's phone order is the experiment's other half. The rail's parts are
+    placed individually rather than travelling together - but WORK COMES
+    FIRST. Hoisting the roster above the to-dos cost 400px and put five rows
+    of who-exists in front of the first actionable thing on a 390px screen;
+    three of those rows say only that a colleague is on the project, which the
+    faces in the header already say. What genuinely needs Grant is in the
+    state line under the title, above everything.
+  */
+  [data-experience='basecamp'] .bccomp--b .bcwork { display: flex; flex-direction: column; }
+  [data-experience='basecamp'] .bccomp--b .bcrail { display: contents; }
+  [data-experience='basecamp'] .bccomp--b .bcworkmain { order: 0; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='crew'] { order: 1; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='chat'] { order: 2; }
+  [data-experience='basecamp'] .bccomp--b .bcrail [data-slot='activity'] { order: 3; }
+}

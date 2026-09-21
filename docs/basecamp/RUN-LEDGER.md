@@ -558,18 +558,128 @@ above is addressed individually. Anything built before that choice is made
 would be built against the layout I am being told is wrong.
 
 ---
+## §21 The two composition experiments, and the choice
+
+Built after the analysis above and before any of the seventeen discrepancies
+was addressed individually, because fixing six tiles inside the equal-weight
+grid would have been building against the layout being corrected.
+
+Both compositions render the SAME miniatures from the SAME records. The
+grammars are not the experiment — §§4–12 require them either way — so the
+arrangement is what varies, and it varies structurally.
+
+| | **A — the briefing** | **B — the workspace** |
+|---|---|---|
+| Top level | one column at the measure | asymmetric two columns |
+| Dominant tool | full width | full width, in the main column |
+| Calendar and board | share a two-up row | full width, stacked |
+| People and speech | one full-width block, together | a persistent companion rail, apart |
+| Activity | closes the page as a spine | in the rail |
+| Phone | the same order as desktop | rail broken up and placed by §18 |
+
+**Captured at 1440×900 and 390×844, plus the shipped grid as a control**:
+`npm run basecamp:compose` → `.out/basecamp-compose/` (12 images, near and
+full page). Nothing was chosen from reading the source.
+
+**B wins.** The deciding evidence is the desktop first viewport, measured
+against §2's five-to-ten second question:
+
+- **B's first screen** says: what needs Grant, what is late, what is stuck,
+  eight open tasks, three named lists with nine real tasks and the one overdue
+  item flagged, the four stage columns beginning, **who is on the project and
+  what each of them is doing**, what is waiting on him, what has been handed
+  back, and three real chat lines with names and timestamps.
+- **A's first screen** says the same about the work and **nothing about the
+  people**: presence is below the calendar and the board, so the team is
+  something you scroll to. §§7–8 ask for the team to feel present, and a block
+  that is present only after a scroll is not.
+- **The shipped control** says which six tools the project has and one sample
+  row from each. Opening the three side by side is the clearest statement of
+  §20 available: the control's six columns are the same column six times.
+
+**What A was better at, recorded rather than discarded.** A's phone was
+better on its first run, because B hoisted the whole rail above the work — and
+that was my ordering choice, not a property of B, so B took A's phone order
+(work first). A's two-up row is also a genuinely better home for the calendar
+and the board than B's full-width stack: at 1440 a month grid does not need
+660px. If B's stack reads as tall once the remaining tools land, A's pair is
+the fix to reach for, and it exists in the source, scoped to A.
+
+### Defects found by inspecting the captures, and fixed
+
+| # | Found | Defect |
+|---|---|---|
+| 31 | opening the capture | **A finished list led the page.** Lists came out in module order, so the first content on the first screen was two struck-through completed tasks — the page answering "what has already been done". Lists with open work first; a finished list is kept, not hidden. |
+| 32 | opening the capture | **A document was rendered as a colleague.** The handed-back output carried its author's face, so a one-pager sat in a list of people with a monogram beside it. A page glyph says thing; the author moved to the meta line. |
+| 33 | opening the capture | **B's phone put the roster above the work.** Five rows of who-exists, 400px, before the first actionable thing on a 390px screen — and three of those rows say only what the faces in the header already say. |
+| 34 | measuring | **Every module heading was an 18px touch target.** The only control in a composition, under the 44px floor, on the device the floor exists for. `bc.css` has a coarse-pointer rule and it names the controls it knew about; a new control is not covered by one. |
+| 35 | the classes audit | **Three classes named with no rule behind them** — `bcmodbody`, `bccomp`, `bctaskwho`. Exactly the `.bcprose` defect `verify:basecamp-classes` was built for, caught within a minute of the audit being able to see the new stylesheet. |
+| 36 | the classes audit | **The audit could not see a new stylesheet.** Its source list was `bc.css` and `tokens.css`, so `compose.css` arriving reported 40 working classes as undefined. It reads every `.css` in the directory now, which cannot go stale when a file is added — the audit-pointed-somewhere-else failure, in the audit written to catch a neighbour of it. |
+
+### A wrong finding, recorded because three of four off a capture usually are
+
+**"In progress" renders as "Inprogress".** It does not. Measured:
+`textContent` is `"In progress"`, 67px wide, `scrollWidth` 67, nothing
+clipped, word-spacing 0. The space is there and reads tight at 12px in the
+fallback face, because webfonts do not load in this sandbox — which CLAUDE.md
+already records as making any typographic observation from a capture
+unreliable. One measurement instead of one fix.
+
+### How it is switched, and why not a URL
+
+`localStorage['bc.compose']`, `'a' | 'b'`, empty for the shipped grid. Not a
+query string, because `keepUrl()` discards one; not a path segment, because
+that means teaching the router about an experiment that is meant to be
+deleted. Read through try/catch and defaulting to the shipped build, so a
+private window or blocked site data gets a working page rather than a blank
+one.
+
+### What this cost the rest of the product
+
+Nothing that any check can find. `basecamp:gate` exit 0 — 50/50 routes, 51/51
+journey, 31/31 keyboard, 26/26 preservation, 64/64 states, classes and
+controls green. The default Team HQ: `verify:wired` 77 attributes across 21
+screens with no dead controls, `verify:layouts` 64 states and 0 findings —
+both unchanged, which matters more than usual because `data.js` is shared and
+this commit changed it.
+
+### The prototype data was reshaped, and that is not faking
+
+`web/studio/data.js` now carries, on the first project, the fields the live
+reader actually returns — `state_raw`, `due_on`, `parent`, `milestone` — plus
+three lines of project chat. It is invented data in a file whose first line
+says so, and the page announces it with its own strip. The reason is that a
+prototype missing the fields a tool is MADE of cannot be used to judge that
+tool: a to-do list with no parents, a board with no stages and a calendar with
+no dates would have made both compositions look like the grid they are
+replacing. The dates are offsets from today rather than literals, so the
+prototype's overdue work does not become overdue merely because the file is
+old.
+
+---
 ## NEXT ACTION
 
-**§21 — two materially different Overview compositions, before anything else.**
-Build both, capture each at 1440x900 and 390x844, open the captures, choose
-one, and record in this ledger why the winner won and what the loser was
-better at. Only then implement the tool-specific grammars.
+**Implement the winner's remaining tools, in B's arrangement.** The
+composition is chosen and the miniatures exist; what is not built is the full
+tool behind each of them and the configurability §14 asks for:
 
-The §20 analysis above is the input to that choice. The three findings that
-constrain it: the To-do hierarchy already exists in the database (0171 /
-0286), Card Table stages already exist as `state_raw`, and there is no events
-table, so Calendar may show scheduled work and must say that is what it is
-showing.
+1. **§6** the full To-dos tool with real lists — the hierarchy is derived from
+   `is_milestone` and `parent_task_id`, so this is a renderer, not a contract.
+2. **§10** the full Card Table from `state_raw`, and moving a card, which
+   needs `task_state` and nothing new.
+3. **§9** the full Calendar, saying on the surface that it shows scheduled
+   work — there is no events table and it must not look like a diary.
+4. **§7** the full project Chat against `conversation_history`.
+5. **§14** add, remove and reorder the tools on the project home, through
+   `plane_layout` / `plane_layout_set` / `plane_layout_reset`, with removal
+   structurally unable to reach a delete path.
+6. **§15** the external-services chooser, in a person's words, with nothing
+   offered that is not connectable and no key, scope or OAuth vocabulary on a
+   project surface.
+
+Then §26: `shell.js` is the file to split, by responsibility, once the full
+tools land — `compose.js`, `miniatures.js` and `compose.css` were written
+outside it for that reason.
 
 Still not to be merged, still not promoted to the default route, and the
 default Team HQ stays untouched.

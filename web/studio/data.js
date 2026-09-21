@@ -19,6 +19,19 @@ import * as people from './people.js'
   human team as possible"* than any amount of surface polish, and the work was
   already done.
 */
+/*
+  A prototype date, relative to now.
+
+  Hard-coded dates go stale, and a prototype whose "overdue" work is overdue
+  because the file is a year old is a prototype that misrepresents the product
+  every time somebody opens a capture. Offsets in days from today instead.
+*/
+const inDays = (n) => {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 const FACES = 'https://baujwlzcziasnfhhkchg.supabase.co/storage/v1/object/public/avatars'
 
 /*
@@ -92,12 +105,12 @@ const FALLBACK_PROJECTS = [
       },
     ],
     modules: [
-      { n: 1, name: 'Legacy Opening Assessment', state: 'done', docs: 2, tasks: 4 },
-      { n: 2, name: 'Ideal Client Avatar', state: 'doing', docs: 3, tasks: 4 },
-      { n: 3, name: 'Client Vision & Journey', state: 'todo', docs: 2, tasks: 4 },
-      { n: 4, name: 'Coaching Interview Execution', state: 'todo', docs: 2, tasks: 4 },
-      { n: 5, name: 'Three-Layer Wellness Impact', state: 'todo', docs: 2, tasks: 4 },
-      { n: 6, name: 'Legacy Interview Roadmap', state: 'todo', docs: 1, tasks: 4 },
+      { id: 'm1', n: 1, name: 'Legacy Opening Assessment', state: 'done', docs: 2, tasks: 4 },
+      { id: 'm2', n: 2, name: 'Ideal Client Avatar', state: 'doing', docs: 3, tasks: 4 },
+      { id: 'm3', n: 3, name: 'Client Vision & Journey', state: 'todo', docs: 2, tasks: 4 },
+      { id: 'm4', n: 4, name: 'Coaching Interview Execution', state: 'todo', docs: 2, tasks: 4 },
+      { id: 'm5', n: 5, name: 'Three-Layer Wellness Impact', state: 'todo', docs: 2, tasks: 4 },
+      { id: 'm6', n: 6, name: 'Legacy Interview Roadmap', state: 'todo', docs: 1, tasks: 4 },
     ],
     documents: [
       { title: 'WS01 — Legacy Opening Assessment', kind: 'pdf', origin: 'Yours', size: '34,606 words', file: './samples/ws01.pdf', lines: [78, 100, 94, 97, 62, 88, 91, 74] },
@@ -109,15 +122,46 @@ const FALLBACK_PROJECTS = [
       { title: 'Legacy Questionnaire', kind: 'pdf', origin: 'Yours', size: '3,370 words', lines: [74, 92, 84] },
       { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed' },
     ],
+    /*
+      The fields `app.studio_tasks` actually returns (0222, 0530): `state_raw`,
+      `due_on`, `parent` and `milestone` alongside the display fields. Invented
+      like everything else in this file, and shaped like the real reader,
+      because a prototype missing the fields a tool is made of cannot be used
+      to judge that tool. `parent` names a module id, which is how
+      PROJECT -> LIST -> TASK is derived rather than stored twice.
+    */
     tasks: [
-      { title: 'Conduct first five interviews', due: 'Due 16 September', who: 'claire', state: 'due' },
-      { title: 'Prepare interview questions', note: 'Coaching Interview Execution', who: 'emma' },
-      { title: 'List 20 real and prospective clients', note: 'Client Vision & Journey Mapping', who: 'emma' },
-      { title: 'Map client answers to the three layers', note: 'Wellness Impact Analysis', who: 'oliver',
-        blocked: 'Waiting on the first five interviews' },
-      { title: 'Draft the avatar document', note: 'Ideal Client Avatar', who: 'emma', state: 'doing' },
-      { title: 'Complete the Success Identity Quiz', state: 'done' },
-      { title: 'Review the Zoom Call interview notes', state: 'done' },
+      { title: 'Conduct first five interviews', due: 'Due 16 September', due_on: inDays(-5),
+        who: 'claire', state: 'due', state_raw: 'doing', parent: 'm4' },
+      { title: 'Prepare interview questions', note: 'Coaching Interview Execution',
+        who: 'emma', state_raw: 'todo', due_on: inDays(2), parent: 'm4' },
+      { title: 'Book the remaining interview slots', note: 'Coaching Interview Execution',
+        who: 'claire', state_raw: 'todo', parent: 'm4' },
+      { title: 'List 20 real and prospective clients', note: 'Client Vision & Journey Mapping',
+        who: 'emma', state_raw: 'todo', due_on: inDays(9), parent: 'm3' },
+      { title: 'Map the journey for the three named clients', note: 'Client Vision & Journey Mapping',
+        who: 'oliver', state_raw: 'todo', parent: 'm3' },
+      { title: 'Map client answers to the three layers', note: 'Wellness Impact Analysis',
+        who: 'oliver', blocked: 'Waiting on the first five interviews', state_raw: 'blocked',
+        parent: 'm5' },
+      { title: 'Draft the avatar document', note: 'Ideal Client Avatar', who: 'emma',
+        state: 'doing', state_raw: 'doing', due_on: inDays(0), parent: 'm2' },
+      { title: 'Agree the avatar with Grant', note: 'Ideal Client Avatar', who: 'claire',
+        state_raw: 'todo', parent: 'm2' },
+      { title: 'Complete the Success Identity Quiz', state: 'done', state_raw: 'done',
+        parent: 'm1' },
+      { title: 'Review the Zoom Call interview notes', state: 'done', state_raw: 'done',
+        who: 'emma', parent: 'm1' },
+    ],
+    /*
+      What has been said on this project. The real surface reads
+      `conversation_history`, which is project-scoped; this stands in for it so
+      the chat grammar can be judged before a token exists.
+    */
+    chat: [
+      { who: 'grant', text: 'Can we get the first five interviews booked this week?', when: 'Fri 09:12' },
+      { who: 'claire', text: 'Three are booked. Ben has not come back on a time yet, so I have put a nudge on Monday.', when: 'Fri 09:40' },
+      { who: 'emma', text: 'The avatar draft is with you - I have left the two segments I was unsure about marked.', when: 'Yesterday 16:05' },
     ],
     /*
       Contacts.

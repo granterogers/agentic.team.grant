@@ -13,11 +13,28 @@
  */
 import { readdir, readFile } from 'node:fs/promises'
 
-const CSS = ['web/studio/bc/bc.css', 'web/studio/bc/tokens.css']
 const DIR = 'web/studio/bc'
 
+/*
+  EVERY stylesheet in the directory, not a list of the ones that existed when
+  this was written. The list was `bc.css` and `tokens.css`; adding
+  `compose.css` reported 40 perfectly good classes as undefined, which is the
+  audit pointed somewhere other than where the product is - the failure this
+  repository has paid for in three separate suites. A directory read cannot go
+  stale when a file is added.
+*/
 let styles = ''
-for (const f of CSS) styles += await readFile(f, 'utf8')
+const sheets: string[] = []
+for (const f of (await readdir(DIR)).filter((x) => x.endsWith('.css')).sort()) {
+  sheets.push(f)
+  styles += await readFile(`${DIR}/${f}`, 'utf8')
+}
+if (sheets.length < 2) {
+  console.error(
+    `only ${String(sheets.length)} stylesheet(s) found in ${DIR} — the read has gone blind`,
+  )
+  process.exit(2)
+}
 
 /* Every class the stylesheet defines, plus the ones the studio already owns. */
 const defined = new Set([...styles.matchAll(/\.([a-z][a-z0-9-]*)/g)].map((m) => m[1] as string))
@@ -58,10 +75,22 @@ if (defined.size < 30) {
   process.exit(2)
 }
 
+/*
+  A class built by interpolation - `bcface--${size}` - reaches this audit as
+  the literal fragment `bcface--`, which is not a name any stylesheet can
+  define. Asserting it by name would report a working modifier as missing; and
+  simply dropping it would give up the coverage. So a fragment ending in a
+  hyphen is satisfied by any DEFINED class beginning with it, which still
+  fails if the base is renamed and still fails if the whole family is deleted.
+*/
+const prefixes = [...defined]
+const covers = (frag: string): boolean => prefixes.some((d) => d.startsWith(frag) && d !== frag)
+
 const missing = [
   ...new Set(
     used
       .filter((u) => !defined.has(u.cls) && !BORROWED.has(u.cls))
+      .filter((u) => !(u.cls.endsWith('-') && covers(u.cls)))
       .map((u) => `${u.cls} (${u.file})`),
   ),
 ]
