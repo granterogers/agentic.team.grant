@@ -531,5 +531,6 @@
   "0530_a_task_the_office_made_remembers_which_job_made_it.sql": "6997c9ffca8db153d713de60d17362df30e3df08e4ff7e4b55d8844e1b4ea397",
   "0531_sweep_the_twenty_one_the_witness_could_not_see.sql": "5497d5beb841d82af6cc0f4283242816b6f1fe14962e5897738d50af3698a1d8",
   "0532_five_more_the_run_token_gives_away.sql": "4d978db76569157183d5809085b6c96cb9c4217f920a869d5da38423593b87c6",
-  "0533_the_harness_can_ask_to_see_its_own_rows.sql": "cd78e088569f2a4aa2215893d57e4ac1b2cb999aeca4112f3c1133f00fc6fbb7"
+  "0533_the_harness_can_ask_to_see_its_own_rows.sql": "cd78e088569f2a4aa2215893d57e4ac1b2cb999aeca4112f3c1133f00fc6fbb7",
+  "0534_the_harness_can_ask_to_see_its_own_projects.sql": "e696bf64402aa319d276262da64b9b8d90f14a25452a22ebfe0044e0f12c7079"
 }

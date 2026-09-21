@@ -1711,7 +1711,7 @@ async function offerRule(
  * "AI Learning" and "AI learning" are the same notebook to a person, and a
  * matcher that disagreed would recreate the exact defect this exists to close.
  */
-async function resolveProjects(db: SqlExecutor, plan: Plan): Promise<Plan> {
+async function resolveProjects(db: SqlExecutor, plan: Plan, jobId: string): Promise<Plan> {
   const named = plan.steps.filter((s) => s.kind === 'project')
   if (named.length === 0) return plan
 
@@ -1740,9 +1740,26 @@ async function resolveProjects(db: SqlExecutor, plan: Plan): Promise<Plan> {
   const candidatesFor = async (
     name: string,
   ): Promise<{ project_id: string; slug: string; name: string; confidence: number }[]> => {
+    /*
+      The second argument is not a mode this handler is in. It is a question
+      the DATABASE answers about the job that is asking.
+
+      `app.harness_job` is the same canonical fact that already decides
+      whether a delivery may reach a destination (0523) and whether a task
+      appears on Grant's own list (0530). It is false for every message a
+      person sends, so this resolves against exactly the rows it always did;
+      for harness traffic it also admits fixture projects, which is what lets
+      the simulated world be asked about at all without a real project being
+      created for it (#295, 0534).
+
+      Computed in SQL rather than fetched first, so there is no extra round
+      trip and no moment where this code holds a boolean it could get wrong.
+    */
     const { rows } = await db.execute(`
       select r.project_id::text, r.slug, r.name, r.confidence::float8 as confidence
-        from app.resolve_project_by_name(${lit(name)}) r
+        from app.resolve_project_by_name(
+               ${lit(name)},
+               app.harness_job(${lit(jobId)}::uuid)) r
        order by r.confidence desc
        limit 5
     `)
@@ -2199,7 +2216,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .catch(() => undefined)
 
       const unresolved = readPlan(instruction)
-      const plan = unresolved === null ? null : await resolveProjects(deps.db, unresolved)
+      const plan =
+        unresolved === null ? null : await resolveProjects(deps.db, unresolved, job.jobId)
       if (plan !== null) {
         /*
           A clause we could not plan is a typed impediment, not just an apology.
