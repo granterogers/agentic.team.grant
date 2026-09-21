@@ -189,6 +189,41 @@ const output = (): HandlerOutput =>
             ${lit(projectId)}::uuid, false, true)
   `)
 
+  /*
+    Register this run's fabricated channel as a test destination, or the case
+    below cannot test what it says it tests.
+
+    0523 made `app.claim_delivery` default-deny for harness traffic: a fixture
+    job may only deliver to a destination registered in
+    `public.test_destinations`, and that table has never held a row. It was
+    written after this suite, and it silently changed what this case measures —
+    the claim came back `suppressed` before the transport was touched, so the
+    note read "slack delivery suppressed" instead of naming the injected
+    outage, and the check went red about the guard rather than about Slack.
+    A suite outside the gate is a suite that will be red and unnoticed, and
+    this one had been.
+
+    Registering it is safe three times over, which is why this is the fix
+    rather than weakening the guard:
+
+      * `CHAOS_CHANNEL` is fabricated per run and carries the run token. It
+        exists in no Slack workspace, so a message sent to it could only ever
+        earn `channel_not_found`.
+      * `SlackClient` here is built on an injected `refused` fetch, so nothing
+        leaves this process at all.
+      * 0523's own trigger refuses any destination that has ever received a
+        real delivery, so this cannot be pointed at Grant's chat even by
+        mistake.
+
+    Removed in teardown beside the channel map.
+  */
+  await db.execute(`
+    insert into public.test_destinations (channel, target_ref, why)
+    values ('slack', ${lit(CHAOS_CHANNEL)},
+            ${lit(`verify:chaos ${run} — a fabricated channel in no workspace, behind an injected refused fetch`)})
+    on conflict (channel, target_ref) do nothing
+  `)
+
   const brokenOffice = await SlackOffice.configured(
     db,
     new SlackClient(realSlackToken, { fetchImpl: refused }),
@@ -848,6 +883,7 @@ console.log(`provider breaker reset: available=${String(restored?.ok)}`)
 
 await db.execute(`
   delete from public.slack_channel_map where channel_id = ${lit(CHAOS_CHANNEL)};
+  delete from public.test_destinations where channel = 'slack' and target_ref = ${lit(CHAOS_CHANNEL)};
   delete from public.inbound_commands where dedupe_key like ${lit(`verify:chaos:%${run}`)};
   delete from public.deliveries where dedupe_key like ${lit(`chaos:${run}:%`)};
   delete from public.deliveries where job_id = ${lit(String(jobRow?.id))}::uuid;

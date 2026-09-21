@@ -42,6 +42,62 @@ const HQ_TOKEN = Deno.env.get('HQ_API_TOKEN') ?? ''
 const DB_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+/**
+ * Where to kick the worker, and why the dashboard needs to.
+ *
+ * Measured on real delivered traffic over fourteen days, `office.instruction`
+ * from creation to being picked up:
+ *
+ *     telegram   median  1s     -- the webhook kicks
+ *     slack      median  4s     -- the events endpoint kicks
+ *     teamhq     median 46s     -- nothing kicks; it waits for pg_cron
+ *
+ * The Telegram webhook has kicked since Grant said *"I need the response to be
+ * pretty much instant"*. `slack-events` was given the same thing later, and
+ * its comment says why: *"a message typed in the office waited for the next
+ * pg_cron tick"*. This is the THIRD door and it was never done — so the
+ * surface Grant reads the office on is the slowest one to answer him.
+ *
+ * Same defect, same fix, third place. CLAUDE.md's rule is the one that
+ * applies: when two functions do the same thing, grep for the other one.
+ *
+ * Empty means no kick, and the queue still drains on the one-minute floor: a
+ * missing secret must degrade to "late", never to "lost".
+ */
+const WORKER_URL = Deno.env.get('WORKER_URL') ?? ''
+const WORKER_KICK_SECRET = Deno.env.get('WORKER_KICK_SECRET') ?? ''
+
+/**
+ * Start a pass now, without waiting for it.
+ *
+ * Deliberately not awaited: a pass can take a minute and the dashboard is
+ * waiting on this response. `waitUntil` keeps the runtime alive after the
+ * response has gone, which is the shape this needs.
+ *
+ * Failures are swallowed on purpose. The kick is an accelerator, not the
+ * delivery mechanism — pg_cron is behind it, so a kick that fails costs
+ * latency and nothing else.
+ *
+ * Fired after any successful POST rather than for a named list of actions.
+ * That is a property and not an enumeration: a GET is a read and can never
+ * enqueue, a POST is a write and might, and a list of the actions that happen
+ * to enqueue today is a list the next action added will not be on. An
+ * unnecessary kick costs one function invocation that finds an empty queue;
+ * a missing one costs Grant a minute.
+ */
+const kickWorker = (): void => {
+  if (WORKER_URL === '' || WORKER_KICK_SECRET === '') return
+  const kick = fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${WORKER_KICK_SECRET}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: 'hq-api' }),
+  }).catch(() => undefined)
+  const keepAlive = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime?.waitUntil
+  if (keepAlive === undefined) void kick
+  else keepAlive(kick)
+}
+
 /** The complete list. A section not named here does not exist. */
 const SECTIONS: Readonly<
   Record<
@@ -1276,6 +1332,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         )
         return json({ error: 'the file was stored but could not be filed' }, 502)
       }
+      kickWorker()
       return json({ action: actionName, result: await recorded.json() })
     }
 
@@ -1292,6 +1349,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
       console.error(`hq-api ${actionName}: upstream ${String(done.status)}`)
       return json({ error: 'the action failed' }, 502)
     }
+    // After the write succeeded, never before: a kick for an action that was
+    // refused would start a pass for work that does not exist.
+    kickWorker()
     return json({ action: actionName, result: await done.json() })
   }
 
