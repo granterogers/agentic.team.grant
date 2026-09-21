@@ -38,7 +38,7 @@ import {
   planningCatalogue,
 } from '../agents/goal.ts'
 import type { Observation } from '../agents/perform.ts'
-import { compile, performable } from '../agents/perform.ts'
+import { byStepId, compile, performable } from '../agents/perform.ts'
 import { howComposed } from '../agents/provenance.ts'
 import { assess, RECONSIDERED } from '../agents/satisfied.ts'
 import type { SqlExecutor } from '../db/executor.ts'
@@ -214,7 +214,7 @@ export function pursueHandler(deps: PursueDeps): Handler {
       )
       let outcome = assess(
         working,
-        (run.kind === 'done' ? run.outcomes : {}) as Record<string, Observation>,
+        byStepId(run.kind === 'done' ? run.outcomes : {}) as Record<string, Observation>,
         { kind: run.kind, ...(run.kind === 'paused' ? { pauseReason: run.pause.reason } : {}) },
       )
       const everySeen: Record<string, Observation> =
@@ -255,7 +255,7 @@ export function pursueHandler(deps: PursueDeps): Handler {
         if (run.kind === 'done') Object.assign(everySeen, run.outcomes)
         outcome = assess(
           next,
-          (run.kind === 'done' ? run.outcomes : {}) as Record<string, Observation>,
+          byStepId(run.kind === 'done' ? run.outcomes : {}) as Record<string, Observation>,
           { kind: run.kind, ...(run.kind === 'paused' ? { pauseReason: run.pause.reason } : {}) },
         )
         rounds.push(RECONSIDERED.tookAnother(next.steps.map((st) => st.capability).join(' → ')))

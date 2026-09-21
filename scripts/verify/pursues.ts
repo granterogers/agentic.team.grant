@@ -32,7 +32,7 @@
 
 import type { GoalPlan } from '../../src/agents/goal.ts'
 import { compile } from '../../src/agents/perform.ts'
-import { saysItReconsidered } from '../../src/agents/satisfied.ts'
+import { RECONSIDERED, saysItReconsidered } from '../../src/agents/satisfied.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
 import { pursueHandler } from '../../src/handlers/pursue.ts'
 import { runSteps } from '../../src/jobs/checkpoint.ts'
@@ -1339,6 +1339,251 @@ check(
   Number(replanFacts.rounds ?? 1) >= 2 ? Number(roundSteps.second) >= 1 : Number(roundSteps.n) >= 1,
 )
 
+// --- a model that will not stop ----------------------------------------------
+/*
+  THE BOUNDS, DRIVEN WITH A HOSTILE MODEL RATHER THAN TRUSTED.
+
+  Everything above uses the real planner, which behaves. The bounds exist for
+  when it does not, and a bound that has only ever been exercised by a
+  well-behaved model is a bound nobody has tested. An agent that re-plans
+  without limit is the behaviour that makes one frightening, so this is the
+  single most important adversarial case in the file.
+
+  Two shapes of misbehaviour, because they stop for different reasons:
+
+    ALWAYS SOMETHING NEW   a model that proposes a fresh route every time, none
+                           of which works. Only the round ceiling can stop it.
+    ALWAYS THE SAME        a model that proposes what was just tried. The
+                           ceiling would stop it eventually; the same-plan
+                           check stops it at once, which is the difference
+                           between three wasted model calls and one.
+*/
+const forever = (steps: string[], why = 'qqzzxxvvnnmm'): ProviderRouter =>
+  ({
+    complete: async () => ({
+      content: JSON.stringify({
+        goal: 'keep going',
+        steps: steps.map((capability, i) => ({
+          id: `s${String(i)}`,
+          capability,
+          /* A word nothing in the corpus matches, so every round finds nothing. */
+          why,
+          needs: [],
+          specialist: null,
+          audience: 'grant',
+        })),
+        unreachable: [],
+      }),
+      model: 'test/never-stops',
+    }),
+  }) as unknown as ProviderRouter
+
+/** A different plan every time, and none of them works. */
+let restless = 0
+const restlessRouter = {
+  complete: async () => {
+    restless += 1
+    const capability = restless % 2 === 0 ? 'notebook.read' : 'db.read'
+    /*
+      A DIFFERENT REASON EVERY TIME. The fingerprint is the goal plus what is
+      still UNMET, and unmet is built from the steps' reasons — so a model that
+      varies its reasons looks like one that is learning, and only the round
+      ceiling can stop it. That is the harder case and this router is for it.
+    */
+    return await forever(
+      [capability, 'notebook.read'],
+      `qqzzxx round ${String(restless)}`,
+    ).complete({ messages: [] })
+  },
+} as unknown as ProviderRouter
+
+/*
+  A DIFFERENT PLAN EVERY TIME, AND ALWAYS THE SAME REASON — a model going round
+  rather than one learning. The ceiling would stop it eventually; the
+  fingerprint should notice at once.
+*/
+let circling = 0
+const circlingRouter = {
+  complete: async () => {
+    circling += 1
+    return await forever([circling % 2 === 0 ? 'notebook.read' : 'db.read']).complete({
+      messages: [],
+    })
+  },
+} as unknown as ProviderRouter
+
+const loopJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
+  values ('office.pursue', 'running', ${lit(emptyId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-loop-${run}`)}, gen_random_uuid(),
+          jsonb_build_object(
+            'plan', ${lit(
+              JSON.stringify({
+                ...plan,
+                goal: 'keep going',
+                steps: [
+                  {
+                    id: 'first',
+                    capability: 'notebook.read',
+                    why: 'qqzzxxvvnnmm',
+                    needs: [],
+                    specialist: null,
+                    audience: 'grant',
+                  },
+                ],
+              }),
+            )}::jsonb,
+            'request', 'find whatever you can about this and keep trying other ways'),
+          'verify:pursues', app.now_utc() + interval '30 minutes')
+  returning job_id::text as id`)
+const loopJobId = String(loopJob.id)
+const loopStarted = Date.now()
+const loopOut = await pursueHandler({ db, router: restlessRouter }).handle(
+  {
+    jobId: loopJobId,
+    kind: 'office.pursue',
+    correlationId: '00000000-0000-0000-0000-000000000000',
+    projectId: emptyId,
+    idempotencyKey: `pursue-loop-${run}`,
+    attempt: 1,
+  },
+  db,
+)
+const loopMs = Date.now() - loopStarted
+await settle(loopJobId)
+const loopFacts = (loopOut.facts ?? {}) as { rounds?: number }
+check(
+  'a model that proposes a NEW route for ever is stopped by the round ceiling',
+  `${String(loopFacts.rounds ?? 1)} round(s) in ${String(Math.round(loopMs / 1000))}s`,
+  Number(loopFacts.rounds ?? 1) <= 3,
+)
+check(
+  'and it terminated at all, rather than being cut off by a timeout',
+  `the handler returned after ${String(Math.round(loopMs / 1000))}s`,
+  loopOut.body.length > 0,
+)
+const loopSteps = await one(`
+  select count(*)::int as n from public.job_steps where job_id = ${lit(loopJobId)}::uuid`)
+check(
+  'and the actions it took are bounded too, not just the planning',
+  `${String(loopSteps.n)} step(s) recorded`,
+  Number(loopSteps.n) <= 8,
+)
+/*
+  AND THE OTHER BOUND, WHICH STOPS A MODEL GOING ROUND.
+
+  Two bounds with one assertion between them means either could be broken
+  without the check moving, so each gets a router only it can stop. The
+  restless one above varies its REASONS, so the fingerprint sees something new
+  every time and only the ceiling can catch it. This one keeps the same reason
+  and offers new capabilities for it — a model going round — which the
+  fingerprint should notice at once. That is the difference between surviving a
+  loop and recognising one.
+*/
+const circlingJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
+  values ('office.pursue', 'running', ${lit(emptyId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-circle-${run}`)}, gen_random_uuid(),
+          jsonb_build_object(
+            'plan', ${lit(
+              JSON.stringify({
+                ...plan,
+                goal: 'keep going',
+                steps: [
+                  {
+                    id: 's0',
+                    capability: 'notebook.read',
+                    why: 'qqzzxxvvnnmm',
+                    needs: [],
+                    specialist: null,
+                    audience: 'grant',
+                  },
+                ],
+              }),
+            )}::jsonb,
+            'request', 'find whatever you can about this and keep trying other ways'),
+          'verify:pursues', app.now_utc() + interval '30 minutes')
+  returning job_id::text as id`)
+const circlingJobId = String(circlingJob.id)
+const circlingOut = await pursueHandler({ db, router: circlingRouter }).handle(
+  {
+    jobId: circlingJobId,
+    kind: 'office.pursue',
+    correlationId: '00000000-0000-0000-0000-000000000000',
+    projectId: emptyId,
+    idempotencyKey: `pursue-circle-${run}`,
+    attempt: 1,
+  },
+  db,
+)
+await settle(circlingJobId)
+const circlingFacts = (circlingOut.facts ?? {}) as { rounds?: number }
+check(
+  'a model going round on the SAME unmet thing is NOTICED, not merely survived',
+  `${String(circlingFacts.rounds ?? 1)} round(s); ${
+    circlingOut.body.includes(RECONSIDERED.sameAgain)
+      ? 'it said it had been here before'
+      : 'it did not notice'
+  }`,
+  circlingOut.body.includes(RECONSIDERED.sameAgain) && Number(circlingFacts.rounds ?? 1) < 3,
+)
+
+/*
+  ALWAYS THE SAME. The ceiling would catch this eventually; the same-plan check
+  should catch it on the first re-plan, which is two model calls saved and —
+  more to the point — the difference between "it stopped because it ran out of
+  attempts" and "it noticed it was going round".
+*/
+const sameJob = await one(`
+  insert into public.jobs
+    (kind, state, project_id, requested_by, idempotency_key, correlation_id, pinned_config,
+     leased_by, leased_until)
+  values ('office.pursue', 'running', ${lit(emptyId)}::uuid, 'telegram:verify-pursues',
+          ${lit(`pursue-same-${run}`)}, gen_random_uuid(),
+          jsonb_build_object(
+            'plan', ${lit(
+              JSON.stringify({
+                ...plan,
+                goal: 'keep going',
+                steps: [
+                  {
+                    id: 's0',
+                    capability: 'notebook.read',
+                    why: 'qqzzxxvvnnmm',
+                    needs: [],
+                    specialist: null,
+                    audience: 'grant',
+                  },
+                ],
+              }),
+            )}::jsonb,
+            'request', 'find whatever you can about this and keep trying other ways'),
+          'verify:pursues', app.now_utc() + interval '30 minutes')
+  returning job_id::text as id`)
+const sameJobId = String(sameJob.id)
+const sameOut = await pursueHandler({ db, router: forever(['notebook.read']) }).handle(
+  {
+    jobId: sameJobId,
+    kind: 'office.pursue',
+    correlationId: '00000000-0000-0000-0000-000000000000',
+    projectId: emptyId,
+    idempotencyKey: `pursue-same-${run}`,
+    attempt: 1,
+  },
+  db,
+)
+await settle(sameJobId)
+const sameFacts = (sameOut.facts ?? {}) as { rounds?: number }
+check(
+  'a model that proposes what was JUST TRIED is stopped at once, not after three goes',
+  `${String(sameFacts.rounds ?? 1)} round(s)`,
+  Number(sameFacts.rounds ?? 1) === 1,
+)
+
 // --- a refusal is never re-planned around ------------------------------------
 /*
   THE BOUND THAT MATTERS MOST.
@@ -1424,6 +1669,8 @@ await db.execute(`
                     ${lit(injectJobId)}::uuid, ${lit(resumeJobId)}::uuid,
                     ${lit(askJobId)}::uuid, ${lit(outageJobId)}::uuid,
                     ${lit(replanJobId)}::uuid, ${lit(noRouteJobId)}::uuid,
+                    ${lit(loopJobId)}::uuid, ${lit(sameJobId)}::uuid,
+                    ${lit(circlingJobId)}::uuid,
                     ${lit(mumbleJobId)}::uuid, ${lit(staleJobId)}::uuid)
      and state not in ('complete', 'cancelled', 'failed', 'committing', 'committed', 'notifying');
   delete from public.documents where project_id = ${lit(projectId)}::uuid;

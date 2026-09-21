@@ -545,6 +545,40 @@ export const EXECUTORS: Readonly<Record<string, Executor>> = {
   },
 }
 
+/**
+ * A compiled step's name, for a given round.
+ *
+ * One function rather than two spellings, because the two spellings is exactly
+ * what went wrong: `compile` prefixed round two's steps with `r2:` so a retry
+ * would not be skipped as already done, and `assess` looked them up WITHOUT
+ * the prefix — so from the second round on it found nothing for every step and
+ * concluded that nothing had run at all. That stopped the loop early and, far
+ * worse, would have reported a round that genuinely succeeded as a failure.
+ *
+ * Found by the hostile-model case, which is the only one that reaches a third
+ * round often enough to notice.
+ */
+export const stepName = (id: string, capability: string, round = 1): string =>
+  round === 1 ? `${id}:${capability}` : `r${String(round)}:${id}:${capability}`
+
+/**
+ * Outcomes re-keyed by the plan's own step names, whatever round recorded them.
+ *
+ * `assess` and every dependency lookup speak in the plan's ids; the checkpoint
+ * speaks in compiled names. This is the one place that translates.
+ */
+export const byStepId = (outcomes: Readonly<Record<string, Outcome>>): Record<string, Outcome> => {
+  const out: Record<string, Outcome> = {}
+  for (const [name, outcome] of Object.entries(outcomes)) {
+    const parts = name.split(':')
+    const rounded = parts.length === 3 && parts[0]?.startsWith('r') === true
+    const id = (rounded ? parts[1] : parts[0]) ?? name
+    const capability = parts[parts.length - 1] ?? ''
+    out[`${id}:${capability}`] = outcome
+  }
+  return out
+}
+
 /** Which registry capabilities this office can actually perform today. */
 export const performable = (): readonly string[] => Object.keys(EXECUTORS)
 
@@ -578,10 +612,7 @@ export const compile = (
   plan.steps.map((step) => {
     const executor = EXECUTORS[step.capability]
     return {
-      name:
-        round === 1
-          ? `${step.id}:${step.capability}`
-          : `r${String(round)}:${step.id}:${step.capability}`,
+      name: stepName(step.id, step.capability, round),
       effect: executor?.effect ?? 'none',
       run: async (done): Promise<{ outcome?: Outcome; pause?: Paused }> => {
         /*

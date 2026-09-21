@@ -1194,6 +1194,48 @@ up on Monday"* — came back **satisfied with 2 canonical receipts.**
 `npm test` **2213** · `verify:pursues` 41/41 on two consecutive runs, one
 taking a second route and one correctly finding none.
 
+## THE BOUNDS, DRIVEN WITH A HOSTILE MODEL — and a real defect they found
+
+Everything else uses the real planner, which behaves. **A bound only ever
+exercised by a well-behaved model is a bound nobody has tested**, and an agent
+that re-plans without limit is the behaviour that makes one frightening. So
+three synthetic routers, each of which only one bound can stop:
+
+| router | behaviour | what must stop it |
+|---|---|---|
+| **restless** | a new route AND a new reason every round | the round ceiling |
+| **circling** | new routes for the identical unmet thing | the fingerprint |
+| **stuck** | proposes exactly what was just tried | the same-plan check |
+
+Each stopped by the one that should: **3 rounds · 2 rounds, "it said it had
+been here before" · 1 round.**
+
+### Sabotage, and it is emphatic
+
+With the ceiling raised to 25 and the fingerprint switched off, the restless
+model ran **11 rounds and 21 steps in 154 seconds**, and the circling model ran
+**16 rounds without noticing**. Three checks red.
+
+The detail worth keeping: it was the **wall-clock ceiling** that finally
+stopped the restless one, not the round count. The third bound, which nothing
+had ever exercised, is the reason that run ended at all.
+
+### THE DEFECT THIS FOUND, WHICH WAS MINE
+
+`compile` prefixes round two's steps `r2:` so a retry is a new step rather than
+one skipped as already done. **`assess` looked them up WITHOUT the prefix** —
+so from the second round on it found nothing for every step and concluded that
+nothing had run at all.
+
+That stopped the loop early, and far worse: **a second round that genuinely
+succeeded would have been reported to Grant as a failure.** The `verify:composes`
+re-plan case had been quietly reporting `failed` for a round that produced
+receipts; with the fix it reports `satisfied`.
+
+One `stepName()` and one `byStepId()` now, because two spellings of a name is
+exactly what went wrong. Only the hostile-model case reaches a third round
+often enough to notice.
+
 ## WHAT IS STILL UNPROVED
 
 - The end-to-end run enters at `inbound_commands`, which is the canonical
