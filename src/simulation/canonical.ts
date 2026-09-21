@@ -231,6 +231,29 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         row = await patiently(
           async () =>
             await one(`
+              /*
+                Hold announce=false across the whole family, on every poll.
+
+                The door sets it on the job it creates; a CHILD does not
+                exist yet at that moment and takes the column default,
+                which is true. Six children of a matrix run were
+                announceable - three artifact.report and three
+                office.pursue - and CLAUDE.md records exactly this shape:
+                a child inherits requested_by and takes the default, which
+                is why 0461 and 0462 were both needed.
+
+                Nothing was delivered, because 0523 refuses a harness job a
+                production destination and has now refused 31 with 0 sent.
+                This is the first line of defence being restored rather
+                than the only one: a guard that depends on a second guard
+                is not a guard.
+              */
+              update public.jobs set announce = false
+               where announce
+                 and (job_id = ${lit(jobId)}::uuid
+                      or parent_job_id = ${lit(jobId)}::uuid
+                      or correlation_id = (select correlation_id from public.jobs
+                                            where job_id = ${lit(jobId)}::uuid));
               select j.state::text as state,
                      app.harness_job(j.job_id) as fixture,
                      coalesce(j.recipient_agent, '') as agent,

@@ -6,7 +6,11 @@
  * CLAUDE.md records being built twice.
  */
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
-import { assertContained, provisionWorld } from '../../src/simulation/provision.ts'
+import {
+  assertContained,
+  provisionWorld,
+  sweepHarnessWork,
+} from '../../src/simulation/provision.ts'
 
 const token = process.env.SUPABASE_ACCESS_TOKEN
 if (token === undefined || token === '') {
@@ -20,6 +24,7 @@ const db = new ManagementApiExecutor(
 )
 
 const check = process.argv.includes('--check')
+const sweep = process.argv.includes('--sweep')
 
 console.log('\nShadow Grant - the simulated world\n')
 
@@ -31,6 +36,18 @@ if (!check) {
   for (const s of r.created) console.log(`    + ${s}`)
   console.log(`  aliases    ${String(r.aliases)}`)
   console.log(`  documents  ${String(r.documents)}`)
+}
+
+if (sweep) {
+  const r = await sweepHarnessWork(db)
+  console.log(`\nSWEEP`)
+  console.log(
+    `  tasks left by shadow jobs: ${String(r.tasksBefore)} -> ${String(r.tasksAfter)} (${String(r.jobs)} job(s) reversed)`,
+  )
+  if (r.tasksAfter > 0)
+    console.log(
+      '  NOTE: what remains is what the office declined to take back, which is correct if a person has touched it.',
+    )
 }
 
 const problems = await assertContained(db)

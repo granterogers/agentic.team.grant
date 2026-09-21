@@ -199,3 +199,58 @@ export const assertContained = async (db: SqlExecutor): Promise<readonly string[
 
   return problems
 }
+
+/**
+ * Take back what a shadow run left behind.
+ *
+ * Run after every live pass, and before believing a containment report.
+ * `npm run check:leaks` found three tasks the matrix had created and was
+ * right to fail on them: 0530 HIDES a harness task from Grant's list, so
+ * he never saw them, but a debris class with no teardown is one that comes
+ * back, and CLAUDE.md counts five tables that proved it.
+ *
+ * It uses `app.undo_tasks_from_job`, which is the office's OWN reversal
+ * rather than a DELETE this file invents — so the teardown exercises a
+ * path a person actually has, and inherits its rule about not taking back
+ * anything changed in the meantime.
+ *
+ * Jobs themselves are never removed: `job_state_transitions` holds them and
+ * a job cannot be deleted. They are correctly marked as harness traffic,
+ * which is what every reader that reports to Grant asks.
+ */
+export const sweepHarnessWork = async (
+  db: SqlExecutor,
+  runTokenLike = 'teamhq:verify-shadow-%',
+): Promise<{
+  readonly tasksBefore: number
+  readonly tasksAfter: number
+  readonly jobs: number
+}> => {
+  const count = async (): Promise<number> =>
+    Number(
+      (
+        (
+          await db.execute(`
+      select count(*)::int as n from public.tasks t
+       where t.job_id in (select job_id from public.jobs
+                           where requested_by like ${lit(runTokenLike)})`)
+        ).rows[0] as { n: number }
+      ).n,
+    )
+
+  const tasksBefore = await count()
+
+  const { rows } = await db.execute(`
+    select job_id::text as id from public.jobs
+     where requested_by like ${lit(runTokenLike)}
+       and job_id in (select job_id from public.tasks where job_id is not null)
+  `)
+
+  for (const row of rows as { id: string }[]) {
+    // One at a time and never fatal: a job whose tasks a person has since
+    // touched is one the undo will decline, and declining is correct.
+    await db.execute(`select app.undo_tasks_from_job(${lit(row.id)}::uuid)`).catch(() => undefined)
+  }
+
+  return { tasksBefore, tasksAfter: await count(), jobs: rows.length }
+}
