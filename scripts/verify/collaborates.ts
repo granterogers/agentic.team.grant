@@ -160,6 +160,8 @@ while (Date.now() < deadline) {
   children = await all(`
     select j.job_id::text as job_id, j.state::text as state, j.announce,
            coalesce(j.state_reason, '') as reason,
+           (select count(*) from public.deliveries d
+             where d.job_id = j.job_id and d.sent_at is not null)::int as deliveries,
            coalesce(j.recipient_agent, '') as recipient,
            j.pinned_config ->> 'addressed_to' as addressed_to,
            j.pinned_config ->> 'handed_off_by' as handed_off_by,
@@ -266,6 +268,35 @@ ok(
 )
 
 /*
+  ## Which children these next three assertions are about
+
+  A HAND-OFF, which is what this suite exists to measure: a child carrying
+  `handed_off_by`, created because one specialist asked another to do
+  something.
+
+  That distinction used to be invisible because the wait loop only ever broke
+  when every child was `complete`, so a child that was not a hand-off and had
+  stopped for approval simply never arrived here — the suite timed out at nine
+  minutes instead. Now that an approval pause is recognised as terminal, an
+  `office.pursue` child reaches these lines with `handed_off_by = null`, no
+  output and `announce` still set, and failed three assertions written about
+  something else entirely.
+
+  Scoped by WHAT THE JOB IS rather than by whether it happens to have
+  finished, so a hand-off that stalls still fails these and is not quietly
+  excused. The non-hand-off children are asserted separately below rather than
+  dropped.
+*/
+const handOffs = children.filter((c) => String(c.handed_off_by ?? '') !== '')
+const others = children.filter((c) => String(c.handed_off_by ?? '') === '')
+
+ok(
+  'the request produced at least one real hand-off',
+  handOffs.length > 0,
+  `${String(handOffs.length)} hand-off(s) of ${String(children.length)} child job(s)`,
+)
+
+/*
   The bound that matters most.
 
   Grant hears from the Chief of Staff and nobody else
@@ -275,14 +306,29 @@ ok(
 */
 ok(
   'no handed-off job can message Grant',
-  children.every((c) => c.announce === false),
-  `${String(children.filter((c) => c.announce !== false).length)} of ${String(children.length)} announcing`,
+  handOffs.every((c) => c.announce === false),
+  `${String(handOffs.filter((c) => c.announce !== false).length)} of ${String(handOffs.length)} announcing`,
+)
+
+/*
+  And the safety property still covers every OTHER child, by the route that
+  actually decides it. A pursue child waiting for Grant's approval keeps
+  `announce` — correctly, since he is the one who would be answering — so the
+  claim worth making about it is not that it stays quiet but that it has not
+  spoken, and cannot while it is paused.
+*/
+ok(
+  'and nothing else the request spawned has reached Grant either',
+  others.every((c) => Number(c.deliveries ?? 0) === 0),
+  others.length === 0
+    ? 'no other children'
+    : others.map((c) => `${String(c.state)}: ${String(c.deliveries ?? 0)} delivery(s)`).join(', '),
 )
 
 ok(
   'the hand-off names who asked for it, so it is a hand-off and not a routing decision',
-  children.every((c) => String(c.handed_off_by ?? '') !== ''),
-  children.map((c) => `${String(c.handed_off_by)} -> ${String(c.addressed_to)}`).join(', '),
+  handOffs.length > 0 && handOffs.every((c) => String(c.handed_off_by ?? '') !== ''),
+  handOffs.map((c) => `${String(c.handed_off_by)} -> ${String(c.addressed_to)}`).join(', '),
 )
 
 /*
@@ -329,12 +375,18 @@ ok(
   check; it is the difference between a second agent working and a second job
   existing.
 */
+/*
+  The outputs of the HAND-OFFS, for the reason stated above: a child that
+  stopped to ask Grant has not done the work yet, by design, and judging its
+  stub as filler would be asserting against the approval gate.
+*/
 const produced = await all(`
   select o.output_id::text as id, length(coalesce(o.body, ''))::int as len,
          coalesce(o.body, '') as body, coalesce(j.recipient_agent, '') as by
     from public.outputs o
     join public.jobs j on j.job_id = o.job_id
-   where j.parent_job_id = ${lit(parent)}::uuid`)
+   where j.parent_job_id = ${lit(parent)}::uuid
+     and coalesce(j.pinned_config ->> 'handed_off_by', '') <> ''`)
 /*
   A LENGTH FLOOR PENALISES THE HONEST SHORT ANSWER, and it did.
 
