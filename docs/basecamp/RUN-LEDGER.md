@@ -879,21 +879,59 @@ and got a capture at all four viewports in the same commit — the rule this run
 has now applied three times.
 
 ---
+## §15 The external services, and §12's Activity — both were printing the record
+
+Three §15 violations on one surface, and the middle one is the serious kind.
+
+| # | Found | Defect |
+|---|---|---|
+| 55 | reading the surface against §15 | **`connector` and `reference` were on a project surface**, printed straight out of `s.kind` — the same defect as the assignee slug, one table over. |
+| 56 | reading the surface against §15 | **Every source not in trouble was labelled "Connected", including a reference.** A reference is a link somebody left for the project; the office has fetched nothing. That is faking integration availability, which §15 forbids by name, and it would have had Grant believing the office was watching a page it has never opened. A connected service now says when it was last read; a reference says what it is. |
+| 57 | reading the tool list | **"Sources & Integrations" and "Documents & Assets".** One is developer terminology and the other is the same word twice with a marketing coat on. Renamed in `TOOLS`, and the headings read it rather than restating it — which the route audit then enforced, because it compares the heading to the tool's name and went red on the one heading still hardcoded. |
+| 58 | reading the surface against §12 | **Activity was a flat list of sentences with the time as a trailing grey fragment**, and printed the raw slug. It renders through the same `timelineMini` the home does, so the tool and its miniature are one grammar rather than two. |
+
+## §14 is blocked on a contract, and the evidence is unambiguous
+
+**Not built, and not faked.** `public.dashboard_layouts` (0250) is exactly the
+right contract and quotes Grant's own words — *"Layout is per person, per
+dashboard project, and persists. Not `localStorage`"* — but its primary key is
+`(owner, project_id)`, so a project holds **one** arrangement, and
+`web/studio/panels.js` already owns that row for the default Team HQ's board.
+
+The two module vocabularies only partly overlap (the board has `modules`,
+`links`, `history`, `note`; the experimental home has `board`, `schedule`,
+`chat`, `sources`, `team`), and the stored array IS the whole arrangement — so
+**arranging the experimental home would silently remove panels from the default
+board.** There is no namespace to escape into either: `owner` is text, but
+`hq_dashboard_layout_set(p_slug, p_panels)` fixes it to `'grant'` inside the
+function, so a caller cannot choose one.
+
+No migration was written, deliberately. This workstream cannot apply one —
+egress to Supabase is blocked from its sandbox — so it would ship unapplied and
+unverifiable, and the UI built against it could never be exercised. That is the
+faking-completeness failure the redesign prompt forbids by name, and CLAUDE.md's
+own *a migration is not a deploy* points the same way.
+
+Filed with the evidence and two ways to unblock it as
+[#299](https://github.com/granterogers/agentic.team.grant/issues/299).
+
+---
 ## NEXT ACTION
 
-**The full tools behind the miniatures, and §14's configurability.** The
-composition is chosen, it is the home, and every tool on it is now a
-miniature of something. What is not built is the full tool behind four of
-them and the ability to change the home:
+**Grant's review.** Every section of the redesign prompt that this workstream
+can satisfy without a backend change is built, green and captured at four
+viewports. What is left needs him:
 
-1. **§10** the full Card Table from `state_raw`, and moving a card, which
-   needs `task_state` and nothing new.
-3. **§9** the full Calendar, saying on its face that it shows scheduled work.
-4. **§7** the full project Chat against `conversation_history`.
-5. **§14** add, remove and reorder the modules on the home, through
-   `plane_layout` / `plane_layout_set` / `plane_layout_reset`, with removal
-   structurally unable to reach a delete path.
-6. **§26** split `shell.js` by responsibility once those land.
+1. **Look at it.** The captures are in `.out/basecamp/` and
+   `.out/basecamp-compose/`; the composition comparison is the three
+   `*-desktop.png` files in the latter, which is the clearest statement of what
+   §21 changed.
+2. **§14 needs a contract**, and it is one line of SQL or one small table —
+   [#299](https://github.com/granterogers/agentic.team.grant/issues/299) has
+   the evidence and two ways to do it. Nothing else in the redesign is blocked.
+3. **Nothing here is deployed**, and nothing has been verified against the real
+   office: both are blocked by credentials AND by the sandbox's egress policy,
+   which is recorded under HUMAN_BLOCKED above.
 
 Still not to be merged, still not promoted to the default route, and the
-default Team HQ stays untouched.
+default Team HQ is unchanged and proved so on every commit.

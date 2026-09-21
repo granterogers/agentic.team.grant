@@ -926,3 +926,8 @@
   border-top: 1px solid var(--bc-border-subtle);
   padding-top: 18px;
 }
+/*
+  The full source list is the same grammar with more room, so the rows breathe
+  rather than being restyled into a second appearance of one thing.
+*/
+[data-experience='basecamp'] .bcsources--full .bcsource { padding: 12px 0; }

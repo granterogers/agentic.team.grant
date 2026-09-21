@@ -100,10 +100,20 @@ export const TOOLS = [
   { id: 'chat', name: 'Chat', own: true },
   { id: 'schedule', name: 'Schedule', own: true },
   { id: 'team', name: 'Agentic Team', own: true },
-  { id: 'documents', name: 'Documents & Assets', own: true },
+  /*
+    And "Assets" is the same word twice with a marketing coat on. A document
+    is a document; the gallery shows PDFs, written pages and uploads, and
+    nobody calls one an asset out loud.
+  */
+  { id: 'documents', name: 'Documents', own: true },
   { id: 'activity', name: 'Activity', own: true },
   { id: 'contacts', name: 'Contacts', own: true },
-  { id: 'sources', name: 'Sources & Integrations', own: true },
+  /*
+    "Integrations" is developer terminology on a project surface, which §15
+    forbids. A person has SOURCES; what the office does with them is its
+    business.
+  */
+  { id: 'sources', name: 'Sources', own: true },
   { id: 'settings', name: 'Project Settings', own: false },
 ]
 
@@ -1075,7 +1085,7 @@ const outputRow = (r) => {
 const documentsSurface = (p) => {
   const docs = p.documents ?? []
   return `${crumbFor(p, 'documents')}
-    <div class="bcrecordhead"><h1>Documents &amp; Assets</h1></div>
+    <div class="bcrecordhead"><h1>${esc(toolById('documents')?.name ?? 'Documents')}</h1></div>
     ${
       docs.length === 0
         ? empty({
@@ -1123,71 +1133,78 @@ const contactsSurface = (p) => {
   }`
 }
 
+/*
+  §15 — WHAT THE OFFICE CAN SEE, IN A PERSON'S WORDS.
+
+  Three things were wrong here and each is named by §15. The meta line printed
+  `s.kind` straight from the record, so "connector" and "reference" - words
+  nobody outside this repository uses - were on a project surface. The heading
+  said "Integrations". And every source that was not in trouble was labelled
+  **Connected**, including a reference, which is a link to something to read
+  and is connected to nothing: that is faking integration availability, which
+  §15 forbids by name and which would have had Grant believing the office was
+  watching a page it has never fetched.
+
+  It shares the miniature's vocabulary rather than restating it, and it says
+  what each source IS rather than asserting a connection it cannot verify.
+*/
 const sourcesSurface = (p) => {
   const ss = p.sources ?? []
   return `${crumbFor(p, 'sources')}
-    <div class="bcrecordhead"><h1>Sources &amp; Integrations</h1></div>
+    <div class="bcrecordhead"><h1>${esc(toolById('sources')?.name ?? 'Sources')}</h1></div>
+    <p class="bcpmeta bcprose bcgap-l">
+      Where this project's material comes from. A connected service is one the
+      team can read; something to read is a link somebody left for it.
+    </p>
     ${
       ss.length === 0
         ? empty({
-            title: 'No sources connected',
-            body: 'A connected notebook, drive folder or workspace lets the team read what is already written down.',
+            title: 'Nothing is connected yet',
+            body: 'A connected notebook, drive folder or workspace lets the team read what is already written down. Until then it works from what is filed here.',
           })
-        : `<div class="bclist">${ss
-            .map(
-              (s) => `<div class="bcitem">
-                <span></span>
-                <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(s.name ?? s.title ?? s.kind ?? 'Source')}</span>
-                  <span class="bcitemmeta">${esc([s.kind, s.last, s.detail].filter(Boolean).join(' · '))}</span>
-                </div>
-                <span>${s.trouble ? status('Needs attention', 'blocked') : status('Connected', 'done')}</span>
-              </div>`,
-            )
+        : `<div class="bcsources bcsources--full">${ss
+            .map((s) => {
+              const trouble = s.health === 'blocked' || s.trouble === true
+              const connected = s.kind === 'connector'
+              return `<div class="bcsource${trouble ? ' bcsource--trouble' : ''}">
+                <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
+                <span class="bcsourcewhat">${esc(s.what ?? s.detail ?? '')}</span>
+                <span class="bcsourcewhen">${
+                  trouble
+                    ? status(esc(s.problem ?? 'Needs attention'), 'blocked')
+                    : esc(
+                        connected
+                          ? ['Connected', s.last ? `last read ${s.last}` : 'not read yet'].join(' · ')
+                          : 'Something to read',
+                      )
+                }</span>
+              </div>`
+            })
             .join('')}</div>`
     }`
 }
 
+/*
+  §12 — ACTIVITY IS A STORY, and time is its axis.
+
+  It rendered a flat list of sentences with the time as a trailing grey
+  fragment, and it printed the raw slug: "emma pulled the WS02 client list".
+  The same two defects as the to-do rows, on the surface whose whole subject
+  is when things happened.
+*/
 const activitySurface = (p) => {
   const acts = p.activity ?? []
   return `${crumbFor(p, 'activity')}
-    <div class="bcrecordhead"><h1>Activity</h1></div>
+    <div class="bcrecordhead"><h1>${esc(toolById('activity')?.name ?? 'Activity')}</h1></div>
+    <p class="bcpmeta bcprose bcgap-l">
+      What has happened on this project, most recent first.
+    </p>
     ${
       acts.length === 0
         ? empty({ title: 'Nothing yet', body: 'What people and the team do on this project is listed here.' })
-        : `<div class="bclist">${acts
-            .map(
-              (a) => `<div class="bcitem">
-                <span></span>
-                <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(
-                    `${a.who ?? 'The team'} ${a.verb ?? 'changed'} ${a.what ?? ''}`.trim(),
-                  )}</span>
-                  <span class="bcitemmeta">${esc(a.when ?? '')}</span>
-                </div>
-                <span></span>
-              </div>`,
-            )
-            .join('')}</div>`
+        : bcMini.timelineMini(p, { items: acts.length })
     }`
 }
-
-
-/* ======================================================================== *
- * §10 — the Card Table
- *
- * The stages are `public.tasks.state`: todo, doing, blocked, done, cancelled.
- * Nothing here is invented vocabulary and there is no board table - a card IS
- * a task, and where it sits IS its state, which is why moving one is
- * `task_state` and not a new writer.
- *
- * BLOCKING IS NOT OFFERED HERE, deliberately. `hq_task_state` refuses
- * `blocked` without a reason - "a blocked task with no reason cannot be
- * unblocked by anyone but the person who blocked it" - so a Move control that
- * offered it would be an offer the press cannot perform, which is the defect
- * this repository has recorded five times. Blocking happens on the task,
- * where there is room to say what it is blocked on, and the column says so.
- * ======================================================================== */
 
 const STAGE = [
   { id: 'todo', name: 'Not started' },
