@@ -1641,7 +1641,7 @@ async function conversationBefore(
  */
 async function offerRule(
   db: SqlExecutor,
-  correction: Correction,
+  correction: Pick<Correction, 'rule' | 'fragment' | 'because'>,
   job: Job,
 ): Promise<string | null> {
   /*
@@ -2662,8 +2662,51 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         .then((r) => String((r.rows[0] as { v?: string } | undefined)?.v ?? 'grant'))
         .catch(() => 'grant')
 
+      /*
+        MARKED IS STORED. UNMARKED IS OFFERED.
+
+        #290's answer to "is explicit confirmation always necessary". It is
+        not, and the line is what the PERSON said rather than what a reader
+        inferred:
+
+          "from now on keep it short"   they said it lasts  -> stored
+          "keep it short"               they did not        -> offered
+
+        The second is genuinely ambiguous between this answer and every
+        answer, and two measurements say the office cannot tell: the prompt
+        rewritten to a functional definition recognised 0 of 8 unseen manner
+        statements, and a deterministic recogniser built from the domain
+        scored 12/12 on the set it was tuned against and 2 OF 12 on a fresh
+        one written afterwards.
+
+        So recognition is unreliable, and #147's route already exists for
+        exactly this: `app.propose_standing_rule` puts the drafted sentence
+        on the Governance page and `app.decide_suggestion` is the only path
+        by which it becomes a lesson. An unreliable reader that OFFERS costs
+        one row with a decline button; the same reader storing silently is
+        what put 34 junk lessons into every prompt (#297).
+
+        Nothing about the marked path changes, so this is backward
+        compatible by construction.
+      */
+      const ruleOffered =
+        teaching !== null && teaching.kind === 'lesson' && !teaching.marked
+          ? await offerRule(
+              deps.db,
+              {
+                rule: teaching.body,
+                fragment: teaching.body,
+                because: [
+                  'a reader recognised it as a preference',
+                  'it did not say it was lasting',
+                ],
+              },
+              job,
+            )
+          : null
+
       const taught =
-        teaching === null
+        teaching === null || ruleOffered !== null
           ? null
           : await remember(
               deps.db,
@@ -2686,6 +2729,22 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         whether that something else was an action.
       */
       const ruleWasAllHeSaid = understood.surviving.every((r) => r.kind === 'preference')
+      /*
+        An OFFER is also a complete turn when the rule was all he said. The
+        sentence says nothing was changed, which is true, and names where to
+        accept it.
+      */
+      if (ruleOffered !== null && ruleWasAllHeSaid) {
+        return {
+          body: ruleOffered,
+          confidence: 'high',
+          evidence: 'verified',
+          sources: [`job:${job.jobId}`],
+          contradictions: null,
+          path: await howComposed(deps.db, job.jobId),
+          model: null,
+        } satisfies HandlerOutput
+      }
       if (taught !== null && ruleWasAllHeSaid) {
         return {
           body: taught.said,

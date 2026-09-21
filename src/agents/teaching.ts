@@ -39,6 +39,18 @@
 export interface LessonTaught {
   readonly kind: 'lesson'
   readonly body: string
+  /**
+   * The person SAID it was lasting, rather than a reader inferring it.
+   *
+   * "From now on", "always", "never", or an explicit ask to store it. That
+   * is the difference between a preference which is unambiguously
+   * future-facing and one where "do it this way" might mean this once.
+   *
+   * The caller routes on it: marked is stored, unmarked is OFFERED. Both
+   * halves of #290 turn on this - the recognition that is unreliable, and
+   * the storage that must not be silent when recognition is unreliable.
+   */
+  readonly marked: boolean
 }
 
 /** A procedure. See ADR-0017 for what it may and may not contain. */
@@ -265,7 +277,7 @@ export function readTeaching(instruction: string, alreadyAPreference = false): T
   if (standing || asked || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
     const body = firstSentence(text)
     if (body.length < 8 || body.length > 280) return null
-    return { kind: 'lesson', body }
+    return { kind: 'lesson', body, marked: standing || asked }
   }
 
   return null

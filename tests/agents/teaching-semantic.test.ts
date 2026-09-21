@@ -12,6 +12,59 @@
 import { describe, expect, it } from 'vitest'
 import { readTeaching } from '../../src/agents/teaching.ts'
 
+describe('marked is stored, unmarked is offered', () => {
+  /*
+    #290's answer to "is explicit confirmation always necessary". It is not,
+    and the line is what the PERSON said rather than what a reader inferred.
+
+    This is the half that IS reliable. Recognition is not - the prompt
+    rewritten to a functional definition scored 0 of 8 on unseen manner
+    statements, and a deterministic recogniser built from the domain scored
+    12/12 on the set it was tuned against and 2 OF 12 on a fresh one - so
+    the route has to be safe for a reader that will be wrong.
+  */
+  const marked = [
+    'from now on keep your answers to a couple of paragraphs',
+    'always put the numbers in a table',
+    'never send anything without checking with me',
+    'as a rule, lead with the conclusion',
+    'by default give me the headline first',
+    'remember this: I want plain english',
+  ]
+
+  for (const said of marked) {
+    it(`is MARKED, so it may persist directly: ${said.slice(0, 38)}`, () => {
+      const got = readTeaching(said)
+      expect(got?.kind).toBe('lesson')
+      expect(got?.kind === 'lesson' && got.marked).toBe(true)
+    })
+  }
+
+  const unmarked = [
+    'lead with the conclusion, I will read the why underneath',
+    'keep answers to a couple of short paragraphs',
+    'put the numbers in a table rather than writing them out',
+    'use plain english, no jargon',
+  ]
+
+  for (const said of unmarked) {
+    it(`is UNMARKED, so it must be offered: ${said.slice(0, 38)}`, () => {
+      const got = readTeaching(said, true)
+      expect(got?.kind).toBe('lesson')
+      expect(got?.kind === 'lesson' && got.marked).toBe(false)
+    })
+  }
+
+  it('an explicit ask to store counts as marked, even with no persistence word', () => {
+    const got = readTeaching('remember this: the middle tier is the one we push')
+    expect(got?.kind === 'lesson' && got.marked).toBe(true)
+  })
+
+  it('a one-off is neither stored nor offered', () => {
+    expect(readTeaching('keep it short on this one, I am on my phone', true)).toBeNull()
+  })
+})
+
 describe('a preference the meaning-reader already recognised', () => {
   /*
     None of these carries "always", "from now on" or any other marker, and
