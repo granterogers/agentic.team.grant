@@ -159,6 +159,7 @@ let children: Record<string, unknown>[] = []
 while (Date.now() < deadline) {
   children = await all(`
     select j.job_id::text as job_id, j.state::text as state, j.announce,
+           coalesce(j.state_reason, '') as reason,
            coalesce(j.recipient_agent, '') as recipient,
            j.pinned_config ->> 'addressed_to' as addressed_to,
            j.pinned_config ->> 'handed_off_by' as handed_off_by,
@@ -176,14 +177,66 @@ while (Date.now() < deadline) {
     you are asserting about has happened.
   */
   const settled = (x: unknown): boolean => ['complete', 'failed', 'cancelled'].includes(String(x))
+  /*
+    A child that stopped to ask Grant has finished, for this suite's purposes.
+
+    `office.pursue` under `autonomy = suggest` -- the global default set by
+    migration 0027 and never changed by a person -- correctly pauses with
+    `awaiting_approval` and `waiting_on = "Grant answers, or raises this
+    project's autonomy above suggest"`. That is the office behaving exactly as
+    designed, and it is a TERMINAL state for anything running unattended:
+    nothing will move it without a human.
+
+    Before this, the loop waited for it anyway and ran to the nine-minute
+    deadline twice, reporting exit 124. A suite that hangs on correct
+    behaviour teaches whoever reads it to discount the timeout.
+
+    Keyed on the approval reason, not on `paused` generally: a pause for a
+    rate limit or a dependency WILL resolve on its own and must still be
+    waited for. And it is asserted below rather than merely tolerated --
+    silently accepting a pause would hide a regression that made the office
+    stop asking.
+  */
+  const askedAndStopped = (c: Record<string, unknown>): boolean =>
+    String(c.state) === 'paused' && String(c.reason ?? '').startsWith('awaiting_approval:')
+  const finished = (c: Record<string, unknown>): boolean => settled(c.state) || askedAndStopped(c)
   const done = String(
     (await one(`select state::text as s from public.jobs where job_id = ${lit(parent)}::uuid`)).s,
   )
-  if (settled(done) && children.length > 0 && children.every((c) => settled(c.state))) break
+  if (settled(done) && children.length > 0 && children.every(finished)) break
   process.stdout.write('.')
   await new Promise((r) => setTimeout(r, 15_000))
 }
 console.log('')
+
+/*
+  Say out loud what the office did with the autonomy level it was given.
+
+  Reported rather than asserted either way: whether a pursue child stops to
+  ask depends on `autonomy_settings`, which is Grant's to set, and a check
+  that failed when he raised or lowered it would be asserting against his
+  preference rather than against the product.
+*/
+const paused = children.filter(
+  (c) => String(c.state) === 'paused' && String(c.reason ?? '').startsWith('awaiting_approval:'),
+)
+const level = String(
+  (await one(`select level::text as v from public.autonomy_settings where project_id is null`)).v ??
+    '(unset)',
+)
+console.log(
+  `       autonomy ${level}: ${String(paused.length)} of ${String(children.length)} child job(s) stopped to ask rather than acting`,
+)
+ok(
+  'every child reached a terminal state — finished, or stopped to ask Grant',
+  children.length > 0 &&
+    children.every(
+      (c) =>
+        ['complete', 'failed', 'cancelled'].includes(String(c.state)) ||
+        String(c.reason ?? '').startsWith('awaiting_approval:'),
+    ),
+  children.map((c) => String(c.state)).join(', ') || 'no children',
+)
 
 const parentRow = await one(`
   select state::text as state, coalesce(recipient_agent, '') as recipient
