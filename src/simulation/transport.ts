@@ -52,7 +52,7 @@ import {
 import { personalTaskRequest } from '../agents/mine.ts'
 import { excludesASubject, rejectsWithoutSaying } from '../agents/negation.ts'
 import { readTeaching } from '../agents/teaching.ts'
-import type { Utterance } from './scenario.ts'
+import type { Utterance, Layer } from './scenario.ts'
 
 /**
  * What came back, in terms the evaluator can score.
@@ -121,6 +121,20 @@ export interface Observation {
    * only ever reported zero being indistinguishable from a check that could
    * not report anything.
    */
+  /**
+   * The layers of the product this door actually drives.
+   *
+   * A scenario declares the layer it turns on; a door declares the layers it
+   * reaches. Only their INTERSECTION is scoreable, and the evaluator must
+   * gate on that rather than on the door's name.
+   *
+   * Before this existed, `agency` short-circuited on the scenario's layer
+   * alone and reported "which this door does not reach" on the CANONICAL
+   * door, which reaches all four — so the one door that can judge whether
+   * the office should have asked declared itself unable to, on about
+   * two-thirds of the corpus.
+   */
+  readonly reaches: readonly Layer[]
   readonly unreached: readonly string[]
   /** Wall-clock, for §19. */
   readonly ms: number
@@ -197,7 +211,8 @@ export const comprehensionDoor = (): Transport => ({
       acknowledgementOnly: onlyAnAcknowledgement(said),
       bareRejection: rejectsWithoutSaying(said),
       exclusionSeen: excludesASubject(said),
-      unreached: COMPREHENSION_CANNOT_REACH,
+      reaches: ['comprehension'],
+    unreached: COMPREHENSION_CANNOT_REACH,
       ms: Date.now() - started,
       modelCalls: 0,
     }

@@ -64,6 +64,15 @@ export type EffectClass =
  * harness: leaked into the office's context it converts every scenario into a
  * comprehension test the office cannot fail.
  */
+/**
+ * Where a scenario is actually decided.
+ *
+ * Named once and exported, because the evaluator gates on it and each door
+ * declares which of them it reaches. Two lists compared by eye is how they
+ * came to differ.
+ */
+export type Layer = 'comprehension' | 'referent' | 'history' | 'execution'
+
 export interface HiddenIntent {
   /** What the person actually wanted, in their own terms. Never shown to the office. */
   readonly want: string
@@ -121,7 +130,7 @@ export interface HiddenIntent {
    * UNREACHED on the offline door rather than failed. Unreached is the
    * honest verdict; a low score is not.
    */
-  readonly turnsOn?: 'comprehension' | 'referent' | 'history' | 'execution'
+  readonly turnsOn?: Layer
   /**
    * Limits the person actually SAID, in words, in this message.
    *

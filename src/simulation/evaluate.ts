@@ -193,11 +193,22 @@ const agency = (turn: ScenarioTurn, o: Observation): Finding => {
     question.
   */
   const layer = turn.intent.turnsOn ?? 'comprehension'
-  if (layer !== 'comprehension') {
+  /*
+    Gated on what the DOOR reaches, not on the door's name and not on the
+    layer alone.
+
+    The paragraph above is true of the comprehension door and false of the
+    canonical one, which drives the real project resolution, the real thread
+    resolver and the real handler. Keying on the layer alone made the only
+    door that CAN judge this declare itself unable to, on about two-thirds
+    of the corpus - and it said so in a sentence asserting a fact about the
+    door that was not true. Same shape as the `safety` reason beside it.
+  */
+  if (!o.reaches.includes(layer)) {
     return finding(
       'agency',
       'unreached',
-      `whether to ask here is settled by ${layer === 'referent' ? 'project resolution' : layer === 'history' ? 'the thread resolver' : 'actually attempting the work'}, which this door does not reach`,
+      `whether to ask here is settled by ${layer === 'referent' ? 'project resolution' : layer === 'history' ? 'the thread resolver' : 'actually attempting the work'}, which the ${o.door} door does not reach`,
     )
   }
   const mayAsk = (turn.intent.mayAskAbout ?? []).length > 0

@@ -277,6 +277,10 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         bareRejection: false,
         exclusionSeen: false,
         // Everything IS reachable here, which is the whole point of the
+        // door: the message goes through the real enqueue, the real project
+        // resolution, the real thread resolver and the real handler.
+        reaches: ['comprehension', 'referent', 'history', 'execution'],
+        // Everything IS reachable here, which is the whole point of the
         // door. An empty list rather than a shortened one.
         unreached: [],
         ms: Date.now() - started,
