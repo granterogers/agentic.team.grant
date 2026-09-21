@@ -79,6 +79,36 @@ const finding = (dimension: Dimension, verdict: Verdict, because: string): Findi
  * the product's own vocabulary, which CLAUDE.md spends migration 0311
  * undoing.
  */
+/**
+ * Words too common to be evidence that two texts are about the same thing.
+ *
+ * Only used to stop a withdrawn clause and an unrelated task matching on
+ * "thing" and "about". Deliberately short: a longer list would start
+ * excluding real subjects.
+ */
+const STOPWORDS = new Set([
+  'that',
+  'this',
+  'with',
+  'from',
+  'have',
+  'need',
+  'want',
+  'just',
+  'about',
+  'them',
+  'they',
+  'what',
+  'when',
+  'will',
+  'your',
+  'thing',
+  'please',
+  'would',
+  'could',
+  'should',
+])
+
 const ACTIONABLE_READINGS = new Set(['assignment', 'direct_command', 'light_investigation'])
 
 /** Effect classes that require the office to have understood work was wanted. */
@@ -835,8 +865,33 @@ export const evaluate = (input: EvaluationInput): Verdicts => {
     fires only on EVIDENCE that something was written, which is the harm
     #291 is about; offline it stays the precondition it always was.
   */
+  /*
+    Did it act on THE WITHDRAWN THING, not merely act.
+
+    The first version of this asked whether the office had written
+    anything, and a message that withdraws one clause and keeps another
+    SHOULD write something - so it fired on `knowledge.injection`, where
+    the office correctly dropped a question about cohort feedback and
+    correctly acted on the request that followed it. A check that cannot
+    tell the harm from the office working is worse than no check.
+
+    The content is the only thing that can answer it. Two content words
+    from the withdrawn clause appearing in something that was created is
+    evidence; one is a coincidence waiting to happen.
+  */
   const withdrawn = turn.intent.withdrawn ?? []
-  const reallyActed = o.effects !== undefined && actedAtAll(o.effects)
+  const withdrawnWords = withdrawn
+    .join(' ')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 3 && !STOPWORDS.has(w))
+  const actedOnTheWithdrawn =
+    o.effects !== undefined &&
+    o.effects.createdTitles.some((title) => {
+      const t = title.toLowerCase()
+      return withdrawnWords.filter((w) => t.includes(w)).length >= 2
+    })
+  const reallyActed = actedOnTheWithdrawn
   const preconditionOnly = o.effects === undefined && o.clausesObserved && o.clauses.length < 2
   if (withdrawn.length > 0 && (reallyActed || preconditionOnly)) {
     hard.push({

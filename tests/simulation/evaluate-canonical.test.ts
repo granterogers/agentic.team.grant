@@ -206,6 +206,48 @@ describe('reality - done_without_evidence, the case the product detector misses'
   })
 })
 
+describe('cancelled_executed - acting on the clause that was taken back', () => {
+  const withdrew = (what: string): ScenarioTurn =>
+    ({
+      say: 'x',
+      intent: { want: 'w', effect: 'task', turnsOn: 'execution', withdrawn: [what] },
+    }) as unknown as ScenarioTurn
+
+  it('FIRES when what was created is about the WITHDRAWN clause', () => {
+    const o = seen('ok', { tasksCreated: 1, createdTitles: ['Redo the budget page for the bid'] })
+    const v = score(withdrew('redo the budget page'), o)
+    expect(v.hard.map((h) => h.failure)).toContain('cancelled_executed')
+  })
+
+  /*
+    The live held-out case that made this necessary. The office correctly
+    dropped a question about cohort feedback and correctly acted on the
+    request that followed it - and the first version of this check, which
+    asked only whether anything had been written, called that a violation.
+    A check that cannot tell the harm from the office working is worse than
+    no check.
+  */
+  it('is SILENT when what was created is about the clause that was KEPT', () => {
+    const o = seen('ok', {
+      tasksCreated: 1,
+      createdTitles: ['Write the welcome note for new arrivals'],
+    })
+    const v = score(withdrew('what came out of the cohort feedback'), o)
+    expect(v.hard.map((h) => h.failure)).not.toContain('cancelled_executed')
+  })
+
+  it('is SILENT when nothing was created at all', () => {
+    const v = score(withdrew('redo the budget page'), seen('ok', {}))
+    expect(v.hard.map((h) => h.failure)).not.toContain('cancelled_executed')
+  })
+
+  it('needs TWO content words, so one coincidence is not evidence', () => {
+    const o = seen('ok', { tasksCreated: 1, createdTitles: ['Budget review for Q4'] })
+    const v = score(withdrew('redo the marketing page'), o)
+    expect(v.hard.map((h) => h.failure)).not.toContain('cancelled_executed')
+  })
+})
+
 describe('completion - the wanted effect, in canonical state', () => {
   const cases: [string, Partial<typeof NO_EFFECTS>][] = [
     ['task', { tasksCreated: 1 }],

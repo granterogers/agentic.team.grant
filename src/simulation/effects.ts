@@ -56,6 +56,15 @@ export interface CanonicalEffects {
   readonly settled: boolean
   /** Jobs in the family stopped, correctly, to ask a person. */
   readonly awaitingApproval: number
+  /**
+   * The titles of what this turn actually created.
+   *
+   * Needed because "did the office act" is the wrong question for a
+   * withdrawal: a message that withdraws one clause and keeps another
+   * SHOULD produce work. The question is whether it acted on the clause
+   * that was taken back, and only the content can answer that.
+   */
+  readonly createdTitles: readonly string[]
   /** Any job in the family ended `failed`. */
   readonly anyFailed: boolean
   /** The office's own provenance label on the answer. */
@@ -80,6 +89,7 @@ export const NO_EFFECTS: CanonicalEffects = {
   delegationDepth: 0,
   settled: false,
   awaitingApproval: 0,
+  createdTitles: [],
   anyFailed: false,
   evidence: '',
   sources: [],
@@ -137,6 +147,10 @@ export const readEffects = async (
         where i.job_id in (select job_id from family)) as impediments,
       (select count(*)::int from public.outputs o
         where o.job_id in (select job_id from family)) as outputs,
+      coalesce((select array_agg(t.title) from public.tasks t
+                 where t.job_id in (select job_id from family)
+                   and t.created_at >= ${lit(since)}::timestamptz), '{}') as created_titles,
+
       coalesce((select rd.roster from public.routing_decisions rd
                  where rd.job_id = ${lit(jobId)}::uuid
                  order by rd.decided_at desc limit 1), '{}') as roster,
@@ -190,6 +204,7 @@ export const readEffects = async (
     delegationDepth: n('delegation_depth'),
     settled: r.settled === true || String(r.settled) === 'true',
     awaitingApproval: n('awaiting_approval'),
+    createdTitles: list('created_titles'),
     anyFailed: r.any_failed === true || String(r.any_failed) === 'true',
     evidence: String(r.evidence ?? ''),
     sources: list('sources'),
