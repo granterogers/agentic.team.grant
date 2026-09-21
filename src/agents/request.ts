@@ -115,7 +115,7 @@ const FORBIDS =
 */
 const WH = /^\s*(?:what|which|why|when|where|who|whose|whom|how)\b/i
 const INVERTED =
-  /^\s*(?:do|does|did|is|are|was|were|has|have|had|am|shall|will)\s+(?:i|we|they|he|she|it|the|a|an|there|that|this|any|our|your)\b/i
+  /^\s*(?:do|does|did|is|are|was|were|has|have|had|am|shall|will)\s+(?:i|you|we|they|he|she|it|the|a|an|there|that|this|any|our|your)\b/i
 
 /*
   The politeness convention: a question in form, a request in function.
@@ -609,7 +609,32 @@ export const readClause = (clause: string): ClauseReading => {
   if (/ing$/.test(first) || /ed$/.test(first) || IRREGULAR_PAST.has(first)) {
     return { text, mood: 'remark', why: `"${first}" is not a bare stem, so not a command` }
   }
-  if (NOT_IMPERATIVE_OPENERS.has(first)) {
+  /*
+    "do" is an auxiliary only when a SUBJECT follows it.
+
+        "do what you think is best and let me know"
+        "do whatever makes sense to move the other one along"
+
+    Both are Grant handing the office the decision, and both read as
+    `unsure` and classified as `thought` - not recognised as a request at
+    all - because `do` sat in the function-word list unconditionally. Four
+    of the 123 genuinely delivered real messages in the last sixty days are
+    this shape, which makes it the commonest of the reading defects found
+    by the Shadow Grant sweep and the only one with a real-traffic count
+    above one.
+
+    The question form is already handled, one branch up: `INVERTED` reads
+    "do the trains run", "do we need", "do you think" as questions before
+    this line is reached. So `do` needs no entry here at all - it needed a
+    subject test, and there already is one. Removing it from the set is the
+    fix; keeping it would be two rules deciding the same thing, which is how
+    they come to disagree.
+
+    (`INVERTED` was missing "you", so "do you think" was reaching this
+    branch and being called unsure rather than a question. Found by the same
+    run.)
+  */
+  if (first !== 'do' && NOT_IMPERATIVE_OPENERS.has(first)) {
     return {
       text,
       mood: 'unsure',

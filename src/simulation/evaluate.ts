@@ -379,6 +379,35 @@ const agency = (turn: ScenarioTurn, o: Observation): Finding => {
       'the job had not settled, so there is no answer to read an intention off',
     )
 
+  /*
+    An office that asks because it did not UNDERSTAND is not an office
+    exercising judgement, and crediting it for that is a false green.
+
+    "do whatever makes sense to move that thing along but do not contact
+    anyone" used to classify as an unrecognised `thought`, so the office
+    flagged ambiguity - and `agency` PASSED it, for having intended to ask.
+    It had intended nothing: it had failed to read the verb. The moment the
+    reading was fixed the same scenario went red, which reads exactly like
+    a regression and is the false green being removed.
+
+    #232 built `recognised` for precisely this distinction - a deliberate
+    remark and a sentence no rule understood both arrive as `thought`, and
+    nothing downstream could tell "we decided this" from "we did not know".
+    The same asymmetry applies to asking.
+
+    Unreached rather than failed: the office may still ask for the right
+    reason once the referent is resolved, and that is a layer this cannot
+    see. Declining to score is the honest verdict where the precondition
+    was never established.
+  */
+  if (!o.recognised) {
+    return finding(
+      'agency',
+      'unreached',
+      'the office did not recognise the request at all, so whether it would ask is not a judgement it has made',
+    )
+  }
+
   const mayAsk = (turn.intent.mayAskAbout ?? []).length > 0
   const knows = (turn.intent.alreadyKnows ?? []).length > 0
 
