@@ -23,7 +23,6 @@
 import { describe, expect, it } from 'vitest'
 import { BARE_PIVOTS, CANCELS, readRetraction } from '../../src/agents/retraction.ts'
 import { GRANT_LIKE } from '../../src/simulation/persona.ts'
-import { Seeded } from '../../src/simulation/random.ts'
 import { roughen } from '../../src/simulation/roughen.ts'
 
 /*
@@ -43,7 +42,7 @@ const stillSeesIt = (op: string, seed: number): boolean => {
   // not the roughener, for the third time this session.
   const phrase = op.replace(/\(\?:/g, '').replace(/\)\?/g, '').replace(/\?/g, '').trim()
   const said = `add a task on the course to write the welcome pack ${phrase} that what is outstanding on the bid`
-  return readRetraction(roughen(said, TYPIST, new Seeded(seed)).text) !== null
+  return readRetraction(roughen(said, TYPIST, seed).text) !== null
 }
 
 /*
@@ -74,7 +73,7 @@ describe('the control - it really does misspell ordinary words', () => {
     const said = 'please redo the budget page and chase the letter of support before Thursday'
     let mangled = 0
     for (let seed = 0; seed < 60; seed++) {
-      if (roughen(said, TYPIST, new Seeded(seed)).text !== said) mangled++
+      if (roughen(said, TYPIST, seed).text !== said) mangled++
     }
     expect(mangled).toBeGreaterThan(0)
   })

@@ -514,9 +514,32 @@ export const readClause = (clause: string): ClauseReading => {
     splitter does not cut on contrastive coordinators — it serves routing too,
     and widening it there would change who gets convened — so the contrast is
     followed here, and only when the prohibition lives on the far side of it.
+
+    ## And a PURPOSE clause is the same shape, which this missed entirely
+
+        "stick something down so I do not forget to ring Kevin"
+        "book the venue so we do not lose the slot"
+
+    Both read as a remark, because the prohibition test scans the whole
+    clause and "do not" is sitting in a subordinate clause explaining WHY.
+    So the commonest reason a person asks for a reminder at all - so that
+    they do not forget - was the one phrasing that guaranteed nothing was
+    filed. Found by the Shadow Grant multi-turn sweep, where "stick
+    something down so i do not forget to ring kevin about the quote" was
+    not recognised as a request at all while the identical sentence ending
+    "so I remember to ring Kevin" was an assignment.
+
+    The mood of a sentence is set by its MAIN clause. CLAUDE.md records
+    that correction twice already - once for a delegation's span, once for
+    `teaching.ts` and complement clauses - and this is the third instance.
+    Purpose subordinators are a closed class, so they join the contrastive
+    ones in the same rule rather than getting a rule of their own.
   */
   if (FORBIDS.test(text)) {
-    const contrast = /^(.{6,}?)\s+(?:but|though|however|although)\s+(.+)$/is.exec(text)
+    const contrast =
+      /^(.{6,}?)\s+(?:but|though|however|although|so(?:\s+that)?|in\s+order\s+(?:that|to|not\s+to)|to\s+avoid|to\s+make\s+sure|to\s+ensure)\s+(.+)$/is.exec(
+        text,
+      )
     const before = contrast?.[1]
     const after = contrast?.[2]
     if (

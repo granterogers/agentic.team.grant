@@ -294,6 +294,7 @@
     "shadow:channels": "tsx scripts/shadow/channels.ts",
     "shadow:world": "tsx scripts/shadow/world.ts",
     "shadow:matrix": "tsx scripts/shadow/matrix.ts",
+    "shadow:probe-live": "tsx scripts/shadow/probe-live.ts",
     "migrate:next": "tsx scripts/migration-number.ts",
     "check:provenance": "tsx scripts/check-provenance.ts"
   },

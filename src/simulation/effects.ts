@@ -186,7 +186,15 @@ export const readEffects = async (
                  order by o.created_at desc limit 1), '') as evidence,
       coalesce((select o.sources from public.outputs o
                  where o.job_id = ${lit(jobId)}::uuid
-                 order by o.created_at desc limit 1), '{}') as sources
+                 /*
+                   An empty JSON ARRAY, not an empty array literal. This
+                   column is JSONB, where a brace pair is an empty OBJECT -
+                   Postgres array syntax leaking into a jsonb context, which
+                   is 0311's two-words-for-one-thing in a default. Array.isArray
+                   then said false, String said object Object, and EVERY turn
+                   that produced no output reported one phantom source.
+                 */
+                 order by o.created_at desc limit 1), '[]'::jsonb) as sources
   `)
 
   const r = (rows[0] ?? {}) as Record<string, unknown>
