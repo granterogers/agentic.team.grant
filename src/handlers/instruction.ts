@@ -118,6 +118,7 @@ import {
   PROVENANCE_NOTE,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
+import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
 import { nameSubjects } from '../agents/subject.ts'
@@ -1962,6 +1963,35 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         above the resolver and not below it.
       */
       const asSaid = instruction
+
+      /*
+        A clause he took back in the same breath never reaches the planner.
+
+        #291 and its escalation: three live runs had the office CREATE a task
+        from a half of the message the person had already withdrawn, and one
+        of them raised a blocker too. A wrong answer can be argued with; a
+        task, a message or a blocker is left behind in the world.
+
+        Applied here, above the resolver, for the reason the paragraph above
+        gives about corrections: resolveAgainstThread expands a fragment into
+        the instruction it refers to, so by the time it has run the pivot is
+        gone and the withdrawn half has been rewritten into something that
+        reads like a request.
+
+        The withdrawn words are kept, not discarded, because the office has
+        to SAY what it set aside - that clause is the whole reason erring
+        towards withdrawal is defensible rather than merely convenient.
+      */
+      const retraction = readRetraction(instruction)
+      if (retraction !== null) {
+        instruction = retraction.kept
+        await deps.db
+          .execute(`
+            select app.understood(${lit(job.jobId)}::uuid,
+              ${lit(`withdrawn in the same message, after "${retraction.pivot}": ${retraction.withdrawn}`.slice(0, 400))})
+          `)
+          .catch(() => undefined)
+      }
 
       const resolved = await resolveAgainstThread(
         deps.db,
