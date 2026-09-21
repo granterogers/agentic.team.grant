@@ -13,7 +13,7 @@
  * in its first line.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { generateCorpus } from '../../src/simulation/compose.ts'
 import { DIMENSIONS, type Dimension, rate, tally } from '../../src/simulation/dimensions.ts'
 import { GOAL_FAMILIES } from '../../src/simulation/goals.ts'
@@ -38,9 +38,13 @@ const corpus = only === '' ? all : all.filter((s) => s.family.includes(only))
 const transport = wantLive ? canonicalDoor() : comprehensionDoor()
 
 console.log(`\nShadow Grant - behavioural baseline`)
-console.log(`  door      ${transport.door}${transport.reachable ? '' : ` (UNREACHABLE: ${transport.blockedBecause ?? 'unknown'})`}`)
+console.log(
+  `  door      ${transport.door}${transport.reachable ? '' : ` (UNREACHABLE: ${transport.blockedBecause ?? 'unknown'})`}`,
+)
 console.log(`  seed      ${seed}`)
-console.log(`  corpus    ${corpus.length} scenarios across ${new Set(corpus.map((s) => s.family)).size} families`)
+console.log(
+  `  corpus    ${corpus.length} scenarios across ${new Set(corpus.map((s) => s.family)).size} families`,
+)
 console.log(`  personas  ${[...new Set(corpus.map((s) => s.persona))].join(', ')}\n`)
 
 const summary = await runCorpus(corpus, transport)
@@ -99,15 +103,20 @@ for (const v of summary.verdicts) {
   }
   byFamily.set(v.family, e)
 }
-const failing = [...byFamily.entries()].filter(([, e]) => e.fail > 0).sort((a, b) => b[1].fail - a[1].fail)
+const failing = [...byFamily.entries()]
+  .filter(([, e]) => e.fail > 0)
+  .sort((a, b) => b[1].fail - a[1].fail)
 for (const [family, e] of failing) {
   console.log(`  ${family}  (${e.fail} finding(s) over ${e.total} scenario(s))`)
   for (const w of [...e.why].slice(0, 2)) console.log(`      ${w}`)
 }
 if (failing.length === 0) console.log('  none\n')
 
-console.log(`\n${summary.verdicts.length} turns, ${summary.modelCalls} model calls, ${(summary.ms / 1000).toFixed(1)}s`)
-if (summary.unrun.length > 0) console.log(`${summary.unrun.length} scenarios could not be attempted.`)
+console.log(
+  `\n${summary.verdicts.length} turns, ${summary.modelCalls} model calls, ${(summary.ms / 1000).toFixed(1)}s`,
+)
+if (summary.unrun.length > 0)
+  console.log(`${summary.unrun.length} scenarios could not be attempted.`)
 console.log(`Families in the corpus: ${GOAL_FAMILIES.length}\n`)
 
 mkdirSync('.out', { recursive: true })
