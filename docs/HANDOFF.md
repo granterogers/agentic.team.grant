@@ -9,6 +9,64 @@
 > [Issues](https://github.com/granterogers/agentic.team.grant/issues)**, under
 > milestones M0 → v1.0. Not here, not in commit messages, not in chat.
 >
+> ## State as of 2026-09-21 — GOAL PLANNING, and the end of the architecture phase
+>
+> **The architecture phase is finished.** The office can now take an ordinary
+> sentence, plan a route through its real capabilities, carry it out durably,
+> notice when the goal was not met, try one other route, and say honestly what
+> it did and did not do. Nothing here needs another architectural campaign
+> before Grant uses it; what remains is listed as ordinary Issues.
+>
+> | | |
+> |---|---|
+> | Tests | **2,213 passing** (140 files) · migrations **529** |
+> | Deployed | `worker` v647 · `hq-api` · studio |
+> | New | `src/agents/goal.ts` (constrained planner) · `src/agents/perform.ts` (executors + compiler) · `src/agents/satisfied.ts` (goal assessment) · `src/handlers/pursue.ts` (`office.pursue`) |
+> | New suites | `verify:pursues` 46/46 · `verify:composes` 18/18 (`--deployed`) · `verify:chief` 10/10 · `verify:plan-stability` (reports, does not gate) |
+>
+> **What the planner is.** `planFor` is *constrained*: it is shown only the
+> capabilities the registry says exist AND are performable, and a capability
+> that is declared but not built is rendered `NOT YET BUILT — the office can
+> only refuse it`, so the model reaches for `unreachable` rather than inventing
+> `web.search` or `notebook.write`. The held-out set went **7/23 → 14/23** and
+> multi-step plans **0 → 7**, with **zero invented capabilities**.
+>
+> **Bounded re-planning (`office.pursue`).** `GOAL → PLAN → ACT → OBSERVE → IS
+> THE GOAL MET? → one other route → VERIFY → REPORT`, bounded at **3 rounds**
+> and **120 s**, with a fingerprint of `goal + unmet` so the same plan is never
+> tried twice. A round re-plans because of a NEW OBSERVATION; an identical plan
+> or a fallback plan ends the loop. **Re-planning never expands
+> authorization** — every re-planned step goes through the same `mayAct`
+> check at execution time, so a permission revoked after planning stops the
+> step, and a refusal or an unbuilt capability is `final()` and is never
+> re-planned around however much else succeeded.
+>
+> **Goal completion is not step completion.** `src/agents/satisfied.ts` returns
+> one of seven verdicts — `satisfied`, `partially_satisfied`, `blocked`,
+> `awaiting_grant`, `impossible_here`, `temporarily_unavailable`, `failed` —
+> deterministically, from canonical effects. `satisfied` requires a **receipt**
+> when the plan contained an acting step; a pure-read plan is satisfied by
+> having read. The assessor never authorizes anything.
+>
+> **The three worth remembering.**
+>
+> 1. **The planner was being handed a paraphrase.** `understand`'s cleaned text
+>    dropped the purpose clause of a 148-character message (91–148 chars out).
+>    Paired against the verbatim sentence: 7/8 cleaned, **8/8 verbatim**. The
+>    planner gets Grant's own words now.
+> 2. **`assess` used unprefixed step names**, so from round 2 onward it read
+>    "nothing ran" — a *successful* second round would have been reported to
+>    Grant as a FAILURE. `byStepId` is shared by the compiler and the assessor,
+>    because two spellings of a name is exactly what went wrong.
+> 3. **A migration that TIGHTENS a contract must ship with or after the code
+>    that satisfies it.** 0529 made `verdict` a required fact key and was
+>    applied before the worker was deployed; one harness job failed in the gap.
+>
+> **Honest about variance.** `npm run verify:plan-stability` reports; it does
+> not gate. Two passes gave 1/15 and 4/15 crossings — **the measurement is
+> itself too noisy to quote as a reliability figure**, and it is recorded that
+> way rather than rounded into a percentage.
+>
 > ## State as of 2026-09-18 — GRANT HUMAN BETA, the first session
 >
 > **The first session driven entirely by Grant using the product.** Two reports
