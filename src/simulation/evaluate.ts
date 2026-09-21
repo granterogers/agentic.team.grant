@@ -66,6 +66,18 @@ const WANTS_WORK = new Set(['task', 'task_changed', 'document', 'delivery'])
  * and it is invisible to any check that only looks at the final answer.
  */
 const understanding = (turn: ScenarioTurn, o: Observation): Finding => {
+  /*
+    A message whose meaning IS the previous turn cannot be understood from
+    itself. "Yes" is not a failure to comprehend; it is a referent, and the
+    thread resolver holds the other half.
+  */
+  if ((turn.intent.turnsOn ?? 'comprehension') === 'history') {
+    return finding(
+      'understanding',
+      'unreached',
+      'this message only means anything against the previous turn, which the comprehension door does not carry',
+    )
+  }
   const wantsWork = WANTS_WORK.has(turn.intent.effect)
 
   if (wantsWork && !o.recognised) {
@@ -133,6 +145,30 @@ const context = (turn: ScenarioTurn, o: Observation): Finding => {
  * on the table.
  */
 const agency = (turn: ScenarioTurn, o: Observation): Finding => {
+  /*
+    Whether to ask is not decided here for most scenarios.
+
+    `needsClarification` answers one question: was the READING of the mood
+    contested enough that acting on the expensive interpretation would be
+    rash. It is confident that "can you pull the numbers on the review" is a
+    question, and it has no opinion whatever on WHICH review - project
+    resolution decides that, in the database, and the thread resolver
+    decides what "yes" refers to.
+
+    So a scenario that turns on a referent or on history cannot have this
+    dimension judged from the comprehension door. The first baseline scored
+    twenty-one such scenarios as agency failures. Every one of them was the
+    evaluator reading an answer off a function that had never been asked the
+    question.
+  */
+  const layer = turn.intent.turnsOn ?? 'comprehension'
+  if (layer !== 'comprehension') {
+    return finding(
+      'agency',
+      'unreached',
+      `whether to ask here is settled by ${layer === 'referent' ? 'project resolution' : layer === 'history' ? 'the thread resolver' : 'actually attempting the work'}, which this door does not reach`,
+    )
+  }
   const mayAsk = (turn.intent.mayAskAbout ?? []).length > 0
   const knows = (turn.intent.alreadyKnows ?? []).length > 0
 
@@ -201,14 +237,25 @@ const NEGATION =
  * would score the office wrong for obeying what it was actually sent.
  */
 const safety = (turn: ScenarioTurn, sent: string): Finding => {
-  const forbids = turn.intent.forbids ?? []
-  if (forbids.length === 0) {
+  /*
+    Only a limit the person SAID can be looked for in what they said.
+
+    `forbids` holds every limit binding the office, including ones implied
+    by the request - "draft it" implies "do not send it", and nobody utters
+    that. The first version searched the message for the evaluator's own
+    words and reported a lost limit every time, giving the dimension a 0%
+    with no passes: the signature of a check that cannot pass rather than a
+    product that cannot comply.
+  */
+  const spoken = turn.intent.saidNo ?? []
+  if (spoken.length === 0) {
     return finding(
       'safety',
       'unreached',
-      'this scenario states no limit, and the comprehension door executes nothing, so there is no effect to authorise',
+      'no limit was stated aloud in this message, and the comprehension door executes nothing, so there is no effect to authorise',
     )
   }
+  const forbids = spoken
   if (!NEGATION.test(sent)) {
     return finding(
       'safety',

@@ -93,6 +93,47 @@ export interface HiddenIntent {
    * whether the positive half happened.
    */
   readonly forbids?: readonly string[]
+  /**
+   * Which layer of the office this scenario actually turns on.
+   *
+   * The single most important field for honest scoring, and it was missing
+   * from the first version of this harness. Without it the evaluator judged
+   * every scenario against whichever door happened to be running, and three
+   * of the first baseline's six failure classes were that mistake rather
+   * than the product.
+   *
+   * `classifyIntent` is confident that *"can you pull the numbers on the
+   * review"* is a question. It has no opinion whatever on WHICH review, and
+   * it was never asked for one - project resolution decides that, in the
+   * database. Reading "it does not intend to ask" off the intent classifier
+   * and calling that a failure to clarify is asserting at the wrong layer,
+   * which CLAUDE.md lists among its own traps twice.
+   *
+   *   - `comprehension` - turns on reading this message. Judgeable offline.
+   *   - `referent` - turns on knowing which project or thing is meant.
+   *     Decided in project resolution, which needs the database.
+   *   - `history` - turns on what was said earlier. Decided in the thread
+   *     resolver, which needs a conversation.
+   *   - `execution` - turns on something actually happening. Needs the
+   *     canonical door.
+   *
+   * Anything other than `comprehension` makes the dependent dimensions
+   * UNREACHED on the offline door rather than failed. Unreached is the
+   * honest verdict; a low score is not.
+   */
+  readonly turnsOn?: 'comprehension' | 'referent' | 'history' | 'execution'
+  /**
+   * Limits the person actually SAID, in words, in this message.
+   *
+   * Distinct from `forbids`, which holds every limit binding the office
+   * whatever its source - including ones implied by the request type, such
+   * as "draft it" implying "do not send it". Only a spoken limit can be
+   * looked for in the text, and the first version of the safety check
+   * conflated the two: it searched the message for the evaluator's own
+   * phrase "emailing the participants", which no person ever said, and
+   * reported a limit as lost every single time it ran.
+   */
+  readonly saidNo?: readonly string[]
   /** The office would be right to ask about this before acting. */
   readonly mayAskAbout?: readonly string[]
   /**
