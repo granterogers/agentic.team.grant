@@ -348,13 +348,228 @@ one field.
 
 ---
 
+## §20 Discrepancy analysis — the reference slice against real Basecamp
+
+Written 21 September 2026, **before any code was changed**, after studying the
+nine reference screenshots Grant supplied and after reading the canonical data
+model rather than guessing at it. §20 asks for this to be critical. The tests
+are green and 30 defects were found and fixed, and none of that is evidence
+about the thing the redesign prompt is actually complaining about, so none of
+it appears below as a defence.
+
+**The correction in one sentence.** I built an attractive directory of places
+you can navigate to. Basecamp builds a page where the project itself is
+present. Every discrepancy below is a consequence of that one reading.
+
+**The structural proof of it, and it is not an impression.** `shell.js` has a
+single preview primitive:
+
+    const row = (title, meta, extra = '', done = false) => …
+
+and all six previews call it. `tasksPreview`, `teamPreview`,
+`documentsPreview`, `activityPreview`, `contactsPreview` and `sourcesPreview`
+differ only in which fields they join into `meta` with a middle dot. So the
+six tiles on the project home are, at the DOM level, the same tile six times.
+That is the generic-dashboard failure stated as a fact about the source, and
+it is why no amount of capture-reading found it: every tile is individually
+well-formed, legible, non-overflowing and accessible. The defect is that they
+are interchangeable.
+
+### 1. Information density
+
+Basecamp's project home carries far more per screen than mine, and does not
+read as busy. Its To-dos tile shows lists with names and several tasks under
+each; its Card Table tile shows columns with counts; its Calendar tile shows a
+dated agenda. Mine shows five lines of `title · meta` per tool and then a
+grey "3 more open". I cut density in the name of calm and got sparseness,
+which §3 names exactly. The room exists: the 324×324 tile is barely half used
+in the tasks tile in every capture.
+
+### 2. Project-at-a-glance comprehension (the 5–10 second test)
+
+Mine fails it. Reading my Overview tells you which tools this project has and
+one sample row from each. It does not tell you whether the project is on
+track, what is late, who is waiting, or what happened yesterday. The
+information needed to answer that is already in the payload — `state_raw`,
+`due_on`, `blocked`, `waiting`, `activity` — and the composition spends it on
+one row apiece instead of aggregating it.
+
+### 3. Visual hierarchy
+
+Six equal tiles in a three-column grid is an explicit statement that the six
+tools are equally important, which is false for every real project. Basecamp's
+own home is not equal-weight: the tools most used sit first and the
+composition is asymmetric. I have no mechanism for "this project is mostly
+to-dos" because the layout is hard-coded in `overview(p)` rather than read from
+the stored arrangement — see 13.
+
+### 4. Live content vs navigation
+
+This is the central charge and it lands. My tiles are affordances with a
+content sample inside them; Basecamp's tiles are the content, and the content
+is the affordance. Concretely: in mine, ticking a task is impossible from the
+Overview — you press the tile, land on the tasks surface, and tick it there.
+Two navigations to do the thing the tile is showing you. §4 says content is the
+affordance, and mine puts a link in front of the content.
+
+### 5. Tool-specific visual grammar
+
+Absent, per the `row()` proof above. What each tool should look like, from the
+screenshots: To-dos is nested lists with checkboxes and per-list progress;
+Card Table is columns with stage names and counts; Calendar is dated, with the
+month legible; Documents is thumbnails and file identity, not a text row;
+Activity is a chronological timeline with time on one axis; Chat is speech
+with avatars. Six grammars, one of which (Documents) I already have the
+machinery for — `pageSvg(title, kind)` in `app.js` generates document page
+illustrations and the Basecamp slice does not use it.
+
+### 6. To-do category / list structure
+
+**My model is flat and it is wrong.** `tasksPreview` and `tasksSurface` treat
+a project as a bag of tasks. §6 requires PROJECT → LIST → TASK, and the
+screenshot of the full To-dos tool shows named lists with their own
+descriptions and completion counts.
+
+**This needs no new backend contract, and I confirmed that rather than
+assuming it.** `migrations/0171_a_task_is_a_first_class_thing.sql` adds
+`is_milestone boolean not null default false` and
+`parent_task_id uuid references public.tasks(task_id)`, with the comment *"A
+milestone is a task with no work of its own that others hang off, rather than
+a separate table."* `app.studio_modules(p_project_id)`
+(`0286_a_module_is_a_milestone_that_gathers.sql`) already returns
+`{id, n, name, state, docs, tasks}` per milestone, and `app.studio_tasks()`
+already returns `milestone` and `parent` on every row. The hierarchy has been
+in the database since 0171 and the Basecamp slice ignored it. That is the
+worst finding in this analysis: not a missing capability, a capability I did
+not look for.
+
+### 7. Team / chat presence
+
+My `teamPreview` prints crew names as text rows. There are no faces on the
+project home at all, although `CREW[].face` exists and the default studio uses
+it. Basecamp's chat tile makes the team feel present — avatars, names, the
+last few utterances, a timestamp. Mine makes the team feel like a list of
+assignees. And project chat history exists as a real reader
+(`project_history`, argument `p_project`), which the Basecamp slice does not
+call: the project surface has no chat at all, so §7 is not under-built, it is
+unbuilt.
+
+### 8. Agentic Team presence
+
+Closest to right, and still framed wrongly. §8 asks for the agents as native
+project participants. `teamPreview` reads roster state, blockers and the
+latest output, which is the right material — but it renders them in the same
+`row()` as documents and contacts, so an agent reads as a database record
+rather than as a colleague. No face, no voice, nothing that distinguishes
+"Emma is working on this" from "a row exists".
+
+### 9. Calendar grammar
+
+There is no calendar. Dates appear as `t.due` inside a task's meta string,
+which is the opposite of temporal: it is a date used as an adjective.
+`app.studio_tasks()` returns both `due_on` and `starts_on`, so a month grid or
+a dated agenda is buildable from real records today.
+
+**The one genuine missing contract, documented rather than faked:** there is
+no *events* table. The office has dated work (tasks with `due_on` /
+`starts_on`) and no notion of a meeting or an appointment. So a Calendar built
+here can honestly show scheduled work and must not pretend to show a diary.
+§19 requires that gap be stated on the surface rather than filled with
+invention.
+
+### 10. Card Table grammar
+
+There is no card table. The stages exist as real data — `state_raw` is the
+enum `todo | doing | blocked | done | cancelled` — so the compressed
+workflow-state summary §10 asks for is derivable now, with no new contract and
+no invented vocabulary. My tasks tile collapses all five states into
+"open / done", which discards precisely the information a workflow summary is
+made of.
+
+### 11. Documents grammar
+
+`documentsPreview` renders a document as `title · kind · origin · size`. A
+document should look like a document. `pageSvg(title, kind)` already exists in
+`app.js` and already generates a page illustration per kind; the slice renders
+text instead. This is the cheapest of the seventeen to fix and among the most
+visible.
+
+### 12. Activity grammar
+
+`activityPreview` renders `"${who} ${verb} ${what}"` with the time as meta —
+so the time, which is the axis the whole tool is organised around, is a
+trailing grey fragment. Basecamp's My Activity screenshot is a chronological
+story with the day as a structural element. Mine is a list of sentences that
+happen to be in order. Related and separately wrong: the same six-row list
+appears in both the tile and the full surface, which is the duplicated-screen
+class I was hunting last pass and did not recognise here because both copies
+are correct.
+
+### 13. Configurable tools
+
+Not built. `overview(p)` hard-codes the tool order, so Grant cannot add,
+remove or reorder anything on his own project home — §14 requires all three.
+The contract exists: `plane_layout` / `hq_plane_layout` read, with
+`plane_layout_set` and `plane_layout_reset` as writers. §14's hard constraint
+is the one to encode structurally rather than to remember: **removing a tool
+from the home must not delete the underlying records**, so visibility has to
+be a layout concern that no delete path can be reached from.
+
+### 14. External services
+
+Not built, and the trap is named in advance. §15 asks for a simple chooser in
+the user's language. The sources tile currently prints `s.kind` straight from
+the record, which is how developer terminology reaches a project surface
+without anybody deciding to put it there. Two absolutes: no API keys, scopes
+or OAuth vocabulary on the project surface, and no service offered as
+available when it is not connectable.
+
+### 15. Unnecessary navigation and chrome
+
+My shell is defensible and still louder than Basecamp's. The tray repeats what
+the Overview already offers, so the same six destinations are reachable twice
+within one viewport — and because my tiles are navigation rather than content,
+the tray and the tiles are doing the *same job*, not two jobs. §16 says the
+project must dominate the chrome. Today the chrome and the project are about
+equal in ink.
+
+### 16. Desktop first viewport
+
+At 1440×900 the first screen shows a header, a tray, and six near-identical
+tiles each with up to five thin rows. Roughly half of each tile is empty. A
+person looking at that screen learns the project's shape and nothing about its
+state. §17 permits substantial desktop redesign and this is the screen that
+needs it.
+
+### 17. Mobile first viewport
+
+At 390×844 the six tiles stack, so the first screen is the header plus one and
+a half tiles — and which tool comes first is an accident of the hard-coded
+order rather than a decision about what matters on a phone. §18 gives a
+priority order and the current build has no concept of priority to apply it
+to. Mobile is where the sparseness costs most: one tile per screen means six
+screens of scrolling to learn what one desktop screen could say.
+
+### What this analysis changes about the next step
+
+The fix is not six better tiles. It is a different composition, which is why
+§21 asks for two materially different experiments before any of the seventeen
+above is addressed individually. Anything built before that choice is made
+would be built against the layout I am being told is wrong.
+
+---
 ## NEXT ACTION
 
-The reference slice is complete and every gate is green. §19.9 is the next
-step and it is Grant's, not an agent's: **review the experience at
-`/basecamp` and decide explicitly whether to expand the system.** Nothing
-here should be merged to `main` or promoted to the default route before that.
+**§21 — two materially different Overview compositions, before anything else.**
+Build both, capture each at 1440x900 and 390x844, open the captures, choose
+one, and record in this ledger why the winner won and what the loser was
+better at. Only then implement the tool-specific grammars.
 
-If the answer is expand, the first slices are the import sheet's four fields
-and the Work Board, in that order: the first closes a known gap in a journey
-that already works, the second is the largest surface still handed off.
+The §20 analysis above is the input to that choice. The three findings that
+constrain it: the To-do hierarchy already exists in the database (0171 /
+0286), Card Table stages already exist as `state_raw`, and there is no events
+table, so Calendar may show scheduled work and must say that is what it is
+showing.
+
+Still not to be merged, still not promoted to the default route, and the
+default Team HQ stays untouched.
