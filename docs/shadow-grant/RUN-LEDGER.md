@@ -101,7 +101,8 @@ One blocked item must never block the mission. Each carries the exact question.
 
 | # | Item | Exact question for Grant | Everything else continues? |
 |---|---|---|---|
-| B1 | Live canonical-door runs, live judge calls, live Supabase oracles | Not a question — a credential. This Cloud session has no `SUPABASE_ACCESS_TOKEN` / `OPENROUTER_API_KEY`. Nothing is asked of Grant: the door is written (`src/simulation/canonical.ts`) and gated behind `--i-have-checked-the-first-run`. | YES — everything else was reachable offline and is done. |
+| B1 | ~~No credentials in this session~~ | **RESOLVED 21 Sep** — Grant supplied `SUPABASE_ACCESS_TOKEN`, `OPENROUTER_API_KEY` and `SUPABASE_DB_URL`. | — |
+| B2 | Live canonical-door runs, live judge calls, live Supabase oracles | **The credentials are present and the network policy blocks them.** Not a question — an environment setting. This environment's egress allowlist permits `api.github.com` and the package registries; `api.supabase.com`, `openrouter.ai` and `*.supabase.co` are refused by the agent proxy with `403 CONNECT tunnel failed`, and `db.…supabase.co:5432` does not resolve at all. Grant needs to add those hosts to the environment's network egress settings, or recreate the environment with a policy that permits them. See the note below. | YES — everything not needing those hosts is done. |
 
 ## What was found, and where it went
 
@@ -140,3 +141,32 @@ Three separate times a check reported a false all-clear because something did
 not land: a `python3 -c` sabotage whose `\b` became a backspace, a grep
 against a file that did not exist, and the multi-edit above. Every proof in
 this workstream now prints evidence that it landed before its verdict counts.
+
+## The live door: credentials arrived, the network did not
+
+**21 September, after the run.** Grant populated the session with
+`SUPABASE_ACCESS_TOKEN` (44 chars), `OPENROUTER_API_KEY` (73) and
+`SUPABASE_DB_URL`. All three look right. None of them can be used from this
+environment.
+
+| host | needed for | result |
+|---|---|---|
+| `api.supabase.com` | the Management API — every SQL statement the harness runs | `403 CONNECT tunnel failed` at the agent proxy |
+| `openrouter.ai` | the judge, and the office's own inference | `403 CONNECT tunnel failed` |
+| `baujwlzcziasnfhhkchg.supabase.co` | edge functions, PostgREST | `403 CONNECT tunnel failed` |
+| `db.baujwlzcziasnfhhkchg.supabase.co:5432` | the direct Postgres route | `getaddrinfo ENOTFOUND` — DNS does not resolve |
+| `api.github.com` | Issues, pushes | **200** |
+
+`curl -sS "$HTTPS_PROXY/__agentproxy/status"` confirms the proxy is enabled
+and not selective; the refusal is the environment's **network egress
+allowlist**, chosen when the environment was created, and documented at
+<https://code.claude.com/docs/en/claude-code-on-the-web>.
+
+`src/db/pg-executor.ts` already records the underlying constraint in its own
+comment — *"non-443 TCP egress is blocked there"* — so the direct Postgres
+route was never going to work here even with a DSN.
+
+**Nothing in the harness needs changing for this.** The transport seam exists
+for exactly this case: `npm run shadow:baseline -- --live
+--i-have-checked-the-first-run` will work unaltered from any environment that
+can reach those hosts. What is blocked is the proof, not the code.
