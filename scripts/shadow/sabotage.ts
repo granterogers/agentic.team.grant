@@ -129,6 +129,44 @@ const SABOTAGES: readonly Sabotage[] = [
     replacement: '      true,',
     check: 'tests/simulation/arcs.test.ts',
   },
+
+  /*
+    The three canonical dimensions, added when they stopped being
+    permanently `unreached` (#295). Each was proved by hand once; a proof
+    run by hand once is not a proof that survives, so each lives here.
+  */
+  {
+    name: 'canonical-claim-vs-record',
+    proves: 'an answer claiming a task nobody filed is a hard failure',
+    file: 'src/simulation/evaluate.ts',
+    // Make the admission always true and the detector can never fire.
+    /*
+      The replacement must not CONTAIN the anchor: this file proves an edit
+      landed with `includes(replacement) && !includes(anchor)`, so a
+      replacement that keeps the anchor can never register, and the first
+      version of this entry was reported INCONCLUSIVE - correctly, and
+      about the sabotage rather than about the detector.
+    */
+    anchor: "  if (said.includes('?')) return true",
+    replacement: '  if (true) return true',
+    check: 'tests/simulation/evaluate-canonical.test.ts',
+  },
+  {
+    name: 'canonical-effect-completeness',
+    proves: 'every effect class has a canonical test, so none reports unreached by omission',
+    file: 'src/simulation/evaluate.ts',
+    anchor: '  delivery: (e) => e.deliveriesSent > 0,',
+    replacement: '',
+    check: 'tests/simulation/evaluate-canonical.test.ts',
+  },
+  {
+    name: 'canonical-acted-unasked',
+    proves: 'acting when nothing was asked for is caught, not only claiming falsely',
+    file: 'src/simulation/evaluate.ts',
+    anchor: "  if (want === 'none' && actedAtAll(e)) {",
+    replacement: '  if (false) {',
+    check: 'tests/simulation/evaluate-canonical.test.ts',
+  },
 ]
 
 const only = ((): string => {
@@ -154,7 +192,7 @@ console.log('  red is not proved, and a sabotage that did not land is not a proo
 
 for (const s of SABOTAGES) {
   if (only !== '' && !s.name.includes(only)) continue
-  process.stdout.write(`  ${s.name.padEnd(28)}`)
+  process.stdout.write(`  ${s.name.padEnd(30)}`)
 
   const original = readFileSync(s.file, 'utf8')
   const backup = `${s.file}.sabotage-backup`
@@ -232,7 +270,7 @@ if (bad.length === 0) {
 }
 
 console.log('  NOT PROVED\n')
-for (const r of bad) console.log(`    ${r.name.padEnd(28)} ${r.outcome}  ${r.note}`)
+for (const r of bad) console.log(`    ${r.name.padEnd(30)} ${r.outcome}  ${r.note}`)
 console.log(`
   An INCONCLUSIVE result means the sabotage did not land - usually the code
   was refactored and the anchor moved. It says nothing about the detector,
