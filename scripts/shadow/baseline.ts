@@ -16,6 +16,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { generateCorpus } from '../../src/simulation/compose.ts'
 import { DIMENSIONS, type Dimension, rate, tally } from '../../src/simulation/dimensions.ts'
+import { HELD_OUT_SEED } from '../../src/simulation/frozen.ts'
 import { GOAL_FAMILIES } from '../../src/simulation/goals.ts'
 import { runCorpus } from '../../src/simulation/run.ts'
 import { canonicalDoor, comprehensionDoor } from '../../src/simulation/transport.ts'
@@ -26,7 +27,16 @@ const arg = (name: string, fallback: string): string => {
   return i === -1 ? fallback : (process.argv[i + 1] ?? fallback)
 }
 
-const seed = Number(arg('seed', '1'))
+/*
+  The held-out corpus, which nobody has read.
+
+  §13 and §18: a fix must be shown to work on scenarios it was not tuned
+  against, and every finding in the first baseline came from seed 1. Passing
+  --heldout runs the frozen seed instead, whose sentences have deliberately
+  not been inspected.
+*/
+const heldOut = process.argv.includes('--heldout')
+const seed = heldOut ? HELD_OUT_SEED : Number(arg('seed', '1'))
 const per = Number(arg('per', '2'))
 const only = arg('family', '')
 const wantLive = process.argv.includes('--live')
@@ -41,7 +51,7 @@ console.log(`\nShadow Grant - behavioural baseline`)
 console.log(
   `  door      ${transport.door}${transport.reachable ? '' : ` (UNREACHABLE: ${transport.blockedBecause ?? 'unknown'})`}`,
 )
-console.log(`  seed      ${seed}`)
+console.log(`  seed      ${seed}${heldOut ? '  (FROZEN HELD-OUT - not tuned against)' : ''}`)
 console.log(
   `  corpus    ${corpus.length} scenarios across ${new Set(corpus.map((s) => s.family)).size} families`,
 )
