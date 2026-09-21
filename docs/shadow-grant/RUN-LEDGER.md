@@ -69,7 +69,15 @@ Append-only. One line per checkpoint, newest at the bottom. Never rewrite histor
 | 7 | 21 Sep | Seven dimensions, deterministic evaluator, transport seam, `npm run shadow:baseline` | DONE |
 | 8 | 21 Sep | First honest baseline; 3 harness defects found and fixed; 5 product findings | DONE |
 | 9 | 21 Sep | Findings filed: #290, #291, #292, #293; #289 commented rather than duplicated | DONE |
-| 10 | 21 Sep | Multi-turn reactive simulation, preference continuity end to end | IN PROGRESS |
+| 10 | 21 Sep | Multi-turn reactive arcs; §9 preference chain measured step by step | DONE |
+| 11 | 21 Sep | Frozen held-out corpus with a generator fingerprint; variance characterised (13pt spread) | DONE |
+| 12 | 21 Sep | Shadow Grant mode — ten conversations, narrative ending | DONE |
+| 13 | 21 Sep | Real-world failure intake, with redaction proved | DONE |
+| 14 | 21 Sep | `npm run shadow:sabotage` — 8 detectors, each proved red-capable | DONE |
+| 15 | 21 Sep | Channel translation coverage through the real Telegram adapter | DONE |
+| 16 | 21 Sep | Live canonical door written, gated behind a first-run checklist, never run | DONE |
+| 17 | 21 Sep | Documentation; #294 filed (repo test suite cannot pass without a token) | DONE |
+| 18 | 21 Sep | Integration-readiness check against main | IN PROGRESS |
 
 ## Decisions taken without asking
 
@@ -91,4 +99,40 @@ One blocked item must never block the mission. Each carries the exact question.
 
 | # | Item | Exact question for Grant | Everything else continues? |
 |---|---|---|---|
-| B1 | Live canonical-door runs, live judge calls, live Supabase oracles | Not a question — a credential. This Cloud session has no `SUPABASE_ACCESS_TOKEN` / `OPENROUTER_API_KEY`. Nothing is asked of Grant: the transport seam (D2) means these run unchanged the moment a token is present. | YES — the comprehension transport, generator, personas, oracles, evaluator, sabotage proofs, corpora and intake are all reachable offline. |
+| B1 | Live canonical-door runs, live judge calls, live Supabase oracles | Not a question — a credential. This Cloud session has no `SUPABASE_ACCESS_TOKEN` / `OPENROUTER_API_KEY`. Nothing is asked of Grant: the door is written (`src/simulation/canonical.ts`) and gated behind `--i-have-checked-the-first-run`. | YES — everything else was reachable offline and is done. |
+
+## What was found, and where it went
+
+| Finding | Where |
+|---|---|
+| A preference is only recognised with an explicit persistence marker (4/12) | [#290](https://github.com/granterogers/agentic.team.grant/issues/290) |
+| A dash is not a clause boundary, so a withdrawal is invisible | [#291](https://github.com/granterogers/agentic.team.grant/issues/291) |
+| An implied obligation, and work stated as prose, read as idle thoughts | [#292](https://github.com/granterogers/agentic.team.grant/issues/292) |
+| A question with an instruction attached is read as a question | [#293](https://github.com/granterogers/agentic.team.grant/issues/293) |
+| `npm run test` cannot pass without a Supabase token | [#294](https://github.com/granterogers/agentic.team.grant/issues/294) |
+| The two task matchers disagree — reproduced offline | comment on [#289](https://github.com/granterogers/agentic.team.grant/issues/289) |
+
+**Nothing in the product was changed.** §18: the baseline comes before any fix.
+
+## Defects found in the harness itself
+
+Kept because the ratio is the point, and because CLAUDE.md calls validating
+the test before believing the finding its most-used rule.
+
+| The instrument was wrong | How it was caught |
+|---|---|
+| Agency scored off a function that decides something else (21 scenarios) | reading the failures, then driving the function directly |
+| Safety searched messages for the evaluator's own words — 0% with no passes | reading the tally rather than the findings |
+| Em dashes inside voice transcripts, which no transcriber can produce | reading the generated messages |
+| Self-correction dropped the withdrawn half's negative constraint | strengthening a test that could not fail |
+| Composition could open an arc with a reply | the arc-ordering invariant |
+| The hyphen guard had no test at all | `npm run shadow:sabotage`, on its first run |
+| Two sabotage anchors had drifted | the same, reported INCONCLUSIVE rather than passing |
+| A sabotage that landed textually and did nothing | the same |
+| Shadow Grant complained about turns the evaluator declines to judge | reading the four-persona comparison |
+| A four-part edit where three parts silently no-op'd | grepping for the result instead of trusting the diff |
+
+Three separate times a check reported a false all-clear because something did
+not land: a `python3 -c` sabotage whose `\b` became a backspace, a grep
+against a file that did not exist, and the multi-edit above. Every proof in
+this workstream now prints evidence that it landed before its verdict counts.
