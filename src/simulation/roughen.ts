@@ -82,15 +82,7 @@ const LOOSE: readonly (readonly [RegExp, string])[] = [
   [/\blet's\b/gi, 'lets'],
 ]
 
-/**
- * Words a typo may not touch.
- *
- * Short words, because respelling a three-letter word usually produces a
- * different three-letter word — "not" into "nto" is a typo, "not" into "no"
- * is the opposite instruction. And numerals, because a typo in a figure is
- * not messiness, it is a different request, and the harness would then be
- * asserting against a number the person never said.
- */
+/** Negations, which a typo may never touch. See `untypoable` below. */
 const NEVER_RESPELL = new Set([
   "don't",
   'dont',
@@ -180,6 +172,24 @@ const typo = (w: string, rng: Seeded): string => {
  */
 const stripPunctuation = (text: string): string =>
   text
+    // Dashes go too, and they go FIRST, replaced by a space rather than by
+    // nothing so the words either side do not fuse.
+    //
+    // A speech-to-text transcript contains no dashes at all - a transcriber
+    // has no way to hear one - so a "voice note" carrying em dashes is a
+    // thing no person ever sent. The harness was generating them: the
+    // self-correction operator joins with " - " and the unpunctuated pass
+    // stripped only sentence marks, so every dictated change of mind arrived
+    // with punctuation its own channel cannot produce.
+    //
+    // It mattered because the office's clause splitter does not treat a dash
+    // as a boundary, so the harness was manufacturing a finding out of its
+    // own unrealism. The underlying finding survives without it and is
+    // sharper: spoken, the change of mind has no separator at all.
+    // A hyphen counts only when it is spaced: an unspaced one is inside a
+    // word (high-performing, twenty-five) and removing it would split a
+    // content word in two, which is the one thing this file may not do.
+    .replace(/\s+[—–-]+\s+|[—–]+/g, ' ')
     .replace(/(?<!\d)([.!?,;:])|([.!?,;:])(?!\d)/g, '')
     .replace(/\s+/g, ' ')
     .trim()
