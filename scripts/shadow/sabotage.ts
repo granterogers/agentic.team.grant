@@ -235,6 +235,31 @@ const SABOTAGES: readonly Sabotage[] = [
     replacement: "'(no sentence)'",
     check: 'tests/agents/outcome-contract.test.ts',
   },
+
+  /*
+    The semantic backstop, at both ends: the detection and the bound.
+
+    The first proves an unsupported promise is actually found; the second
+    proves the rewrite loop ends at a sentence composed from the rows rather
+    than at another attempt, which is the property that stops regeneration
+    turning a failure into a different promise.
+  */
+  {
+    name: 'commitment-found',
+    proves: 'an answer promising what nothing will do is detected',
+    file: 'src/agents/commitment.ts',
+    anchor: '    if (NOT_AN_EXECUTION.test(after)) continue',
+    replacement: '    if (true) continue',
+    check: 'tests/agents/commitment.test.ts',
+  },
+  {
+    name: 'commitment-loop-is-bounded',
+    proves: 'regeneration ends at the truth, never at another promise',
+    file: 'src/agents/commitment.ts',
+    anchor: "  if (truth !== null) return { answer: truth, outcome: 'fell_back' }",
+    replacement: "  if (truth !== null) return { answer: second, outcome: 'fell_back' }",
+    check: 'tests/agents/commitment.test.ts',
+  },
 ]
 
 const only = ((): string => {

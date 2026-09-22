@@ -88,6 +88,7 @@ import {
   toolNames,
 } from '../agents/capability.ts'
 import { split } from '../agents/clauses.ts'
+import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
 import { assignedTo, dueOn } from '../agents/due.ts'
@@ -4544,7 +4545,63 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         and leaves the shape of the answer to his rules rather than to this
         line's formatting.
       */
-      const answer = outcomeLine === null ? answer1 : `${outcomeLine} ${answer1}`.trim()
+      const draft = outcomeLine === null ? answer1 : `${outcomeLine} ${answer1}`.trim()
+
+      /*
+        And the backstop, when the rows say nothing is coming - #302.
+
+        The composed sentence made the truth unavoidable and the prompt
+        clause asked the writer not to promise, and three live probes
+        against v679 and v681 showed neither was enough: the office answered
+        "I have not done this... but I'll create a task that flags the
+        insurance renewal", against 0 tasks and 0 child jobs. Prompting is
+        advisory.
+
+        Authority stays with the rows. `unsupportedCommitment` is consulted
+        ONLY where `mayCommitToFuture` is already false, so it never has to
+        tell a real plan from an invented one - a promise backed by a child
+        job is never shown to it.
+
+        One rewrite, then the truth. A model asked to stop promising will
+        promise something else, so the loop ends at a sentence composed from
+        canonical state rather than at another attempt.
+      */
+      const held = contractFor(outcome).mayCommitToFuture
+        ? { answer: draft, outcome: 'clean' as const }
+        : await heldToWhatIsQueued(draft, outcomeLine, async (instruction) => {
+            const redo = await deps.router.complete({
+              messages: [
+                { role: 'system' as const, content: instruction },
+                { role: 'user' as const, content: draft },
+              ],
+              jobId: job.jobId,
+              maxTokens: 700,
+              // Deterministic: a correction that varies between attempts is a
+              // coin flip, and this one has exactly one job.
+              temperature: 0,
+            })
+            return scrub(redo.content)
+          })
+
+      /*
+        Recorded when neither the rewrite nor the fallback could produce a
+        clean answer - which is only reachable on a COMPLETED turn, where
+        there is no composed sentence to fall back to and the report of real
+        work is worth more than a trailing promise.
+
+        Allowed to fail without failing the job, and never silently: a write
+        that may fail records that it did, which is the rule `consultations`
+        was written into this repository for.
+      */
+      if (held.outcome === 'fell_back' && outcomeLine === null) {
+        await deps.db
+          .execute(`
+            select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+              'an answer that does not promise what nothing will do', ${lit(who.slug)},
+              ${lit('the rewrite still committed the office to unqueued work')})`)
+          .catch(() => undefined)
+      }
+      const answer = held.answer
 
       /*
         The context, tagged. Assembled from the same values that went into the

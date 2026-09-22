@@ -139,6 +139,46 @@ permanent Slack channels, 740 jobs in twelve hours, and harness traffic
 reported to Grant as his office collapsing.
 `
 
+/**
+ * THE CHAT, which is what threads a conversation.
+ *
+ * `app.conversation_before` keys on the origin channel, the FIRST SEGMENT of
+ * `origin_ref`, and the speaker, within a window. Two properties have to hold
+ * and they pull in opposite directions, which is why both are proved rather
+ * than reasoned about:
+ *
+ *   - Two turns of ONE conversation must share a chat, or a follow-up has no
+ *     history and the office asks again for something it was just told. That
+ *     read as the office forgetting itself, and it was the harness minting a
+ *     fresh run token per invocation.
+ *   - Two DIFFERENT conversations must not, or scenarios thread into each
+ *     other. That was measured at 2 prior turns on a turn that had none, and
+ *     it is fatal to any multi-turn measurement.
+ *
+ * Extracted from the door so both can be checked without a database.
+ */
+export const chatFor = (runToken: string, conversation: string): string =>
+  `shadow-${runToken}-${conversation}`.replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 80)
+
+/**
+ * The dedupe key, which is a DIFFERENT question from the chat.
+ *
+ * `nth` restarts at 1 in every process, so a key of run token plus `nth`
+ * collides the moment two invocations share a token - which they deliberately
+ * do, so a multi-turn sequence can share a thread. The second turn was
+ * silently deduplicated against the first and the door returned the FIRST
+ * turn's answer, which reads exactly like the office repeating itself.
+ *
+ * Counting `inbound_commands` was the only thing that could tell them apart:
+ * one row where there should have been two.
+ *
+ * The channel goes in the first segment because the CHECK constraint on
+ * `inbound_commands.dedupe_key` requires it, and because every real key in
+ * the table has that shape.
+ */
+export const dedupeKeyFor = (runToken: string, nth: number, nonce: string): string =>
+  `teamhq:shadow:${runToken}-${String(nth)}-${nonce}`
+
 export const canonicalDoor = (options: CanonicalOptions): Transport => {
   const token = process.env.SUPABASE_ACCESS_TOKEN
   const has = token !== undefined && token !== ''
@@ -218,7 +258,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         Dedupe identity and thread identity are different questions: two
         turns of one conversation SHARE a chat and must NOT share a key.
       */
-      const key = `teamhq:shadow:${options.runToken}-${String(nth)}-${doorNonce}`
+      const key = dedupeKeyFor(options.runToken, nth, doorNonce)
 
       /*
         THE CHAT, which is what threads a conversation.
@@ -238,9 +278,7 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         its own shape, which the CHECK constraint requires and which has
         nothing to do with threading.
       */
-      const chat = `shadow-${options.runToken}-${context.conversation}`
-        .replace(/[^A-Za-z0-9_-]+/g, '-')
-        .slice(0, 80)
+      const chat = chatFor(options.runToken, context.conversation)
       const ref = `${chat}:${String(nth)}`
 
       /*
