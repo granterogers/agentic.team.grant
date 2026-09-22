@@ -17,6 +17,7 @@
  *
  * Browser code travels as a STRING. tsconfig has no DOM lib on purpose.
  */
+import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { serveStudio } from './serve-studio.ts'
 
@@ -356,6 +357,50 @@ const sideways = (await small.evaluate(
 )) as number
 check('and the phone does not scroll sideways', sideways <= 1, `${String(sideways)}px`)
 await phone.close()
+
+/* --- 15. the scrollbar is the experience's, not the browser's ----------- */
+/*
+  Grant: *"Implement attractive, unobtrusive, visually consistent scrollbars
+  across modules wherever overflow exists. The scrollbar treatment should fit
+  the premium visual direction of the new UI rather than looking like an
+  unstyled browser default."*
+
+  HALF OF THIS IS OBSERVABLE AND HALF IS NOT, which decides the shape of the
+  check. `scrollbar-width` and `scrollbar-color` are computed styles and can
+  be read off the element. The `::-webkit-scrollbar` rules that give Chromium
+  an inset, rounded thumb are pseudo-elements: `getComputedStyle` cannot see
+  them from script at all. So the first is measured on the live element and
+  the second is asserted where it CAN be - that the stylesheet defines it, for
+  the same surfaces - because "we styled it in one syntax and forgot the
+  other" is precisely the failure this is guarding against.
+*/
+const bars = (await page.evaluate(
+  inPage(`const out = []
+     for (const el of document.querySelectorAll('.bcpanes .bcmodbody')) {
+       const cs = getComputedStyle(el)
+       out.push({ width: cs.scrollbarWidth, colour: cs.scrollbarColor })
+     }
+     return out`),
+)) as { width: string; colour: string }[]
+check(
+  'every scrolling pane asks for a thin, coloured scrollbar rather than the default',
+  bars.length > 0 && bars.every((b) => b.width === 'thin' && b.colour !== 'auto'),
+  bars.map((b) => `${b.width}/${b.colour}`).join(' | ') || 'no panes measured',
+)
+const css = await readFile('web/studio/bc/compose.css', 'utf8')
+for (const want of [
+  '::-webkit-scrollbar-thumb',
+  'background-clip: content-box',
+  'border-radius: 999px',
+]) {
+  check(`and the WebKit half of the treatment is there too (${want})`, css.includes(want))
+}
+check(
+  'the same treatment covers the expanded views, not only the board',
+  /\.bcexpbody[^{]*::-webkit-scrollbar-thumb/.test(css) ||
+    css.includes('.bcexpbody::-webkit-scrollbar-thumb'),
+  'a scrollbar styled on one surface and not the next is the inconsistency he asked to remove',
+)
 
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 

@@ -1376,6 +1376,81 @@ not done. The rendered evidence is the local run over the identical files:
 `basecamp:gate` green end to end and 92 captures at four widths.
 
 ---
+
+## The 22 September workspace overhaul
+
+The mission is at `docs/basecamp/MISSION-2026-09-22-overhaul.md`, verbatim,
+with a 36-row requirement ledger. **Every row is verified.** What follows is
+what changed underneath, and what it cost to find.
+
+### The nine suites this run added
+
+`npm run basecamp:gate2` — 183 checks, all driven in a real browser:
+
+| suite | what it drives |
+|---|---|
+| `basecamp-board` | drag, resize, both bounds, overlap after every gesture, persistence, internal scroll, the scrollbar treatment, the width, the phone |
+| `basecamp-todos` | the tick in both views, the record page, adding a task, and EVERY schedule entry opening the task it names |
+| `basecamp-cards` | the miniature as a board, a real drag between columns asserted after a RELOAD, repeated moves, empty and long columns, the phone |
+| `basecamp-docs` | every document in both views pressed, and what each one does |
+| `basecamp-back` | `page.goBack()` through all three of his levels, plus Forward and a reload |
+| `basecamp-contacts` | every field edited, an image through a real file input, validation, all asserted after a reload |
+| `basecamp-voice` | the press, the mint, the microphone permission, the SDP attempt, and the states on screen |
+| `basecamp-settings` | both screens measured on the rendered pixels, and the default studio proved untouched |
+| `basecamp-words` | the renamed controls, the source marks, and the sidebar toggle in both directions |
+
+Every one of them was proved able to FAIL by a sabotage whose own effect was
+printed first — the rule §10 of the QA standard asks for, and the rule that
+caught two sabotages in an earlier run that had silently not applied.
+
+### The four defect classes, rather than the four defects
+
+Grant asked for the systemic cause each time. Each of these was found by
+looking for the SHAPE, and each had more instances than he reported:
+
+1. **A control disabled because its row has no office id.** Three instances:
+   the miniature checkbox, the surface checkbox, and — found by grep, not by
+   report — Save and Mark done on the task record. The deployed preview
+   carries no token, so that is every row he can press. The port remembers
+   rows that have no record, and they are MARKED "Kept in this browser"
+   wherever they are drawn.
+2. **`attempt()` refuses before it runs anything when there is no token.**
+   Correct for a call that leaves the browser and useless for a person
+   judging a preview. Four call sites now branch around it for local writes.
+3. **Two key schemes for one task.** The office id, an index-based `at-N`,
+   and nothing at all in the miniatures — which is why the schedule said
+   *"this task is not on this project any more"*. One key, owned by the port.
+4. **A door still pointing at the legacy studio.** Project Settings came
+   in-house and a second control still handed off to the old screen: two
+   doors onto one screen, one of them moved.
+
+### What is NOT verified, and is not claimed
+
+- **`hq_contact_update` and the `contact_update` gateway action.** Migration
+  0534 is written and NOT applied; the gateway action is written and NOT
+  deployed. Both are additive and both are ready. Applying them means
+  touching Grant's live database and deploying this branch's edge function,
+  neither of which is this branch's to do. Contact editing is therefore fully
+  verified in the prototype and awaiting those two steps for the office.
+- **A real voice conversation.** The chain is driven to the SDP request with
+  a fake microphone and granted permission; a conversation needs the deployed
+  `voice-token` function and a live key. The suite says so in its own output.
+
+### Two defects of mine that the captures found and no check could
+
+- Removing the dead bar-chart CSS with a pattern took a declaration block with
+  it, leaving two dangling selectors that merged into the next rule: every
+  card on the card table became `position: fixed; inset: 0` at the size of the
+  viewport. The CSS still parsed and the class check still passed.
+- A backtick inside an HTML comment inside a template literal, for the seventh
+  time in this repository, made a module unparseable.
+
+Both were reported by `npm run basecamp:shots`, whose output I had been
+sending to `/dev/null`. It prints page errors and the screens it could not
+capture; suppressing it is how four screens went uncaptured at every width
+without anybody noticing.
+
+---
 ## NEXT ACTION
 
 **It is live — look at it.** https://agentic-team-hq-basecamp.vercel.app
