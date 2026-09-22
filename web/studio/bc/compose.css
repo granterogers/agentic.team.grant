@@ -1683,8 +1683,19 @@
 [data-experience='basecamp'] [data-stage='done'] { --stage: var(--stage-done); }
 
 [data-experience='basecamp'] .bcminiboard {
+  /*
+    AS MANY COLUMNS AS FIT, not four.
+
+    Four fixed columns in a third-width pane is 85px each, and the first
+    capture of it read "Prepare interview question / s" and "IN PROGRES / S" -
+    one or two characters a line, which is CLAUDE.md's oldest visual defect
+    arriving in a module I had just rebuilt. `auto-fit` with a real minimum
+    means the miniature is two columns in a narrow pane and four in a wide
+    one, which is what a resizable workspace needs anyway: the pane decides,
+    not a number written here.
+  */
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 8px;
   align-items: start;
 }
@@ -1705,6 +1716,9 @@
 }
 [data-experience='basecamp'] .bcminicolname {
   font: 600 10.5px/1.3 var(--bc-font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--stage);
@@ -1714,6 +1728,11 @@
   color: var(--bc-text-strong);
 }
 [data-experience='basecamp'] .bcminicard {
+  /* Two lines and then an ellipsis: a card is a title, not a paragraph. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   text-align: left;
   font: 500 12px/1.35 var(--bc-font);
   color: var(--bc-text);
@@ -1948,4 +1967,79 @@
   font: 500 10.5px/1.5 var(--bc-font);
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+
+/*
+  THE TWO COMMUNICATION CONTROLS, as siblings.
+
+  Grant: *"Make its button/icon sizing, hit area, spacing and visual weight
+  harmonious with the adjacent Chat with Team control. The two controls should
+  clearly look like sibling primary communication actions... while remaining
+  visually distinct enough that the user understands one is text chat and the
+  other is immediate voice conversation."*
+
+  Same height, same weight, different shape: a filled rectangle for words and
+  a filled circle for a voice. The microphone was a 32px ghost icon button
+  beside a 40px filled one, which read as a secondary action attached to the
+  primary rather than as the other half of a pair.
+*/
+[data-experience='basecamp'] .bcheadacts { align-items: center; gap: 10px; }
+[data-experience='basecamp'] .bcmic {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bc-accent) 16%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--bc-accent) 45%, transparent);
+  color: var(--bc-text-strong);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+[data-experience='basecamp'] .bcmic:hover {
+  background: color-mix(in srgb, var(--bc-accent) 30%, transparent);
+  border-color: var(--bc-accent);
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .bcmic:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 3px;
+}
+/* Connecting is its own state: several seconds long, and not yet a call. */
+[data-experience='basecamp'] .bcmic.connecting {
+  border-color: var(--bc-section-accent);
+  color: var(--bc-section-accent);
+  animation: bcpulse 1.4s ease-in-out infinite;
+}
+[data-experience='basecamp'] .bcmic.ringing {
+  background: var(--bc-section-accent);
+  border-color: var(--bc-section-accent);
+  color: #1b1207;
+}
+@keyframes bcpulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcmic.connecting { animation: none; }
+  [data-experience='basecamp'] .bcmic { transition: none; }
+}
+[data-experience='basecamp'] .bccallsay {
+  flex-basis: 100%;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--bc-text-muted);
+}
+
+/*
+  AND THE CHAT BUTTON GROWS TO MEET IT. The pair was 32px of text beside a
+  44px circle - which is the same mismatch Grant reported, with the sign
+  reversed, and it would have shipped that way because the microphone was the
+  only half being measured. Both are 44px on the project head; elsewhere the
+  button keeps the size the rest of the experience uses.
+*/
+[data-experience='basecamp'] .bcheadacts .bcbtn {
+  min-height: 44px;
+  padding-inline: 18px;
 }

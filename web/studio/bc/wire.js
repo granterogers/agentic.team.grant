@@ -15,7 +15,7 @@
 
 import { act, attempt, canWrite, read } from '../office.js'
 import * as pdf from '../pdf.js'
-import { callIsLive, syncCallButtons, toggleCall } from '../call.js'
+import { callPhase, callSays, syncCallButtons, toggleCall } from '../call.js'
 import * as compose from './compose.js'
 import * as grid from './layout.js'
 import * as contacts from './contacts.js'
@@ -359,20 +359,52 @@ document.addEventListener('keydown', (e) => {
   truth the shared painter uses.
 */
 const paintMic = (b) => {
-  const live = callIsLive()
-  b.classList.toggle('ringing', live)
-  b.setAttribute('aria-pressed', live ? 'true' : 'false')
-  b.setAttribute('aria-label', live ? 'End the call' : 'Talk to the team out loud')
-  b.title = live ? 'End the call' : 'Start a voice call with the team'
+  const phase = callPhase()
+  b.classList.toggle('ringing', phase === 'live')
+  b.classList.toggle('connecting', phase === 'connecting')
+  b.setAttribute('aria-pressed', phase === 'idle' ? 'false' : 'true')
+  const label =
+    phase === 'live'
+      ? 'End the call'
+      : phase === 'connecting'
+        ? 'Connecting the call — press to cancel'
+        : 'Talk to the team out loud'
+  b.setAttribute('aria-label', label)
+  b.title = label
 }
 
 const wireVoice = (root) => {
+  const said = root.querySelector('[data-callsay]')
+  if (said !== null) {
+    /*
+      A RENDER LOSES WHAT THE CALL SAID, because the element is new every
+      paint - so the sentence is put back from the call's own memory rather
+      than waiting for the next thing to happen. #197's rule: anything that
+      must survive a redraw has to be put back after it.
+    */
+    const words = callSays()
+    said.textContent = words
+    said.hidden = words === ''
+  }
   for (const b of root.querySelectorAll('[data-bc-voice]')) {
     paintMic(b)
     b.addEventListener('click', () => {
       toggleCall()
       syncCallButtons()
       paintMic(b)
+      /*
+        The phases that follow arrive over several seconds - minting, the
+        permission prompt, the SDP exchange - and none of them repaints this
+        page. A short poll is what keeps the button honest without making
+        call.js know about this experience; it stops as soon as the call
+        settles either way.
+      */
+      let ticks = 0
+      const watch = globalThis.setInterval(() => {
+        ticks += 1
+        paintMic(b)
+        if (ticks > 40 || callPhase() !== 'connecting') globalThis.clearInterval(watch)
+      }, 400)
     })
   }
 }

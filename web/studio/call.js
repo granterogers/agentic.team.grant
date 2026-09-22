@@ -105,6 +105,19 @@ const stopTracks = (s) => {
 export function callIsLive() { return onCall }
 
 /*
+  WHICH OF THE THREE STATES the call is in, for a surface that paints itself.
+
+  `syncCallButtons` computes this and keeps it, so anything drawing its own
+  control had to guess - and "connecting" is the state that matters most to
+  guess right: it is several seconds long, it involves a permission prompt,
+  and painting it as either of its neighbours is a status light that lies.
+*/
+export function callPhase() {
+  if (!onCall) return 'idle'
+  return pc === null ? 'connecting' : 'live'
+}
+
+/*
   Where the call's state is said.
 
   The panel, when it is open. And ALWAYS the call buttons themselves, because

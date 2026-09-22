@@ -292,6 +292,29 @@ const STAGES = [
  * It says the same thing in a fifth of the room: where the work has piled up.
  * The cards are the full tool's job.
  */
+/*
+  THE COUNTS, ON ONE LINE, for the module header.
+
+  The board reads left to right and its last two columns are Stuck and Done -
+  which in a third-width pane are below the fold until somebody scrolls. The
+  pane is right to be a board rather than a summary, and the glance is right
+  to be answerable without scrolling, so the summary rides in the HEADER where
+  it costs no height. The same decision, for the same reason, as Mine / Team
+  on the To-dos module.
+*/
+export const cardsCount = (p) => {
+  const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
+  if (tasks.length === 0) return ''
+  const at = (id) =>
+    tasks.filter((t) => {
+      const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
+      if (id === 'blocked') return st === 'blocked' || (t.blocked ? st !== 'done' : false)
+      if (id === 'todo') return st === 'todo' && !t.blocked
+      return st === id
+    }).length
+  return STAGES.map((st) => `${String(at(st.id))} ${st.name.toLowerCase()}`).join(' · ')
+}
+
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
   if (tasks.length === 0) return `<p class="bcmpty">Nothing on the board yet.</p>`

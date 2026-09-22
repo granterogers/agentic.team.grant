@@ -41,6 +41,7 @@ import * as grid from './layout.js'
 import { button, esc } from './parts.js'
 import {
   calendarMini,
+  cardsCount,
   cardsMini,
   chatMini,
   contactsMini,
@@ -195,16 +196,40 @@ const head = (p) => {
           or another custom chat interface when the microphone is clicked. So
           it presses the studio's own voice path, the same one the call panel
           uses, and nothing is drawn in between.
+
+          A SIBLING OF CHAT WITH TEAM, not a footnote to it. Grant, 22
+          September: "The microphone control should also have appropriate
+          visual prominence. It currently feels undersized relative to Chat
+          with Team... The two controls should clearly look like sibling
+          primary communication actions... while remaining visually distinct
+          enough that the user understands one is text chat and the other is
+          immediate voice conversation." So it carries the same height and
+          weight and a different shape: filled and round against a filled
+          rectangle.
         -->
         <button type="button" class="bcbtn bcmic" data-bc-voice="1"
           aria-pressed="false" aria-label="Talk to the team out loud">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
-            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
+            stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="3" width="6" height="11" rx="3"></rect>
             <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
             <path d="M12 18v3"></path>
           </svg>
         </button>
+        <!--
+          AND WHAT THE CALL IS DOING, where the call is started.
+
+          Every sentence the voice path produces - connecting, asking for the
+          microphone, a refusal, a dropped connection - was written into the
+          call PANEL, which this experience never opens. So the mic was
+          pressed, several things happened, and not one of them was on screen:
+          which is the whole of "the microphone control appears to do
+          nothing". The data-callsay attribute is painted on any element that
+          asks for it, so asking is all this needs to be. Plain words in here:
+          a backtick inside an HTML comment inside a template literal ends the
+          string, and that is the seventh time in this repository.
+        -->
+        <span class="bccallsay" data-callsay role="status" aria-live="polite" hidden></span>
         <!--
           A three-dot menu, which is where page-level things live now: how this
           page is arranged, where the material comes from, and the project's
@@ -430,7 +455,7 @@ const boardMods = (p) => [
     satisfy. A summary belongs beside the heading anyway.
   */
   { id: 'tasks', name: toolName('tasks', 'To-dos'), meta: mineAndTeam(p), body: todosMini(p, { lists: 4, per: 6 }) },
-  { id: 'board', name: 'Card Table', body: cardsMini(p) },
+  { id: 'board', name: 'Card Table', meta: cardsCount(p), body: cardsMini(p) },
   { id: 'documents', slot: 'documents', name: toolName('documents', 'Docs & Files'), body: docsMini(p, { items: 9 }) },
   { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 8 }) },
   /*
