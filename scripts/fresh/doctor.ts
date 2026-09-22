@@ -363,7 +363,35 @@ async function main(): Promise<void> {
       console.log(`  ${entry.title} — ${mark}`)
       console.log(`      ${entry.feature ?? entry.why}`)
     }
-    console.log('\n  Run: npm run fresh:doctor -- --optional   for the steps for any of them')
+    if (!process.argv.includes('--optional')) {
+      console.log('\n  Run: npm run fresh:doctor -- --optional   for the steps for any of them')
+    }
+    if (process.argv.includes('--optional')) {
+      /*
+        The steps, not another pointer.
+
+        The line above offered `--optional` and nothing implemented it, which is
+        the defect `npm run check:fresh` exists to catch -- an offer promising
+        what the press cannot perform -- found in the tool that reports on
+        everything else. The check reads the CONTRACT's commands; it does not
+        read what the doctor prints, which is how this survived.
+      */
+      for (const entry of optional) {
+        if (results.get(entry.id)?.state === 'ok') continue
+        console.log(`\n── ${entry.title} ──\n`)
+        console.log(`  ${entry.why}\n`)
+        if (entry.human !== undefined) {
+          console.log(
+            `  Needs you — ${entry.human.because}. About ${entry.human.minutes} minutes. ` +
+              `Cost: ${entry.human.cost}\n`,
+          )
+          for (const [i, step] of entry.human.steps.entries()) console.log(`    ${i + 1}. ${step}`)
+        } else if (entry.automatedBy !== undefined) {
+          console.log(`  Automatic. Run:\n\n    ${entry.automatedBy}`)
+        }
+      }
+      console.log('')
+    }
     return
   }
 
