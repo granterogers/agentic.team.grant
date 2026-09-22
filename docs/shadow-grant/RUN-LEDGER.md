@@ -1489,3 +1489,112 @@ Fresh seeds never run before:
 | 27182 | 89% | 95% | 85% | **100%** |
 
 `check:leaks` still fails only on **#298**'s two preserved rows.
+
+---
+
+# 22 September, later still — #302's second half, and v683
+
+## The backstop, with the rows still in charge
+
+The composed sentence made the truth unavoidable; the prompt clause asked
+the writer not to promise. **Three live probes showed neither was enough** —
+*"I have not done this… but I'll create a task that flags the insurance
+renewal"*, against 0 tasks and 0 child jobs. Prompting is advisory.
+
+`src/agents/commitment.ts` is the semantic layer, and it is consulted
+**only** where `mayCommitToFuture` is already false. That gate is what lets
+a short closed-class rule be sufficient: it never has to tell a real plan
+from an invented one, because a promise backed by a child job is never
+shown to it. The six-class suite proves it — *"I'll draft the outline and
+come back with it"* is **refused** under `blocked_needs_user` and
+**allowed** under `pending_approval`. Same sentence, decided by the rows.
+
+Not the blacklist the contract exists to avoid: the SUBJECT and the TENSE
+are closed classes, and the **enumeration is the exemption** rather than
+the detection. A new way to promise is caught by construction; a missing
+non-action verb costs one false positive, visible at once.
+
+**26 negative controls against 11 positives**, written from the six
+categories BEFORE the live reproductions were looked at again — those are
+in a separate block, labelled confirmation rather than specification.
+
+## Three defects the controls found in the detector itself
+
+- **`"as well"` parsed as `we'll`** — `we` + `ll` spans the word.
+- **A trailing *"let me know"* licensed a promise that came before it** —
+  live reproduction 3 exactly. Position decides now: a condition licenses
+  as an antecedent, or from the right through a real subordinator. A
+  semicolon is not one.
+- **The office's own MANDATED sentence tripped it** — *"say it again in a
+  sentence and I will"* — which would have made the contract
+  unsatisfiable. The *"do X and I'll do Y"* shape is licensed by asking the
+  office's own imperative reader whether the left clause is an instruction
+  to him, not by listing the verbs he might perform.
+
+## The loop is bounded and ends at the truth
+
+One rewrite, then the canonical sentence. A model asked to stop promising
+will promise something else, so the terminal state is **composed from rows
+rather than generated**. Proved against a rewriter that is adversarial by
+construction, and against ones that throw or return nothing.
+
+And the invariant holds **unconditionally**. A completed turn owes no
+sentence, so the first draft kept its trailing promise — the six-class
+suite caught that. The offending sentences are **removed** instead:
+deletion, not paraphrase, since the detector already names them exactly.
+The true report of real work survives, and `app.cannot` records the case
+so it stays countable.
+
+## Live, against v683
+
+Reconciled immediately before deploying (`merge-base --is-ancestor`, live
+version read), and the running version **verified after**: v681 → **v683**.
+
+| probe | reply | rows |
+|---|---|---|
+| insurance renewal (repro 1 & 2 & 3) | *"…I need the designated owner and the target date so I can create a task"* | 0 tasks, 0 children |
+| Match Funding "do what you think is best" | *"…I can't take any step without a precise instruction. Should I draft a scope note, create a task, or…?"* | 0 tasks, 0 children, 0 docs |
+| Kevin (the original) | *"I could not get this done after 4 attempts, and nothing was created. Ask me again and I will retry it."* + a conditional offer | 0 tasks |
+| **fresh** "line up a proofread for the bid before Friday" | asks which document | 3 **children** — so a promise would have been permitted here |
+| **fresh** "chase whoever owns the CRM export" | *"I've got no record of who owns the CRM export. Let me know… and I can point you to the right person."* | 0 tasks, 0 children |
+
+**No unconditional promise in any of them.** The conditional offers
+survive, which is the behaviour the invariant asks for — an ask that cannot
+say what happens next is a dead end.
+
+## Two harness defects are now permanent regressions
+
+`chatFor` and `dedupeKeyFor` are extracted from the door so the property
+can be checked without a database: **two turns of one conversation share a
+chat and must NOT share a key.** Eleven checks covering both directions —
+accidental new-chat creation, and the cross-turn dedupe collision that made
+the door replay turn 1's answer.
+
+## Post-deployment gates
+
+```
+tests 2606 across 160 files · lint · tsc · migrations · secrets ·
+templates · callers                                          all green
+shadow:sabotage     18 detectors (16 -> 18), each shown a defect, each red
+check:provenance    no gap written in the last day
+containment         swept; every counter zero but the reported lesson pile
+shadow:freeze       b98b6cf030e75970 UNCHANGED
+```
+
+Fresh seeds never run before:
+
+| seed | understanding | context | agency | safety |
+|---|---|---|---|---|
+| 8675309 | 89% | 97% | 83% | **100%** |
+| 1123581 | 86% | 92% | 85% | **100%** |
+
+`check:leaks` still fails only on **#298**'s two preserved rows.
+
+## Still open on #302
+
+The deployed office no longer converts a canonical failure into an
+unsupported promise on any known or fresh material tried. What has NOT been
+established is durability across many turns and personas — five live probes
+is five samples of a stochastic system, and the detector's exposure is a
+clause read as `other`, acted on by nobody and planned by nobody. #302
+stays open until a broader multi-turn sweep says otherwise.
