@@ -1450,6 +1450,25 @@ sending to `/dev/null`. It prints page errors and the screens it could not
 capture; suppressing it is how four screens went uncaptured at every width
 without anybody noticing.
 
+### The deploy, and what was verified about it
+
+**https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app** carries the
+overhaul, and so does the shorter
+**https://agentic-team-hq-basecamp.vercel.app** — both aliases point at the
+same deployment.
+
+Verified, not assumed: fifteen files compared by sha256 between each live host
+and the source in `web/studio/` — the page, the chat and call modules, all six
+bc modules, all four stylesheets and the sample recording — all identical on
+both hosts, and the bare domain still redirects to the project home. The first
+reading of the short host 404'd on a file that did not exist in the version it
+had cached; it revalidated within a minute and matched.
+
+As in the previous deploy, the page was NOT rendered in a browser from this
+sandbox: Chromium here does not trust the agent proxy's certificate authority.
+The rendered evidence is the local run over byte-identical files — the gate,
+the nine new suites and 100 captures at four widths.
+
 ---
 ## NEXT ACTION
 
