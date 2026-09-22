@@ -94,6 +94,31 @@ describe('the prohibition on promising exists and is gated on the rows', () => {
     expect(withoutComments).not.toMatch(/pendingActions: pursuing === null \? 0 : 1/)
   })
 
+  /*
+    AND "WAITING ON YOUR WORD" HAS TO BE REACHABLE.
+
+    `awaitingApproval` was hardcoded `false`, so the one branch of
+    `sayWhatHappened` that tells Grant the office is waiting on HIM could
+    never fire — a permission on the contract with nothing able to reach it.
+
+    Measured live on v723: a turn fanned out, one child completed and the
+    other PAUSED with an open blocker asking him to approve the next step,
+    and the conversation told him "I have handed this on and will come back
+    with what comes of it." Each side waiting for the other, and only one of
+    them knowing. Four such blockers are open in real traffic.
+
+    Descendants as well as this job, because the office asking through a
+    specialist is still the office asking.
+  */
+  it('knows when it is waiting on him, including through a child', () => {
+    expect(withoutComments).toMatch(/awaitingApproval: Number\(counted\?\.asking \?\? 0\) > 0/)
+    expect(withoutComments).toMatch(/b\.state = 'open'/)
+    expect(withoutComments).toMatch(
+      /c\.parent_job_id = \$\{lit\(job\.jobId\)\}::uuid\)\)\) as asking/,
+    )
+    expect(withoutComments).not.toMatch(/awaitingApproval: false/)
+  })
+
   it('reads whether he asked from the mood, not from the count', () => {
     expect(withoutComments).toMatch(/asked:\s*askedForWork/)
     expect(withoutComments).toMatch(

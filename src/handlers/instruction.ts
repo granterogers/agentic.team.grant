@@ -3545,8 +3545,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                + (select count(*) from public.documents d
                    where d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
                  (select count(*) from public.jobs c
-                   where c.parent_job_id = ${lit(job.jobId)}::uuid) as kids`)
-        .then((r) => r.rows[0] as { n?: number; kids?: number } | undefined)
+                   where c.parent_job_id = ${lit(job.jobId)}::uuid) as kids,
+                 (select count(*) from public.blockers b
+                   where b.state = 'open'
+                     and (b.job_id = ${lit(job.jobId)}::uuid
+                          or b.job_id in (select c.job_id from public.jobs c
+                                           where c.parent_job_id = ${lit(job.jobId)}::uuid))) as asking`)
+        .then((r) => r.rows[0] as { n?: number; kids?: number; asking?: number } | undefined)
         .catch(() => undefined)
       const landedRows = counted === undefined ? acted : Number(counted.n ?? 0)
       /*
@@ -3596,7 +3601,25 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         // The only thing that licenses a commitment to the future, and the
         // office's one way of making one here is to hand work on.
         pendingActions: pendingChildren,
-        awaitingApproval: false,
+        /*
+          WAITING ON HIM, INCLUDING WHEN A CHILD IS THE ONE WAITING.
+
+          This was hardcoded `false`, so the one branch of `sayWhatHappened`
+          that says "it is waiting on your word" could never fire — a
+          permission on the contract with nothing able to reach it, which is
+          the defaulted-parameter defect this repository records four times.
+
+          And the blocker is usually not on THIS job. Measured live on v723:
+          a turn fanned out, one child completed and the other PAUSED with an
+          open blocker asking Grant to approve the next step — and the
+          conversation told him "I have handed this on and will come back
+          with what comes of it." Each side waiting for the other, and only
+          one of them knows.
+
+          Descendants as well as this job, because the office asking through
+          a specialist is still the office asking.
+        */
+        awaitingApproval: Number(counted?.asking ?? 0) > 0,
         /*
           Named only where it is KNOWN. Claiming to know what is missing when
           we do not is the same defect as claiming to have done the work, so

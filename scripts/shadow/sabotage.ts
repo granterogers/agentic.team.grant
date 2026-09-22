@@ -285,6 +285,15 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'waiting-on-him-is-reachable',
+    proves: 'the office can tell Grant it is waiting on HIM, including through a child',
+    file: 'src/handlers/instruction.ts',
+    anchor: '        awaitingApproval: Number(counted?.asking ?? 0) > 0,',
+    replacement: '        awaitingApproval: false,',
+    check: 'tests/handlers/promise-needs-pending-work.test.ts',
+  },
+
+  {
     name: 'pending-work-is-counted-from-rows',
     proves: 'the contract sees a child job whoever enqueued it',
     file: 'src/handlers/instruction.ts',
