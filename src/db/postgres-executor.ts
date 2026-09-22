@@ -31,6 +31,24 @@
  * BEGIN/COMMIT controls its own boundaries. Both shapes get the contract they
  * were written against, and neither needs the caller to know which it is.
  *
+ * ## One session per call, like an HTTP request
+ *
+ * Each `execute` opens its own connection and closes it. That is not an
+ * oversight about connection reuse — it is the behaviour being matched.
+ * `ManagementApiExecutor` sends one HTTPS request per migration and each
+ * request gets a fresh backend, so anything session-scoped dies between
+ * migrations.
+ *
+ * Holding one session instead makes the harness DISAGREE with the transport it
+ * stands in for, and it disagrees silently until it does not: 0128 and 0137
+ * both `create temporary table _dq_probe`, a temp table lives for the session,
+ * and over a reused connection 0137 died with `42P07: relation "_dq_probe"
+ * already exists` — a failure that says "the product is broken" about a product
+ * that is fine, 84 migrations after the one that actually planted it.
+ *
+ * CLAUDE.md's rule is the general form: a verification pointed at something
+ * other than what the user reaches passes, or fails, for the wrong reason.
+ *
  * ## What it refuses
  *
  * A connection string naming anything but a local host, unless the caller says
@@ -66,7 +84,6 @@ export interface PostgresExecutorOptions {
 
 export class PostgresExecutor implements SqlExecutor {
   readonly kind = 'postgres'
-  private client: Client | null = null
 
   constructor(
     private readonly connectionString: string,
@@ -86,17 +103,9 @@ export class PostgresExecutor implements SqlExecutor {
     }
   }
 
-  private async connected(): Promise<Client> {
-    if (this.client === null) {
-      const client = new Client({ connectionString: this.connectionString })
-      await client.connect()
-      this.client = client
-    }
-    return this.client
-  }
-
   async execute(sql: string): Promise<SqlResult> {
-    const client = await this.connected()
+    const client = new Client({ connectionString: this.connectionString })
+    await client.connect()
     try {
       // One simple query. See the header for why this is not wrapped.
       const result = await client.query(sql)
@@ -114,7 +123,19 @@ export class PostgresExecutor implements SqlExecutor {
       return { rows: (last?.rows ?? []) as Record<string, unknown>[] }
     } catch (error) {
       /*
-        Leave the session usable.
+        Roll back before the connection is discarded.
+
+        This looks redundant now that every call owns its connection, and it is
+        not: `client.end()` on a session sitting inside an open transaction
+        leaves the server to notice the disconnect and abort it, and until it
+        does the locks that transaction holds are still held. Rolling back first
+        makes the release immediate and deterministic, which matters when 533
+        migrations run back to back.
+
+        The original reason is worth keeping written down. When this executor
+        reused one session, a failed `begin;` migration left it aborted, every
+        later statement returned 25P02, and the harness reported that from
+        `ledgerExists` -- naming neither the migration that broke nor why.
 
         343 of the 533 migrations open with their own `begin;`. When one of
         those fails partway, Postgres does not end the transaction — it puts the
@@ -149,13 +170,16 @@ export class PostgresExecutor implements SqlExecutor {
           ? String((error as { code: unknown }).code)
           : null
       throw new SqlExecutionError(code === null ? message : `${code}: ${message}`, null)
+    } finally {
+      await client.end().catch(() => undefined)
     }
   }
 
+  /**
+   * Nothing to close — each call owns its connection. Kept so callers written
+   * against a pooled executor need no special case.
+   */
   async close(): Promise<void> {
-    if (this.client !== null) {
-      await this.client.end()
-      this.client = null
-    }
+    return
   }
 }

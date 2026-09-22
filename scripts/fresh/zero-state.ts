@@ -43,10 +43,14 @@ import {
 
 const MIGRATIONS_DIR = 'migrations'
 const SHIM = 'scripts/fresh/sql/supabase-shim.sql'
+const PRECONDITIONS = 'scripts/fresh/sql/preconditions'
 const STUBS = 'scripts/fresh/sql/stub-extensions'
 
 const keep = process.argv.includes('--keep')
 const resume = process.argv.includes('--resume')
+// Replaying the historical corpus needs the state Grant's database already had.
+// Only the baseline build asks for this; a fresh-install proof must not.
+const preconditions = process.argv.includes('--preconditions')
 const stopAfterArg = process.argv.find((a) => a.startsWith('--stop-after='))
 const stopAfter = stopAfterArg === undefined ? null : (stopAfterArg.split('=')[1] ?? null)
 
@@ -114,7 +118,10 @@ async function main(): Promise<void> {
     asSuperuser(`dropdb --if-exists ${db}`)
     asSuperuser(`createdb ${db} --owner=${HARNESS_ROLE}`)
     asSuperuser(`psql -q -v ON_ERROR_STOP=1 -d ${db} -f ${process.cwd()}/${SHIM}`)
-    console.log('blank database created and the Supabase shim applied')
+    console.log(
+      `blank database created and the Supabase shim applied` +
+        (preconditions ? ' (+ historical preconditions)' : ''),
+    )
   } else {
     console.log('resuming against the existing database — nothing dropped')
   }
@@ -136,6 +143,32 @@ async function main(): Promise<void> {
     console.log(`stopping after ${last === undefined ? stopAfter : last.name}`)
   }
 
+  /*
+    Preconditions are STAGED.
+
+    A precondition is a statement about the database at a moment in its history,
+    not a fixture loaded up front: the scaffold project 0167 needs cannot be
+    inserted before 0002 has created the table to put it in. So each file is
+    named for the migration it precedes, and the corpus is applied in segments
+    that stop at each of those points.
+
+    The runner's own idempotency is what makes this safe to express as repeated
+    calls: a migration already recorded in `app.schema_migrations` is skipped,
+    so a segment ending at 0167 followed by a segment of everything applies each
+    file exactly once.
+  */
+  const stages: { before: string; sql: string }[] = []
+  if (preconditions) {
+    for (const name of (await readdir(PRECONDITIONS)).sort()) {
+      const matched = /^before-(\d{4})\.sql$/.exec(name)
+      if (matched?.[1] === undefined) continue
+      stages.push({
+        before: matched[1],
+        sql: await readFile(join(PRECONDITIONS, name), 'utf8'),
+      })
+    }
+  }
+
   const executor = new PostgresExecutor(url)
   const started = Date.now()
   let applied = 0
@@ -143,10 +176,16 @@ async function main(): Promise<void> {
   let failure: string | null = null
 
   try {
+    for (const stage of stages) {
+      const upto = files.filter((f) => f.name < stage.before)
+      if (upto.length > 0) applied += (await runMigrations(upto, executor, sha256, () => {})).applied.length
+      await executor.execute(stage.sql)
+      console.log(`precondition applied before ${stage.before}`)
+    }
     const result = await runMigrations(files, executor, sha256, () => {})
-    applied = result.applied.length
+    applied += result.applied.length
     console.log(
-      `\napplied ${result.applied.length}, skipped ${result.skipped.length} ` +
+      `\napplied ${applied}, skipped ${result.skipped.length} ` +
         `in ${((Date.now() - started) / 1000).toFixed(1)}s`,
     )
   } catch (error) {

@@ -73,3 +73,82 @@ data, in a corpus that is also the only installer a new user has.**
 and CLAUDE.md: *"An applied migration is immutable and `check:migrations`
 enforces it"*). Editing 0054 would break Grant's production ledger and the
 integrity check. **The fix must be forward-only.**
+
+---
+
+## F-002 — Nine migrations assert the CONTENTS of Grant's database, not its schema
+
+**Status:** OPEN · **Journey:** C, J · **Severity:** blocks zero-state; cannot be fixed in place
+
+### Evidence
+
+Replaying the corpus into a blank database, each failure fixed in turn, the run
+stopped nine times at a migration that required Grant's operational data:
+
+| Migration | What it requires of the DATA | Reached |
+|---|---|---|
+| `0054` | Grant's seven Telegram bots, and a stored token for the chief's | 53/533 |
+| `0167` | a project named **"Legacy Coaching Course"**, holding material | 166 |
+| `0169` | a Notion mirror to adopt — *"nothing was adopted as a mirror"* | 168 |
+| `0489` | any job at all, to attribute a proposal to | 488 |
+| `0490` | a job that is **not** harness traffic, as the control | 489 |
+| `0498` | at least one `slide_deck` **and** one `mind_map` artifact | 497 |
+| `0516` | that no other personal task was created in the last hour (see F-003) | 515 |
+| `0523` | that Grant's real chat `1386648496` has **received real deliveries** | 522 |
+| `0524` | **at least 100** harness deliveries that escaped before the guard existed | 523 |
+
+With all nine scaffolded: **533/533 applied, 14.6s.** Reproduce with
+`npm run fresh:zero-state -- --preconditions`.
+
+### The finding, stated precisely
+
+These are not careless migrations. Every one of the assertions is defensible —
+several are exemplary, and `0523`'s is the best of them: it refuses to decide
+whether a destination is real by checking an identity, and asks the delivery
+rows instead. `0167`'s comment says why it exists: *"a function that returns
+valid JSON with nothing in it looks identical to a working one from every angle
+except his."*
+
+The defect is not in any migration. It is that **`migrations/` is simultaneously
+two things**: the append-only record of how Grant's database became what it is,
+and the only installer a new user has. As a record it is excellent. As an
+installer it cannot work, because nine of its steps assert facts that only
+accrue by running the system for months. `0524` is the proof of that in one
+line: no credential, account or configuration produces a hundred historical
+mistakes.
+
+### Why the fix cannot be in `migrations/`
+
+Applied migrations are immutable and checksum-enforced. Every repair must be
+forward-only, and a forward-only migration cannot help a run that dies at 0054.
+
+### The fix
+
+Separate the two roles. `migrations/` stays exactly as it is. A fresh install
+gets a **baseline**: the schema as it stands after all 533, captured as
+structure with no data, applied in one step and recorded as all 533 applied. See
+F-004 and `npm run fresh:baseline`.
+
+---
+
+## F-003 — A migration control that depends on time passing fails in any replay
+
+**Status:** FIXED (in the harness) · **Journey:** C · **Severity:** low, but it will recur
+
+`0516`'s control asserts a task from two hours ago is not what *"that"* means. It
+deletes its own probes, back-dates one, and requires `app.my_task_recent()` to
+answer null. On Grant's database every other personal task was days old. In a
+replay the whole corpus applies in minutes, so a task created by an earlier
+migration is seconds old and legitimately IS the most recent — and the control
+fails naming a task about a function that works:
+
+```
+CONTROL FAILED: a task from two hours ago answered "that"
+  — Reconnect google_calendar — oauth_client
+```
+
+A user who applied the migrations one at a time over months would never see
+this; one who applies them in an afternoon always would. The harness restores
+the elapsed time rather than deleting the awkward rows — deleting would also
+pass, and would be the harness quietly removing the evidence against its own
+assertion.
