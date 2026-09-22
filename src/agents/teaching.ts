@@ -35,6 +35,8 @@
  * bar for a skill in particular is a message that actually contains a sequence.
  */
 
+import { withdrawsARule } from './preference.ts'
+
 /** A standing preference. Short by construction — see ADR-0015. */
 export interface LessonTaught {
   readonly kind: 'lesson'
@@ -274,10 +276,29 @@ export function readTeaching(instruction: string, alreadyAPreference = false): T
     "from now on" and "just this once" has contradicted themselves, and the
     explicit marker is the one to believe.
   */
-  if (standing || asked || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
+  /*
+    TAKING A RULE BACK IS ALSO ABOUT STANDING RULES (#310).
+
+    "do not use bullets anymore", "forget what I said about bullets", "no
+    longer put links in the replies" — none of these carries a STANDING
+    marker, so none reached this branch and none could be acted on. The
+    office would accept a preference and had no way to be told to stop, which
+    is half a lifecycle: measured live on v705, a withdrawal was answered with
+    a paragraph asking Grant to confirm what he had just said.
+
+    `withdrawsARule` is the test rather than a word added to STANDING,
+    because it is far stricter than any single word can be: it requires a
+    withdrawal operator AND a dimension the office can actually aim at, so
+    "I cannot do that anymore" claims nothing. The branch below then reads it
+    as the lesson-shaped thing it is, and `remember()` decides it retires a
+    rule rather than stating one.
+  */
+  const takingItBack = withdrawsARule(text) !== null
+
+  if (standing || asked || takingItBack || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
     const body = firstSentence(text)
     if (body.length < 8 || body.length > 280) return null
-    return { kind: 'lesson', body, marked: standing || asked }
+    return { kind: 'lesson', body, marked: standing || asked || takingItBack }
   }
 
   return null

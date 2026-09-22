@@ -28,6 +28,7 @@ import {
   restates,
   withdrawsARule,
 } from '../../src/agents/preference.ts'
+import { readTeaching } from '../../src/agents/teaching.ts'
 
 describe('two rules about one thing are recognised as being about it', () => {
   const cases: [string, Dimension][] = [
@@ -145,4 +146,42 @@ describe('a rule that says how long it lasts', () => {
       expect(boundToThisConversation(said)).toBe(false)
     }
   })
+})
+
+describe('a withdrawal reaches the lifecycle at all', () => {
+  /*
+    The recognition stage, which was the half that only a live run found.
+
+    None of these carries a STANDING marker, so `readTeaching` returned null
+    and the withdrawal never reached `remember()` — the office could be given
+    a preference and had no way to be told to stop. Measured on v705:
+    "do not put screenshots in anymore" was answered with a paragraph asking
+    Grant to confirm the thing he had just said.
+
+    `withdrawsARule` is the test rather than a word added to the standing
+    markers, because it needs both a withdrawal operator AND a dimension the
+    office can aim at — which is why "I cannot do that anymore" is still not
+    a teaching.
+  */
+  for (const said of [
+    'do not put screenshots in anymore',
+    'do not use bullets anymore',
+    'forget what I said about bullets',
+    'no longer put links in the replies',
+  ]) {
+    it(`reads "${said}" as something to act on`, () => {
+      expect(readTeaching(said)).not.toBeNull()
+      expect(readTeaching(said)?.kind).toBe('lesson')
+    })
+  }
+
+  for (const said of [
+    'I cannot do that anymore',
+    'send me the report',
+    'the funding officer does not reply anymore',
+  ]) {
+    it(`does not read "${said}" as one`, () => {
+      expect(readTeaching(said)).toBeNull()
+    })
+  }
 })
