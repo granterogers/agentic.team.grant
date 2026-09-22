@@ -197,6 +197,44 @@ const SABOTAGES: readonly Sabotage[] = [
     replacement: '    if (false) continue',
     check: 'tests/agents/retraction.test.ts',
   },
+
+  /*
+    #302's contract, sabotaged at BOTH ends of the relationship it exists to
+    hold: the classification and the sentence it owes.
+
+    These two are the reason the fix is not a seventh phrase detector. The
+    first proves the office cannot claim work is coming when nothing is
+    coming; the second proves it cannot go quiet about work that did not
+    happen. Break either and the defect #302 describes is back.
+  */
+  {
+    name: 'outcome-promise-needs-pending-work',
+    proves: 'a commitment to the future is permitted only where a canonical pending action exists',
+    file: 'src/agents/outcome.ts',
+    anchor: '  mayCommitToFuture: c.pendingActions > 0 || c.awaitingApproval,',
+    replacement: '  mayCommitToFuture: true,',
+    check: 'tests/agents/outcome-contract.test.ts',
+  },
+  {
+    name: 'outcome-owes-a-sentence',
+    proves: 'a turn that did not do what was asked says so, from the rows rather than the prose',
+    file: 'src/agents/outcome.ts',
+    /*
+      Anchored on the SENTENCE, not on the case label.
+
+      The first version replaced the label with the label plus a return, so
+      the replacement contained the anchor and the suite's landing test -
+      "the replacement is present AND the anchor is gone" - could never be
+      satisfied. It reported INCONCLUSIVE, correctly, rather than crediting a
+      sabotage that had not applied. A sabotage that did not land is not a
+      passing control, and this is the sixth time that rule has earned its
+      place.
+    */
+    anchor:
+      "'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.'",
+    replacement: "'(no sentence)'",
+    check: 'tests/agents/outcome-contract.test.ts',
+  },
 ]
 
 const only = ((): string => {

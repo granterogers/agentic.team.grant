@@ -1,0 +1,314 @@
+/**
+ * What actually happened, as a CLASS, and what the answer is then allowed to
+ * say about it — #302.
+ *
+ * ## The defect
+ *
+ * Understanding improved faster than acting. The office now reads messages it
+ * used to discard, the acting path did not widen with it, and when it
+ * understands an instruction it cannot carry out it does one of two things,
+ * neither of which is asking:
+ *
+ *     "stick something down so I do not forget to ring Kevin about the quote"
+ *       -> read as an assignment, extractor returned nothing, nothing filed,
+ *          model wrote "Task added", the gate refused it four times, and
+ *          Grant received an EMPTY REPLY.
+ *
+ *     "on simgrant Match Funding Bid do what you think is best and let me know"
+ *       -> refused once for claiming, and the retry came back with
+ *          "I'll draft a high-level outline... create a task... add a Notion
+ *          note..." - three things, none of which exists, which PASSED.
+ *
+ * The second is reached FROM the first. The refusal is written into
+ * `pinned_config` so the retry can see it, the retry reads *"do not report it
+ * as done"*, and switches from the past tense to the future. **The closed loop
+ * teaches the model to promise instead of claim.**
+ *
+ * ## Why this is not another detector
+ *
+ * Every existing gate keys on a CLAIM: `claimsToHaveRead` needs "I checked",
+ * `claimsToHaveSent` needs "I posted", `claimsToHaveMade` needs a past-tense
+ * creation. Each is a list of ways of saying a thing, and a list is always
+ * missing the next one — this repository records that correction six times,
+ * and the future tense is simply the shape no list had.
+ *
+ * Adding "I'll", "I will", "I am going to" would be the seventh instance of
+ * the same mistake, and it would be worse than the previous six because the
+ * future tense is also how a LEGITIMATE plan is expressed. A gate that cannot
+ * tell "I'll draft it" backed by a child job from "I'll draft it" backed by
+ * nothing has to refuse both or allow both.
+ *
+ * So the question is inverted. Not *"does this sentence claim something?"* but
+ * *"what is the canonical outcome, and what is an answer for that outcome
+ * permitted to say?"* The permission is computed from rows. The wording is
+ * never consulted.
+ *
+ * ## The invariant
+ *
+ * IF THE REQUEST IS UNDERSTOOD BUT CANNOT BE COMPLETED, THE FINAL RESPONSE
+ * MUST ACCURATELY REPRESENT THE CANONICAL OUTCOME AND, WHERE USEFUL, ASK FOR
+ * THE MINIMUM INFORMATION OR APPROVAL NEEDED TO CONTINUE.
+ *
+ * The one rule everything else falls out of: **a commitment to the future is
+ * permitted only where a canonical pending action exists.** A child job, a job
+ * paused for approval, a blocker carrying what answering it performs — those
+ * are things that will actually happen. Without one, "I'll add the task" is
+ * the same lie as "Task added" in a tense the old gate could not see.
+ *
+ * ## Deliberately pure
+ *
+ * No database, no clock, no model. Everything here is a function of counts the
+ * caller has already established, so the classes can be driven exhaustively in
+ * a unit test and so `verify:outcome` can prove each one against real rows
+ * without this file being able to cheat.
+ */
+
+/**
+ * The six outcomes a turn can end in.
+ *
+ * A closed set, and closed on purpose: `REQUIRES` below is typed against it,
+ * so a seventh class cannot be added without the compiler demanding its
+ * contract. CLAUDE.md records what an unforced enumeration costs — a
+ * `REQUIRES` map typed this way is what caught `delivery` missing from the
+ * effect classes.
+ */
+export type OutcomeClass =
+  /** Everything that was wanted exists. A question answered is also this. */
+  | 'completed'
+  /** Some of it exists and some does not, and the answer must say which. */
+  | 'partially_completed'
+  /** Understood, not done, and there is something specific to ask him for. */
+  | 'blocked_needs_user'
+  /** Understood, not done, and nothing he could say would change that. */
+  | 'blocked_capability'
+  /** Not done YET, and a canonical pending action is waiting on his word. */
+  | 'pending_approval'
+  /** Attempts are spent and nothing landed. */
+  | 'failed_after_retries'
+
+/**
+ * What the caller has established from canonical state.
+ *
+ * Every field is a count or a list of rows, never a reading of the answer.
+ * That is the whole design: a field derived from the prose would make this
+ * unable to fail for the only reason it exists.
+ */
+export interface CanonicalOutcome {
+  /**
+   * How many distinct things this turn set out to do.
+   *
+   * Zero for a question, an acknowledgement or a preference — and zero is not
+   * a failure, it is the commonest correct answer in the corpus.
+   */
+  readonly wanted: number
+  /**
+   * How many of them CANONICALLY EXIST.
+   *
+   * Counted from rows the turn produced, never from what the handler decided
+   * to attempt. `acted` in `OutputMetadata` counts the latter, which is why it
+   * cannot see a `my_task_add` that was called and refused.
+   */
+  readonly landed: number
+  /**
+   * Work that is really going to happen: child jobs enqueued, and a job paused
+   * with something waiting on it.
+   *
+   * This is the ONLY thing that licenses a commitment to the future, and it is
+   * the whole reason the field exists.
+   */
+  readonly pendingActions: number
+  /** A blocker was raised that is waiting on Grant to answer it. */
+  readonly awaitingApproval: boolean
+  /**
+   * What the turn could not resolve, named in words he could act on — "which
+   * project", "a title for it".
+   *
+   * Non-empty is what separates `blocked_needs_user` from
+   * `blocked_capability`: the first has a question worth asking and the second
+   * does not. Forcing the caller to NAME the gap is the point — "I could not
+   * do it" is not an answer he can do anything with.
+   */
+  readonly missing: readonly string[]
+  /** The office declined because the capability does not exist or is refused. */
+  readonly capabilityRefused: boolean
+  /** Which attempt this is, and how many it gets. */
+  readonly attempt: number
+  readonly maxAttempts: number
+}
+
+/**
+ * Classify, from rows alone.
+ *
+ * Order matters and is argued rather than incidental:
+ *
+ *   1. **Spent attempts first.** A job out of attempts with nothing to show is
+ *      `failed_after_retries` whatever else is true of it, because that is the
+ *      state Grant is actually in — waiting, with nothing coming.
+ *   2. **Approval before blocked.** A job paused for approval is not blocked
+ *      on information; it is blocked on a decision, and those need different
+ *      sentences and different next actions.
+ *   3. **Capability before information.** If the office cannot do a thing at
+ *      all, asking him which project is a waste of his time.
+ *   4. Then the arithmetic.
+ */
+export const classifyOutcome = (c: CanonicalOutcome): OutcomeClass => {
+  const outOfAttempts = c.attempt >= c.maxAttempts
+  if (outOfAttempts && c.landed === 0 && c.wanted > 0 && c.pendingActions === 0) {
+    return 'failed_after_retries'
+  }
+  if (c.awaitingApproval || (c.pendingActions > 0 && c.landed === 0 && c.wanted > 0)) {
+    return 'pending_approval'
+  }
+  if (c.capabilityRefused) return 'blocked_capability'
+  /*
+    Nothing was wanted, so nothing missing can make this incomplete.
+
+    A question, an acknowledgement and a stated preference all arrive here,
+    and all three are COMPLETE with zero effects. Reading them as blocked was
+    the first draft's mistake and it would have put "I could not do that" on
+    the end of every "thanks".
+  */
+  if (c.wanted === 0) return 'completed'
+  /*
+    Nothing landed, and we have NOT established that it cannot be done.
+
+    The first draft fell back to `blocked_capability` here, which asserts an
+    incapability nobody proved: "it is not something I can do" would have
+    been a fresh fabrication in the sentence written to stop fabrications.
+    Only an explicit `capabilityRefused` — checked above — licenses that
+    claim.
+
+    So an unexplained miss is `blocked_needs_user` with a generic ask. The
+    honest position is that the office understood, did nothing, and does not
+    know why; the useful next action is to have him say it again plainly.
+  */
+  if (c.landed === 0) return 'blocked_needs_user'
+  if (c.landed < c.wanted) return 'partially_completed'
+  return 'completed'
+}
+
+/**
+ * What an answer for this outcome may and may not do.
+ *
+ * Permissions, not wording. Nothing here inspects a sentence, and nothing here
+ * can be satisfied by phrasing something differently — which is the property
+ * that makes this survive the next way somebody finds to say "I did it".
+ */
+export interface NarrationContract {
+  /** The answer may report the work as done. */
+  readonly mayClaimCompletion: boolean
+  /**
+   * The answer may commit to doing something after this turn.
+   *
+   * **The rule #302 turns on.** True only where a canonical pending action
+   * exists, so "I'll draft the outline" is permitted exactly when something is
+   * really going to draft it.
+   */
+  readonly mayCommitToFuture: boolean
+  /** The answer must distinguish what happened from what did not. */
+  readonly mustNameWhatDidNotHappen: boolean
+  /** The answer must ask for something — information, or a decision. */
+  readonly mustAsk: boolean
+}
+
+/**
+ * The contract for each class.
+ *
+ * A `Record` over the closed union, so the compiler refuses a new class
+ * without one. `mayCommitToFuture` is computed from the outcome rather than
+ * fixed per class, because the same class can arrive with or without a pending
+ * action and the permission belongs to the STATE, not to the label.
+ */
+const BASE: Record<OutcomeClass, Omit<NarrationContract, 'mayCommitToFuture'>> = {
+  completed: { mayClaimCompletion: true, mustNameWhatDidNotHappen: false, mustAsk: false },
+  partially_completed: {
+    mayClaimCompletion: false,
+    mustNameWhatDidNotHappen: true,
+    mustAsk: false,
+  },
+  blocked_needs_user: { mayClaimCompletion: false, mustNameWhatDidNotHappen: true, mustAsk: true },
+  blocked_capability: { mayClaimCompletion: false, mustNameWhatDidNotHappen: true, mustAsk: false },
+  pending_approval: { mayClaimCompletion: false, mustNameWhatDidNotHappen: false, mustAsk: true },
+  failed_after_retries: {
+    mayClaimCompletion: false,
+    mustNameWhatDidNotHappen: true,
+    mustAsk: false,
+  },
+}
+
+export const contractFor = (c: CanonicalOutcome): NarrationContract => ({
+  ...BASE[classifyOutcome(c)],
+  mayCommitToFuture: c.pendingActions > 0 || c.awaitingApproval,
+})
+
+/**
+ * The sentence the office is REQUIRED to say, composed from the rows.
+ *
+ * Composed rather than policed, which is the difference between this and every
+ * gate that came before it. `act()` already proves the shape works — *"Happy
+ * to, but this one is not attached to a project, so I have nowhere to put it.
+ * Tell me which project and it is done."* is code-composed, always true, and
+ * has never needed a detector.
+ *
+ * Null where the class needs no clause: a completed turn says what it did in
+ * the ordinary way, and bolting a state sentence onto it would give Grant a
+ * status report on every "thanks".
+ *
+ * The wording names the gap rather than the mechanism. "I have not added
+ * anything" is a fact about his world; "the extractor returned null" is a fact
+ * about ours, and #242's lesson is that an internal reference in a sentence a
+ * person reads is a defect.
+ */
+export const sayWhatHappened = (c: CanonicalOutcome): string | null => {
+  const cls = classifyOutcome(c)
+  const list = (xs: readonly string[]): string =>
+    xs.length <= 1
+      ? (xs[0] ?? '')
+      : `${xs.slice(0, -1).join(', ')} and ${String(xs[xs.length - 1] ?? '')}`
+
+  switch (cls) {
+    case 'completed':
+      return null
+    case 'partially_completed':
+      return `That is partly done — ${String(c.landed)} of ${String(c.wanted)}. ${
+        c.missing.length > 0
+          ? `For the rest I need ${list(c.missing)}.`
+          : 'The rest did not go through.'
+      }`
+    case 'blocked_needs_user':
+      /*
+        The generic ask is not a worse sentence than a named one — it is the
+        true one when nothing is named. Claiming to know what is missing when
+        we do not is the same defect as claiming to have done the work.
+      */
+      return c.missing.length === 0
+        ? 'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.'
+        : `I have not done this yet — I need ${list(c.missing)}.`
+    case 'blocked_capability':
+      return 'I have not done this, and it is not something I can do — so there is nothing to wait for.'
+    case 'pending_approval':
+      return 'Nothing has changed yet. It is waiting on your word.'
+    case 'failed_after_retries':
+      return `I could not get this done after ${String(c.attempt)} attempts, and nothing was created. ${
+        c.missing.length > 0
+          ? `It may go through if I have ${list(c.missing)}.`
+          : 'Ask me again and I will retry it.'
+      }`
+  }
+}
+
+/**
+ * The classes in which a turn owes Grant a sentence it cannot get from the
+ * model.
+ *
+ * Exported so the handler and the tests read the same list rather than two
+ * copies of it — CLAUDE.md records a row list built twice as a list that will
+ * disagree.
+ */
+export const OWES_A_SENTENCE: readonly OutcomeClass[] = [
+  'partially_completed',
+  'blocked_needs_user',
+  'blocked_capability',
+  'pending_approval',
+  'failed_after_retries',
+]

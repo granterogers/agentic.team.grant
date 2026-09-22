@@ -99,6 +99,8 @@ import { classifyIntent } from '../agents/intent.ts'
 import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../agents/links.ts'
 import { personalTaskChange, personalTaskRequest } from '../agents/mine.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
+import type { CanonicalOutcome } from '../agents/outcome.ts'
+import { sayWhatHappened } from '../agents/outcome.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import { performable } from '../agents/perform.ts'
 import {
@@ -2518,6 +2520,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         adds himself and the office still answers; a false positive costs him
         the WORK.
       */
+      /*
+        The readings that are UNAMBIGUOUSLY a request for work — #302's
+        `wanted` count, and deliberately not `MAY_ACT` below. See the comment
+        beside `wantedWork`.
+      */
+      const WANTED_DOING: ReadonlySet<ReadingKind> = new Set([
+        'task_create',
+        'task_change',
+        'delegate',
+      ])
       const MAY_ACT: ReadonlySet<ReadingKind> = new Set([
         'task_create',
         'task_change',
@@ -4410,7 +4422,76 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const offered = correction === null ? null : await offerRule(deps.db, correction, job)
       const answer0b = confirmation === null ? answer0 : `${confirmation}\n\n${answer0}`
-      const answer = offered === null ? answer0b : `${answer0b}\n\n${offered}`
+      const answer1 = offered === null ? answer0b : `${answer0b}\n\n${offered}`
+
+      /*
+        And the one sentence the model is not allowed to write - #302.
+
+        The defect: understanding improved faster than acting, so the office
+        now reads instructions it cannot carry out. Asked to "stick something
+        down so I do not forget to ring Kevin", it read an assignment, filed
+        nothing, wrote "Task added", was refused four times by the coherence
+        gate and Grant received an EMPTY REPLY. Asked to "do what you think is
+        best", it was refused once and the retry came back with "I'll draft an
+        outline... create a task... add a Notion note" - three things, none of
+        which exists, which PASSED because the future tense is a shape no
+        detector had.
+
+        The second is reached FROM the first: the refusal goes into
+        `pinned_config` so the retry can see it, the retry reads "do not
+        report it as done", and switches tense. The closed loop teaches the
+        model to promise instead of claim.
+
+        So this is not a seventh detector. `outcome.ts` classifies what
+        CANONICALLY happened - from counts, never from the prose - and
+        composes the sentence that class owes him. Prepended rather than
+        appended, because the state is the headline and the model's prose is
+        the detail: a person reading "I have not done this yet - I need which
+        project this is for" cannot be misled by an "I'll get on it" further
+        down, whereas the same two sentences the other way round read as a
+        promise with a caveat.
+
+        `act()` already proves the shape works. *"Happy to, but this one is not
+        attached to a project, so I have nowhere to put it. Tell me which
+        project and it is done."* is code-composed, always true, and has never
+        needed a detector - because a composed sentence cannot be phrased
+        around.
+      */
+      /*
+        Counted from the EXPLICIT action readings only, never from `MAY_ACT`.
+
+        `MAY_ACT` includes `other` as a catch-all, and it is permissive on
+        purpose: it gates what may reach a writer, where "the worst this
+        filter can do is decline to act, which is the cheap direction". For
+        NARRATION the asymmetry is reversed - a turn counted as wanting work
+        when it was only a remark gets "I have not done this" bolted onto an
+        ordinary answer, which is the check-that-fires-on-good-behaviour
+        failure this repository records twice.
+
+        So the two lists are deliberately different, and this one is the
+        strict half.
+      */
+      const wantedWork = understood.surviving.filter((r) => WANTED_DOING.has(r.kind)).length
+
+      const outcome: CanonicalOutcome = {
+        wanted: wantedWork,
+        landed: acted,
+        // The only thing that licenses a commitment to the future, and the
+        // office's one way of making one here is to hand work on.
+        pendingActions: pursuing === null ? 0 : 1,
+        awaitingApproval: false,
+        /*
+          Named only where it is KNOWN. Claiming to know what is missing when
+          we do not is the same defect as claiming to have done the work, so
+          the generic ask is the honest sentence rather than a worse one.
+        */
+        missing: job.projectId === null && wantedWork > 0 ? ['which project this is for'] : [],
+        capabilityRefused: false,
+        attempt: job.attempt,
+        maxAttempts: 4,
+      }
+      const outcomeLine = sayWhatHappened(outcome)
+      const answer = outcomeLine === null ? answer1 : `${outcomeLine}\n\n${answer1}`
 
       /*
         The context, tagged. Assembled from the same values that went into the
