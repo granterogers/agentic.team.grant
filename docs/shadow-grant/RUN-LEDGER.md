@@ -2392,3 +2392,99 @@ rename entirely).
 Yes. This one began by refusing a green suite and produced two architectural
 defects, one of which puts rows on Grant's own list that he never asked for.
 That is not an edge case and it is not diminishing returns.
+
+---
+
+# Iteration — #316 and #317: the office stops repeating itself, and says what it is waiting for
+
+## #316 — one live attempt per obligation
+
+**Real traffic, not a harness.** Grant's own Telegram: `Write me a PDF report
+on where the Legacy Coaching…` at 08:05:27 and the identical sentence at
+08:08:37 — two `artifact.report` children, two PDFs into his real project. On
+genuinely delivered real traffic, **57 of 290 message pairs within two hours
+are near-duplicates**, over 113 messages.
+
+The first calibration said 166 of 506 and every top pair was one sentence in a
+chat literally named `verify`, driven through the real voice path so
+`requested_by` is `voice:grant` and `app.harness_job` cannot see it. Seventh
+instance of that class, one step from being reported as Grant's own behaviour.
+
+**The mechanism existed and one line defeated it.**
+`jobs_one_live_per_idempotency_key` is a partial unique index — a
+database-enforced "one live job per obligation", and a unique index cannot be
+raced. `app.enqueue_child` composed its key with `gen_random_uuid()`, so for
+every child it was structurally inert. `enqueue_child_once` keys on the
+obligation and **the insert is the check**.
+
+Three of #316's lifecycle cases fall out of the partial index rather than being
+coded: cancelled, failed and complete each free the key, so **#315's explicit
+restart needs no special case** and the session proves it end to end.
+
+**Five things driving found that reading could not:**
+
+1. The dominant fan-out is the **roster hand-off**, not `office.pursue`. The
+   first fix guarded the rarer path (0558).
+2. A turn found the work **it had just created** and refused to start something
+   nobody had asked for twice (0558).
+3. The decision was made in **two places**, so one turn convened a specialist
+   AND said it had not started anything. Both halves right alone.
+4. Work that had just **completed** was no candidate, so a repeat 54 seconds
+   later duplicated — the real-traffic shape exactly (0559).
+5. A child that finished saying *"I have not done this"* was relayed as a
+   finding AND suppressed the retry (0560). And `get another person to look at
+   that` produced **nothing**, because the sentence names no subject — the
+   offer every suppressing reply makes could not be performed (0561).
+
+## #317 — what did they come back with
+
+```
+Grant : where exactly do they differ?
+office: I don't have any record of the team's actual comments, so I can't
+        point to exact phrasing where they diverge. Generally, the "numbers"
+        view flags the revenue hit (X % lost ARR, churn risk)…
+```
+
+The first clause is true; the second supplies exactly what the first said was
+unavailable, down to a literal `X %`. Every coherence gate passes it — no claim
+verb, and the hedge reads as care.
+
+**Answered, not gated.** A gate makes the office quieter, and this repository
+already records what that cost: two turns of an ordinary conversation refused
+and Grant receiving nothing. The rows have the answer, including the part he
+most needs — that one of them is waiting on HIM. `waiting_on_you` existed
+canonically and reached him nowhere, which is how an office deadlocks politely.
+
+Verified on v753: the answers now read `**Tom**: …` from the colleague's actual
+output, with no invention.
+
+## What was wrong before the product was
+
+- The race probe reported the race getting through when the deployed worker had
+  completed the first child mid-run, **freeing the key by design**; and its
+  eight calls spanned nine seconds, so they were never concurrent and the
+  earlier "one child" was luck in the other direction. It states its own
+  condition now.
+- 0559's drive reported the product broken because `app.now_utc()` is the
+  transaction timestamp, so a one-second window cannot exclude a job finished
+  in the same transaction. 0361's clock trap.
+- **Three sabotage controls passed vacuously**, all the same shape: asserting a
+  name appears rather than that it is wired. Now in CLAUDE.md.
+- A relayed output opening *"I have not done this"* looked like a new defect.
+  **Zero real outputs** begin that way — it only happens in the harness's empty
+  fixture projects, where specialists genuinely cannot do the work.
+
+## Verification
+
+- Six migrations (0556–0561), each driven inside a rollback, each sabotaged.
+- `tests/agents/one-live-attempt.test.ts` 43 checks,
+  `tests/agents/calling-it-off.test.ts` 29, **2879** unit tests.
+- `verify:context` 32/32. Deployed v753.
+- Five fresh cases live: exact repeat, rephrase, deliberate second opinion,
+  different work, and stop-then-restart.
+
+## Is another iteration justified?
+
+Yes. This pass found a defect already putting duplicate documents in Grant's
+real project, an offer the office could not perform, and a reader that answered
+from invention while the answer sat in a table. None of it is an edge case.

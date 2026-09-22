@@ -133,7 +133,7 @@ import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../age
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
-import { asksWhoIsOnIt } from '../agents/whoison.ts'
+import { asksWhatTheyFound, asksWhoIsOnIt } from '../agents/whoison.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
@@ -3002,24 +3002,124 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         because it may legitimately want a document.
       */
       const headCount = isBranch ? null : firstOfHis(asksWhoIsOnIt)
+
+      /*
+        AND WHAT DID THEY FIND? (#317)
+
+        On v733, with one specialist blocked and one refusing:
+
+            Grant : where exactly do they differ?
+            office: I don't have any record of the team's actual comments, so
+                    I can't point to exact phrasing where they diverge.
+                    Generally, the "numbers" view flags the revenue hit
+                    (X % lost ARR, churn risk)…
+
+        The first clause is true; the second supplies exactly what the first
+        said was unavailable, down to a literal `X %`. Every coherence gate
+        passes it — no claim verb, and the hedge reads as care.
+
+        Answered from the rows rather than gated. A gate makes the office
+        quieter, and CLAUDE.md records what that cost the last time: two turns
+        of an ordinary conversation refused and Grant receiving nothing. The
+        rows have the answer, including the part he most needs — that one of
+        them is waiting on HIM.
+      */
+      const wantsTheirAnswers = isBranch
+        ? false
+        : firstOfHis((t) => (asksWhatTheyFound(t) ? true : null)) === true
       const whoIsOn =
-        headCount === null
+        headCount === null && !wantsTheirAnswers
           ? null
           : await deps.db
               .execute(
+                /*
+                  A LONGER WINDOW FOR "WHAT DID THEY FIND?".
+
+                  The default thirty minutes is for spotting a repeat — a
+                  person asking again because nothing arrived. Asking what
+                  came back is a different question and its answer does not
+                  go stale in half an hour, so the window follows the
+                  question rather than the other way round.
+                */
                 `select app.conversation_work(
-                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as r`,
+                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
+                   interval '24 hours', null,
+                   ${wantsTheirAnswers ? "interval '24 hours'" : "interval '30 minutes'"}) as r`,
               )
               .then((r) => {
                 const raw = (r.rows[0] as { r?: unknown })?.r
                 const work = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
                   in_flight?: { who?: string; about?: string }[]
+                  recently_done?: {
+                    who?: string
+                    about?: string
+                    answer?: string
+                    hit_trouble?: boolean
+                  }[]
                   finished?: number
                   waiting_on_you?: number
                 } | null
                 const live = work?.in_flight ?? []
                 const finished = Number(work?.finished ?? 0)
                 const waiting = Number(work?.waiting_on_you ?? 0)
+                const back = work?.recently_done ?? []
+
+                /*
+                  "WHAT DID THEY COME BACK WITH?" IS A DIFFERENT QUESTION FROM
+                  "WHO IS ON IT?" (#317).
+
+                  It is answered with what actually came back, and when
+                  nothing has, with WHY — which is the part he most needs,
+                  because one of them may be waiting on him and he has no
+                  other way to know.
+                */
+                if (wantsTheirAnswers) {
+                  const said = back
+                    .filter((w) => w.hit_trouble !== true && String(w.answer ?? '').trim() !== '')
+                    .slice(0, 3)
+                    .map(
+                      (w) =>
+                        `**${String(w.who ?? 'Someone')}**: ${String(w.answer ?? '')
+                          .trim()
+                          .slice(0, 700)}`,
+                    )
+                  if (said.length > 0) {
+                    const rest =
+                      live.length === 0
+                        ? ''
+                        : `\n\n${String(live.length)} other ${live.length === 1 ? 'piece' : 'pieces'} of that work ${live.length === 1 ? 'is' : 'are'} still running.`
+                    return `${said.join('\n\n')}${rest}`
+                  }
+                  /*
+                    NOTHING CAME BACK, AND THAT IS THE ANSWER.
+
+                    The defect was answering this from general knowledge after
+                    correctly saying there was no record. There is no
+                    invention available here: every clause below is a count
+                    from the rows.
+                  */
+                  const troubled = back.filter((w) => w.hit_trouble === true).length
+                  const parts = ['Nothing has come back on that yet.']
+                  if (waiting > 0) {
+                    parts.push(
+                      `${String(waiting)} of it is waiting on YOUR answer before it can go further — that is the thing holding it up.`,
+                    )
+                  }
+                  if (live.length > 0) {
+                    parts.push(
+                      `${String(live.length)} ${live.length === 1 ? 'piece is' : 'pieces are'} still running.`,
+                    )
+                  }
+                  if (troubled > 0) {
+                    parts.push(
+                      `${String(troubled)} came back unable to do it, so there is nothing from ${troubled === 1 ? 'that one' : 'those'}.`,
+                    )
+                  }
+                  if (live.length === 0 && waiting === 0 && troubled === 0) {
+                    parts.push('There is nothing of mine running on it either.')
+                  }
+                  return parts.join(' ')
+                }
                 /*
                   Nothing running is a real answer and it is said plainly.
                   What must never happen again is the office reporting this

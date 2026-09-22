@@ -322,3 +322,61 @@ describe('an offer may only promise what the press can perform', () => {
     expect(withoutComments).toContain('take a separate look')
   })
 })
+
+describe('#317 — what did they come back with, answered from the rows', () => {
+  /*
+    Measured on v733, with one specialist blocked and one refusing:
+
+        Grant : where exactly do they differ?
+        office: I don't have any record of the team's actual comments, so I
+                can't point to exact phrasing where they diverge. Generally,
+                the "numbers" view flags the revenue hit (X % lost ARR…
+
+    The first clause is true and the second supplies exactly what the first
+    said was unavailable, down to a literal `X %`. Every coherence gate passes
+    it — there is no claim verb and the hedge reads as care.
+
+    Answered rather than gated. A gate makes the office quieter, and CLAUDE.md
+    records what that cost: two turns of an ordinary conversation refused and
+    Grant receiving nothing.
+  */
+  it('the question has a reader, and it is CALLED', () => {
+    /*
+      The CALL, not the name. A synthetic failure replacing the whole
+      expression with `false` left an earlier version green, because
+      `asksWhatTheyFound` still appeared in the import and
+      `if (wantsTheirAnswers)` still appeared below. Third vacuous control in
+      this file from the same shape: asserting a name is present proves
+      nothing about whether it is wired.
+    */
+    expect(withoutComments).toMatch(
+      /firstOfHis\(\(t\) => \(asksWhatTheyFound\(t\) \? true : null\)\)/,
+    )
+    expect(withoutComments).toMatch(/if \(wantsTheirAnswers\) \{/)
+  })
+
+  it('and when nothing came back it says WHY, from counts', () => {
+    expect(withoutComments).toContain('Nothing has come back on that yet.')
+    /*
+      The part he most needs and had no other way to learn: the office is
+      waiting on HIM. `waiting_on_you` existed canonically and reached him
+      nowhere, which is how an office deadlocks politely.
+    */
+    expect(withoutComments).toContain('waiting on YOUR answer')
+  })
+
+  it('and a colleague who could not do it is not reported as a finding', () => {
+    const block = /if \(wantsTheirAnswers\) \{[\s\S]{0,2000}/.exec(withoutComments)?.[0] ?? ''
+    expect(block).toContain('hit_trouble !== true')
+    expect(block).toContain('came back unable to do it')
+  })
+
+  it('and the window follows the question, not the other way round', () => {
+    /*
+      Thirty minutes is for spotting a repeat. What a colleague found does not
+      go stale in half an hour, and a window that hid it would recreate the
+      defect with a clock instead of a gap.
+    */
+    expect(withoutComments).toMatch(/wantsTheirAnswers \? "interval '24 hours'"/)
+  })
+})

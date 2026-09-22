@@ -2040,6 +2040,18 @@ Each of these cost real time. They are here so they cost it once.
   slash, which opens the command bar from anywhere. Same shape as #268's
   substring check satisfied by a superstring: the synthetic failure has to
   exercise the path the check claims to cover, not a neighbour of it.
+- **Assert the CALL, not the NAME — three vacuous controls in one session.**
+  #268 already records a substring check satisfied by a superstring. This is
+  its commoner form: a test asserting `expect(source).toContain('asksWhoIsOnIt')`
+  or `indexOf('const headCount =')` stays GREEN when the expression is replaced
+  by `null`, because the import still names the function and the declaration
+  still matches. All three passed their first sabotage and proved nothing.
+  What discriminates is the wired expression — `firstOfHis(asksWhoIsOnIt)`,
+  `const askedForAnother = wantsAnotherGo(instruction)` — because a sabotage
+  that guts the logic must remove it. **A name appearing in a file is not
+  evidence that anything calls it**, and the only way to know is to break the
+  thing on purpose and watch the check go red.
+
 - **`npm run lint` is `biome ci .`, which fails on FORMATTING.** A format
   failure prints as one unattributed "Some errors were emitted" a long way below
   the diagnostics, while every named finding above it is a warning — so the run

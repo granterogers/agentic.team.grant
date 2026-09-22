@@ -69,3 +69,66 @@ export function asksWhoIsOnIt(text: string): WhoIsOnIt | null {
   if (IS_ANYONE.test(said)) return 'is_anyone'
   return null
 }
+
+/*
+  AND WHAT DID THEY FIND? (#317)
+
+  Measured on v733, with one specialist blocked and one refusing:
+
+      Grant : where exactly do they differ?
+      office: I don't have any record of the team's actual comments, so I
+              can't point to exact phrasing where they diverge. Generally,
+              the "numbers" view flags the revenue hit (X % lost ARR, churn
+              risk) and the upgrade upside, while the "customer impact" view
+              flags perception…
+
+  The first clause is true and the second supplies exactly what the first
+  said was unavailable, down to a literal `X %` placeholder. Every coherence
+  gate passes it: there is no claim verb, and the hedge reads as care.
+
+  This is not a gate. A gate would make the office quieter, and CLAUDE.md
+  records what that costs — the coherence gate refusing two turns of an
+  ordinary conversation and Grant receiving nothing. The answer is to ANSWER
+  the question from the rows, because the rows have it: what each colleague
+  came back with, what is still running, and what is waiting on his word.
+*/
+const COLLEAGUES = String.raw`(?:they|them|the team|everyone|both(?: of them)?|he|she)`
+
+const CAME_BACK = new RegExp(
+  String.raw`^\s*(?:and\s+|so\s+|ok(?:ay)?[,\s]+)*` +
+    String.raw`(?:what|anything)\s+(?:did|have|has)\s+${COLLEAGUES}\s+` +
+    String.raw`(?:come back with|say|find|report|conclude|think|make of (?:it|that))` +
+    String.raw`[^?]{0,40}\??\s*$`,
+  'i',
+)
+
+const DID_THEY = new RegExp(
+  String.raw`^\s*(?:and\s+|so\s+|ok(?:ay)?[,\s]+)*` +
+    String.raw`(?:did|do|have|has)\s+${COLLEAGUES}\s+` +
+    String.raw`(?:agree|disagree|get back to (?:you|me)|come back|finish|manage it)` +
+    String.raw`[^?]{0,40}\??\s*$`,
+  'i',
+)
+
+const WHERE_DIFFER = new RegExp(
+  String.raw`^\s*(?:and\s+|so\s+|ok(?:ay)?[,\s]+)*` +
+    String.raw`(?:where|how|in what way)\s+(?:exactly\s+)?(?:do|did)\s+${COLLEAGUES}\s+` +
+    String.raw`(?:differ|disagree|diverge|split)` +
+    String.raw`[^?]{0,40}\??\s*$`,
+  'i',
+)
+
+const ANY_WORD = new RegExp(
+  String.raw`^\s*(?:and\s+|so\s+)?any(?:thing)?\s+(?:(?:word|news|update)\s+)?(?:from|on)\s+` +
+    String.raw`(?:${COLLEAGUES}|that|it)\s*\??\s*$`,
+  'i',
+)
+
+/** Whether this asks what the colleagues came back with. */
+export function asksWhatTheyFound(text: string): boolean {
+  const said = straighten(String(text ?? '')).trim()
+  if (said === '') return false
+  return (
+    CAME_BACK.test(said) || DID_THEY.test(said) || WHERE_DIFFER.test(said) || ANY_WORD.test(said)
+  )
+}
