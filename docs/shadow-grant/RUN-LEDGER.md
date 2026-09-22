@@ -2197,3 +2197,89 @@ needs.
 - Gates throughout: 2777 tests · 36 sabotage detectors · `verify:context`
   18/18 · `verify:preferences` 29/29 · containment clean but for #298's two
   preserved rows.
+
+---
+
+# The delegation thread — v727 → v729
+
+Pulled because two facts could not both be right: #312 found a turn that
+convened four specialists, and `measure` reported delegation depth 1 on two
+decisions in the office's entire history.
+
+## Canonical ground truth, established first
+
+```
+child jobs (have a parent)        real  56    all 1040
+parents (have a child)            real  30    all  708
+routing decisions depth > 0       real   2    all  685
+consultations                     real  20    all 2110
+```
+
+**Delegation works.** All 56 real children completed, all 30 parents answered,
+and the child carries its parent's project in 54 of 56 — the two differences
+are a superseded project correctly redirected. Constraints survive the chain
+too: a standing rule set before a fan-out held after it, live.
+
+## The measurement was mislabelled, not miscounted
+
+A routing decision exists only for an `office.instruction` job, so
+`delegation_depth` counts one specialist handing an INSTRUCTION to another.
+Real: 2, and that is accurate. What the office does constantly is fan a plan
+into capability jobs, and none of it was visible. CLAUDE.md's own headline —
+*"delegation_depth 0 across every real job"* — has been read for weeks as
+"the office never delegates". **It fans out constantly and hands on almost
+never, and those are different findings.** No number was changed; the missing
+one was added and the ambiguous heading retired.
+
+And the consultation count was the WHOLE TABLE while every other number in
+that file is filtered — 2,110 against 20 real, divided by a real denominator,
+printing *"consultation rate 854.3%"*. It reads 8.1% now.
+
+## Four product defects behind it, each found live
+
+1. **`pendingActions` was a variable, not a row count.** #312's fix could not
+   fire: a turn with one child and two consultations mentioned neither.
+   Third time this exact shape has been fixed in this contract — `landed`,
+   then `asked`, now `pendingActions`.
+2. **`awaitingApproval` was hardcoded `false`**, so the branch that tells
+   Grant the office is waiting on HIM could never fire. Live: a child paused
+   with an open blocker while the conversation said *"I will come back with
+   what comes of it."* Each side waiting for the other. Four such blockers
+   are open in real traffic.
+3. **All 56 child outputs were unreachable by the conversation.** The reader
+   took the parent's own output only, so the office asked two specialists,
+   they answered, and it told him *"I don't have any competitor pricing data
+   in our records."* Attributed and filed as the office's own prose, never as
+   evidence — a colleague's figure does not become grounded by passing
+   through them.
+4. **The office could not say what it was still doing.** *"so what is
+   actually being worked on now?"* answered from document retrieval while a
+   child was paused. Two counts per earlier turn now, and they are different
+   sentences because one needs him to act and the other needs him not to.
+
+## What only a contained verifier could prove
+
+A live session cannot demonstrate 3 or 4: the parent COMPLETES and only then
+does its child pause, so a follow-up turn races the state it is meant to see.
+Observed exactly that on v729. The properties are proved in `verify:context`
+instead, 21/21, from state built directly inside a rollback.
+
+Three fixture defects on the way, each caught by the check rather than by
+reading: the wrong enum types on `outputs`, `jobs_finished_iff_terminal`
+needing `finished_at`, and both turns sharing a transaction timestamp so the
+conversation came back empty — 0361's clock trap again.
+
+## Acceptance
+
+23 of 24 gate suites green. The one failure is **#313**, filed with evidence
+that it is not from this session's work: `titleReply` and `readFollowUp` are
+untouched, `namedLater` was last changed on 20 September, and the failing job
+has no blockers and no children so neither contract change can reach it.
+Two runs failed differently, and the same sentence shape succeeds in other
+sessions on the same worker — so the suite's own fixture text is a live
+hypothesis and was not guessed at.
+
+## Is another iteration justified?
+
+This one produced five systemic fixes and one filed defect, all of them
+architectural rather than edge cases. That is not diminishing returns.

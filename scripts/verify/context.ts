@@ -85,7 +85,8 @@ const scenario = async (name: string, body: string): Promise<Record<string, stri
     delete from answers;
     do $outer$
     declare
-      v_p uuid; v_q uuid; v_c uuid; v_ans jsonb := '{}'::jsonb; k text; v text;
+      v_p uuid; v_q uuid; v_c uuid; v_c2 uuid; v_k uuid; v_k2 uuid;
+      v_ans jsonb := '{}'::jsonb; k text; v text;
     begin
       /*
         Two REAL, NAMED projects, and both adjectives were learned the hard
@@ -262,6 +263,95 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
       r.after_synthetic === 'NONE',
       r.after_synthetic,
     )
+  }
+}
+
+// ------------------------------------- what came back, and what has not
+{
+  /*
+    0549 and 0550, driven deterministically.
+
+    A live session cannot prove these: the parent COMPLETES and only then
+    does its child run and pause, so a follow-up turn races the thing it is
+    meant to see. Observed on v729 — turn 2 said "We don't have any work in
+    progress right now" while turn 1's child was paused on an open blocker,
+    and the conversation reader was right at the moment it was asked.
+
+    So the state is built directly and the reader is asked, which is the
+    independent contained verifier this repository reaches for whenever the
+    harness cannot safely exercise an invariant.
+  */
+  const r = await scenario(
+    'chain',
+    `/*
+       EXPLICITLY EARLIER, because both rows are written in one transaction.
+
+       received_at defaults to app.now_utc(), which is the TRANSACTION
+       timestamp — identical to the microsecond for two rows in one block —
+       and conversation_before takes turns strictly BEFORE the current one.
+       So the first draft of this fixture returned an empty conversation and
+       reported three failures about a reader that works. CLAUDE.md records
+       the same clock trap in 0361. No backticks: template literal.
+     */
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, project_id, dedupe_key, received_at)
+     values ('telegram', '8${run}8:1', '8${run}8', 'ctx-${run}', 'Go and find out.', v_p, 'telegram:ctx:${run}_c1',
+             app.now_utc() - interval '2 minutes')
+     returning command_id into v_c;
+     perform app.enqueue_inbound(v_c);
+
+     -- The parent answers, then hands on: a child that came back, and a
+     -- child that is paused waiting on him.
+     insert into public.outputs (job_id, body, confidence, evidence, deterministic)
+     select j.job_id, 'I have handed this on.', 'medium'::public.confidence_level, 'inferred'::public.evidence_type, true
+       from public.jobs j where j.idempotency_key = format('inbound-%s', v_c);
+
+     insert into public.jobs (correlation_id, project_id, idempotency_key, kind,
+                              requested_by, priority, parent_job_id, state, finished_at)
+     /*
+       jobs_finished_iff_terminal requires finished_at on a terminal state,
+       so a completed child needs one — read from pg_constraint after it
+       refused the first version of this fixture, rather than guessed at.
+       No backticks in this comment: it lives inside a template literal.
+     */
+     select gen_random_uuid(), j.project_id, format('kid-a-%s', v_c), 'office.pursue',
+            j.requested_by, 10, j.job_id, 'complete', app.now_utc()
+       from public.jobs j where j.idempotency_key = format('inbound-%s', v_c)
+     returning job_id into v_k;
+     insert into public.outputs (job_id, body, confidence, evidence, deterministic)
+     values (v_k, 'The venue quoted four hundred pounds for the day.', 'medium'::public.confidence_level, 'inferred'::public.evidence_type, true);
+
+     insert into public.jobs (correlation_id, project_id, idempotency_key, kind,
+                              requested_by, priority, parent_job_id, state)
+     select gen_random_uuid(), j.project_id, format('kid-b-%s', v_c), 'office.pursue',
+            j.requested_by, 10, j.job_id, 'paused'
+       from public.jobs j where j.idempotency_key = format('inbound-%s', v_c)
+     returning job_id into v_k2;
+     insert into public.blockers (job_id, requested_action, why_needed,
+                                  consequences_of_delay, approval_options,
+                                  originating_agent, work_can_continue, state)
+     values (v_k2, 'Book it', 'It needs your go-ahead', 'The rest waits',
+             array['Yes, do it', 'No, leave it'], 'chief-of-staff', false, 'open');
+
+     -- And the NEXT turn, which is the one that must see all of that.
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key)
+     values ('telegram', '8${run}8:2', '8${run}8', 'ctx-${run}', 'What is happening?', 'telegram:ctx:${run}_c2')
+     returning command_id into v_c2;
+
+     v_ans := v_ans || jsonb_build_object(
+       'colleagues', coalesce((app.conversation_before(v_c2) -> 0 -> 'colleagues') #>> '{0}', 'NONE'),
+       'stillGoing', coalesce((app.conversation_before(v_c2) -> 0 ->> 'stillGoing'), 'NONE'),
+       'waitingOnYou', coalesce((app.conversation_before(v_c2) -> 0 ->> 'waitingOnYou'), 'NONE'));`,
+  )
+  if (r.skipped === undefined) {
+    ok(
+      'a later turn sees what the colleague came back with',
+      (r.colleagues ?? '').includes('four hundred pounds'),
+      r.colleagues,
+    )
+    ok('and how much is still running', r.stillGoing === '1', r.stillGoing)
+    ok('and that some of it is waiting on HIM', r.waitingOnYou === '1', r.waitingOnYou)
   }
 }
 
