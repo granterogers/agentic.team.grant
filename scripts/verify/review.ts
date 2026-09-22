@@ -99,7 +99,49 @@ check(
   (await page.locator('body').innerText()).includes('Review copy'),
 )
 
+/*
+  A FRAGMENT THE HOST OWNS IS NOT A ROUTE.
+
+  The artifact host puts its own fragment on the page. The first version read
+  whatever it found in the hash, so `#artifact-abc` matched no route and fell
+  through to the DEFAULT studio - the review build opened on today's Team HQ,
+  which is what Grant saw and reported. This is the check that would have
+  caught it, and it is the reason the guard is a shape rather than a list.
+*/
+for (const foreign of ['#artifact-abc', '#section-2', '#']) {
+  await page.goto(url(foreign), { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(900)
+  check(
+    `a fragment the host owns (${foreign}) still opens the experiment`,
+    (await page.locator('[data-experience="basecamp"]').count()) === 1,
+    `it opened "${(
+      await page
+        .locator('h1')
+        .first()
+        .innerText()
+        .catch(() => '?')
+    ).slice(0, 40)}"`,
+  )
+}
+
+/* --- it opens on the screen it exists to show --- */
+await page.goto(url(), { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(1200)
+check(
+  'it opens ON the redesigned project home, not one click away',
+  (await page.locator('.bcpanes').count()) === 1,
+  `it opened "${(
+    await page
+      .locator('h1')
+      .first()
+      .innerText()
+      .catch(() => '?')
+  ).slice(0, 40)}"`,
+)
+
 /* --- the address is in the hash, and survives a reload --- */
+await page.goto(url('#/basecamp'), { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(900)
 await page.waitForSelector('[data-bc-go^="/basecamp/p/"]', { timeout: 8000 })
 await page.locator('[data-bc-go^="/basecamp/p/"]').first().click()
 await page.waitForTimeout(700)

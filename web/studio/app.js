@@ -13131,11 +13131,30 @@ function cameBackFromGoogle() {
 */
 const REVIEW = typeof window !== 'undefined' && window.STUDIO_REVIEW === true
 
+/*
+  WHERE A REVIEW BUILD STARTS, so the one screen it exists to show is the one
+  it opens on rather than one click away.
+*/
+const START =
+  typeof window !== 'undefined' && typeof window.STUDIO_START === 'string' && window.STUDIO_START !== ''
+    ? window.STUDIO_START
+    : '/basecamp'
+
 const addressNow = () => {
   if (typeof location === 'undefined') return '/'
   if (!REVIEW) return location.pathname
   const h = location.hash.slice(1)
-  return h === '' ? '/basecamp' : h
+  /*
+    ONLY A FRAGMENT THAT IS ONE OF OURS, which means it begins with a slash.
+
+    A host may put its own fragment on the page - the artifact host does - and
+    the first version returned whatever it found. `#artifact-abc` was therefore
+    read as a route, matched nothing, and fell through to the DEFAULT studio:
+    the review build opened on today's Team HQ and Grant reasonably said he was
+    being shown the old interface. Anything that is not our shape is not an
+    address, and the page starts where it was told to.
+  */
+  return h.startsWith('/') ? h : START
 }
 
 let wantedPath = addressNow()

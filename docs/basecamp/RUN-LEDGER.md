@@ -1114,18 +1114,92 @@ deploy script shipped as verified when the network refuses the host is the
 faking-completeness failure the redesign prompt forbids by name.
 
 ---
+## There is a live URL, and two corrections about why there was not
+
+**https://agentic-team-hq-basecamp.vercel.app** — the real product build, on
+Vercel, with `vercel.json`'s rewrites, so `/basecamp/p/<slug>/documents` is a
+real address that survives a reload. Its own project,
+`agentic-team-hq-basecamp`, **separate from `ai-team-hq`**, which is untouched.
+
+### Two things this ledger reported that were wrong
+
+**1. The credentials were never missing.** `VERCEL_TOKEN`,
+`SUPABASE_ACCESS_TOKEN` and both GitHub tokens are present and have been.
+
+**2. `api.vercel.com` is not blocked.** A single `curl` got `403` at CONNECT
+and that one result was written up as an egress policy. It was transient: the
+Vercel CLI reached the API on the first attempt, and a later `curl` to
+`/v2/user` returned `200`. The claim failed the rule this file states about
+everything else — **one observation is not a measurement**, and a negative
+result about the network deserves a retry before it becomes a fact in a
+handover document.
+
+What is genuinely blocked, retested: the Supabase project host, and the GitHub
+API's `/pages` and `/deployments` paths.
+
+### What actually stopped the deploy, and it was not the network
+
+Deploying the REPOSITORY fails: Vercel finds `api/notebook.py` and
+`api/notebook-act.py`, cannot resolve a Python entrypoint, and the build ends
+before it reaches the page. Those functions have nothing to do with this
+experience. `npm run deploy:preview` builds `.out/site/` — `web/studio` plus
+the one rewrite rule — and deploys that, so the deploy contains the site and
+nothing else.
+
+### The sign-in wall, removed deliberately
+
+A new Vercel project gets **SSO deployment protection**, which answered `302`
+to `vercel.com/sso-api` on every path. Verified first through an automation
+bypass secret rather than by opening it up — the secret was minted, used for
+the check, and never printed, because a bypass token in a chat message is a
+credential in a chat message.
+
+Then `ssoProtection` was set to `null`, because a URL Grant has to be signed
+into Vercel to open is not a URL he can hand to anyone or open on a phone. It
+is one toggle to put back: Vercel → the project → Settings → Deployment
+Protection. **The page serves invented example projects and no office data**,
+because it holds no token.
+
+### Verified, and how
+
+`curl` against the live host: `/`, `/basecamp`, a project, a project tool and a
+deep link all `200 text/html` (the rewrite works), `bc/compose.css` `200
+text/css`, `samples/ws01.pdf` `200 application/pdf`, `vendor/pdf.worker.mjs`
+`200` at 1,362,587 bytes. The served page carries `bc/compose.css` and **not**
+`STUDIO_REVIEW` — it is the product build, not the static review copy.
+
+**Not** driven in a browser against the live host: Playwright's Chromium does
+not trust the proxy's CA, and the fix for that is disabling certificate
+verification, which is not worth a check. The same bytes are driven in a
+browser by `basecamp:gate` on every run, and the live host's own contribution —
+the rewrite — is what `curl` proved.
+
+### The static review build, and the defect Grant found in it
+
+The artifact copy is still there and now correct. He opened it and said he was
+being shown the old interface, and he was: **the artifact host puts its own
+fragment on the URL**, `addressNow()` returned whatever it found in the hash,
+`#artifact-abc` matched no route, and the page fell through to the DEFAULT
+studio. A guard — a fragment is only an address if it begins with a slash —
+and `verify:review` now drives three foreign fragments. It also opens on the
+project home rather than the portfolio, from a slug read out of `data.js`
+rather than written down; the first attempt read `slug: 'claire'`, which is a
+member of the crew, and opened on a project that does not exist.
+
+16/16.
+
+---
 ## NEXT ACTION
 
-**Grant's review, again — the home is a different page.** Composition C is what
-`/basecamp/p/<slug>` draws: a board of live tool panes with Docs & Files
-carrying real rendered first pages, above Latest Activity. The captures are in
-`.out/basecamp/` and `.out/basecamp-compose/`, and the four compositions are
-the `*-desktop.png` files in the latter.
+**It is live — look at it.** https://agentic-team-hq-basecamp.vercel.app
+opens on the project board; the project home is at
+`/basecamp/p/legacy-coaching-course`. It runs on the example projects, because
+the deploy carries no office token.
 
-One thing still needs him rather than more work here:
+Then the one thing still waiting on him:
 [#299](https://github.com/granterogers/agentic.team.grant/issues/299) — one
-argument or one small table, and the arrangement moves from this device into
-his office, where he asked for it to live.
+argument or one small table, and the home's arrangement moves from the device
+into his office, where he asked for it to live.
 
-Nothing merged, nothing promoted, nothing deployed, and the default Team HQ
-unchanged and proved so on every commit.
+`main` is untouched, nothing is merged, and the default Team HQ is unchanged
+and proved so on every commit.

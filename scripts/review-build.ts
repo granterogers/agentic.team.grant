@@ -45,7 +45,28 @@ if (html === before)
   inline script placed after it would still be a bet on that, and the bet is
   free to avoid.
 */
-const flag = `<script>window.STUDIO_REVIEW = true</script>\n`
+/*
+  The screen this build exists to show. Taken from the data rather than
+  written down, so a rename of the example project cannot leave the review
+  build opening on a project that is not there.
+*/
+const dataSrc = await readFile(join(FROM, 'data.js'), 'utf8')
+/*
+  The first slug after the fallback PROJECTS array begins. The first `slug:`
+  in the file belongs to a member of the crew, so an unanchored match produced
+  `/basecamp/p/claire` - a project that does not exist, and a review build that
+  opened on the portfolio instead. `export const PROJECTS` is not the anchor
+  either: it is assigned from `FALLBACK_PROJECTS`, which is where the data is.
+  Asserted, because a wrong start address is the kind of defect that looks
+  like a preference.
+*/
+const projectsAt = dataSrc.indexOf('const FALLBACK_PROJECTS = [')
+const firstSlug =
+  projectsAt < 0 ? undefined : /slug:\s*'([^']+)'/.exec(dataSrc.slice(projectsAt))?.[1]
+if (firstSlug === undefined)
+  throw new Error('data.js names no project slug — the start address would be a guess')
+
+const flag = `<script>window.STUDIO_REVIEW = true; window.STUDIO_START = '/basecamp/p/${firstSlug}'</script>\n`
 if (!html.includes('<script type="module"'))
   throw new Error('the page no longer loads app.js as a module')
 html = html.replace('<script type="module"', `${flag}<script type="module"`)
@@ -123,6 +144,39 @@ await writeFile(
   ),
 )
 
+/* ------------------------------------------------ the deployable copy -- */
+
+/*
+  A SECOND OUTPUT: the site as the product, for a real preview deploy.
+  
+  `.out/site/` is `web/studio` untouched, plus the rewrite rule that makes path
+  addressing work. It exists because deploying the REPOSITORY does not work -
+  Vercel finds `api/*.py`, cannot resolve a Python entrypoint, and the build
+  fails before it ever reaches the page. Those functions are nothing to do with
+  this experience, so the deploy gets the site and nothing else.
+  
+  This copy keeps the PATH addressing, because a real host has the rewrite -
+  so `/basecamp/p/x` is a real address that survives a reload, which is the one
+  thing the static review bundle can only approximate.
+*/
+const SITE = '.out/site'
+await rm(SITE, { recursive: true, force: true })
+await mkdir(SITE, { recursive: true })
+await cp(FROM, SITE, { recursive: true })
+await writeFile(
+  join(SITE, 'vercel.json'),
+  `${JSON.stringify(
+    {
+      rewrites: [
+        { source: '/:path((?!api/|studio/|samples/|fonts/)[^.]*)', destination: '/index.html' },
+      ],
+    },
+    null,
+    2,
+  )}\n`,
+)
+console.log(`deployable site in ${SITE}/ — the product, with its rewrite rule`)
+
 /* --------------------------------------------------------------- report -- */
 
 const count = async (dir: string): Promise<number> => {
@@ -133,4 +187,6 @@ const count = async (dir: string): Promise<number> => {
   return out
 }
 console.log(`review build in ${TO}/ — ${String(await count(TO))} file(s)`)
-console.log(`  hash addressing on, ${String(n)} sample reference(s) made relative`)
+console.log(
+  `  hash addressing on, opens at /basecamp/p/${firstSlug}, ${String(n)} sample reference(s) made relative`,
+)

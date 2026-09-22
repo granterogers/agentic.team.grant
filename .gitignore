@@ -169,3 +169,4 @@ team-hq-dashboard.html
 # to be re-tuned. The processed tiles beside it ARE committed, and regenerating
 # these costs about $0.07 through npm run textures -- --go.
 web/studio/textures/raw/
+.vercel
