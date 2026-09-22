@@ -553,5 +553,6 @@
   "0551_a_rename_needs_a_referent_not_a_recent_row.sql": "a6e04635293565ba930ad8a41a1180fd3466eda6e8fc0e88faf8bdf6906f02e7",
   "0552_a_task_he_typed_himself_is_still_a_referent.sql": "477bc8addabecffd96f3b2e73bb61dcd8217b71300b9062e8a8dcaa10a3bd2f0",
   "0553_the_window_not_the_first_turn.sql": "6bd4282c7a541fa51ccf4645aab86c2f9b85e128c2910e1599105d4c6ce73336",
-  "0554_reference_needs_an_antecedent.sql": "38bbb8657b59cb350d68b9945b4c30eaa81bfdaad7625bd0c8712c8be8ba3374"
+  "0554_reference_needs_an_antecedent.sql": "38bbb8657b59cb350d68b9945b4c30eaa81bfdaad7625bd0c8712c8be8ba3374",
+  "0555_a_conversation_can_see_and_stop_its_own_work.sql": "224a67c62027e90ffda22e5163deaaaab3f6bb6bb3da05c89bec04d7fb1f2a8a"
 }

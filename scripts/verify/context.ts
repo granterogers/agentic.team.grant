@@ -85,7 +85,7 @@ const scenario = async (name: string, body: string): Promise<Record<string, stri
     delete from answers;
     do $outer$
     declare
-      v_p uuid; v_q uuid; v_c uuid; v_c2 uuid; v_k uuid; v_k2 uuid;
+      v_p uuid; v_q uuid; v_c uuid; v_c2 uuid; v_c3 uuid; v_k uuid; v_k2 uuid; v_j2 uuid;
       v_ans jsonb := '{}'::jsonb; k text; v text;
     begin
       /*
@@ -452,6 +452,83 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
     */
     ok('a task he typed BEFORE this chat began is not a referent', r.older === 'NULL', r.older)
     ok('and one he typed DURING it is', r.during === 'Typed during this chat', String(r.during))
+  }
+}
+
+// ------------------------------------------- stopping what this chat started
+{
+  /*
+    #315 / 0555. "stop that" must stop the work THIS conversation handed on,
+    say what it could not take back, and reach nothing else.
+
+    Live on v733 it stopped nothing and the next turn answered "there's no
+    record of anyone having started work on it" over two children the
+    conversation had made itself, one paused and still in flight.
+
+    The migration drives this too, but a migration runs once. Containment is
+    the property that has to hold on every gate: a stop that reaches another
+    chat destroys work nobody withdrew.
+  */
+  const r = await scenario(
+    'calloff',
+    `insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key)
+     values ('teamhq', 'off${run}:1', 'grant', 'ctx-${run}', 'have someone look into it',
+             'teamhq:off:${run}_one')
+     returning command_id into v_c;
+     insert into public.jobs (correlation_id, project_id, idempotency_key, kind,
+                              requested_by, priority, state)
+     values (gen_random_uuid(), v_p, 'off-${run}-parent', 'office.instruction',
+             'teamhq:grant', 10, 'queued')
+     returning job_id into v_k;
+     update public.inbound_commands set job_id = v_k where command_id = v_c;
+
+     -- a child PAUSED, which is the state the live reproduction left behind
+     insert into public.jobs (correlation_id, project_id, idempotency_key, kind,
+                              requested_by, priority, state, parent_job_id)
+     values (gen_random_uuid(), v_p, 'off-${run}-kid', 'office.pursue',
+             'teamhq:grant', 10, 'queued', v_k)
+     returning job_id into v_c2;
+     update public.jobs set state = 'paused' where job_id = v_c2;
+
+     -- and a DIFFERENT chat with live work of its own, which must survive
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key)
+     values ('telegram', 'far${run}:1', 'grant', 'ctx-${run}', 'something else',
+             'telegram:off:${run}_two')
+     returning command_id into v_c3;
+     insert into public.jobs (correlation_id, project_id, idempotency_key, kind,
+                              requested_by, priority, state)
+     values (gen_random_uuid(), v_p, 'off-${run}-far', 'office.instruction',
+             'teamhq:grant', 10, 'queued')
+     returning job_id into v_j2;
+     update public.inbound_commands set job_id = v_j2 where command_id = v_c3;
+
+     v_ans := v_ans || jsonb_build_object('sees',
+       jsonb_array_length(app.conversation_work(v_c) -> 'in_flight'));
+     v_ans := v_ans || jsonb_build_object('stopped',
+       (app.stop_conversation_work(v_c, 'you asked me to stop') ->> 'stopped'));
+     v_ans := v_ans || jsonb_build_object('child',
+       (select state::text from public.jobs where job_id = v_c2));
+     v_ans := v_ans || jsonb_build_object('elsewhere',
+       (select state::text from public.jobs where job_id = v_j2));
+     v_ans := v_ans || jsonb_build_object('again',
+       (app.stop_conversation_work(v_c) ->> 'stopped'));`,
+  )
+  if (r.skipped === undefined) {
+    ok('it sees the one thing this conversation has in flight', r.sees === '1', String(r.sees))
+    ok('and stops it', r.stopped === '1', String(r.stopped))
+    ok('canonical state agrees the child is off', r.child === 'cancelled', String(r.child))
+    /*
+      The one that matters. A stop that reaches another chat cancels work
+      nobody withdrew, and it would look exactly like this one working.
+    */
+    ok('and ANOTHER chat is untouched', r.elsewhere === 'queued', String(r.elsewhere))
+    /*
+      Asked twice, the second must claim nothing — "stopped" over an empty
+      set is the claim-with-no-row that caused the Issue.
+    */
+    ok('a second stop stops nothing and says so', r.again === '0', String(r.again))
   }
 }
 

@@ -80,6 +80,7 @@ import {
   pageRequest,
   type RequestedKind,
 } from '../agents/actions.ts'
+import { callsItOff } from '../agents/calloff.ts'
 import {
   capabilityBrief,
   capabilityNow,
@@ -2667,6 +2668,90 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const changesHis = isBranch ? null : firstOfHis(personalTaskChange)
 
       /*
+        HE CALLED IT OFF (#315, 0555).
+
+        Measured on v733: "stop that, I do not need it any more" stopped
+        nothing, and the next turn was answered "there's no record of anyone
+        having started work on it" over two children the conversation had made
+        itself, one of them paused and still in flight.
+
+        `retraction.ts` reads a withdrawal INSIDE one message and correctly
+        declines a turn that is nothing but a withdrawal — which is how he
+        actually changes his mind. `callsItOff` is that turn.
+
+        Grounded exactly as #313 grounds a rename: what is acted on is the
+        work THIS CONVERSATION handed on, never the newest thing anywhere.
+        `app.stop_conversation_work` reports what it stopped, what refused,
+        and what had already finished, and the sentence is composed from those
+        rows rather than from having asked.
+
+        A finished child is NOT claimed as stopped — taking back what it did
+        is `app.hq_undo`'s question — and saying so is the difference between
+        this and the answer that caused the Issue.
+      */
+      const calledOff = isBranch || changesHis !== null ? null : firstOfHis(callsItOff)
+      const stopped =
+        calledOff === null
+          ? null
+          : await deps.db
+              .execute(
+                `select app.stop_conversation_work(
+                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
+                   ${lit(`you asked me to stop: ${instruction.slice(0, 120)}`)}) as r`,
+              )
+              .then((r) => {
+                const raw = (r.rows[0] as { r?: unknown })?.r
+                const got = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  stopped?: number
+                  could_not?: number
+                  already_finished?: number
+                } | null
+                const n = Number(got?.stopped ?? 0)
+                const finished = Number(got?.already_finished ?? 0)
+                const refused = Number(got?.could_not ?? 0)
+                /*
+                  Nothing to stop is SAID, not glossed over. The office having
+                  nothing in flight is a perfectly good answer and the honest
+                  one; claiming to have stopped something would be the
+                  claim-with-no-row this repository keeps paying for.
+                */
+                if (n === 0 && finished === 0 && refused === 0) {
+                  return 'There was nothing still running on that, so there is nothing to stop.'
+                }
+                const parts: string[] = []
+                if (n > 0) {
+                  parts.push(
+                    n === 1
+                      ? 'Stopped — one piece of work was still running and it is off now.'
+                      : `Stopped — ${String(n)} pieces of work were still running and they are off now.`,
+                  )
+                }
+                if (refused > 0) {
+                  parts.push(
+                    `${String(refused)} could not be stopped because ${refused === 1 ? 'it is' : 'they are'} already being written up.`,
+                  )
+                }
+                if (finished > 0) {
+                  parts.push(
+                    n === 0
+                      ? `Nothing was still running — ${String(finished)} had already finished. Say the word if you want what ${finished === 1 ? 'it' : 'they'} produced taken back.`
+                      : `${String(finished)} had already finished, so that part stands. Say the word if you want it taken back.`,
+                  )
+                }
+                return parts.join(' ')
+              })
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'stop work this conversation started', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return null
+              })
+
+      /*
         Is he teaching us something? (#48, #50)
 
         Grant: *"all behaviours, skills, what I want them to do, it can all just
@@ -3488,6 +3573,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         filed,
         noted,
         changed,
+        stopped,
         extracting,
         enumerating,
         writingFile,
@@ -3522,6 +3608,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           filed,
           noted,
           changed,
+          stopped,
           extracting,
           enumerating,
           writingFile,
