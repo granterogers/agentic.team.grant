@@ -4491,7 +4491,23 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         maxAttempts: 4,
       }
       const outcomeLine = sayWhatHappened(outcome)
-      const answer = outcomeLine === null ? answer1 : `${outcomeLine}\n\n${answer1}`
+      /*
+        Joined with a SPACE, not a blank line.
+
+        The first version used a paragraph break and the live probe found
+        what that costs: Grant has a standing rule reading *"From now on in
+        this conversation, keep every answer to a single short paragraph"*,
+        and a prepended paragraph makes that rule structurally
+        unsatisfiable - the office would have to break one of his
+        instructions to obey another. The coherence gate said so, on the
+        deployed worker, about a real lesson of his rather than anything the
+        harness taught.
+
+        A leading sentence keeps the state first, which is the whole point,
+        and leaves the shape of the answer to his rules rather than to this
+        line's formatting.
+      */
+      const answer = outcomeLine === null ? answer1 : `${outcomeLine} ${answer1}`.trim()
 
       /*
         The context, tagged. Assembled from the same values that went into the
