@@ -322,6 +322,63 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     instrument than a real one that fails when the weather does — and this runs
     when the provider is out, which is exactly when somebody wants to know.
   */
+  /*
+    The 17 September backup died with nothing said (0535).
+
+    `verify:recovers` proves a recovered job does not fabricate, duplicate or
+    strand. It says nothing about the job that simply DIES — and six paths
+    reach `failed`, of which three used to write no record anywhere a person
+    looks. The one that mattered was in SQL, so no amount of care in
+    `worker.ts` could have covered it.
+  */
+  /*
+    Invariant 13, both halves, and the reading that could not see either.
+
+    app.office_health() reported failed, stalled, waiting, breakers and budget
+    holds and had NO idea whether a backup existed -- so the night the nightly
+    backup died it read `failed: 1` for 24 hours in a window nobody watches,
+    and then said nothing at all. And backup:rehearse printed a report and
+    exited, so "when did a restore last work" had no answer anywhere.
+  */
+  /*
+    The escape that reported green.
+
+    verify:history sent a real Telegram message to Grant's own chat and a real
+    Slack message while reporting 51/51, exit 0. 0523's guard asked
+    app.harness_job, which was DERIVED from an attribution the suite controls,
+    so at send time it said false. 0541 moves the mark onto the door the work
+    came through and makes it immutable; 0542 carries it down the lineage.
+
+    Every attempt here runs through the real DeliveryService with a transport
+    that counts its own invocations, so "0" is a claim about whether the
+    sending code was reached at all -- and a positive control proves a
+    permitted delivery still reaches it.
+  */
+  [
+    'verify:escapes',
+    'synthetic work cannot cross a real external boundary, proved by attempting it (0541, 0542)',
+  ],
+  [
+    'verify:backups',
+    'a recent FINISHED backup and a PROVEN restore, and a chore when either is missing (0537, 0538)',
+  ],
+  /*
+    And the other half of the same night's finding.
+
+    0535 made the backup's death visible. This is why it was dying: a
+    checkpointed job that runs out of wall clock is picked up again, and every
+    pickup spent one of five attempts. The backup needed one attempt on 16
+    September and three on the 21st as the database grew 78k -> 135k rows. Two
+    of headroom left, with nothing anywhere watching the margin.
+  */
+  [
+    'verify:resumes',
+    'a job that ran out of time resumes without spending a retry, and one that failed still dies (0536)',
+  ],
+  [
+    'verify:journals',
+    'a job that dies says so, whichever layer killed it — a silent backup failure cost Grant a day of backups (0535)',
+  ],
   [
     'verify:recovers',
     'no fabricated success, no duplicate action, no lost mutation, no stranded work (#231)',

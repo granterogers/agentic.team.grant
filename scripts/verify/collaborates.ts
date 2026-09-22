@@ -159,6 +159,9 @@ let children: Record<string, unknown>[] = []
 while (Date.now() < deadline) {
   children = await all(`
     select j.job_id::text as job_id, j.state::text as state, j.announce,
+           coalesce(j.state_reason, '') as reason,
+           (select count(*) from public.deliveries d
+             where d.job_id = j.job_id and d.sent_at is not null)::int as deliveries,
            coalesce(j.recipient_agent, '') as recipient,
            j.pinned_config ->> 'addressed_to' as addressed_to,
            j.pinned_config ->> 'handed_off_by' as handed_off_by,
@@ -176,14 +179,66 @@ while (Date.now() < deadline) {
     you are asserting about has happened.
   */
   const settled = (x: unknown): boolean => ['complete', 'failed', 'cancelled'].includes(String(x))
+  /*
+    A child that stopped to ask Grant has finished, for this suite's purposes.
+
+    `office.pursue` under `autonomy = suggest` -- the global default set by
+    migration 0027 and never changed by a person -- correctly pauses with
+    `awaiting_approval` and `waiting_on = "Grant answers, or raises this
+    project's autonomy above suggest"`. That is the office behaving exactly as
+    designed, and it is a TERMINAL state for anything running unattended:
+    nothing will move it without a human.
+
+    Before this, the loop waited for it anyway and ran to the nine-minute
+    deadline twice, reporting exit 124. A suite that hangs on correct
+    behaviour teaches whoever reads it to discount the timeout.
+
+    Keyed on the approval reason, not on `paused` generally: a pause for a
+    rate limit or a dependency WILL resolve on its own and must still be
+    waited for. And it is asserted below rather than merely tolerated --
+    silently accepting a pause would hide a regression that made the office
+    stop asking.
+  */
+  const askedAndStopped = (c: Record<string, unknown>): boolean =>
+    String(c.state) === 'paused' && String(c.reason ?? '').startsWith('awaiting_approval:')
+  const finished = (c: Record<string, unknown>): boolean => settled(c.state) || askedAndStopped(c)
   const done = String(
     (await one(`select state::text as s from public.jobs where job_id = ${lit(parent)}::uuid`)).s,
   )
-  if (settled(done) && children.length > 0 && children.every((c) => settled(c.state))) break
+  if (settled(done) && children.length > 0 && children.every(finished)) break
   process.stdout.write('.')
   await new Promise((r) => setTimeout(r, 15_000))
 }
 console.log('')
+
+/*
+  Say out loud what the office did with the autonomy level it was given.
+
+  Reported rather than asserted either way: whether a pursue child stops to
+  ask depends on `autonomy_settings`, which is Grant's to set, and a check
+  that failed when he raised or lowered it would be asserting against his
+  preference rather than against the product.
+*/
+const paused = children.filter(
+  (c) => String(c.state) === 'paused' && String(c.reason ?? '').startsWith('awaiting_approval:'),
+)
+const level = String(
+  (await one(`select level::text as v from public.autonomy_settings where project_id is null`)).v ??
+    '(unset)',
+)
+console.log(
+  `       autonomy ${level}: ${String(paused.length)} of ${String(children.length)} child job(s) stopped to ask rather than acting`,
+)
+ok(
+  'every child reached a terminal state — finished, or stopped to ask Grant',
+  children.length > 0 &&
+    children.every(
+      (c) =>
+        ['complete', 'failed', 'cancelled'].includes(String(c.state)) ||
+        String(c.reason ?? '').startsWith('awaiting_approval:'),
+    ),
+  children.map((c) => String(c.state)).join(', ') || 'no children',
+)
 
 const parentRow = await one(`
   select state::text as state, coalesce(recipient_agent, '') as recipient
@@ -213,6 +268,35 @@ ok(
 )
 
 /*
+  ## Which children these next three assertions are about
+
+  A HAND-OFF, which is what this suite exists to measure: a child carrying
+  `handed_off_by`, created because one specialist asked another to do
+  something.
+
+  That distinction used to be invisible because the wait loop only ever broke
+  when every child was `complete`, so a child that was not a hand-off and had
+  stopped for approval simply never arrived here — the suite timed out at nine
+  minutes instead. Now that an approval pause is recognised as terminal, an
+  `office.pursue` child reaches these lines with `handed_off_by = null`, no
+  output and `announce` still set, and failed three assertions written about
+  something else entirely.
+
+  Scoped by WHAT THE JOB IS rather than by whether it happens to have
+  finished, so a hand-off that stalls still fails these and is not quietly
+  excused. The non-hand-off children are asserted separately below rather than
+  dropped.
+*/
+const handOffs = children.filter((c) => String(c.handed_off_by ?? '') !== '')
+const others = children.filter((c) => String(c.handed_off_by ?? '') === '')
+
+ok(
+  'the request produced at least one real hand-off',
+  handOffs.length > 0,
+  `${String(handOffs.length)} hand-off(s) of ${String(children.length)} child job(s)`,
+)
+
+/*
   The bound that matters most.
 
   Grant hears from the Chief of Staff and nobody else
@@ -222,14 +306,29 @@ ok(
 */
 ok(
   'no handed-off job can message Grant',
-  children.every((c) => c.announce === false),
-  `${String(children.filter((c) => c.announce !== false).length)} of ${String(children.length)} announcing`,
+  handOffs.every((c) => c.announce === false),
+  `${String(handOffs.filter((c) => c.announce !== false).length)} of ${String(handOffs.length)} announcing`,
+)
+
+/*
+  And the safety property still covers every OTHER child, by the route that
+  actually decides it. A pursue child waiting for Grant's approval keeps
+  `announce` — correctly, since he is the one who would be answering — so the
+  claim worth making about it is not that it stays quiet but that it has not
+  spoken, and cannot while it is paused.
+*/
+ok(
+  'and nothing else the request spawned has reached Grant either',
+  others.every((c) => Number(c.deliveries ?? 0) === 0),
+  others.length === 0
+    ? 'no other children'
+    : others.map((c) => `${String(c.state)}: ${String(c.deliveries ?? 0)} delivery(s)`).join(', '),
 )
 
 ok(
   'the hand-off names who asked for it, so it is a hand-off and not a routing decision',
-  children.every((c) => String(c.handed_off_by ?? '') !== ''),
-  children.map((c) => `${String(c.handed_off_by)} -> ${String(c.addressed_to)}`).join(', '),
+  handOffs.length > 0 && handOffs.every((c) => String(c.handed_off_by ?? '') !== ''),
+  handOffs.map((c) => `${String(c.handed_off_by)} -> ${String(c.addressed_to)}`).join(', '),
 )
 
 /*
@@ -276,12 +375,18 @@ ok(
   check; it is the difference between a second agent working and a second job
   existing.
 */
+/*
+  The outputs of the HAND-OFFS, for the reason stated above: a child that
+  stopped to ask Grant has not done the work yet, by design, and judging its
+  stub as filler would be asserting against the approval gate.
+*/
 const produced = await all(`
   select o.output_id::text as id, length(coalesce(o.body, ''))::int as len,
          coalesce(o.body, '') as body, coalesce(j.recipient_agent, '') as by
     from public.outputs o
     join public.jobs j on j.job_id = o.job_id
-   where j.parent_job_id = ${lit(parent)}::uuid`)
+   where j.parent_job_id = ${lit(parent)}::uuid
+     and coalesce(j.pinned_config ->> 'handed_off_by', '') <> ''`)
 /*
   A LENGTH FLOOR PENALISES THE HONEST SHORT ANSWER, and it did.
 

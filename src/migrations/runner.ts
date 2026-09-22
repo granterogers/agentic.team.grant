@@ -98,13 +98,31 @@ export async function runMigrations(
 
   // Never apply anything CI would reject. Running the same checks here means a
   // migration cannot reach the database by bypassing CI.
+  /*
+    A `note` is reported and does not block.
+
+    `checkMigrations` gained one severity beyond `error` for the case where
+    a rule's subject is history rather than a pending mistake - two branches
+    that took the same sequence number and BOTH applied it. Refusing to run
+    on that would mean no migration could ever be applied again, because the
+    collision cannot be un-done: `app.schema_migrations` is keyed on name and
+    both rows are real.
+
+    The distinction is the whole point of the severity. An unapplied
+    duplicate is still an error here, so a migration still cannot reach the
+    database by bypassing the check.
+  */
   const findings = checkMigrations(files, recorded, hash)
-  if (findings.length > 0) {
-    const summary = findings.map((f) => `${f.file ?? '(migrations/)'} [${f.rule}] ${f.message}`)
+  const blocking = findings.filter((f) => f.severity !== 'note')
+  if (blocking.length > 0) {
+    const summary = blocking.map((f) => `${f.file ?? '(migrations/)'} [${f.rule}] ${f.message}`)
     throw new MigrationError(
-      `refusing to run: ${findings.length} integrity finding(s)\n  ${summary.join('\n  ')}`,
+      `refusing to run: ${blocking.length} integrity finding(s)\n  ${summary.join('\n  ')}`,
       null,
     )
+  }
+  for (const note of findings.filter((f) => f.severity === 'note')) {
+    log(`  NOTE  [${note.rule}]  ${note.message}`)
   }
 
   const appliedNames = new Set(applied.map((a) => a.name))

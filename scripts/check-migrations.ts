@@ -54,15 +54,21 @@ async function readRecorded(): Promise<RecordedChecksums> {
 const [files, recorded] = await Promise.all([readMigrations(), readRecorded()])
 const findings = checkMigrations(files, recorded, sha256)
 
-if (findings.length === 0) {
+const notes = findings.filter((f) => f.severity === 'note')
+const errors = findings.filter((f) => f.severity !== 'note')
+for (const note of notes) {
+  console.log(`  NOTE  [${note.rule}]  ${note.message}\n`)
+}
+
+if (errors.length === 0) {
   console.log(
     `Migration check passed: ${files.length} migration(s), ${Object.keys(recorded).length} recorded as applied.`,
   )
   process.exit(0)
 }
 
-console.error(`Migration check FAILED — ${findings.length} finding(s):\n`)
-for (const finding of findings) {
+console.error(`Migration check FAILED — ${errors.length} finding(s):\n`)
+for (const finding of errors) {
   console.error(`  ${finding.file ?? '(migrations/)'}  [${finding.rule}]`)
   console.error(`      ${finding.message}\n`)
 }

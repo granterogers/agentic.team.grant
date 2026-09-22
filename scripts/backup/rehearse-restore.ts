@@ -67,6 +67,67 @@ const record = (what: string, outcome: string, passed: boolean): void => {
 
 const SCRATCH = 'restore_rehearsal'
 
+/*
+  Count many tables in ONE round trip.
+
+  This file used to ask `select count(*) from each` in two loops of 122, which
+  is 244 sequential HTTPS calls to the Management API for numbers Postgres can
+  produce in a single query. On 21 September that tail is what put the whole
+  rehearsal past ten minutes: the restore itself finished — 153,259 of 153,259
+  rows — and then it timed out CHECKING the restore it had just done.
+
+  Ten minutes is not an arbitrary line. Grant's standing instruction is that
+  nothing runs in the background and that a long command gets a real timeout
+  rather than being hidden, up to ten minutes, and that anything which
+  genuinely cannot finish inside that must be SPLIT. Making 244 round trips
+  into two is the cheaper answer than splitting, and it costs nothing: the
+  counts are identical and there is one fewer moving part.
+
+  An empty list returns an empty map rather than a query with no branches,
+  because `union all` needs at least one.
+*/
+async function countRows(
+  qualified: ReadonlyArray<readonly [key: string, schema: string, table: string]>,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (qualified.length === 0) return out
+  const branches = qualified.map(
+    ([key, schema, table]) =>
+      `select ${lit(key)} as k, count(*)::int as n from "${schema}"."${table}"`,
+  )
+  const { rows } = await db.execute(branches.join(' union all '))
+  for (const r of rows) out.set(String(r.k), Number(r.n))
+  return out
+}
+
+/*
+  Sweep before starting, not only after finishing.
+
+  The `finally` at the end of this file drops the scratch schema on every
+  ordinary path — and it cannot run at all if the process is killed. This run
+  proved it: a rehearsal stopped at nine minutes by a shell timeout left
+  `restore_rehearsal` in the live database holding 82 scratch tables, and a
+  timeout, a cancelled CI job and an OOM all produce exactly that.
+
+  No handler can catch SIGKILL, so the only repair that covers every way this
+  can die is to clean up at the START. `cascade` is safe by construction: the
+  schema is created by this file, seconds before it is used, and has never
+  held anything but copies — the same argument the `finally` already makes.
+
+  The signal handlers are the polite half, for Ctrl-C and SIGTERM, so an
+  interactive run does not leave a schema behind for the next one to sweep.
+*/
+await db.execute(`drop schema if exists ${SCRATCH} cascade`)
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void db
+      .execute(`drop schema if exists ${SCRATCH} cascade`)
+      .catch(() => undefined)
+      .finally(() => process.exit(130))
+  })
+}
+
 const serviceKey = String(
   (
     await db.execute(
@@ -327,13 +388,15 @@ try {
     `)
   ).rows
   const short: string[] = []
-  for (const [qualified, claimed] of Object.entries(archive.row_counts ?? {})) {
-    const name = qualified.replace('.', '__')
-    if (!restored.some((r) => String(r.t) === name)) continue
-    const back = Number(
-      (await db.execute(`select count(*)::int as n from ${SCRATCH}."${name}"`)).rows[0]?.n ?? 0,
-    )
-    if (back !== Number(claimed)) short.push(`${qualified} ${String(back)}/${String(claimed)}`)
+  const wanted = Object.entries(archive.row_counts ?? {}).filter(([qualified]) =>
+    restored.some((r) => String(r.t) === qualified.replace('.', '__')),
+  )
+  const back = await countRows(
+    wanted.map(([qualified]) => [qualified, SCRATCH, qualified.replace('.', '__')] as const),
+  )
+  for (const [qualified, claimed] of wanted) {
+    const n = back.get(qualified) ?? 0
+    if (n !== Number(claimed)) short.push(`${qualified} ${String(n)}/${String(claimed)}`)
   }
   record(
     'and every table came back with the number of rows the archive claims',
@@ -379,13 +442,17 @@ try {
 
   const shrunk: string[] = []
   const impossible: string[] = []
-  for (const [qualified, claimed] of Object.entries(archive.row_counts ?? {})) {
-    if (!live.includes(qualified)) continue
-    const [schema, table] = qualified.split('.')
-    const now = Number(
-      (await db.execute(`select count(*)::int as n from "${String(schema)}"."${String(table)}"`))
-        .rows[0]?.n ?? 0,
-    )
+  const inArchive = Object.entries(archive.row_counts ?? {}).filter(([qualified]) =>
+    live.includes(qualified),
+  )
+  const liveNow = await countRows(
+    inArchive.map(([qualified]) => {
+      const [schema, table] = qualified.split('.')
+      return [qualified, String(schema), String(table)] as const
+    }),
+  )
+  for (const [qualified, claimed] of inArchive) {
+    const now = liveNow.get(qualified) ?? 0
     if (Number(claimed) <= now) continue
     const gap = `${qualified} ${String(claimed)}→${String(now)}`
     if (appendOnly.has(qualified)) impossible.push(gap)
@@ -415,4 +482,42 @@ for (const c of checks) console.log(`| ${c.what} | ${c.outcome} | ${c.passed ? '
 console.log(`\n${String(passed)}/${String(checks.length)} checks passed`)
 console.log(`The scratch schema ${SCRATCH} has been dropped. No archive was touched.`)
 
-process.exit(passed === checks.length ? 0 : 1)
+/*
+  Record the verdict, or this proves nothing tomorrow.
+
+  Until 0537 this script printed a report and exited. Nothing anywhere knew
+  whether a restore had EVER worked, so invariant 13 — a recent backup AND a
+  proven restore — was half unmeasurable, and `app.chores_for_backups` had
+  nothing to clear itself against.
+
+  Both outcomes are recorded, not just the good one. A rehearsal that failed
+  is the single most important thing this script can discover, and a ledger
+  that only holds successes cannot distinguish "the last one failed" from
+  "nobody has run one".
+*/
+const everything = passed === checks.length
+try {
+  await db.execute(
+    `select app.record_rehearsal(${lit(everything ? 'passed' : 'failed')}, ` +
+      `${lit(
+        JSON.stringify({
+          checks_passed: passed,
+          checks_total: checks.length,
+          folder: folder ?? null,
+          failed: checks.filter((c) => !c.passed).map((c) => c.what),
+        }),
+      )}::jsonb)`,
+  )
+  console.log(`Recorded as a backup.rehearsed event: ${everything ? 'passed' : 'failed'}.`)
+} catch (error) {
+  /*
+    Never fatal, and never silent either. The rehearsal's own verdict is what
+    matters and it is already printed above; a ledger write that failed must
+    not turn a passing restore into a red exit code, but it must not be
+    swallowed without a word — an unrecorded pass looks exactly like a
+    rehearsal nobody ran, and the chore will say so.
+  */
+  console.error(`Could not record the verdict: ${(error as Error).message}`)
+}
+
+process.exit(everything ? 0 : 1)

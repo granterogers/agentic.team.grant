@@ -42,6 +42,7 @@
 
 import type { SqlExecutor } from '../../src/db/executor.ts'
 import { ManagementApiExecutor } from '../../src/db/executor.ts'
+import { signedUrl } from '../../src/files/store.ts'
 import { SlackClient } from '../../src/slack/api.ts'
 import { ChannelProvisioner } from '../../src/slack/provision.ts'
 
@@ -241,7 +242,8 @@ check('the report job finished', childState, childState === 'complete')
 
 const made = await one(`
   select d.document_id::text as id, d.title, coalesce(d.storage_path, '') as path,
-         coalesce(d.mime_type, '') as mime, coalesce(d.byte_size, 0)::int as bytes
+         coalesce(d.mime_type, '') as mime, coalesce(d.byte_size, 0)::int as bytes,
+         coalesce(d.storage_path, '') as storage_path
     from public.documents d
    where d.project_id = ${lit(projectId)}::uuid and d.origin = 'made'
    order by d.created_at desc limit 1`)
@@ -262,54 +264,96 @@ check(
 // The room itself — Slack's answer, not ours
 // ---------------------------------------------------------------------------
 
-const history = async (): Promise<Record<string, unknown>[]> =>
-  ((await slack.call('conversations.history', { channel: CHANNEL, limit: 100 })).body
-    .messages as Record<string, unknown>[]) ?? []
+/*
+  ## Why this no longer waits for Slack to store a message
 
-let posted: Record<string, unknown>[] = []
-for (let i = 0; i < 18; i += 1) {
-  posted = await history()
-  if (posted.length > before) break
-  await pause(10_000)
-}
+  0523 made a harness job structurally incapable of delivering to a
+  destination that is not registered as a test one, and 0541 closed the
+  send-time hole underneath it — a job is now marked from the DOOR its work
+  came through rather than from an attribution the harness controls. This
+  suite's job is harness traffic and asserts so itself, three of three, so the
+  delivery is refused inside `app.claim_delivery` before anything touches the
+  network. These checks went red about the guard WORKING.
+
+  The fix is not to register this channel. It is a real channel in Grant's
+  workspace — this suite creates it and archives it — so registering it would
+  post test material into his Slack to make a suite green, which is exactly
+  what the guard exists to prevent.
+
+  ## Nothing below this line lost any coverage
+
+  What mattered here was never that Slack stored a message. It was that the
+  office produces a signed, expiring link to the file it made, that the link
+  SERVES THE BYTES, and that those bytes are the stored artifact. Every one of
+  those assertions survives unchanged; only their source moved, from a message
+  Slack echoed back to the same `signedUrl` the notifier itself calls
+  (`src/slack/notifier.ts` line 326).
+
+  The mrkdwn WRAPPING of that link — `<url|label>` — is asserted in
+  `tests/slack/artifact-link.test.ts`, which drives the whole delivery against
+  a fake transport, including "puts the signed link in the message Slack
+  actually receives". Reading it back out of `conversations.history` tested
+  Slack's storage as much as our composition, and the first version of that
+  check read `text` alone and reported "no link" about a message whose block
+  carried one.
+*/
+const attempted = await one(`
+  select state::text as s, coalesce(target_ref, '') as target
+    from public.deliveries
+   where job_id = ${lit(String(child.id))}::uuid and channel = 'slack'
+   order by created_at desc limit 1`)
 check(
-  'a message actually landed in the channel',
-  `${String(posted.length)} message(s), ${String(before)} before`,
-  posted.length > before,
+  'the office tried to tell that room — a delivery was claimed for this channel',
+  attempted.s === undefined
+    ? 'NO DELIVERY WAS EVER CLAIMED — the office never tried'
+    : `claimed for ${String(attempted.target)}`,
+  attempted.s !== undefined && String(attempted.target) === CHANNEL,
+)
+check(
+  'and the harness boundary is why it did not land, before any network call',
+  attempted.s === undefined ? 'n/a' : `state=${String(attempted.s)}`,
+  String(attempted.s ?? '') === 'suppressed',
 )
 
 /*
-  The link, taken out of what Slack returned.
-
-  Slack's mrkdwn link is `<url|label>`, and #186 records the inverse mistake —
-  escaping something one surface resolves. So the assertion is on the SHAPE
-  Slack stores, which is what a person would click.
+  Asked of Slack itself rather than inferred. This is the check that would go
+  red if a future change ever let a suite post into Grant's workspace again.
 */
-/*
-  THE BLOCKS, not only `text`.
-
-  Slack's `text` is the notification fallback and it renders `<url|label>` as
-  the LABEL alone — the first run of this suite read it and reported "no link"
-  about a message whose block might well have carried one. What a person clicks
-  is in the block, so that is where the assertion belongs. Both are searched,
-  because a future message might carry the link in either.
-*/
-const blockText = (m: Record<string, unknown>): string =>
-  (Array.isArray(m.blocks) ? (m.blocks as Record<string, unknown>[]) : [])
-    .map((b) => {
-      const t = b.text as { text?: string } | undefined
-      const fields = Array.isArray(b.fields) ? (b.fields as { text?: string }[]) : []
-      return [t?.text ?? '', ...fields.map((f) => f.text ?? '')].join('\n')
-    })
-    .join('\n')
-const text = posted.map((m) => `${String(m.text ?? '')}\n${blockText(m)}`).join('\n')
-const link = /<(https?:\/\/[^|>]+)(?:\|([^>]*))?>/.exec(text)
+const inRoom =
+  ((await slack.call('conversations.history', { channel: CHANNEL, limit: 100 })).body
+    .messages as Record<string, unknown>[]) ?? []
+const authored = inRoom.filter((m) => String(m.subtype ?? '') !== 'channel_join')
 check(
-  'and it carries a link to the file, in Slack’s own mrkdwn',
-  link === null
-    ? text.slice(0, 120) || '(no text at all)'
-    : String(link[2] ?? link[1]).slice(0, 80),
-  link !== null,
+  'CONTROL: and Slack itself holds no message from this run',
+  `${String(authored.length)} authored, ${String(inRoom.length)} total, ${String(before)} before`,
+  authored.length === 0,
+)
+
+/*
+  The link, minted the way the notifier mints it.
+
+  `src/slack/notifier.ts` line 326 calls `signedUrl(projectRef, serviceKey,
+  attach.storagePath)`. So does this, from the document the office actually
+  stored — the same function, the same arguments, no message in between.
+*/
+const serviceKey = String(
+  (
+    await one(
+      `select coalesce(decrypted_secret, '') as k from vault.decrypted_secrets
+        where name = 'supabase.service_role_key'`,
+    )
+  ).k ?? '',
+)
+const mintedUrl =
+  made.id === undefined || String(made.storage_path) === ''
+    ? null
+    : await signedUrl(ref, serviceKey, String(made.storage_path))
+const link: RegExpExecArray | null =
+  mintedUrl === null ? null : (/(https?:\/\/\S+)/.exec(mintedUrl) as RegExpExecArray | null)
+check(
+  'the office can mint a link to the file it made — the same call the notifier makes',
+  mintedUrl === null ? 'NO LINK COULD BE MINTED' : String(mintedUrl).slice(0, 72),
+  mintedUrl !== null,
 )
 
 /*

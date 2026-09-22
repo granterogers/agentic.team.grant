@@ -51,6 +51,7 @@
     "notion:import": "tsx scripts/notion/import.ts",
     "verify:ledger": "tsx scripts/verify/ledger.ts",
     "verify:jobs": "tsx scripts/verify/jobs.ts",
+    "verify:journals": "tsx scripts/verify/journals.ts",
     "verify:impediments": "tsx scripts/verify/impediments.ts",
     "verify:notice": "tsx scripts/verify/notice.ts",
     "verify:delegation": "tsx scripts/verify/delegation.ts",
@@ -158,6 +159,7 @@
     "verify:review": "tsx scripts/verify/review.ts",
     "verify:organising": "tsx scripts/verify/organising.ts",
     "verify:recovery": "tsx scripts/verify/recovery.ts",
+    "verify:resumes": "tsx scripts/verify/resumes.ts",
     "verify:mytasks": "tsx scripts/verify/mytasks.ts",
     "verify:schema": "tsx scripts/verify/schema.ts",
     "slack:rename-channels": "tsx scripts/slack/rename-channels.ts",
@@ -226,6 +228,7 @@
     "verify:google-live": "tsx scripts/verify/google-live.ts",
     "q": "tsx scripts/q.ts",
     "verify:drains": "tsx scripts/verify/drains.ts",
+    "verify:escapes": "tsx scripts/verify/escapes.ts",
     "verify:roster": "tsx scripts/verify/roster.ts",
     "breadth": "tsx scripts/breadth.ts",
     "session": "tsx scripts/sessions/cli.ts",
@@ -296,7 +299,8 @@
     "shadow:matrix": "tsx scripts/shadow/matrix.ts",
     "shadow:probe-live": "tsx scripts/shadow/probe-live.ts",
     "migrate:next": "tsx scripts/migration-number.ts",
-    "check:provenance": "tsx scripts/check-provenance.ts"
+    "check:provenance": "tsx scripts/check-provenance.ts",
+    "verify:backups": "tsx scripts/verify/backups.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

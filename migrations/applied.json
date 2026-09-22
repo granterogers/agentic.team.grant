@@ -541,5 +541,7 @@
   "0540_the_backup_chore_runs_without_waiting_for_a_deploy.sql": "fb1e0df0f565ec31ac339c94da8c5a306a49d249c0b2511b3aa36f14573da596",
   "0541_synthetic_work_cannot_cross_a_real_boundary.sql": "039f602cb454f4f8f9f617dbd015165f694a2c9abc65de97ac0c4a65ecdfb282",
   "0542_a_job_inherits_whether_it_is_real.sql": "fdaab209c8d140e520de972c2a5ba945aecf96ad77b611c79240b21d45efdb89",
-  "0543_an_offer_a_harness_made_is_not_an_offer.sql": "a87c4098bca9fde37781ba33e8dd86fa4d5737a8568048be4e19729ea1ba733e"
+  "0543_a_failed_backup_reaches_grant.sql": "b0a9c2d6d20184bff36d0a2e5c1b56b52449818ff67d8ade6d82b0e07d3ce650",
+  "0543_an_offer_a_harness_made_is_not_an_offer.sql": "a87c4098bca9fde37781ba33e8dd86fa4d5737a8568048be4e19729ea1ba733e",
+  "0544_exactly_once_means_exactly_once_delivered.sql": "a121b86bf175dc7e1fd2358f418fb85282880e1d9021789e00184be734e3dd98"
 }

@@ -60,6 +60,54 @@ describe('sequence', () => {
     expect(rules(files)).toContain('sequence/duplicate')
   })
 
+  /*
+    A collision that has ALREADY HAPPENED is history, not a mistake waiting
+    to be made.
+
+    Three sessions write to one database and `npm run migrate:next` exists
+    to stop two of them taking the same number. On 21 September it happened
+    anyway - Shadow Grant applied 0543 at 21:53 and Production Reliability
+    applied a different 0543 at 22:04. Both rows are real, because
+    `app.schema_migrations` is keyed on NAME.
+
+    Renaming one to clear the check was tried and reverted: it would make
+    the repository claim a migration ran under a number it did not, which
+    is rewriting history to make a check green. So the check learned the
+    distinction it was already holding the evidence for.
+
+    The second case below is the one that matters. Without it this change
+    is a hole: every duplicate would pass the moment one of the pair
+    happened to be applied.
+  */
+  const applied = (...names: string[]): Record<string, string> =>
+    Object.fromEntries(names.map((n) => [n, hash(file(n).sql)]))
+
+  it('does NOT fail a duplicate where both files are already applied', () => {
+    const files = [file('0001_a.sql'), file('0001_b.sql')]
+    const r = rules(files, applied('0001_a.sql', '0001_b.sql'))
+    expect(r).not.toContain('sequence/duplicate')
+    expect(r).toContain('sequence/collided')
+  })
+
+  it('still FAILS a duplicate where one file is not yet applied', () => {
+    const files = [file('0001_a.sql'), file('0001_b.sql')]
+    const r = rules(files, applied('0001_a.sql'))
+    expect(r).toContain('sequence/duplicate')
+    expect(r).not.toContain('sequence/collided')
+  })
+
+  it('and fails one where NEITHER is applied', () => {
+    expect(rules([file('0001_a.sql'), file('0001_b.sql')], {})).toContain('sequence/duplicate')
+  })
+
+  it('reports the recorded collision as a note, so nothing hides it', () => {
+    const files = [file('0001_a.sql'), file('0001_b.sql')]
+    const found = checkMigrations(files, applied('0001_a.sql', '0001_b.sql'), hash)
+    expect(found.map((f) => f.severity)).toEqual(['note'])
+    expect(found[0]?.message).toContain('0001_a.sql')
+    expect(found[0]?.message).toContain('0001_b.sql')
+  })
+
   it('is order-independent', () => {
     const ascending = [file('0001_a.sql'), file('0002_b.sql')]
     const descending = [file('0002_b.sql'), file('0001_a.sql')]

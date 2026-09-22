@@ -390,10 +390,45 @@ const piles = await db.execute(`
     */
     (select count(*) from public.tool_permissions
       where tool ~ '^(verification|fixture|probe|verify)[._-]') as harness_tools,
-    (select count(*) from public.staff where is_fixture and not active) as retired_fixture_staff
+    (select count(*) from public.staff where is_fixture and not active) as retired_fixture_staff,
+    /*
+      The eighth class, and the only one that is a SECURITY regression rather
+      than clutter.
+
+      0523 made app.claim_delivery default-deny for harness traffic: a
+      fixture job may only be delivered to a destination registered in
+      public.test_destinations. The table stood empty for a day and a half
+      and that was correct -- until two suites had to start registering their
+      own fabricated destinations, because the guard had quietly turned nine
+      of verify:transport's checks and one of verify:chaos's red about a
+      thing that was not broken.
+
+      No backticks in this comment, deliberately: it lives inside a template
+      literal and a backtick here ends the string. CLAUDE.md records that trap
+      five times and it was hit again writing this very block.
+
+      A registration a crashed run leaves behind does not merely clutter a
+      table. It permanently widens the hole 0523 closed, for that destination,
+      for ever, and nothing else would ever mention it. Every other debris
+      class here costs tidiness; this one costs the invariant.
+
+      Counted rather than swept, on purpose. A row here was put there
+      deliberately by somebody, and 0523's own argument is that what may
+      receive harness traffic is a decision rather than a default — so this
+      names it and stops, exactly as it does for a pinned project.
+    */
+    (select count(*) from public.test_destinations) as registered_test_destinations
 `)
 const pile = (piles.rows[0] ?? {}) as Record<string, number>
 const noisy: string[] = []
+if (Number(pile.registered_test_destinations ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.registered_test_destinations)} destination(s) still registered in ` +
+      'public.test_destinations — a suite registers one so its fixture job can be ' +
+      'delivered at all (0523) and removes it in teardown, so a row at rest means a ' +
+      'crashed run left the default-deny guard open for that destination',
+  )
+}
 if (Number(pile.fixture_tasks ?? 0) > 0) {
   noisy.push(`${String(pile.fixture_tasks)} fixture task(s) — npm run purge:fixtures -- --go`)
 }
@@ -455,6 +490,7 @@ console.log(
     `probe providers: ${String(pile.probe_providers)} · ` +
     `fixture connectors: ${String(pile.fixture_connectors)} · ` +
     `stranded autonomy rows: ${String(pile.stranded_autonomy)} · ` +
+    `test destinations registered: ${String(pile.registered_test_destinations)} · ` +
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `harness offers on the Governance page: ${String(pile.harness_offers)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,

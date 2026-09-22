@@ -22,7 +22,15 @@ export interface MigrationFile {
 export type RecordedChecksums = Readonly<Record<string, string>>
 
 export interface Finding {
-  readonly severity: 'error'
+  /**
+   * `note` is reported and does not fail.
+   *
+   * Added for the one case where a rule's subject is HISTORY rather than a
+   * pending mistake: two branches that took the same sequence number and
+   * both applied it. That cannot be un-done and must not be hidden, so it
+   * is neither an error nor silence.
+   */
+  readonly severity: 'error' | 'note'
   readonly file: string | null
   readonly rule: string
   readonly message: string
@@ -130,11 +138,46 @@ export function checkMigrations(
   // --- duplicate and missing sequence numbers ------------------------------
   for (const [sequence, names] of [...sequences].sort((a, b) => a[0] - b[0])) {
     if (names.length > 1) {
-      err(
-        null,
-        'sequence/duplicate',
-        `sequence ${String(sequence).padStart(4, '0')} used by ${names.length} files: ${names.join(', ')}`,
-      )
+      /*
+        A collision that has ALREADY HAPPENED is history, not a mistake
+        waiting to be made.
+
+        This rule exists so two branches do not take the same number and
+        then both apply it - the shared database has three sessions writing
+        to it and `npm run migrate:next` exists to prevent exactly that. On
+        21 September it happened anyway: Shadow Grant applied 0543 at 21:53
+        and Production Reliability applied a different 0543 at 22:04, eleven
+        minutes apart. `app.schema_migrations` is keyed on NAME, so both are
+        recorded and both ran.
+
+        Renaming one to clear this was tried and is the wrong fix. It would
+        make the repository claim a migration ran as 0545 when it ran as
+        0543, which is rewriting history to make a check green - and
+        Production Reliability made that exact argument the same day about
+        preserving two escape rows rather than deleting them.
+
+        So the DISTINCTION is what the rule needed, and it is the one this
+        function was already holding the evidence for. Every file applied:
+        a recorded collision, reported and not failed. Any file unapplied:
+        the pending case, still an error, because that one can still be
+        fixed by taking a free number.
+      */
+      const allApplied = names.every((n) => recorded[n] !== undefined)
+      const where = `sequence ${String(sequence).padStart(4, '0')} used by ${names.length} files: ${names.join(', ')}`
+      if (allApplied) {
+        findings.push({
+          severity: 'note',
+          file: null,
+          rule: 'sequence/collided',
+          message: `${where} - both applied, so this is a recorded collision between branches rather than a pending one. Renaming either would make the repository claim a number it did not run under.`,
+        })
+      } else {
+        err(
+          null,
+          'sequence/duplicate',
+          `${where} - at least one is NOT yet applied, so take a free number with npm run migrate:next before applying it`,
+        )
+      }
     }
   }
 

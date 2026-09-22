@@ -125,6 +125,38 @@ try {
   )
   if (made.is_fixture !== true) throw new Error('refusing to continue with a real job')
 
+  /*
+    Register this suite's two fabricated destinations, or nothing below tests
+    what it says it tests.
+
+    0523 made `app.claim_delivery` default-deny for harness traffic: a fixture
+    job may only be delivered to a destination registered in
+    `public.test_destinations`, and that table has never held a row. It landed
+    on 20 September at 08:49 and **nine of this suite's checks have been red
+    ever since** — every one of them reporting `suppressed`, which is the
+    guard working and not the transport failing. This suite is IN the gate,
+    so the gate has been red for a day and a half about a thing that is not
+    broken. A check that fails for the wrong reason is worse than no check:
+    it teaches whoever reads it to discount the colour.
+
+    Safe, and not a weakening of 0523:
+
+      * `CVERIFY001` and `12345` are fabricated. Nothing in this file performs
+        a network send at all — the provider is simulated by reporting a
+        retryable failure, and every call is to the office's own SQL.
+      * 0523's trigger refuses any destination that has ever received a real
+        delivery, so this cannot be aimed at Grant by mistake.
+
+    Removed in teardown, and the removal is asserted like every other.
+  */
+  await db.execute(`
+    insert into public.test_destinations (channel, target_ref, why) values
+      ('slack', 'CVERIFY001',
+       'verify:transport — a fabricated channel; this suite performs no network send'),
+      ('telegram', '12345',
+       'verify:transport — a fabricated chat; this suite performs no network send')
+    on conflict (channel, target_ref) do nothing`)
+
   // --- the claim ----------------------------------------------------------
   const claimed = await one(`
     select * from app.claim_delivery(
@@ -582,6 +614,9 @@ try {
   }
   if (jobId !== '') {
     await db.execute(`delete from public.deliveries where job_id = ${lit(jobId)}::uuid`)
+    await db.execute(`
+      delete from public.test_destinations
+       where (channel, target_ref) in (('slack', 'CVERIFY001'), ('telegram', '12345'))`)
     const left = await one(
       `select count(*) as n from public.deliveries where job_id = ${lit(jobId)}::uuid`,
     )

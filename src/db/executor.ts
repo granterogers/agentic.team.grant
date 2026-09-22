@@ -89,17 +89,49 @@ export class ManagementApiExecutor implements SqlExecutor {
 
     Five attempts, doubling from two seconds — about half a minute in total,
     which is what the Management API's window actually needed; four attempts
-    from one second gave up after seven and the throttle was still on. Only on
-    the two statuses that
-    mean "ask again later". Everything else — a 400 carrying a Postgres error,
-    a 401, a 404 — is an answer and is raised immediately, because retrying a
-    syntax error four times is four times the wait for the same message.
+    from one second gave up after seven and the throttle was still on.
 
-    Here rather than in each caller: 82 call sites cannot each remember it, and
-    the ones that measure something are exactly the ones where forgetting is
-    invisible.
+    ## Why this asks a property rather than consulting a list
+
+    It used to be `new Set([429, 503])`, and on 21 September the gateway
+    returned **502 with an HTML body** twice in one run of `verify:failures`,
+    at two different call sites. A 502 is not an answer from Postgres — it is
+    Cloudflare saying it could not reach one — and it was raised immediately
+    as though it were, which is the thing the paragraph above exists to
+    forbid.
+
+    A list of the statuses that mean "ask again later" is an enumeration of
+    things the infrastructure will add to, and CLAUDE.md already records what
+    those cost: a whitelist "fails by refusing to speak, which is the
+    expensive direction", and the correction each time has been to state the
+    property instead. The property here is exact, because the two layers use
+    disjoint status ranges:
+
+      * **Postgres answers through this API as a 400** carrying
+        `{"message": "Failed to run sql query: ERROR: 42601: ..."}`. A syntax
+        error, a constraint violation, a permission refusal — every one of
+        them is a 400, and every one of them is an ANSWER.
+      * **Anything 5xx is the transport**, not the database. The gateway, the
+        pooler, the API process. Retrying it is the only correct response.
+
+    So: 429, plus any 5xx. A 401 and a 404 are still answers and still raise
+    at once, because retrying a bad token four times is four times the wait
+    for the same message.
+
+    The cost of being wrong in each direction is what settles it. A 5xx that
+    really did carry a database answer costs thirty seconds and then the same
+    message. A 5xx treated as data costs a measurement that is wrong for
+    reasons that have nothing to do with the office — and **the production
+    worker uses this executor** whenever the direct Postgres connection is
+    unavailable, so there it costs a burnt job attempt, five of which is a
+    permanently failed job.
+
+    Here rather than in each caller: 219 files construct one, and the ones
+    that measure something are exactly the ones where forgetting is invisible.
   */
-  private static readonly RETRY_ON = new Set([429, 503])
+  private static retryable(status: number): boolean {
+    return status === 429 || status >= 500
+  }
 
   async execute(sql: string): Promise<SqlResult> {
     let response!: Response
@@ -112,7 +144,7 @@ export class ManagementApiExecutor implements SqlExecutor {
         },
         body: JSON.stringify({ query: sql }),
       })
-      if (!ManagementApiExecutor.RETRY_ON.has(response.status) || attempt >= 4) break
+      if (!ManagementApiExecutor.retryable(response.status) || attempt >= 4) break
       await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
     }
 
