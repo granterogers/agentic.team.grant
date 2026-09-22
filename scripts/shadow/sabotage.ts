@@ -285,6 +285,16 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'a-rename-needs-a-referent',
+    proves: 'an ungrounded follow-up cannot rename whatever happens to be newest',
+    file: 'src/handlers/instruction.ts',
+    anchor:
+      "                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,",
+    replacement: "                'select app.my_task_recent() as t',",
+    check: 'tests/handlers/a-rename-needs-a-referent.test.ts',
+  },
+
+  {
     name: 'colleagues-reach-the-conversation',
     proves: 'what a specialist came back with is visible to a later turn',
     file: 'src/handlers/instruction.ts',

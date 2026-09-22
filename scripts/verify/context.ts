@@ -355,6 +355,74 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
   }
 }
 
+// ------------------------------------------- the referent of a follow-up
+{
+  /*
+    #313 / 0551. "Call it X" may rename something only when that something is
+    canonically grounded as what he meant.
+
+    The defect this replaced asked for the newest open personal task in the
+    last half hour, ANYWHERE in the office, and renamed it — proximity
+    standing in for reference. #259's own control caught it: one reply
+    renamed "Chase the printers" to "Review the onboarding copy for the task
+    labeled …".
+
+    The boundaries are the point, so all four are here: none, one, several,
+    and a DIFFERENT conversation, which is the one a clock can never express.
+  */
+  const r = await scenario(
+    'referent',
+    `insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key, received_at)
+     values ('teamhq', 'ref${run}:1', 'grant', 'ctx-${run}', 'Add a task',
+             'teamhq:ref:${run}_one', app.now_utc() - interval '1 minute')
+     returning command_id into v_c;
+     insert into public.jobs (correlation_id, project_id, idempotency_key, kind,
+                              requested_by, priority)
+     values (gen_random_uuid(), v_p, 'ref-${run}-job', 'office.instruction', 'teamhq:grant', 10)
+     returning job_id into v_k;
+     update public.inbound_commands set job_id = v_k where command_id = v_c;
+
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key)
+     values ('teamhq', 'ref${run}:2', 'grant', 'ctx-${run}', 'Call it something else',
+             'teamhq:ref:${run}_two')
+     returning command_id into v_c2;
+
+     v_ans := v_ans || jsonb_build_object('none',
+       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));
+
+     insert into public.tasks (title, added_by, assigned_to_human, job_id)
+     values ('The one this conversation made', 'the office', true, v_k);
+     v_ans := v_ans || jsonb_build_object('one',
+       coalesce(app.my_task_referent(v_c2) ->> 'title', 'NULL'));
+
+     insert into public.tasks (title, added_by, assigned_to_human, job_id)
+     values ('A second from the same conversation', 'the office', true, v_k);
+     v_ans := v_ans || jsonb_build_object('several',
+       coalesce((app.my_task_referent(v_c2) ->> 'ambiguous'), 'NULL'));
+
+     -- A DIFFERENT conversation, with those two tasks sitting there, minutes old.
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key)
+     values ('teamhq', 'other${run}:1', 'grant', 'ctx-${run}', 'Call it something else',
+             'teamhq:ref:${run}_three')
+     returning command_id into v_c2;
+     v_ans := v_ans || jsonb_build_object('elsewhere',
+       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));`,
+  )
+  if (r.skipped === undefined) {
+    ok('a conversation that made nothing offers no referent', r.none === 'NULL', r.none)
+    ok('one task it made IS the referent', r.one === 'The one this conversation made', r.one)
+    /*
+      Several is the case that matters most: the old reader picked the newest
+      and renamed it. Ambiguity must be reported, never resolved.
+    */
+    ok('two are ambiguous, and it says so rather than picking', r.several === '2', r.several)
+    ok('and another conversation inherits no referent at all', r.elsewhere === 'NULL', r.elsewhere)
+  }
+}
+
 // ------------------------------------------------- a paused project
 {
   const r = await scenario(

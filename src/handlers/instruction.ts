@@ -3206,10 +3206,16 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         not a change to the last one, and `personalTaskChange` refuses those
         for the same reason one layer down.
 
-        The subject is `app.my_task_recent` — the newest open personal task in
-        the last half hour — and never a title match, because a fuzzy match is
-        one bad guess away from editing a row he did not mean. The confirmation
-        NAMES what changed, which is the honest alternative to guessing well.
+        The subject is `app.my_task_referent` — the ONE task this conversation
+        made — and never a title match, because a fuzzy match is one bad guess
+        away from editing a row he did not mean. The confirmation NAMES what
+        changed, which is the honest alternative to guessing well.
+
+        It used to be `app.my_task_recent`: the newest open personal task in
+        the last half hour, anywhere in the office. That is proximity rather
+        than reference, and #259's own control caught what it costs — one
+        "Call it X" renamed an unrelated task Grant had never mentioned
+        (#313, 0551).
       */
       // A plural extraction is not a single task. `pullOut` having claimed the
       // sentence, `taskRequest` must not also file one from the same words —
@@ -3285,13 +3291,50 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         change === null
           ? null
           : await deps.db
-              .execute('select app.my_task_recent() as t')
+              /*
+                THE REFERENT, NOT THE NEWEST ROW (#313, 0551).
+
+                This asked `app.my_task_recent()` — the newest open personal
+                task in the last half hour, ANYWHERE in the office — and
+                renamed it. That is proximity standing in for reference, and
+                the task Grant meant and the newest task are the same row
+                only by luck.
+
+                Caught by #259's own control on v729: one "Call it X" renamed
+                "Chase the printers" to "Review the onboarding copy for the
+                task labeled …". The comment below already said "never claim
+                a task was changed unless canonical state proves it", and the
+                only thing proved was that SOMETHING recent existed.
+
+                `app.my_task_referent` answers the narrower question: the one
+                task THIS CONVERSATION made. One candidate is a referent;
+                several are ambiguous and get asked about; none gets asked
+                about too. A fresh conversation therefore inherits nothing,
+                which is the boundary a clock cannot express.
+              */
+              .execute(
+                `select app.my_task_referent(${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as t`,
+              )
               .then(async (r) => {
                 const raw = (r.rows[0] as { t?: unknown })?.t
                 const subject = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
                   id?: string
                   title?: string
+                  ambiguous?: number
+                  titles?: string[]
                 } | null
+                /*
+                  SEVERAL things it could mean, so it asks which — and names
+                  them, because "which one?" with no list is a question he
+                  cannot answer either.
+                */
+                if (typeof subject?.ambiguous === 'number') {
+                  const names = (subject.titles ?? []).slice(0, 4).map((t) => `"${t}"`)
+                  return (
+                    `There is more than one thing that could be — ${names.join(', ')}. ` +
+                    'Say which and I will change it.'
+                  )
+                }
                 /*
                   Nothing to point at is said out loud rather than guessed.
                   #259: never claim a task was changed unless canonical state
@@ -3300,7 +3343,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 if (subject?.id === undefined) {
                   return (
                     'I am not sure which task you mean — nothing has gone on your list ' +
-                    'in the last half hour. Tell me the name and I will change it.'
+                    'in this conversation. Tell me the name and I will change it.'
                   )
                 }
                 const set = await deps.db.execute(`
