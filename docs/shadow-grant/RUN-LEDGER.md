@@ -1742,3 +1742,70 @@ reported whatever the mood.
 Both halves sabotaged and proved red: removing `if (!c.asked) return null`
 turns the contract suite red, and replacing the grammar call with
 `requests.length > 0` turns the handler source assertion red.
+
+## What the fix measured, v691
+
+The ten sessions were re-recorded against the deployed worker and the
+independent oracle re-run over both prefixes.
+
+```
+                  turns   scored   ESCAPES   CLAIMS   FALSE REFUSALS
+d302                 22       21         0        0                0
+dfresh               13       13         0        0                0
+
+classes reached live: completed 27 · blocked_needs_user 4 ·
+                      pending_approval 2 · failed_after_retries 1
+
+OPENS BY SAYING IT DID NOTHING   7 of 34   (was 22 of 34)
+   on a question                 0         (was 8)
+```
+
+**65% to 21%, and none of the seven is a question.** Every remaining one
+is a turn where he genuinely asked for something and nothing landed —
+*"ring the venue"*, *"put it on the list"*, *"get someone to look at what
+the three big competitors charge"* — which is the sentence doing its job.
+
+## And the residual the corpus could not see, found live
+
+A probe against v691, of a shape none of the 35 turns had:
+
+```
+"tell me where we are on the bid"
+  -> "I have not done this. I understood what you want and could not carry
+      it out — say it again in a sentence and I will. I have no record of
+      any updates on the bid…"
+```
+
+An imperative is an `ask` whether it wants a row or an answer, and `landed`
+counts only rows — so the office apologised for failing to do something
+nobody asked it to do, immediately before doing what was asked.
+
+`asksForWork` asks the second question about an `ask` clause, and asks it
+with POSITIVE evidence: a wh-complement after a verb of informing. The
+first draft read *"an informing verb and no sign of an action"*, which also
+swallows *"remind me about the paperwork"* — the commonest way he asks for
+a row, and #302 reopened on the request that most needs it. Anything not
+plainly a request for information still counts as work.
+
+Verified on v695: the clause is gone and the answer is unchanged. The v691
+measurement above still stands for this corpus, because **0 of the 35
+recorded turns change their `asked` verdict under the new predicate** —
+checked offline against the recorded text rather than assumed.
+
+## What is NOT claimed, and one thing left open
+
+- Still one turn in 35 answering nothing (`d302-dictated#0`, four attempts,
+  four coherence refusals). Unchanged by any of this, and #211's territory.
+- **A whole-message withdrawal still gets the clause.** *"forget the
+  proofreading, it is being done elsewhere"* is an imperative, so it reads
+  as work asked for, and the office says it has not done the thing he asked
+  it not to do. **One occurrence in 160 real messages over 45 days**, and
+  the discriminator is genuinely hard — *"cancel that"* is a withdrawal and
+  *"cancel the venue booking"* is work. Filed rather than patched on one
+  harness occurrence, which is the rule #301 and #303 were filed under.
+- 34 turns is 34 samples of a stochastic system.
+
+Gates: 2655 tests · lint · tsc · migrations · secrets · templates ·
+fingerprint `b98b6cf030e75970` unchanged · sabotage **21 detectors**, each
+shown a defect and each red · containment swept to zero on every counter but
+the reported lesson pile and #298's two preserved rows.
