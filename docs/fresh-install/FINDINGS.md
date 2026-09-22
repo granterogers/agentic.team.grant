@@ -240,3 +240,58 @@ check:fresh` refuses the shape anywhere new.
 Rewriting all 252 was considered and rejected: a diff across the whole
 repository, while three other workstreams are in flight, for a change whose
 whole benefit is a message that `resolveProjectRef` now prints anyway.
+
+---
+
+## F-010 — `fresh:install` silently installed into a throwaway
+
+**Status:** FIXED · **Found by:** the adversarial clean-room pass · **Journey:** B
+
+Following `SETUP.md` in order, a person reaches `npm run fresh:install` before
+they have created a Supabase project — because the document lists the project as
+step 3 and the install as step 6, and people do not always do things in order.
+
+It defaulted to a local `fresh_alex_*` database, succeeded in a second and a
+half, and printed **INSTALLED**. The line above it said "disposable", which is
+exactly the kind of word somebody setting a thing up for the first time does not
+read. They would have had a working office they were never going to look at
+again, and no reason to suspect it.
+
+The local path must now be asked for by name (`FRESH_DB`). A person gets told
+what to do instead, with the two exports and a pointer to the doctor.
+
+**Only findable by running it.** Every check was green over this: the install
+worked, the database was valid, the acceptance suite passed — because the
+acceptance suite sets `FRESH_DB`, which is precisely the thing a person does
+not do.
+
+## F-011 — The doctor told somebody to fetch a key they had already stored
+
+**Status:** FIXED · **Found by:** the adversarial clean-room pass · **Journey:** A
+
+Storing the OpenRouter key and re-running the doctor produced:
+
+```
+NEXT: An OpenRouter API key
+  1. Go to https://openrouter.ai and sign in.
+  ...
+```
+
+The key was in the vault. What was missing was `npm run fresh:configure` to
+connect it — and **the check knew**: its own detail line said *"a key is stored
+but nothing is using it yet"*. The next-action block was not reading it, and
+showed the entry's usual human steps instead.
+
+A person following that would go and make a second key, and the second one would
+not work either, for the same reason. A `Result` may now carry what to do about
+THIS state, and the next-action block prefers it.
+
+## F-012 — The doctor could never finish against the one target needing no account
+
+**Status:** FIXED · **Journey:** A
+
+A local harness database has no Supabase project, no access token and nothing
+deployed in front of it, and never will. The doctor reported all five as
+**todo**, so it counted down to a number it could not reach — and a progress
+report that cannot finish is one nobody follows. Those entries now report
+`n/a` with the reason, and the count says how many do not apply.

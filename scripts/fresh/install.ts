@@ -55,7 +55,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
-import { HARNESS_DB_PREFIX, refuseForeignDatabase } from '../../src/fresh/forbidden.ts'
+import { refuseForeignDatabase } from '../../src/fresh/forbidden.ts'
 import {
   asSuperuser,
   createDatabase,
@@ -89,7 +89,32 @@ function chooseTarget(): Target {
       db: null,
     }
   }
-  const db = process.env.FRESH_DB ?? `${HARNESS_DB_PREFIX}install`
+  /*
+    The local path has to be ASKED for.
+
+    This defaulted to a `fresh_alex_*` database whenever no Supabase project was
+    configured, and the clean-room pass found what that does to somebody
+    following SETUP.md in order: they run the install before creating their
+    project, it succeeds in a second and a half, it says INSTALLED, and they
+    have a disposable database they will never look at again. It says
+    "disposable" in the line above, which is exactly the kind of thing a person
+    setting something up for the first time does not read.
+
+    A harness asks for it by name. A person gets told what to do instead.
+  */
+  const db = process.env.FRESH_DB
+  if (db === undefined) {
+    console.error(
+      'No office to install into.\n\n' +
+        'Before this step you need a Supabase project of your own and an access token\n' +
+        'for it, and this repository needs to know about them:\n\n' +
+        '    export SUPABASE_PROJECT_REF=<your project reference>\n' +
+        '    export SUPABASE_ACCESS_TOKEN=<your access token>\n\n' +
+        'Run npm run fresh:doctor and it will walk you through both, with the exact\n' +
+        'steps and the pages to get them from.\n',
+    )
+    process.exit(2)
+  }
   refuseForeignDatabase(db)
   return {
     executor: new PostgresExecutor(localConnection(db)),

@@ -29,16 +29,45 @@ import { CONTRACT, humanEffort } from '../../src/fresh/contract.ts'
 import { GRANT_PRODUCTION_PROJECT_REF, HARNESS_DB_PREFIX } from '../../src/fresh/forbidden.ts'
 import { localConnection } from '../../src/fresh/local-db.ts'
 
-type State = 'ok' | 'missing' | 'blocked' | 'unknown'
+type State = 'ok' | 'missing' | 'blocked' | 'unknown' | 'n/a'
 interface Result {
   readonly state: State
   /** What was established, in words. Never a value. */
   readonly detail: string
+  /**
+   * What to do about THIS state, when it differs from the entry's usual step.
+   *
+   * The clean-room pass found why this is needed. A person stored their
+   * OpenRouter key, ran the doctor, and was told "NEXT: An OpenRouter API key"
+   * followed by five steps for getting one — because the entry's human steps
+   * are about acquiring a key, and what was actually missing was
+   * `npm run fresh:configure` to connect the one they had. The check knew: its
+   * detail said so. The next-action block was not reading it.
+   */
+  readonly instead?: string
 }
 
 const ok = (detail: string): Result => ({ state: 'ok', detail })
 const missing = (detail: string): Result => ({ state: 'missing', detail })
 const unknown = (detail: string): Result => ({ state: 'unknown', detail })
+/**
+ * Not applicable to the office being looked at.
+ *
+ * A local harness database has no Supabase project, no access token and
+ * nothing deployed in front of it, and it never will. Reporting those as
+ * "todo" makes the doctor unable to ever finish against the one target that
+ * needs no account — and a progress report that can only count down to a
+ * number it cannot reach is one nobody follows.
+ */
+const notHere = (detail: string): Result => ({ state: 'n/a', detail })
+
+/** Is the office being examined a local harness database rather than a project? */
+function local(): boolean {
+  const ref = process.env.SUPABASE_PROJECT_REF
+  const token = process.env.SUPABASE_ACCESS_TOKEN
+  const hasProject = ref !== undefined && ref !== '' && token !== undefined && token !== ''
+  return !hasProject && process.env.FRESH_DB?.startsWith(HARNESS_DB_PREFIX) === true
+}
 
 /** Connect to whatever office this environment names, or to nothing. */
 async function office(): Promise<{ db: SqlExecutor; where: string } | null> {
@@ -81,6 +110,12 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
   },
   'supabase-project': async (db) => {
     if (db === null) return missing('no project named — nothing to check')
+    if (local()) {
+      // Reachable and answering, and NOT a Supabase project. Reporting "ok"
+      // here read as though the harness database were one, which is the shape
+      // of lie this whole workstream exists to find.
+      return ok('a local harness database is standing in for one — reachable, and it answered')
+    }
     try {
       const n = await one(db, 'select 1 as n')
       return n === 1 || n === '1'
@@ -93,7 +128,10 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
   },
   SUPABASE_PROJECT_REF: async () => {
     const v = process.env.SUPABASE_PROJECT_REF
-    if (v === undefined || v === '') return missing('not set')
+    if (v === undefined || v === '') {
+      if (local()) return notHere('this is a local harness database — it has no Supabase project')
+      return missing('not set')
+    }
     if (v === GRANT_PRODUCTION_PROJECT_REF) {
       return {
         state: 'blocked',
@@ -105,8 +143,13 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
     return ok('set')
   },
   SUPABASE_ACCESS_TOKEN: async (db) => {
-    if (process.env.SUPABASE_ACCESS_TOKEN === undefined || process.env.SUPABASE_ACCESS_TOKEN === '')
+    if (
+      process.env.SUPABASE_ACCESS_TOKEN === undefined ||
+      process.env.SUPABASE_ACCESS_TOKEN === ''
+    ) {
+      if (local()) return notHere('nothing to authenticate against on a local database')
       return missing('not set')
+    }
     if (db === null) return ok('set (not yet verified — no project to try it against)')
     try {
       await one(db, 'select 1 as n')
@@ -137,6 +180,7 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
   },
   'db.project_ref': async (db) => {
     if (db === null) return missing('no office to look in')
+    if (local()) return notHere('a local database has no Supabase address to know')
     try {
       const v = await one(
         db,
@@ -179,7 +223,11 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
       if (connected)
         return ok('stored and connected — run npm run fresh:first-use to prove it thinks')
       if (stored > 0)
-        return missing('a key is stored but nothing is using it yet — run: npm run fresh:configure')
+        return {
+          state: 'missing',
+          detail: 'a key is stored, and nothing is using it yet',
+          instead: 'npm run fresh:configure',
+        }
       return missing('no key stored — the office cannot think yet')
     } catch {
       return unknown('could not read the vault')
@@ -232,7 +280,10 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
 
 async function deployed(fn: string): Promise<Result> {
   const ref = process.env.SUPABASE_PROJECT_REF
-  if (ref === undefined || ref === '') return missing('nothing deployed — no project named')
+  if (ref === undefined || ref === '') {
+    if (local()) return notHere('nothing is deployed in front of a local database')
+    return missing('nothing deployed — no project named')
+  }
   try {
     // Functionally, not by presence: ask the deployed thing whether it is there.
     const response = await fetch(`https://${ref}.supabase.co/functions/v1/${fn}`, {
@@ -249,13 +300,11 @@ async function deployed(fn: string): Promise<Result> {
 }
 
 function paint(state: State): string {
-  return state === 'ok'
-    ? '  ok  '
-    : state === 'missing'
-      ? ' todo '
-      : state === 'blocked'
-        ? 'BLOCKED'
-        : '  ?   '
+  if (state === 'ok') return '  ok  '
+  if (state === 'missing') return ' todo '
+  if (state === 'blocked') return 'BLOCKED'
+  if (state === 'n/a') return ' n/a  '
+  return '  ?   '
 }
 
 async function main(): Promise<void> {
@@ -285,9 +334,16 @@ async function main(): Promise<void> {
   }
 
   const core = CONTRACT.filter((e) => e.requirement === 'REQUIRED_FOR_CORE')
-  const coreDone = core.filter((e) => results.get(e.id)?.state === 'ok').length
+  const applicable = core.filter((e) => results.get(e.id)?.state !== 'n/a')
+  const coreDone = applicable.filter((e) => results.get(e.id)?.state === 'ok').length
 
-  console.log(`REQUIRED — ${coreDone} of ${core.length} done\n`)
+  console.log(
+    `REQUIRED — ${coreDone} of ${applicable.length} done` +
+      (applicable.length === core.length
+        ? ''
+        : ` (${core.length - applicable.length} do not apply to this kind of office)`) +
+      '\n',
+  )
   for (const entry of core) {
     const r = results.get(entry.id)
     if (r === undefined) continue
@@ -295,7 +351,7 @@ async function main(): Promise<void> {
     if (r.state !== 'ok') console.log(`            ${r.detail}`)
   }
 
-  const next = core.find((e) => results.get(e.id)?.state !== 'ok')
+  const next = applicable.find((e) => results.get(e.id)?.state !== 'ok')
 
   if (next === undefined) {
     console.log('\nEverything required is done. Your office works.\n')
@@ -313,7 +369,12 @@ async function main(): Promise<void> {
 
   console.log(`\nNEXT: ${next.title}\n`)
   console.log(`  Why: ${next.why}\n`)
-  if (next.human !== undefined) {
+  const found = results.get(next.id)
+  if (found?.instead !== undefined) {
+    // What this office needs is not the entry's usual step.
+    console.log(`  ${found.detail}. Run:\n`)
+    console.log(`    ${found.instead}`)
+  } else if (next.human !== undefined) {
     console.log(
       `  This one needs you — ${next.human.because}, which no software may do on your behalf.`,
     )
@@ -324,7 +385,7 @@ async function main(): Promise<void> {
     console.log(`    ${next.automatedBy}`)
   }
 
-  const left = core.filter((e) => results.get(e.id)?.state !== 'ok')
+  const left = applicable.filter((e) => results.get(e.id)?.state !== 'ok')
   const effort = humanEffort(left)
   console.log(
     `\n  ${left.length} step(s) left in total, of which ${
