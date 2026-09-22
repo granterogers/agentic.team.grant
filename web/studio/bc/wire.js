@@ -1467,6 +1467,15 @@ const wireTasks = (root) => {
   for (const b of root.querySelectorAll('[data-bc-tasksave-edit]')) {
     b.addEventListener('click', async () => {
       const id = b.dataset.bcTasksaveEdit
+      if (String(id ?? '').startsWith('p:')) {
+        /* A prototype row: the browser remembers it, as everywhere else. */
+        todos.rememberPatch(ctx.state.project, id, {
+          who: String(root.querySelector('#bc-edit-who')?.value ?? '').trim(),
+          due: String(root.querySelector('#bc-edit-due')?.value ?? '').trim(),
+        })
+        ctx.render()
+        return
+      }
       const who = String(root.querySelector('#bc-edit-who')?.value ?? '').trim()
       const due = String(root.querySelector('#bc-edit-due')?.value ?? '').trim()
       /*
@@ -1495,10 +1504,16 @@ const wireTasks = (root) => {
 
   for (const b of root.querySelectorAll('[data-bc-taskdone]')) {
     b.addEventListener('click', async () => {
+      const key = b.dataset.bcTaskdone ?? ''
+      if (key.startsWith('p:')) {
+        todos.rememberDone(ctx.state.project, key, b.dataset.bcWant === 'done')
+        ctx.render()
+        return
+      }
       const done = await attempt(
         b,
         'Saving…',
-        () => act('task_state', { p_task_id: b.dataset.bcTaskdone, p_state: b.dataset.bcWant }),
+        () => todos.setDone(key, b.dataset.bcWant === 'done'),
         b.dataset.bcWant === 'done' ? 'Done.' : 'Put back.',
       )
       if (done !== null) await ctx.refresh()

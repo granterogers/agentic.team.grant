@@ -624,7 +624,14 @@ const projectHeader = (p, latest) => {
         .join(', ') || 'No one assigned'}
       ${waiting === 0 ? '' : status(waiting === 1 ? '1 thing waiting' : `${waiting} things waiting`, 'waiting')}
       <span class="bcactions">
-        ${button('Project settings', { 'data-bc-leave': `/p/${p.slug}/settings` })}
+        <!--
+          INSIDE THE EXPERIENCE. This was the last hand-off to the legacy
+          settings screen, left behind when the surface came in-house - which
+          is the shape Grant asked to look for: "If one legacy screen remains,
+          inspect navigation routes that can unexpectedly expose other legacy
+          UI." Two doors onto one screen, and only one of them had been moved.
+        -->
+        ${button('Project settings', { 'data-bc-go': at(`/p/${p.slug}/settings`) })}
       </span>
     </div>
     <h1>${esc(p.name)}</h1>
@@ -987,6 +994,7 @@ const taskRecord = (p) => {
       )}`
   }
   const done = t.state === 'done'
+  const key = taskKey(t)
   return `${breadcrumb([
     { name: p.name, to: at(`/p/${p.slug}`) },
     { name: toolById('tasks')?.name ?? 'To-dos', to: at(`/p/${p.slug}/tasks`) },
@@ -1011,7 +1019,7 @@ const taskRecord = (p) => {
     </p>
 
     <h2 class="bcsubhead">Details</h2>
-    <form class="bcaddform bcgap-l" data-bc-taskedit="${esc(String(t.id ?? ''))}">
+    <form class="bcaddform bcgap-l" data-bc-taskedit="${esc(key)}">
       ${input({
         id: 'bc-edit-who',
         label: 'Assigned to',
@@ -1021,23 +1029,25 @@ const taskRecord = (p) => {
         hint: 'A team member’s name, or leave it unassigned.',
       })}
       ${input({ id: 'bc-edit-due', label: 'Due date', name: 'due', type: 'date', value: isoDay(t.due) })}
+      <!--
+        NOT DISABLED FOR A PROTOTYPE ROW - the third and last instance of the
+        same defect, found by grepping for the shape rather than by waiting
+        for Grant to press one. The controls carry the port's key, so a row
+        with a record writes to the office and a row without is remembered
+        here, exactly as the tick and the card table are.
+      -->
       <div class="bcrow">
-        ${button('Save', {
-          kind: 'primary',
-          'data-bc-tasksave-edit': String(t.id ?? ''),
-          disabled: t.id === undefined || t.id === null || t.id === '',
-        })}
+        ${button('Save', { kind: 'primary', 'data-bc-tasksave-edit': key })}
         ${button(done ? 'Reopen' : 'Mark done', {
-          'data-bc-taskdone': String(t.id ?? ''),
+          'data-bc-taskdone': key,
           'data-bc-want': done ? 'todo' : 'done',
-          disabled: t.id === undefined || t.id === null || t.id === '',
         })}
       </div>
       ${
-        t.id === undefined || t.id === null || t.id === ''
+        t.local === true || t.id === undefined || t.id === null || t.id === ''
           ? `<p class="bcpmeta bcprose">These are the studio's example projects, which have no
-             records behind them, so there is nothing to change. Sign in and the
-             same controls write to the real project.</p>`
+             records behind them, so changes here are kept in this browser. Sign
+             in and the same controls write to the real project.</p>`
           : ''
       }
     </form>

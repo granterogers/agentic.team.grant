@@ -285,6 +285,47 @@ check(
   (await page.locator('.bcmain').innerText()).includes(made),
 )
 
+/* --- 12. THE RECORD PAGE'S OWN CONTROLS --------------------------------- */
+/*
+  THE THIRD INSTANCE OF ONE DEFECT, found by grepping for its shape rather
+  than by waiting for it to be reported. The record's Save and Mark done were
+  disabled for any row with no office id - which is every row in the deployed
+  preview, exactly as the checkbox was. A class of defect is not fixed by
+  fixing the two instances somebody noticed.
+*/
+await page.goto(url(`${slug}/tasks`), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcmain')
+await page.waitForTimeout(400)
+await page.locator('[data-bc-task-open]').first().click()
+await page.waitForTimeout(600)
+check(
+  'no control on the task record is disabled',
+  (await page.locator('.bcmain [disabled]').count()) === 0,
+  `${String(await page.locator('.bcmain [disabled]').count())} disabled control(s)`,
+)
+const recordTitle = (await page.locator('.bcrecordhead h1').innerText()).trim()
+await page.locator('#bc-edit-who').fill('Emma')
+await page.locator('#bc-edit-due').fill('2026-10-15')
+await page.locator('[data-bc-tasksave-edit]').click()
+await page.waitForTimeout(700)
+check(
+  'editing who it is for and when it is due is kept',
+  (await page.locator('#bc-edit-who').inputValue()) === 'Emma' &&
+    (await page.locator('#bc-edit-due').inputValue()) === '2026-10-15',
+  `${await page.locator('#bc-edit-who').inputValue()} / ${await page.locator('#bc-edit-due').inputValue()}`,
+)
+await page.locator('[data-bc-taskdone]').click()
+await page.waitForTimeout(700)
+await page.goto(url(`${slug}/tasks`), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcmain')
+await page.waitForTimeout(500)
+const listNow = await page.locator('.bcmain').innerText()
+check(
+  `marking "${recordTitle}" done from its record is still true after a reload`,
+  listNow.includes('completed task'),
+  listNow.replace(/\n/g, ' / ').slice(0, 160),
+)
+
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

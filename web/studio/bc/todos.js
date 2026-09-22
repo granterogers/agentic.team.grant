@@ -233,13 +233,36 @@ const memory = (project) => {
  * introduce it.
  */
 export const rememberStage = (project, key, stage) => {
+  rememberPatch(project, key, { stage: STAGES.includes(stage) ? stage : 'todo' })
+}
+
+/**
+ * Remember any change to a row with no record behind it.
+ *
+ * A PATCH rather than a stage, because the record page edits an assignee and
+ * a date as well - and those controls were disabled for exactly the same
+ * reason the checkbox was: no id, nothing to write to, so nothing offered.
+ * One store for all of it, so the tick, the card table and the record cannot
+ * each remember a different version of the same row.
+ *
+ * The old shape was a bare stage string. It is still read (see `patchOf`),
+ * because a browser that ticked something yesterday should not lose it.
+ */
+export const rememberPatch = (project, key, patch) => {
   try {
     const now = memory(project)
-    now[key] = STAGES.includes(stage) ? stage : 'todo'
+    const was = patchOf(now[key])
+    now[key] = { ...was, ...patch }
     globalThis.localStorage?.setItem(MEM(project), JSON.stringify(now))
   } catch {
     /* A viewer who cannot store it still sees the change until they reload. */
   }
+}
+
+/** One stored entry, in whichever of the two shapes it was written. */
+const patchOf = (entry) => {
+  if (typeof entry === 'string') return { stage: entry }
+  return entry !== null && typeof entry === 'object' ? entry : {}
 }
 
 /** The tick, in terms of the stage. */
@@ -314,8 +337,18 @@ export const overlay = (p) => {
     tasks: [...p.tasks, ...added].map((t) => {
       /* A row with a record behind it is the office's business, never ours. */
       if (typeof t.id === 'string' && t.id !== '') return t
-      const want = mem[keyOf(t)]
-      if (want === undefined) return t
+      const entry = mem[keyOf(t)]
+      if (entry === undefined) return t
+      const patch = patchOf(entry)
+      const want = patch.stage
+      const edited = {
+        ...t,
+        ...(patch.who === undefined ? {} : { who: patch.who === '' ? null : patch.who }),
+        ...(patch.due === undefined
+          ? {}
+          : { due_on: patch.due === '' ? null : patch.due, due: patch.due }),
+      }
+      if (want === undefined) return edited
       /*
         `blocked` is a STATE and also a REASON, and the two are different
         columns of the record: a row whose stage is no longer blocked must
@@ -323,7 +356,7 @@ export const overlay = (p) => {
         a blocked flag still on the card.
       */
       return {
-        ...t,
+        ...edited,
         state: want,
         state_raw: want,
         done: want === 'done',
