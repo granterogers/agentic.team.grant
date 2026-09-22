@@ -97,12 +97,12 @@ const ids = turns.map((t) => `${lit(t.jobId)}::uuid`).join(',')
 const rows = await db.execute(`
   select t.job_id, t.title, coalesce(p.slug, '') as slug, t.state
     from public.tasks t
-    left join public.projects p on p.id = t.project_id
+    left join public.projects p on p.project_id = t.project_id
    where t.job_id in (${ids})
   union all
   select d.produced_by_job as job_id, d.title, coalesce(p.slug, '') as slug, d.state
     from public.documents d
-    left join public.projects p on p.id = d.project_id
+    left join public.projects p on p.project_id = d.project_id
    where d.produced_by_job in (${ids})`)
 
 interface Made {
@@ -196,7 +196,7 @@ export const silentAction = (answer: string, titles: readonly string[]): string 
   turn's outcome.
 */
 const DENIES_ANY =
-  /\b(?:no|not\s+any|nothing|none)\s+(?:tasks?|items?|notes?|entries|records?)\b|\bnothing\s+(?:has\s+been|was)\s+(?:created|added|filed|logged|made)\b|\bhaven[’']?t\s+created\s+any\b|\bhave\s+not\s+created\s+any\b|\bno\s+tasks?\s+(?:exist|have\s+been)\b/i
+  /\b(?:no|nothing|none|not\s+any)\b[^.;!?]{0,44}?\b(?:tasks?|items?|notes?|entries|records?|to-?dos?)\b|\bnothing\s+(?:has\s+been|was)\s+(?:created|added|filed|logged|made)\b|\b(?:haven[\u2019']?t|have\s+not)\s+created\s+any\b/i
 
 for (const t of turns) {
   const answer = String(t.answered ?? '')
@@ -291,7 +291,13 @@ for (const [session, list] of bySession) {
 */
 {
   const fails: string[] = []
-  if (silentAction('Noted, thanks.', ['Confirm the printer quote']) === null) {
+  /*
+    The control sentence must carry NO acknowledgement verb, or it is
+    testing the exemption rather than the detector. The first one was
+    "Noted, thanks." and `noted` is in ACKNOWLEDGES, so the control failed —
+    correctly, and about itself rather than about the product.
+  */
+  if (silentAction('Right, understood.', ['Confirm the printer quote']) === null) {
     fails.push('silent action')
   }
   if (
@@ -302,6 +308,24 @@ for (const [session, list] of bySession) {
   }
   if (!DENIES_ANY.test('There are no tasks on that project at the moment.')) {
     fails.push('contradiction')
+  }
+  /*
+    THE WIDENING, and the case that forced it. The first version required
+    the noun to follow the negator immediately, so the real finding —
+    "I have no printer-or-signage tasks recorded right now", said while the
+    conversation's own row from two turns earlier was live — was missed and
+    reported as a clean sweep.
+  */
+  if (!DENIES_ANY.test('I have no printer-or-signage tasks recorded right now.')) {
+    fails.push('contradiction misses a qualified noun')
+  }
+  /*
+    And the bound on the widening. A window with no clause boundary in it
+    would make "no reason to worry" plus a later mention of tasks into a
+    denial, so the window stops at sentence punctuation and is 44 characters.
+  */
+  if (DENIES_ANY.test('There is no reason to worry. Your tasks are all on the board.')) {
+    fails.push('contradiction false-positives across a sentence boundary')
   }
   if (DENIES_ANY.test('I have not done this. Say it again in a sentence and I will.')) {
     fails.push('contradiction fires on the #302 sentence, which is about one turn')
