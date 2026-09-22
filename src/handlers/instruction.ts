@@ -121,7 +121,7 @@ import {
   PROVENANCE_NOTE,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
-import { readRequest } from '../agents/request.ts'
+import { asksForWork } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
@@ -3509,9 +3509,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         `wanted` is unchanged, so nothing here widens what an answer may
         claim - which is what keeps the insurance-renewal escape closed.
       */
-      const askedForWork = requests.some((text) =>
-        readRequest(text, clauses).some((c) => c.mood === 'ask'),
-      )
+      const askedForWork = requests.some((text) => asksForWork(text, clauses))
 
       /*
         What this turn actually put in the world, from the tables.

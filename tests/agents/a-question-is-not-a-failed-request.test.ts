@@ -41,7 +41,7 @@ import { describe, expect, it } from 'vitest'
 import { clauses } from '../../src/agents/clauses.ts'
 import type { CanonicalOutcome } from '../../src/agents/outcome.ts'
 import { classifyOutcome, contractFor, sayWhatHappened } from '../../src/agents/outcome.ts'
-import { readRequest } from '../../src/agents/request.ts'
+import { asksForWork } from '../../src/agents/request.ts'
 
 const at = (over: Partial<CanonicalOutcome> = {}): CanonicalOutcome => ({
   wanted: 1,
@@ -57,9 +57,8 @@ const at = (over: Partial<CanonicalOutcome> = {}): CanonicalOutcome => ({
   ...over,
 })
 
-/** What the handler computes: any clause of the request in the `ask` mood. */
-const askedForWork = (said: string): boolean =>
-  readRequest(said, clauses).some((c) => c.mood === 'ask')
+/** Exactly what the handler computes. */
+const askedForWork = (said: string): boolean => asksForWork(said, clauses)
 
 describe('the grammar separates a question from a request', () => {
   /*
@@ -80,6 +79,48 @@ describe('the grammar separates a question from a request', () => {
   ]) {
     it(`does not read "${said}" as work asked for`, () => {
       expect(askedForWork(said)).toBe(false)
+    })
+  }
+
+  /*
+    IMPERATIVE-FRAMED QUESTIONS, confirmed live on v691 after the first fix.
+
+    "tell me where we are on the bid" is an imperative, so the mood is `ask`
+    and the first version of this counted it as work. The deployed office
+    answered it with "I have not done this... say it again in a sentence and
+    I will" and then answered the question properly in the next breath -
+    apologising for failing to do something nobody asked for.
+
+    What makes them questions is the wh-complement, which is why the test
+    requires one rather than looking for the absence of an action.
+  */
+  for (const said of [
+    'tell me where we are on the bid',
+    'tell me what the entry price is',
+    'let me know what it costs',
+    'walk me through what happened',
+    'show me how many are left',
+  ]) {
+    it(`does not read "${said}" as work asked for`, () => {
+      expect(askedForWork(said)).toBe(false)
+    })
+  }
+
+  /*
+    And the neighbours that must NOT be swept up with them. "remind me about
+    the paperwork" opens with an informing verb, has no sign of an action,
+    and is the commonest way Grant asks for a row: suppressing the honest
+    sentence there would be #302 reopened on the request that most needs it.
+  */
+  for (const said of [
+    'remind me about the paperwork',
+    'remind me to ring Kevin about the quote',
+    'show me the draft',
+    'give me a summary of the bid',
+    'tell Emma to chase the letter',
+  ]) {
+    it(`still reads "${said}" as work asked for`, () => {
+      expect(askedForWork(said)).toBe(true)
     })
   }
 

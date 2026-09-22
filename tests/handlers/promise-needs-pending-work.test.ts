@@ -79,7 +79,7 @@ describe('the prohibition on promising exists and is gated on the rows', () => {
   it('reads whether he asked from the mood, not from the count', () => {
     expect(withoutComments).toMatch(/asked:\s*askedForWork/)
     expect(withoutComments).toMatch(
-      /const askedForWork = requests\.some\([\s\S]{0,120}readRequest\([\s\S]{0,80}mood === 'ask'/,
+      /const askedForWork = requests\.some\([\s\S]{0,80}asksForWork\(/,
     )
   })
 })

@@ -691,6 +691,65 @@ export const readClause = (clause: string): ClauseReading => {
   return { text, mood: 'ask', why: `imperative: opens with "${first}", no subject` }
 }
 
+/*
+  ASKING TO BE TOLD IS NOT ASKING FOR WORK.
+
+  "Tell me where we are on the bid" is an imperative, so `readClause` reads
+  it as `ask` - correctly, because it IS a request. What it is a request FOR
+  is an answer, and an answer is not a row.
+
+  That distinction matters exactly once, downstream, in #302's outcome
+  contract: `landed` counts tasks and documents, so a turn that asks to be
+  told something and is told it lands nothing, classifies as
+  `blocked_needs_user`, and opens by announcing "I have not done this". Live
+  on v691:
+
+      "tell me where we are on the bid"
+        -> "I have not done this. I understood what you want and could not
+            carry it out - say it again in a sentence and I will. I have no
+            record of any updates on the bid..."
+
+  which is the office apologising for failing to do something nobody asked
+  it to do, immediately before doing what was asked.
+
+  ## Positive evidence, not the absence of evidence
+
+  The first draft read "an informing verb, and no sign of an action" - and
+  "remind me about the paperwork" has no sign of an action either, while
+  being the single commonest way Grant asks for a row. Suppressing the
+  honest sentence there would have been #302 reopened on the request that
+  most needs it.
+
+  So the test requires the thing that makes it a question: a WH-COMPLEMENT.
+  "tell me WHERE we are", "let me know WHAT it costs", "walk me through WHAT
+  happened". Anything else - "show me the draft", "give me a summary",
+  "remind me about the paperwork" - counts as work asked for, which is the
+  cheap direction: a sentence in a slightly stiff register costs far less
+  than an office that drops a request in silence.
+
+  Verbs of informing are a closed grammatical class, like the stance markers
+  and the politeness convention above. It changes no mood and no routing;
+  `readClause` is untouched, and this is a second question asked ABOUT an
+  `ask` clause by the one caller that needs it.
+*/
+const WANTS_TELLING =
+  /^\s*(?:please\s+)?(?:tell|show|give|let)\s+(?:me|us)\s+(?:know\s+)?(?:about\s+)?(?:what|which|why|when|where|who|whose|whom|how|if|whether)\b|^\s*(?:fill|catch|walk|talk)\s+(?:me|us)\s+(?:in|up|through)\s+(?:on\s+)?(?:what|which|why|when|where|who|how|whether)\b/i
+
+/**
+ * Does this message ask for a CHANGE IN THE WORLD, rather than for an answer?
+ *
+ * Used by the outcome contract to decide whether the office owes a sentence
+ * about having done nothing. A turn that asked to be told something and was
+ * told it has not failed, so it must not say it has.
+ *
+ * Conservative in one direction on purpose: anything it cannot read as a
+ * plain request for information counts as work asked for, because the cost
+ * of a miss is a sentence in the wrong register and the cost of a false
+ * positive is #302 reopened.
+ */
+export const asksForWork = (message: string, split: (t: string) => readonly string[]): boolean =>
+  readRequest(message, split).some((c) => c.mood === 'ask' && !WANTS_TELLING.test(c.text))
+
 /**
  * Read a whole message, clause by clause.
  *
