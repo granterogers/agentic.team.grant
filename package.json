@@ -293,6 +293,7 @@
     "shadow:variance": "tsx scripts/shadow/variance.ts",
     "shadow:grant": "tsx scripts/shadow/grant.ts",
     "shadow:intake": "tsx scripts/shadow/intake.ts",
+    "shadow:coherence": "tsx scripts/shadow/coherence.ts",
     "shadow:sabotage": "tsx scripts/shadow/sabotage.ts",
     "shadow:channels": "tsx scripts/shadow/channels.ts",
     "shadow:world": "tsx scripts/shadow/world.ts",
