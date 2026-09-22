@@ -34,6 +34,7 @@ import { PROJECTS, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import * as bcMini from './miniatures.js'
+import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
@@ -51,6 +52,7 @@ export const mount = (c) => {
   */
   bcMini.mount(c)
   todos.mount(c)
+  contacts.mount(c)
   compose.mount(c)
 }
 
@@ -66,7 +68,13 @@ const at = (p = '') => `/basecamp${p}`
   memory is applied. See todos.overlay: it touches only rows that have no
   record behind them, so a signed-in session never sees it at all.
 */
-const project = () => todos.overlay(PROJECTS.find((p) => p.slug === state().project) ?? PROJECTS[0])
+/*
+  ONE PLACE the project is read, and therefore one place each prototype memory
+  is applied. Both touch only rows that have no record behind them, so a
+  signed-in session sees neither.
+*/
+const project = () =>
+  contacts.overlay(todos.overlay(PROJECTS.find((p) => p.slug === state().project) ?? PROJECTS[0]))
 
 /* ======================================================================== *
  * Tool definitions
@@ -919,6 +927,7 @@ const taskRow = (t, i = 0, listName = '') => {
         left while the thing you press said nothing about where it goes.
       -->
       <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
+      ${t.local === true ? '<span class="bclocalmark">Kept in this browser</span>' : ''}
       <span class="bcitemmeta">${esc(
         /*
           The guard stays for the near-miss case: a note that merely BEGINS
@@ -1295,52 +1304,110 @@ const documentsSurface = (p) => {
   record and the form share `p.contacts` and the same two state fields, so
   there is no second copy of anybody to disagree with the first.
 */
-const contactKey = (c, i) => String(i)
+/*
+  THE KEY IS THE PORT'S, so the miniature, the list and the record all mean the
+  same person by it - and so a contact with a record behind it is addressed by
+  its id rather than by where it happens to sit in a list that sorts by name.
+*/
+const contactKey = (c, i) => contacts.keyOf(c, i)
 
-const contactRecord = (p, c) => {
-  const lines = [
-    ['What they are here', [c.role, c.org].filter(Boolean).join(' · ')],
-    ['Where', c.where ?? ''],
-    ['Email', c.email ?? ''],
-    ['Phone', c.phone ?? ''],
-    ['Last heard from', c.last ?? ''],
-    ['Next', [c.next, c.nextDue].filter(Boolean).join(' · ')],
-  ].filter(([, v]) => v !== '')
+const avatar = (c, size = 56) =>
+  c.image
+    ? `<img class="bcface bcface--photo" src="${esc(c.image)}" alt="" width="${String(size)}" height="${String(size)}">`
+    : `<span class="bcface bcface--mono" aria-hidden="true">${esc(
+        String(c.name ?? '?')
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w.charAt(0).toUpperCase())
+          .join(''),
+      )}</span>`
+
+/*
+  ONE PERSON, EDITABLE IN PLACE.
+
+  Grant: *"Existing contacts must be editable... change existing data; add
+  missing data; replace/remove the image; add or update website/social
+  information; edit notes; correct details later."* So this is a form rather
+  than a list of facts with an Edit button somewhere: every field a person can
+  see is the field they change, which is his general rule stated as markup.
+
+  Rendered from `contacts.FIELDS`, so a field added to the port appears here,
+  is validated here and is sent from here without three separate edits.
+*/
+const contactRecord = (p, c, i) => {
+  const key = contactKey(c, i)
+  const lines = []
+  for (const f of contacts.FIELDS) {
+    const at = lines.find((l) => l.n === f.line)
+    if (at === undefined) lines.push({ n: f.line, fields: [f] })
+    else at.fields.push(f)
+  }
   return `${breadcrumb([
     { name: p.name, to: at(`/p/${p.slug}`) },
     { name: toolById('contacts')?.name ?? 'Contacts', to: at(`/p/${p.slug}/contacts`) },
     { name: c.name },
   ])}
     <div class="bcrecordhead">
-      <h1>${esc(c.name)}</h1>
+      <span class="bcpersonhead">
+        ${avatar(c, 56)}
+        <h1>${esc(c.name)}</h1>
+      </span>
       <span class="bcactions">${button('Back to Contacts', { 'data-bc-contact-close': '1' })}</span>
     </div>
-    <dl class="bcfacts bcgap-l">
+
+    <form class="bcaddform bcgap-l" data-bc-contactedit="${esc(key)}">
+      <div class="bcimagerow">
+        ${avatar(c, 72)}
+        <span class="bcimageacts">
+          <label class="bcbtn bcbtn--file">
+            <span>${esc(c.image ? 'Replace the image' : 'Add an image')}</span>
+            <input type="file" accept="image/*" data-bc-contact-image="${esc(key)}" hidden>
+          </label>
+          ${
+            c.image
+              ? button('Remove it', { 'data-bc-contact-image-off': esc(key) })
+              : ''
+          }
+        </span>
+      </div>
       ${lines
         .map(
-          ([k, v]) =>
-            `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`,
+          (l) => `<div class="${l.fields.length > 1 ? 'bcformrow' : ''}">
+            ${l.fields
+              .map((f) =>
+                f.kind === 'long'
+                  ? `<label class="bcfield">
+                      <span class="bclabel" for="bc-ct-${esc(f.key)}">${esc(f.label)}</span>
+                      <textarea class="bcinput" id="bc-ct-${esc(f.key)}" rows="4"
+                        data-bc-ctfield="${esc(f.key)}">${esc(c[f.key] ?? '')}</textarea>
+                    </label>`
+                  : input({
+                      id: `bc-ct-${f.key}`,
+                      label: f.label,
+                      name: f.key,
+                      type: f.kind === 'text' ? 'text' : f.kind,
+                      value: c[f.key] ?? '',
+                      autocomplete: 'off',
+                      'data-bc-ctfield': f.key,
+                    }),
+              )
+              .join('')}
+          </div>`,
         )
         .join('')}
-    </dl>
-    ${c.note ? `<h2 class="bcsubhead">Notes</h2><p class="bcpmeta bcprose">${esc(c.note)}</p>` : ''}
-    ${
-      (c.docs ?? []).length === 0
-        ? ''
-        : `<h2 class="bcsubhead">What they sent</h2>
-           <!--
-             A STACKED LIST, not the inline one. bcinline-list is a flex row
-             built for hand-off links, and two document titles laid side by
-             side in it read as one title: the first capture of this record
-             said "Whats App Audio From Ben  WhatsApp from Ben" on a single
-             line. Line breaks are not a list and neither is a row of them.
-           -->
-           <ul class="bcsentlist">${(c.docs ?? [])
-             .map((d) => `<li>${esc(d)}</li>`)
-             .join('')}</ul>`
-    }`
+      <div class="bcrow">
+        ${button('Save changes', { kind: 'primary', 'data-bc-contact-save': esc(key) })}
+        <span class="bcsaidhere" data-bc-contact-said role="status" aria-live="polite"></span>
+      </div>
+    </form>`
 }
 
+/*
+  ADDING ONE. Four fields rather than eleven: Grant asked that nothing be
+  compulsory, and a form of eleven boxes is a form nobody fills in. Everything
+  else is one press away on the record, which is now editable - which is what
+  makes a short creation form the right answer rather than a lossy one.
+*/
 const contactForm = (p) => `${breadcrumb([
   { name: p.name, to: at(`/p/${p.slug}`) },
   { name: toolById('contacts')?.name ?? 'Contacts', to: at(`/p/${p.slug}/contacts`) },
@@ -1348,31 +1415,20 @@ const contactForm = (p) => `${breadcrumb([
 ])}
   <div class="bcrecordhead"><h1>Add Contact</h1></div>
   <form class="bcaddform bcgap-l" data-bc-contactform="1">
-    <!--
-      Paired, because five full-width boxes down a 1000px dialog is a form
-      that looks longer than it is. A name and what somebody is to the project
-      are read together, and so are an email and a phone.
-    -->
     <div class="bcformrow">
       ${input({ id: 'bc-c-name', label: 'Name', name: 'name', autocomplete: 'off' })}
       ${input({ id: 'bc-c-role', label: 'What they are to this project', name: 'role', autocomplete: 'off' })}
     </div>
     <div class="bcformrow">
       ${input({ id: 'bc-c-email', label: 'Email', name: 'email', type: 'email', autocomplete: 'off' })}
-      ${input({ id: 'bc-c-phone', label: 'Phone', name: 'phone', autocomplete: 'off' })}
+      ${input({ id: 'bc-c-phone', label: 'Telephone', name: 'phone', type: 'tel', autocomplete: 'off' })}
     </div>
-    ${input({ id: 'bc-c-org', label: 'Where they work', name: 'org', autocomplete: 'off' })}
+    ${input({ id: 'bc-c-org', label: 'Organisation', name: 'org', autocomplete: 'off' })}
     <div class="bcrow">
-      ${button('Add', { kind: 'primary', 'data-bc-contactadd-go': '1', disabled: !canWrite() })}
+      ${button('Add', { kind: 'primary', 'data-bc-contactadd-go': '1' })}
       ${button('Cancel', { 'data-bc-contact-close': '1' })}
+      <span class="bcsaidhere" data-bc-contact-said role="status" aria-live="polite"></span>
     </div>
-    ${
-      canWrite()
-        ? ''
-        : `<p class="bcpmeta bcprose">These are the studio's example projects, which have no
-           records behind them. Sign in and the same form writes to the real
-           project.</p>`
-    }
   </form>`
 
 const contactsSurface = (p) => {
@@ -1380,8 +1436,8 @@ const contactsSurface = (p) => {
   if (state().bcContactAdd === true) return contactForm(p)
   const wanted = state().bcContact
   if (wanted !== null && wanted !== undefined) {
-    const c = cs.find((x, i) => contactKey(x, i) === String(wanted))
-    if (c !== undefined) return contactRecord(p, c)
+    const i = cs.findIndex((x, n) => contactKey(x, n) === String(wanted))
+    if (i !== -1) return contactRecord(p, cs[i], i)
     /*
       A key that names nobody is the project having moved on, not a crash: the
       list is the honest answer and it is one press from here anyway.
@@ -1398,14 +1454,14 @@ const contactsSurface = (p) => {
         : `<div class="bclist">${cs
             .map(
               (c, i) => `<div class="bcitem">
-                <span></span>
+                ${avatar(c, 34)}
                 <div class="bcitembody">
                   <button type="button" class="bcitemtitle bcitemlink" data-bc-contact="${esc(contactKey(c, i))}">${esc(c.name)}</button>
                   <span class="bcitemmeta">${esc(
                     [c.role, c.org, c.where, c.last].filter(Boolean).join(' · '),
                   )}</span>
                 </div>
-                <span></span>
+                <span class="bcpmeta">${esc(c.email ?? c.phone ?? '')}</span>
               </div>`,
             )
             .join('')}</div>`

@@ -18,6 +18,7 @@ import * as pdf from '../pdf.js'
 import { callIsLive, syncCallButtons, toggleCall } from '../call.js'
 import * as compose from './compose.js'
 import * as grid from './layout.js'
+import * as contacts from './contacts.js'
 import * as todos from './todos.js'
 import * as jump from './jump.js'
 
@@ -383,6 +384,25 @@ const wireVoice = (root) => {
   presses open the Contacts tool over the home rather than navigating away,
   which is what makes the miniature and the expanded view one tool.
 */
+/*
+  WRITING WITHOUT A TOKEN.
+
+  `attempt()` refuses before it runs anything when there is no token - "Read
+  only, no token in this browser" - which is right for a call that would reach
+  the office and wrong for one that never leaves the browser. The tick already
+  took this branch; the contact editor did not, so every save in the deployed
+  preview did nothing at all and said nothing either, which is precisely the
+  shape Grant reported about the checkboxes.
+
+  A key beginning `p:` names a row with no record behind it, so the write is
+  local by construction and the gate does not apply to it.
+*/
+const localKey = (key) => String(key ?? '').startsWith('p:')
+const saidIn = (el, words) => {
+  const say = el?.closest('form')?.querySelector('[data-bc-contact-said]')
+  if (say !== null && say !== undefined) say.textContent = words
+}
+
 const wireContacts = (root) => {
   for (const b of root.querySelectorAll('[data-bc-contact]')) {
     b.addEventListener('click', () => {
@@ -403,23 +423,134 @@ const wireContacts = (root) => {
     b.addEventListener('click', async () => {
       const val = (id) => String(root.querySelector(`#${id}`)?.value ?? '').trim()
       const name = val('bc-c-name')
-      if (name === '') return
+      const say = root.querySelector('[data-bc-contact-said]')
+      if (name === '') {
+        if (say !== null) say.textContent = 'A name, at least.'
+        root.querySelector('#bc-c-name')?.focus()
+        return
+      }
+      /*
+        VALIDATED BEFORE IT IS SENT, by the port's own rules rather than by a
+        second copy of them here. An email that is refused by the office after
+        a round trip is an error message about a form the person has already
+        left.
+      */
+      const fields = { name, role: val('bc-c-role'), org: val('bc-c-org') }
+      for (const key of ['email', 'phone']) {
+        const v = contacts.check(key, val(`bc-c-${key}`))
+        if (!v.ok) {
+          if (say !== null) say.textContent = v.why
+          root.querySelector(`#bc-c-${key}`)?.focus()
+          return
+        }
+        fields[key] = v.value
+      }
+      if (canWrite() !== true) {
+        await contacts.add(ctx.state.project, fields)
+        saidIn(b, `${name} is on this project.`)
+        ctx.closeContact()
+        return
+      }
       const done = await attempt(
         b,
         'Adding…',
-        () =>
-          act('contact_add', {
-            p_project: ctx.state.project,
-            p_name: name,
-            p_role: val('bc-c-role') || null,
-            p_org: val('bc-c-org') || null,
-            p_email: val('bc-c-email') || null,
-            p_phone: val('bc-c-phone') || null,
-          }),
+        () => contacts.add(ctx.state.project, fields),
         `${name} is on this project.`,
       )
       if (done !== null) {
         ctx.closeContact()
+        await ctx.refresh()
+      }
+    })
+  }
+
+  /*
+    CORRECTING ONE. Every field on the record is read, validated and sent as a
+    PATCH - only what changed - so editing the notes sends the notes.
+  */
+  for (const b of root.querySelectorAll('[data-bc-contact-save]')) {
+    b.addEventListener('click', async () => {
+      const key = b.dataset.bcContactSave ?? ''
+      const form = b.closest('[data-bc-contactedit]')
+      if (form === null) return
+      const say = form.querySelector('[data-bc-contact-said]')
+      const patch = {}
+      for (const el of form.querySelectorAll('[data-bc-ctfield]')) {
+        const field = el.dataset.bcCtfield
+        const v = contacts.check(field, el.value)
+        if (!v.ok) {
+          if (say !== null) say.textContent = v.why
+          el.focus()
+          return
+        }
+        patch[field] = v.value
+      }
+      if (String(patch.name ?? '').trim() === '') {
+        if (say !== null) say.textContent = 'A contact needs a name.'
+        return
+      }
+      if (localKey(key)) {
+        await contacts.save(ctx.state.project, key, patch)
+        saidIn(b, 'Saved.')
+        ctx.render()
+        return
+      }
+      const done = await attempt(b, 'Saving…', () => contacts.save(ctx.state.project, key, patch), 'Saved.')
+      if (done !== null) {
+        ctx.render()
+        await ctx.refresh()
+      }
+    })
+  }
+
+  /*
+    A FACE. Downscaled in the browser before it is sent - see contacts.shrink,
+    and 0534's 400KB cap, which is that decision made a rule.
+  */
+  for (const f of root.querySelectorAll('[data-bc-contact-image]')) {
+    f.addEventListener('change', async () => {
+      const key = f.dataset.bcContactImage ?? ''
+      const file = f.files?.[0]
+      const say = f.closest('form')?.querySelector('[data-bc-contact-said]')
+      if (file === undefined) return
+      try {
+        const image = await contacts.shrink(file)
+        if (localKey(key)) {
+          await contacts.save(ctx.state.project, key, { image })
+          ctx.render()
+          return
+        }
+        const done = await attempt(
+          f,
+          'Adding the image…',
+          () => contacts.save(ctx.state.project, key, { image }),
+          'Image added.',
+        )
+        if (done !== null) {
+          ctx.render()
+          await ctx.refresh()
+        }
+      } catch (e) {
+        if (say !== null) say.textContent = e instanceof Error ? e.message : 'That image could not be read.'
+      }
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-contact-image-off]')) {
+    b.addEventListener('click', async () => {
+      const key = b.dataset.bcContactImageOff ?? ''
+      if (localKey(key)) {
+        await contacts.save(ctx.state.project, key, { image: '' })
+        ctx.render()
+        return
+      }
+      const done = await attempt(
+        b,
+        'Removing…',
+        () => contacts.save(ctx.state.project, key, { image: '' }),
+        'Image removed.',
+      )
+      if (done !== null) {
+        ctx.render()
         await ctx.refresh()
       }
     })
@@ -990,6 +1121,26 @@ const wireTasks = (root) => {
       clearFieldError(f, titleField)
       const due = String(f.querySelector(`#bc-task-due-${key}`)?.value ?? '').trim()
       const who = String(f.querySelector(`#bc-task-who-${key}`)?.value ?? '').trim()
+      /*
+        WITHOUT A TOKEN THE PROTOTYPE KEEPS IT. Same branch as the tick and the
+        contact editor: `attempt` refuses before it runs anything when there is
+        no office to write to, which is correct for a call that would leave
+        the browser and useless for a person judging the preview. The row has
+        no id, so nothing that writes to the office can ever be handed it.
+      */
+      if (canWrite() !== true) {
+        todos.addLocal(ctx.state.project, { title, list: key, due, assignee: who })
+        for (const i of f.querySelectorAll('input')) i.value = ''
+        /*
+          AND IT SAYS WHERE IT WENT. A local row that appears exactly as a real
+          one would is the prototype quietly claiming to be the office, which
+          is the one thing this repository has spent a certification campaign
+          refusing to do. The form stays open with the sentence in it; nothing
+          was sent anywhere.
+        */
+        ctx.render()
+        return
+      }
       const done = await attempt(
         b,
         'Adding…',

@@ -256,6 +256,35 @@ for (let i = 0; i < entries; i += 1) {
 }
 check('every schedule entry opens the task it names', broken === 0, brokenNames.join(', '))
 
+/* --- 11. adding a task actually adds one -------------------------------- */
+/*
+  Grant's journey list has "add a task" in it, and the deployed preview has no
+  office token - so "Read only, no token in this browser" was the whole of
+  what pressing Add a Task did. A prototype that cannot be exercised cannot be
+  judged, and judging it is what the preview is for.
+*/
+await page.goto(url(`${slug}/tasks`), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcmain')
+await page.waitForTimeout(400)
+const made = `Audit task ${String(Date.now()).slice(-5)}`
+await page.locator('.bcrecordhead [data-bc-addtask]').first().click()
+await page.waitForTimeout(300)
+const field = page.locator('[data-bc-taskform]:not([hidden]) input').first()
+await field.fill(made)
+await page.locator('[data-bc-taskform]:not([hidden])').locator('[data-bc-tasksave]').first().click()
+await page.waitForTimeout(700)
+check(
+  'adding a task puts it on the list',
+  (await page.locator('.bcmain').innerText()).includes(made),
+)
+await page.goto(url(`${slug}/tasks`), { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.bcmain')
+await page.waitForTimeout(400)
+check(
+  'and it is still there after a reload',
+  (await page.locator('.bcmain').innerText()).includes(made),
+)
+
 check('nothing threw while all of that happened', thrown.length === 0, thrown.join(' | '))
 
 await browser.close()

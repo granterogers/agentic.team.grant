@@ -354,7 +354,7 @@ Status words mean exactly one thing each:
 | 24 | Voice states: loading, permission, connecting, active, error, ended | pending | |
 | 25 | Agentic Team panel removed from the project home | **verified** | off the board, still reachable from the three-dot menu; asserted by the journey and the preservation suite |
 | 26 | "Add Someone" becomes "Add Contact" | implemented | miniature, surface head and form title |
-| 27 | Contacts editable, all fields, image upload, notes | pending | |
+| 27 | Contacts editable, all fields, image upload, notes | **verified in the prototype; the office path needs a migration and a gateway deploy** | verify:basecamp-contacts (23 checks) edits every field, changes and removes an image through a real file input, and RELOADS after each. `public.contacts` had never had an update path: migration 0534 adds `hq_contact_update` and `image_url`, and the gateway gains `contact_update`. **Neither is applied or deployed from this branch** — see the run ledger |
 | 28 | Card Table opens | **verified** | verify:basecamp-cards — the miniature is the board, its cards open their to-do, and the header opens the full table |
 | 29 | Cards drag between columns and persist | **verified** | dragged, RELOADED, asserted; then round the board four times; the select is the second path. Proved by a sabotage that broke the drop |
 | 30 | Column colour coding | **verified** | one stage palette used by both views; the suite asserts four distinct column colours |

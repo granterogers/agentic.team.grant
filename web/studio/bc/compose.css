@@ -1876,3 +1876,76 @@
   font: 600 11px/1 var(--bc-font);
 }
 [data-experience='basecamp'] .bcsources--full .bcsource { align-items: center; }
+
+/*
+  A contact's face, and the row that changes it.
+
+  A monogram where there is no photograph: the initials of a name are a better
+  fallback than a grey circle, and they are the same treatment the chat uses
+  for the team - which is where Grant asked for faces to stay. A contact is
+  not an agent, so this is the only other place one appears.
+*/
+[data-experience='basecamp'] .bcface--photo {
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+[data-experience='basecamp'] .bcface--mono {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: none;
+  background: color-mix(in srgb, var(--bc-accent) 24%, transparent);
+  color: var(--bc-text-strong);
+  font: 600 12px/1 var(--bc-font);
+  letter-spacing: 0.02em;
+}
+[data-experience='basecamp'] .bcpersonhead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+[data-experience='basecamp'] .bcpersonhead .bcface--mono { width: 56px; height: 56px; font-size: 18px; }
+[data-experience='basecamp'] .bcimagerow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0 4px;
+}
+[data-experience='basecamp'] .bcimagerow .bcface--mono { width: 72px; height: 72px; font-size: 22px; }
+[data-experience='basecamp'] .bcimageacts { display: flex; gap: 8px; flex-wrap: wrap; }
+/*
+  A file input styled as a button. The input itself is hidden rather than
+  transparent-and-overlaid: a hidden input inside its own label is still
+  reachable by keyboard, still opens the picker on Enter, and cannot drift out
+  of alignment with the thing that looks like the control.
+*/
+[data-experience='basecamp'] .bcbtn--file { cursor: pointer; display: inline-flex; align-items: center; }
+[data-experience='basecamp'] .bcbtn--file:focus-within {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcsaidhere {
+  font-size: 13px;
+  color: var(--bc-text-muted);
+  align-self: center;
+}
+
+/*
+  A row the prototype is holding, marked as such wherever it is drawn. Quiet -
+  it is a provenance note rather than a warning - and permanent, because the
+  claim is about the row and not about the moment it was made.
+*/
+[data-experience='basecamp'] .bclocalmark {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bc-text-muted) 40%, transparent);
+  color: var(--bc-text-muted);
+  font: 500 10.5px/1.5 var(--bc-font);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}

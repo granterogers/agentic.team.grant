@@ -263,13 +263,55 @@ export const forgetLocal = (project) => {
  * whether something is done. Two readers of one fact is the defect this
  * repository has paid for more than any other.
  */
+/**
+ * A to-do added in a browser with no office behind it.
+ *
+ * The same argument as the tick, one step further along: a person judging the
+ * preview presses Add a Task, and "Read only, no token in this browser" is
+ * true and useless. The row is the prototype's, is marked as such by its key,
+ * and can never be confused with a record - it has no id, so nothing that
+ * writes to the office will ever be handed it.
+ */
+export const addLocal = (project, { title, list, due, assignee }) => {
+  try {
+    const now = memory(project)
+    const made = Array.isArray(now.__added) ? now.__added : []
+    made.push({
+      title,
+      parent: list === '' || list === 'loose' ? null : list,
+      due_on: due === '' ? null : due,
+      due: due === '' ? '' : due,
+      who: assignee === '' ? null : assignee,
+      state: 'todo',
+      state_raw: 'todo',
+      milestone: false,
+      /*
+        MARKED, PERMANENTLY, rather than announced once.
+
+        A transient "kept in this browser" message is wiped by the redraw that
+        shows the row - anything that must survive a render has to be put back
+        after it, which this repository learned the hard way about a keyboard
+        pin. A row that is the prototype's says so every time it is looked at,
+        which is also the more honest of the two: the claim is about the row,
+        not about the moment it was made.
+      */
+      local: true,
+    })
+    now.__added = made
+    globalThis.localStorage?.setItem(MEM(project), JSON.stringify(now))
+  } catch {
+    /* Nothing stored. The form still said what it did. */
+  }
+}
+
 export const overlay = (p) => {
   if (p === undefined || p === null || !Array.isArray(p.tasks)) return p
   const mem = memory(p.slug)
   if (Object.keys(mem).length === 0) return p
+  const added = Array.isArray(mem.__added) ? mem.__added : []
   return {
     ...p,
-    tasks: p.tasks.map((t) => {
+    tasks: [...p.tasks, ...added].map((t) => {
       /* A row with a record behind it is the office's business, never ours. */
       if (typeof t.id === 'string' && t.id !== '') return t
       const want = mem[keyOf(t)]

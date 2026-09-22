@@ -424,13 +424,25 @@ await rp
   .fill('Should never be created')
 await rp.locator('[data-bc-taskform]:not([hidden]) [data-bc-tasksave]').click()
 await rp.waitForTimeout(500)
-check(
-  'a browser with no token is told it is read-only rather than failing silently',
-  (await rp.locator('[data-bc-taskform]:not([hidden])').innerText())
-    .toLowerCase()
-    .includes('read-only'),
-)
+/*
+  WHAT A TOKENLESS BROWSER DOES NOW, and why this check changed.
+
+  It used to assert the words "read-only", because pressing Save without a
+  token did nothing but say so. Grant, 22 September, is judging the deployed
+  preview - which has no token - and an interface that cannot be exercised
+  cannot be judged, so the prototype keeps the row in the browser instead.
+
+  The half that MATTERS is unchanged and is asserted first: nothing reached
+  the office. The second half is the new honesty requirement - a local row
+  that appeared exactly as a real one would is the prototype quietly claiming
+  to be the office.
+*/
 check('and nothing was sent', seen.length === sentBefore)
+check(
+  'a browser with no token says where the row actually went',
+  /this browser/i.test(await rp.locator('.bcmain').innerText()),
+  (await rp.locator('.bcmain').innerText()).replace(/\n/g, ' / ').slice(0, 200),
+)
 await ro.close()
 
 /* ---------------------------------- the task record page (§9, §17 phase 4) */

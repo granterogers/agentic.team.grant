@@ -199,6 +199,7 @@ const taskLine = (t) => {
     <button type="button" class="bctasktitle bclinky" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
     ${who === '' ? '' : `<span class="bctaskwho">${esc(who)}</span>`}
     ${due === '' ? '' : `<span class="bctaskdue${isLate(t) ? ' bctaskdue--late' : ''}">${esc(due)}</span>`}
+    ${t.local === true ? '<span class="bclocalmark">This browser</span>' : ''}
     ${t.blocked ? status('Blocked', 'blocked') : ''}
   </li>`
 }

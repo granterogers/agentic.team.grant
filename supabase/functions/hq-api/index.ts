@@ -711,6 +711,16 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     undo, and impossible to half-apply. §5 still holds; the RPC validates every
     entry and writes nothing if one is malformed.
   */
+  /*
+    Correcting one (0534).
+
+    Grant: *"If information about a contact is displayed as user-managed
+    contact data, there should be a sensible way to edit it."* There was one
+    door onto this table and it only created. Only the id is required: every
+    other argument is null-means-leave-it-alone, so a caller changing one note
+    sends one field.
+  */
+  contact_update: { fn: 'hq_contact_update', required: ['p_contact_id'] },
   contact_label_add: { fn: 'hq_contact_label_add', required: ['p_name'] },
   contact_label_rename: { fn: 'hq_contact_label_rename', required: ['p_label_id', 'p_name'] },
   contact_label_remove: { fn: 'hq_contact_label_remove', required: ['p_label_id'] },
