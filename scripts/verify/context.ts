@@ -328,11 +328,14 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
   Nothing to tear down: every statement above ran inside a `do` block that
   ends in a rollback, so no job, no command and no switch survives. Asserted
   rather than assumed, because a teardown that matches nothing looks exactly
-  like one that worked.
+  like one that worked — and the first version of this check matched only the
+  TELEGRAM refs, so a switch the voice scenario had left on a real project's
+  scope went unnoticed until it was found by hand.
 */
 const left = await db.execute(`
   select (select count(*) from public.inbound_commands where subject = 'ctx-${run}') as commands,
-         (select count(*) from public.project_switches where scope_ref like '8${run}%') as switches`)
+         (select count(*) from public.project_switches
+           where scope_ref like '8${run}%' or scope_ref = 'call${run}') as switches`)
 const l = left.rows[0] as { commands: number; switches: number }
 ok(
   'the suite left no command and no switch behind',

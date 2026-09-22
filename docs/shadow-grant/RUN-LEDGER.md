@@ -2035,3 +2035,84 @@ Grant's own rows is his call, not mine.
 Gates: 2732 tests · lint · tsc · migrations · secrets · templates ·
 `verify:preferences` 29/29 · sabotage **32 detectors** · containment swept,
 harness lessons reaching a real prompt 0 with the filter removing 33.
+
+---
+
+# #308 — a conversation remembers which project it is about
+
+## Where the missing link was, since that was the question asked first
+
+Not ingress, not persistence, not the resolver, not consumption. **All four
+worked.** `enqueue_inbound` already resolved a project from an asset's
+context, from a project the surface named and from a Slack channel's mapping;
+`project_switches` stored; `app.current_project` read, and correctly ignored a
+switch pointing at a fixture.
+
+**Nothing joined them.** No caller ever wrote a switch for a real
+conversation — `switchTo` and `resolveProject` in `src/projects/context.ts`
+have no importer — and the resolution cascade never asked. All 169 rows were
+harness traffic because only a probe had ever called the writer. The dial with
+no reader, in the mechanism that decides where Grant's work goes.
+
+## Two blocks in one function
+
+In `app.enqueue_inbound`, because §5 says an adapter may only translate:
+
+```
+asset's project  >  the surface named it  >  Slack channel map
+  >  WHAT THIS CONVERSATION IS ALREADY ABOUT        <- new
+  >  Unnamed  >  most recently updated
+```
+
+Anything the message itself says still wins; the conversation beats a
+fallback. **Only an explicit resolution is remembered** — the two branches
+below it are guesses, and a guess written into a conversation's memory locks
+the whole exchange onto something nobody said, which is worse than guessing
+once because it compounds. Unnamed is excluded for the same reason: it is the
+absence of a project rather than a project.
+
+The conversation is the first segment of `origin_ref`, which is what the Slack
+branch already assumed — so a different chat inherits nothing, and a harness
+ref can neither read nor write a real one's context.
+
+## The instrument was wrong three times before the product was once
+
+1. The migration's drive picked the most recently updated ACTIVE project,
+   which was a fixture — `current_project` returns nothing for those (0164) —
+   and failed with *"the conversation did not remember"* about a function that
+   works.
+2. `verify:context` picked the reserved **unnamed** project as its second
+   subject, tried to switch to it, and reported correct behaviour as a defect.
+3. `verify:context` **described a rollback in its own header and did not
+   implement one**, writing 15 REAL queued jobs whose `requested_by` matches
+   no `is_fixture` pattern. The worker would have answered all fifteen. They
+   were cancelled by hand within a minute. That is #210's rule broken in the
+   file that quotes it — and the teardown assertion that should have caught it
+   matched only the Telegram refs, so a switch the voice scenario left on a
+   real project's scope was found by hand rather than by the check.
+
+## And one real regression, found in minutes
+
+`project_switches` refuses a switch into a project that is not active, and
+says why. 0547 put that refusal in the path of **every inbound message**, so a
+message about a PAUSED project made `enqueue_inbound` raise — not mis-filed,
+**lost**, before the job existed. 0548 guards on active status AND wraps the
+insert, because remembering is best-effort and delivering is not: a constraint
+added to that table tomorrow would otherwise become a way to drop his
+messages.
+
+## What the Shadow Grant harness cannot prove, and why that is correct
+
+The session runner's projects are fixtures and paused, so a session cannot
+exercise inheritance at all: 0548 will not record a paused project and 0164
+will not resolve a fixture switch. **That is containment doing its job**, and
+weakening either to make the harness able to test it is precisely what must
+not be done. Inheritance is therefore proved in `verify:context`, against
+REAL projects, inside a rollback — 18 checks including four turns without
+decay, an explicit switch and back, isolation between conversations, a guess
+never becoming the memory, a paused project still becoming a job, voice, and
+containment in both directions.
+
+`#310`'s multi-turn project-scoped preference lifecycle is unblocked by the
+same mechanism and for the same reason cannot be demonstrated through the
+session harness; `verify:preferences` continues to prove it at 29/29.
