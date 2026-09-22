@@ -285,6 +285,7 @@
     "verify:chief": "tsx scripts/verify/chief.ts",
     "verify:understands": "tsx scripts/verify/understands.ts",
     "verify:basecamp-routes": "tsx scripts/verify/basecamp-routes.ts",
+    "verify:basecamp-todos": "tsx scripts/verify/basecamp-todos.ts",
     "verify:basecamp-board": "tsx scripts/verify/basecamp-board.ts",
     "basecamp:shots": "tsx scripts/verify/basecamp-shots.ts",
     "basecamp:measure": "tsx scripts/verify/basecamp-measure.ts",

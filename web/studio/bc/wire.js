@@ -18,6 +18,7 @@ import * as pdf from '../pdf.js'
 import { callIsLive, syncCallButtons, toggleCall } from '../call.js'
 import * as compose from './compose.js'
 import * as grid from './layout.js'
+import * as todos from './todos.js'
 import * as jump from './jump.js'
 
 let ctx = null
@@ -1116,24 +1117,36 @@ const wireTasks = (root) => {
     })
   }
 
+  /*
+    THE TICK, and the one decision that makes it work everywhere.
+
+    `data-bc-tick` carries the port's KEY, not the office's id — so a row with
+    a record behind it writes to the office, and a row without one is
+    remembered by the prototype. Which of the two it is, is decided by the key
+    itself rather than by a flag, because the key IS the office's id whenever
+    there is one.
+
+    The optimistic contract is unchanged: mark the row pending, reconcile,
+    and roll the box back VISIBLY if the write did not happen. A tick that
+    survives a failed write is the product lying about canonical state.
+  */
   for (const c of root.querySelectorAll('[data-bc-tick]')) {
     c.addEventListener('change', async () => {
-      const id = c.dataset.bcTick
-      if (id === '') return
+      const key = c.dataset.bcTick ?? ''
+      if (key === '') return
       const wanted = c.checked
-      /*
-        §12 optimistic mutation: mark the row pending, reconcile with the
-        server, roll back VISIBLY on failure. The checkbox is put back to what
-        the server still believes rather than left showing a change that did
-        not happen - a tick that survives a failed write is the product lying
-        about canonical state.
-      */
-      const rowEl = c.closest('.bcitem')
+      const rowEl = c.closest('.bcitem') ?? c.closest('.bctask')
       rowEl?.classList.add('bcitem--pending')
+      if (key.startsWith('p:')) {
+        todos.rememberDone(ctx.state.project, key, wanted)
+        rowEl?.classList.remove('bcitem--pending')
+        ctx.render()
+        return
+      }
       const done = await attempt(
         c,
         'Saving…',
-        () => act('task_state', { p_task_id: id, p_state: wanted ? 'done' : 'todo' }),
+        () => todos.setDone(key, wanted),
         wanted ? 'Done.' : 'Put back.',
       )
       rowEl?.classList.remove('bcitem--pending')

@@ -337,13 +337,13 @@ Status words mean exactly one thing each:
 | 7 | No "one more" overflow; modules scroll internally | **verified** | every summary line removed; the suite fails on any /\d+ more/ and asserts a pane actually scrolls |
 | 8 | Styled, consistent scrollbars | implemented | both syntaxes (scrollbar-color and ::-webkit-scrollbar), on module bodies, expanded views and .bcscroll |
 | 9 | Workspace uses much more viewport width, tasteful margin | **verified** | 1088px measure became min(1680px, 94%); measured at 94% of a 1600px window |
-| 10 | Miniature To-dos: checkboxes work, immediate, persisted | pending | |
-| 11 | Expanded To-dos genuinely interactive | pending | |
+| 10 | Miniature To-dos: checkboxes work, immediate, persisted | **verified** | verify:basecamp-todos — no box is disabled, ticking redraws the row at once, it survives a reload, and the expanded view agrees |
+| 11 | Expanded To-dos genuinely interactive | **verified** | same suite — unticking in the expanded view puts it back and the miniature agrees the moment the modal closes |
 | 12 | "Add a List" becomes "Add a Task" | implemented | Add a Task is the primary action; list creation is genuinely separate (a list is a milestone task, 0171) so it is kept as a demoted "New list" |
 | 13 | Docs and Files: every file type opens sensibly | pending | |
 | 14 | Thumbnails or attractive fallbacks for every type | pending | |
 | 15 | Audio playback | pending | |
-| 16 | Schedule entries resolve to the right object; no dead links | pending | |
+| 16 | Schedule entries resolve to the right object; no dead links | **verified** | the cause was one key scheme too many; EVERY schedule entry is now opened by the suite and must show the task it names. Proved by a sabotage that put the old key back |
 | 17 | Three-dot wording becomes "Sources" | implemented | |
 | 18 | Source logos or icons | pending | |
 | 19 | "Chat" becomes "Chat with Team" and toggles the sidebar | pending | |

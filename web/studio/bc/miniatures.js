@@ -36,6 +36,7 @@
   template.
 */
 
+import * as todos from './todos.js'
 import { esc, status } from './parts.js'
 
 let ctx = null
@@ -178,14 +179,24 @@ const taskLine = (t) => {
   const done = isDone(t)
   const who = named(t.who)
   const due = dueWords(t)
-  const ref = t.id ?? ''
+  /*
+    THE BOX IS NEVER DISABLED, and the title is a control.
+
+    It used to be disabled whenever the row had no id, which is every row a
+    visitor without an office token can see - so on the deployed preview the
+    whole module was a picture. The write still only happens where there is
+    something to write to; where there is not, the prototype remembers
+    (todos.overlay), which is the difference between an interface that is
+    honest about having no records and one that is not interactive at all.
+  */
+  const key = todos.keyOf(t)
   return `<li class="bctask${done ? ' bctask--done' : ''}">
     <label class="bctickhit">
       <input type="checkbox" class="bccheck" ${done ? 'checked' : ''}
-        ${ref === '' ? 'disabled' : ''} data-bc-tick="${esc(ref)}"
+        data-bc-tick="${esc(key)}"
         aria-label="${esc(`${done ? 'Completed' : 'Not completed'}: ${t.title}`)}">
     </label>
-    <span class="bctasktitle">${esc(t.title)}</span>
+    <button type="button" class="bctasktitle bclinky" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
     ${who === '' ? '' : `<span class="bctaskwho">${esc(who)}</span>`}
     ${due === '' ? '' : `<span class="bctaskdue${isLate(t) ? ' bctaskdue--late' : ''}">${esc(due)}</span>`}
     ${t.blocked ? status('Blocked', 'blocked') : ''}
@@ -368,7 +379,7 @@ export const calendarMini = (p, { items = 4 } = {}) => {
                     It opens the to-do the date belongs to.
                   -->
                   <button type="button" class="bcitemtitle bclinky bcagendawhat"
-                    data-bc-task-open="${esc(t.id ?? '')}">${esc(t.title)}</button>
+                    data-bc-task-open="${esc(todos.keyOf(t))}">${esc(t.title)}</button>
                   ${t.who ? `<span class="bcagendawho">${esc(named(t.who) || t.who)}</span>` : ''}
                 </div>`,
               )

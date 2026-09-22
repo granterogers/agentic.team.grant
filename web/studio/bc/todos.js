@@ -186,3 +186,82 @@ export const update = async (ref, patch = {}, clear = []) =>
 
 /** Whether this browser may write at all. */
 export const canWrite = () => ctx?.canWrite?.() === true
+
+/* ======================================================================== *
+ * The prototype's own memory
+ *
+ * WHY THIS EXISTS, because a local store beside a canonical one is exactly
+ * what ADR-0043 warns about and this is deliberately NOT that.
+ *
+ * Grant, 22 September: *"The miniature To-Dos module remains functionally
+ * broken... task checkboxes work; tasks themselves can be clicked where
+ * appropriate; changes immediately update the interface; state persists
+ * correctly."* Every checkbox he pressed was DISABLED, and correctly so by
+ * the rule above: a prototype row carries no id, so there is nothing to
+ * write to. The deployed preview carries no office token, so that is every
+ * row he can see.
+ *
+ * The answer is not to fake a write. It is to let the PROTOTYPE remember what
+ * was done to it, in the browser, for rows that have no record behind them -
+ * and only for those. The moment a row has an id the office is the only
+ * store, this overlay is not consulted for it, and nothing here can ever
+ * disagree with a canonical row because it never holds one.
+ * ======================================================================== */
+
+const MEM = (project) => `bc.todos.${project}`
+
+/** A stable key for a row that has no id of its own. */
+export const keyOf = (t) => (typeof t?.id === 'string' && t.id !== '' ? t.id : `p:${t?.title ?? ''}`)
+
+const memory = (project) => {
+  try {
+    const raw = globalThis.localStorage?.getItem(MEM(project)) ?? ''
+    const parsed = raw === '' ? {} : JSON.parse(raw)
+    return parsed !== null && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Remember that a row with no record behind it was ticked, or unticked. */
+export const rememberDone = (project, key, done) => {
+  try {
+    const now = memory(project)
+    now[key] = done ? 'done' : 'todo'
+    globalThis.localStorage?.setItem(MEM(project), JSON.stringify(now))
+  } catch {
+    /* A viewer who cannot store it still sees the change until they reload. */
+  }
+}
+
+export const forgetLocal = (project) => {
+  try {
+    globalThis.localStorage?.removeItem(MEM(project))
+  } catch {
+    /* Already nothing. */
+  }
+}
+
+/**
+ * The project as the person has left it.
+ *
+ * Applied in ONE place - `project()` in shell.js - so the miniature, the
+ * expanded view, the schedule and the card table cannot disagree about
+ * whether something is done. Two readers of one fact is the defect this
+ * repository has paid for more than any other.
+ */
+export const overlay = (p) => {
+  if (p === undefined || p === null || !Array.isArray(p.tasks)) return p
+  const mem = memory(p.slug)
+  if (Object.keys(mem).length === 0) return p
+  return {
+    ...p,
+    tasks: p.tasks.map((t) => {
+      /* A row with a record behind it is the office's business, never ours. */
+      if (typeof t.id === 'string' && t.id !== '') return t
+      const want = mem[keyOf(t)]
+      if (want === undefined) return t
+      return { ...t, state: want, state_raw: want, done: want === 'done' }
+    }),
+  }
+}

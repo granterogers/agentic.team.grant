@@ -34,6 +34,7 @@ import { PROJECTS, source } from '../data.js'
 import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import * as bcMini from './miniatures.js'
+import * as todos from './todos.js'
 import { breadcrumb, button, empty, errorState, esc, input, skeleton, status, tool } from './parts.js'
 
 /*
@@ -49,6 +50,7 @@ export const mount = (c) => {
     the files inside bc/ - which is what makes it deletable in one commit.
   */
   bcMini.mount(c)
+  todos.mount(c)
   compose.mount(c)
 }
 
@@ -59,7 +61,12 @@ const repaint = () => ctx.render()
 /** Every address in this experience carries the prefix. One place to change. */
 const at = (p = '') => `/basecamp${p}`
 
-const project = () => PROJECTS.find((p) => p.slug === state().project) ?? PROJECTS[0]
+/*
+  ONE PLACE the project is read, and therefore one place the prototype's own
+  memory is applied. See todos.overlay: it touches only rows that have no
+  record behind them, so a signed-in session never sees it at all.
+*/
+const project = () => todos.overlay(PROJECTS.find((p) => p.slug === state().project) ?? PROJECTS[0])
 
 /* ======================================================================== *
  * Tool definitions
@@ -837,7 +844,18 @@ const tasksSurface = (p) => {
   So the key is the id where there is one and the position where there is
   not, and the controls that need canonical identity say so themselves.
 */
-const taskKey = (t, i) => String(t.id ?? `at-${String(i)}`)
+/*
+  ONE KEY FOR A TASK, ANYWHERE IN THE EXPERIENCE.
+
+  This was `t.id ?? at-<index>` while the miniatures had none at all - and the
+  moment the miniature rows became openable and tickable, an index-based key
+  here and a title-based one there would have been two keys for one row: a
+  tick in the miniature and a tick on the surface would have remembered two
+  different things, and opening a task from the board would have found
+  nothing. An index is the wrong basis anyway, because filtering a list
+  changes it. The port owns the key now, and takes the whole task.
+*/
+const taskKey = (t) => todos.keyOf(t)
 
 /*
   A PERSON'S NAME, NOT THEIR SLUG. The rows read "emma" and "oliver" while
@@ -870,7 +888,7 @@ const repeatsList = (note, listName) => {
 const taskRow = (t, i = 0, listName = '') => {
   const isDone = t.state === 'done'
   const id = t.id ?? ''
-  const key = taskKey(t, i)
+  const key = taskKey(t)
   return `<div class="bcitem${isDone ? ' bcitem--done' : ''}" data-bc-task="${esc(key)}">
     <!--
       THE TICK IS WRAPPED so its hit area can be 44px without the tick itself
@@ -880,9 +898,15 @@ const taskRow = (t, i = 0, listName = '') => {
       hit area growing rather than a second control being introduced.
     -->
     <label class="bctickhit">
+      <!--
+        NOT DISABLED WHEN THERE IS NO RECORD. The same correction as in the
+        miniature and for the same reason: every row a visitor without an
+        office token can see carried no id, so the whole surface was a
+        picture. The write still only happens where there is something to
+        write to; where there is not, the prototype remembers.
+      -->
       <input type="checkbox" class="bccheck" ${isDone ? 'checked' : ''}
-        ${id === '' ? 'disabled' : ''}
-        data-bc-tick="${esc(id)}"
+        data-bc-tick="${esc(key)}"
         aria-label="${esc(`${isDone ? 'Completed' : 'Not completed'}: ${t.title}`)}">
     </label>
     <div class="bcitembody">
@@ -927,7 +951,7 @@ const taskRow = (t, i = 0, listName = '') => {
  */
 const taskRecord = (p) => {
   const wanted = String(state().bcTask ?? '')
-  const t = (p.tasks ?? []).find((x, i) => taskKey(x, i) === wanted)
+  const t = (p.tasks ?? []).find((x) => taskKey(x) === wanted)
   if (t === undefined) {
     return `${crumbFor(p, 'tasks')}
       ${errorState(
@@ -1445,7 +1469,7 @@ const stageOf = (t) => {
 
 const card = (p, t, i) => {
   const id = t.id ?? ''
-  const key = taskKey(t, i)
+  const key = taskKey(t)
   const list = (p.modules ?? []).find((m) => (m.id ?? m.name) === t.parent)
   return `<article class="bcbcard" data-bc-card="${esc(key)}">
     <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
@@ -1615,7 +1639,7 @@ const scheduleSurface = (p) => {
                                 <span class="bcagendamm">${esc(MONTHS[Number(iso.slice(5, 7)) - 1].slice(0, 3))}</span>
                               </span>
                               <button type="button" class="bcitemtitle bcitemlink bcagendawhat"
-                                data-bc-task-open="${esc(taskKey(t, all.indexOf(t)))}">${esc(t.title)}</button>
+                                data-bc-task-open="${esc(taskKey(t))}">${esc(t.title)}</button>
                               <!--
                                 IN WORDS AS WELL AS IN COLOUR. A date box with
                                 a different border is not a statement anybody
