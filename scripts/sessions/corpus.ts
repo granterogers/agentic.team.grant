@@ -22,6 +22,7 @@
  * all. Long sessions are for what breaks that the short ones cannot show.
  */
 
+import { COLLABORATION } from './collaboration.ts'
 import { DELEGATION } from './delegation.ts'
 import { DISCOVERY } from './discovery.ts'
 import { DURABILITY } from './durability.ts'
@@ -815,6 +816,7 @@ export const SESSIONS: readonly Session[] = [
   ...DISCOVERY,
   ...PREFERENCES,
   ...DELEGATION,
+  ...COLLABORATION,
 ]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)
