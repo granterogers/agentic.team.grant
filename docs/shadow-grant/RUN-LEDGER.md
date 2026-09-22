@@ -1195,3 +1195,161 @@ Containment held: `is_fixture`, `harness_job` and `synthetic` all true,
 today's live runs left were swept and every `check:leaks` counter is zero.
 `check:leaks` still fails on **#298**, which is Production Reliability's
 and deliberately untouched here.
+
+---
+
+# 22 September — integration, deployment, and what the deployed office does
+
+## Reconciliation before deployment
+
+`worker` was on **v671**, deployed 21:48 on 21 September — **this branch's
+own code**, which is why that evening's live probe read the purpose-clause
+sentence as `thought`. The fix was in the repository and not in the thing
+that runs.
+
+Production Reliability had already done the analysis from their side in
+`docs/ops/deployment-reconciliation.md` and **stopped their deploy rather
+than attempting it**, because `deploy:worker` publishes the whole of
+`src/` and this branch carried twenty more changed files than theirs.
+
+The divergence, computed rather than assumed: **source overlap is zero.**
+Theirs is `src/db/executor.ts`, `src/handlers/chores.ts` and
+`supabase/functions/hq-api/index.ts`; mine is `src/agents/*`,
+`src/handlers/instruction.ts`, `src/migrations/*`, `src/simulation/*`. One
+conflict in the whole merge — `package.json`, both adding npm scripts —
+resolved by keeping both sets.
+
+Their four post-integration checks all pass, including both controls of
+`verify:escapes`: real traffic is still stamped `synthetic=false` and a
+permitted delivery still reaches the transport.
+
+### The migration collision, kept as history
+
+Both branches took **0543**, eleven minutes apart, and both applied it —
+mine 21:53, theirs 22:04. `app.schema_migrations` is keyed on NAME, so both
+rows are real and the database is correct. They touch disjoint functions.
+
+**Renaming mine to 0545 was done and reverted.** It would make the
+repository claim a migration ran under a number it did not, which is
+rewriting history to make a check green — and Production Reliability made
+that exact argument the same day, preserving two escape rows rather than
+deleting them for a clean check.
+
+So the check learned the distinction it was already holding the evidence
+for: a duplicate where **every file is applied** is a recorded collision,
+reported as a `note`; a duplicate where **any file is unapplied** is still
+an error. `runner.ts` refuses on errors only — without that no migration
+could ever be applied again. Proved by putting a second unapplied 0544 in
+`migrations/` and watching it go red.
+
+`migrations/applied.json` was two entries stale — that staleness is what
+made the check call an already-recorded collision a pending one.
+
+## Deployed v671 → v673, and the three fixes verified against it
+
+| fix | evidence on the deployed worker |
+|---|---|
+| **purpose clause** | reading `thought` → **`assignment`**; the control *"put a task on simgrant Coaching Programme to book the venue so we do not lose the slot"* → **1 task, 1 attempt, 0 impediments**, truthful reply, purpose clause carried into the title |
+| **polite retraction** | the same sentence + *"please leave it I will do it"* → **0 tasks**. The withdrawn clause was not executed, against a control that created one |
+| **delegation** | *"do what you think is best"* → **`recognised: true`**, where it was an unrecognised thought |
+
+Containment held on every probe: `is_fixture`, `harness_job`, `synthetic`
+all true, `announce` false, no delivery attributable to any run, and the
+tasks swept afterwards.
+
+## The second-order defect, found because it was looked for — #302
+
+The agency regression was not a regression. Investigated, it is this:
+**understanding improved faster than acting.**
+
+An instruction the office now reads but cannot carry out is answered with
+a claim or a promise, never a question.
+
+```
+"stick something down so I do not forget to ring Kevin about the quote"
+   assignment · recognised · 4 attempts · 0 tasks · 0 outputs · REPLY EMPTY
+   coherence_note: the text says something was made ("Task added") and this
+                   job did nothing — no task, no document, no child job.
+```
+
+And the retry converts the refused claim into a promise that passes:
+*"I'll draft… create a task… add a Notion note…"* — three things, none of
+which exists.
+
+The instance underneath is `personalTaskRequest`: *"stick a note down to
+ring Kevin"* extracts a title, *"stick something down so I do not forget to
+ring Kevin"* extracts nothing. **Widening the noun list is the instance;
+the class is that nothing makes the office say so when the extractor
+returns nothing.**
+
+**Calibrated, not extrapolated.** 25 real actionable instructions in 30
+days, all answered in prose, none making an artifact — and reading the
+bodies, *three of six already do the right thing* (*"I don't have a record
+of the 'ideal client avatar' file… Let me know where"*). One is the defect.
+The probes hit it harder because the synthetic world holds **zero
+documents**, which is the harness being a harder test rather than the
+office being worse than measured.
+
+## Continuity — what the harness can and cannot prove
+
+A marked preference is stored as a **`global`** lesson. `public.lessons`
+has **no chat, conversation or thread column**, so it is unscoped by
+construction and survives a conversation boundary. Verified live: the probe
+stored one and `app.lessons_for(p_include_harness => true)` returns it.
+
+**And the harness cannot prove the delivery half end to end, by design.**
+0539 keeps a harness-taught lesson out of every prompt — measured, zero
+reach a real prompt — which is containment working and is the right trade.
+The real path is driveable through `p_include_harness`, the way 0297's
+`p_include_fixtures` exists.
+
+*An earlier query of mine appeared to show six harness lessons reaching
+prompts. It conflated two conditions; the six were real-traffic lessons.
+Caught in one query, and recorded because it is the third time today that
+my own analysis was the thing at fault.*
+
+## Live multi-turn arcs are throughput-bound
+
+~2.4 minutes a turn when a request is ungrounded (four coherence attempts);
+47 seconds when it is grounded. A four-turn arc with a drafting turn
+outruns a foreground session — `arc.across-conversations` was abandoned at
+turn 1 and reported unrun, which is the bounded-failure rule working.
+
+So continuity is tested with **named conversations** instead
+(`shadow:probe-live --conversation`), which needs two turns rather than
+four and tests the property directly.
+
+## Gates against the deployed state
+
+```
+tests 2479 · lint · tsc · migrations · secrets · templates    all green
+shadow:sabotage     14 detectors, each shown a defect, each red
+check:provenance    no gap written in the last day
+shadow:freeze       b98b6cf030e75970 UNCHANGED across the merge
+check:leaks         clean except #298's two preserved rows
+```
+
+Fresh seeds never run before:
+
+| seed | understanding | context | agency | safety |
+|---|---|---|---|---|
+| 20260922 | 89% | 95% | 82% | **100%** |
+| 5150 | 81% | 94% | 93% | **100%** |
+| 8823 | 86% | 93% | 91% | **100%** |
+| held-out `b98b6cf0` | 85% | 96% | 80% | **100%** |
+
+The spread is honest seed variance, reported rather than averaged. **Do not
+compare any of these to the 21 September numbers taken against
+`27f3b93972980a66` — that is a different corpus.**
+
+29-arc multi-turn sweep, 2 personas × 2 fresh seeds, **29 complaints**: 16
+preference-not-stored (#290, preserved), 9 request-not-registered, 2
+withdrawal, 1 #289, 1 asked-something-already-said.
+
+## The lesson pile
+
+49 standing harness lessons on an append-only table whose withdrawal path
+is an INSERT. Sweeping would add 49 permanent rows for no gain — 0539 keeps
+them out of prompts and `check:leaks` fails if one reaches the Governance
+page, both measured at zero. So the new counter **reports and does not
+fail**: a debris class with no witness is one that comes back.
