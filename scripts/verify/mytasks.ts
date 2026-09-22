@@ -1248,27 +1248,41 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
     conversation had no path to a change at all — the RPC was fine and nothing
     called it. A test that called `my_task_set` would have proved the half that
     was never in doubt.
+
+    ## Through the REAL inbound path, in ONE thread (0554)
+
+    This used to insert each job raw, with no `inbound_commands` row at all —
+    so there was no conversation, and the three checks below were driving a
+    shape production cannot produce. 0553 then widened the PRODUCT to make
+    them reachable: any loose personal task inside a two-hour window became a
+    referent, which handed a fresh chat on another channel a task Grant had
+    typed twenty minutes earlier. The fixture was wrong and the product was
+    changed to suit it.
+
+    The subject is therefore added DURING the conversation rather than before
+    it, which is the flow 0552 was written for and the one Grant is actually
+    in: he puts something on his list while they are talking, and then says
+    "actually make that Monday".
   */
-  const first = (await press('my_task_add', {
-    p_title: `Ring the caterers ${run}`,
-    p_due_on: new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10),
-  })) as { id?: string }
-  const subject = String(first.id ?? '')
+  const THREAD = `verify-chg-${run}`
+  let said = 0
 
   const say = async (text: string): Promise<string> => {
-    const jobId = String(
+    said += 1
+    const commandId = String(
       (
         await one(`
-          insert into public.jobs
-            (correlation_id, project_id, idempotency_key, kind, requested_by, state, announce,
-             pinned_config)
-          values (extensions.gen_random_uuid(), null,
-                  ${lit(`verify-mytasks-chg-${run}-${Math.random().toString(36).slice(2, 8)}`)},
-                  'office.instruction', ${lit(`teamhq:verify-${run}`)}, 'queued', false,
-                  jsonb_build_object('instruction', ${lit(text)}))
-          returning job_id::text as id`)
-      ).id ?? '',
+          insert into public.inbound_commands
+            (origin_channel, origin_ref, actor, instruction, dedupe_key)
+          values ('teamhq', ${lit(`${THREAD}:${String(said)}`)},
+                  ${lit(`verify-mytasks-${run}`)}, ${lit(text)},
+                  ${lit(`teamhq:message:${THREAD}-${String(said)}`)})
+          returning command_id::text as v`)
+      ).v ?? '',
     )
+    const enq = (await one(`select app.enqueue_inbound(${lit(commandId)}::uuid) as v`)).v
+    const parsed = (typeof enq === 'string' ? JSON.parse(enq) : enq) as { job_id?: string }
+    const jobId = String(parsed.job_id ?? '')
     for (let i = 0; i < 40; i += 1) {
       const row = await one(`
         select j.state, coalesce(o.body, '') as body
@@ -1285,11 +1299,25 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
     return ''
   }
 
+  /*
+    Turn one opens the conversation. It has to be a real turn through the
+    real path: `app.my_task_referent` dates a loose task from the first thing
+    said in this chat, so a subject added before the chat began is correctly
+    not a referent at all.
+  */
+  await say('Morning — what is on my list?')
+
+  const first = (await press('my_task_add', {
+    p_title: `Ring the caterers ${run}`,
+    p_due_on: new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10),
+  })) as { id?: string }
+  const subject = String(first.id ?? '')
+
   const monday = await say('Actually make that Monday')
   const moved = await one(`
     select due_on::text as due, title from public.tasks where task_id = ${lit(subject)}::uuid`)
   check(
-    'a follow-up moves the task the office just made',
+    'a follow-up moves the task this conversation put on his list',
     `${String(moved.due ?? 'no date')} — the office said: ${monday.slice(0, 60)}`,
     String(moved.due ?? '') !== new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10) &&
       String(moved.due ?? '') !== '',
@@ -1328,6 +1356,9 @@ console.log('\n"actually make that Monday" (#259, migration 0516)')
   )
 
   await db.execute(`delete from public.tasks where task_id = ${lit(subject)}::uuid`)
+  await db.execute(
+    `delete from public.inbound_commands where origin_ref like ${lit(`${THREAD}:%`)}`,
+  )
 }
 
 // ===========================================================================

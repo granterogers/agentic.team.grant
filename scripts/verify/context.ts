@@ -409,7 +409,30 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
              'teamhq:ref:${run}_three')
      returning command_id into v_c2;
      v_ans := v_ans || jsonb_build_object('elsewhere',
-       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));`,
+       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));
+
+     /*
+       0554. A task he typed HIMSELF carries no job, so it belongs to no
+       conversation — and 0553 let any such task inside a two-hour window be
+       the referent, which is the half-hour clock 0551 removed, lengthened.
+       A fresh chat that had not begun when the task was made is pointing at
+       nothing.
+     */
+     delete from public.tasks where job_id = v_k;
+     insert into public.tasks (title, added_by, assigned_to_human, created_at)
+     values ('Typed before this chat', 'grant', true, app.now_utc() - interval '20 minutes');
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, dedupe_key, received_at)
+     values ('telegram', 'fresh${run}:1', 'grant', 'ctx-${run}', 'Call it something else',
+             'telegram:ref:${run}_four', app.now_utc() - interval '2 minutes')
+     returning command_id into v_c2;
+     v_ans := v_ans || jsonb_build_object('older',
+       coalesce(app.my_task_referent(v_c2)::text, 'NULL'));
+
+     insert into public.tasks (title, added_by, assigned_to_human, created_at)
+     values ('Typed during this chat', 'grant', true, app.now_utc() - interval '1 minute');
+     v_ans := v_ans || jsonb_build_object('during',
+       coalesce(app.my_task_referent(v_c2) ->> 'title', 'NULL'));`,
   )
   if (r.skipped === undefined) {
     ok('a conversation that made nothing offers no referent', r.none === 'NULL', r.none)
@@ -420,6 +443,15 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
     */
     ok('two are ambiguous, and it says so rather than picking', r.several === '2', r.several)
     ok('and another conversation inherits no referent at all', r.elsewhere === 'NULL', r.elsewhere)
+    /*
+      0554's pair. The first is the defect 0553 shipped: a loose task older
+      than the conversation, offered to a fresh chat on another channel. The
+      second is the flow 0552 was written for and must keep working — he
+      adds something to his list while they are talking, then says something
+      about it.
+    */
+    ok('a task he typed BEFORE this chat began is not a referent', r.older === 'NULL', r.older)
+    ok('and one he typed DURING it is', r.during === 'Typed during this chat', String(r.during))
   }
 }
 

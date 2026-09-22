@@ -2615,7 +2615,36 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         nobody recognised.
       */
       const HIS_OWN: ReadonlySet<ReadingKind> = new Set(['task_create', 'task_change', 'other'])
-      const hisRequests = understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text)
+      /*
+        WHAT HE SAID COMES FIRST, AND THE REWRITE COMES SECOND (#313).
+
+        `instruction` was replaced by `resolveAgainstThread` above, so every
+        reader here sees a paraphrase rather than his words. That is right for
+        the MODEL — a fragment has to stand alone before anything can answer
+        it — and it is exactly wrong for these recognisers, which key on the
+        elliptical shape BECAUSE the elliptical shape is what a follow-up
+        looks like.
+
+        Measured, in process, with the debug line this replaced:
+
+            Grant : Make that urgent
+            read as: Make the 'Ring the caterers …' task urgent
+            change=null
+            office: Added it: the 'Ring the caterers …' task urgent
+
+        The rewrite turned a follow-up CHANGE into a fresh imperative CREATE:
+        it put a junk row on his own list AND left the task he meant
+        untouched. Both halves of the expensive direction in one turn.
+
+        So his own words are tried first and the rewrite is kept as a
+        fallback, because the resolution genuinely helps where his words carry
+        no title of their own. This can only ever ADD a reading his own
+        sentence supports; it never invents one from a paraphrase.
+      */
+      const hisRequests = [
+        ...(resolved.changed && resolved.from !== null ? [resolved.from] : []),
+        ...understood.surviving.filter((r) => HIS_OWN.has(r.kind)).map((r) => r.text),
+      ]
       const firstOfHis = <T>(read: (text: string) => T | null): T | null => {
         for (const text of hisRequests) {
           const got = read(text)
@@ -2623,6 +2652,19 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         }
         return null
       }
+
+      /*
+        AND ONE CLAUSE IS EITHER A CHANGE OR A NEW THING, NEVER BOTH.
+
+        Recognised here rather than where it is acted on, because the two
+        create readers below run first and had no way to know. On one live
+        turn the office both changed the task and created a second one from
+        the same four words, and narrated both — "Added it: …" above
+        "Changed — …". `personalTaskChange` and `personalTaskRequest` do not
+        overlap on any create sentence in the corpus, so this only ever
+        subtracts, which is the cheap direction `mine.ts` argues for.
+      */
+      const changesHis = isBranch ? null : firstOfHis(personalTaskChange)
 
       /*
         Is he teaching us something? (#48, #50)
@@ -3113,7 +3155,10 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         gets "I will add that" now and the task some seconds later.
       */
       // A request for a FILE is not a to-do, and it is decided above.
-      const forGrant = wantsFile !== null || isBranch ? null : firstOfHis(personalTaskRequest)
+      const forGrant =
+        wantsFile !== null || isBranch || changesHis !== null
+          ? null
+          : firstOfHis(personalTaskRequest)
       const noted =
         forGrant === null
           ? null
@@ -3223,7 +3268,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const asked =
         pullOut !== null || noted !== null || isBranch
           ? null
-          : firstOfHis((text) => taskRequest(text, classifyIntent(text)))
+          : changesHis !== null
+            ? null
+            : firstOfHis((text) => taskRequest(text, classifyIntent(text)))
 
       /*
         And the ANSWER to "what should it be called?", which is the other half.
@@ -3284,9 +3331,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         one of them.
       */
       const change =
-        noted !== null || wantsFile !== null || namedLater !== null || isBranch
-          ? null
-          : firstOfHis(personalTaskChange)
+        noted !== null || wantsFile !== null || namedLater !== null || isBranch ? null : changesHis
       const changed =
         change === null
           ? null

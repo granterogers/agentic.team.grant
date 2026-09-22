@@ -550,5 +550,8 @@
   "0548_remembering_the_project_may_never_lose_the_message.sql": "0ffa6661c797b8ae8ffb2e1a4a534c90fb781982e3a5dea7ec982aa93440b6a4",
   "0549_what_the_specialists_found_reaches_the_conversation.sql": "30cd7220b7ebb6625059fa9ebe7ccb2fbc6b1cc53c132f8ebbf6c56b29ed4452",
   "0550_the_office_knows_what_it_is_still_doing.sql": "440828cbd7dfc5973391b59e8d595a5066ac64cd1be98c85050824b3e5413bce",
-  "0551_a_rename_needs_a_referent_not_a_recent_row.sql": "a6e04635293565ba930ad8a41a1180fd3466eda6e8fc0e88faf8bdf6906f02e7"
+  "0551_a_rename_needs_a_referent_not_a_recent_row.sql": "a6e04635293565ba930ad8a41a1180fd3466eda6e8fc0e88faf8bdf6906f02e7",
+  "0552_a_task_he_typed_himself_is_still_a_referent.sql": "477bc8addabecffd96f3b2e73bb61dcd8217b71300b9062e8a8dcaa10a3bd2f0",
+  "0553_the_window_not_the_first_turn.sql": "6bd4282c7a541fa51ccf4645aab86c2f9b85e128c2910e1599105d4c6ce73336",
+  "0554_reference_needs_an_antecedent.sql": "38bbb8657b59cb350d68b9945b4c30eaa81bfdaad7625bd0c8712c8be8ba3374"
 }
