@@ -2283,3 +2283,112 @@ hypothesis and was not guessed at.
 
 This one produced five systemic fixes and one filed defect, all of them
 architectural rather than edge cases. That is not diminishing returns.
+
+---
+
+# Iteration — #313 closed properly, and #314 found underneath it
+
+## The suite went green and the product was wrong
+
+`verify:mytasks` reached 89/89 after 0551 → 0552 → 0553, and the green was
+bought. **0553's own header says what it was for**: three sections of that
+suite drive the office with a raw job insert and no `inbound_commands` row at
+all, so there was no conversation for a task to have appeared during, and
+0552's bound made them red. It replaced the bound with a flat two-hour window.
+
+Driven on the live function:
+
+```
+a task Grant typed himself, 20 minutes ago, in no conversation
+a BRAND NEW conversation on another channel that has created nothing
+-> {"id": "a866c7e4…", "title": "Chase the printers", "priority": 100}
+```
+
+0551's defect — proximity standing in for reference — with a two-hour clock in
+place of a half-hour one, in the migration written to preserve the fix.
+
+0553's argument was that EXACTLY ONE protects him. On Grant's real rows it
+does not: of the three hours in which he has ever had a loose personal task
+open, **two held exactly one**, which is the condition under which it fires.
+#259 is the feature that makes personal tasks common, so the guard gets weaker
+the more the product is used.
+
+**0554** — a task with no job is a referent only where it appeared since this
+conversation began. The arithmetic is untouched. Five directions driven inside
+a rollback; sabotaging the guard makes the drive red, naming the row.
+
+**The fixture was fixed rather than the product bent to it.** That section now
+drives one real thread through the real inbound path and adds its subject
+DURING the conversation, which is the flow 0552 was written for.
+
+## The failure that remained was a second, larger defect (#314)
+
+One check stayed red. Chasing it rather than adjusting it found this, with a
+debug line on the veto:
+
+```
+Grant : Make that urgent
+read as: Make the 'Ring the caterers …' task urgent
+change = null
+office: Added it: the 'Ring the caterers …' task urgent
+CANONICAL: priority still 100, and a SECOND task on his list
+```
+
+`instruction = resolved.instruction` replaces Grant's words with the thread
+resolver's paraphrase before any recogniser runs. Those readers key on the
+**elliptical shape**, because the elliptical shape is what a follow-up looks
+like. Making a fragment self-contained is right for the model and destroys the
+only signal the recognisers have.
+
+| he said | read as | recogniser |
+|---|---|---|
+| `Make that urgent` | `Make the 'Ring the caterers' task urgent` | declines |
+| `Call it Ring the venue` | `Call the reminder Ring the venue` | declines |
+| `Call it Review the onboarding copy` | `Call the task Review the onboarding copy` | declines |
+
+The third was **already in the live acceptance run's own data** before anyone
+looked for it: two jobs whose stored instruction is the rewrite, both answering
+*"I have not done this."*
+
+Second defect in the same turn: one clause was read as a change AND as a new
+task, and the office narrated both.
+
+**The fix** is at the layer, not the instance: his own sentence is offered to
+the recognisers first, with the rewrite kept as a fallback so a resolution that
+supplies a missing title still helps; and a recognised change vetoes both
+create readers, since the two recognisers do not overlap on any sentence in the
+corpus.
+
+## The instrument was wrong twice before the product was wrong once
+
+Two probes reported the resolver leaving everything "(unchanged)" and very
+nearly stood as a refutation. They passed `pass.router` — **which does not
+exist on `Pass`** — so `resolveAgainstThread` went past its `router === null`
+guard, threw inside, was caught, and returned the instruction untouched every
+single time. It surfaced only because `npm run typecheck` named the property
+that did not exist. A probe that never calls the model reports "no rewrite"
+in exactly the words a working resolver would.
+
+A third version, with real history but a real router, then found the defect in
+one run — and found a shape nobody had asked about (`Call it …` losing the
+rename entirely).
+
+## Verification
+
+- 0554 drive: five directions, inside a rollback, sabotage proved.
+- `verify:context` **27/27**, with two new permanent boundaries.
+- `tests/handlers/his-words-not-the-rewrite.test.ts` **15 checks**, both halves
+  of the fix proved by sabotage; the three live rewrites recorded verbatim.
+- **2807** unit tests; lint, typecheck, check:migrations, check:secrets,
+  check:templates, check:callers green.
+- Deployed **v733**, then `verify:mytasks` **89/89 against the deployed
+  worker**, with the representative fixture and the narrowed product.
+- `check:leaks`: no task debris; the two delivery escapes are #298's preserved
+  evidence from 21 September, and the guard refused 168 since, including every
+  run in this iteration.
+
+## Is another iteration justified?
+
+Yes. This one began by refusing a green suite and produced two architectural
+defects, one of which puts rows on Grant's own list that he never asked for.
+That is not an edge case and it is not diminishing returns.
