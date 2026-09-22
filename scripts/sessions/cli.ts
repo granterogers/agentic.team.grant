@@ -124,10 +124,39 @@ if (argv.includes('--report')) {
   process.exit(fail > 0 ? 1 : 0)
 }
 
+/*
+  Reverse what the sessions put on Grant's list.
+
+  `tidy` cancels leftover JOBS and has never touched the tasks those jobs
+  created, so ten sessions left eleven of them. They are invisible to him -
+  `app.my_tasks` excludes a harness task by default - which is why nothing
+  had ever noticed; but a debris class with no sweep is one that grows, and
+  `check:leaks` counts these precisely so somebody eventually does.
+
+  The same reverser the shadow world uses, pointed at the session actor
+  instead of the probe one.
+*/
+if (argv.includes('--sweep')) {
+  const { sweepHarnessWork } = await import('../../src/simulation/provision.ts')
+  const { db } = await import('./run.ts')
+  const r = await sweepHarnessWork(db, 'teamhq:verify-sess-%')
+  console.log(
+    `\n  tasks left by session jobs: ${String(r.tasksBefore)} -> ${String(r.tasksAfter)} ` +
+      `(${String(r.jobs)} job(s) reversed)`,
+  )
+  if (r.tasksAfter > 0) {
+    console.log('  what remains is what the office declined to take back, which is correct')
+    console.log('  if a person has touched it.\n')
+  } else {
+    console.log()
+  }
+  process.exit(0)
+}
+
 const name = flag('only')
 const session = name === undefined ? undefined : byName(name)
 if (session === undefined) {
-  console.error('usage: npm run session -- --only <name> | --list | --report')
+  console.error('usage: npm run session -- --only <name> | --list | --report | --sweep')
   process.exit(2)
 }
 /*
