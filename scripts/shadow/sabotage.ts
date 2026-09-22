@@ -285,6 +285,15 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'a-stem-that-looks-inflected',
+    proves: 'an imperative whose verb ends in -ing or -ed is still an imperative',
+    file: 'src/agents/request.ts',
+    anchor: '    !A_STEM_THAT_LOOKS_INFLECTED.has(first) &&',
+    replacement: '',
+    check: 'tests/agents/a-stem-that-looks-inflected.test.ts',
+  },
+
+  {
     name: 'a-guess-never-becomes-the-conversation',
     proves: "only an explicit resolution is written to a conversation's memory",
     file: 'migrations/0547_a_conversation_remembers_its_project.sql',

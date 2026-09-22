@@ -445,6 +445,49 @@ const IRREGULAR_PAST = new Set([
   'knew',
 ])
 
+/*
+  Verbs whose BARE STEM ends in -ing or -ed, so the gerund and past-tense
+  shape tests must not reject them.
+
+  Closed, and closed for good: English is not acquiring monosyllabic -ing
+  verbs. Listed rather than derived because no derivation distinguishes
+  "bring" from "drafting" - stripping the suffix leaves "br", which is not a
+  word, and stripping it from "making" leaves "mak", which is not one either.
+*/
+const A_STEM_THAT_LOOKS_INFLECTED = new Set([
+  // -ing
+  'bring',
+  'cling',
+  'fling',
+  'ring',
+  'sing',
+  'sling',
+  'spring',
+  'sting',
+  'string',
+  'swing',
+  'wring',
+  'ping',
+  'ding',
+  // -ed
+  'need',
+  'feed',
+  'speed',
+  'bleed',
+  'breed',
+  'exceed',
+  'proceed',
+  'succeed',
+  'seed',
+  'weed',
+  'heed',
+  'shed',
+  'embed',
+  'lead',
+  'read',
+  'spread',
+])
+
 const REPORTING_ADVERB = new Set([
   'already',
   'just',
@@ -605,8 +648,33 @@ export const readClause = (clause: string): ClauseReading => {
     token rather than recognising the word, so it holds for verbs nobody has
     used yet. Found by semantic mutation rather than by the development
     controls, which is what mutations are for.
+
+    ## And the English verbs whose STEM already ends that way
+
+    The shape test cannot tell a gerund from a stem that happens to look like
+    one, and the cost of that was not theoretical. Grant's real traffic:
+
+        "bring Finance in on that"      -> remark -> thought -> nobody convened
+
+    said twice, and they are the only two times he has ever explicitly asked
+    for the finance director, who `npm run measure` reports has **NEVER been
+    chosen**. One three-character suffix test, and the specialist he asked for
+    by name was never told.
+
+    `ring the venue` is the same word class and is the commonest phone-call
+    task there is; `speed`, `feed`, `proceed` and `exceed` are the -ed half.
+
+    This is a genuinely closed class - English has a few dozen verbs whose
+    bare stem ends in -ing or -ed, and it is not acquiring more - so naming
+    them is not the phrase-list mistake this file avoids elsewhere. It
+    SUBTRACTS from a rejection rule, so the worst it can do is read a
+    description as an instruction, which §6's downward resolution then caps at
+    `assignment`.
   */
-  if (/ing$/.test(first) || /ed$/.test(first) || IRREGULAR_PAST.has(first)) {
+  if (
+    !A_STEM_THAT_LOOKS_INFLECTED.has(first) &&
+    (/ing$/.test(first) || /ed$/.test(first) || IRREGULAR_PAST.has(first))
+  ) {
     return { text, mood: 'remark', why: `"${first}" is not a bare stem, so not a command` }
   }
   /*
