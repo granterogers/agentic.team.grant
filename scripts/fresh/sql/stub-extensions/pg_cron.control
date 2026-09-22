@@ -1,0 +1,6 @@
+# STUB pg_cron for the fresh-install zero-state harness. Records schedules,
+# executes nothing. Not the real pg_cron. See scripts/fresh/sql/supabase-shim.sql.
+comment = 'STUB pg_cron (fresh-install harness) - records schedules, runs nothing'
+default_version = '1.0'
+relocatable = false
+schema = 'cron'
