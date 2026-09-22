@@ -3488,9 +3488,44 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       */
       const wantedWork = requests.length
 
+      /*
+        What this turn actually put in the world, from the tables.
+
+        Asked once, here, after every writer has run. `acted` above is what
+        the handler ATTEMPTED; this is what survived.
+      */
+      const landedRows = await deps.db
+        .execute(`
+          select (select count(*) from public.tasks t where t.job_id = ${lit(job.jobId)}::uuid)
+               + (select count(*) from public.documents d
+                   where d.produced_by_job = ${lit(job.jobId)}::uuid) as n`)
+        .then((r) => Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0))
+        .catch(() => acted)
+
       const outcome: CanonicalOutcome = {
         wanted: wantedWork,
-        landed: acted,
+        /*
+          Counted from ROWS, not from what the handler attempted.
+
+          `outcome.ts` says this in its own field comment - "counted from
+          rows the turn produced, never from what the handler decided to
+          attempt, which is why it cannot see a my_task_add that was called
+          and refused" - and the first wiring passed `acted` anyway, which
+          is that warning ignored one file away.
+
+          The durability sweep found what it costs. A turn that asked to
+          MOVE a task counted `changed` as one thing done, so `landed` was
+          1, the class came out `completed`, `mayClaimCompletion` was true,
+          the backstop was never consulted, and the office told Grant it had
+          "Added book venue and moved write welcome pack" against zero rows.
+          One turn later it correctly said it had created nothing.
+
+          One extra count, after the writers have run, against the job's own
+          id. Failing open to `acted` rather than throwing: a reading that
+          cannot be taken must not cost the answer, and the worse direction
+          is the one that loses a reply.
+        */
+        landed: landedRows,
         // The only thing that licenses a commitment to the future, and the
         // office's one way of making one here is to hand work on.
         pendingActions: pursuing === null ? 0 : 1,
