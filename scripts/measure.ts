@@ -72,6 +72,32 @@ const depth = await all(`
     join public.jobs j on j.job_id = r.job_id
    group by 1 order by 1`)
 
+/*
+  FANNING WORK OUT, which is a different thing from handing it ON.
+
+  The block below reported `routing_decisions.delegation_depth` under the
+  heading "delegation", and that number is ACCURATE and means something much
+  narrower than the heading: a routing decision exists only for an
+  `office.instruction` job, so depth counts one specialist passing an
+  INSTRUCTION to another (#128's hand-off). Real traffic: 2, ever.
+
+  What the office actually does constantly is fan a plan out into capability
+  jobs — `office.execute_plan`, `notebook.collect`, `artifact.report`. Real
+  traffic: **30 parents, 56 children, every one of them complete**, and none
+  of it visible here. CLAUDE.md's own headline, "delegation_depth 0 across
+  every real job", has been read for weeks as "the office never delegates".
+
+  So both are reported, each named for what it is. The numbers are not
+  changed; the missing one is added and the ambiguous heading is retired.
+*/
+const fanout = await one(`
+  select count(*) filter (where ${REAL})::int as children,
+         count(distinct case when ${REAL} then j.parent_job_id end)::int as parents,
+         count(*) filter (where ${REAL} and j.state = 'complete')::int as finished,
+         count(*) filter (where ${REAL} and j.state in ('failed', 'cancelled'))::int as failed
+    from public.jobs j
+   where j.parent_job_id is not null`)
+
 const intents = await all(`
   select coalesce(r.intent_class, '(none)') as intent,
          count(*) filter (where ${REAL})::int as real_n
@@ -88,7 +114,20 @@ const staff = await all(`
     from public.staff s where s.active order by s.slug`)
 
 const totals = await one(`
-  select (select count(*)::int from public.consultations) as consultations,
+  /*
+    REAL consultations, which this was not.
+
+    Every other number in this file is filtered by app.harness_job — the
+    header says so and says why, three times over — and this one counted the
+    whole table. 2,110 against 20 real ones, divided by a REAL instruction
+    count, which printed "consultation rate 854.3% of real instructions": a
+    percentage with a harness numerator and a real denominator, in the file
+    written to stop harness traffic being reported as the office's behaviour.
+
+    No backticks in this comment: it lives inside a template literal.
+  */
+  select (select count(*)::int from public.consultations c
+           where not app.harness_job(c.job_id)) as consultations,
          (select count(*)::int from public.job_traces) as traces,
          (select count(*)::int from public.outputs) as outputs,
          (select count(*)::int from public.jobs j where ${REAL}) as real_jobs,
@@ -169,7 +208,15 @@ console.log(
     (dormant.length === 0 ? '' : ` — dormant: ${dormant.map((s) => String(s.slug)).join(', ')}`),
 )
 
-console.log('\ndelegation')
+console.log('\nwork the office fanned out (real)')
+console.log(`  parent jobs               ${String(Number(fanout.parents ?? 0))}`)
+console.log(`  child jobs                ${String(Number(fanout.children ?? 0))}`)
+console.log(
+  `  of those, finished        ${String(Number(fanout.finished ?? 0))}` +
+    `${Number(fanout.failed ?? 0) > 0 ? `  (${String(Number(fanout.failed ?? 0))} failed or cancelled)` : ''}`,
+)
+
+console.log('\nwork one specialist handed to another (real)')
 console.log(`  max depth observed        ${String(maxDepth)}`)
 console.log(`  decisions with depth > 0  ${String(delegated)}`)
 console.log(`  consultations             ${String(snapshot.consultations)}`)
