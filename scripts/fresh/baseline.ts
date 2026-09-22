@@ -80,6 +80,40 @@ const PRODUCT_SEED: readonly string[] = [
   'public.ci_workflows',
   'public.contact_labels',
   'public.system_config',
+  /*
+    One row of `projects`, and what makes it usable.
+
+    `unnamed` is where a message lands before anybody has said which project it
+    is about, and `inbound_commands.project_id` is NOT NULL with
+    `app.unnamed_project()` as its default — so an office without it cannot
+    accept anything anybody says. The scaffolding rows are deleted by
+    `neutralise.sql` immediately before this runs, and it asserts that exactly
+    one project survives.
+  */
+  'public.projects',
+  'public.project_aliases',
+  'public.project_attachments',
+  /*
+    The job state machine itself.
+
+    `app.job_transitions_allowed` holds the 46 moves a job may legally make, and
+    `enforce_job_transition` reads it on every state change. It is in `app`
+    rather than `public` because nothing over HTTP should see it — which is also
+    why the first version of this list, written by scanning `public` for tables
+    with rows in them, did not contain it.
+
+    Without these rows an office accepts a message and can never run it: the
+    first `queued -> running` is refused, and the refusal says "illegal job
+    transition", which sounds like a bug in the worker. Every other check was
+    green over it. Found by `npm run fresh:first-use`, which is the entire
+    argument for §22 -- a deployment is not proven until a real instruction has
+    been through.
+
+    `app.schema_migrations` is deliberately NOT here: `fresh:install` writes it
+    from the files on disk, so that the checksums are the ones the runner will
+    compare against rather than a copy taken at build time.
+  */
+  'app.job_transitions_allowed',
 ]
 
 /**

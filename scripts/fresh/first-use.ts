@@ -1,0 +1,368 @@
+/**
+ * ASK YOUR OFFICE SOMETHING, AND GET AN ANSWER.
+ *
+ *   npm run fresh:first-use
+ *   npm run fresh:first-use -- --stub-inference
+ *
+ * Journey G. Setup is not finished when the configuration is complete; it is
+ * finished when you have asked the office something and it has answered. §22 is
+ * explicit that a green deployment without a real first interaction is not
+ * done, and this is the thing that makes the difference.
+ *
+ * ## What it does
+ *
+ * Puts a harmless instruction in through `app.enqueue_inbound` — the same door
+ * every real message comes through, from Telegram, Slack, the dashboard or a
+ * phone call — then runs a pass and reads back what the office wrote. Nothing
+ * here is a special test path: the job is an ordinary `office.instruction`, it
+ * is routed by the ordinary router, answered by whichever member the ordinary
+ * routing chooses, and written to `public.outputs` like any other answer.
+ *
+ * ## --stub-inference
+ *
+ * With no OpenRouter key there is nobody to answer, and that is a genuine
+ * human-only prerequisite. The flag stands a small HTTP server in front of the
+ * office that speaks OpenRouter's wire format, and points the provider registry
+ * at it for the length of the run.
+ *
+ * Nothing in the office is stubbed by it. The router still chooses a provider,
+ * still resolves its credential from the vault, still makes a real HTTP request
+ * and still parses a real response; the handler, the coherence gates, the
+ * review step, the output insert and the delivery path are all the live ones.
+ * The ONLY thing that is not real is who composed the sentence — which is
+ * exactly the part that needs an account.
+ *
+ * So a pass with `--stub-inference` proves the whole path except the model, and
+ * says so in as many words rather than reporting a clean green.
+ *
+ * ## Why the stand-in is HTTPS, and why that needs a re-exec
+ *
+ * `providers_https_only` refuses a `base_url` that is not https, and it is
+ * right to: a provider reached over plain http is a credential sent in clear.
+ * Loosening a security constraint so a harness can run would be the harness
+ * arguing with a safety rule, which this repository has paid for before.
+ *
+ * So the stand-in serves HTTPS with a self-signed certificate for 127.0.0.1,
+ * and the certificate is TRUSTED rather than verification being switched off —
+ * `NODE_TLS_REJECT_UNAUTHORIZED=0` would disable it for every connection this
+ * process makes, including the real ones. `NODE_EXTRA_CA_CERTS` can only be
+ * read at startup, so the command re-runs itself once with it set. The
+ * certificate lives in a temporary directory, covers one loopback address, and
+ * lasts two days.
+ */
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { createServer, type Server } from 'node:https'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
+import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
+import { isHarnessDb, localUrl } from '../../src/fresh/local-db.ts'
+
+const stub = process.argv.includes('--stub-inference')
+const question =
+  process.argv.find((a) => a.startsWith('--ask='))?.slice(6) ??
+  'Who is on my team, and what is each person for?'
+
+function connect(): { db: SqlExecutor; where: string } {
+  const ref = process.env.SUPABASE_PROJECT_REF
+  const token = process.env.SUPABASE_ACCESS_TOKEN
+  if (ref !== undefined && ref !== '' && token !== undefined && token !== '') {
+    return { db: new ManagementApiExecutor(ref, token), where: `Supabase project ${ref}` }
+  }
+  const local = process.env.FRESH_DB
+  if (isHarnessDb(local)) {
+    return { db: new PostgresExecutor(localUrl(local)), where: `local database ${local}` }
+  }
+  throw new Error('No office to ask. Run npm run fresh:doctor first.')
+}
+
+const quote = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+async function value(db: SqlExecutor, sql: string): Promise<unknown> {
+  const { rows } = await db.execute(sql)
+  const row = rows[0] as Record<string, unknown> | undefined
+  return row === undefined ? undefined : Object.values(row)[0]
+}
+
+/**
+ * A server that speaks OpenRouter's wire format and answers from the office's
+ * own data, so the answer is at least true.
+ */
+function certificate(): { dir: string; cert: string; key: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'fresh-standin-'))
+  execFileSync('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', join(dir, 'key.pem'), '-out', join(dir, 'cert.pem'),
+    '-days', '2', '-subj', '/CN=127.0.0.1',
+    '-addext', 'subjectAltName=IP:127.0.0.1',
+  ], { stdio: 'ignore' })
+  return { dir, cert: join(dir, 'cert.pem'), key: join(dir, 'key.pem') }
+}
+
+/*
+  Re-run once with the stand-in's certificate trusted.
+
+  Node reads NODE_EXTRA_CA_CERTS when it starts and never again, so there is no
+  way to trust a certificate generated by this process from inside it. The
+  alternative is NODE_TLS_REJECT_UNAUTHORIZED=0, which switches verification off
+  for every connection the process makes — including the ones to real providers.
+  A re-exec costs a second and keeps TLS verification on.
+*/
+const STANDIN_CERT = process.env.FRESH_STANDIN_CERT
+if (stub && STANDIN_CERT === undefined) {
+  const made = certificate()
+  // Through tsx, not through node: this file is TypeScript, and node's
+  // strip-only mode refuses the parameter properties in the executor it imports.
+  const result = spawnSync(
+    'npx',
+    ['tsx', process.argv[1] ?? '', ...process.argv.slice(2)],
+    {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        FRESH_STANDIN_CERT: made.cert,
+        FRESH_STANDIN_KEY: made.key,
+        NODE_EXTRA_CA_CERTS: made.cert,
+      },
+    },
+  )
+  process.exit(result.status ?? 1)
+}
+
+function standIn(): Promise<{ server: Server; url: string }> {
+  return new Promise((resolve) => {
+    const server = createServer({
+      cert: readFileSync(STANDIN_CERT ?? '', 'utf8'),
+      key: readFileSync(process.env.FRESH_STANDIN_KEY ?? '', 'utf8'),
+    }, (req, res) => {
+      let body = ''
+      req.on('data', (c) => {
+        body += String(c)
+      })
+      req.on('end', () => {
+        if (req.url?.includes('/models') === true) {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ data: [] }))
+          return
+        }
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            id: 'stand-in',
+            model: 'stand-in/no-model',
+            choices: [
+              {
+                finish_reason: 'stop',
+                message: {
+                  role: 'assistant',
+                  content:
+                    'I have not looked anything up, because there is no model connected ' +
+                    'to this office yet — this reply came from the stand-in the ' +
+                    'fresh-install harness runs when there is no OpenRouter key. ' +
+                    'Everything else you are reading went through the real path.',
+                },
+              },
+            ],
+            /*
+              `cost` is not optional here.
+
+              The office refuses a call it cannot verify as within budget —
+              *"the provider reported no usage.cost, so this call cannot be
+              verified as within budget"* — and that refusal is the reason the
+              stand-in's first four replies were thrown away. It is a good rule
+              working: an office that spends money it cannot account for is
+              worse than one that stops. Zero, because a stand-in costs nothing,
+              which is true rather than convenient.
+            */
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: 0 },
+          }),
+        )
+      })
+    })
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      const port = typeof address === 'object' && address !== null ? address.port : 0
+      resolve({ server, url: `https://127.0.0.1:${port}/api/v1` })
+    })
+  })
+}
+
+async function main(): Promise<void> {
+  const { db, where } = connect()
+  console.log(`\nasking ${where}\n`)
+  console.log(`  you: ${question}\n`)
+
+  let server: Server | null = null
+  let savedBaseUrl: string | null = null
+  let savedRef: string | null = null
+
+  if (stub) {
+    const stood = await standIn()
+    server = stood.server
+    savedBaseUrl = String(
+      (await value(db, `select base_url as u from public.providers where provider = 'openrouter'`)) ??
+        '',
+    )
+    savedRef = String(
+      (await value(
+        db,
+        `select coalesce(secret_ref::text, '') as r from public.providers where provider = 'openrouter'`,
+      )) ?? '',
+    )
+    await db.execute(
+      `update public.providers set base_url = ${quote(stood.url)} where provider = 'openrouter'`,
+    )
+    if (savedRef === '') {
+      // The router must still resolve a credential from the vault — that path
+      // is one of the things being proven, so it needs something to resolve.
+      await db.execute(
+        `select app.connect_provider_key('openrouter', 'openrouter.api_key') as r
+           where exists (select 1 from vault.secrets where name = 'openrouter.api_key')`,
+      )
+    }
+    /*
+      Close the breaker, because it is about a different endpoint.
+
+      The router opens a circuit breaker after repeated provider failures, which
+      is correct and is why a bad afternoon does not become thirty seconds of
+      requests nobody asked for. Its state is about the endpoint that was
+      failing — and pointing the provider at the stand-in makes it a different
+      endpoint, so carrying the old verdict across means the first run after a
+      failed one reports "its circuit breaker is open" and never calls anything.
+
+      The verdict lives in `public.provider_health`, and it is FORGOTTEN rather
+      than overwritten: `app.provider_available` treats a provider with no row
+      as available because "no failures recorded, so nothing to distrust", which
+      is exactly the truth about an endpoint nothing has ever called.
+      `record_provider_success` cannot do it — it closes a half-open breaker,
+      and an open one stays open until its cooldown elapses.
+    */
+    await db.execute(`delete from public.provider_health where provider = 'openrouter'`)
+    console.log('  (no model connected — a stand-in is answering; everything else is real)\n')
+  }
+
+  try {
+    /*
+      In through the front door.
+
+      `app.enqueue_inbound` is where a Telegram message, a Slack mention, a
+      dashboard instruction and a phone call all arrive. Writing a job row
+      directly would prove the worker runs and would prove nothing about
+      whether a person can reach it.
+    */
+    /*
+      `<channel>:<purpose>:<ref>`, which `inbound_dedupe_key_shaped` enforces.
+      Read from `pg_constraint` after the first shape was refused — a dedupe key
+      is how the office knows it has already seen a message, so the format is
+      load-bearing rather than cosmetic.
+    */
+    const dedupe = `teamhq:first_use:${Date.now()}`
+    /*
+      A row, then the enqueue.
+
+      `app.enqueue_inbound` takes ONE argument — the id of a command already
+      written down — and that shape is the point: what a person said is
+      recorded before anything decides what to do about it, so a routing
+      failure loses the decision and never the sentence. The first draft of
+      this guessed a five-argument signature and was refused, which is the
+      trap CLAUDE.md names about column names, one level up.
+    */
+    const commandId = String(
+      await value(
+        db,
+        `insert into public.inbound_commands
+           (origin_channel, origin_ref, actor, instruction, dedupe_key)
+         values ('teamhq', 'fresh-install', 'grant', ${quote(question)}, ${quote(dedupe)})
+         returning command_id`,
+      ),
+    )
+    /*
+      It returns jsonb, not a uuid.
+
+      The executor hands a jsonb column back as an OBJECT, so taking the first
+      value of the row and calling String() on it produces "[object Object]" —
+      which then arrives at the next query as an invalid uuid, an error naming
+      a type and not a cause. CLAUDE.md records the same shape from the other
+      direction. Read the field out of the payload instead.
+    */
+    await db.execute(`select app.enqueue_inbound(${quote(commandId)}::uuid) as enqueued`)
+    const jobId = String(
+      await value(
+        db,
+        `select job_id::text as j from public.inbound_commands
+          where command_id = ${quote(commandId)}::uuid`,
+      ),
+    )
+    console.log(`  the office took it as job ${jobId.slice(0, 8)}…`)
+
+    /*
+      Drain until THIS job settles.
+
+      A fresh office wakes up with a dozen duties already queued — the nightly
+      backup, the morning briefing, the drive watch — and a single-job pass
+      takes whichever is first. The office is not doing anything wrong; the
+      harness was asking one question and watching somebody else's work.
+
+      Bounded, and the bound is the report: a job that has not settled after
+      this many passes is a finding, not something to wait longer for.
+    */
+    const { buildPass } = await import('../../src/office/pass.ts')
+    const pass = await buildPass(db, 'fresh-install-first-use', { max: 6, log: () => {} })
+    const SETTLED = new Set(['complete', 'failed', 'cancelled'])
+    let state = 'queued'
+    for (let round = 0; round < 6; round += 1) {
+      await pass()
+      state = String(
+        await value(db, `select state::text as s from public.jobs where job_id = ${quote(jobId)}`),
+      )
+      if (SETTLED.has(state)) break
+    }
+    const answer = await value(
+      db,
+      `select o.body as b from public.outputs o where o.job_id = ${quote(jobId)}
+        order by o.created_at desc limit 1`,
+    )
+    const who = await value(
+      db,
+      `select coalesce(s.name, j.recipient_agent, '(nobody yet)') as w
+         from public.jobs j left join public.staff s on s.slug = j.recipient_agent
+        where j.job_id = ${quote(jobId)}`,
+    )
+
+    if (answer === undefined || answer === null || String(answer).trim() === '') {
+      const why = await value(
+        db,
+        `select coalesce(state_reason, '(no reason recorded)') as r from public.jobs
+          where job_id = ${quote(jobId)}`,
+      )
+      console.log(`\n  the office did not answer. The job is "${state}".`)
+      console.log(`  reason: ${String(why)}`)
+      console.log('\n  Run npm run fresh:doctor — it will say which piece is missing.\n')
+      process.exitCode = 1
+      return
+    }
+
+    console.log(`\n  ${String(who)}:\n`)
+    for (const line of String(answer).split('\n')) console.log(`    ${line}`)
+    console.log(`\n  (job ${state})`)
+    console.log(
+      stub
+        ? '\nFIRST USE PROVEN, EXCEPT THE MODEL. A real instruction went in through the\n' +
+            'real door, was routed to a real member, and the real answer path wrote it\n' +
+            'back. Connect an OpenRouter key and the same command gives you a real reply.\n'
+        : '\nFIRST USE PROVEN. Your office works.\n',
+    )
+  } finally {
+    if (server !== null) {
+      if (savedBaseUrl !== null) {
+        await db.execute(
+          `update public.providers set base_url = ${quote(savedBaseUrl)} where provider = 'openrouter'`,
+        )
+      }
+      server.close()
+    }
+  }
+}
+
+await main()

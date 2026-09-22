@@ -289,7 +289,8 @@
     "fresh:install": "tsx scripts/fresh/install.ts",
     "fresh:doctor": "tsx scripts/fresh/doctor.ts",
     "fresh:secret": "tsx scripts/fresh/secret.ts",
-    "fresh:configure": "tsx scripts/fresh/configure.ts"
+    "fresh:configure": "tsx scripts/fresh/configure.ts",
+    "fresh:first-use": "tsx scripts/fresh/first-use.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

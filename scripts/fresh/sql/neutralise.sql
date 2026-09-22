@@ -49,3 +49,66 @@ delete from public.system_config where key like 'fresh-install-scaffold%';
 -- yet — which is exactly true of everybody on a fresh install.
 -- ---------------------------------------------------------------------------
 update public.staff set telegram_username = null where telegram_username is not null;
+
+-- ---------------------------------------------------------------------------
+-- The scaffold projects, and the one project that is NOT scaffolding
+--
+-- `public.projects` looked like personal data and is not entirely. One row in
+-- it is the product: `unnamed`, the project every message lands in before
+-- anybody has said which project it is about. `inbound_commands.project_id` is
+-- NOT NULL and defaults to `app.unnamed_project()`, so without that row a
+-- brand-new office cannot accept a single message — the first instruction a new
+-- person sends is refused with
+-- `23502: null value in column "project_id"`, which names a column and not a
+-- cause.
+--
+-- Found by running `npm run fresh:first-use` against an install built from an
+-- earlier baseline that excluded the whole table. It is the clearest argument
+-- for §22's rule that a deployment is not proven until a real instruction has
+-- gone through: every other check was green over an office that could not be
+-- spoken to.
+--
+-- So the scaffolding goes and `unnamed` stays, with the alias and attachment
+-- that make it resolvable and activatable.
+--
+-- ADR-0014's order is ARCHIVE, then attachments, then the project, and the
+-- order is not advice: the trigger fires on the attachment delete and refuses
+-- to leave an ACTIVE project reading from nowhere. Deleting the attachment
+-- first is refused with *"project ... is active with no enabled attachment"*,
+-- which is the rule working. CLAUDE.md states the order and the first draft of
+-- this did it anyway.
+-- ---------------------------------------------------------------------------
+delete from public.documents
+ where project_id in (select project_id from public.projects
+                       where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course'));
+
+delete from public.artifacts
+ where project_id in (select project_id from public.projects
+                       where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course'));
+
+update public.projects set status = 'archived'
+ where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course');
+
+delete from public.project_aliases
+ where project_id in (select project_id from public.projects
+                       where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course'));
+
+delete from public.project_attachments
+ where project_id in (select project_id from public.projects
+                       where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course'));
+
+delete from public.projects
+ where slug in ('baseline-scaffold-do-not-use', 'legacy-coaching-course');
+
+-- And prove the one that must survive did. A neutralise that removed the inbox
+-- would be indistinguishable from one that worked, until somebody said hello.
+do $$
+begin
+  if not exists (select 1 from public.projects where slug = 'unnamed') then
+    raise exception 'neutralise removed the unnamed project — a fresh office could not accept a message';
+  end if;
+  if exists (select 1 from public.projects where slug <> 'unnamed') then
+    raise exception 'neutralise left a project behind: %',
+      (select string_agg(slug, ', ') from public.projects where slug <> 'unnamed');
+  end if;
+end $$;

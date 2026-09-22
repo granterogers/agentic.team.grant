@@ -1,6 +1,6 @@
 {
   "note": "The schema as it stands after every migration listed here, captured as structure plus product seed. Built by npm run fresh:baseline; never edited by hand. A fresh install applies this instead of replaying the corpus, because nine migrations assert the contents of Grant's database (F-002).",
-  "builtAt": "2026-09-22T14:39:56.215Z",
+  "builtAt": "2026-09-22T14:47:01.858Z",
   "represents": 536,
   "through": "0536_an_office_can_connect_its_own_thinking.sql",
   "migrations": [
