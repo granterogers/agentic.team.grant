@@ -265,27 +265,70 @@ than adding decorative onboarding features.
 | | |
 |---|---|
 | **Branch** | `claude/fresh-install-onboarding` |
-| **HEAD** | `3c94150` (start) |
 | **main SHA at start** | `3c9415084f4b2664bf8147d995412609e58a24f8` |
-| **main SHA last checked** | `3c9415084f4b2664bf8147d995412609e58a24f8` |
-| **Working tree** | clean at start |
-| **Phase** | 0–2h: mapping |
+| **Working tree** | clean |
+| **Phase** | 9–10h: adversarial clean-room pass |
 
-### Evidence recorded so far
+### What exists now — the whole deliverable in one table
 
-_none yet — see `docs/fresh-install/EVIDENCE/`_
+| Command | What it does |
+|---|---|
+| `npm run fresh:doctor` | what is done, what is missing, the ONE next action. Works with nothing configured. |
+| `npm run fresh:install` | empty database → working office, in one atomic statement |
+| `npm run fresh:configure` | everything that needs no person; idempotent |
+| `npm run fresh:secret -- <name>` | a credential into the vault, prompted, never echoed |
+| `npm run fresh:first-use` | asks the office something and shows the answer |
+| `npm run fresh:accept` | the ten acceptance journeys, no account needed |
+| `npm run fresh:zero-state` | every migration against a genuinely blank database |
+| `npm run fresh:baseline` | rebuild the baseline (run after adding a migration) |
+| `npm run fresh:docs` | regenerate SETUP.md from the contract |
+| `npm run check:fresh` | the static guard, for the gate |
+
+| File | Role |
+|---|---|
+| `SETUP.md` | **the one canonical starting point.** Generated. |
+| `src/fresh/contract.ts` | **the single source of truth** for what an install needs |
+| `src/fresh/forbidden.ts` | identifiers the harness refuses by name |
+| `src/fresh/project-ref.ts` | the 252-file default, no longer silent |
+| `src/db/postgres-executor.ts` | the `pg` transport `executor.ts` always described |
+| `migrations/baseline/` | schema + product seed, what a fresh install applies |
+| `scripts/fresh/sql/` | the Supabase shim, the stub extensions, the staged preconditions |
+
+### Migrations added
+
+`0534` the MCP address is this office's or it is nothing ·
+`0535` a column comment naming a bot nobody else has ·
+`0536` an office can connect its own thinking
+
+All three drive themselves and all were proven from zero state.
+
+### Evidence recorded
+
+`docs/fresh-install/EVIDENCE/acceptance-run.txt` — 10/10 journeys, 54 assertions
+`docs/fresh-install/EVIDENCE/journey-a-nothing-configured.txt` — the doctor with nothing set
 
 ### Defects found / fixed
 
-_see `docs/fresh-install/FINDINGS.md`_
+F-001 … F-009 in `docs/fresh-install/FINDINGS.md`. The headline is **F-002**:
+nine migrations assert the CONTENTS of Grant's database, so the corpus stops at
+migration 54 of 536 on a blank one, and the fix cannot be in `migrations/`
+because applied migrations are immutable.
 
 ### HUMAN_BLOCKED
 
-_see `docs/fresh-install/HUMAN-BLOCKED.md`_
+Four, in `docs/fresh-install/HUMAN-BLOCKED.md`: a Supabase project, a Supabase
+access token, an OpenRouter key (these three are core, ~10 min, free), and one
+Telegram bot for the first surface.
+
+### Known pre-existing failures, NOT caused by this branch
+
+Both reproduce identically on `origin/main`:
+- `npm run lint` exits 1 (biome findings across `src/agents`, `scripts/verify`, …)
+- `tests/sessions/weather-is-not-a-failure.test.ts` fails — it needs
+  `SUPABASE_ACCESS_TOKEN`, which a clean container has none of. 2,207 tests pass.
 
 ### NEXT AUTONOMOUS ACTION
 
-> Map the current setup surface: enumerate every bootstrap/setup script, every
-> environment variable read anywhere in `scripts/` and `src/`, and every
-> hard-coded Grant identifier in a setup or runtime path. Write the result to
-> `docs/fresh-install/FINDINGS.md`.
+> Adversarial clean-room pass: wipe every harness database, unset every
+> variable, and follow `SETUP.md` literally as somebody who knows nothing,
+> recording each point of friction. Then final reconciliation with main.
