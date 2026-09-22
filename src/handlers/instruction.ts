@@ -2520,16 +2520,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         adds himself and the office still answers; a false positive costs him
         the WORK.
       */
-      /*
-        The readings that are UNAMBIGUOUSLY a request for work — #302's
-        `wanted` count, and deliberately not `MAY_ACT` below. See the comment
-        beside `wantedWork`.
-      */
-      const WANTED_DOING: ReadonlySet<ReadingKind> = new Set([
-        'task_create',
-        'task_change',
-        'delegate',
-      ])
       const MAY_ACT: ReadonlySet<ReadingKind> = new Set([
         'task_create',
         'task_change',
@@ -4458,20 +4448,31 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         around.
       */
       /*
-        Counted from the EXPLICIT action readings only, never from `MAY_ACT`.
+        Counted from `MAY_ACT` - the same signal the handler already trusts
+        to decide whether to PLAN.
 
-        `MAY_ACT` includes `other` as a catch-all, and it is permissive on
-        purpose: it gates what may reach a writer, where "the worst this
-        filter can do is decline to act, which is the cheap direction". For
-        NARRATION the asymmetry is reversed - a turn counted as wanting work
-        when it was only a remark gets "I have not done this" bolted onto an
-        ordinary answer, which is the check-that-fires-on-good-behaviour
-        failure this repository records twice.
+        The first version counted only the explicit task_create, task_change
+        and delegate readings, reasoning that the `other` catch-all would put
+        "I have not done this" onto ordinary remarks. Fresh unseen material
+        overturned that within the hour:
 
-        So the two lists are deliberately different, and this one is the
-        strict half.
+            "get someone onto the insurance renewal before it slips"
+              -> 0 tasks, 0 child jobs, 1 impediment, and the office said
+                 "I'll create a task titled Insurance renewal - follow-up"
+
+        which is #302's second failure mode exactly, arriving under a label
+        the strict list did not cover. A narrower count did not reduce noise;
+        it reopened the defect.
+
+        `requests.length` is the honest line because it is already the
+        handler's own actionability judgement - `planAndPursue` runs on
+        exactly this condition. If the turn is worth planning for it is worth
+        telling the truth about. And the sentence appears only when NOTHING
+        was done and NOTHING was planned, so the remaining exposure is a
+        clause read as `other`, acted on by nobody and planned by nobody,
+        about which "I have not done this" is true.
       */
-      const wantedWork = understood.surviving.filter((r) => WANTED_DOING.has(r.kind)).length
+      const wantedWork = requests.length
 
       const outcome: CanonicalOutcome = {
         wanted: wantedWork,
