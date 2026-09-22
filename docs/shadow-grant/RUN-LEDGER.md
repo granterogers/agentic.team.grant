@@ -2116,3 +2116,84 @@ containment in both directions.
 `#310`'s multi-turn project-scoped preference lifecycle is unblocked by the
 same mechanism and for the same reason cannot be demonstrated through the
 session harness; `verify:preferences` continues to prove it at 29/29.
+
+---
+
+# Open-ended discovery against v713 → v721
+
+#308 closed, so the corpus was re-run against a worker that finally keeps
+conversation context. Four defects, none of them from the backlog.
+
+## #311 — the finance director had never been chosen, and here is why
+
+`npm run measure` had said it for weeks: **finance-director 0, NEVER CHOSEN.**
+Sampling the real messages classified `thought` — the class that convenes
+nobody and writes nothing — produced the other half:
+
+```
+bring Finance in on that      x2
+```
+
+the only two times Grant has ever asked for that specialist by name.
+
+`readClause` rejects a clause opening with a gerund, because *"Drafting it now
+feels premature"* is a description. The test is `/ing$/`, and **`bring` ends in
+-ing.** So does `ring`, the commonest phone-call task there is, which had been
+silently unrecognised in the discovery corpus all along; `speed`, `feed`,
+`proceed` and `lead` are the -ed half.
+
+`readClause` gates classification, routing, titling and `asksForWork`, so a
+clause it rejects is invisible to everything downstream. One suffix test,
+every writer. Verified live on v715: `assignment`, roster
+`{finance-director}`, recipient `finance-director`.
+
+## #307's third and fourth writers
+
+`taskTitle` and `mine.ts` were fixed in the last run. The corpus immediately
+produced `draft.create — redo budget page` on Grant's own list, from a THIRD
+writer: `PlanStep.why`, which its own declaration calls *"why this step, in
+Grant's terms"* and which the model prefixes with the capability it chose.
+
+Fixed where the step is BUILT — and the next live run produced
+`task.create — Create a task to redo the budget page on the bid` from a
+FOURTH: a blocker's `requestedAction`, composed as
+`${step.capability} — ${why}`, which put the identifier straight back one line
+later. **Only a live row showed each site**; reading the third fix would never
+have found the fourth.
+
+## #312 — the contract had no rule for under-claiming
+
+The turn that made it obvious:
+
+```
+say:    ok so um two things on the bid … and also on the coaching one … and
+        actually what did we say the deadline was
+office: I have nothing from earlier in this conversation …
+rows:   4 child jobs
+```
+
+Four specialists working, and Grant told nothing was happening. #302's whole
+contract points one way — it stops the office claiming what it has not done —
+and `pending_approval` required `wanted > 0`, which this turn's readings did
+not satisfy.
+
+**Found in four turns of the corpus**, so a pattern. And the oracle was blind
+for the same reason the contract was: pending work is not a row in the table
+it was reading. It counts child jobs now, with a control.
+
+Two sentences rather than one, because a blocker with his name on it and work
+already handed to a colleague are different facts — *"waiting on your word"*
+about four working specialists would make him wait for a decision nobody
+needs.
+
+## What the run also established without changing anything
+
+- **The comma-preamble gap is real and rare.** *"on the bid, put something
+  down to chase the letter of support"* is unrecognised, because `clauses()`
+  has a twelve-character floor and `on the bid` is ten — so the whole message
+  stays one clause and opens with a function word. **0 of 160 real messages**
+  use that shape, so it is recorded here rather than fixed, under the same
+  rule that filed #301 and #303.
+- Gates throughout: 2777 tests · 36 sabotage detectors · `verify:context`
+  18/18 · `verify:preferences` 29/29 · containment clean but for #298's two
+  preserved rows.
