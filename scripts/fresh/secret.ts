@@ -23,7 +23,7 @@
 import { createInterface } from 'node:readline'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
-import { isHarnessDb, localUrl } from '../../src/fresh/local-db.ts'
+import { isHarnessDb, localConnection } from '../../src/fresh/local-db.ts'
 
 /**
  * Names the office understands, with what each is for.
@@ -52,7 +52,7 @@ function connect(): { db: SqlExecutor; where: string } {
   }
   const local = process.env.FRESH_DB
   if (isHarnessDb(local)) {
-    return { db: new PostgresExecutor(localUrl(local)), where: `local database ${local}` }
+    return { db: new PostgresExecutor(localConnection(local)), where: `local database ${local}` }
   }
   throw new Error(
     'No office to store this in. Set SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN first — ' +

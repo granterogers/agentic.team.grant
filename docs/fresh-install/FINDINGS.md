@@ -152,3 +152,91 @@ this; one who applies them in an afternoon always would. The harness restores
 the elapsed time rather than deleting the awkward rows — deleting would also
 pass, and would be the harness quietly removing the evidence against its own
 assertion.
+
+---
+
+## F-004 — The baseline: what a fresh install actually applies
+
+**Status:** FIXED · **Journey:** B, C, H, I
+
+`migrations/` cannot be the installer (F-002), so `npm run fresh:baseline`
+captures the schema after all of them as structure plus product seed, and
+`npm run fresh:install` applies it in ONE statement — atomic, so an interruption
+leaves the empty database it started with rather than a half-built one.
+
+Four things stood between the baseline and being installable, and every one was
+only findable by applying it: `COPY ... FROM stdin` is psql meta-commands a
+driver cannot read; pg_dump 16 wraps output in `\restrict`; `CREATE SCHEMA
+public` fails on every target that could ever receive it; and the seed carries
+`vault.naming`, a row that predates the trigger refusing a config key beginning
+with a schema name and so could not be written today.
+
+## F-005 — `providers.secret_ref` is read and nothing sets it
+
+**Status:** FIXED (migration 0536) · **Journey:** B, G
+**Severity:** silent. Setup looks complete and the office cannot think.
+
+`ProviderRouter.key()` prefers the vault over the environment and resolves
+`providers.secret_ref`. `app.store_secret` writes the vault row and sets no ref.
+**Nothing in the repository connected the two.** On this database it never
+mattered, because the deployed worker carries `OPENROUTER_API_KEY` in its
+environment and the fallback catches it. On a fresh installation it is the whole
+difference between an office that thinks and one that cannot — and it fails in
+the worst available way: the new person follows the instruction exactly, every
+check that looks for the credential finds it, and every job fails for want of a
+key in the same database.
+
+§5's list names the shape: *"credential presence mistaken for working
+connection."*
+
+Fixed by `app.connect_provider_key(provider, secret_name)` — a function rather
+than a line in a setup script, because a capability that exists only as a script
+an agent runs is a capability nobody has. The doctor now asks whether the
+provider is CONNECTED rather than whether a key exists.
+
+## F-006 — `web/studio` points a fresh dashboard at this project's gateway
+
+**Status:** OTHER_BRANCH (`claude/basecamp-team-hq`) · See INTEGRATION-REQUESTS.md IR-1
+
+## F-007 — The job state machine's transitions are in `app`, and a seed list built from `public` missed them
+
+**Status:** FIXED · **Journey:** C, G
+
+`app.job_transitions_allowed` holds the 46 moves a job may legally make, and
+`enforce_job_transition` reads it on every state change. An office installed
+without them accepts a message and can never run it: the first
+`queued -> running` is refused as an *"illegal job transition"*, which reads
+like a bug in the worker. Every other check was green over it, and it was found
+by `npm run fresh:first-use` — §22's argument in one incident.
+
+## F-008 — `unnamed` is the inbox, and was excluded as personal data
+
+**Status:** FIXED · **Journey:** C, G
+
+`inbound_commands.project_id` is NOT NULL and defaults to
+`app.unnamed_project()`. Without that row a brand-new office refuses the first
+instruction anybody sends, with `23502: null value in column "project_id"` —
+an error naming a column and not a cause.
+
+## F-009 — 252 files default to this project, and the default must stay
+
+**Status:** MITIGATED · **Journey:** A, J
+
+`process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'` appears in 252
+files. For Grant the default is load-bearing: a Claude Code session starts with
+no environment and without it not one command would run. Removing it would break
+every session on the day it shipped, in the name of somebody who does not exist
+yet.
+
+For a second person it is a quiet failure: their own token against a project
+that is not theirs, refused, with no sentence saying why.
+
+So the default stays and stops being silent. `resolveProjectRef` returns the
+environment variable when set and otherwise returns the default **after saying
+once that it did, and what to set**. Used by `scripts/migrate.ts` and
+`src/office/pass.ts` — the two that a fresh user actually runs. `npm run
+check:fresh` refuses the shape anywhere new.
+
+Rewriting all 252 was considered and rejected: a diff across the whole
+repository, while three other workstreams are in flight, for a change whose
+whole benefit is a message that `resolveProjectRef` now prints anyway.

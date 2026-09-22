@@ -23,9 +23,10 @@
  * that the value protects nothing. If a future change makes this database hold
  * anything real, this file becomes a credential and must move to the vault.
  */
+
+import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { dirname } from 'node:path'
 import { HARNESS_DB_PREFIX, refuseForeignDatabase } from './forbidden.ts'
 
@@ -60,20 +61,36 @@ export function ensureRole(): void {
   )
 }
 
-/** The connection string for a harness database. Loopback, always. */
-export function localUrl(db: string): string {
+/**
+ * How to reach a harness database. Loopback, always.
+ *
+ * A `{ host, user, password, database }` object rather than a libpq connection
+ * URL, because such a URL carries the password inside the string, and a string
+ * is what ends up in a log line, an error message or a process listing. `npm run check:secrets` flags the shape on
+ * sight and is right to; the fix is to stop writing the shape.
+ */
+export function localConnection(db: string): {
+  host: string
+  user: string
+  password: string
+  database: string
+} {
   refuseForeignDatabase(db)
-  return `postgresql://${HARNESS_ROLE}:${localPassword()}@127.0.0.1/${db}`
+  return { host: '127.0.0.1', user: HARNESS_ROLE, password: localPassword(), database: db }
 }
 
 /** Is this name one of ours? */
 export function isHarnessDb(name: string | undefined): name is string {
-  return name !== undefined && name.startsWith(HARNESS_DB_PREFIX)
+  return name?.startsWith(HARNESS_DB_PREFIX) === true
 }
 
 export function databaseExists(db: string): boolean {
   refuseForeignDatabase(db)
-  return asSuperuser(`psql -tAd postgres -c "select 1 from pg_database where datname='${db}'"`).trim() !== ''
+  return (
+    asSuperuser(
+      `psql -tAd postgres -c "select 1 from pg_database where datname='${db}'"`,
+    ).trim() !== ''
+  )
 }
 
 export function createDatabase(db: string): void {

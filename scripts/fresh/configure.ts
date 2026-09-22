@@ -19,7 +19,7 @@
 import { randomBytes } from 'node:crypto'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
-import { isHarnessDb, localUrl } from '../../src/fresh/local-db.ts'
+import { isHarnessDb, localConnection } from '../../src/fresh/local-db.ts'
 
 interface Step {
   readonly what: string
@@ -35,7 +35,11 @@ function connect(): { db: SqlExecutor; where: string; ref: string | null } {
   }
   const local = process.env.FRESH_DB
   if (isHarnessDb(local)) {
-    return { db: new PostgresExecutor(localUrl(local)), where: `local database ${local}`, ref: null }
+    return {
+      db: new PostgresExecutor(localConnection(local)),
+      where: `local database ${local}`,
+      ref: null,
+    }
   }
   throw new Error(
     'No office to configure. Run npm run fresh:doctor — it will tell you what is missing.',
@@ -83,7 +87,10 @@ async function main(): Promise<void> {
 
   // 2. The office's API token.
   const hasToken = Number(
-    await value(db, `select (select count(*)::int from vault.secrets where name = 'hq.api_token') as n`),
+    await value(
+      db,
+      `select (select count(*)::int from vault.secrets where name = 'hq.api_token') as n`,
+    ),
   )
   if (hasToken > 0) {
     steps.push({

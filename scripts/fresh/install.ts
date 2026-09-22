@@ -51,7 +51,7 @@
  * database, and the safe recovery from "I want to start again" is a new one.
  */
 import { createHash } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
@@ -61,7 +61,7 @@ import {
   createDatabase,
   databaseExists,
   ensureRole,
-  localUrl,
+  localConnection,
 } from '../../src/fresh/local-db.ts'
 
 const BASELINE = 'migrations/baseline'
@@ -92,13 +92,12 @@ function chooseTarget(): Target {
   const db = process.env.FRESH_DB ?? `${HARNESS_DB_PREFIX}install`
   refuseForeignDatabase(db)
   return {
-    executor: new PostgresExecutor(localUrl(db)),
+    executor: new PostgresExecutor(localConnection(db)),
     describe: `local disposable database ${db}`,
     local: true,
     db,
   }
 }
-
 
 async function alreadyInstalled(executor: SqlExecutor): Promise<number | null> {
   try {

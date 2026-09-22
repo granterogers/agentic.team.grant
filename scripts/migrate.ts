@@ -12,12 +12,12 @@ import { createHash } from 'node:crypto'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ManagementApiExecutor } from '../src/db/executor.ts'
+import { resolveProjectRef } from '../src/fresh/project-ref.ts'
 import type { MigrationFile } from '../src/migrations/check.ts'
 import { ledgerExists, readApplied, runMigrations } from '../src/migrations/runner.ts'
 
 const MIGRATIONS_DIR = 'migrations'
 const APPLIED_LEDGER = join(MIGRATIONS_DIR, 'applied.json')
-const DEFAULT_PROJECT_REF = 'baujwlzcziasnfhhkchg'
 
 const sha256 = (content: string): string =>
   createHash('sha256').update(content, 'utf8').digest('hex')
@@ -39,8 +39,16 @@ const files: MigrationFile[] = await Promise.all(
     .map(async (name) => ({ name, sql: await readFile(join(MIGRATIONS_DIR, name), 'utf8') })),
 )
 
+/*
+  Say which project this is about to change.
+
+  The default is load-bearing — a session starts with no environment and every
+  command in this repository would stop without it — and it is also the quietest
+  way for a second person to apply this schema to somebody else's database.
+  `resolveProjectRef` keeps the default and says, once, that it used it.
+*/
 const executor = new ManagementApiExecutor(
-  process.env.SUPABASE_PROJECT_REF ?? DEFAULT_PROJECT_REF,
+  resolveProjectRef({ forWhat: 'the migration runner' }),
   token,
 )
 

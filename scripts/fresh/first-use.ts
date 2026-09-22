@@ -57,7 +57,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
-import { isHarnessDb, localUrl } from '../../src/fresh/local-db.ts'
+import { isHarnessDb, localConnection } from '../../src/fresh/local-db.ts'
 
 const stub = process.argv.includes('--stub-inference')
 const question =
@@ -72,7 +72,7 @@ function connect(): { db: SqlExecutor; where: string } {
   }
   const local = process.env.FRESH_DB
   if (isHarnessDb(local)) {
-    return { db: new PostgresExecutor(localUrl(local)), where: `local database ${local}` }
+    return { db: new PostgresExecutor(localConnection(local)), where: `local database ${local}` }
   }
   throw new Error('No office to ask. Run npm run fresh:doctor first.')
 }
@@ -91,12 +91,27 @@ async function value(db: SqlExecutor, sql: string): Promise<unknown> {
  */
 function certificate(): { dir: string; cert: string; key: string } {
   const dir = mkdtempSync(join(tmpdir(), 'fresh-standin-'))
-  execFileSync('openssl', [
-    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-    '-keyout', join(dir, 'key.pem'), '-out', join(dir, 'cert.pem'),
-    '-days', '2', '-subj', '/CN=127.0.0.1',
-    '-addext', 'subjectAltName=IP:127.0.0.1',
-  ], { stdio: 'ignore' })
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-keyout',
+      join(dir, 'key.pem'),
+      '-out',
+      join(dir, 'cert.pem'),
+      '-days',
+      '2',
+      '-subj',
+      '/CN=127.0.0.1',
+      '-addext',
+      'subjectAltName=IP:127.0.0.1',
+    ],
+    { stdio: 'ignore' },
+  )
   return { dir, cert: join(dir, 'cert.pem'), key: join(dir, 'key.pem') }
 }
 
@@ -114,57 +129,55 @@ if (stub && STANDIN_CERT === undefined) {
   const made = certificate()
   // Through tsx, not through node: this file is TypeScript, and node's
   // strip-only mode refuses the parameter properties in the executor it imports.
-  const result = spawnSync(
-    'npx',
-    ['tsx', process.argv[1] ?? '', ...process.argv.slice(2)],
-    {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        FRESH_STANDIN_CERT: made.cert,
-        FRESH_STANDIN_KEY: made.key,
-        NODE_EXTRA_CA_CERTS: made.cert,
-      },
+  const result = spawnSync('npx', ['tsx', process.argv[1] ?? '', ...process.argv.slice(2)], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      FRESH_STANDIN_CERT: made.cert,
+      FRESH_STANDIN_KEY: made.key,
+      NODE_EXTRA_CA_CERTS: made.cert,
     },
-  )
+  })
   process.exit(result.status ?? 1)
 }
 
 function standIn(): Promise<{ server: Server; url: string }> {
   return new Promise((resolve) => {
-    const server = createServer({
-      cert: readFileSync(STANDIN_CERT ?? '', 'utf8'),
-      key: readFileSync(process.env.FRESH_STANDIN_KEY ?? '', 'utf8'),
-    }, (req, res) => {
-      let body = ''
-      req.on('data', (c) => {
-        body += String(c)
-      })
-      req.on('end', () => {
-        if (req.url?.includes('/models') === true) {
+    const server = createServer(
+      {
+        cert: readFileSync(STANDIN_CERT ?? '', 'utf8'),
+        key: readFileSync(process.env.FRESH_STANDIN_KEY ?? '', 'utf8'),
+      },
+      (req, res) => {
+        // The body is drained rather than read: the office's request shape is
+        // not what this is standing in for, and parsing it would be a second
+        // place to get OpenRouter's wire format wrong.
+        req.on('data', () => {})
+        req.on('end', () => {
+          if (req.url?.includes('/models') === true) {
+            res.writeHead(200, { 'content-type': 'application/json' })
+            res.end(JSON.stringify({ data: [] }))
+            return
+          }
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify({ data: [] }))
-          return
-        }
-        res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            id: 'stand-in',
-            model: 'stand-in/no-model',
-            choices: [
-              {
-                finish_reason: 'stop',
-                message: {
-                  role: 'assistant',
-                  content:
-                    'I have not looked anything up, because there is no model connected ' +
-                    'to this office yet — this reply came from the stand-in the ' +
-                    'fresh-install harness runs when there is no OpenRouter key. ' +
-                    'Everything else you are reading went through the real path.',
+          res.end(
+            JSON.stringify({
+              id: 'stand-in',
+              model: 'stand-in/no-model',
+              choices: [
+                {
+                  finish_reason: 'stop',
+                  message: {
+                    role: 'assistant',
+                    content:
+                      'I have not looked anything up, because there is no model connected ' +
+                      'to this office yet — this reply came from the stand-in the ' +
+                      'fresh-install harness runs when there is no OpenRouter key. ' +
+                      'Everything else you are reading went through the real path.',
+                  },
                 },
-              },
-            ],
-            /*
+              ],
+              /*
               `cost` is not optional here.
 
               The office refuses a call it cannot verify as within budget —
@@ -175,11 +188,12 @@ function standIn(): Promise<{ server: Server; url: string }> {
               worse than one that stops. Zero, because a stand-in costs nothing,
               which is true rather than convenient.
             */
-            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: 0 },
-          }),
-        )
-      })
-    })
+              usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: 0 },
+            }),
+          )
+        })
+      },
+    )
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
       const port = typeof address === 'object' && address !== null ? address.port : 0
@@ -201,8 +215,10 @@ async function main(): Promise<void> {
     const stood = await standIn()
     server = stood.server
     savedBaseUrl = String(
-      (await value(db, `select base_url as u from public.providers where provider = 'openrouter'`)) ??
-        '',
+      (await value(
+        db,
+        `select base_url as u from public.providers where provider = 'openrouter'`,
+      )) ?? '',
     )
     savedRef = String(
       (await value(

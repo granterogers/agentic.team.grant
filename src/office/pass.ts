@@ -42,6 +42,7 @@ import { combinedNotifier, pagerChannel } from '../channels/notify.ts'
 import { announceStart, sayStillWorking } from '../channels/progress.ts'
 import { replyChannel } from '../channels/reply.ts'
 import type { SqlExecutor } from '../db/executor.ts'
+import { resolveProjectRef } from '../fresh/project-ref.ts'
 import { artifactHandler } from '../handlers/artifact.ts'
 import { backupHandler } from '../handlers/backup.ts'
 import { briefingHandler } from '../handlers/briefing.ts'
@@ -215,7 +216,14 @@ export const buildPass = async (
   /** Set when Slack is installed, so the narrator can run after the drain. */
   let floor: (() => Promise<void>) | null = null
 
-  const projectRef = options.projectRef ?? 'baujwlzcziasnfhhkchg'
+  /*
+    Whose project the storage paths belong to.
+
+    Only the backup and the file handlers name it, and a wrong value there
+    writes somebody else's bucket rather than failing — which is why this reads
+    the environment before falling back, and says so when it falls back.
+  */
+  const projectRef = options.projectRef ?? resolveProjectRef({ forWhat: 'this worker' })
 
   // Two secrets and the Slack app id, in ONE round trip.
   //

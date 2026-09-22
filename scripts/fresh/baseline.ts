@@ -36,8 +36,7 @@
  * direction of that mistake is "a stranger's data in a new user's database".
  */
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { readdir } from 'node:fs/promises'
+import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { GRANT_PRODUCTION_PROJECT_REF, HARNESS_DB_PREFIX } from '../../src/fresh/forbidden.ts'
 
@@ -134,9 +133,15 @@ const CONTAMINATION: readonly { readonly name: string; readonly pattern: RegExp 
   { name: "Grant's Slack user id", pattern: /\bU0BUNF6AALC\b/ },
   { name: "Grant's Slack team id", pattern: /\bT0BUCJ2L5FD\b/ },
   { name: 'a Telegram bot username', pattern: /\batg_[a-z]+_bot\b/ },
-  { name: "one of Grant's Telegram bot ids", pattern: /\b8(?:967954396|842154625|883385300|965090661|800409793|301012441)\b/ },
+  {
+    name: "one of Grant's Telegram bot ids",
+    pattern: /\b8(?:967954396|842154625|883385300|965090661|800409793|301012441)\b/,
+  },
   { name: 'the name of one of his projects', pattern: /Legacy Coaching Course/i },
-  { name: 'scaffolding the baseline build invented', pattern: /fresh-install-scaffold|baseline-scaffold|PLACEHOLDER-NOT-A-CREDENTIAL/ },
+  {
+    name: 'scaffolding the baseline build invented',
+    pattern: /fresh-install-scaffold|baseline-scaffold|PLACEHOLDER-NOT-A-CREDENTIAL/,
+  },
 ]
 
 function pgDump(args: readonly string[]): string {
@@ -160,10 +165,11 @@ function pgDump(args: readonly string[]): string {
     scanned before it is written. A dump from an untrusted source should never
     be applied by this path at all, with or without the directive.
   */
-  return raw
-    .split('\n')
-    .filter((line) => !/^\\(restrict|unrestrict)\b/.test(line))
-    /*
+  return (
+    raw
+      .split('\n')
+      .filter((line) => !/^\\(restrict|unrestrict)\b/.test(line))
+      /*
       `public` always already exists.
 
       Every Postgres database is created with it, and Supabase's is where
@@ -171,8 +177,11 @@ function pgDump(args: readonly string[]): string {
       every target this baseline could ever be applied to. pg_dump emits it
       because it is describing a schema it found, not writing an installer.
     */
-    .map((line) => line.replace(/^CREATE SCHEMA (?!IF NOT EXISTS)/, 'CREATE SCHEMA IF NOT EXISTS '))
-    .join('\n')
+      .map((line) =>
+        line.replace(/^CREATE SCHEMA (?!IF NOT EXISTS)/, 'CREATE SCHEMA IF NOT EXISTS '),
+      )
+      .join('\n')
+  )
 }
 
 function scan(label: string, text: string): string[] {
@@ -203,11 +212,10 @@ function scan(label: string, text: string): string[] {
 
 async function main(): Promise<void> {
   console.log('building the scaffold database by replaying the whole corpus…')
-  execFileSync(
-    'npx',
-    ['tsx', 'scripts/fresh/zero-state.ts', '--preconditions', '--keep'],
-    { env: { ...process.env, FRESH_DB: DB }, stdio: 'inherit' },
-  )
+  execFileSync('npx', ['tsx', 'scripts/fresh/zero-state.ts', '--preconditions', '--keep'], {
+    env: { ...process.env, FRESH_DB: DB },
+    stdio: 'inherit',
+  })
 
   console.log('\ncapturing structure…')
   const schema = pgDump([
@@ -284,15 +292,13 @@ async function main(): Promise<void> {
   const findings = [...scan('schema.sql', schema), ...scan('seed.sql', seed)]
   await mkdir(OUT, { recursive: true })
 
-  const migrations = (await readdir('migrations'))
-    .filter((n) => /^\d{4}_.*\.sql$/.test(n))
-    .sort()
+  const migrations = (await readdir('migrations')).filter((n) => /^\d{4}_.*\.sql$/.test(n)).sort()
 
   if (findings.length > 0) {
     console.error(`\nBASELINE REFUSED — ${findings.length} contamination finding(s):`)
     for (const f of findings) console.error(`  ${f}`)
     console.error(
-      '\nNothing was written. A baseline carrying somebody else\'s identifiers is ' +
+      "\nNothing was written. A baseline carrying somebody else's identifiers is " +
         'worse than no baseline, because it would be installed without being read.',
     )
     process.exit(1)
@@ -308,7 +314,7 @@ async function main(): Promise<void> {
           'The schema as it stands after every migration listed here, captured as ' +
           'structure plus product seed. Built by npm run fresh:baseline; never edited ' +
           'by hand. A fresh install applies this instead of replaying the corpus, ' +
-          'because nine migrations assert the contents of Grant\'s database (F-002).',
+          "because nine migrations assert the contents of Grant's database (F-002).",
         builtAt: new Date().toISOString(),
         represents: migrations.length,
         through: migrations[migrations.length - 1] ?? null,

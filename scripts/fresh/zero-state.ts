@@ -27,20 +27,25 @@
  * ref refused by name. The harness drops databases; every guard exists because
  * dropping the wrong one is the worst thing in this workstream's reach.
  */
-import { createHash } from 'node:crypto'
+
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
-import type { MigrationFile } from '../../src/migrations/check.ts'
-import { ledgerExists, readApplied, runMigrations } from '../../src/migrations/runner.ts'
 import {
   HARNESS_DB_PREFIX,
   refuseForeignDatabase,
   refuseProductionRef,
   refuseRemoteHost,
 } from '../../src/fresh/forbidden.ts'
-import { asSuperuser as runAsSuperuser, ensureRole, localUrl } from '../../src/fresh/local-db.ts'
+import {
+  ensureRole,
+  localConnection,
+  asSuperuser as runAsSuperuser,
+} from '../../src/fresh/local-db.ts'
+import type { MigrationFile } from '../../src/migrations/check.ts'
+import { ledgerExists, readApplied, runMigrations } from '../../src/migrations/runner.ts'
 
 const MIGRATIONS_DIR = 'migrations'
 const SHIM = 'scripts/fresh/sql/supabase-shim.sql'
@@ -77,8 +82,8 @@ refuseProductionRef(process.env.DATABASE_URL, 'DATABASE_URL')
   SUPERUSER because the migrations create extensions and roles, which nothing
   less can do.
 */
-const url = localUrl(db)
-refuseRemoteHost(url, 'the harness connection string')
+const connection = localConnection(db)
+refuseRemoteHost(`postgres://${connection.host}/${connection.database}`, 'the harness target')
 
 const sha256 = (content: string): string =>
   createHash('sha256').update(content, 'utf8').digest('hex')
@@ -156,7 +161,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const executor = new PostgresExecutor(url)
+  const executor = new PostgresExecutor(connection)
   const started = Date.now()
   let applied = 0
   let failedAt: string | null = null
@@ -165,7 +170,8 @@ async function main(): Promise<void> {
   try {
     for (const stage of stages) {
       const upto = files.filter((f) => f.name < stage.before)
-      if (upto.length > 0) applied += (await runMigrations(upto, executor, sha256, () => {})).applied.length
+      if (upto.length > 0)
+        applied += (await runMigrations(upto, executor, sha256, () => {})).applied.length
       await executor.execute(stage.sql)
       console.log(`precondition applied before ${stage.before}`)
     }

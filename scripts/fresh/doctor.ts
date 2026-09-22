@@ -27,7 +27,7 @@ import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.t
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
 import { CONTRACT, humanEffort } from '../../src/fresh/contract.ts'
 import { GRANT_PRODUCTION_PROJECT_REF, HARNESS_DB_PREFIX } from '../../src/fresh/forbidden.ts'
-import { localUrl } from '../../src/fresh/local-db.ts'
+import { localConnection } from '../../src/fresh/local-db.ts'
 
 type State = 'ok' | 'missing' | 'blocked' | 'unknown'
 interface Result {
@@ -48,9 +48,9 @@ async function office(): Promise<{ db: SqlExecutor; where: string } | null> {
     return { db: new ManagementApiExecutor(ref, token), where: `Supabase project ${ref}` }
   }
   const local = process.env.FRESH_DB
-  if (local !== undefined && local.startsWith(HARNESS_DB_PREFIX)) {
+  if (local?.startsWith(HARNESS_DB_PREFIX) === true) {
     return {
-      db: new PostgresExecutor(localUrl(local)),
+      db: new PostgresExecutor(localConnection(local)),
       where: `local database ${local}`,
     }
   }
@@ -176,11 +176,10 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
           `select (select secret_ref is not null from public.providers
                     where provider = 'openrouter') as c`,
         )) === true
-      if (connected) return ok('stored and connected — run npm run fresh:first-use to prove it thinks')
+      if (connected)
+        return ok('stored and connected — run npm run fresh:first-use to prove it thinks')
       if (stored > 0)
-        return missing(
-          'a key is stored but nothing is using it yet — run: npm run fresh:configure',
-        )
+        return missing('a key is stored but nothing is using it yet — run: npm run fresh:configure')
       return missing('no key stored — the office cannot think yet')
     } catch {
       return unknown('could not read the vault')
@@ -208,9 +207,7 @@ const CHECKS: Record<string, (db: SqlExecutor | null) => Promise<Result>> = {
         `select (select count(*)::int from public.telegram_bots
                   where is_pager and enabled and token_ref is not null) as n`,
       )
-      return Number(v) > 0
-        ? ok('registered, with a token')
-        : missing('no Chief of Staff bot yet')
+      return Number(v) > 0 ? ok('registered, with a token') : missing('no Chief of Staff bot yet')
     } catch {
       return unknown('could not read the bot registry')
     }
@@ -252,7 +249,13 @@ async function deployed(fn: string): Promise<Result> {
 }
 
 function paint(state: State): string {
-  return state === 'ok' ? '  ok  ' : state === 'missing' ? ' todo ' : state === 'blocked' ? 'BLOCKED' : '  ?   '
+  return state === 'ok'
+    ? '  ok  '
+    : state === 'missing'
+      ? ' todo '
+      : state === 'blocked'
+        ? 'BLOCKED'
+        : '  ?   '
 }
 
 async function main(): Promise<void> {
@@ -315,7 +318,7 @@ async function main(): Promise<void> {
       `  This one needs you — ${next.human.because}, which no software may do on your behalf.`,
     )
     console.log(`  About ${next.human.minutes} minutes. Cost: ${next.human.cost}\n`)
-    next.human.steps.forEach((s, i) => console.log(`    ${i + 1}. ${s}`))
+    for (const [i, step] of next.human.steps.entries()) console.log(`    ${i + 1}. ${step}`)
   } else if (next.automatedBy !== undefined) {
     console.log('  This one is automatic. Run:\n')
     console.log(`    ${next.automatedBy}`)

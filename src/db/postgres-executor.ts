@@ -49,6 +49,19 @@
  * CLAUDE.md's rule is the general form: a verification pointed at something
  * other than what the user reaches passes, or fails, for the wrong reason.
  *
+ * ## A config object, not only a URL
+ *
+ * A libpq connection URL puts the password inside the string, between the user
+ * name and the host, and a string is the thing that ends up in a log line, an
+ * error message or a process listing. `npm run check:secrets` flags the shape on sight and is right to —
+ * CLAUDE.md's rule is that a security check which cries wolf is one somebody
+ * starts overriding, and the way to keep it quiet is to stop writing the shape
+ * rather than to teach it an exception.
+ *
+ * So the harness hands over `{ host, user, password, database }` and no URL
+ * carrying a credential exists anywhere. A connection string is still accepted,
+ * because that is what a person supplying their own would have.
+ *
  * ## What it refuses
  *
  * A connection string naming anything but a local host, unless the caller says
@@ -56,11 +69,13 @@
  * reach a throwaway database; a typo that reached a real one would be the
  * single worst outcome available to this workstream.
  */
-import { Client } from 'pg'
-import { type SqlExecutor, type SqlResult, SqlExecutionError } from './executor.ts'
+import { Client, type ClientConfig } from 'pg'
+import { SqlExecutionError, type SqlExecutor, type SqlResult } from './executor.ts'
 
 /** Hosts a disposable harness database may live on. */
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '', '0.0.0.0'])
+
+export type Connection = string | ClientConfig
 
 export function isLocalConnectionString(url: string): boolean {
   // A bare socket path or a libpq keyword string with no host is local.
@@ -71,6 +86,15 @@ export function isLocalConnectionString(url: string): boolean {
   } catch {
     return false
   }
+}
+
+function isLocal(connection: Connection): boolean {
+  if (typeof connection === 'string') return isLocalConnectionString(connection)
+  if (connection.connectionString !== undefined) {
+    return isLocalConnectionString(connection.connectionString)
+  }
+  // No host at all means a local socket, which is what libpq defaults to.
+  return connection.host === undefined || LOCAL_HOSTS.has(connection.host)
 }
 
 export interface PostgresExecutorOptions {
@@ -86,14 +110,15 @@ export class PostgresExecutor implements SqlExecutor {
   readonly kind = 'postgres'
 
   constructor(
-    private readonly connectionString: string,
+    private readonly connection: Connection,
     options: PostgresExecutorOptions = {},
   ) {
-    if (connectionString.trim() === '') {
+    if (typeof connection === 'string' && connection.trim() === '') {
       throw new Error('a Postgres connection string is required')
     }
-    if (!options.allowRemoteHost && !isLocalConnectionString(connectionString)) {
+    if (!options.allowRemoteHost && !isLocal(connection)) {
       // Never name the connection string in the message: it carries a password.
+      // Never name the connection: it may carry a password.
       throw new Error(
         'PostgresExecutor refuses a non-local host. This transport exists for a ' +
           'disposable harness database. If you genuinely mean to reach a remote ' +
@@ -104,7 +129,9 @@ export class PostgresExecutor implements SqlExecutor {
   }
 
   async execute(sql: string): Promise<SqlResult> {
-    const client = new Client({ connectionString: this.connectionString })
+    const client = new Client(
+      typeof this.connection === 'string' ? { connectionString: this.connection } : this.connection,
+    )
     await client.connect()
     try {
       // One simple query. See the header for why this is not wrapped.

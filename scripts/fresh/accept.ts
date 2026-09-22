@@ -28,18 +28,23 @@
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
-import { runMigrations } from '../../src/migrations/runner.ts'
-import type { MigrationFile } from '../../src/migrations/check.ts'
 import {
   GRANT_PRODUCTION_PROJECT_REF,
   HARNESS_DB_PREFIX,
   ProductionIdentifierError,
   refuseForeignDatabase,
 } from '../../src/fresh/forbidden.ts'
-import { createDatabase, dropDatabase, ensureRole, localUrl } from '../../src/fresh/local-db.ts'
+import {
+  createDatabase,
+  dropDatabase,
+  ensureRole,
+  localConnection,
+} from '../../src/fresh/local-db.ts'
+import type { MigrationFile } from '../../src/migrations/check.ts'
+import { runMigrations } from '../../src/migrations/runner.ts'
 
 const DB = `${HARNESS_DB_PREFIX}accept`
 const SHIM = 'scripts/fresh/sql/supabase-shim.sql'
@@ -93,7 +98,7 @@ function run(
   }
 }
 
-const db = (): PostgresExecutor => new PostgresExecutor(localUrl(DB))
+const db = (): PostgresExecutor => new PostgresExecutor(localConnection(DB))
 
 async function value(sql: string): Promise<unknown> {
   const executor = db()
@@ -106,7 +111,11 @@ function blank(): void {
   ensureRole()
   dropDatabase(DB)
   createDatabase(DB)
-  execFileSync('su', ['postgres', '-c', `psql -q -v ON_ERROR_STOP=1 -d ${DB} -f ${process.cwd()}/${SHIM}`])
+  execFileSync('su', [
+    'postgres',
+    '-c',
+    `psql -q -v ON_ERROR_STOP=1 -d ${DB} -f ${process.cwd()}/${SHIM}`,
+  ])
 }
 
 function install(): { code: number; out: string } {
@@ -132,10 +141,7 @@ async function journeyA(): Promise<void> {
     'it never falls back to the project this repository was developed against',
   )
   assert(r.out.includes('NEXT:'), 'it names exactly one next action')
-  assert(
-    /needs you|Run:/.test(r.out),
-    'and says whether that action is yours or the software’s',
-  )
+  assert(/needs you|Run:/.test(r.out), 'and says whether that action is yours or the software’s')
   assert(
     r.out.includes('https://'),
     'a human step carries the URL to go to, per Grant’s standing instruction',
@@ -162,7 +168,9 @@ async function journeyBC(): Promise<void> {
   const staff = Number(await value('select count(*)::int as n from public.staff'))
   assert(staff === 8, `the roster is there — ${staff} staff`)
 
-  const transitions = Number(await value('select count(*)::int as n from app.job_transitions_allowed'))
+  const transitions = Number(
+    await value('select count(*)::int as n from app.job_transitions_allowed'),
+  )
   assert(
     transitions > 0,
     `the job state machine has its ${transitions} legal transitions ` +
@@ -237,12 +245,10 @@ async function journeyE(): Promise<void> {
     !r.out.includes('sbp_this_token_is_not_real_and_never_was'),
     'the credential is never echoed back, not even when it is the thing that is wrong',
   )
+  assert(/token|refused|reach/i.test(r.out), 'it says which credential is the problem')
   assert(
-    /token|refused|reach/i.test(r.out),
-    'it says which credential is the problem',
-  )
-  assert(
-    r.out.includes('https://supabase.com/dashboard/account/tokens') || /generate a new one/i.test(r.out),
+    r.out.includes('https://supabase.com/dashboard/account/tokens') ||
+      /generate a new one/i.test(r.out),
     'and where to get a working one',
   )
 }
@@ -270,11 +276,15 @@ async function journeyF(): Promise<void> {
 
 async function journeyG(): Promise<void> {
   journey('G', 'First real use — an instruction goes in and an answer comes back')
-  run('sh', ['-c', `echo "sk-or-v1-not-a-real-key" | npx tsx scripts/fresh/secret.ts openrouter.api_key`], {
-    FRESH_DB: DB,
-    SUPABASE_PROJECT_REF: undefined,
-    SUPABASE_ACCESS_TOKEN: undefined,
-  })
+  run(
+    'sh',
+    ['-c', `echo "sk-or-v1-not-a-real-key" | npx tsx scripts/fresh/secret.ts openrouter.api_key`],
+    {
+      FRESH_DB: DB,
+      SUPABASE_PROJECT_REF: undefined,
+      SUPABASE_ACCESS_TOKEN: undefined,
+    },
+  )
   run('npx', ['tsx', 'scripts/fresh/configure.ts'], {
     FRESH_DB: DB,
     SUPABASE_PROJECT_REF: undefined,
@@ -303,9 +313,11 @@ async function journeyG(): Promise<void> {
     typeof who === 'string' && who !== '(nobody)',
     `a real member of staff was chosen to answer (${String(who)})`,
   )
-  current!.humanBlocked =
-    'the model itself. A stand-in composed the sentence, because an OpenRouter ' +
-    'key needs an account. Everything else on the path was the live code.'
+  if (current !== null) {
+    current.humanBlocked =
+      'the model itself. A stand-in composed the sentence, because an OpenRouter ' +
+      'key needs an account. Everything else on the path was the live code.'
+  }
 }
 
 async function journeyH(): Promise<void> {
@@ -381,10 +393,7 @@ async function journeyI(): Promise<void> {
     result.applied.length === 1,
     `exactly the one new migration was applied (${result.applied.length})`,
   )
-  assert(
-    result.applied[0]?.name === probe.name,
-    'and it was the new one, not something re-run',
-  )
+  assert(result.applied[0]?.name === probe.name, 'and it was the new one, not something re-run')
   assert(
     result.skipped.length === files.length,
     `everything already applied was skipped (${result.skipped.length} of ${files.length})`,
@@ -493,7 +502,16 @@ async function main(): Promise<void> {
   console.log(`  against ${DB} — a disposable local database, no account of any kind\n`)
 
   if (wanted('A')) await journeyA()
-  if (wanted('B') || wanted('C') || wanted('D') || wanted('F') || wanted('G') || wanted('H') || wanted('I') || wanted('J')) {
+  if (
+    wanted('B') ||
+    wanted('C') ||
+    wanted('D') ||
+    wanted('F') ||
+    wanted('G') ||
+    wanted('H') ||
+    wanted('I') ||
+    wanted('J')
+  ) {
     await journeyBC()
   }
   if (wanted('D')) await journeyD()
