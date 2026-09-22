@@ -27,7 +27,26 @@ if (said === '') {
   process.exit(1)
 }
 
-const runToken = Math.random().toString(36).slice(2, 10)
+/*
+  The run token is nameable, so two invocations can share one THREAD.
+
+  The canonical door builds its chat as `shadow-<runToken>-<conversation>`,
+  and the token is in there deliberately: without it two harness runs would
+  thread into each other, which is the cross-scenario contamination fixed on
+  21 September. But it also means `--conversation` alone cannot join two
+  separate probe runs into one conversation - each invocation minted a fresh
+  token, so a deliberate two-turn sequence produced two chats.
+
+  That was found by a follow-up probe reading as a product defect: the office
+  asked for a task title it had itself proposed one turn earlier, and the
+  honest explanation is that it had no thread to remember it from. Asking
+  again with no history is CORRECT.
+
+  Passing the token explicitly keeps the containment property - it is still
+  in the chat name, still in `requested_by` - and makes a multi-turn sequence
+  expressible.
+*/
+const runToken = arg('token', Math.random().toString(36).slice(2, 10))
 const door = canonicalDoor({ runToken, deadlineMs: Number(arg('deadline', '240')) * 1000 })
 if (!door.reachable) {
   console.log(`\n  ${door.blockedBecause ?? 'unreachable'}`)

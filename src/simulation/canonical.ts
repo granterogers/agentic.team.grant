@@ -176,6 +176,8 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
 
   let nth = 0
   const deadlineMs = options.deadlineMs ?? 7 * 60 * 1000
+  /** Unique per door INSTANCE, so two processes sharing a run token still differ. */
+  const doorNonce = Math.random().toString(36).slice(2, 8)
 
   return {
     door: 'canonical',
@@ -200,7 +202,23 @@ export const canonicalDoor = (options: CanonicalOptions): Transport => {
         segment becomes the channel, which is what every real key in the
         table does (`telegram:message:...`, `teamhq:my_tasks:...`).
       */
-      const key = `teamhq:shadow:${options.runToken}-${String(nth)}`
+      /*
+        And a NONCE, because `nth` restarts at 1 in every process.
+
+        The key was `runToken-nth`, which is unique while one door instance
+        is asking - and collides the moment two invocations share a run
+        token, which they now deliberately do so a multi-turn sequence can
+        share a THREAD. The second turn was silently deduplicated against
+        the first and the door returned the first turn's answer, which reads
+        exactly like the office repeating itself.
+
+        Found by counting `inbound_commands` rather than by reading the
+        reply, which is the only thing that could have told them apart.
+
+        Dedupe identity and thread identity are different questions: two
+        turns of one conversation SHARE a chat and must NOT share a key.
+      */
+      const key = `teamhq:shadow:${options.runToken}-${String(nth)}-${doorNonce}`
 
       /*
         THE CHAT, which is what threads a conversation.
