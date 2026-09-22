@@ -285,6 +285,15 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'a-plan-step-reads-in-grants-terms',
+    proves: 'an internal capability name never becomes the title of his task',
+    file: 'src/agents/goal.ts',
+    anchor: "  const plain = said.replace(OUR_VOCABULARY, '').trim()",
+    replacement: '  const plain = said',
+    check: 'tests/agents/a-plan-step-reads-in-grants-terms.test.ts',
+  },
+
+  {
     name: 'a-stem-that-looks-inflected',
     proves: 'an imperative whose verb ends in -ing or -ed is still an imperative',
     file: 'src/agents/request.ts',

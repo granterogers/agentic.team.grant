@@ -133,6 +133,46 @@ export interface GoalPlan {
 const MOST_STEPS = 8
 const LONGEST_WHY = 240
 
+/*
+  THE STEP'S REASON, WITH OUR VOCABULARY TAKEN OUT OF IT.
+
+  `why` is documented three lines from here as "why this step, in Grant's
+  terms. Shown to him; never used to decide" - and it is written by the model,
+  which helpfully prefixes it with the capability it chose:
+
+      draft.create — redo budget page
+      draft.create — report outdated items
+      draft.create — produce a draft listing what is out of date
+
+  All three are REAL rows in `public.tasks`, because `perform.ts` uses this
+  field verbatim as the title of a task on Grant's own list. Two of the four
+  tasks the office wrote from a real message in 45 days are this shape (#307),
+  and #307 fixed the two writers that compose a title from a sentence; this is
+  the third, which composes one from a plan.
+
+  #242's rule: an internal reference in a sentence a person reads is a defect.
+  A dotted identifier is ours - `draft.create`, `task.create`, `slack.post` -
+  and the only place Grant could have got one from is us.
+
+  Structural rather than a list of capability names: any leading
+  `word.word` followed by a separator is our vocabulary, so this holds for
+  capabilities nobody has added yet. It only strips a PREFIX and only when a
+  separator follows, so a sentence that genuinely discusses `draft.create`
+  mid-clause keeps it.
+*/
+const OUR_VOCABULARY = /^\s*[a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*\s*[—–:-]\s*/i
+
+export const inGrantsTerms = (why: string): string => {
+  const said = String(why ?? '').trim()
+  const plain = said.replace(OUR_VOCABULARY, '').trim()
+  /*
+    Stripping it must never leave nothing. "draft.create" alone carries no
+    reason, and an empty `why` is what `perform.ts` already falls back from -
+    to the request itself, which is a better title than half an identifier.
+  */
+  return (plain === '' ? said : plain).slice(0, LONGEST_WHY)
+}
+
 /**
  * Capabilities that put words in front of a person.
  *
@@ -300,7 +340,7 @@ export function validate(
   for (const s of proposed) {
     const id = typeof s?.id === 'string' ? s.id.trim() : ''
     const capability = typeof s?.capability === 'string' ? s.capability.trim() : ''
-    const why = typeof s?.why === 'string' ? s.why.trim().slice(0, LONGEST_WHY) : ''
+    const why = inGrantsTerms(typeof s?.why === 'string' ? s.why : '')
     const needs = Array.isArray(s?.needs) ? s.needs.map((n) => String(n).trim()) : []
     const specialist =
       typeof s?.specialist === 'string' && s.specialist.trim() !== '' ? s.specialist.trim() : null
