@@ -745,15 +745,64 @@ const wireDocs = (root) => {
     void paintThumb(host, ref)
   }
 
+  /*
+    EVERY DOCUMENT PRESSES. What the press DOES depends on what exists behind
+    it, and that decision is in `openDoc` rather than here, so the gallery and
+    the list cannot disagree about what a given file does.
+  */
+  for (const b of root.querySelectorAll('[data-bc-doc-open]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const fig = b.closest('[data-bc-doc]')
+      void openDoc(
+        b.dataset.bcDocOpen ?? '',
+        b.dataset.bcDocTitle ?? fig?.dataset.bcDocTitle ?? 'document',
+      )
+    })
+  }
+  /*
+    And the whole row or tile is still a target, for the person who presses the
+    thumbnail rather than the words - as long as they did not press the button
+    inside it, which has already handled it.
+  */
   for (const fig of root.querySelectorAll('[data-bc-doc]')) {
     const ref = fig.dataset.bcDoc ?? ''
     if (ref === '') continue
-    fig.classList.add('bcdoc--openable')
-    fig.addEventListener('click', () => {
+    fig.addEventListener('click', (e) => {
+      if (e.target.closest('[data-bc-doc-open]') !== null) return
       void openDoc(ref, fig.dataset.bcDocTitle ?? 'document')
     })
   }
+
+  /* The detail view's own two actions. */
+  for (const b of root.querySelectorAll('[data-bc-doc-tab]')) {
+    b.addEventListener('click', () => {
+      openInTab(b.dataset.bcDocTab ?? '')
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-doc-save]')) {
+    b.addEventListener('click', () => {
+      const href = b.dataset.bcDocSave ?? ''
+      if (href === '') return
+      /*
+        A DOWNLOAD IS A LINK WITH A `download` ATTRIBUTE. Fetching the bytes
+        and making a blob would work and would also pull the whole file
+        through this tab's memory for no reason; the attribute asks the
+        browser to save what it was going to stream anyway.
+      */
+      const a = document.createElement('a')
+      a.href = href
+      a.download = (b.dataset.bcDocTitle ?? 'file').replace(/[\\/:*?"<>|]+/g, ' ').trim()
+      a.style.display = 'none'
+      document.body.append(a)
+      a.click()
+      a.remove()
+    })
+  }
 }
+
+/** Audio, by what the reference actually is rather than by the row's label. */
+const isAudioRef = (ref) => /\.(wav|mp3|m4a|ogg|oga|aac|flac|opus|weba)(\?|$)/i.test(ref)
 
 /** The file a reference points at, or null. Never throws. */
 const fileFor = async (ref) => {
@@ -809,9 +858,33 @@ const openInTab = (href) => {
 }
 
 const openDoc = async (ref, title) => {
+  /*
+    FOUR ANSWERS, one of which used to be silence.
+
+    A reference beginning `d:` names a document with no file and no record -
+    there is nothing to fetch and nothing to open, and the honest answer is
+    the details rather than nothing happening. That silence was most of
+    Grant's *"some PDFs can be clicked while other assets cannot"*.
+  */
+  if (ref === '' || ref.startsWith('d:')) {
+    ctx.openDocDetail?.(ref, title)
+    return
+  }
+  if (isAudioRef(ref)) {
+    /* A recording plays HERE, with the project still around it. */
+    ctx.openDocDetail?.(ref, title)
+    return
+  }
   const file = await fileFor(ref)
-  if (file === null) return
+  if (file === null) {
+    ctx.openDocDetail?.(ref, title)
+    return
+  }
   if (file.url !== '') {
+    if (isAudioRef(file.url) || String(file.mime ?? '').startsWith('audio/')) {
+      ctx.openDocDetail?.(ref, title)
+      return
+    }
     openInTab(file.url)
     return
   }
@@ -821,7 +894,10 @@ const openDoc = async (ref, title) => {
     route this experience has not built.
   */
   const text = String(file.content ?? '')
-  if (text === '') return
+  if (text === '') {
+    ctx.openDocDetail?.(ref, title)
+    return
+  }
   const blob = new Blob([`${title}\n\n${text}`], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   openInTab(url)

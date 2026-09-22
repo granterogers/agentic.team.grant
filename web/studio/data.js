@@ -120,7 +120,16 @@ const FALLBACK_PROJECTS = [
       { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: '/samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
       { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
       { title: 'Legacy Questionnaire', kind: 'pdf', origin: 'Yours', size: '3,370 words', lines: [74, 92, 84] },
-      { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed' },
+      /*
+        A REAL FILE ON THE AUDIO ROW. Grant, 22 September: "audio files not
+        being clickable/useful... audio should have usable playback". The
+        prototype's audio document had no file at all, so there was nothing to
+        play and nothing to draw - and the same absence is what made it
+        unclickable. The sample is three seconds long and is here for the same
+        reason the sample PDFs are: a file type nobody can see the handling of
+        is a file type nobody is checking.
+      */
+      { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed', file: '/samples/voice-note.wav' },
     ],
     /*
       The fields `app.studio_tasks` actually returns (0222, 0530): `state_raw`,

@@ -1808,3 +1808,43 @@
 @media (max-width: 1180px) {
   [data-experience='basecamp'] .bcbsel { min-height: 44px; font-size: 13px; }
 }
+
+/*
+  The gallery tile is a button now, so it needs to stop looking like one and
+  start looking like the tile it replaced - the press is the whole card.
+*/
+[data-experience='basecamp'] .bcdocpress {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcdocpress:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+[data-experience='basecamp'] .bcglyph {
+  width: 54%;
+  height: auto;
+  opacity: 0.8;
+}
+[data-experience='basecamp'] .bcthumb--object .bcglyph { color: currentColor; }
+/*
+  The recording, played where it was found. `width: 100%` because a native
+  audio element is 300px wide by default and sits in the corner of any
+  container wider than that, reading as a control somebody forgot to lay out.
+*/
+[data-experience='basecamp'] .bcplayer { margin: 0 0 var(--bc-5); }
+[data-experience='basecamp'] .bcplayer audio {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bc-text) 8%, transparent);
+}

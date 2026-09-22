@@ -340,9 +340,9 @@ Status words mean exactly one thing each:
 | 10 | Miniature To-dos: checkboxes work, immediate, persisted | **verified** | verify:basecamp-todos — no box is disabled, ticking redraws the row at once, it survives a reload, and the expanded view agrees |
 | 11 | Expanded To-dos genuinely interactive | **verified** | same suite — unticking in the expanded view puts it back and the miniature agrees the moment the modal closes |
 | 12 | "Add a List" becomes "Add a Task" | implemented | Add a Task is the primary action; list creation is genuinely separate (a list is a milestone task, 0171) so it is kept as a demoted "New list" |
-| 13 | Docs and Files: every file type opens sensibly | pending | |
-| 14 | Thumbnails or attractive fallbacks for every type | pending | |
-| 15 | Audio playback | pending | |
+| 13 | Docs and Files: every file type opens sensibly | **verified** | verify:basecamp-docs presses EVERY document in both views and asserts a tab, a player or a details view — never nothing. Proved by restoring the empty reference |
+| 14 | Thumbnails or attractive fallbacks for every type | **verified** | a rendered page where there is one, a drawn page where there is not, and a stroked glyph for audio, sheets, slides, mind maps, images and video; no tile collapses |
+| 15 | Audio playback | **verified** | the recording plays in the detail view; the suite asserts a real source AND calls play(), which resolves |
 | 16 | Schedule entries resolve to the right object; no dead links | **verified** | the cause was one key scheme too many; EVERY schedule entry is now opened by the suite and must show the task it names. Proved by a sabotage that put the old key back |
 | 17 | Three-dot wording becomes "Sources" | implemented | |
 | 18 | Source logos or icons | pending | |

@@ -178,9 +178,26 @@ for (const size of sizes) {
         .slice(0, 46)
 
       const before = await fingerprint()
+      /*
+        A CONTROL THAT OPENS A NEW TAB CHANGES NOTHING ON THIS ONE, and that
+        is not a dead control - it is the commonest thing a document does.
+
+        The fingerprint is the address, the DOM, the text and whether a sheet
+        is open, all of which are properties of THIS page, so the four
+        documents that open their file read as inert the moment the gallery
+        tile became a real button. Watching for the popup is the property;
+        an allow-list of document titles would have silenced the shape a
+        genuinely dead tile has.
+      */
+      let openedTab = false
+      const onPopup = (): void => {
+        openedTab = true
+      }
+      page.context().on('page', onPopup)
       try {
         await el.click({ timeout: 2500 })
       } catch (e) {
+        page.context().off('page', onPopup)
         unpressable += 1
         /* The log names WHICH of the five actionability checks failed. */
         const why = e instanceof Error ? e.message.split('\n').slice(0, 6).join(' / ') : String(e)
@@ -188,10 +205,15 @@ for (const size of sizes) {
         continue
       }
       await page.waitForTimeout(420)
+      page.context().off('page', onPopup)
       pressed += 1
       const after = await fingerprint()
+      /* Close anything the press opened, or the next route opens behind it. */
+      for (const extra of page.context().pages()) {
+        if (extra !== page) await extra.close().catch(() => undefined)
+      }
 
-      if (before === after) {
+      if (before === after && !openedTab) {
         /*
           A CONTROL MAY CHANGE NOTHING ONLY IF IT SAYS IT IS ALREADY THERE.
 

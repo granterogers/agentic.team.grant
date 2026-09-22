@@ -1178,8 +1178,16 @@ const docsView = () => {
 }
 
 const docRow = (d, i) => {
-  const ref = d.file ?? (d.id ? `id:${d.id}` : '')
-  return `<div class="bcitem${ref === '' ? '' : ' bcdoc--openable'}" data-bc-doc="${esc(ref)}"
+  /*
+    THE SAME REFERENCE THE GALLERY USES, and the row is a control.
+
+    It was `d.file ?? id:<id> ?? ''` here as well - two copies of one rule,
+    which is how "some assets can be clicked and others cannot" was true in
+    two views at once. `bcMini.docRef` is the one place now, and the row
+    presses like the tile does.
+  */
+  const ref = bcMini.docRef(d)
+  return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}"
     data-bc-doc-title="${esc(d.title ?? '')}">
     <span class="bcrowthumb bcthumb" data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
       ${(Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 84, 96])
@@ -1188,11 +1196,39 @@ const docRow = (d, i) => {
         .join('')}
     </span>
     <div class="bcitembody">
-      <span class="bcitemtitle">${esc(d.title)}</span>
-      <span class="bcitemmeta">${esc([d.kind, d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
+      <button type="button" class="bcitemtitle bcitemlink" data-bc-doc-open="${esc(ref)}"
+        data-bc-doc-title="${esc(d.title ?? '')}">${esc(d.title)}</button>
+      <span class="bcitemmeta">${esc([KIND[d.kind] ?? d.kind, d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
     </div>
-    <span class="bcpmeta">${ref === '' ? '' : 'Opens in a new tab'}</span>
+    <span class="bcpmeta">${esc(opensAs(d))}</span>
   </div>`
+}
+
+/*
+  WHAT PRESSING THIS WILL DO, said before it is pressed.
+
+  Every row used to read "Opens in a new tab", including the rows that had no
+  file and could not open at all. A row that promises the wrong thing is worse
+  than one that promises nothing, and this is the same rule as an offer only
+  promising what the press can perform.
+*/
+const KIND = {
+  pdf: 'PDF',
+  doc: 'Document',
+  made: 'Written by the team',
+  slides: 'Slides',
+  mindmap: 'Mind map',
+  audio: 'Audio',
+  image: 'Image',
+  sheet: 'Spreadsheet',
+  video: 'Video',
+}
+
+const opensAs = (d) => {
+  if (d.kind === 'audio') return 'Plays here'
+  if (d.file !== undefined && d.file !== null && d.file !== '') return 'Opens in a new tab'
+  if (d.id !== undefined && d.id !== null && d.id !== '') return 'Opens in a new tab'
+  return 'Details'
 }
 
 const documentsSurface = (p) => {
@@ -1220,8 +1256,9 @@ const documentsSurface = (p) => {
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       Everything filed on this project — what the team wrote, what you uploaded
-      and anything brought in from a connected source. Opening one opens the
-      real file in a new tab.
+      and anything brought in from a connected source. A file opens in a new
+      tab, a recording plays here, and anything the office only has a record
+      of opens its details.
     </p>
     <form class="bcaddform" data-bc-uploadform hidden>
       <label class="bcfield">
@@ -1749,6 +1786,82 @@ const chatSurface = (p) => {
     </form>`
 }
 
+/*
+  ONE DOCUMENT, WHEN A NEW TAB IS THE WRONG ANSWER.
+
+  Grant, 22 September: *"unsupported preview formats should still have a
+  sensible open/download/details action"*, and *"audio should have usable
+  playback"*. Two cases a new tab cannot serve:
+
+   - a recording. Sending somebody to a bare browser tab with an audio element
+     in it loses the project, the title and the way back. It plays here.
+   - a document with no file behind it at all - most of the gallery on a
+     project whose material lives in a connected notebook. There is nothing to
+     open, and the honest answer is to say what is known about it rather than
+     to do nothing, which is what "some assets cannot be clicked" actually
+     was.
+*/
+const documentRecord = (p) => {
+  const want = state().bcDoc
+  const docs = p.documents ?? []
+  const d =
+    docs.find((x) => bcMini.docRef(x) === want?.ref) ??
+    docs.find((x) => (x.title ?? '') === (want?.title ?? '')) ??
+    null
+  if (d === null) {
+    return `${crumbFor(p, 'documents')}
+      ${errorState(
+        'That file is not on this project any more. It may have been removed, or the gallery may have moved on.',
+        button('Back to Docs & Files', { 'data-bc-go': at(`/p/${p.slug}/documents`) }),
+      )}`
+  }
+  const isAudio = d.kind === 'audio'
+  const file = d.file ?? ''
+  const facts = [
+    ['What it is', KIND[d.kind] ?? d.kind ?? ''],
+    ['Size', d.size ?? ''],
+    ['Where it came from', d.origin ?? ''],
+    ['When', d.when ?? ''],
+  ].filter(([, v]) => v !== '' && v !== undefined)
+  return `<div class="bcrecordhead">
+      <h1>${esc(d.title ?? 'Document')}</h1>
+    </div>
+    ${
+      isAudio && file !== ''
+        ? `<div class="bcplayer">
+            <audio controls preload="metadata" src="${esc(file)}" data-bc-audio="1"
+              aria-label="${esc(`Play ${d.title ?? 'the recording'}`)}"></audio>
+          </div>`
+        : ''
+    }
+    ${
+      !isAudio && file !== ''
+        ? `<p class="bcpmeta bcprose">
+            ${esc('The file itself opens in a new tab, at full size.')}
+          </p>
+          <div class="bcrow">
+            ${button('Open the file', { kind: 'primary', 'data-bc-doc-tab': esc(file) })}
+            ${button('Download', { 'data-bc-doc-save': esc(file), 'data-bc-doc-title': esc(d.title ?? '') })}
+          </div>`
+        : ''
+    }
+    ${
+      file === ''
+        ? `<p class="bcpmeta bcprose">
+            There is no file behind this one to open — it is a record of
+            something the office knows about rather than something it holds.
+            What it knows is below.
+          </p>`
+        : ''
+    }
+    <h2 class="bcsubhead">Details</h2>
+    <dl class="bcfacts bcgap-l">
+      ${facts
+        .map(([k, v]) => `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`)
+        .join('')}
+    </dl>`
+}
+
 const SURFACE = {
   overview,
   tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
@@ -1760,6 +1873,7 @@ const SURFACE = {
   board: boardSurface,
   schedule: scheduleSurface,
   chat: chatSurface,
+  document: documentRecord,
 }
 
 /* ======================================================================== *
@@ -2074,8 +2188,17 @@ const body = () => {
       const pick = compose.chosen()
       if (pick !== 'grid') return `${compose.COMPOSITIONS[pick](p)}${expandedOverlay(p)}`
     }
+    /*
+      THE OVERLAY BELONGS TO EVERY PROJECT SURFACE, not only to the home.
+
+      It was appended to the composition alone, so `openDocDetail` on the Docs
+      and Files surface set the state, the page repainted, and nothing drew:
+      four documents "did nothing" when pressed, which is the exact defect
+      this run is fixing, arriving through the fix for it. A dialog that only
+      exists on one route is a dialog every other route cannot open.
+    */
     const render = SURFACE[s.tab] ?? overview
-    return render(p)
+    return `${render(p)}${expandedOverlay(p)}`
   }
   return portfolio()
 }

@@ -571,7 +571,69 @@ const FACE = {
   sheet: { glyph: 'sheet', tone: 's' },
   mindmap: { glyph: 'map', tone: 'm' },
   slides: { glyph: 'slides', tone: 'p' },
+  image: { glyph: 'image', tone: 'i' },
+  video: { glyph: 'video', tone: 'v' },
 }
+
+/*
+  A GLYPH RATHER THAN A WORD ON THE TILE.
+
+  Grant: *"broken/missing thumbnails should have attractive fallbacks."* A
+  grey word in a box is not a fallback, it is the absence of one - and the
+  word is repeated directly underneath in the caption, so the tile said
+  nothing the line below it did not. These are the same stroke weight and the
+  same geometry as the rest of the experience's icons.
+*/
+const GLYPH = {
+  audio: `<svg viewBox="0 0 48 32" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2.2" stroke-linecap="round">
+      <path d="M4 16h3M11 10v12M18 5v22M25 12v8M32 7v18M39 13v6M46 16h-2"></path>
+    </svg>`,
+  sheet: `<svg viewBox="0 0 40 32" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="3" width="34" height="26" rx="3"></rect>
+      <path d="M3 12h34M15 12v17M26 12v17"></path>
+    </svg>`,
+  map: `<svg viewBox="0 0 40 32" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round">
+      <circle cx="20" cy="16" r="5"></circle>
+      <circle cx="6" cy="6" r="3"></circle><circle cx="34" cy="7" r="3"></circle>
+      <circle cx="7" cy="26" r="3"></circle><circle cx="33" cy="25" r="3"></circle>
+      <path d="M16 13L9 8M24 13l7-4M16 19l-6 5M24 19l6 4"></path>
+    </svg>`,
+  slides: `<svg viewBox="0 0 40 32" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="4" width="34" height="20" rx="3"></rect>
+      <path d="M14 29h12M20 24v5M10 12h12M10 17h8"></path>
+    </svg>`,
+  image: `<svg viewBox="0 0 40 32" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="4" width="34" height="24" rx="3"></rect>
+      <circle cx="13" cy="12" r="3"></circle>
+      <path d="M5 24l9-8 7 6 5-4 9 8"></path>
+    </svg>`,
+  video: `<svg viewBox="0 0 40 32" class="bcglyph" aria-hidden="true" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="5" width="24" height="22" rx="3"></rect>
+      <path d="M27 13l10-5v16l-10-5z"></path>
+    </svg>`,
+}
+
+/*
+  ONE REFERENCE PER DOCUMENT, and never an empty one.
+
+  This is the whole of Grant's *"some PDFs can be clicked while other assets
+  cannot"*. The reference was `d.file ?? id:<id> ?? ''`, and both callers
+  then refused to make a document openable when it came back empty - so the
+  avatar document, the interview questions, the questionnaire and the voice
+  note were all inert, while the three rows that happen to carry a sample PDF
+  worked. Every document has a reference now: the file if it has one, the
+  record if it has one, and otherwise its own title, which opens the details.
+  What a press DOES still depends on what exists; whether it presses at all
+  no longer does.
+*/
+export const docRef = (d) =>
+  d?.file ?? (d?.id ? `id:${d.id}` : `d:${d?.title ?? ''}`)
 
 /** The drawn page, from the document's own line lengths where it has them. */
 const drawnPage = (d) => {
@@ -586,22 +648,24 @@ const drawnPage = (d) => {
 const thumb = (d, i) => {
   const kind = String(d.kind ?? 'doc')
   const object = FACE[kind]
+  const ref = docRef(d)
   /*
-    `file` is the sample path a prototype document carries; `id` is what a real
-    one has. Either is enough to ask for a preview, and a document with
-    neither still gets a drawn page and a real title - which is the state most
-    of a young project is in.
+    A FIGURE WITH A BUTTON IN IT, not a clickable div. The press was on the
+    figure, which is not focusable and not announced as a control, so the
+    whole gallery was unreachable by keyboard and silent to a screen reader.
   */
-  const ref = d.file ?? (d.id ? `id:${d.id}` : '')
-  return `<figure class="bcdoc" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}">
-    <span class="bcthumb${object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`}"
-      data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
-      ${object === undefined ? drawnPage(d) : `<span class="bcobjword">${esc(KINDWORD[kind] ?? kind)}</span>`}
-    </span>
-    <figcaption>
-      <span class="bcdoctitle">${esc(d.title)}</span>
-      <span class="bcdocmeta">${esc([KINDWORD[kind] ?? kind, d.size].filter(Boolean).join(' · '))}</span>
-    </figcaption>
+  return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}">
+    <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
+      aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
+      <span class="bcthumb${object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`}"
+        data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
+        ${object === undefined ? drawnPage(d) : (GLYPH[object.glyph] ?? '')}
+      </span>
+      <figcaption>
+        <span class="bcdoctitle">${esc(d.title)}</span>
+        <span class="bcdocmeta">${esc([KINDWORD[kind] ?? kind, d.size].filter(Boolean).join(' · '))}</span>
+      </figcaption>
+    </button>
   </figure>`
 }
 

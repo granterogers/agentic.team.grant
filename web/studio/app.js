@@ -325,6 +325,8 @@ const state = {
   */
   bcContact: null,
   bcContactAdd: false,
+  // Which document the detail view is showing (audio, or one with no file).
+  bcDoc: null,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8638,6 +8640,7 @@ function goToPath(path) {
   state.bcExpanded = null
   state.bcContact = null
   state.bcContactAdd = false
+  state.bcDoc = null
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   /*
     The experiment's full search (§7.4). Its own view, reachable only under
@@ -13245,6 +13248,7 @@ const bcContext = {
     state.bcTask = null
     state.bcContact = null
     state.bcContactAdd = false
+    state.bcDoc = null
     render()
   },
   chatFor: (slug) => chat.thread(slug),
@@ -13369,6 +13373,15 @@ const bcContext = {
   closeContact: () => {
     state.bcContact = null
     state.bcContactAdd = false
+    render()
+  },
+  /*
+    One document, as a record over the page. Used where a new tab is the wrong
+    answer - a recording, or a document with no file behind it at all.
+  */
+  openDocDetail: (ref, title) => {
+    state.bcDoc = { ref, title }
+    state.bcExpanded = 'document'
     render()
   },
   openDock: () => {
