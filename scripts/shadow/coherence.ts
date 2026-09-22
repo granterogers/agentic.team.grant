@@ -105,6 +105,24 @@ const rows = await db.execute(`
     left join public.projects p on p.project_id = d.project_id
    where d.produced_by_job in (${ids})`)
 
+/*
+  AND THE WORK HANDED ON, which rows alone cannot show.
+
+  The SILENT ACTION check counted tasks and documents, so a turn that fanned
+  out to four specialists and said nothing about it read as a clean turn with
+  no effects. That is the under-claiming half of #302 and the oracle was blind
+  to it for the same reason the contract was: pending work is not a row in a
+  table the reader was looking at.
+*/
+const kids = await db.execute(`
+  select parent_job_id::text as parent, count(*) as n
+    from public.jobs where parent_job_id in (${ids})
+   group by 1`)
+const childrenOf = new Map<string, number>()
+for (const r of kids.rows as { parent: string; n: number }[]) {
+  childrenOf.set(String(r.parent), Number(r.n))
+}
+
 interface Made {
   readonly jobId: string
   readonly title: string
@@ -170,6 +188,10 @@ const contentWords = (title: string): string[] =>
 const ACKNOWLEDGES =
   /\b(?:added|created|filed|logged|made|drafted|noted|put|saved|scheduled|set\s+up|opened|started|written|wrote|raised)\b/i
 
+/** Any sign at all that the answer mentions work being carried on elsewhere. */
+const HANDED_ON =
+  /\b(?:handed|handing|passed|passing|asked|asking|looking\s+into|working\s+on|come\s+back|get\s+back|under\s+way|underway|in\s+hand|on\s+it|started|kicked\s+off|specialist|colleague|team|Emma|Tom|Daniel|Marcus|Ruby|Oliver|Grace|Claire)\b/i
+
 export const silentAction = (answer: string, titles: readonly string[]): string | null => {
   if (titles.length === 0) return null
   const said = plain(answer)
@@ -212,6 +234,21 @@ for (const t of turns) {
       kind: 'SILENT ACTION',
       where: `${t.session} turn ${String(t.index)}`,
       detail: `created ${String(mine.length)} row(s) and named none of them — e.g. "${silent}"`,
+      answer,
+    })
+  }
+
+  /*
+    Work handed to a colleague, never mentioned. The test is deliberately
+    generous — any acknowledgement at all counts — because the finding is an
+    answer that says nothing whatsoever about it, which is what Grant got.
+  */
+  const handedOn = childrenOf.get(t.jobId) ?? 0
+  if (handedOn > 0 && !HANDED_ON.test(answer)) {
+    findings.push({
+      kind: 'SILENT ACTION',
+      where: `${t.session} turn ${String(t.index)}`,
+      detail: `handed the work to ${String(handedOn)} colleague(s) and said nothing about it`,
       answer,
     })
   }
@@ -305,6 +342,12 @@ for (const [session, list] of bySession) {
     null
   ) {
     fails.push('silent action false-positives on a named row')
+  }
+  if (HANDED_ON.test('I have nothing from earlier in this conversation.')) {
+    fails.push('handed-on fires on an answer that mentions no colleague')
+  }
+  if (!HANDED_ON.test('I have asked Emma to look at it and will come back to you.')) {
+    fails.push('handed-on misses a plain hand-off')
   }
   if (!DENIES_ANY.test('There are no tasks on that project at the moment.')) {
     fails.push('contradiction')

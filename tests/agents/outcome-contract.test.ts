@@ -282,3 +282,48 @@ describe('an unfinished turn cannot have failed after retries', () => {
     expect(classifyOutcome(early)).not.toBe('failed_after_retries')
   })
 })
+
+describe('work handed on is never silent', () => {
+  /*
+    The under-claiming half of #302, found on v717 by the coherence oracle.
+
+    A dictated message carrying four intentions fanned out to FOUR child jobs,
+    and because its readings did not count as `wanted` the class came out
+    `completed`, no sentence was owed, and Grant was told:
+
+        "I have nothing from earlier in this conversation — this is the first
+         thing you have said to me here…"
+
+    Four specialists were working and he was told nothing was happening. The
+    contract governed over-claiming in every direction and had no rule for
+    under-claiming, which is the same defect with the sign reversed: an office
+    that starts work and does not say so is one he cannot plan around.
+
+    Found in FOUR turns of the recorded corpus, so it is a pattern rather than
+    one answer.
+  */
+  it('is pending even when nothing was read as wanted', () => {
+    expect(classifyOutcome(at({ wanted: 0, pendingActions: 4 }))).toBe('pending_approval')
+    expect(sayWhatHappened(at({ wanted: 0, pendingActions: 4 }))).toContain('handed this on')
+  })
+
+  it('counts what was handed on, when there is more than one piece', () => {
+    expect(sayWhatHappened(at({ wanted: 0, pendingActions: 4 }))).toContain('4 pieces')
+    expect(sayWhatHappened(at({ wanted: 0, pendingActions: 1 }))).not.toContain('pieces')
+  })
+
+  it('does not tell him a colleague is waiting on HIM', () => {
+    /*
+      `awaitingApproval` is a blocker with his name on it; `pendingActions` is
+      work already handed to somebody. Saying four specialists are "waiting on
+      your word" would make him wait for a decision nobody needs while the
+      office waits for him — false in the expensive direction.
+    */
+    expect(sayWhatHappened(at({ pendingActions: 3 }))).not.toContain('your word')
+    expect(sayWhatHappened(at({ awaitingApproval: true }))).toContain('your word')
+  })
+
+  it('and a turn that did the work itself still says nothing extra', () => {
+    expect(sayWhatHappened(at({ wanted: 1, landed: 1 }))).toBeNull()
+  })
+})

@@ -213,7 +213,27 @@ export const classifyOutcome = (c: CanonicalOutcome): OutcomeClass => {
   if (outOfAttempts && c.landed === 0 && c.wanted > 0 && c.pendingActions === 0) {
     return 'failed_after_retries'
   }
-  if (c.awaitingApproval || (c.pendingActions > 0 && c.landed === 0 && c.wanted > 0)) {
+  /*
+    WORK THAT IS REALLY GOING TO HAPPEN IS NEVER SILENT.
+
+    `c.wanted > 0` used to be required here, and a live turn on v717 showed
+    what that costs. A dictated message carrying four intentions fanned out to
+    **four child jobs**, and because its readings did not count as `wanted`
+    the class came out `completed`, no sentence was owed, and the answer Grant
+    received was:
+
+        "I have nothing from earlier in this conversation — this is the first
+         thing you have said to me here…"
+
+    Four specialists were working and he was told nothing was happening. The
+    #302 contract governs over-claiming in every direction and had no rule for
+    UNDER-claiming: an office that starts work and does not say so is one he
+    cannot plan around, and it is the same defect as a false promise with the
+    sign reversed.
+
+    Pending work is a fact about rows, so it decides the class on its own.
+  */
+  if (c.awaitingApproval || (c.pendingActions > 0 && c.landed === 0)) {
     return 'pending_approval'
   }
   if (c.capabilityRefused) return 'blocked_capability'
@@ -355,7 +375,20 @@ export const sayWhatHappened = (c: CanonicalOutcome): string | null => {
     case 'blocked_capability':
       return 'I have not done this, and it is not something I can do — so there is nothing to wait for.'
     case 'pending_approval':
-      return 'Nothing has changed yet. It is waiting on your word.'
+      /*
+        WAITING ON HIM AND WAITING ON A COLLEAGUE ARE DIFFERENT SENTENCES.
+
+        `awaitingApproval` is a blocker with his name on it; `pendingActions`
+        is work already handed to somebody. Telling him that four specialists
+        are "waiting on your word" would be false in the expensive direction —
+        he would wait for a decision nobody needs, while the office waits for
+        him.
+      */
+      return c.awaitingApproval
+        ? 'Nothing has changed yet. It is waiting on your word.'
+        : `Nothing has changed yet — I have handed this on${
+            c.pendingActions > 1 ? ` in ${String(c.pendingActions)} pieces` : ''
+          } and will come back with what comes of it.`
     case 'failed_after_retries':
       return `I could not get this done after ${String(c.attempt)} attempts, and nothing was created. ${
         c.missing.length > 0

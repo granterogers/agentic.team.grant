@@ -285,6 +285,15 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'work-handed-on-is-never-silent',
+    proves: 'a turn that convened somebody says so',
+    file: 'src/agents/outcome.ts',
+    anchor: '  if (c.awaitingApproval || (c.pendingActions > 0 && c.landed === 0)) {',
+    replacement: '  if (c.awaitingApproval) {',
+    check: 'tests/agents/outcome-contract.test.ts',
+  },
+
+  {
     name: 'a-plan-step-reads-in-grants-terms',
     proves: 'an internal capability name never becomes the title of his task',
     file: 'src/agents/goal.ts',
