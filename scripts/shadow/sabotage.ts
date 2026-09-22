@@ -237,6 +237,39 @@ const SABOTAGES: readonly Sabotage[] = [
   },
 
   /*
+    #306's three halves, each of which alone let a false completion claim
+    reach Grant on v695 against zero rows.
+  */
+  {
+    name: 'claim-sees-the-contraction',
+    proves: '"I\'ve created" is not invisible to the completion reader',
+    file: 'src/agents/commitment.ts',
+    // Anchored on the named constant rather than on the pattern text: an
+    // anchor written with the real apostrophe character matched nothing,
+    // which this tool reported as INCONCLUSIVE rather than as a pass.
+    anchor: 'const SAYS_I = String.raw',
+    replacement:
+      "const SAYS_I = '\\\\b(?:i|we)\\\\s+(?:have\\\\s+|just\\\\s+)?'; const UNUSED = String.raw",
+    check: 'tests/agents/a-negation-stops-its-own-clause.test.ts',
+  },
+  {
+    name: 'negation-stops-its-own-clause',
+    proves: 'a caveat beside a false claim does not excuse it',
+    file: 'src/agents/commitment.ts',
+    anchor: '    for (const clause of clauses(sentence)) {',
+    replacement: '    for (const clause of [sentence]) {',
+    check: 'tests/agents/a-negation-stops-its-own-clause.test.ts',
+  },
+  {
+    name: 'both-claim-readers-are-asked',
+    proves: 'an impersonal completion claim is reachable from the gate',
+    file: 'src/agents/commitment.ts',
+    anchor: '        const made = claimsToHaveMade(draft)',
+    replacement: '        const made = null as string | null',
+    check: 'tests/agents/a-negation-stops-its-own-clause.test.ts',
+  },
+
+  /*
     #304, at both ends of its own distinction.
 
     The clause the office owes a failed request is the same clause it must
@@ -291,8 +324,8 @@ const SABOTAGES: readonly Sabotage[] = [
     name: 'completion-claim-without-a-noun',
     proves: 'a claim to have done something is caught when the thing is named by its title',
     file: 'src/agents/commitment.ts',
-    anchor: '    if (NOT_A_CLAIM.test(sentence)) continue',
-    replacement: '    if (true) continue',
+    anchor: '      if (NOT_A_CLAIM.test(clause)) continue',
+    replacement: '      if (true) continue',
     check: 'tests/agents/commitment.test.ts',
   },
 ]

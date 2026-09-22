@@ -44,7 +44,8 @@
  *      first person. *"I'll be brief."* Not an execution.
  */
 
-import { straighten } from './quality.ts'
+import { clauses } from './clauses.ts'
+import { claimsToHaveMade, straighten } from './quality.ts'
 import { readClause } from './request.ts'
 
 /**
@@ -248,7 +249,33 @@ export const misrepresents = (
   may: { readonly mayCommitToFuture: boolean; readonly mayClaimCompletion: boolean },
 ): UnsupportedCommitment | null =>
   (may.mayCommitToFuture ? null : unsupportedCommitment(draft)) ??
-  (may.mayClaimCompletion ? null : claimsCompletion(draft))
+  (may.mayClaimCompletion ? null : claimsCompletion(draft)) ??
+  /*
+    AND THE OLDER READER, because the comment above was not true.
+
+    It says "one entry point, so the handler cannot enforce the future
+    tense and forget the past" - and it consulted one of the two readers
+    of the past tense. `shadow:alignment` has asked both since it was
+    written, with a comment saying why; the product asked one.
+
+    They are not redundant. `claimsToHaveMade` reaches shapes with no
+    first-person pronoun in front of them ("Done - that is on your list
+    now"); `claimsCompletion` reaches shapes with no artifact noun. The
+    live escape needed neither of those - it needed only that the two had
+    different reasons to stand down on the same sentence.
+
+    `claimsToHaveMade` is the older half and is gated in `quality.ts` on
+    `acted`, which counts what the handler ATTEMPTED - so a turn that
+    enqueued a child job took itself out of its reach while landing
+    nothing. Here it is gated on `mayClaimCompletion`, which is computed
+    from ROWS, and that is the whole argument of #302.
+  */
+  (may.mayClaimCompletion
+    ? null
+    : (() => {
+        const made = claimsToHaveMade(draft)
+        return made === null ? null : { clause: made.slice(0, 200), marker: made.slice(0, 40) }
+      })())
 
 export const heldToWhatIsQueued = async (
   draft: string,
@@ -332,8 +359,27 @@ const withoutCommitments = (draft: string, may: Parameters<typeof misrepresents>
  * Consulted only where `mayClaimCompletion` is false, so an office that
  * really did the work is never shown it.
  */
-const DID_IT =
-  /(?:^|[.!?]\s+|\b(?:i|we)\s+(?:have\s+|'ve\s+|just\s+)?)(?:created|added|filed|logged|made|drafted|scheduled|booked|saved|moved|put|set\s+up|opened|started|sent|posted|assigned|updated|renamed|deleted|removed)\b/i
+/*
+  AND THE CONTRACTION, which is how a model actually writes it.
+
+  The first version required a SPACE after the pronoun - `(?:i|we)\s+` -
+  before the optional "have/'ve/just", so the "'ve" branch could only ever
+  match "I 've created". `I've created` and `We've added` were invisible to
+  this reader for its whole life, and that is the commonest form of the
+  claim. It is what let the live escape through on v695: `I've created a
+  task for Friday` against zero rows.
+
+  A missing form is invisible in exactly the way CLAUDE.md describes for a
+  regex refuted twice by a real inbox - the detector reports nothing and
+  nothing is what a working detector also reports. It was found by counting
+  what the office SAID against what the tables HELD, which is the only
+  measurement that can see a reader that never fires.
+*/
+const SAYS_I = String.raw`\b(?:i|we)(?:\s+have|\s*['\u2019]ve|\s+just)?\s+`
+const DID_IT_VERB =
+  'created|added|filed|logged|made|drafted|scheduled|booked|saved|moved|put|set\\s+up|' +
+  'opened|started|sent|posted|assigned|updated|renamed|deleted|removed'
+const DID_IT = new RegExp(`(?:^|[.!?]\\s+|${SAYS_I})(?:${DID_IT_VERB})\\b`, 'i')
 
 /**
  * What takes the claim back out of the past.
@@ -358,10 +404,37 @@ export const claimsCompletion = (body: string): UnsupportedCommitment | null => 
   const text = straighten(String(body ?? ''))
   if (text.trim() === '') return null
   for (const sentence of sentences(text)) {
-    const m = DID_IT.exec(sentence)
-    if (m === null) continue
-    if (NOT_A_CLAIM.test(sentence)) continue
-    return { clause: sentence.slice(0, 200), marker: m[0].trim() }
+    if (DID_IT.exec(sentence) === null) continue
+    /*
+      A NEGATION STOPS THE CLAUSE IT IS IN, NOT THE ONE BESIDE IT.
+
+      The sentence was the unit here, so any negation anywhere in it
+      exempted the whole thing - and a model writing an honest caveat
+      beside a false claim gets both past the gate in one breath. Live on
+      v695, against zero tasks and zero documents:
+
+          "I've created a task for Friday to add the budget rewrite to the
+           bid, and I won't touch the bid before then."
+
+      One "won't", in the clause AFTER the claim, and #302's older half
+      walked through. The office told Grant a task existed; none did.
+
+      CLAUDE.md records this correction three times already - a prohibition
+      stops the clause it is in, a delegation governs its own span, the
+      mood of a sentence is set by its main clause - and `readClause`
+      implements it for the contrastive coordinator. This is the fourth
+      instance, in the gate rather than in the reader.
+
+      The claim VERB decides which clause is examined, so a negated clause
+      still exempts itself: "I haven't created any tasks yet" is one clause
+      and stays honest.
+    */
+    for (const clause of clauses(sentence)) {
+      const m = DID_IT.exec(clause)
+      if (m === null) continue
+      if (NOT_A_CLAIM.test(clause)) continue
+      return { clause: sentence.slice(0, 200), marker: m[0].trim() }
+    }
   }
   return null
 }
