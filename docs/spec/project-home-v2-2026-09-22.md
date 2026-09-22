@@ -100,10 +100,16 @@ them, and the chat requirements below REPLACE the previous ones.
    * Tasks remain directly interactive.
    * Each task has a functional checkbox.
    * Tasks can be marked complete from the expanded interface.
-* To-dos + Vecunia
-   * The To-dos system is intended to interface with Vecunia.
+* To-dos + Vikunja
+   * The To-dos system is intended to interface with Vikunja.
    * Architect the To-do implementation accordingly from the outset.
-   * Do not build a disconnected visual mock-up that subsequently needs to be rebuilt for Vecunia integration.
+   * Do not build a disconnected visual mock-up that subsequently needs to be rebuilt for Vikunja integration.
+
+   > **Corrected by Grant in the same session:** *"not venucia .. vikunja"*.
+   > The original message spelled it Vecunia, which matches nothing; Vikunja is
+   > the open-source, self-hostable task manager. The correction is recorded
+   > here rather than silently applied, because the name is the whole of the
+   > requirement and a future reader needs to know which spelling was his.
 * Schedule — miniature
    * Schedule must actually work in miniature form.
    * Existing schedule entries should be clickable.

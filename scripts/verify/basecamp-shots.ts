@@ -147,9 +147,40 @@ for (const size of sizes) {
       await page.locator('[data-bc-docview="list"]').click()
       await page.waitForTimeout(400)
     })
+    /*
+      ARRANGE IS BEHIND THE THREE-DOT MENU NOW, and this capture is how that
+      was noticed: project home v2 replaced the "Change this page" button with
+      the page menu, so the click waited thirty seconds for a control that no
+      longer exists and four screens went uncaptured at every width. A screen
+      with no capture is a screen nobody is watching, so the harness opens the
+      menu the way a person does rather than the control being moved back.
+    */
     await shot('home-arrange', slug, async () => {
+      await page.locator('[data-bc-pagemenu]').first().click()
+      await page.waitForTimeout(200)
       await page.locator('[data-bc-arrange]').first().click()
       await page.waitForTimeout(300)
+    })
+    /*
+      And the menu itself, which nothing had ever photographed: it is where
+      two capabilities went when they left the home.
+    */
+    await shot('home-pagemenu', slug, async () => {
+      await page.locator('[data-bc-pagemenu]').first().click()
+      await page.waitForTimeout(250)
+    })
+    /*
+      One person, as a record. v2 made the contacts miniature open somebody,
+      and a surface that exists only behind a press is exactly the kind that
+      ships unlooked-at.
+    */
+    await shot('contact-record', slug, async () => {
+      await page.locator('[data-bc-contact]').first().click()
+      await page.waitForTimeout(350)
+    })
+    await shot('contact-add', slug, async () => {
+      await page.locator('[data-bc-contact-add]').first().click()
+      await page.waitForTimeout(350)
     })
     /*
       CONTACTS WAS IN NO CAPTURE AT ALL until this line. It is one of the six

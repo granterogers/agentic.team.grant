@@ -92,6 +92,26 @@ await page.waitForSelector('.bchome')
 await page.waitForTimeout(500)
 
 /* --- 1. every project section has a route from the overview ------------- */
+/*
+  WHAT "REACHABLE" MEANS, retargeted for project home v2, and this is the third
+  retarget of the same lookup in two days - every one of them caused by a check
+  naming the MECHANISM rather than the property.
+
+  The property is unchanged: a person standing on the project home can get to
+  every section the default studio has. v2 changed three of the mechanisms and
+  nothing else:
+
+   - a module heading is no longer a link to a separate address. It is a button
+     that opens the expanded view as a modal over this page
+     ([data-bc-expand="<id>"]). The address still exists and still works; this
+     is simply the press;
+   - Sources left the home entirely, into the three-dot menu, because Grant
+     asked for it: "remove Where the material comes from as a module";
+   - Project settings is in that same menu.
+
+  So a section is reachable if the home carries ANY of: a link to it, a control
+  that expands it, or an item in the page menu that opens it.
+*/
 const reachable = (await page.evaluate(
   inPage(`const out = []
      for (const el of document.querySelectorAll('[data-bc-go], [data-bc-leave]')) {
@@ -99,6 +119,38 @@ const reachable = (await page.evaluate(
      }
      return out`),
 )) as string[]
+
+/** The ids the home can expand in place. */
+const expands = (await page.evaluate(
+  inPage(
+    `return [...document.querySelectorAll('[data-bc-expand]')].map((el) => el.dataset.bcExpand ?? '')`,
+  ),
+)) as string[]
+
+/** The ids the three-dot page menu reaches. */
+const menuReaches = (await page.evaluate(
+  inPage(`const panel = document.querySelector('[data-bc-pagemenu-panel]')
+     if (panel === null) return []
+     const out = []
+     for (const el of panel.querySelectorAll('[data-bc-sources]')) out.push('sources')
+     for (const el of panel.querySelectorAll('[data-bc-leave]')) {
+       const bits = (el.dataset.bcLeave ?? '').split('/').filter((x) => x !== '')
+       if (bits[0] === 'p' && bits[2] !== undefined) out.push(bits[2])
+     }
+     return out`),
+)) as string[]
+
+/*
+  A found-nothing check reports a perfect score, so both new lookups get a
+  floor before anything is concluded from them. The menu is the one that would
+  go silently blind: it is rendered `hidden`, so an empty panel and a missing
+  panel look identical from a count of visible things.
+*/
+check(
+  'the home offers expandable modules and a page menu to read reachability from',
+  expands.length > 0 && menuReaches.length > 0,
+  `${String(expands.length)} expandable module(s), ${String(menuReaches.length)} page-menu destination(s)`,
+)
 
 const bare = slug.replace('/basecamp', '')
 for (const s of sections) {
@@ -120,10 +172,14 @@ for (const s of sections) {
   }
   const own = reachable.includes(`${slug}/${s.id}`)
   const compat = reachable.includes(`${bare}/${s.id}`)
+  const expanded = expands.includes(s.id)
+  const inMenu = menuReaches.includes(s.id)
   check(
     `${s.name} (${s.id}) is reachable from the experimental overview`,
-    own || compat,
-    own ? '' : compat ? '' : `neither ${slug}/${s.id} nor ${bare}/${s.id} appears on the page`,
+    own || compat || expanded || inMenu,
+    own || compat || expanded || inMenu
+      ? ''
+      : `nothing on the home links to ${slug}/${s.id}, expands "${s.id}", or reaches it from the page menu`,
   )
 }
 
@@ -216,11 +272,31 @@ check(
 )
 
 /* The dock is not merely present — there is a way in. */
+/*
+  ON THE PROJECT HOME, which is where the way in now is.
+
+  This ran wherever the tool loop above had finished, and v2 moved the chat
+  control from the top row - where it was always present and where Grant said
+  it duplicated the team communication - onto the project head. So it is asked
+  for on the home. The consequence is real and worth stating: on a bare TOOL
+  ADDRESS at desktop width there is no visible chat control, and the way back
+  is the breadcrumb. That is acceptable while expanded views are modals over
+  the home, and it is the first thing to revisit if Grant wants chat reachable
+  from everywhere.
+
+  A VISIBLE way in. `.first()` matched the tray's Chat control, which is
+  phone-only and therefore invisible on a desktop - so the press timed out on
+  a page where the blue Chat button was right there. Asserting that a way in
+  EXISTS and that one of them can actually be pressed are two different
+  claims, and only the second is worth having.
+*/
+await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(500)
 check(
   'the team conversation can be opened from the experiment',
-  (await page.locator('[data-bc-dock]').count()) > 0,
+  (await page.locator('[data-bc-dock]:visible').count()) > 0,
 )
-await page.locator('[data-bc-dock]').first().click()
+await page.locator('[data-bc-dock]:visible').first().click()
 await page.waitForTimeout(400)
 check(
   'and pressing it actually opens the dock',

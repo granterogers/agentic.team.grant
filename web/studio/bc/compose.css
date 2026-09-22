@@ -1244,3 +1244,261 @@
 */
 [data-experience='basecamp'] .bccomp--c .bcmod { padding: 13px 16px 14px; }
 [data-experience='basecamp'] .bccomp--c .bcmodhead { padding-bottom: 8px; margin-bottom: 10px; }
+
+/* ======================================================================== *
+ * PROJECT HOME v2 — the visual system
+ *
+ * Grant asked for stronger borders, a hover glow, tasteful gradients and more
+ * depth, and asked explicitly that they NOT be solved in isolation: *"they
+ * should form a consistent design system across the new interface."*
+ *
+ * So there are four tokens and everything below reads them. They are defined
+ * against the experience's own palette rather than as literal colours, so the
+ * light scheme and the dark scheme both get a treatment that belongs to them -
+ * a glow that is a fixed rgba is a glow that is wrong in one of the two.
+ * ======================================================================== */
+
+[data-experience='basecamp'] {
+  /* A border with weight. 1px hairlines read as a wireframe at this density. */
+  --v2-edge: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 30%, transparent);
+  --v2-edge-hover: 1.5px solid color-mix(in srgb, var(--bc-accent) 55%, transparent);
+  /*
+    Depth from a gradient that runs with the light rather than across it: a
+    surface a little lighter at the top reads as tilted towards you, which is
+    the whole of what "pop" means here.
+  */
+  --v2-face: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bc-text-strong) 5%, var(--bc-surface)) 0%,
+    var(--bc-surface) 42%,
+    color-mix(in srgb, var(--bc-canvas) 28%, var(--bc-surface)) 100%
+  );
+  --v2-lift: 0 1px 2px rgb(0 0 0 / 22%), 0 10px 26px -18px rgb(0 0 0 / 55%);
+  --v2-glow:
+    0 0 0 1px color-mix(in srgb, var(--bc-accent) 34%, transparent),
+    0 0 22px -4px color-mix(in srgb, var(--bc-accent) 42%, transparent),
+    0 2px 4px rgb(0 0 0 / 22%), 0 14px 32px -20px rgb(0 0 0 / 60%);
+}
+
+[data-experience='basecamp'] .bccomp--c .bcmod {
+  background: var(--v2-face);
+  border: var(--v2-edge);
+  box-shadow: var(--v2-lift);
+  transition:
+    box-shadow var(--bc-t-out, 160ms) ease,
+    border-color var(--bc-t-out, 160ms) ease,
+    transform var(--bc-t-out, 160ms) ease;
+}
+/*
+  The glow, on hover and on keyboard focus alike — a treatment that only
+  answers a pointer tells a keyboard user nothing about what is interactive.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod:hover,
+[data-experience='basecamp'] .bccomp--c .bcmod:focus-within {
+  border: var(--v2-edge-hover);
+  box-shadow: var(--v2-glow);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bccomp--c .bcmod { transition: none; }
+}
+
+/* The heading is a control now, and reads as the module's name, not a link. */
+[data-experience='basecamp'] .bcmodopen {
+  font: inherit;
+  color: var(--bc-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+[data-experience='basecamp'] .bcmodopen:hover,
+[data-experience='basecamp'] .bcmodopen:focus-visible { color: var(--bc-accent); }
+
+/* Cards and thumbnails inside a module get the same edge, at lower weight. */
+[data-experience='basecamp'] .bcbcard,
+[data-experience='basecamp'] .bcthumb,
+[data-experience='basecamp'] .bcbar {
+  border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
+}
+
+/* --------------------------------------------------- the expanded view -- */
+
+[data-experience='basecamp'] .bcexp {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+[data-experience='basecamp'] .bcexpback {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bc-canvas) 78%, transparent);
+  backdrop-filter: blur(3px);
+  border: 0;
+}
+/*
+  The dialog is a surface in the same system: same gradient, same edge, a
+  heavier lift because it is nearer.
+*/
+[data-experience='basecamp'] .bcexpbox {
+  position: relative;
+  width: min(1040px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: auto;
+  background: var(--v2-face);
+  border: var(--v2-edge);
+  border-radius: var(--bc-r-sheet);
+  box-shadow: 0 24px 70px -28px rgb(0 0 0 / 75%), 0 2px 6px rgb(0 0 0 / 30%);
+  padding: 26px 28px 30px;
+}
+/*
+  The breadcrumb belongs to an address, and inside a dialog there is no
+  address to walk back up — the X is the way out. Hidden rather than made
+  conditional in nine renderers, which would be nine places to forget.
+*/
+[data-experience='basecamp'] .bcexpbox .bccrumb { display: none; }
+[data-experience='basecamp'] .bcexpx {
+  position: absolute;
+  inset-block-start: 14px;
+  inset-inline-end: 14px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: var(--v2-edge);
+  background: var(--bc-surface);
+  color: var(--bc-text);
+  cursor: pointer;
+  z-index: 1;
+}
+[data-experience='basecamp'] .bcexpx:hover,
+[data-experience='basecamp'] .bcexpx:focus-visible {
+  border: var(--v2-edge-hover);
+  color: var(--bc-text-strong);
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcexpx { width: 44px; height: 44px; }
+}
+
+/* ------------------------------------------------- the three-dot menu --- */
+
+[data-experience='basecamp'] .bcmenuwrap { position: relative; display: inline-flex; }
+[data-experience='basecamp'] .bcmenu {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 40;
+  min-width: 250px;
+  display: grid;
+  padding: 6px;
+  background: var(--bc-surface);
+  border: var(--v2-edge);
+  border-radius: var(--bc-r-menu);
+  box-shadow: var(--v2-lift);
+}
+[data-experience='basecamp'] .bcmenu button {
+  appearance: none;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--bc-text);
+  padding: 10px 12px;
+  min-height: 44px;
+  border-radius: calc(var(--bc-r-menu) - 4px);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcmenu button:hover,
+[data-experience='basecamp'] .bcmenu button:focus-visible {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+}
+
+/* The icon controls in the head: the mic and the menu sit beside blue Chat. */
+[data-experience='basecamp'] .bcbtn.bcicon {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+@media (pointer: coarse) {
+  [data-experience='basecamp'] .bcbtn.bcicon { width: 44px; height: 44px; }
+}
+[data-experience='basecamp'] .bcmic[aria-pressed='true'],
+[data-experience='basecamp'] .bcmic.is-live {
+  border: var(--v2-edge-hover);
+  color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcexpbody { min-width: 0; }
+/* Who, in words, where a monogram used to be. */
+[data-experience='basecamp'] .bctaskwho,
+[data-experience='basecamp'] .bcagendawho {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+/* A contact row that is a control, without looking like a button. */
+[data-experience='basecamp'] .bcmate--press {
+  width: 100%;
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 7px 8px;
+  margin-inline: -8px;
+}
+[data-experience='basecamp'] .bcmate--press:hover,
+[data-experience='basecamp'] .bcmate--press:focus-visible { background: var(--bc-surface-selected); }
+[data-experience='basecamp'] .bcmate--press .bcmatebody { display: grid; min-width: 0; }
+/* The tick in a miniature is the same tick as the tool's. */
+[data-experience='basecamp'] .bclists .bccheck {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--bc-text-muted);
+  cursor: pointer;
+  position: relative;
+  flex: 0 0 auto;
+}
+[data-experience='basecamp'] .bclists .bccheck:disabled { cursor: default; opacity: 0.5; }
+[data-experience='basecamp'] .bclists .bccheck:checked { background: var(--bc-accent); box-shadow: none; }
+[data-experience='basecamp'] .bclists .bccheck:checked::after {
+  content: '';
+  position: absolute;
+  left: 34%;
+  top: 22%;
+  width: 26%;
+  height: 46%;
+  border: 2px solid var(--bc-accent-ink);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(40deg);
+}
+
+/*
+  A RECORD'S OWN ACTIONS MUST CLEAR THE CLOSE BUTTON.
+
+  Inside an expanded view the breadcrumb is hidden, so a record's "Back to
+  Contacts" is the only way back to its list - and it was rendering straight
+  underneath the X in the same corner, half of it unreachable. The dialog's
+  chrome owns that corner; the record keeps the rest of the row.
+*/
+[data-experience='basecamp'] .bcexpbox .bcrecordhead { padding-right: 56px; }
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcexpbox .bcrecordhead { padding-right: 60px; }
+}
+
+/* Phone override, at the end of the file where source order makes it win. */
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcformrow { grid-template-columns: 1fr; }
+}

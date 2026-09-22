@@ -315,6 +315,16 @@ const state = {
     belongs to somebody else's list.
   */
   bcTask: null,
+  // Which module is open as an expanded view over the project home (v2).
+  bcExpanded: null,
+  /*
+    Which person the Contacts tool is showing, and whether it is showing the
+    form that adds one. Both live here for the same reason bcTask does: the
+    miniature and the expanded view are two presentations of one tool, so the
+    thing being looked at belongs to the tool rather than to either of them.
+  */
+  bcContact: null,
+  bcContactAdd: false,
   // Which Settings tab is open (#39).
   setting: 'team',
   view: 'portfolio', project: null, done: new Set(), label: null,
@@ -8623,6 +8633,11 @@ function goToPath(path) {
   if (state.experience === 'basecamp') bits.shift()
   // Cleared here, once, rather than at each of the callers that navigate.
   state.bcTask = null
+  // An expanded module does not survive a navigation: the page underneath it
+  // has changed, so the dialog over it is about somewhere else.
+  state.bcExpanded = null
+  state.bcContact = null
+  state.bcContactAdd = false
   if (bits.length === 0) { state.view = 'portfolio'; state.project = null; return true }
   /*
     The experiment's full search (§7.4). Its own view, reachable only under
@@ -13210,6 +13225,28 @@ const bcContext = {
     optimistic tail and the rule that the office's copy wins. A second reader
     in the experiment would be a second thing to keep in step.
   */
+  /*
+    Project home v2's expanded views. One flag, read by the shell, so opening
+    and closing is a repaint rather than a navigation - which is what makes
+    closing return "naturally to the underlying project homepage".
+  */
+  openExpanded: (id) => {
+    state.bcExpanded = id
+    render()
+  },
+  closeExpanded: () => {
+    state.bcExpanded = null
+    /*
+      And the record with it. A modal closed on one task and reopened from the
+      To-dos heading would otherwise come back showing that task rather than
+      the list, which is the dialog remembering something the person has just
+      dismissed.
+    */
+    state.bcTask = null
+    state.bcContact = null
+    state.bcContactAdd = false
+    render()
+  },
   chatFor: (slug) => chat.thread(slug),
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, token.get()),
@@ -13299,8 +13336,39 @@ const bcContext = {
   */
   openTask: (id) => {
     state.bcTask = id
+    /*
+      ON THE PROJECT HOME A RECORD HAS NOWHERE TO DRAW, and that is how eight
+      dead controls shipped in one afternoon: the To-dos miniature's task
+      titles and the Schedule miniature's agenda items both set the record and
+      repainted a page that draws the board, so every one of them was a press
+      that changed nothing. v2's rule is that a miniature acts, and the
+      expanded view is where the record lives - so opening one from the home
+      opens To-dos over the page with that record in it.
+    */
+    if (state.tab !== 'tasks') state.bcExpanded = 'tasks'
     // `keepUrl()` pushes from the state on the next paint, so opening a
     // record becomes a history entry and Back returns to the list.
+    render()
+  },
+  /*
+    One person, and the form that adds one. Both open the Contacts tool over
+    the home for the same reason a task does.
+  */
+  openContact: (key) => {
+    state.bcContact = key
+    state.bcContactAdd = false
+    if (state.tab !== 'contacts') state.bcExpanded = 'contacts'
+    render()
+  },
+  openContactAdd: () => {
+    state.bcContact = null
+    state.bcContactAdd = true
+    if (state.tab !== 'contacts') state.bcExpanded = 'contacts'
+    render()
+  },
+  closeContact: () => {
+    state.bcContact = null
+    state.bcContactAdd = false
     render()
   },
   openDock: () => {

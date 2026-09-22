@@ -15,6 +15,7 @@
 
 import { act, attempt, canWrite, read } from '../office.js'
 import * as pdf from '../pdf.js'
+import { callIsLive, syncCallButtons, toggleCall } from '../call.js'
 import * as compose from './compose.js'
 import * as jump from './jump.js'
 
@@ -98,6 +99,10 @@ export const wire = (root) => {
   wireDocs(root)
   wireArrange(root)
   wireDocsWorkspace(root)
+  wireVoice(root)
+  wireContacts(root)
+  wirePageMenu(root)
+  wireExpanded(root)
 }
 
 /* ----------------------------------------------------------------- search */
@@ -274,6 +279,184 @@ const asBase64 = (file) =>
     }
     reader.readAsDataURL(file)
   })
+
+/* ---------------------------------- expanded views, as modals (v2) ------ */
+
+/*
+  Open, close, Escape, and the click on the backdrop. The focus goes into the
+  dialog on open and back to what opened it on close, because a modal that
+  leaves the keyboard behind the thing it covers is not a modal - the
+  keyboard audit has a name for that and this repository has already paid for
+  it once on the document viewer.
+*/
+const wireExpanded = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-expand]')) {
+    b.addEventListener('click', () => {
+      lastOpener = b.dataset.bcExpand ?? ''
+      ctx.openExpanded?.(b.dataset.bcExpand)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-expclose]')) {
+    b.addEventListener('click', () => {
+      ctx.closeExpanded?.()
+      /*
+        Back to the control that opened it. `render()` has replaced every node,
+        so the one to focus is found by what it opens rather than by a
+        reference captured before the redraw - #197's lesson, which cost four
+        attempts the first time.
+      */
+      document.querySelector(`[data-bc-expand="${lastOpener}"]`)?.focus()
+    })
+  }
+  const box = root.querySelector('.bcexpbox')
+  if (box !== null) box.querySelector('button, a, input, select')?.focus()
+}
+
+let lastOpener = ''
+
+/* ----------------------------- the page menu, and the voice button ------ */
+
+/*
+  THE MICROPHONE STARTS A CALL AND NOTHING ELSE.
+
+  Grant: *"Clicking the microphone should immediately activate the OpenAI voice
+  interface / pure voice mode... Do not introduce an unnecessary intermediate
+  screen or another custom chat interface."* So it calls `toggleCall`, which is
+  the studio's own path - the one the existing call panel drives - and draws
+  nothing of its own. Toggle rather than start, because a microphone that
+  cannot stop the call it began is a control with no way out.
+*/
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return
+  if (document.querySelector('[data-bc-expanded]') === null) return
+  ctx?.closeExpanded?.()
+  document.querySelector(`[data-bc-expand="${lastOpener}"]`)?.focus()
+})
+
+/*
+  The microphone beside Chat, and the state it has to show itself.
+
+  `syncCallButtons()` paints every element carrying `data-call`, which this
+  button deliberately does not: the default studio wires the FIRST such
+  element to its own handler, so borrowing the attribute would have given the
+  mic two handlers and made one press two toggles. The consequence was that
+  pressing it changed the call and nothing on screen said so - a control the
+  audit correctly read as dead. So it paints itself from the same source of
+  truth the shared painter uses.
+*/
+const paintMic = (b) => {
+  const live = callIsLive()
+  b.classList.toggle('ringing', live)
+  b.setAttribute('aria-pressed', live ? 'true' : 'false')
+  b.setAttribute('aria-label', live ? 'End the call' : 'Talk to the team out loud')
+  b.title = live ? 'End the call' : 'Start a voice call with the team'
+}
+
+const wireVoice = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-voice]')) {
+    paintMic(b)
+    b.addEventListener('click', () => {
+      toggleCall()
+      syncCallButtons()
+      paintMic(b)
+    })
+  }
+}
+
+/* --------------------------------------------------------------- contacts */
+/*
+  v2: *"Clicking a contact should show useful information/details"* and *"the
+  user should be able to add a new contact directly from the miniature"*. Both
+  presses open the Contacts tool over the home rather than navigating away,
+  which is what makes the miniature and the expanded view one tool.
+*/
+const wireContacts = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-contact]')) {
+    b.addEventListener('click', () => {
+      ctx.openContact(b.dataset.bcContact)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-contact-add]')) {
+    b.addEventListener('click', () => {
+      ctx.openContactAdd()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-contact-close]')) {
+    b.addEventListener('click', () => {
+      ctx.closeContact()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-contactadd-go]')) {
+    b.addEventListener('click', async () => {
+      const val = (id) => String(root.querySelector(`#${id}`)?.value ?? '').trim()
+      const name = val('bc-c-name')
+      if (name === '') return
+      const done = await attempt(
+        b,
+        'Adding…',
+        () =>
+          act('contact_add', {
+            p_project: ctx.state.project,
+            p_name: name,
+            p_role: val('bc-c-role') || null,
+            p_org: val('bc-c-org') || null,
+            p_email: val('bc-c-email') || null,
+            p_phone: val('bc-c-phone') || null,
+          }),
+        `${name} is on this project.`,
+      )
+      if (done !== null) {
+        ctx.closeContact()
+        await ctx.refresh()
+      }
+    })
+  }
+}
+
+/*
+  The three-dot menu that replaced "Change this page".
+
+  Closes on Escape and on a press outside, because a menu that can only be
+  closed by pressing the thing that opened it is a menu people leave open.
+*/
+const wirePageMenu = (root) => {
+  const panel = root.querySelector('[data-bc-pagemenu-panel]')
+  const trigger = root.querySelector('[data-bc-pagemenu]')
+  if (panel === null || trigger === null) return
+
+  const shut = () => {
+    panel.hidden = true
+    trigger.setAttribute('aria-expanded', 'false')
+  }
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation()
+    panel.hidden = !panel.hidden
+    trigger.setAttribute('aria-expanded', String(!panel.hidden))
+    if (!panel.hidden) panel.querySelector('button')?.focus()
+  })
+  panel.addEventListener('click', (e) => {
+    e.stopPropagation()
+  })
+  document.addEventListener('click', shut)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !panel.hidden) {
+      shut()
+      trigger.focus()
+    }
+  })
+
+  /*
+    Where the material comes from, which used to be a module. It opens as an
+    expanded view rather than a page, which is the specification's rule for
+    every expanded thing now.
+  */
+  for (const b of root.querySelectorAll('[data-bc-sources]')) {
+    b.addEventListener('click', () => {
+      shut()
+      ctx.openExpanded?.('sources')
+    })
+  }
+}
 
 /* ------------------------------------------- arranging the home (§14) --- */
 

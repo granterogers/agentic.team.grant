@@ -706,6 +706,17 @@
   margin-top: 2px;
   accent-color: var(--bc-accent);
   cursor: pointer;
+  /*
+    A NATIVE FORM CONTROL TAKES ITS COLOURS FROM THE UA, NOT FROM THIS
+    STYLESHEET, so the one place the studio's scheme could still reach into
+    this experience was the checkbox v2 made real: `color` came back
+    rgb(84,84,84) under the light preference and rgb(170,170,170) under the
+    dark one, on a surface that is the same dark concrete either way.
+    Declaring the scheme this control renders in is what stops the browser
+    deciding it from somewhere else.
+  */
+  color-scheme: dark;
+  color: var(--bc-text);
 }
 .bcitem--pending { opacity: 0.55; }
 
@@ -1155,3 +1166,59 @@
   cursor: default;
 }
 [data-experience='basecamp'] .bctop .bcbtn[disabled]:hover { background: transparent; }
+
+/*
+  A record's structured facts (§9's fifth band), as a definition list rather
+  than as a table: a table with two columns and one row per fact is a list
+  that has to be read across, and the label belongs above its value on a phone
+  where there is no room for both side by side.
+*/
+[data-experience='basecamp'] .bcfacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+}
+[data-experience='basecamp'] .bcfact dt {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+}
+[data-experience='basecamp'] .bcfact dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--bc-text);
+}
+
+/* What a contact sent, one per line. See the comment where it is rendered. */
+[data-experience='basecamp'] .bcsentlist {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+[data-experience='basecamp'] .bcsentlist li {
+  font-size: 15px;
+  color: var(--bc-text);
+  overflow-wrap: anywhere;
+}
+
+/* Two fields that are read together. One column where there is no room. */
+[data-experience='basecamp'] .bcformrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--bc-3);
+}
+
+/*
+  A SUBHEAD AFTER THE FACTS IS NOT THE FIRST THING ON THE PAGE.
+
+  `.bcsubhead:first-of-type` zeroes the top margin because a record's first
+  subhead used to sit directly under the record head. On a contact it sits
+  under the facts list, and on a phone "Notes" was rendering into the line
+  above it. Equal specificity, so this rule wins by being last, which is the
+  same source-order argument the phone overrides at the end of this file rest
+  on.
+*/
+[data-experience='basecamp'] .bcfacts + .bcsubhead { margin-top: var(--bc-8); }

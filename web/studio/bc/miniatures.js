@@ -45,6 +45,16 @@ export const mount = (c) => {
 
 /* ======================================================================== *
  * People
+ *
+ * NO FACES ON THE PROJECT HOME (project home v2). Grant: *"Do not display
+ * pictures or avatars of team members throughout the project homepage... Team
+ * imagery belongs only where it is actually relevant to interaction with the
+ * team."*
+ *
+ * `face()` stays, and is used where that is true - the chat, where a bubble
+ * without a face is a wall of text, and nowhere else. A to-do row says who by
+ * NAME, which is what a person reads anyway; a monogram beside it was decoration
+ * that made eight rows look like a contact list.
  * ======================================================================== */
 
 /**
@@ -151,14 +161,32 @@ export const listsOf = (p) => {
     .map((x) => x.l)
 }
 
+/*
+  A REAL TICK, in the miniature.
+
+  Project home v2: *"Each to-do should have a functional checkbox. Clicking the
+  checkbox in the miniature immediately marks the task as complete. The user
+  should not need to open the expanded view simply to complete a task."*
+
+  So this is an `input[type=checkbox]` carrying the task's REF, not a drawn
+  span — and the ref comes from the port, which is what keeps this line the
+  same whether the office or Vikunja is answering. A prototype row has no ref
+  and the box is disabled, which is the precedent the tasks surface already
+  set: openable is not the same as writeable.
+*/
 const taskLine = (t) => {
   const done = isDone(t)
   const who = named(t.who)
   const due = dueWords(t)
+  const ref = t.id ?? ''
   return `<li class="bctask${done ? ' bctask--done' : ''}">
-    <span class="bctick${done ? ' bctick--on' : ''}" aria-hidden="true"></span>
+    <label class="bctickhit">
+      <input type="checkbox" class="bccheck" ${done ? 'checked' : ''}
+        ${ref === '' ? 'disabled' : ''} data-bc-tick="${esc(ref)}"
+        aria-label="${esc(`${done ? 'Completed' : 'Not completed'}: ${t.title}`)}">
+    </label>
     <span class="bctasktitle">${esc(t.title)}</span>
-    ${who === '' ? '' : `<span class="bctaskwho">${face(person(t.who))}</span>`}
+    ${who === '' ? '' : `<span class="bctaskwho">${esc(who)}</span>`}
     ${due === '' ? '' : `<span class="bctaskdue${isLate(t) ? ' bctaskdue--late' : ''}">${esc(due)}</span>`}
     ${t.blocked ? status('Blocked', 'blocked') : ''}
   </li>`
@@ -325,8 +353,15 @@ export const calendarMini = (p, { items = 4 } = {}) => {
                     <span class="bcagendadd">${esc(String(Number(iso.slice(8, 10))))}</span>
                     <span class="bcagendamm">${esc(new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short' }))}</span>
                   </span>
-                  <span class="bcagendawhat">${esc(t.title)}</span>
-                  ${t.who ? face(person(t.who)) : ''}
+                  <!--
+                    Clickable, because v2 says the schedule must work in
+                    miniature: *"Clicking Schedule or its contents should
+                    actually perform an action rather than doing nothing."*
+                    It opens the to-do the date belongs to.
+                  -->
+                  <button type="button" class="bcitemtitle bclinky bcagendawhat"
+                    data-bc-task-open="${esc(t.id ?? '')}">${esc(t.title)}</button>
+                  ${t.who ? `<span class="bcagendawho">${esc(named(t.who) || t.who)}</span>` : ''}
                 </div>`,
               )
               .join('')
@@ -413,7 +448,6 @@ export const crewMini = (p, { people = 4 } = {}) => {
     ${crew
       .map(
         (c) => `<div class="bcmate">
-          ${face(c, 'md')}
           <div class="bcmatebody">
             <span class="bcmatename">${esc(c.name)}</span>
             <span class="bcmatedoing">${esc(c.doing ?? c.role ?? '')}</span>
@@ -426,7 +460,6 @@ export const crewMini = (p, { people = 4 } = {}) => {
       .slice(0, 2)
       .map(
         (w) => `<div class="bcmate bcmate--asks">
-          ${face(person(w.who), 'md')}
           <div class="bcmatebody">
             <span class="bcmatename">${esc(named(w.who) || 'The team')} needs you</span>
             <span class="bcmatedoing">${esc(w.what ?? '')}</span>
@@ -608,7 +641,7 @@ export const timelineMini = (p, { items = 5 } = {}) => {
             ${d.items
               .map(
                 (a) => `<li class="bcevent">
-                  ${a.who ? face(person(a.who)) : '<span class="bcdot" aria-hidden="true"></span>'}
+                  <span class="bcdot" aria-hidden="true"></span>
                   <span class="bceventwhat"><b>${esc(named(a.who) || a.who || 'The team')}</b>
                     ${esc(`${a.verb ?? 'changed'} ${a.what ?? ''}`.trim())}</span>
                 </li>`,
@@ -666,21 +699,28 @@ export const stateLine = (p) => {
 export const contactsMini = (p, { items = 4 } = {}) => {
   const cs = p.contacts ?? []
   if (cs.length === 0) return `<p class="bcmpty">Nobody is recorded against this project yet.</p>`
+  /*
+    v2: *"Clicking a contact should show useful information/details... The user
+    should be able to add a new contact directly from the miniature."* So each
+    row is a control that opens the person, and the pane carries Add.
+  */
   return `<div class="bccrew">
     ${cs
       .slice(0, items)
       .map(
-        (c) => `<div class="bcmate">
-          ${face({ name: c.name }, 'md')}
-          <div class="bcmatebody">
+        (c, i) => `<button type="button" class="bcmate bcmate--press" data-bc-contact="${esc(String(i))}">
+          <span class="bcmatebody">
             <span class="bcmatename">${esc(c.name)}</span>
             <span class="bcmatedoing">${esc([c.role, c.org].filter(Boolean).join(' · '))}</span>
-          </div>
+          </span>
           ${c.next ? `<span class="bcnext">${esc(c.next)}</span>` : ''}
-        </div>`,
+        </button>`,
       )
       .join('')}
-    ${cs.length > items ? `<p class="bcmore">${esc(`${cs.length - items} more`)}</p>` : ''}
+    <p class="bcmore bcdocsall">
+      ${cs.length > items ? `<span>${esc(`${cs.length - items} more · `)}</span>` : ''}
+      <button type="button" class="bclinky" data-bc-contact-add="1">Add someone</button>
+    </p>
   </div>`
 }
 

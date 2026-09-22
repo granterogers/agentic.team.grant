@@ -534,9 +534,19 @@ await open('/basecamp/p/journey-subject')
   module on the home links to the team surface, whatever the composition calls
   its slot and whatever the heading says.
 */
+/*
+  THE MODULE THAT OPENS THE TEAM, found by what it opens.
+
+  It was located by an anchor whose href ended `/team`, which was true while a
+  module heading navigated. Project home v2 made every expanded view a MODAL,
+  so the heading is a control carrying the module's id and there is no href to
+  match. What the check means is unchanged - one module on the home leads to
+  the team - so it asks for that, and this is now the second retarget of the
+  same lookup in two days, both caused by naming the mechanism.
+*/
 const teamMod = page
   .locator('.bchome [data-mod]')
-  .filter({ has: page.locator('a[href$="/team"]') })
+  .filter({ has: page.locator('[data-bc-expand="team"]') })
   .first()
 const preview = await teamMod.innerText()
 check(
@@ -545,10 +555,33 @@ check(
   preview.replace(/\n/g, ' / ').slice(0, 160),
 )
 
-const teamWay = teamMod.locator('a[href$="/team"]').first()
+const teamWay = teamMod.locator('[data-bc-expand="team"]').first()
 await teamWay.click()
 await page.waitForTimeout(700)
-check('the home opens the team surface', page.url().endsWith('/team'), page.url())
+check(
+  'the home opens the team surface AS A MODAL, without navigating away',
+  (await page.locator('[data-bc-expanded="team"]').count()) === 1 && !page.url().endsWith('/team'),
+  `dialogs: ${String(await page.locator('[data-bc-expanded]').count())}, url ${page.url()}`,
+)
+check(
+  'and the modal carries an X that closes it back to the home',
+  (await page.locator('[data-bc-expanded] [data-bc-expclose]').count()) >= 1,
+)
+await page.locator('[data-bc-expanded] .bcexpx').click()
+await page.waitForTimeout(400)
+check(
+  'closing it returns to the project home',
+  (await page.locator('[data-bc-expanded]').count()) === 0 &&
+    (await page.locator('.bcpanes').count()) === 1,
+)
+
+/*
+  The output journey below is about the TEAM SURFACE, and the modal proof above
+  deliberately ends back on the home. The address still renders that surface -
+  v2 made the modal the press, not the only way in - so the journey goes there
+  by address rather than assuming the dialog left it somewhere.
+*/
+await open('/basecamp/p/journey-subject/team')
 
 const outRow = page.locator('[data-bc-output]').first()
 const outText = await outRow.innerText()

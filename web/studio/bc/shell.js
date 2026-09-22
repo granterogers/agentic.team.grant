@@ -199,10 +199,15 @@ const currentPath = () => {
 }
 const isHere = (to) => currentPath() === to
 
-const dockButton = (cls) =>
-  `<button type="button" class="${cls}" data-bc-dock>
-    <span aria-hidden="true">✎</span><span>Ask the team</span>
-  </button>`
+/*
+  ASK THE TEAM IS GONE (project home v2).
+
+  Grant: *"Remove Ask the Team from the top of the interface. It duplicates the
+  team communication functionality."* The blue Chat button on the project head
+  opens the same sidebar, so two controls opened one thing - which is the
+  duplication rule in the same specification, met by deletion rather than by
+  renaming.
+*/
 
 /**
  * §6.1: a three-part sticky top row, and a persistent personal tray below the
@@ -241,8 +246,21 @@ const topRow = () => {
   const attentionTo = firstWaiting === undefined ? null : at(`/p/${firstWaiting.slug}/team`)
   return `<header class="bctop">
     <div class="bcleft">
-      <button type="button" class="bcbtn" data-bc-go="${at('/')}"
-        aria-current="${isHere(at('/')) ? 'page' : 'false'}">Home</button>
+      <!--
+        A HOME ICON, not the word. Grant: the icon performs the same navigation
+        without occupying space with the word. The accessible name stays, so
+        nothing is lost to anyone reading the page aloud - which is the whole
+        difference between removing a label and removing a word.
+      -->
+      <button type="button" class="bcbtn bcicon" data-bc-go="${at('/')}"
+        aria-label="Home — all your projects"
+        aria-current="${isHere(at('/')) ? 'page' : 'false'}">
+        <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none"
+          stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10.5 12 3l9 7.5"></path>
+          <path d="M5.5 9.5V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.5"></path>
+        </svg>
+      </button>
     </div>
     <button type="button" class="bcjump${here === null ? '' : ' bcjump--in'}" data-bc-jump
       aria-haspopup="dialog"
@@ -254,7 +272,6 @@ const topRow = () => {
       <span>${esc(here === null ? 'Jump to…' : here.name)}</span><kbd>Shift J</kbd>
     </button>
     <div class="bcright">
-      ${dockButton('bcbtn bcwide-only')}
       <button type="button" class="bcbtn" data-bc-attention
         ${attentionTo === null ? 'disabled' : ''}
         aria-current="${attentionTo !== null && isHere(attentionTo) ? 'page' : 'false'}"
@@ -273,7 +290,19 @@ const topRow = () => {
 
 const tray = () =>
   `<nav class="bctray" aria-label="Your things">
-    ${dockButton('bcnarrow-only')}
+    <!--
+      CHAT stays in the personal tray, renamed.
+
+      The specification removes Ask the Team from the TOP of the interface,
+      where it duplicated the project head's blue Chat button. The tray is the
+      bottom, and it is the only way into the sidebar from the portfolio, where
+      there is no project head at all - so removing it here would take the
+      typed team chat away from a phone on the projects screen rather than
+      removing a duplicate.
+    -->
+    <button type="button" class="bcnarrow-only" data-bc-dock>
+      <span aria-hidden="true">✎</span><span>Chat</span>
+    </button>
     ${trayItems()
       .map(
         (i) =>
@@ -867,7 +896,7 @@ const taskRow = (t, i = 0, listName = '') => {
       )}</span>
       ${t.blocked ? `<span class="bcitemmeta">${status('Blocked', 'blocked')} ${esc(t.blocked)}</span>` : ''}
     </div>
-    <span class="bcitemwho">${t.who ? bcMini.face({ ...((ctx?.crew ?? []).find((c) => c.slug === t.who) ?? {}), name: whoName(t.who) }) : ''}</span>
+    <span></span>
   </div>`
 }
 
@@ -1183,19 +1212,122 @@ const documentsSurface = (p) => {
     }`
 }
 
+/*
+  One person, as a record.
+
+  Contacts was a read-only list of three lines per person, and v2 asks for two
+  things it could not do: "clicking a contact should show useful information"
+  and "the user should be able to add a new contact directly from the
+  miniature". Both are views of ONE tool - the miniature, this list, the
+  record and the form share `p.contacts` and the same two state fields, so
+  there is no second copy of anybody to disagree with the first.
+*/
+const contactKey = (c, i) => String(i)
+
+const contactRecord = (p, c) => {
+  const lines = [
+    ['What they are here', [c.role, c.org].filter(Boolean).join(' · ')],
+    ['Where', c.where ?? ''],
+    ['Email', c.email ?? ''],
+    ['Phone', c.phone ?? ''],
+    ['Last heard from', c.last ?? ''],
+    ['Next', [c.next, c.nextDue].filter(Boolean).join(' · ')],
+  ].filter(([, v]) => v !== '')
+  return `${breadcrumb([
+    { name: p.name, to: at(`/p/${p.slug}`) },
+    { name: toolById('contacts')?.name ?? 'Contacts', to: at(`/p/${p.slug}/contacts`) },
+    { name: c.name },
+  ])}
+    <div class="bcrecordhead">
+      <h1>${esc(c.name)}</h1>
+      <span class="bcactions">${button('Back to Contacts', { 'data-bc-contact-close': '1' })}</span>
+    </div>
+    <dl class="bcfacts bcgap-l">
+      ${lines
+        .map(
+          ([k, v]) =>
+            `<div class="bcfact"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`,
+        )
+        .join('')}
+    </dl>
+    ${c.note ? `<h2 class="bcsubhead">Notes</h2><p class="bcpmeta bcprose">${esc(c.note)}</p>` : ''}
+    ${
+      (c.docs ?? []).length === 0
+        ? ''
+        : `<h2 class="bcsubhead">What they sent</h2>
+           <!--
+             A STACKED LIST, not the inline one. bcinline-list is a flex row
+             built for hand-off links, and two document titles laid side by
+             side in it read as one title: the first capture of this record
+             said "Whats App Audio From Ben  WhatsApp from Ben" on a single
+             line. Line breaks are not a list and neither is a row of them.
+           -->
+           <ul class="bcsentlist">${(c.docs ?? [])
+             .map((d) => `<li>${esc(d)}</li>`)
+             .join('')}</ul>`
+    }`
+}
+
+const contactForm = (p) => `${breadcrumb([
+  { name: p.name, to: at(`/p/${p.slug}`) },
+  { name: toolById('contacts')?.name ?? 'Contacts', to: at(`/p/${p.slug}/contacts`) },
+  { name: 'Add someone' },
+])}
+  <div class="bcrecordhead"><h1>Add someone</h1></div>
+  <form class="bcaddform bcgap-l" data-bc-contactform="1">
+    <!--
+      Paired, because five full-width boxes down a 1000px dialog is a form
+      that looks longer than it is. A name and what somebody is to the project
+      are read together, and so are an email and a phone.
+    -->
+    <div class="bcformrow">
+      ${input({ id: 'bc-c-name', label: 'Name', name: 'name', autocomplete: 'off' })}
+      ${input({ id: 'bc-c-role', label: 'What they are to this project', name: 'role', autocomplete: 'off' })}
+    </div>
+    <div class="bcformrow">
+      ${input({ id: 'bc-c-email', label: 'Email', name: 'email', type: 'email', autocomplete: 'off' })}
+      ${input({ id: 'bc-c-phone', label: 'Phone', name: 'phone', autocomplete: 'off' })}
+    </div>
+    ${input({ id: 'bc-c-org', label: 'Where they work', name: 'org', autocomplete: 'off' })}
+    <div class="bcrow">
+      ${button('Add', { kind: 'primary', 'data-bc-contactadd-go': '1', disabled: !canWrite() })}
+      ${button('Cancel', { 'data-bc-contact-close': '1' })}
+    </div>
+    ${
+      canWrite()
+        ? ''
+        : `<p class="bcpmeta bcprose">These are the studio's example projects, which have no
+           records behind them. Sign in and the same form writes to the real
+           project.</p>`
+    }
+  </form>`
+
 const contactsSurface = (p) => {
   const cs = p.contacts ?? []
+  if (state().bcContactAdd === true) return contactForm(p)
+  const wanted = state().bcContact
+  if (wanted !== null && wanted !== undefined) {
+    const c = cs.find((x, i) => contactKey(x, i) === String(wanted))
+    if (c !== undefined) return contactRecord(p, c)
+    /*
+      A key that names nobody is the project having moved on, not a crash: the
+      list is the honest answer and it is one press from here anyway.
+    */
+  }
   return `${crumbFor(p, 'contacts')}
-    <div class="bcrecordhead"><h1>Contacts</h1></div>
+    <div class="bcrecordhead">
+      <h1>Contacts</h1>
+      <span class="bcactions">${button('Add someone', { 'data-bc-contact-add': '1' })}</span>
+    </div>
     ${
       cs.length === 0
         ? empty({ title: 'No people recorded', body: 'People connected to this project appear here.' })
         : `<div class="bclist">${cs
             .map(
-              (c) => `<div class="bcitem">
+              (c, i) => `<div class="bcitem">
                 <span></span>
                 <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(c.name)}</span>
+                  <button type="button" class="bcitemtitle bcitemlink" data-bc-contact="${esc(contactKey(c, i))}">${esc(c.name)}</button>
                   <span class="bcitemmeta">${esc(
                     [c.role, c.org, c.where, c.last].filter(Boolean).join(' · '),
                   )}</span>
@@ -1308,7 +1440,6 @@ const card = (p, t, i) => {
     <div class="bcbmeta">
       ${list === undefined ? '' : `<span class="bcbwhere">${esc(list.name)}</span>`}
       ${t.due ? `<span class="bcbdue">${esc(t.due)}</span>` : ''}
-      ${t.who ? bcMini.face({ ...((ctx?.crew ?? []).find((c) => c.slug === t.who) ?? {}), name: whoName(t.who) }) : ''}
     </div>
     <!--
       DISABLED, NOT ABSENT, when the row has no canonical id - which is the
@@ -1480,7 +1611,7 @@ const scheduleSurface = (p) => {
                                 a person is which of these is already late.
                               -->
                               ${bcMini.isLate(t) ? status('Overdue', 'blocked') : ''}
-                              ${t.who ? bcMini.face({ ...((ctx?.crew ?? []).find((c) => c.slug === t.who) ?? {}), name: whoName(t.who) }) : ''}
+                              ${t.who ? `<span class="bcagendawho">${esc(whoName(t.who))}</span>` : ''}
                             </div>`,
                           )
                           .join('')
@@ -1812,6 +1943,57 @@ const search = () => {
  * Body selection
  * ======================================================================== */
 
+/* ======================================================================== *
+ * EXPANDED — a module's full version, as a modal over the project home
+ *
+ * Project home v2: *"When a module needs its expanded view, it should open as
+ * a pop-up/modal overlay, rather than navigating away to a completely separate
+ * page. The expanded interface should have an appropriately positioned X for
+ * closing it. Closing it should return naturally to the underlying project
+ * homepage."*
+ *
+ * ONE IMPLEMENTATION, TWO CONTAINERS. The expanded view is the SAME renderer
+ * the address already used - `tasksSurface`, `documentsSurface` and the rest -
+ * drawn inside a dialog instead of in the page. It is not a second
+ * implementation of each tool, which the specification forbids in the contacts
+ * section by name and which is what a modal built beside a page always becomes.
+ *
+ * The addresses still work, because a deep link to a tool is a different thing
+ * from a press on the home, and losing one to gain the other would be trading
+ * a defect for a defect.
+ * ======================================================================== */
+
+const EXPANDED_NAME = {
+  tasks: 'To-dos',
+  board: 'Card Table',
+  documents: 'Docs & Files',
+  schedule: 'Schedule',
+  team: 'The team',
+  contacts: 'People',
+  sources: 'Where the material comes from',
+  activity: 'Latest activity',
+}
+
+const expandedOverlay = (p) => {
+  const id = state().bcExpanded
+  if (id === null || id === undefined || id === '') return ''
+  const render = SURFACE[id]
+  if (render === undefined) return ''
+  return `<div class="bcexp" data-bc-expanded="${esc(id)}">
+    <div class="bcexpback" data-bc-expclose="1"></div>
+    <div class="bcexpbox" role="dialog" aria-modal="true"
+      aria-label="${esc(EXPANDED_NAME[id] ?? id)}">
+      <button type="button" class="bcexpx" data-bc-expclose="1" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
+      <div class="bcexpbody">${render(p)}</div>
+    </div>
+  </div>`
+}
+
 const body = () => {
   const s = state()
   if (s.view === 'bcsearch') return search()
@@ -1831,7 +2013,7 @@ const body = () => {
     */
     if (s.tab === 'overview') {
       const pick = compose.chosen()
-      if (pick !== 'grid') return compose.COMPOSITIONS[pick](p)
+      if (pick !== 'grid') return `${compose.COMPOSITIONS[pick](p)}${expandedOverlay(p)}`
     }
     const render = SURFACE[s.tab] ?? overview
     return render(p)

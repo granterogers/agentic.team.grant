@@ -35,8 +35,18 @@ const check = (what: string, ok: boolean, detail = ''): void => {
 
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 
-/* The five §21 names, and where the home must put them. */
-const REQUIRED = ['tasks', 'board', 'documents', 'schedule', 'chat']
+/*
+  What the home must carry, and what it must NOT.
+
+  §21 named five, and project home v2 removed one of them: *"Remove the Chat to
+  the Team module from the project homepage. Do not replace it with another
+  chat module. It is completely superfluous when the sidebar already provides
+  this functionality."* So chat moved from the required list to the forbidden
+  one, and it is checked in both directions — a requirement that is only ever
+  tested for presence cannot notice a removal being undone.
+*/
+const REQUIRED = ['tasks', 'board', 'documents', 'schedule']
+const FORBIDDEN = ['chat', 'sources']
 
 /* ------------------------------------------------- the desktop first view */
 {
@@ -80,6 +90,40 @@ const REQUIRED = ['tasks', 'board', 'documents', 'schedule', 'chat']
       b === undefined ? 'the pane is not on the home at all' : `it runs to ${String(b.bottom)}px`,
     )
   }
+  for (const id of FORBIDDEN) {
+    check(`${id} is NOT a module on the home (project home v2)`, where[id] === undefined)
+  }
+
+  /* --- the chrome v2 specifies, each asserted where it actually is --- */
+  check(
+    'the blue Chat button is on the project head',
+    (await page.locator('.bcheadacts [data-bc-dock]').count()) === 1,
+  )
+  check(
+    'a microphone sits beside it, as its own control',
+    (await page.locator('.bcheadacts [data-bc-voice]').count()) === 1,
+  )
+  check(
+    'Ask the team is gone from the top of the interface',
+    (await page.locator('.bctop').innerText()).toLowerCase().includes('ask the team') === false,
+    await page.locator('.bctop').innerText(),
+  )
+  check(
+    'Change this page is gone, and a three-dot menu is there instead',
+    (await page.locator('[data-bc-pagemenu]').count()) === 1 &&
+      (await page.locator('.bchead').innerText()).includes('Change this page') === false,
+  )
+  /*
+    NO TEAM IMAGERY ON THE HOME. v2: *"Do not display pictures or avatars of
+    team members throughout the project homepage."* Asserted as the absence of
+    the face element anywhere inside the home, which is a property rather than
+    a list of the places it used to appear.
+  */
+  check(
+    'no avatars or monograms anywhere on the project home',
+    (await page.locator('.bchome .bcface').count()) === 0,
+    `${String(await page.locator('.bchome .bcface').count())} still drawn`,
+  )
 
   /*
     A PANE, NOT A CARD. The point of §21 is that Docs and Files shows the
@@ -207,12 +251,19 @@ const REQUIRED = ['tasks', 'board', 'documents', 'schedule', 'chat']
     )) as string[]
 
   const before = await mods()
-  check('the home starts with every tool on it', before.length >= 8, before.join(','))
+  check('the home starts with every tool on it', before.length >= 6, before.join(','))
 
+  /*
+    Arranging lives in the three-dot menu now, so it has to be opened first.
+    The check timed out on a hidden control the moment v2 moved it, which is
+    the audit noticing a real change rather than a defect.
+  */
+  await page.locator('[data-bc-pagemenu]').first().click()
+  await page.waitForTimeout(150)
   await page.locator('[data-bc-arrange]').first().click()
   await page.waitForTimeout(200)
   check(
-    'Change this page opens a panel naming every tool',
+    'the three-dot menu opens a panel naming every tool',
     (await page.locator('[data-bc-arrange-panel] .bcarrrow').count()) === before.length,
   )
 
@@ -244,6 +295,8 @@ const REQUIRED = ['tasks', 'board', 'documents', 'schedule', 'chat']
   await page.waitForTimeout(300)
   check('and the removal survives a reload', !(await mods()).includes('documents'))
 
+  await page.locator('[data-bc-pagemenu]').first().click()
+  await page.waitForTimeout(150)
   await page.locator('[data-bc-arrange]').first().click()
   await page.waitForTimeout(200)
   await page.locator('[data-bc-arr-on="documents"]').click()

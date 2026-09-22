@@ -45,7 +45,6 @@ import {
   contactsMini,
   crewMini,
   docsMini,
-  face,
   mineAndTeam,
   sourcesMini,
   stateLine,
@@ -107,7 +106,12 @@ export const choose = (v) => {
 const mod = (p, { id, name, body, wide = false, slot = '', meta = '' }) =>
   `<section class="bcmod${wide ? ' bcmod--wide' : ''}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}">
     <header class="bcmodhead">
-      <h2><a href="${esc(at(`/p/${p.slug}/${id}`))}" data-bc-go="${esc(at(`/p/${p.slug}/${id}`))}">${esc(name)}</a></h2>
+      <!--
+        THE HEADING OPENS THE EXPANDED VIEW, as a modal over this page, rather
+        than navigating away to a separate one. The address still exists and
+        still works; this is the press, not the only way in.
+      -->
+      <h2><button type="button" class="bclinky bcmodopen" data-bc-expand="${esc(id)}">${esc(name)}</button></h2>
       ${meta === '' ? '' : `<span class="bcmodmeta">${esc(meta)}</span>`}
     </header>
     <div class="bcmodbody">${body}</div>
@@ -121,19 +125,58 @@ const mod = (p, { id, name, body, wide = false, slot = '', meta = '' }) =>
  * line sits directly under the name because it is the answer to the question
  * §2 says this page exists to answer.
  */
+/*
+  No presence cluster in the head either: project home v2 takes team imagery
+  off this page entirely, and a row of monograms beside the project name was
+  the most decorative instance of it.
+*/
 const head = (p) => {
-  const crew = (ctx?.crewFor?.(p.slug) ?? []).slice(0, 6)
   return `<header class="bchead">
     <div class="bcheadtop">
       <h1>${esc(p.name)}</h1>
-      <span class="bcpresence">${crew.map((c) => face(c)).join('')}</span>
     </div>
     ${p.purpose ? `<p class="bcheadwhy">${esc(p.purpose)}</p>` : ''}
     <div class="bcheadrow">
       ${stateLine(p)}
       <span class="bcheadacts">
-        ${button('Talk to the team', { kind: 'primary', 'data-bc-dock': '1' })}
-        ${button('Change this page', { 'data-bc-arrange': '1' })}
+        ${button('Chat', { kind: 'primary', 'data-bc-dock': '1' })}
+        <!--
+          THE MICROPHONE IS A SEPARATE CONTROL, and it starts the call rather
+          than opening anything. Grant: do not introduce an intermediate screen
+          or another custom chat interface when the microphone is clicked. So
+          it presses the studio's own voice path, the same one the call panel
+          uses, and nothing is drawn in between.
+        -->
+        <button type="button" class="bcbtn bcicon bcmic" data-bc-voice="1"
+          aria-label="Talk to the team out loud">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+            <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
+            <path d="M12 18v3"></path>
+          </svg>
+        </button>
+        <!--
+          A three-dot menu, which is where page-level things live now: how this
+          page is arranged, where the material comes from, and the project's
+          settings. Grant asked for the conventional control rather than a
+          sentence, and for those two modules to stop occupying dashboard space.
+        -->
+        <span class="bcmenuwrap">
+          <button type="button" class="bcbtn bcicon" data-bc-pagemenu="1"
+            aria-haspopup="menu" aria-expanded="false" aria-label="More about this page">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+              <circle cx="5" cy="12" r="1.7"></circle>
+              <circle cx="12" cy="12" r="1.7"></circle>
+              <circle cx="19" cy="12" r="1.7"></circle>
+            </svg>
+          </button>
+          <div class="bcmenu" data-bc-pagemenu-panel role="menu" hidden>
+            <button type="button" role="menuitem" data-bc-arrange="1">Arrange this page</button>
+            <button type="button" role="menuitem" data-bc-sources="1">Where the material comes from</button>
+            <button type="button" role="menuitem" data-bc-leave="/p/${esc(p.slug)}/settings">Project settings</button>
+          </div>
+        </span>
       </span>
     </div>
   </header>`
@@ -199,16 +242,7 @@ const elsewhere = (p) => {
  * of ids and not a list of records.
  */
 
-const ALL = [
-  'tasks',
-  'board',
-  'documents',
-  'schedule',
-  'chat',
-  'team',
-  'contacts',
-  'sources',
-]
+const ALL = ['tasks', 'board', 'documents', 'schedule', 'team', 'contacts']
 
 const KEY = (slug) => `bc.home.${slug}`
 
@@ -253,10 +287,8 @@ const NAMES = {
   board: 'Card Table',
   documents: 'Docs & Files',
   schedule: 'Schedule',
-  chat: 'Chat',
   team: 'The team',
   contacts: 'People',
-  sources: 'Where the material comes from',
 }
 
 /** The panel that changes the home, opened from the head. */
@@ -408,10 +440,16 @@ const boardMods = (p) => [
   { id: 'board', name: 'Card Table', body: cardsMini(p) },
   { id: 'documents', slot: 'documents', name: toolName('documents', 'Docs & Files'), body: docsMini(p, { items: 3 }) },
   { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 3 }) },
-  { id: 'chat', name: 'Chat', body: chatMini(p, { lines: 2 }) },
+  /*
+    NO CHAT MODULE. Grant: *"It is completely superfluous when the sidebar
+    already provides this functionality."* The sidebar is the typed team chat,
+    the blue Chat button opens it, and nothing on the home repeats it.
+
+    NO SOURCES MODULE either - *"not useful enough to occupy dashboard space"* -
+    it is in the three-dot menu.
+  */
   { id: 'team', name: toolName('team', 'The team'), body: crewMini(p, { people: 3 }) },
   { id: 'contacts', name: toolName('contacts', 'People'), body: contactsMini(p, { items: 3 }) },
-  { id: 'sources', name: 'Where the material comes from', body: sourcesMini(p, { items: 3 }) },
 ]
 
 export const compositionC = (p) => {

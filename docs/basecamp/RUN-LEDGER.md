@@ -1264,6 +1264,96 @@ than an attempt. It worked first time.
 **https://agentic-team-hq-basecamp.vercel.app** now opens on the project home.
 
 ---
+
+## Project home v2 — the first slice
+
+Grant's v2 specification is at `docs/spec/project-home-v2-2026-09-22.md`,
+verbatim, persisted before any code was written. What landed in this slice,
+and what did not, stated separately because a list of forty requirements with
+no honest division is a list nobody can act on.
+
+### Done
+
+- **No team imagery on the project home.** Every `face()` call is out of the
+  home modules; an assignee is their name.
+- **Chat is not a home module.** The sidebar is the typed conversation, "Ask
+  the Team" is gone, and *Talk to the Team* is now a blue **Chat** button on
+  the project head that opens it.
+- **A microphone beside it** starts the voice call with no intermediate
+  screen.
+- **A three-dot menu** replaced "Change this page". It holds *Arrange this
+  page*, *Where the material comes from* — which v2 removes as a module — and
+  *Project settings*.
+- **Expanded views are modals** over the home with an X, opened from a
+  module's heading, closed on Escape with focus restored to the heading that
+  opened it.
+- **Heavier module borders, a hover glow and a gradient face**, as four tokens
+  on the experience rather than as rules scattered through six selectors.
+- **To-dos carries real checkboxes** in miniature and expanded.
+- **Schedule and To-dos act in miniature**: an agenda item and a task title
+  both open that task's record.
+- **Contacts is interactive**: a person opens their record, the pane adds
+  somebody, and the expanded view is the same data through the same two state
+  fields rather than a second copy.
+- **The Vikunja port** (`web/studio/bc/todos.js`) is written and documents the
+  two places a naive implementation would need rewriting later: a LIST is a
+  milestone task here and a nested project or bucket there, so the port
+  carries an opaque list id; and **priority runs the other way**, so the port
+  speaks in words.
+
+### Still to build
+
+Freeform drag and resize with reflow (which also removes the up/down
+arrangement); Schedule expanded with event creation; documents clickable in
+list view; thumbnails for every file type; Add File from Google Drive;
+removal of the legacy Project Settings interface; per-project appearance
+(heading colour, icon, background); third-party logos; and routing the To-dos
+writes through the port rather than through `act('task_state')` directly.
+
+### What the checks had to learn, and what they found
+
+Four defects, all of them in this slice, all of them found by a check or a
+capture rather than by reading:
+
+1. **Eight dead controls.** `openTask` set the record and repainted — and on
+   the home there is nowhere for a record to draw, so every task title and
+   every agenda item was a press that changed nothing. Opening one from the
+   home now opens To-dos over the page with that record in it. The contacts
+   controls had no handler at all.
+2. **The microphone said nothing when pressed.** `syncCallButtons()` paints
+   `[data-call]`, which this button deliberately does not carry: the default
+   studio wires the first such element to its own handler, so borrowing the
+   attribute would have made one press two toggles. It paints itself from
+   `callIsLive()` instead.
+3. **A studio token reached into the experience through a native control.**
+   The real checkbox took its `color` from the UA — rgb(84,84,84) under the
+   light preference, rgb(170,170,170) under the dark one — on a surface that
+   is the same dark concrete either way. `basecamp:measure` found it;
+   `color-scheme: dark` on the control fixed it.
+4. **Four screens went uncaptured at every width.** The shots harness pressed
+   *Change this page*, which v2 had moved into the menu, and waited thirty
+   seconds for it. A screen with no capture is a screen nobody is watching, so
+   the harness opens the menu the way a person does — and the menu, the
+   contact record and the add form now have captures of their own.
+
+And two the captures found, neither of which any suite could have: *Back to
+Contacts* rendering underneath the dialog's X, half of it unreachable, on the
+one surface where the breadcrumb is hidden and it is the only way back; and
+two document titles laid side by side in a flex list, reading as one title.
+
+**Reachability was retargeted, for the third time in two days, and every one
+of those retargets was caused by a check naming the MECHANISM.**
+`verify:basecamp-preservation` asked for a link to each section; v2 makes a
+module heading a button that expands in place and moves Sources into the
+menu. What the check MEANS is unchanged — a person on the project home can
+get to every section the default studio has — so it asks for that: a link, or
+a control that expands it, or an item in the menu that opens it. Both new
+lookups get a positivity floor first, because the menu is rendered `hidden`
+and an empty panel and a missing one are indistinguishable from a count.
+Proved by removing `data-bc-expand` from the module heading and watching four
+checks go red, with the sabotage printing its own effect first.
+
+---
 ## NEXT ACTION
 
 **It is live — look at it.** https://agentic-team-hq-basecamp.vercel.app
