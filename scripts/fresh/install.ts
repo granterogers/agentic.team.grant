@@ -26,6 +26,22 @@
  * for a local disposable database instead, which is how the acceptance journeys
  * run with no account at all.
  *
+ * ## It is one statement, so an interruption leaves nothing
+ *
+ * The schema, the seed and the migration ledger go in as a SINGLE execute.
+ * `SqlExecutor`'s atomicity contract is that the whole string is applied
+ * all-or-nothing, over either transport, so a person who presses Ctrl-C
+ * halfway — or whose laptop sleeps, or whose network drops — is left with the
+ * empty database they started with rather than a half-built one. Running it
+ * again then simply works.
+ *
+ * The alternative shapes are all worse. Three separate calls would leave a
+ * database with a schema and no seed, which looks installed and is not; a
+ * resume flag would have to know which of the three got through, and would be
+ * wrong the first time somebody interrupted it somewhere new. Journey D asks
+ * for safe resume with no duplication, and the cheapest way to resume safely is
+ * to have nothing to resume from.
+ *
  * ## What it refuses
  *
  * An installation that already exists. `app.schema_migrations` holding rows
@@ -114,7 +130,7 @@ async function main(): Promise<void> {
   }
 
   const existing = await alreadyInstalled(target.executor)
-  if (existing !== null) {
+  if (existing !== null && existing > 0) {
     console.error(
       `\nREFUSED: ${target.describe} already has an office in it — ` +
         `app.schema_migrations records ${existing} migration(s).\n\n` +
@@ -128,19 +144,14 @@ async function main(): Promise<void> {
   const schema = await readFile(join(BASELINE, 'schema.sql'), 'utf8')
   const seed = await readFile(join(BASELINE, 'seed.sql'), 'utf8')
 
-  console.log('applying the schema…')
-  await target.executor.execute(schema)
-  console.log('applying the seed…')
-  await target.executor.execute(seed)
-
   /*
     Record the migrations the baseline represents.
 
-    Without this the next `npm run migrate` would try to apply all 535 from the
-    beginning against a database that already has them, and fail immediately and
-    confusingly. With it, a fresh installation and one that replayed the corpus
-    are indistinguishable to the runner — which is the property that makes
-    journey I, the upgrade, work at all.
+    Without this the next `npm run migrate` would try to apply all of them from
+    the beginning against a database that already has them, and fail
+    immediately and confusingly. With it, a fresh installation and one that
+    replayed the corpus are indistinguishable to the runner — which is the
+    property that makes journey I, the upgrade, work at all.
 
     Checksums are computed from the files on disk, which is what the runner
     compares against. Anything else would be a second copy of the truth.
@@ -151,11 +162,13 @@ async function main(): Promise<void> {
     const sql = await readFile(join('migrations', name), 'utf8')
     values.push(`(${quote(name)}, ${quote(sha256(sql))})`)
   }
+
+  console.log(`applying the schema, the seed and ${names.length} ledger entries, in one step…`)
   await target.executor.execute(
-    `insert into app.schema_migrations (name, checksum) values ${values.join(',')} ` +
-      'on conflict (name) do nothing',
+    `${schema}\n${seed}\n` +
+      `insert into app.schema_migrations (name, checksum) values ${values.join(',')} ` +
+      'on conflict (name) do nothing;',
   )
-  console.log(`recorded ${names.length} migration(s) as applied`)
 
   const after = await alreadyInstalled(target.executor)
   console.log(`\nINSTALLED — app.schema_migrations records ${after ?? 0} migration(s)`)

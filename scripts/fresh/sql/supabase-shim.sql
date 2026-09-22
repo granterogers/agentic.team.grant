@@ -71,7 +71,20 @@ begin
   end loop;
   -- Supabase's `authenticator` can become the other three. Some migrations
   -- assume that chain exists when they test a grant with SET LOCAL ROLE.
-  execute 'grant anon, authenticated, service_role to authenticator';
+  --
+  -- Granted only when it is not already: the roles live in the CLUSTER, not in
+  -- the database, so a second harness database on the same machine re-runs this
+  -- and Postgres emits three NOTICEs about memberships that already exist. Not
+  -- an error, and noise at the top of every acceptance run is how a real
+  -- warning gets skimmed past.
+  if not exists (
+    select 1 from pg_auth_members m
+      join pg_roles r on r.oid = m.roleid
+      join pg_roles g on g.oid = m.member
+     where r.rolname = 'anon' and g.rolname = 'authenticator')
+  then
+    execute 'grant anon, authenticated, service_role to authenticator';
+  end if;
 end $$;
 
 -- ---------------------------------------------------------------------------
