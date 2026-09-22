@@ -1,0 +1,366 @@
+# MISSION — project workspace overhaul, 22 September 2026
+
+**Read this first if the conversation has been compacted.** It is Grant's brief,
+verbatim, followed by a requirement ledger that is updated as work proceeds.
+Compaction is NOT a stopping condition and NOT a reason to ask him to repeat
+anything: recover the mission from this file and continue.
+
+Branch: `claude/basecamp-team-hq`. Never merge to `main`. Never damage or
+replace the default Team HQ. Never claim verification that did not happen.
+
+---
+
+## His brief, verbatim
+
+You are continuing the UX and functional overhaul of the Agentic Team project interface.
+This is an implementation task, not a planning exercise and not a GitHub-issue-writing exercise. Inspect the existing implementation, reproduce the defects where appropriate, make the changes, test them in the real interface, and continue until this entire batch has been addressed as far as technically possible.
+
+CRITICAL: SURVIVE CONTEXT COMPACTION
+Before substantial implementation work:
+
+1. Persist this complete mission and its acceptance criteria in an appropriate repository handover/autonomous-run document.
+2. Record progress against each requirement as work proceeds.
+3. Record important architectural decisions, discoveries, remaining defects, and verification results.
+4. If the conversation is compacted, immediately recover the mission from the repository rather than relying on conversational memory.
+5. Do not treat compaction as a reason to stop, ask Grant to repeat instructions, or quietly drop requirements.
+6. Before declaring completion, reconcile the implementation against the persisted requirements one by one.
+7. A requirement is not complete merely because code exists. Verify actual user-visible behaviour wherever practical.
+
+Do not create dozens of GitHub issues instead of doing the work. Fix defects directly. Create an issue only where genuinely useful for something that cannot responsibly be completed during this run.
+
+### PROJECT HOMEPAGE / MODULE SYSTEM
+
+**Expand/collapse behaviour**
+At present, expanding some minimized panels requires clicking precisely on the title text.
+Change this so that the entire module header/top section is the interaction target for expanding/collapsing the module.
+It should feel obvious and forgiving rather than requiring pixel-precise clicking.
+Do not allow interactive controls within the header, such as three-dot menus, to accidentally trigger expansion.
+
+**Dynamic module layout**
+The project homepage is intended to behave as a configurable workspace, not a static collection of cards.
+Implement proper:
+
+* drag-and-drop module repositioning;
+* dynamic module resizing;
+* sensible minimum sizes;
+* sensible maximum sizes;
+* collision prevention;
+* responsive rearrangement;
+* persistence of the user's chosen layout where appropriate.
+
+Grant should be able to make Documents larger, make another module smaller, reposition modules, etc.
+Do not substitute crude up/down controls for genuine spatial rearrangement.
+Modules must not overlap or create broken layouts.
+
+**Panel overflow**
+Remove patterns such as "One More" being used merely because additional content does not fit.
+Modules containing more data than their visible area should instead become internally scrollable.
+Implement attractive, unobtrusive, visually consistent scrollbars across modules wherever overflow exists.
+The scrollbar treatment should fit the premium visual direction of the new UI rather than looking like an unstyled browser default.
+
+**Screen width**
+The project homepage currently wastes too much horizontal screen space.
+Allow the workspace to occupy substantially more of the available viewport width while retaining a tasteful outer margin.
+The layout should adapt intelligently to larger desktop displays rather than remaining unnecessarily constrained.
+
+### TO-DOS
+The miniature To-Dos module remains functionally broken.
+Fix interaction so that:
+
+* task checkboxes work;
+* tasks themselves can be clicked where appropriate;
+* changes immediately update the interface;
+* state persists correctly;
+* the miniature view reflects the real underlying task state.
+
+The expanded To-Dos interface has the same fundamental problem.
+Fix it so that tasks and checkboxes are genuinely interactive there as well.
+Do not accept an interface that merely looks interactive.
+Change: "Add a List" to: "Add a Task" unless there is a genuine separate list-creation function that requires a distinct command.
+
+### DOCS & FILES
+File behaviour is inconsistent.
+Some PDFs can be clicked while other assets cannot.
+Audit the file/document interaction rather than patching only one example.
+Known examples include:
+
+* the Grant Rogers avatar document having no useful thumbnail and not opening;
+* audio files not being clickable/useful.
+
+Support the file types represented in the project properly.
+Where appropriate:
+
+* clicking a file should open/preview it;
+* thumbnails/previews should appear;
+* audio should have usable playback;
+* unsupported preview formats should still have a sensible open/download/details action;
+* broken/missing thumbnails should have attractive fallbacks.
+
+Do not design Docs & Files around PDFs alone.
+
+### SCHEDULE
+Schedule entries currently contain broken references.
+For example, clicking "Conduct first five interviews" can produce: "This task is not in the project anymore."
+Investigate the underlying relationship between schedule entries and tasks rather than hiding the error.
+Repair stale/broken references where possible and ensure schedule entries resolve to the correct underlying object.
+The schedule must not routinely display clickable objects that lead nowhere.
+
+### SOURCES
+In the three-dot menu, replace the wording "Where the material comes from" with simply "Sources".
+Grant has repeatedly requested visual identification of sources.
+Add the appropriate logo/icon next to each source.
+Do not leave this as another text-only source list.
+The source should be recognizable visually as well as by name.
+
+### CHAT WITH TEAM
+Rename the current "Chat" button to "Chat with Team".
+Clicking it should open the team chat sidebar.
+Clicking the same button again should close the sidebar.
+The control therefore behaves as a genuine toggle.
+The sidebar should expose useful chat history, rather than behaving as though every interaction starts from nothing.
+Keep team avatars/photos confined to the chat experience where they are useful; do not scatter agent portraits around unrelated project modules.
+
+### VOICE TEAM / MICROPHONE
+The microphone control next to Chat with Team currently appears to do nothing.
+This is a functional defect.
+Wire the microphone button into the intended pure voice conversation with the Agentic Team using the OpenAI voice/realtime interface.
+Trace the interaction end-to-end: button to voice interface/session to microphone/audio permissions to connection to conversation to cleanup/end state.
+Do not merely attach a click handler that does not result in a usable voice session.
+Verify the real behaviour.
+The microphone control should also have appropriate visual prominence.
+It currently feels undersized relative to Chat with Team.
+Make its button/icon sizing, hit area, spacing and visual weight harmonious with the adjacent Chat with Team control.
+The two controls should clearly look like sibling primary communication actions: Chat with Team | Microphone
+while remaining visually distinct enough that the user understands one is text chat and the other is immediate voice conversation.
+Provide sensible loading, permission, connecting, active, error and disconnected states where applicable.
+
+### REMOVE AGENTIC TEAM DASHBOARD PANEL
+The standalone Agentic Team panel on the project homepage is superfluous.
+Remove it.
+Configuration/management of the agentic team belongs in Settings rather than consuming project-dashboard real estate.
+Do not remove the actual team/chat functionality - only the redundant homepage panel.
+
+### CONTACTS
+Change "Add Someone" to "Add Contact".
+Expand Contacts from a mostly static display into an editable contact-management component.
+Each contact should support an optional profile/client image upload.
+Contacts should support useful metadata including, where appropriate:
+
+* name;
+* organisation/company;
+* role;
+* email;
+* telephone;
+* website;
+* Instagram/social profile;
+* other relevant links;
+* notes;
+* image/avatar;
+* other existing contact fields.
+
+Do not force every field to be populated.
+
+**Editing**
+Existing contacts must be editable.
+Grant should be able to open a contact and:
+
+* change existing data;
+* add missing data;
+* replace/remove the image;
+* add or update website/social information;
+* edit notes;
+* correct details later.
+
+**Notes**
+Notes must not be read-only decoration.
+They should be genuinely editable and persisted.
+The general rule should be: If information about a contact is displayed as user-managed contact data, there should be a sensible way to edit it.
+Use appropriate validation for URLs/email/etc. without making the interface cumbersome.
+
+### CARD TABLE
+The Card Table module currently appears to be interactive but clicking it can do nothing.
+Fix this.
+When opened, the Card Table itself needs a substantial functional pass.
+Cards must be dynamically draggable between columns.
+Moving a card must update its actual underlying state rather than merely animating the UI.
+Make column/status differences immediately legible.
+Use tasteful colour coding according to the card's current column/status.
+The result should feel like a real lightweight Kanban board.
+Test: opening the Card Table; moving cards; persistence; moving repeatedly between columns; empty columns; long columns; scrolling; responsive behaviour.
+
+### NAVIGATION / BACK BUTTON
+At present, using the browser Back button or a mouse Back button while inside an expanded module can immediately throw the user back to Project Selection.
+Improve navigation-state handling.
+Desired hierarchy:
+
+1. If a modal/expanded module/detail view is open, Back should close that first.
+2. If an internal project navigation state can sensibly be reversed, Back should reverse it.
+3. Only when the user is genuinely back at the root project view should another Back action navigate away toward Project Selection/Home.
+
+Where technically appropriate, use browser history/state correctly rather than hijacking the Back button in a brittle way.
+Test this specifically with browser Back and mouse Back navigation.
+
+### LATEST ACTIVITY
+Latest Activity currently appears acceptable.
+Do not redesign it simply for the sake of changing something.
+Only touch it if necessary for consistency or because testing exposes a genuine defect.
+
+### REMOVE REDUNDANT "ELSEWHERE ON THIS PROJECT" MODULE
+Remove the "Elsewhere on this project..." style module.
+Its purpose is redundant because Project Settings already exists within the three-dot project menu.
+Avoid duplicate navigation and unnecessary dashboard clutter.
+
+### PROJECT SETTINGS
+Project Settings is still exposing the old-fashioned/legacy interface.
+Do not continue mixing the redesigned project UI with legacy screens.
+Project Settings should be migrated to the same current visual system and interaction language as the redesigned interface.
+However, do not invent or unnecessarily expand the Settings information architecture during this pass.
+The immediate requirement is:
+
+* stop dropping the user into an obviously legacy-looking interface;
+* make Project Settings visually coherent with the new application;
+* preserve existing settings functionality;
+* avoid regressions.
+
+A more detailed settings review can happen separately.
+
+### GLOBAL SETTINGS
+The global Settings page is also still using the old interface.
+This is now explicitly technical debt that must be addressed.
+Create a replacement interface using the same design system as the new project experience:
+
+* typography;
+* spacing;
+* card/panel treatment;
+* borders;
+* shadows;
+* controls;
+* buttons;
+* navigation;
+* interaction states;
+* responsive behaviour;
+* premium visual finish.
+
+Do not simply recolour the legacy page.
+Move it properly into the new design system while preserving the underlying settings capabilities.
+This can be treated as its own coherent workstream within this run if appropriate.
+
+### VISUAL / INTERACTION QUALITY
+Throughout this work, preserve the intended premium character of the interface.
+Controls should have: obvious but tasteful hover states; generous hit targets; consistent border weights; attractive shadows/depth where appropriate; coherent typography; polished animations/transitions; visible focus states; clear disabled/loading/error states.
+Avoid thin, lifeless borders and controls that technically exist but do not visually communicate interactivity.
+Do not sacrifice usability for decorative effects.
+
+### SYSTEMIC AUDIT
+Do not assume that the examples Grant reported are the only occurrences.
+For each defect class, search for the systemic cause.
+Examples: If one checkbox is dead, inspect other checkbox implementations. If one document cannot open, inspect file handling generally. If one schedule item references a deleted task, inspect reference integrity generally. If one module cannot resize, inspect the entire dashboard layout architecture. If one legacy screen remains, inspect navigation routes that can unexpectedly expose other legacy UI.
+Fix the class of defect where practical rather than playing whack-a-mole with individual examples.
+
+### VERIFICATION
+Use the real running application/browser-based testing wherever practical.
+Do not declare success solely from: TypeScript compiling; tests passing; components rendering; click handlers existing.
+Exercise the interface as a user would.
+At minimum verify the important journeys:
+
+* expand/collapse modules by clicking their headers;
+* resize modules;
+* reposition modules;
+* scroll overflowing modules;
+* tick miniature To-Dos;
+* tick expanded To-Dos;
+* add a task;
+* open multiple file types;
+* play/open an audio asset;
+* open schedule entries;
+* inspect Sources and their icons;
+* open Chat with Team;
+* close Chat with Team using the same button;
+* inspect chat history;
+* launch voice from the microphone;
+* edit an existing contact;
+* upload/change a contact image;
+* edit contact notes;
+* open Card Table;
+* drag cards between columns;
+* verify card state persists;
+* exercise browser/mouse Back behaviour;
+* open Project Settings;
+* inspect global Settings;
+* verify removed redundant modules are genuinely gone;
+* test at relevant desktop widths and responsive/mobile sizes.
+
+Where something cannot be fully tested because an external credential/service is unavailable, distinguish clearly between: implemented, automatically verified, and requires external/live verification.
+Never represent the third category as fully verified.
+
+### COMPLETION STANDARD
+Before stopping:
+
+1. Re-read the persisted mission document.
+2. Compare every requirement against the actual implementation.
+3. Run relevant automated tests.
+4. Perform browser/user-journey testing.
+5. Check for regressions.
+6. Check responsive layouts.
+7. Check console/runtime errors.
+8. Check persistence after reload where applicable.
+9. Check that no legacy or duplicate implementation remains accidentally exposed.
+10. Update the persistent run/handover document with exact final status.
+
+Do not stop merely because the first obvious defects have been fixed.
+Continue through this complete batch autonomously.
+At the end, provide Grant with a concise reconciliation: what was fixed; what was changed systemically; what was tested in the real interface; anything genuinely remaining; anything requiring credentials/external verification; relevant commits/deployment status.
+
+The objective is not to make the screenshots look approximately right.
+The objective is to make the project workspace actually behave like the polished, configurable, interactive project-management interface Grant has been describing.
+
+---
+
+## Requirement ledger
+
+Status words mean exactly one thing each:
+
+- **implemented** — the code is written and the gates pass.
+- **verified** — driven in a real browser in this repository's harness, and the
+  user-visible behaviour was asserted.
+- **live-only** — needs a credential or an external service this sandbox does
+  not have. Never reported as verified.
+
+| # | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | Whole module header expands/collapses; header controls do not | pending | |
+| 2 | Drag-and-drop module repositioning | pending | |
+| 3 | Module resizing, min and max sizes | pending | |
+| 4 | Collision prevention, no overlap | pending | |
+| 5 | Responsive rearrangement | pending | |
+| 6 | Layout persistence | pending | |
+| 7 | No "one more" overflow; modules scroll internally | pending | |
+| 8 | Styled, consistent scrollbars | pending | |
+| 9 | Workspace uses much more viewport width, tasteful margin | pending | |
+| 10 | Miniature To-dos: checkboxes work, immediate, persisted | pending | |
+| 11 | Expanded To-dos genuinely interactive | pending | |
+| 12 | "Add a List" becomes "Add a Task" | pending | |
+| 13 | Docs and Files: every file type opens sensibly | pending | |
+| 14 | Thumbnails or attractive fallbacks for every type | pending | |
+| 15 | Audio playback | pending | |
+| 16 | Schedule entries resolve to the right object; no dead links | pending | |
+| 17 | Three-dot wording becomes "Sources" | pending | |
+| 18 | Source logos or icons | pending | |
+| 19 | "Chat" becomes "Chat with Team" and toggles the sidebar | pending | |
+| 20 | Sidebar shows chat history | pending | |
+| 21 | Avatars only in the chat experience | pending | |
+| 22 | Microphone starts a real voice session, end to end | pending | |
+| 23 | Microphone sizing and weight harmonious with Chat with Team | pending | |
+| 24 | Voice states: loading, permission, connecting, active, error, ended | pending | |
+| 25 | Agentic Team panel removed from the project home | pending | |
+| 26 | "Add Someone" becomes "Add Contact" | pending | |
+| 27 | Contacts editable, all fields, image upload, notes | pending | |
+| 28 | Card Table opens | pending | |
+| 29 | Cards drag between columns and persist | pending | |
+| 30 | Column colour coding | pending | |
+| 31 | Back closes a modal first, then reverses project state | pending | |
+| 32 | "Elsewhere on this project" removed | pending | |
+| 33 | Project Settings in the new design system | pending | |
+| 34 | Global Settings in the new design system | pending | |
+| 35 | Visual and interaction quality throughout | pending | |
+| 36 | Systemic audit per defect class | pending | |
