@@ -46,6 +46,7 @@ import { readFollowUp } from './clarify.ts'
 import { clauses } from './clauses.ts'
 import { type Classification, withoutOpeningAffirmation } from './intent.ts'
 import { readRequest, requestBody } from './request.ts'
+import { readRetraction } from './retraction.ts'
 
 /** The classes that may write. Everything cheaper discusses. */
 const MAY_WRITE = new Set(['assignment', 'direct_command'])
@@ -179,9 +180,93 @@ const LINKING =
 /** Politeness at the end, which the opening strip cannot reach. */
 const TRAILING_PLEASE = /\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|would))\b[\s,.]*$/i
 
+/*
+  WHAT ELSE IS FRAME, established from the rows rather than from reading.
+
+  Every task the office wrote from a real message in the 45 days to 22
+  September had a malformed title - four out of four - and the offline
+  reproduction put the failures in four structural places, none of which is a
+  missing word in a list. #249 moved RECOGNITION off a verb list and onto
+  grammar and left titling stripping a frame with patterns, so the better
+  recognition got, the more malformed titles it produced.
+
+  Each of these is a closed class and each is named after what it is, so the
+  next reader can tell whether a new phrasing belongs to one of them.
+*/
+
+/**
+ * A topic named before the instruction, with a comma.
+ *
+ *   "on the bid, put something down to chase the letter of support"
+ *
+ * `requestBody` strips a LEADING verb, so nothing in the old pipeline could
+ * see past the preamble and the whole sentence became the title. `readClause`
+ * already follows an em-dash for exactly this shape - object first,
+ * instruction after - and a comma is the commoner punctuation for it in
+ * writing.
+ *
+ * Bounded to a short phrase, because a long one before a comma is a
+ * subordinate clause and part of what the task IS.
+ */
+const TOPIC_FIRST = /^\s*(?:on|for|under|in|about|re)\s+(?:the\s+)?[\w' -]{2,28},\s*(?=\S)/i
+
+/**
+ * A verb particle and the preposition after it.
+ *
+ *   "get a task DOWN FOR the printer quote"  ->  the frame is "get a task
+ *   down for", not "get a task"
+ *
+ * The particle belongs to the verb (`request.ts` keeps the same closed class
+ * for the same reason), so leaving it in front makes the title open with a
+ * word that is not about the work.
+ */
+const STRANDED_PARTICLE = /^\s*(?:down|up|out|in|off|aside|together)\s+(?=(?:for|to|about)\b)/i
+
+/**
+ * The reason for the reminder, which is not the reminder.
+ *
+ * The particle is taken here rather than by `STRANDED_PARTICLE`, because in
+ * "stick something DOWN so I do not forget to…" it is followed by the purpose
+ * subordinator rather than by a preposition — and widening the particle rule
+ * to cover it would let it fire on "in alpha", which is a place.
+ *
+ *   "stick something down SO I DO NOT FORGET TO ring Kevin about the quote"
+ *
+ * The commonest way a person asks for a reminder at all, and CLAUDE.md
+ * quotes this exact sentence as #302's origin. The purpose subordinators are
+ * the same closed class `readClause` already uses; what follows the "to" is
+ * the action.
+ */
+const PLACEHOLDER_OBJECT = /^\s*(?:something|anything|a\s+(?:note|line|marker|placeholder))\b\s*/i
+const PURPOSE_FRAME =
+  /^\s*(?:down|up)?\s*(?:so(?:\s+that)?|in\s+order\s+(?:that|to|not\s+to))\s+(?:i|we)\s+(?:do\s*n[o']?t|don[\u2019']t|will\s*not|won[\u2019']t|never)?\s*(?:forget|lose\s+track\s+of|miss)\s*(?:to|about)?\s*/i
+
 export const taskTitle = (clause: string): string | null => {
-  let text = requestBody(clause)
+  /*
+    A withdrawn false start is not part of the name.
+
+    `public.tasks` holds one titled *"For me and the um... No actually, you
+    know what? Scan the entire project"* - his raw dictated speech with the
+    clause he took back in the same breath. #291's reader exists for exactly
+    this and was never consulted when a title was composed.
+  */
+  const kept = readRetraction(clause)?.kept
+  const said = kept !== undefined && kept.trim() !== '' ? kept : clause
+  let text = requestBody(TOPIC_FIRST.test(said) ? said.replace(TOPIC_FIRST, '') : said)
   text = text.replace(OBJECT_NOUN, '')
+  text = text.replace(PLACEHOLDER_OBJECT, '')
+  /*
+    The project adjunct FIRST, because "in" is both a particle and a
+    preposition. Stripping the particle first turned "Raise a task in alpha
+    to review the lease break clause" into "alpha to review…", which the
+    adjunct could then no longer see - a regression caught by #249's own
+    suite on the first run. The particle rule also now REQUIRES the
+    preposition after it, so it can only fire on the shape it was written
+    for ("down for", "up to").
+  */
+  text = text.replace(PROJECT_ADJUNCT, '')
+  text = text.replace(STRANDED_PARTICLE, '')
+  text = text.replace(PURPOSE_FRAME, '')
   /*
     A gerund joining the frame to the content: "a task ADDING to chase the
     roofer", "a task RAISED for the renewal". Structural — an -ing or -ed word
@@ -199,6 +284,7 @@ export const taskTitle = (clause: string): string | null => {
   text = text.replace(/\s+(?:in)?to\s+(?:a|an)\s*(?:tasks?|to-?dos?|reminders?|items?)\s*$/i, '')
   text = text.replace(/\s+(?:a|an|the)?\s*(?:tasks?|to-?dos?|reminders?|items?)\s*$/i, '')
   text = text.replace(TRAILING_PLEASE, '').trim().replace(/\s+/g, ' ')
+  text = text.replace(/[\s,;:-]+$/, '')
   if (text === '' || NOT_A_TITLE.test(text)) return null
   return text
 }

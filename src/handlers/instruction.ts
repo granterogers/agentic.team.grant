@@ -91,7 +91,7 @@ import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
-import { assignedTo, dueOn } from '../agents/due.ts'
+import { assignedTo, dueOn, withoutTheDate } from '../agents/due.ts'
 import { extractionRequest } from '../agents/extract.ts'
 import { type Capability, planFor, planningCatalogue } from '../agents/goal.ts'
 import { guidanceBrief, guidanceFor, recordSkillUse } from '../agents/guidance.ts'
@@ -907,6 +907,16 @@ async function addTask(
     reason the subtraction was removed, and it is still the reason.
   */
   const when = dueOn(said_by === '' ? asked.title : said_by, now)
+  /*
+    And then out of the NAME, because it is now in the column.
+
+    The comment above is kept because its argument is still right about an
+    unconditional strip. This one is conditional on the resolver having
+    actually resolved the phrase, so a deadline #253 declines keeps every
+    word he said and one it accepts is not stored twice. Resolved FIRST and
+    removed after, because `dueOn` reads the title.
+  */
+  const titled = withoutTheDate(asked.title, when)
   const owner = assignedTo(said_by === '' ? asked.title : said_by)
 
   /*
@@ -919,7 +929,7 @@ async function addTask(
     .execute(`
       select app.task_add(
         p_project => ${job.projectId === null ? 'null' : `${lit(String(job.projectId))}::uuid`},
-        p_title => ${lit(asked.title)},
+        p_title => ${lit(titled)},
         p_due_on => ${when === null ? 'null' : `${lit(when.on)}::date`},
         p_assignee => ${owner === null ? 'null' : lit(owner)},
         p_added_by => 'the office',

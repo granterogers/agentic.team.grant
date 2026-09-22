@@ -328,3 +328,44 @@ export function assignedTo(text: string): string | null {
   const name = (hit[1] ?? hit[2] ?? '').toLowerCase()
   return FIRST_NAMES[name] ?? null
 }
+
+/**
+ * The title with the deadline taken out of it — but only once the deadline is
+ * a DATE.
+ *
+ * ## Why this lives here and not in `taskTitle`
+ *
+ * `tasks.ts` carried a comment saying the date was deliberately left in the
+ * name because "nothing extracts it into a column". That stopped being true
+ * when this file shipped, and the row proves it: on 22 September the office
+ * created **"down for the printer quote, due Tuesday"** with
+ * `due_on = 2026-09-22`. The deadline was in the column AND in the name.
+ *
+ * The first attempt at the fix subtracted the date inside `taskTitle`, which
+ * would have broken the feature outright: the handler passes the TITLE to
+ * `dueOn`, so a title with the date removed resolves to no date at all. The
+ * words stay in the title precisely because the resolver reads them.
+ *
+ * ## The condition that makes it safe
+ *
+ * `instruction.ts` already records the argument against subtracting: it
+ * "would have been a loss on every phrase the resolver declines". That is
+ * true of an unconditional strip and not of this one. This takes out exactly
+ * the words the resolver CONSUMED, and only when it resolved them — so a
+ * phrase #253 refuses keeps every word Grant said, and one it accepts is not
+ * said twice.
+ *
+ * Returns the title unchanged when removing the phrase would leave nothing:
+ * a task called "" is worse than one called "by Friday".
+ */
+export const withoutTheDate = (title: string, due: Due | null): string => {
+  if (due === null) return title
+  const at = title.toLowerCase().lastIndexOf(due.from.toLowerCase())
+  if (at === -1) return title
+  const cut = title
+    .slice(0, at)
+    .replace(/[\s,;:-]*\b(?:due|by|before|on|for)\s*$/i, '')
+    .replace(/[\s,;:-]+$/, '')
+    .trim()
+  return cut === '' ? title : cut
+}

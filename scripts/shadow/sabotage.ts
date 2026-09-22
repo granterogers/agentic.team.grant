@@ -237,6 +237,45 @@ const SABOTAGES: readonly Sabotage[] = [
   },
 
   /*
+    #307 — the title is what to do, not what is left over. Four of four real
+    task titles in 45 days were malformed; these are the two gaps that
+    account for most of it, plus the condition that makes the date
+    subtraction safe.
+  */
+  {
+    name: 'title-drops-the-purpose-clause',
+    proves: 'the reason for a reminder is not the reminder',
+    file: 'src/agents/tasks.ts',
+    anchor: "  text = text.replace(PURPOSE_FRAME, '')",
+    replacement: '',
+    check: 'tests/agents/a-task-title-is-what-to-do.test.ts',
+  },
+  {
+    name: 'title-drops-the-topic-preamble',
+    proves: 'a topic named before the instruction is not part of the name',
+    file: 'src/agents/tasks.ts',
+    anchor: "TOPIC_FIRST.test(said) ? said.replace(TOPIC_FIRST, '') : said",
+    replacement: 'said',
+    check: 'tests/agents/a-task-title-is-what-to-do.test.ts',
+  },
+  {
+    name: 'the-date-leaves-exactly-what-it-consumed',
+    proves: 'taking the deadline out of a name does not take a word of the work with it',
+    file: 'src/agents/due.ts',
+    /*
+      Sabotaging the null guard is not available: the replacement would have
+      to contain the anchor, which this file's landing test can never
+      satisfy, and with no `due` there is no `from` to strip anyway. So the
+      property proved is the PRECISION - the cut lands exactly where the
+      resolver's words begin - which is the half that decides whether a
+      title loses work.
+    */
+    anchor: '    .slice(0, at)',
+    replacement: '    .slice(0, Math.max(0, at - 6))',
+    check: 'tests/agents/a-task-title-is-what-to-do.test.ts',
+  },
+
+  /*
     #306's three halves, each of which alone let a false completion claim
     reach Grant on v695 against zero rows.
   */
