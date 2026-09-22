@@ -237,6 +237,33 @@ const SABOTAGES: readonly Sabotage[] = [
   },
 
   /*
+    #304, at both ends of its own distinction.
+
+    The clause the office owes a failed request is the same clause it must
+    NOT lead with on a question, so the detector has to be shown both
+    mistakes. The first removes the distinction, which puts "I have not done
+    this" back on "did you do it?"; the second inverts the informing test,
+    which suppresses it on the requests that need it. Measured before the
+    fix: 22 of 34 live turns, 8 of them questions.
+  */
+  {
+    name: 'outcome-volunteers-only-when-asked',
+    proves: 'the office does not announce a failure on a turn that asked for nothing',
+    file: 'src/agents/outcome.ts',
+    anchor: '      if (!c.asked) return null',
+    replacement: '      if (false) return null',
+    check: 'tests/agents/a-question-is-not-a-failed-request.test.ts',
+  },
+  {
+    name: 'asking-to-be-told-is-not-work',
+    proves: 'an imperative wanting an answer is separated from one wanting a row',
+    file: 'src/agents/request.ts',
+    anchor: "c.mood === 'ask' && !WANTS_TELLING.test(c.text)",
+    replacement: "c.mood === 'ask'",
+    check: 'tests/agents/a-question-is-not-a-failed-request.test.ts',
+  },
+
+  /*
     The semantic backstop, at both ends: the detection and the bound.
 
     The first proves an unsupported promise is actually found; the second
