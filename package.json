@@ -298,6 +298,7 @@
     "shadow:world": "tsx scripts/shadow/world.ts",
     "shadow:matrix": "tsx scripts/shadow/matrix.ts",
     "shadow:probe-live": "tsx scripts/shadow/probe-live.ts",
+    "shadow:alignment": "tsx scripts/shadow/alignment.ts",
     "migrate:next": "tsx scripts/migration-number.ts",
     "check:provenance": "tsx scripts/check-provenance.ts",
     "verify:backups": "tsx scripts/verify/backups.ts"
