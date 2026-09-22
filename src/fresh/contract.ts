@@ -107,7 +107,7 @@ export const CONTRACT: readonly ContractEntry[] = [
     requirement: 'REQUIRED_FOR_CORE',
     why: 'Everything in this repository runs on it, including the installer.',
     verifies: 'functional',
-    automatedBy: 'install Node 22 from https://nodejs.org — or `nvm install 22`',
+    automatedBy: 'Install Node 22 from https://nodejs.org, or run: nvm install 22',
   },
   {
     id: 'deps',

@@ -292,7 +292,8 @@
     "fresh:configure": "tsx scripts/fresh/configure.ts",
     "fresh:first-use": "tsx scripts/fresh/first-use.ts",
     "fresh:accept": "tsx scripts/fresh/accept.ts",
-    "check:fresh": "tsx scripts/check-fresh.ts"
+    "check:fresh": "tsx scripts/check-fresh.ts",
+    "fresh:docs": "tsx scripts/fresh/docs.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

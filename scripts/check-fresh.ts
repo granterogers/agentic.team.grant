@@ -12,6 +12,7 @@
  * §15's own wording, and the reason there is no rule here about how a script
  * is formatted.
  */
+import { execFileSync } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CONTRACT } from '../src/fresh/contract.ts'
@@ -224,7 +225,26 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------
-  // 4. The baseline must exist and must represent every migration.
+  // 4. SETUP.md must be what the contract would produce.
+  //
+  // §17 wants one obvious starting point; §6 wants one machine-readable source
+  // of truth. Those pull apart the moment somebody edits the prose, and the
+  // drift is invisible because both halves look fine. So the document is
+  // generated and this is what stops them disagreeing.
+  // ---------------------------------------------------------------------
+  try {
+    execFileSync('npx', ['tsx', 'scripts/fresh/docs.ts', '--check'], { stdio: 'pipe' })
+  } catch {
+    note(
+      'setup-doc-has-drifted',
+      'SETUP.md',
+      'is not what src/fresh/contract.ts would produce. It is generated, so the ' +
+        'fix is never to edit it: change the contract and run npm run fresh:docs.',
+    )
+  }
+
+  // ---------------------------------------------------------------------
+  // 5. The baseline must exist and must represent every migration.
   // ---------------------------------------------------------------------
   try {
     const meta: unknown = JSON.parse(await readFile('migrations/baseline/baseline.json', 'utf8'))
