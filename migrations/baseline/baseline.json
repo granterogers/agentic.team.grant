@@ -1,8 +1,8 @@
 {
   "note": "The schema as it stands after every migration listed here, captured as structure plus product seed. Built by npm run fresh:baseline; never edited by hand. A fresh install applies this instead of replaying the corpus, because nine migrations assert the contents of Grant's database (F-002).",
-  "builtAt": "2026-09-22T14:30:37.438Z",
-  "represents": 535,
-  "through": "0535_a_column_comment_that_names_a_bot_nobody_else_has.sql",
+  "builtAt": "2026-09-22T14:39:56.215Z",
+  "represents": 536,
+  "through": "0536_an_office_can_connect_its_own_thinking.sql",
   "migrations": [
     "0001_foundations.sql",
     "0002_projects_and_config.sql",
@@ -538,6 +538,7 @@
     "0532_five_more_the_run_token_gives_away.sql",
     "0533_the_harness_can_ask_to_see_its_own_rows.sql",
     "0534_the_mcp_address_is_this_offices_or_it_is_nothing.sql",
-    "0535_a_column_comment_that_names_a_bot_nobody_else_has.sql"
+    "0535_a_column_comment_that_names_a_bot_nobody_else_has.sql",
+    "0536_an_office_can_connect_its_own_thinking.sql"
   ]
 }

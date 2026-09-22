@@ -27,7 +27,7 @@
  * ref refused by name. The harness drops databases; every guard exists because
  * dropping the wrong one is the worst thing in this workstream's reach.
  */
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -40,6 +40,7 @@ import {
   refuseProductionRef,
   refuseRemoteHost,
 } from '../../src/fresh/forbidden.ts'
+import { asSuperuser as runAsSuperuser, ensureRole, localUrl } from '../../src/fresh/local-db.ts'
 
 const MIGRATIONS_DIR = 'migrations'
 const SHIM = 'scripts/fresh/sql/supabase-shim.sql'
@@ -55,7 +56,6 @@ const stopAfterArg = process.argv.find((a) => a.startsWith('--stop-after='))
 const stopAfter = stopAfterArg === undefined ? null : (stopAfterArg.split('=')[1] ?? null)
 
 const db = process.env.FRESH_DB ?? `${HARNESS_DB_PREFIX}zero_state`
-const superuser = process.env.FRESH_PG_SUPERUSER ?? 'postgres'
 
 refuseForeignDatabase(db)
 refuseProductionRef(process.env.FRESH_DB, 'FRESH_DB')
@@ -77,19 +77,13 @@ refuseProductionRef(process.env.DATABASE_URL, 'DATABASE_URL')
   SUPERUSER because the migrations create extensions and roles, which nothing
   less can do.
 */
-const HARNESS_ROLE = 'fresh_alex_harness'
-const runPassword = randomBytes(24).toString('hex')
-
-const url = `postgresql://${HARNESS_ROLE}:${runPassword}@127.0.0.1/${db}`
+const url = localUrl(db)
 refuseRemoteHost(url, 'the harness connection string')
 
 const sha256 = (content: string): string =>
   createHash('sha256').update(content, 'utf8').digest('hex')
 
-/** Run a psql/createdb/dropdb command as the cluster superuser. */
-function asSuperuser(command: string): string {
-  return execFileSync('su', [superuser, '-c', command], { encoding: 'utf8', stdio: 'pipe' })
-}
+const asSuperuser = runAsSuperuser
 
 function installStubExtensions(): void {
   // 0121 writes `create extension if not exists pg_cron`, which Postgres
@@ -104,19 +98,12 @@ function installStubExtensions(): void {
 async function main(): Promise<void> {
   console.log(`zero-state target: ${db} (local, disposable)\n`)
 
-  // The role is (re)given this run's password whether or not the database is
-  // being recreated, because a resume needs to connect too.
-  asSuperuser(
-    `psql -q -v ON_ERROR_STOP=1 -d postgres -c "do \\$\\$ begin ` +
-      `if not exists (select 1 from pg_roles where rolname = '${HARNESS_ROLE}') then ` +
-      `create role ${HARNESS_ROLE} login superuser password '${runPassword}'; ` +
-      `else alter role ${HARNESS_ROLE} password '${runPassword}'; end if; end \\$\\$;"`,
-  )
+  ensureRole()
 
   if (!resume) {
     installStubExtensions()
     asSuperuser(`dropdb --if-exists ${db}`)
-    asSuperuser(`createdb ${db} --owner=${HARNESS_ROLE}`)
+    asSuperuser(`createdb ${db} --owner=fresh_alex_harness`)
     asSuperuser(`psql -q -v ON_ERROR_STOP=1 -d ${db} -f ${process.cwd()}/${SHIM}`)
     console.log(
       `blank database created and the Supabase shim applied` +

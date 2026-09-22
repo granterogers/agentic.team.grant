@@ -2796,6 +2796,49 @@ COMMENT ON FUNCTION app.config_key_is_not_a_schema() IS '0493. `app.base_url` ma
 
 
 --
+-- Name: connect_provider_key(text, text); Type: FUNCTION; Schema: app; Owner: -
+--
+
+CREATE FUNCTION app.connect_provider_key(p_provider text, p_secret_name text) RETURNS app.vault_secret_ref
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  v_ref app.vault_secret_ref;
+begin
+  if not exists (select 1 from public.providers where provider = p_provider) then
+    raise exception 'no provider called %', p_provider
+      using hint = 'The providers this office knows are in public.providers.',
+            errcode = '23503';
+  end if;
+
+  select id::app.vault_secret_ref into v_ref
+    from vault.secrets where name = p_secret_name;
+
+  if v_ref is null then
+    -- Name what is missing and how to supply it. A credential that is not
+    -- there is the commonest state during setup, not an exceptional one.
+    raise exception 'there is no secret called % in this office''s vault', p_secret_name
+      using hint = 'Store it first: npm run fresh:secret -- ' || p_secret_name,
+            errcode = '23503';
+  end if;
+
+  update public.providers set secret_ref = v_ref, updated_at = app.now_utc()
+   where provider = p_provider;
+
+  return v_ref;
+end
+$$;
+
+
+--
+-- Name: FUNCTION connect_provider_key(p_provider text, p_secret_name text); Type: COMMENT; Schema: app; Owner: -
+--
+
+COMMENT ON FUNCTION app.connect_provider_key(p_provider text, p_secret_name text) IS 'Point a provider at a credential already in the vault. Takes the secret''s NAME and returns its REFERENCE: the caller chose the name, and must never be handed the value. Without this a stored inference key is connected to nothing and every job fails for want of a credential in the same database.';
+
+
+--
 -- Name: connector_label(text); Type: FUNCTION; Schema: app; Owner: -
 --
 
@@ -36986,6 +37029,14 @@ GRANT ALL ON FUNCTION app.claim_pending_notification(p_worker text, p_lease_seco
 --
 
 GRANT ALL ON FUNCTION app.classify_failure(p_message text) TO ai_team_app;
+
+
+--
+-- Name: FUNCTION connect_provider_key(p_provider text, p_secret_name text); Type: ACL; Schema: app; Owner: -
+--
+
+REVOKE ALL ON FUNCTION app.connect_provider_key(p_provider text, p_secret_name text) FROM PUBLIC;
+GRANT ALL ON FUNCTION app.connect_provider_key(p_provider text, p_secret_name text) TO service_role;
 
 
 --

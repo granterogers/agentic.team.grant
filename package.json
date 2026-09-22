@@ -286,7 +286,10 @@
     "verify:understands": "tsx scripts/verify/understands.ts",
     "fresh:zero-state": "tsx scripts/fresh/zero-state.ts",
     "fresh:baseline": "tsx scripts/fresh/baseline.ts",
-    "fresh:install": "tsx scripts/fresh/install.ts"
+    "fresh:install": "tsx scripts/fresh/install.ts",
+    "fresh:doctor": "tsx scripts/fresh/doctor.ts",
+    "fresh:secret": "tsx scripts/fresh/secret.ts",
+    "fresh:configure": "tsx scripts/fresh/configure.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

@@ -35,12 +35,18 @@
  * database, and the safe recovery from "I want to start again" is a new one.
  */
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ManagementApiExecutor, type SqlExecutor } from '../../src/db/executor.ts'
 import { PostgresExecutor } from '../../src/db/postgres-executor.ts'
 import { HARNESS_DB_PREFIX, refuseForeignDatabase } from '../../src/fresh/forbidden.ts'
+import {
+  asSuperuser,
+  createDatabase,
+  databaseExists,
+  ensureRole,
+  localUrl,
+} from '../../src/fresh/local-db.ts'
 
 const BASELINE = 'migrations/baseline'
 const SHIM = 'scripts/fresh/sql/supabase-shim.sql'
@@ -70,23 +76,13 @@ function chooseTarget(): Target {
   const db = process.env.FRESH_DB ?? `${HARNESS_DB_PREFIX}install`
   refuseForeignDatabase(db)
   return {
-    executor: new PostgresExecutor(`postgresql://${installRole()}:${installPassword}@127.0.0.1/${db}`),
+    executor: new PostgresExecutor(localUrl(db)),
     describe: `local disposable database ${db}`,
     local: true,
     db,
   }
 }
 
-const installPassword = createHash('sha256')
-  .update(`${process.pid}-${Date.now()}-${Math.random()}`)
-  .digest('hex')
-function installRole(): string {
-  return 'fresh_alex_harness'
-}
-
-function asSuperuser(command: string): string {
-  return execFileSync('su', ['postgres', '-c', command], { encoding: 'utf8', stdio: 'pipe' })
-}
 
 async function alreadyInstalled(executor: SqlExecutor): Promise<number | null> {
   try {
@@ -109,17 +105,9 @@ async function main(): Promise<void> {
     // A local target has to exist and has to look like Supabase before the
     // baseline will apply — the schema references roles, a vault and an
     // extensions schema that Supabase provides and stock Postgres does not.
-    asSuperuser(
-      `psql -q -v ON_ERROR_STOP=1 -d postgres -c "do \\$\\$ begin ` +
-        `if not exists (select 1 from pg_roles where rolname = '${installRole()}') then ` +
-        `create role ${installRole()} login superuser password '${installPassword}'; ` +
-        `else alter role ${installRole()} password '${installPassword}'; end if; end \\$\\$;"`,
-    )
-    const exists = asSuperuser(
-      `psql -tAd postgres -c "select 1 from pg_database where datname = '${target.db}'"`,
-    ).trim()
-    if (exists === '') {
-      asSuperuser(`createdb ${target.db} --owner=${installRole()}`)
+    ensureRole()
+    if (!databaseExists(target.db ?? '')) {
+      createDatabase(target.db ?? '')
       console.log(`created ${target.db}`)
     }
     asSuperuser(`psql -q -v ON_ERROR_STOP=1 -d ${target.db} -f ${process.cwd()}/${SHIM}`)
