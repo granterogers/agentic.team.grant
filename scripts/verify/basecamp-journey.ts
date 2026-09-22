@@ -535,27 +535,42 @@ await open('/basecamp/p/journey-subject')
   its slot and whatever the heading says.
 */
 /*
-  THE MODULE THAT OPENS THE TEAM, found by what it opens.
+  THE TEAM IS NOT A MODULE ON THE HOME ANY MORE, and this is the THIRD retarget
+  of this lookup - each one caused by the check naming a mechanism.
 
-  It was located by an anchor whose href ended `/team`, which was true while a
-  module heading navigated. Project home v2 made every expanded view a MODAL,
-  so the heading is a control carrying the module's id and there is no href to
-  match. What the check means is unchanged - one module on the home leads to
-  the team - so it asks for that, and this is now the second retarget of the
-  same lookup in two days, both caused by naming the mechanism.
+  Grant, 22 September: *"The standalone Agentic Team panel on the project
+  homepage is superfluous. Remove it. Configuration/management of the agentic
+  team belongs in Settings rather than consuming project-dashboard real
+  estate. Do not remove the actual team/chat functionality - only the redundant
+  homepage panel."*
+
+  So the two halves of what this section always meant come apart, and both are
+  still asserted. The HOME must still say that something is waiting - which it
+  does in the head, where the state line has carried it all along. And the
+  TEAM must still be one press away - which it is, from the page menu.
 */
-const teamMod = page
-  .locator('.bchome [data-mod]')
-  .filter({ has: page.locator('[data-bc-expand="team"]') })
-  .first()
-const preview = await teamMod.innerText()
+/*
+  THE STATE LINE, asserted on what it can say about THIS subject rather than
+  on the words the prototype project happens to produce. The journey drives a
+  project it made itself, which is on track with one open task - so asserting
+  "something is waiting" would have been asserting against the fixture, not
+  against the product. The property that holds for every project is that the
+  head answers the question the page exists to answer.
+*/
+const headLine = await page.locator('.bchead').first().innerText()
 check(
-  'the home names the latest output and that it is waiting',
-  preview.includes('Course one-pager') && preview.includes('Ready for you'),
-  preview.replace(/\n/g, ' / ').slice(0, 160),
+  'the home head still summarises the project, with the team panel gone',
+  /on track|needs you|late|stuck|open task/i.test(headLine),
+  headLine.replace(/\n/g, ' / ').slice(0, 160),
 )
+check(
+  'and the redundant Agentic Team panel is genuinely off the board',
+  (await page.locator('.bcpanes [data-mod="team"]').count()) === 0,
+)
+await page.locator('[data-bc-pagemenu]').first().click()
+await page.waitForTimeout(250)
 
-const teamWay = teamMod.locator('[data-bc-expand="team"]').first()
+const teamWay = page.locator('[data-bc-pagemenu-panel] [data-bc-expand="team"]').first()
 await teamWay.click()
 await page.waitForTimeout(700)
 check(

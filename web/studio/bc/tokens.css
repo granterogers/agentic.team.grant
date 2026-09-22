@@ -77,7 +77,20 @@
   --bc-12: 48px;
   --bc-16: 64px;
 
-  --bc-measure: 1088px;
+  /*
+    THE WORKSPACE USES THE SCREEN. Grant, 22 September: "The project homepage
+    currently wastes too much horizontal screen space. Allow the workspace to
+    occupy substantially more of the available viewport width while retaining
+    a tasteful outer margin."
+
+    1088px was a READING measure, which is right for prose and wrong for a
+    twelve-column board: on a 1920 display it left 800px of canvas either
+    side. The margin is kept as a percentage of the window rather than as a
+    constant, so a larger display gets a larger workspace AND a larger margin.
+  */
+  --bc-measure: 1680px;
+  /* One grid row on the project board. layout.js holds the same number. */
+  --bc-row: 44px;
   --bc-nav-h: 40px;
   --bc-main-pad: 40px;
   --bc-main-pad-bottom: 144px;

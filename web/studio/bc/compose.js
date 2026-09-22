@@ -37,6 +37,7 @@
   A NOTE ON COMMENTS. Plain words only inside a returned template literal.
 */
 
+import * as grid from './layout.js'
 import { button, esc } from './parts.js'
 import {
   calendarMini,
@@ -103,19 +104,60 @@ export const choose = (v) => {
  * content, and pressing content does what the content says rather than
  * navigating somewhere plausible.
  */
-const mod = (p, { id, name, body, wide = false, slot = '', meta = '' }) =>
-  `<section class="bcmod${wide ? ' bcmod--wide' : ''}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}">
-    <header class="bcmodhead">
-      <!--
-        THE HEADING OPENS THE EXPANDED VIEW, as a modal over this page, rather
-        than navigating away to a separate one. The address still exists and
-        still works; this is the press, not the only way in.
-      -->
-      <h2><button type="button" class="bclinky bcmodopen" data-bc-expand="${esc(id)}">${esc(name)}</button></h2>
+const mod = (p, { id, name, body, wide = false, slot = '', meta = '', rect = null }) => {
+  /*
+    THE WHOLE HEADER IS THE TARGET. Grant, 22 September:
+
+      "At present, expanding some minimized panels requires clicking precisely
+      on the title text... the entire module header/top section is the
+      interaction target... Do not allow interactive controls within the
+      header, such as three-dot menus, to accidentally trigger expansion."
+
+    So the header carries the press and the title is a plain heading rather
+    than a button. Two things follow, and both are in wire.js because they are
+    behaviour rather than markup: the controls inside it stop the event before
+    it reaches the header, and a press that MOVED is a drag rather than an
+    expand - which is what lets one element be both without a separate grip.
+    CLAUDE.md records what a separate grip costs: eighteen buttons inside a
+    drag handle that looked fine and did nothing.
+  */
+  const style =
+    rect === null
+      ? ''
+      : ` style="grid-column:${String(rect.x + 1)}/span ${String(rect.w)};grid-row:${String(rect.y + 1)}/span ${String(rect.h)}"`
+  return `<section class="bcmod${wide ? ' bcmod--wide' : ''}${rect === null ? '' : ' bcmod--placed'}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}"${style}>
+    <header class="bcmodhead" data-bc-expand="${esc(id)}" role="button" tabindex="0"
+      aria-label="${esc(`${name} — open, or drag to move`)}">
+      <h2 class="bcmodtitle">${esc(name)}</h2>
       ${meta === '' ? '' : `<span class="bcmodmeta">${esc(meta)}</span>`}
+      ${
+        rect === null
+          ? ''
+          : `<span class="bcmodctl">
+              <button type="button" class="bcmodbtn" data-bc-modoff="${esc(id)}"
+                aria-label="${esc(`Take ${name} off this page`)}" title="Take it off this page">
+                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M6 6l12 12M18 6L6 18"></path>
+                </svg>
+              </button>
+            </span>`
+      }
     </header>
     <div class="bcmodbody">${body}</div>
+    ${
+      rect === null
+        ? ''
+        : `<span class="bcresize" data-bc-resize="${esc(id)}" role="separator"
+            aria-label="${esc(`Resize ${name}`)}" tabindex="0" aria-orientation="horizontal">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M13 6L6 13M13 10.5l-2.5 2.5"></path>
+            </svg>
+          </span>`
+    }
   </section>`
+}
 
 /**
  * The project's own head.
@@ -139,7 +181,14 @@ const head = (p) => {
     <div class="bcheadrow">
       ${stateLine(p)}
       <span class="bcheadacts">
-        ${button('Chat', { kind: 'primary', 'data-bc-dock': '1' })}
+        <!--
+          CHAT WITH TEAM, and it is a TOGGLE. Grant: "Clicking it should open
+          the team chat sidebar. Clicking the same button again should close
+          the sidebar." So the label says what it opens and the control
+          carries its own pressed state, painted from whether the dock is
+          actually open rather than from a variable this page keeps.
+        -->
+        ${button('Chat with Team', { kind: 'primary', 'data-bc-dock': '1', 'aria-pressed': 'false' })}
         <!--
           THE MICROPHONE IS A SEPARATE CONTROL, and it starts the call rather
           than opening anything. Grant: do not introduce an intermediate screen
@@ -147,9 +196,9 @@ const head = (p) => {
           it presses the studio's own voice path, the same one the call panel
           uses, and nothing is drawn in between.
         -->
-        <button type="button" class="bcbtn bcicon bcmic" data-bc-voice="1"
-          aria-label="Talk to the team out loud">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"
+        <button type="button" class="bcbtn bcmic" data-bc-voice="1"
+          aria-pressed="false" aria-label="Talk to the team out loud">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="3" width="6" height="11" rx="3"></rect>
             <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"></path>
@@ -173,7 +222,8 @@ const head = (p) => {
           </button>
           <div class="bcmenu" data-bc-pagemenu-panel role="menu" hidden>
             <button type="button" role="menuitem" data-bc-arrange="1">Arrange this page</button>
-            <button type="button" role="menuitem" data-bc-sources="1">Where the material comes from</button>
+            <button type="button" role="menuitem" data-bc-expand="team">The team</button>
+            <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
             <button type="button" role="menuitem" data-bc-leave="/p/${esc(p.slug)}/settings">Project settings</button>
           </div>
         </span>
@@ -183,35 +233,19 @@ const head = (p) => {
 }
 
 
-/**
- * The tools this experience has not built its own surface for.
- *
- * Quiet, at the foot of the home, and NOT omitted: a home that silently drops
- * a tool makes work that is reachable today unreachable, which the route audit
- * caught within a run of composition B shipping without Contacts, Sources or
- * the way to Project Settings. Whether a tool has a surface here is this
- * experiment's business; whether Grant can get to his own project's settings
- * is not.
- */
-const elsewhere = (p) => {
-  const others = (ctx?.tools ?? []).filter((t) => t.own !== true)
-  if (others.length === 0) return ''
-  return `<section class="bcmod bcmod--quiet" data-mod="elsewhere" data-slot="elsewhere">
-    <header class="bcmodhead"><h2>Elsewhere on this project</h2></header>
-    <div class="bcmodbody">
-      <p class="bcmpty">These open in the current Team HQ. Nothing has moved.</p>
-      <div class="bcinline-list">
-        ${others
-          .map(
-            (t) =>
-              `<a href="${esc(`/p/${p.slug}/${t.id}`)}" data-bc-leave="${esc(`/p/${p.slug}/${t.id}`)}">${esc(t.name)}</a>`,
-          )
-          .join('')}
-      </div>
-    </div>
-  </section>`
-}
+/*
+  THERE IS NO "ELSEWHERE ON THIS PROJECT" MODULE.
 
+  Grant, 22 September: *"Remove the Elsewhere on this project style module.
+  Its purpose is redundant because Project Settings already exists within the
+  three-dot project menu."* He is right, and the thing it was written to
+  prevent - a tool becoming unreachable because this experience has no surface
+  for it - is prevented properly now: the three-dot menu names the team,
+  Sources and Project settings, and verify:basecamp-preservation asserts every
+  section of the default studio is reachable from this page by SOME press.
+  A second list of the same links was duplicate navigation, which is what he
+  called it.
+*/
 
 /* ======================================================================== *
  * §14 — adding, removing and reordering the tools on the home
@@ -242,91 +276,52 @@ const elsewhere = (p) => {
  * of ids and not a list of records.
  */
 
-const ALL = ['tasks', 'board', 'documents', 'schedule', 'team', 'contacts']
+/*
+  THE ARRANGEMENT IS A SET OF RECTANGLES NOW, and it lives in layout.js.
 
-const KEY = (slug) => `bc.home.${slug}`
-
-export const arrangement = (slug) => {
-  const s = typeof slug === 'string' ? slug : (slug?.slug ?? '')
-  try {
-    const raw = globalThis.localStorage?.getItem(KEY(s)) ?? ''
-    if (raw === '') return [...ALL]
-    const ids = JSON.parse(raw)
-    if (!Array.isArray(ids)) return [...ALL]
-    /*
-      Filtered against ALL on the way OUT, not on the way in. A stored id for a
-      tool that has since been removed would otherwise render nothing and take
-      its place in the grid - a hole where a pane should be, which is what the
-      shipped grid did when two tools arrived with no tile.
-    */
-    const kept = ids.filter((x) => ALL.includes(x))
-    return kept.length === 0 ? [...ALL] : kept
-  } catch {
-    return [...ALL]
-  }
-}
-
-export const arrange = (slug, ids) => {
-  try {
-    globalThis.localStorage?.setItem(KEY(slug), JSON.stringify(ids.filter((x) => ALL.includes(x))))
-  } catch {
-    /* A viewer who cannot store it still gets the default arrangement. */
-  }
-}
-
-export const arrangeReset = (slug) => {
-  try {
-    globalThis.localStorage?.removeItem(KEY(slug))
-  } catch {
-    /* Already the default. */
-  }
-}
-
+  Grant: *"Do not substitute crude up/down controls for genuine spatial
+  rearrangement."* Up and Down are gone with the list they ordered; what is
+  left here is the one thing dragging cannot express - putting a module back
+  after it has been taken off the page - plus the reset.
+*/
 const NAMES = {
   tasks: 'To-dos',
   board: 'Card Table',
   documents: 'Docs & Files',
   schedule: 'Schedule',
-  team: 'The team',
   contacts: 'People',
+  activity: 'Latest Activity',
 }
 
-/** The panel that changes the home, opened from the head. */
+export const arrangement = (slug) => grid.layout(slug).map((m) => m.id)
+export const arrangeReset = (slug) => {
+  grid.reset(slug)
+}
+
+/** The panel that changes the home, opened from the three-dot menu. */
 const arrangePanel = (p) => {
-  const on = arrangement(p.slug)
-  const off = ALL.filter((id) => !on.includes(id))
+  const off = grid.off(p.slug)
   return `<section class="bcarrange" data-bc-arrange-panel hidden>
-    <header class="bcmodhead"><h2>What is on this page</h2></header>
-    <ol class="bcarrlist">
-      ${on
-        .map(
-          (id, i) => `<li class="bcarrrow">
-            <span class="bcarrname">${esc(NAMES[id] ?? id)}</span>
-            <span class="bcarract">
-              ${button('Up', { 'data-bc-arr-up': esc(id), disabled: i === 0 })}
-              ${button('Down', { 'data-bc-arr-down': esc(id), disabled: i === on.length - 1 })}
-              ${button('Remove', { 'data-bc-arr-off': esc(id) })}
-            </span>
-          </li>`,
-        )
-        .join('')}
-    </ol>
+    <header class="bcmodhead"><h2 class="bcmodtitle">This page</h2></header>
+    <p class="bcarrnote">
+      Drag a module by its header to move it, and pull the corner to resize
+      it. Nothing can overlap: what you drop onto moves down. The cross on a
+      header takes that module off the page, which changes nothing but this
+      page - the to-dos, documents and messages behind it are untouched.
+    </p>
     ${
       off.length === 0
-        ? ''
+        ? '<p class="bcarrnote">Every module is on the page.</p>'
         : `<div class="bcarradd">
             <span class="bclabel">Put back</span>
             ${off.map((id) => button(NAMES[id] ?? id, { 'data-bc-arr-on': esc(id) })).join('')}
           </div>`
     }
     <p class="bcarrnote">
-      Removing a tool takes it off this page and nothing else — the to-dos,
-      documents and messages behind it are untouched, because all this changes
-      is a list of names.
-      <br>
       Kept on this device for now. It cannot be kept in your office yet: a
-      project holds one arrangement and your current dashboard already uses it,
-      so saving this there would take panels off that. Issue 299 has the fix.
+      project holds one arrangement and your current dashboard already uses
+      it, so saving this there would take panels off that. Issue 299 has the
+      fix.
     </p>
     <div class="bcrow">
       ${button('Put it back the way it was', { 'data-bc-arr-reset': '1' })}
@@ -364,7 +359,6 @@ export const compositionA = (p) => `<div class="bchome bccomp bccomp--a">
       ${mod(p, { id: 'sources', name: 'Where the material comes from', body: sourcesMini(p, { items: 3 }) })}
     </div>
     ${mod(p, { id: 'activity', name: 'What has happened', body: timelineMini(p, { items: 6 }), wide: true })}
-    ${elsewhere(p)}
   </div>`
 
 /* ======================================================================== *
@@ -388,7 +382,6 @@ export const compositionB = (p) => `<div class="bchome bccomp bccomp--b">
         ${mod(p, { id: 'activity', name: toolName('activity', 'Activity'), body: timelineMini(p, { items: 5 }) })}
       </aside>
     </div>
-    ${elsewhere(p)}
   </div>`
 
 
@@ -436,38 +429,63 @@ const boardMods = (p) => [
     Schedule and Chat below the fold, which is the requirement it was added to
     satisfy. A summary belongs beside the heading anyway.
   */
-  { id: 'tasks', name: toolName('tasks', 'To-dos'), meta: mineAndTeam(p), body: todosMini(p, { lists: 2, per: 2 }) },
+  { id: 'tasks', name: toolName('tasks', 'To-dos'), meta: mineAndTeam(p), body: todosMini(p, { lists: 4, per: 6 }) },
   { id: 'board', name: 'Card Table', body: cardsMini(p) },
-  { id: 'documents', slot: 'documents', name: toolName('documents', 'Docs & Files'), body: docsMini(p, { items: 3 }) },
-  { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 3 }) },
+  { id: 'documents', slot: 'documents', name: toolName('documents', 'Docs & Files'), body: docsMini(p, { items: 9 }) },
+  { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 8 }) },
   /*
     NO CHAT MODULE. Grant: *"It is completely superfluous when the sidebar
     already provides this functionality."* The sidebar is the typed team chat,
-    the blue Chat button opens it, and nothing on the home repeats it.
+    the Chat with Team button opens it, and nothing on the home repeats it.
 
     NO SOURCES MODULE either - *"not useful enough to occupy dashboard space"* -
-    it is in the three-dot menu.
+    and NO AGENTIC TEAM PANEL: *"The standalone Agentic Team panel on the
+    project homepage is superfluous. Remove it. Configuration/management of
+    the agentic team belongs in Settings."* Both are in the three-dot menu,
+    which is what keeps them REACHABLE while off the board - the distinction
+    the preservation check exists to hold.
   */
-  { id: 'team', name: toolName('team', 'The team'), body: crewMini(p, { people: 3 }) },
-  { id: 'contacts', name: toolName('contacts', 'People'), body: contactsMini(p, { items: 3 }) },
+  { id: 'contacts', name: toolName('contacts', 'People'), body: contactsMini(p, { items: 8 }) },
+  /*
+    Latest Activity is a module like any other now, rather than a full-width
+    band welded under the board. Grant asked not to redesign it and this does
+    not: the same renderer, the same rows, placed rather than pinned.
+  */
+  { id: 'activity', name: 'Latest Activity', slot: 'activity', body: timelineMini(p, { items: 12 }) },
 ]
 
+/*
+  ITEM COUNTS ARE DELIBERATELY LARGER THAN THE PANE.
+
+  Grant: *"Remove patterns such as One More being used merely because
+  additional content does not fit. Modules containing more data than their
+  visible area should instead become internally scrollable."* A renderer that
+  is handed exactly what fits can only ever produce the summary line he is
+  objecting to. So each miniature is handed MORE than a default-sized pane
+  shows, the body scrolls, and making the pane taller reveals more without
+  re-rendering anything.
+*/
+
 export const compositionC = (p) => {
-  const shown = arrangement(p).map((id) => boardMods(p).find((m) => m.id === id)).filter(Boolean)
+  /*
+    THE BOARD IS A TWELVE-COLUMN GRID and every module carries its own
+    rectangle. The order of the markup no longer decides anything, which is
+    the point: a module is where it was put.
+  */
+  const place = grid.layout(p.slug)
+  const by = new Map(boardMods(p).map((m) => [m.id, m]))
   return `<div class="bchome bccomp bccomp--c">
     ${head(p)}
     ${arrangePanel(p)}
-    <div class="bcpanes">
-      ${shown.map((m) => mod(p, m)).join('')}
+    <div class="bcpanes" data-bc-board="${esc(p.slug)}"
+      style="--bc-rows:${String(place.reduce((n, m) => Math.max(n, m.y + m.h), 0))}">
+      ${place
+        .map((r) => {
+          const m = by.get(r.id)
+          return m === undefined ? '' : mod(p, { ...m, rect: r })
+        })
+        .join('')}
     </div>
-    ${mod(p, {
-      id: 'activity',
-      name: 'Latest Activity',
-      body: timelineMini(p, { items: 6 }),
-      wide: true,
-      slot: 'activity',
-    })}
-    ${elsewhere(p)}
   </div>`
 }
 

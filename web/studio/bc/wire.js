@@ -17,6 +17,7 @@ import { act, attempt, canWrite, read } from '../office.js'
 import * as pdf from '../pdf.js'
 import { callIsLive, syncCallButtons, toggleCall } from '../call.js'
 import * as compose from './compose.js'
+import * as grid from './layout.js'
 import * as jump from './jump.js'
 
 let ctx = null
@@ -98,6 +99,7 @@ export const wire = (root) => {
   wireSearch(root)
   wireDocs(root)
   wireArrange(root)
+  wireBoard(root)
   wireDocsWorkspace(root)
   wireVoice(root)
   wireContacts(root)
@@ -461,9 +463,208 @@ const wirePageMenu = (root) => {
 /* ------------------------------------------- arranging the home (§14) --- */
 
 /*
-  Every press here rewrites ONE list of module ids and repaints. There is no
-  path from this panel to any record, which is §14's requirement met
-  structurally rather than by being careful.
+  THE BOARD IS DRAGGED AND RESIZED, not reordered by buttons.
+
+  Grant, 22 September: *"Implement proper drag-and-drop module repositioning;
+  dynamic module resizing; sensible minimum sizes; sensible maximum sizes;
+  collision prevention; responsive rearrangement; persistence... Do not
+  substitute crude up/down controls for genuine spatial rearrangement."*
+
+  Three decisions here are worth stating because each of them is a trap this
+  repository has already paid for:
+
+  1. **The header is both the press and the drag handle.** A separate grip is
+     what CLAUDE.md records as eighteen buttons that looked fine and did
+     nothing - they sat inside the handle, a drag began, and the DOM the click
+     was travelling towards no longer existed. Here a pointer that MOVES more
+     than four pixels becomes a drag and the click is suppressed; a pointer
+     that does not is an ordinary press and opens the module. One element,
+     two meanings, decided by what the person actually did.
+
+  2. **Pointer events, captured.** `setPointerCapture` keeps the gesture with
+     the module even when the pointer leaves it, which is most of a drag; it
+     also gives touch and pen the same path as the mouse for nothing.
+
+  3. **The preview is the real grid.** Dragging writes the rectangle into the
+     live layout and repaints the board's inline styles directly, without a
+     render - so what is under the pointer is the actual arrangement, including
+     the modules that have been pushed down, rather than a ghost that tells
+     the truth only when it lands.
+*/
+
+/** Where the pointer is, in grid units, relative to a board element. */
+const gridAt = (board, clientX, clientY) => {
+  const box = board.getBoundingClientRect()
+  const cols = grid.COLS
+  const gap = Number.parseFloat(getComputedStyle(board).gap) || 0
+  const colW = (box.width - gap * (cols - 1)) / cols
+  const rowH = grid.ROW + gap
+  return {
+    col: Math.round((clientX - box.left) / (colW + gap)),
+    row: Math.round((clientY - box.top) / rowH),
+    colW,
+    rowH,
+  }
+}
+
+/** Paint one module's rectangle without a render. */
+const paintRect = (board, list) => {
+  for (const m of list) {
+    const el = board.querySelector(`[data-mod="${m.id}"]`)
+    if (el === null) continue
+    el.style.gridColumn = `${String(m.x + 1)}/span ${String(m.w)}`
+    el.style.gridRow = `${String(m.y + 1)}/span ${String(m.h)}`
+  }
+  board.style.setProperty(
+    '--bc-rows',
+    String(list.reduce((n, m) => Math.max(n, m.y + m.h), 0)),
+  )
+}
+
+const wireBoard = (root) => {
+  const board = root.querySelector('[data-bc-board]')
+  if (board === null) return
+  const slug = board.dataset.bcBoard ?? ctx.state.project
+
+  /*
+    ONE POINTER GESTURE AT A TIME, and the element it belongs to. Held on the
+    closure rather than on the module, because a drag that starts on one
+    header and ends over another is the ordinary case.
+  */
+  let live = null
+
+  const begin = (kind, el, e) => {
+    const mod = el.closest('[data-mod]')
+    if (mod === null) return
+    const id = mod.dataset.mod
+    const start = grid.layout(slug).find((m) => m.id === id)
+    if (start === undefined) return
+    live = { kind, id, mod, startX: e.clientX, startY: e.clientY, rect: start, moved: false }
+    el.setPointerCapture?.(e.pointerId)
+  }
+
+  const during = (e) => {
+    if (live === null) return
+    const dx = e.clientX - live.startX
+    const dy = e.clientY - live.startY
+    if (!live.moved && Math.hypot(dx, dy) < 4) return
+    if (!live.moved) {
+      live.moved = true
+      board.classList.add('bcpanes--moving')
+      live.mod.classList.add('bcmod--dragging')
+    }
+    const { colW, rowH } = gridAt(board, e.clientX, e.clientY)
+    const dCol = Math.round(dx / (colW + (Number.parseFloat(getComputedStyle(board).gap) || 0)))
+    const dRow = Math.round(dy / rowH)
+    const want =
+      live.kind === 'move'
+        ? { x: live.rect.x + dCol, y: Math.max(0, live.rect.y + dRow) }
+        : { w: live.rect.w + dCol, h: live.rect.h + dRow }
+    paintRect(board, grid.place(slug, live.id, want))
+    e.preventDefault()
+  }
+
+  const finish = (e) => {
+    if (live === null) return
+    const was = live
+    live = null
+    board.classList.remove('bcpanes--moving')
+    was.mod.classList.remove('bcmod--dragging')
+    if (!was.moved) return
+    /*
+      SUPPRESS THE CLICK THAT FOLLOWS A DRAG. A pointerup after a real gesture
+      is still followed by a click on the header, which would open the module
+      the person has just finished moving.
+    */
+    const swallow = (c) => {
+      c.stopPropagation()
+      c.preventDefault()
+    }
+    was.mod.addEventListener('click', swallow, { capture: true, once: true })
+    globalThis.setTimeout(() => {
+      was.mod.removeEventListener('click', swallow, { capture: true })
+    }, 350)
+    ctx.render()
+    e?.preventDefault?.()
+  }
+
+  for (const h of board.querySelectorAll('.bcmodhead')) {
+    h.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      /*
+        A CONTROL INSIDE THE HEADER IS NOT THE HEADER. Grant asked for exactly
+        this: "Do not allow interactive controls within the header, such as
+        three-dot menus, to accidentally trigger expansion."
+      */
+      if (e.target.closest('button, a, input, select, [data-bc-modoff]') !== null) return
+      begin('move', h, e)
+    })
+    h.addEventListener('pointermove', during)
+    h.addEventListener('pointerup', finish)
+    h.addEventListener('pointercancel', finish)
+  }
+  for (const r of board.querySelectorAll('[data-bc-resize]')) {
+    r.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      begin('size', r, e)
+    })
+    r.addEventListener('pointermove', during)
+    r.addEventListener('pointerup', finish)
+    r.addEventListener('pointercancel', finish)
+    r.addEventListener('click', (e) => {
+      e.stopPropagation()
+    })
+  }
+
+  /*
+    THE KEYBOARD CAN MOVE AND RESIZE TOO, because a workspace only a mouse can
+    arrange is a workspace half the people cannot arrange. Alt with an arrow
+    moves; Alt and Shift resizes. Held on the header, which is already the
+    focusable thing.
+  */
+  for (const h of board.querySelectorAll('.bcmodhead')) {
+    h.addEventListener('keydown', (e) => {
+      const id = h.closest('[data-mod]')?.dataset.mod
+      if (id === undefined) return
+      if ((e.key === 'Enter' || e.key === ' ') && !e.altKey) {
+        e.preventDefault()
+        ctx.openExpanded?.(id)
+        return
+      }
+      if (!e.altKey) return
+      const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[
+        e.key
+      ]
+      if (step === undefined) return
+      e.preventDefault()
+      const now = grid.layout(slug).find((m) => m.id === id)
+      if (now === undefined) return
+      const want = e.shiftKey
+        ? { w: now.w + step[0], h: now.h + step[1] }
+        : { x: now.x + step[0], y: Math.max(0, now.y + step[1]) }
+      grid.place(slug, id, want)
+      ctx.render()
+      document.querySelector(`[data-mod="${id}"] .bcmodhead`)?.focus()
+    })
+  }
+
+  /* Taking a module off the page, from the cross on its header. */
+  for (const b of board.querySelectorAll('[data-bc-modoff]')) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      grid.remove(slug, b.dataset.bcModoff)
+      ctx.render()
+    })
+    b.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+    })
+  }
+}
+
+/*
+  The panel that puts a module back and resets the page. Everything it used to
+  do with Up, Down and Remove is done on the board itself now.
 */
 const wireArrange = (root) => {
   const panel = root.querySelector('[data-bc-arrange-panel]')
@@ -484,17 +685,6 @@ const wireArrange = (root) => {
     })
   }
 
-  const move = (id, by) => {
-    const ids = compose.arrangement(slug)
-    const at = ids.indexOf(id)
-    const to = at + by
-    if (at < 0 || to < 0 || to >= ids.length) return
-    ids.splice(to, 0, ids.splice(at, 1)[0])
-    compose.arrange(slug, ids)
-    ctx.render()
-    reopen()
-  }
-
   /*
     The panel is inside the thing being redrawn, so a press closes it unless it
     is reopened - and a control that undoes itself on every use reads as
@@ -506,34 +696,16 @@ const wireArrange = (root) => {
     if (again !== null) again.hidden = false
   }
 
-  for (const b of root.querySelectorAll('[data-bc-arr-up]')) {
-    b.addEventListener('click', () => {
-      move(b.dataset.bcArrUp, -1)
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-arr-down]')) {
-    b.addEventListener('click', () => {
-      move(b.dataset.bcArrDown, 1)
-    })
-  }
-  for (const b of root.querySelectorAll('[data-bc-arr-off]')) {
-    b.addEventListener('click', () => {
-      const id = b.dataset.bcArrOff
-      compose.arrange(slug, compose.arrangement(slug).filter((x) => x !== id))
-      ctx.render()
-      reopen()
-    })
-  }
   for (const b of root.querySelectorAll('[data-bc-arr-on]')) {
     b.addEventListener('click', () => {
-      compose.arrange(slug, [...compose.arrangement(slug), b.dataset.bcArrOn])
+      grid.add(slug, b.dataset.bcArrOn)
       ctx.render()
       reopen()
     })
   }
   for (const b of root.querySelectorAll('[data-bc-arr-reset]')) {
     b.addEventListener('click', () => {
-      compose.arrangeReset(slug)
+      grid.reset(slug)
       ctx.render()
       reopen()
     })
@@ -668,9 +840,23 @@ const openDoc = async (ref, title) => {
   defect that works perfectly with one list on screen and is wrong with two,
   which is exactly the shape a prototype with one list hides.
 */
-const form = (el, root) =>
-  el.closest('[data-bc-tasklist]')?.querySelector('[data-bc-taskform]') ??
-  root.querySelector('[data-bc-taskform]')
+/*
+  AND THE HEAD'S Add a Task IS NOT INSIDE ANY LIST, so `closest` finds nothing
+  for it. It names the list it means in its own attribute, which is the only
+  thing that works for a control that sits above all of them - the fallback to
+  "the first form on the page" is kept for the empty state, where there is
+  exactly one.
+*/
+const form = (el, root) => {
+  const inside = el.closest('[data-bc-tasklist]')?.querySelector('[data-bc-taskform]')
+  if (inside !== null && inside !== undefined) return inside
+  const named = el.dataset?.bcAddtask
+  if (named !== undefined && named !== '') {
+    const owner = root.querySelector(`[data-bc-tasklist="${named}"] [data-bc-taskform]`)
+    if (owner !== null) return owner
+  }
+  return root.querySelector('[data-bc-taskform]')
+}
 
 const wireTasks = (root) => {
   for (const b of root.querySelectorAll('[data-bc-addtask]')) {

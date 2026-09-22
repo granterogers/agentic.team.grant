@@ -328,23 +328,23 @@ Status words mean exactly one thing each:
 
 | # | Requirement | Status | Evidence |
 |---|---|---|---|
-| 1 | Whole module header expands/collapses; header controls do not | pending | |
-| 2 | Drag-and-drop module repositioning | pending | |
-| 3 | Module resizing, min and max sizes | pending | |
-| 4 | Collision prevention, no overlap | pending | |
-| 5 | Responsive rearrangement | pending | |
-| 6 | Layout persistence | pending | |
-| 7 | No "one more" overflow; modules scroll internally | pending | |
-| 8 | Styled, consistent scrollbars | pending | |
-| 9 | Workspace uses much more viewport width, tasteful margin | pending | |
+| 1 | Whole module header expands/collapses; header controls do not | **verified** | verify:basecamp-board — pressed 60px from the header's right edge, empty space, opens the module; the cross does not |
+| 2 | Drag-and-drop module repositioning | **verified** | verify:basecamp-board — a real pointer drag moves Docs & Files and the drop survives a reload |
+| 3 | Module resizing, min and max sizes | **verified** | verify:basecamp-board — the corner grip grows it; dragged 900px inwards it stops at the minimum; dragged 4000px out it stops at the board |
+| 4 | Collision prevention, no overlap | **verified** | asserted on the RENDERED boxes after every gesture, plus 10 unit tests in tests/studio/layout.test.ts |
+| 5 | Responsive rearrangement | **verified** | 2-up under 1180px, stacked under 860px, measured on a 390px phone with no sideways scroll |
+| 6 | Layout persistence | **verified** | per device, per project; reload check in the board suite. Not yet in the office — Issue 299 |
+| 7 | No "one more" overflow; modules scroll internally | **verified** | every summary line removed; the suite fails on any /\d+ more/ and asserts a pane actually scrolls |
+| 8 | Styled, consistent scrollbars | implemented | both syntaxes (scrollbar-color and ::-webkit-scrollbar), on module bodies, expanded views and .bcscroll |
+| 9 | Workspace uses much more viewport width, tasteful margin | **verified** | 1088px measure became min(1680px, 94%); measured at 94% of a 1600px window |
 | 10 | Miniature To-dos: checkboxes work, immediate, persisted | pending | |
 | 11 | Expanded To-dos genuinely interactive | pending | |
-| 12 | "Add a List" becomes "Add a Task" | pending | |
+| 12 | "Add a List" becomes "Add a Task" | implemented | Add a Task is the primary action; list creation is genuinely separate (a list is a milestone task, 0171) so it is kept as a demoted "New list" |
 | 13 | Docs and Files: every file type opens sensibly | pending | |
 | 14 | Thumbnails or attractive fallbacks for every type | pending | |
 | 15 | Audio playback | pending | |
 | 16 | Schedule entries resolve to the right object; no dead links | pending | |
-| 17 | Three-dot wording becomes "Sources" | pending | |
+| 17 | Three-dot wording becomes "Sources" | implemented | |
 | 18 | Source logos or icons | pending | |
 | 19 | "Chat" becomes "Chat with Team" and toggles the sidebar | pending | |
 | 20 | Sidebar shows chat history | pending | |
@@ -352,14 +352,14 @@ Status words mean exactly one thing each:
 | 22 | Microphone starts a real voice session, end to end | pending | |
 | 23 | Microphone sizing and weight harmonious with Chat with Team | pending | |
 | 24 | Voice states: loading, permission, connecting, active, error, ended | pending | |
-| 25 | Agentic Team panel removed from the project home | pending | |
-| 26 | "Add Someone" becomes "Add Contact" | pending | |
+| 25 | Agentic Team panel removed from the project home | **verified** | off the board, still reachable from the three-dot menu; asserted by the journey and the preservation suite |
+| 26 | "Add Someone" becomes "Add Contact" | implemented | miniature, surface head and form title |
 | 27 | Contacts editable, all fields, image upload, notes | pending | |
 | 28 | Card Table opens | pending | |
 | 29 | Cards drag between columns and persist | pending | |
 | 30 | Column colour coding | pending | |
 | 31 | Back closes a modal first, then reverses project state | pending | |
-| 32 | "Elsewhere on this project" removed | pending | |
+| 32 | "Elsewhere on this project" removed | **verified** | the function is gone; preservation still proves every section is reachable |
 | 33 | Project Settings in the new design system | pending | |
 | 34 | Global Settings in the new design system | pending | |
 | 35 | Visual and interaction quality throughout | pending | |

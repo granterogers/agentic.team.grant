@@ -146,7 +146,7 @@
     The phone block below takes the margins away properly, and takes the
     radius and the shadow with them.
   */
-  width: min(var(--bc-measure), 100% - 32px);
+  width: min(var(--bc-measure), 94%);
   margin: 0 auto;
   padding: var(--bc-main-pad) var(--bc-main-pad) var(--bc-main-pad-bottom);
   background: var(--bc-surface);

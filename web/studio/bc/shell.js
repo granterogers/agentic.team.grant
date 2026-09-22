@@ -769,7 +769,19 @@ const tasksSurface = (p) => {
   return `${crumbFor(p, 'tasks')}
     <div class="bcrecordhead">
       <h1>${esc(toolById('tasks')?.name ?? 'To-dos')}</h1>
-      <span class="bcactions">${button('Add a list', { 'data-bc-addlist': '1' })}</span>
+      <!--
+        ADD A TASK IS THE PRIMARY ACTION HERE. Grant: *"Change Add a List to
+        Add a Task unless there is a genuine separate list-creation function
+        that requires a distinct command."* There is one - a list is a
+        milestone task that others hang off (0171) and creating one is a
+        different write - so it is kept, and demoted. What was wrong was the
+        ORDER: the first thing offered on a to-do screen was a way to make a
+        container rather than a way to make a to-do.
+      -->
+      <span class="bcactions">
+        ${button('Add a Task', { kind: 'primary', 'data-bc-addtask': esc(named[0]?.id === undefined || named[0]?.id === '' ? 'loose' : named[0].id) })}
+        ${button('New list', { 'data-bc-addlist': '1' })}
+      </span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
       What this project has committed to, in its lists. Your own list is under
@@ -1271,9 +1283,9 @@ const contactRecord = (p, c) => {
 const contactForm = (p) => `${breadcrumb([
   { name: p.name, to: at(`/p/${p.slug}`) },
   { name: toolById('contacts')?.name ?? 'Contacts', to: at(`/p/${p.slug}/contacts`) },
-  { name: 'Add someone' },
+  { name: 'Add Contact' },
 ])}
-  <div class="bcrecordhead"><h1>Add someone</h1></div>
+  <div class="bcrecordhead"><h1>Add Contact</h1></div>
   <form class="bcaddform bcgap-l" data-bc-contactform="1">
     <!--
       Paired, because five full-width boxes down a 1000px dialog is a form
@@ -1317,7 +1329,7 @@ const contactsSurface = (p) => {
   return `${crumbFor(p, 'contacts')}
     <div class="bcrecordhead">
       <h1>Contacts</h1>
-      <span class="bcactions">${button('Add someone', { 'data-bc-contact-add': '1' })}</span>
+      <span class="bcactions">${button('Add Contact', { 'data-bc-contact-add': '1' })}</span>
     </div>
     ${
       cs.length === 0

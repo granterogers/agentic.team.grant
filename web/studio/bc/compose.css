@@ -103,6 +103,13 @@
   border-bottom: 1px solid var(--bc-border-subtle);
 }
 [data-experience='basecamp'] .bcmodhead h2 { margin: 0; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+/*
+  The title is a heading rather than a link now: the whole header is the
+  press, so a second, smaller target inside it would be the pixel-precise
+  thing Grant asked to be rid of.
+*/
+[data-experience='basecamp'] .bcmodtitle { color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcmodhead:hover .bcmodtitle { color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bcmodhead h2 a { color: var(--bc-text-muted); text-decoration: none; }
 [data-experience='basecamp'] .bcmodhead h2 a:hover,
 [data-experience='basecamp'] .bcmodhead h2 a:focus-visible { color: var(--bc-accent); text-decoration: underline; }
@@ -1050,11 +1057,155 @@
   baseline is what made the first build read as a grid of cards.
 */
 [data-experience='basecamp'] .bcpanes {
+  /*
+    TWELVE COLUMNS AND A FIXED ROW, which is what makes a module have a SIZE.
+
+    The previous grid was three equal columns of automatic height, and a pane
+    whose height comes from its content can never overflow - so it can never
+    scroll, and the only way to say "there is more" was the summary line Grant
+    asked to remove. Here the layout decides the height, the body scrolls, and
+    the resize handle has something to change.
+  */
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: var(--bc-row);
+  grid-template-rows: repeat(var(--bc-rows, 12), var(--bc-row));
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
 }
+[data-experience='basecamp'] .bcpanes--moving { cursor: grabbing; user-select: none; }
+[data-experience='basecamp'] .bcmod--placed {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodbody {
+  /*
+    THE PANE SCROLLS RATHER THAN SAYING "ONE MORE". Grant: "Modules containing
+    more data than their visible area should instead become internally
+    scrollable."
+  */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+[data-experience='basecamp'] .bcmod--dragging {
+  z-index: 3;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.45);
+  transform: scale(1.012);
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodhead {
+  cursor: grab;
+  border-radius: 10px;
+  margin: -4px -6px 8px;
+  padding: 4px 6px 8px;
+  transition: background 140ms ease;
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodhead:hover {
+  background: color-mix(in srgb, var(--bc-accent) 9%, transparent);
+}
+[data-experience='basecamp'] .bcmod--placed .bcmodhead:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcmodctl {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+/*
+  Reserved, not conjured. `opacity: 0` hides pixels and not layout, and
+  CLAUDE.md records twice what appearing-on-hover controls do to a row's
+  height when they are in the flow. These are absolutely positioned and the
+  header reserves the room.
+*/
+[data-experience='basecamp'] .bcmod--placed .bcmodhead { padding-right: 34px; position: relative; }
+[data-experience='basecamp'] .bcmodctl { position: absolute; right: 4px; top: 2px; margin: 0; }
+[data-experience='basecamp'] .bcmod:hover .bcmodctl,
+[data-experience='basecamp'] .bcmod:focus-within .bcmodctl { opacity: 1; }
+[data-experience='basecamp'] .bcmodbtn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bc-text-muted);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcmodbtn:hover {
+  background: color-mix(in srgb, var(--bc-text) 12%, transparent);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcresize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--bc-text-muted);
+  opacity: 0;
+  cursor: nwse-resize;
+  touch-action: none;
+  transition: opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcmod:hover .bcresize,
+[data-experience='basecamp'] .bcmod:focus-within .bcresize { opacity: 0.8; }
+[data-experience='basecamp'] .bcresize:hover { opacity: 1; color: var(--bc-accent); }
+[data-experience='basecamp'] .bcresize:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+
+/*
+  THE SCROLLBAR, styled once for every scrolling surface in the experience.
+
+  Grant: "Implement attractive, unobtrusive, visually consistent scrollbars
+  across modules wherever overflow exists. The scrollbar treatment should fit
+  the premium visual direction of the new UI rather than looking like an
+  unstyled browser default."
+
+  Both syntaxes, because they are not equivalent: `scrollbar-color` is what
+  Firefox understands and `::-webkit-scrollbar` is what gives Chromium a
+  thumb that can be inset and rounded. Neither alone covers the product.
+*/
+[data-experience='basecamp'] .bcmodbody,
+[data-experience='basecamp'] .bcexpbody,
+[data-experience='basecamp'] .bcscroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--bc-text) 26%, transparent) transparent;
+}
+[data-experience='basecamp'] .bcmodbody::-webkit-scrollbar,
+[data-experience='basecamp'] .bcexpbody::-webkit-scrollbar,
+[data-experience='basecamp'] .bcscroll::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-experience='basecamp'] .bcmodbody::-webkit-scrollbar-track,
+[data-experience='basecamp'] .bcexpbody::-webkit-scrollbar-track,
+[data-experience='basecamp'] .bcscroll::-webkit-scrollbar-track { background: transparent; }
+[data-experience='basecamp'] .bcmodbody::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcexpbody::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcscroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--bc-text) 22%, transparent);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+[data-experience='basecamp'] .bcmodbody:hover::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcexpbody:hover::-webkit-scrollbar-thumb,
+[data-experience='basecamp'] .bcscroll:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--bc-text) 38%, transparent);
+  background-clip: content-box;
+}
+
 [data-experience='basecamp'] .bccomp--c .bcmod { min-width: 0; }
 [data-experience='basecamp'] .bccomp--c .bcmodbody { font-size: 13.5px; }
 [data-experience='basecamp'] .bccomp--c .bcsaidtext { font-size: 13px; }
@@ -1501,4 +1652,49 @@
 /* Phone override, at the end of the file where source order makes it win. */
 @media (max-width: 860px) {
   [data-experience='basecamp'] .bcformrow { grid-template-columns: 1fr; }
+}
+
+/*
+  RESPONSIVE REARRANGEMENT, at the END of the stylesheet where source order
+  makes it win - and with `!important`, which is not a shortcut here: the
+  stored rectangle is an INLINE style, and nothing but !important outranks
+  one. A twelve-column arrangement made on a 1600px display is not an
+  arrangement on a 768px tablet; it is six 48px slivers, which is what the
+  board suite measured before this block existed.
+
+  The stored layout is untouched - only its presentation changes - so the
+  desktop arrangement is still there when the window is widened again.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcpanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: minmax(0, auto);
+  }
+  [data-experience='basecamp'] .bcmod--placed {
+    grid-column: auto / span 1 !important;
+    grid-row: auto !important;
+    max-height: 460px;
+  }
+  [data-experience='basecamp'] .bcmod--placed .bcmodhead { cursor: default; }
+  [data-experience='basecamp'] .bcresize { display: none; }
+}
+@media (max-width: 860px) {
+  [data-experience='basecamp'] .bcpanes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  [data-experience='basecamp'] .bcmod--placed { max-height: 62vh; }
+}
+
+/*
+  ON A TOUCH DEVICE THERE IS NO HOVER, so a control that appears on hover is a
+  control that never appears - and the one on the module header is how a
+  module is taken off the page. It is always visible below the desktop width,
+  and it meets the 44px floor there, which the measure enforces.
+*/
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcmodctl { opacity: 1; right: 0; top: -4px; }
+  [data-experience='basecamp'] .bcmodbtn { width: 44px; height: 44px; }
+  [data-experience='basecamp'] .bcmod--placed .bcmodhead { padding-right: 48px; }
 }

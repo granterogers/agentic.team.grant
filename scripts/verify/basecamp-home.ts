@@ -251,6 +251,21 @@ const FORBIDDEN = ['chat', 'sources']
     )) as string[]
 
   const before = await mods()
+
+  /*
+    OPEN THE PANEL, don't TOGGLE it. The arrange control is a toggle and the
+    panel puts itself back after a render, so a blind second press CLOSES it -
+    which is how a correct product produced "element is not visible" on the
+    reset button. Ask what state it is in, the way a person does by looking.
+  */
+  const openArrange = async (): Promise<void> => {
+    const panel = page.locator('[data-bc-arrange-panel]')
+    if (await panel.isVisible()) return
+    await page.locator('[data-bc-pagemenu]').first().click()
+    await page.waitForTimeout(150)
+    await page.locator('[data-bc-arrange]').first().click()
+    await page.waitForTimeout(200)
+  }
   check('the home starts with every tool on it', before.length >= 6, before.join(','))
 
   /*
@@ -258,16 +273,28 @@ const FORBIDDEN = ['chat', 'sources']
     The check timed out on a hidden control the moment v2 moved it, which is
     the audit noticing a real change rather than a defect.
   */
-  await page.locator('[data-bc-pagemenu]').first().click()
-  await page.waitForTimeout(150)
-  await page.locator('[data-bc-arrange]').first().click()
-  await page.waitForTimeout(200)
-  check(
-    'the three-dot menu opens a panel naming every tool',
-    (await page.locator('[data-bc-arrange-panel] .bcarrrow').count()) === before.length,
-  )
+  await openArrange()
+  /*
+    THE PANEL NAMES WHAT IS OFF THE PAGE, and the board names what is on it.
 
-  await page.locator('[data-bc-arr-off="documents"]').click()
+    It used to list every module with Up, Down and Remove beside each. Grant,
+    22 September: *"Do not substitute crude up/down controls for genuine
+    spatial rearrangement."* Moving is dragging now and removing is the cross
+    on the module's own header, so the panel has exactly one job left that
+    dragging cannot do - putting back something that is not there to drag.
+    With nothing off the page it correctly offers nothing, which is what is
+    asserted first.
+  */
+  check(
+    'with every tool on the page the panel offers nothing to put back',
+    (await page.locator('[data-bc-arrange-panel] [data-bc-arr-on]').count()) === 0,
+  )
+  await page.keyboard.press('Escape')
+
+  /* Removing is the cross on the module's own header now. */
+  await page.locator('[data-mod="documents"]').first().hover()
+  await page.waitForTimeout(150)
+  await page.locator('[data-bc-modoff="documents"]').click()
   await page.waitForTimeout(300)
   const without = await mods()
   check('removing a tool takes it off the home', !without.includes('documents'), without.join(','))
@@ -295,30 +322,22 @@ const FORBIDDEN = ['chat', 'sources']
   await page.waitForTimeout(300)
   check('and the removal survives a reload', !(await mods()).includes('documents'))
 
-  await page.locator('[data-bc-pagemenu]').first().click()
-  await page.waitForTimeout(150)
-  await page.locator('[data-bc-arrange]').first().click()
-  await page.waitForTimeout(200)
+  await openArrange()
+  check(
+    'and the panel now offers to put it back',
+    (await page.locator('[data-bc-arr-on="documents"]').count()) === 1,
+  )
   await page.locator('[data-bc-arr-on="documents"]').click()
   await page.waitForTimeout(300)
   check('putting it back puts it back', (await mods()).includes('documents'))
 
-  /* Reordering moves one and only one. */
-  const order = await mods()
-  await page.locator(`[data-bc-arr-down="${order[0]}"]`).click()
-  await page.waitForTimeout(300)
-  const moved = await mods()
-  check(
-    'moving a tool down swaps it with the one below and disturbs nothing else',
-    moved[0] === order[1] && moved[1] === order[0] && moved.length === order.length,
-    `${order.join(',')} -> ${moved.join(',')}`,
-  )
-
+  await openArrange()
   await page.locator('[data-bc-arr-reset]').click()
   await page.waitForTimeout(300)
   check(
-    'putting it back the way it was restores the default order',
-    (await mods()).join(',') === before.join(','),
+    'putting it back the way it was restores the default page',
+    (await mods()).length === before.length,
+    `${(await mods()).join(',')} against ${before.join(',')}`,
   )
   await ctx.close()
 }

@@ -226,8 +226,18 @@ export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
     if (flat.length === 0) return `<p class="bcmpty">No to-dos on this project yet.</p>`
     return `<ul class="bctasks">${flat.slice(0, per * lists).map(taskLine).join('')}</ul>`
   }
+  /*
+    EVERY LIST AND EVERY TASK, and the pane scrolls.
+
+    Grant, 22 September: *"Remove patterns such as One More being used merely
+    because additional content does not fit. Modules containing more data than
+    their visible area should instead become internally scrollable."* The
+    `lists` and `per` arguments are a CEILING now rather than a page size -
+    they stop a project with four hundred tasks building four hundred rows
+    into a pane nobody has scrolled to - and they are set well above what a
+    default pane shows, so making the pane taller reveals more.
+  */
   const shown = groups.slice(0, lists)
-  const rest = groups.length - shown.length
   return `<div class="bclists">
     ${shown
       .map((g) => {
@@ -240,11 +250,9 @@ export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
             <span class="bclistcount">${esc(`${done}/${g.items.length}`)}</span>
           </header>
           <ul class="bctasks">${first.map(taskLine).join('')}</ul>
-          ${g.items.length > first.length ? `<p class="bcmore">${esc(`${g.items.length - first.length} more in this list`)}</p>` : ''}
         </section>`
       })
       .join('')}
-    ${rest > 0 ? `<p class="bcmore">${esc(rest === 1 ? '1 more list' : `${rest} more lists`)}</p>` : ''}
   </div>`
 }
 
@@ -718,8 +726,7 @@ export const contactsMini = (p, { items = 4 } = {}) => {
       )
       .join('')}
     <p class="bcmore bcdocsall">
-      ${cs.length > items ? `<span>${esc(`${cs.length - items} more · `)}</span>` : ''}
-      <button type="button" class="bclinky" data-bc-contact-add="1">Add someone</button>
+      <button type="button" class="bclinky" data-bc-contact-add="1">Add Contact</button>
     </p>
   </div>`
 }
@@ -770,6 +777,5 @@ export const sourcesMini = (p, { items = 4 } = {}) => {
         </div>`
       })
       .join('')}
-    ${ss.length > items ? `<p class="bcmore">${esc(`${ss.length - items} more`)}</p>` : ''}
   </div>`
 }
