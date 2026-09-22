@@ -1881,3 +1881,52 @@ Both caught by controls rather than by reading, which is the whole reason the
 controls exist. And one regression of my own, caught by #249's suite on the
 first run: `in` is a particle and a preposition, so stripping it before the
 project adjunct turned "Raise a task in alpha to…" into "alpha to…".
+
+## The finding the corpus was really for — #309
+
+Chasing #307's second writer led into `public.lessons`, and the answer to one
+query was the worst thing found in this session:
+
+```
+select * from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 100)
+
+  shown to a real prompt   15
+  taught by a harness job  12
+```
+
+Among them, at global scope, **both at once**:
+
+```
+The middle tier is forty-two pounds a month.
+The middle tier is sixty-three pounds fifty a month.
+```
+
+The second is the figure the office INVENTED from an unrelated document in the
+September bait corpus. **A hallucination the harness was written to catch had
+become a permanent standing lesson and was being read back to the office as
+truth**, beside six copies of a rule Grant scoped to one conversation and three
+other incompatible formatting instructions.
+
+0539 put the filter in exactly the right place a fortnight ago and rests on a
+premise that is false — `lessons.is_fixture` is GENERATED from `learned_by`, so
+it is right about a lesson a SUITE named itself in and cannot be right about one
+taught during a harness job driving the real enqueue path, where `learned_by` is
+`grant`. That is `jobs.is_fixture` for the third table with the same cause, and
+0355's treatment was never carried across. 0545 carries it: the reader asks
+`app.harness_job(from_job)`, with 0304's asymmetry. **Fifteen became three and
+all three are real.**
+
+`check:leaks` gains the counter and its control — *the filter removes 44, which
+is what makes the zero mean something*.
+
+## Order of the session's findings, by what they cost Grant
+
+| | |
+|---|---|
+| **#309** | a fabricated price in every prompt for a week — fixed, 0545, v703 |
+| **#307** | every task title written from a real message was malformed — fixed in both writers, v701 |
+| **#306** | the office said a task existed when none did — fixed, v697 |
+| **#310** | standing instructions never retire; a withdrawal is stored as one — filed |
+| **#308** | no real conversation has ever recorded its project — filed |
+
+Three fixed at the layer, two filed with the evidence and the calibration.
