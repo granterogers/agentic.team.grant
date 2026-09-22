@@ -275,6 +275,15 @@ const SABOTAGES: readonly Sabotage[] = [
     check: 'tests/agents/a-task-title-is-what-to-do.test.ts',
   },
 
+  {
+    name: 'both-task-writers-share-the-classes',
+    proves: 'a project adjunct is not part of the name, on EITHER writer',
+    file: 'src/agents/mine.ts',
+    anchor: "    .replace(PROJECT_ADJUNCT, '')",
+    replacement: '',
+    check: 'tests/agents/a-task-title-is-what-to-do.test.ts',
+  },
+
   /*
     #306's three halves, each of which alone let a false completion claim
     reach Grant on v695 against zero rows.

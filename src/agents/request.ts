@@ -750,6 +750,40 @@ const WANTS_TELLING =
 export const asksForWork = (message: string, split: (t: string) => readonly string[]): boolean =>
   readRequest(message, split).some((c) => c.mood === 'ask' && !WANTS_TELLING.test(c.text))
 
+/*
+  TWO CLASSES THAT BOTH TASK WRITERS NEED.
+
+  The office has two of them - `tasks.ts` for a task on a project and
+  `mine.ts` for one on Grant's own list - and #307 was fixed in the first
+  only. The very next session found the second, writing
+
+      "On coaching to book the venue, end of"
+
+  from "add a task on coaching to book the venue, end of next week": the
+  project adjunct kept, and a preposition left hanging where the date had
+  been removed. CLAUDE.md's "two doors onto one field" with a title instead
+  of a ledger, and the answer is the same - one list, two callers, rather
+  than a second copy that will drift.
+
+  They live here because this file is where the grammar is and because it
+  imports nothing, so neither writer can create a cycle by using them.
+*/
+
+/** "on coaching to …", "under the beta project to …" — where it goes, not what it is. */
+export const PROJECT_ADJUNCT =
+  /^\s*\b(?:on|under|in|against|for|to|about)\s+(?:the\s+)?[\w-]+(?:\s+project)?\b(?=\s+(?:to|for|about)\b)\s*/i
+
+/**
+ * What a removed date leaves behind at the end of a title.
+ *
+ * A resolver reports the words it consumed, and those are not always the
+ * whole phrase: "end of next week" resolves from "next week", so cutting at
+ * what was consumed leaves "…, end of". Closed list, anchored at the END, so
+ * nothing that is part of the work can be reached.
+ */
+export const DANGLING_AFTER_A_DATE =
+  /[\s,;:.-]*\b(?:(?:the\s+)?(?:end|start|beginning|middle)\s+of|due|by|before|on|for|at|in)\s*$/i
+
 /**
  * Read a whole message, clause by clause.
  *

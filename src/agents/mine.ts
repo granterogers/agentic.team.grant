@@ -58,6 +58,7 @@
   what he sends. The corpus caught it on its first run.
 */
 import { withoutOpeningAffirmation } from './intent.ts'
+import { DANGLING_AFTER_A_DATE, PROJECT_ADJUNCT } from './request.ts'
 
 const APOS = "['\u2019\u02bc]?"
 const REMIND_ME = new RegExp(
@@ -456,10 +457,31 @@ const stripFraming = (said: string): string =>
       Widened rather than given a second pass of its own, because two lists of
       leading words are two places for the next one to be missed.
     */
+    /*
+      The project this is FOR is not what it is called.
+
+      From the shared class in `request.ts`, because `tasks.ts` needs exactly
+      the same one and #307 was fixed in that one alone - the very next live
+      session wrote "On coaching to book the venue, end of" through THIS
+      path. Two titlings, one list.
+
+      Placed ABOVE the leading-word passes deliberately: it leaves the "to"
+      of "on coaching TO book the venue", and those passes already exist to
+      take it. A second strip here would be the second list this file's own
+      comment warns about.
+    */
+    .replace(/^\s+/, '')
+    .replace(PROJECT_ADJUNCT, '')
     .replace(/^\s*(?:to|that|about|and|but|so|then|also|right|well|now|one\s+more)\b/gi, ' ')
     .replace(/^[\s,.:;—–-]+/g, ' ')
     .replace(/^\s*(?:to|that|about|and)\b/i, ' ')
     .replace(/\s{2,}/g, ' ')
+    /*
+      And the preposition a removed date leaves behind: this path strips
+      "next week" and left "…, end of". Same shared class the project task
+      writer uses after its own resolver has run.
+    */
+    .replace(DANGLING_AFTER_A_DATE, '')
     .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, '')
     /*
       The quotes come off LAST and only in a matched pair, so a title that

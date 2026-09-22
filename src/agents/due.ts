@@ -39,6 +39,8 @@
  */
 
 /** Monday-first is not used here; JavaScript's own 0=Sunday is, throughout. */
+import { DANGLING_AFTER_A_DATE } from './request.ts'
+
 const WEEKDAYS: Readonly<Record<string, number>> = {
   sunday: 0,
   sun: 0,
@@ -362,10 +364,21 @@ export const withoutTheDate = (title: string, due: Due | null): string => {
   if (due === null) return title
   const at = title.toLowerCase().lastIndexOf(due.from.toLowerCase())
   if (at === -1) return title
+  /*
+    The words the resolver consumed are not always the whole date phrase.
+
+    `dueOn` reports `from` as "next week" for "end of next week", so cutting
+    at `from` alone leaves "…, end of" — a title ending in a preposition,
+    which is how the live row read on v699. So after the cut, trailing
+    function words that can only have belonged to the date go too. Bounded
+    to a closed list and to the END, so nothing that is part of the work can
+    be reached.
+  */
   const cut = title
     .slice(0, at)
-    .replace(/[\s,;:-]*\b(?:due|by|before|on|for)\s*$/i, '')
-    .replace(/[\s,;:-]+$/, '')
+    .replace(DANGLING_AFTER_A_DATE, '')
+    .replace(DANGLING_AFTER_A_DATE, '')
+    .replace(/[\s,;:.-]+$/, '')
     .trim()
   return cut === '' ? title : cut
 }

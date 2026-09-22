@@ -43,6 +43,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { dueOn, withoutTheDate } from '../../src/agents/due.ts'
+import { personalTaskRequest } from '../../src/agents/mine.ts'
 import { taskTitle } from '../../src/agents/tasks.ts'
 
 /** A Tuesday, so "by Friday" and "on Thursday" have somewhere to land. */
@@ -149,4 +150,50 @@ describe('what this does NOT fix, stated rather than glossed', () => {
   it('still does badly on an action with no object but the placeholder', () => {
     expect(taskTitle('book something in so we do not lose the slot')).toContain('lose the slot')
   })
+})
+
+describe('the OTHER task writer gets the same classes', () => {
+  /*
+    #307 was fixed in `tasks.ts` and the very next live session found the
+    second writer. `mine.ts` writes a task on Grant's own list, has its own
+    framing stripper and its own date resolver, and on v699 it stored
+
+        "On coaching to book the venue, end of"
+
+    from "add a task on coaching to book the venue, end of next week" — the
+    project adjunct kept, and a preposition left hanging where its resolver
+    had taken "next week" out.
+
+    CLAUDE.md's "two doors onto one field" with a title instead of a ledger.
+    The answer is the same: one list in `request.ts`, two callers, rather than
+    a second copy that drifts. These cases are here rather than beside
+    `mine.ts`'s own suite so that the two writers are asserted TOGETHER — the
+    defect was that they disagreed.
+  */
+  const NOW_MINE = new Date('2026-09-22T09:00:00Z')
+  const cases: [string, string, string | null][] = [
+    ['add a task on coaching to book the venue, end of next week', 'Book the venue', '2026-09-29'],
+    ['add a task on the bid to confirm the numbers by Friday', 'Confirm the numbers', '2026-09-25'],
+    [
+      'remind me to ring Kevin about the quote next week',
+      'Ring Kevin about the quote',
+      '2026-09-29',
+    ],
+    ['remind me on Friday to ring the venue', 'Ring the venue', '2026-09-25'],
+    // and the shapes that already worked here, which must not move
+    ['put a to-do on to check the numbers', 'Check the numbers', null],
+    ['stick the invoice chase on my list', 'Invoice chase', null],
+    [
+      'remind me to book the venue for the first session',
+      'Book the venue for the first session',
+      null,
+    ],
+  ]
+  for (const [said, title, due] of cases) {
+    it(`"${said.slice(0, 46)}…" is called "${title}"`, () => {
+      const r = personalTaskRequest(said, NOW_MINE)
+      expect(r).not.toBeNull()
+      expect({ title: r?.title, due: r?.due ?? null }).toEqual({ title, due })
+    })
+  }
 })

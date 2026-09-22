@@ -45,7 +45,7 @@
 import { readFollowUp } from './clarify.ts'
 import { clauses } from './clauses.ts'
 import { type Classification, withoutOpeningAffirmation } from './intent.ts'
-import { readRequest, requestBody } from './request.ts'
+import { PROJECT_ADJUNCT, readRequest, requestBody } from './request.ts'
 import { readRetraction } from './retraction.ts'
 
 /** The classes that may write. Everything cheaper discusses. */
@@ -171,9 +171,6 @@ const FORBIDDEN =
 */
 const OBJECT_NOUN =
   /^\s*(?:a|an|the|another|new)?\s*(?:new\s+)?(?:tasks?|to-?dos?|todos?|reminders?|items?)\b\s*/i
-/** "on alpha", "under the beta project", "in alpha" — where it goes, not what it is. */
-const PROJECT_ADJUNCT =
-  /^\s*\b(?:on|under|in|against|for|to)\s+(?:the\s+)?[\w-]+(?:\s+project)?\b(?=\s+(?:to|for|about)\b)\s*/i
 /** What is left once the frame has gone, if it is only a link word. */
 const LINKING =
   /^\s*(?:to|for|about|that|which|and|then|called|named|titled|saying|which\s+is)\b\s*/i
@@ -205,10 +202,18 @@ const TRAILING_PLEASE = /\s*\b(?:please|pls|thanks|ta|if\s+you\s+(?:can|could|wo
  * instruction after - and a comma is the commoner punctuation for it in
  * writing.
  *
- * Bounded to a short phrase, because a long one before a comma is a
- * subordinate clause and part of what the task IS.
+ * Bounded to at most TWO words, and the bound is load-bearing rather than
+ * tidy. The first version allowed spaces inside a 28-character run, so on
+ *
+ *     "On coaching to book the venue, end of next week"
+ *
+ * it matched "on coaching to book the venue," and left "end of next week" —
+ * it ate the instruction and kept the deadline. Found by fresh material on
+ * the very next session after the fix shipped, which is what fresh material
+ * is for. A topic is a name; anything with a verb in it is the sentence.
  */
-const TOPIC_FIRST = /^\s*(?:on|for|under|in|about|re)\s+(?:the\s+)?[\w' -]{2,28},\s*(?=\S)/i
+const TOPIC_FIRST =
+  /^\s*(?:on|for|under|in|about|re)\s+(?:the\s+)?[\w'-]+(?:\s+[\w'-]+)?(?:\s+project)?,\s*(?=\S)/i
 
 /**
  * A verb particle and the preposition after it.
@@ -284,7 +289,7 @@ export const taskTitle = (clause: string): string | null => {
   text = text.replace(/\s+(?:in)?to\s+(?:a|an)\s*(?:tasks?|to-?dos?|reminders?|items?)\s*$/i, '')
   text = text.replace(/\s+(?:a|an|the)?\s*(?:tasks?|to-?dos?|reminders?|items?)\s*$/i, '')
   text = text.replace(TRAILING_PLEASE, '').trim().replace(/\s+/g, ' ')
-  text = text.replace(/[\s,;:-]+$/, '')
+  text = text.replace(/[\s,;:.-]+$/, '')
   if (text === '' || NOT_A_TITLE.test(text)) return null
   return text
 }
