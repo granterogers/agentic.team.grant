@@ -100,7 +100,7 @@ import { type FoundLink, LINK_LABEL, type LinkRequest, linkRequest } from '../ag
 import { personalTaskChange, personalTaskRequest } from '../agents/mine.ts'
 import { asksWhatWasSaid, rejectsWithoutSaying, withoutNegated } from '../agents/negation.ts'
 import type { CanonicalOutcome } from '../agents/outcome.ts'
-import { sayWhatHappened } from '../agents/outcome.ts'
+import { contractFor, sayWhatHappened } from '../agents/outcome.ts'
 import { join, PAIRING_WINDOW_MINUTES, readFragment } from '../agents/pairing.ts'
 import { performable } from '../agents/perform.ts'
 import {
@@ -3460,6 +3460,51 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         (changed === null ? 0 : 1) +
         who.alsoConvened.length
 
+      /*
+        Counted from `MAY_ACT` - the same signal the handler already trusts
+        to decide whether to PLAN.
+
+        The first version counted only the explicit task_create, task_change
+        and delegate readings, reasoning that the `other` catch-all would put
+        "I have not done this" onto ordinary remarks. Fresh unseen material
+        overturned that within the hour:
+
+            "get someone onto the insurance renewal before it slips"
+              -> 0 tasks, 0 child jobs, 1 impediment, and the office said
+                 "I'll create a task titled Insurance renewal - follow-up"
+
+        which is #302's second failure mode exactly, arriving under a label
+        the strict list did not cover. A narrower count did not reduce noise;
+        it reopened the defect.
+
+        `requests.length` is the honest line because it is already the
+        handler's own actionability judgement - `planAndPursue` runs on
+        exactly this condition. If the turn is worth planning for it is worth
+        telling the truth about. And the sentence appears only when NOTHING
+        was done and NOTHING was planned, so the remaining exposure is a
+        clause read as `other`, acted on by nobody and planned by nobody,
+        about which "I have not done this" is true.
+      */
+      const wantedWork = requests.length
+
+      const outcome: CanonicalOutcome = {
+        wanted: wantedWork,
+        landed: acted,
+        // The only thing that licenses a commitment to the future, and the
+        // office's one way of making one here is to hand work on.
+        pendingActions: pursuing === null ? 0 : 1,
+        awaitingApproval: false,
+        /*
+          Named only where it is KNOWN. Claiming to know what is missing when
+          we do not is the same defect as claiming to have done the work, so
+          the generic ask is the honest sentence rather than a worse one.
+        */
+        missing: job.projectId === null && wantedWork > 0 ? ['which project this is for'] : [],
+        capabilityRefused: false,
+        attempt: job.attempt,
+        maxAttempts: 4,
+      }
+
       // The same retrieval the office uses, so an instruction answered in
       // Telegram cites the same corpus as one answered in Slack. §22's rule
       // that the source interface must not change the organisation's
@@ -4187,6 +4232,41 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   answer rather than about the subject, and it should be the
                   last thing read before the conversation.
                 */
+              /*
+                  What this turn is PERMITTED to promise - #302.
+
+                  The contract is computed from rows above. Telling the
+                  writer is the other half of it: the composed sentence makes
+                  the truth unavoidable, and this stops the model appending a
+                  commitment that contradicts it.
+
+                  A live probe is why this exists. With the composed line
+                  leading, the office still answered "I have not done this...
+                  but I'll create a task for the appropriate team member and
+                  set a deadline" - against 0 tasks and 0 child jobs. The
+                  truth led and the promise followed it, which is a mixed
+                  message rather than an honest one.
+
+                  Stated as a permission derived from state, never as a list
+                  of forbidden phrases: a detector that cannot tell "I'll
+                  draft it" backed by a child job from the same words backed
+                  by nothing would have to refuse both.
+                */
+              ...(contractFor(outcome).mayCommitToFuture
+                ? []
+                : [
+                    {
+                      role: 'system' as const,
+                      content:
+                        'NOTHING IS QUEUED TO HAPPEN AFTER THIS ANSWER. No work has been ' +
+                        'started, handed on or scheduled by this turn, so there is nothing ' +
+                        'that would carry out a commitment you make here. Do not say you ' +
+                        'are going to do something, or that something will happen, unless ' +
+                        'he does something first - "tell me which project and I will" is ' +
+                        'fine because it depends on him; "I will create the task" is not, ' +
+                        'because nothing will. Say what you would need, and ask for it.',
+                    },
+                  ]),
               ...(coherenceNote === null
                 ? []
                 : [
@@ -4447,50 +4527,6 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         needed a detector - because a composed sentence cannot be phrased
         around.
       */
-      /*
-        Counted from `MAY_ACT` - the same signal the handler already trusts
-        to decide whether to PLAN.
-
-        The first version counted only the explicit task_create, task_change
-        and delegate readings, reasoning that the `other` catch-all would put
-        "I have not done this" onto ordinary remarks. Fresh unseen material
-        overturned that within the hour:
-
-            "get someone onto the insurance renewal before it slips"
-              -> 0 tasks, 0 child jobs, 1 impediment, and the office said
-                 "I'll create a task titled Insurance renewal - follow-up"
-
-        which is #302's second failure mode exactly, arriving under a label
-        the strict list did not cover. A narrower count did not reduce noise;
-        it reopened the defect.
-
-        `requests.length` is the honest line because it is already the
-        handler's own actionability judgement - `planAndPursue` runs on
-        exactly this condition. If the turn is worth planning for it is worth
-        telling the truth about. And the sentence appears only when NOTHING
-        was done and NOTHING was planned, so the remaining exposure is a
-        clause read as `other`, acted on by nobody and planned by nobody,
-        about which "I have not done this" is true.
-      */
-      const wantedWork = requests.length
-
-      const outcome: CanonicalOutcome = {
-        wanted: wantedWork,
-        landed: acted,
-        // The only thing that licenses a commitment to the future, and the
-        // office's one way of making one here is to hand work on.
-        pendingActions: pursuing === null ? 0 : 1,
-        awaitingApproval: false,
-        /*
-          Named only where it is KNOWN. Claiming to know what is missing when
-          we do not is the same defect as claiming to have done the work, so
-          the generic ask is the honest sentence rather than a worse one.
-        */
-        missing: job.projectId === null && wantedWork > 0 ? ['which project this is for'] : [],
-        capabilityRefused: false,
-        attempt: job.attempt,
-        maxAttempts: 4,
-      }
       const outcomeLine = sayWhatHappened(outcome)
       /*
         Joined with a SPACE, not a blank line.
