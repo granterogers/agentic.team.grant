@@ -62,6 +62,26 @@ describe('the prohibition on promising exists and is gated on the rows', () => {
     expect(withoutComments).toContain('contractFor(outcome)')
     expect(withoutComments.match(/const outcome: CanonicalOutcome = \{/g) ?? []).toHaveLength(1)
   })
+
+  /*
+    And `asked` is the GRAMMAR's answer, not a restatement of `wanted`.
+
+    Wiring it to `requests.length > 0` compiles, passes every other check in
+    this file, and reinstates the measured defect exactly — 22 of 34 live
+    turns opening with "I have not done this", 8 of them on questions —
+    because `requests` counts the `other` reading that every non-model path
+    produces for the whole utterance.
+
+    A source assertion because the handler cannot be unit-driven, and a
+    sabotage of that one line is the control: replacing it with the length
+    test must turn this red.
+  */
+  it('reads whether he asked from the mood, not from the count', () => {
+    expect(withoutComments).toMatch(/asked:\s*askedForWork/)
+    expect(withoutComments).toMatch(
+      /const askedForWork = requests\.some\([\s\S]{0,120}readRequest\([\s\S]{0,80}mood === 'ask'/,
+    )
+  })
 })
 
 describe('what the clause may and may not contain', () => {

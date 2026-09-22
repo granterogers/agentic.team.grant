@@ -152,6 +152,37 @@ export interface CanonicalOutcome {
    * settled state passes what the job's own state says.
    */
   readonly settled: boolean
+  /**
+   * Did he ASK for work, in a form the office's own grammar recognises?
+   *
+   * Separate from `wanted` because the two numbers answer different
+   * questions, and the first wiring used one for both.
+   *
+   * `wanted` is deliberately permissive: it counts every clause the handler
+   * would act on, and it includes the `other` reading, because a narrower
+   * count reopened #302 within the hour - *"get someone onto the insurance
+   * renewal before it slips"* is a request the strict list did not cover and
+   * the office promised to file a task for it.
+   *
+   * But `other` is ALSO what every non-model path returns for the whole
+   * utterance: no provider, a short single clause, a fan-out branch. So
+   * *"did you do it?"* arrives as one reading of kind `other`, counts as
+   * wanting work, lands nothing, classifies as `blocked_needs_user`, and the
+   * office answers a question about its own state by opening *"I have not
+   * done this. I understood what you want and could not carry it out - say it
+   * again in a sentence and I will."* Measured over 34 live turns: **22 of
+   * them, 65%, opened with that clause, 8 of those on questions.**
+   *
+   * CLAUDE.md records the shape exactly - a fallback class and a real class
+   * sharing one name makes both unreachable, and nothing downstream can tell
+   * *"we decided this"* from *"we did not know"*. The remedy there was
+   * `Classification.recognised`; this is the same remedy one layer out.
+   *
+   * It is deliberately used for ONE thing: whether the office VOLUNTEERS a
+   * state sentence. It never widens what an answer may claim, so a turn that
+   * asked for nothing still may not say it did something.
+   */
+  readonly asked: boolean
 }
 
 /**
@@ -307,9 +338,20 @@ export const sayWhatHappened = (c: CanonicalOutcome): string | null => {
         true one when nothing is named. Claiming to know what is missing when
         we do not is the same defect as claiming to have done the work.
       */
-      return c.missing.length === 0
-        ? 'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.'
-        : `I have not done this yet — I need ${list(c.missing)}.`
+      if (c.missing.length > 0) return `I have not done this yet — I need ${list(c.missing)}.`
+      /*
+        Nothing specific to ask for, and he did not ask for work in a form
+        the grammar recognises. Then the office owes him nothing extra: the
+        clause below is an answer to a request, and this turn was a question
+        or a remark that the `other` reading could not tell apart from one.
+
+        Silence here does NOT loosen the contract. The class is unchanged, so
+        `mayClaimCompletion` is still false and the backstop still runs - the
+        office may say nothing about having done it, it simply does not open
+        by announcing that it has not.
+      */
+      if (!c.asked) return null
+      return 'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.'
     case 'blocked_capability':
       return 'I have not done this, and it is not something I can do — so there is nothing to wait for.'
     case 'pending_approval':

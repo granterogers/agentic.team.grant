@@ -153,6 +153,12 @@ for (const t of turns) {
     // The oracle reads a finished job, so it may use the class the handler
     // deliberately cannot reach.
     settled: ['complete', 'failed', 'cancelled'].includes(String(r.state)),
+    /*
+      Derived from the office's own routing record rather than from the
+      handler's grammar call, so the two halves are a second opinion rather
+      than the same opinion twice.
+    */
+    asked: actionable,
   }
   const cls = classifyOutcome(outcome)
   classes.set(cls, (classes.get(cls) ?? 0) + 1)

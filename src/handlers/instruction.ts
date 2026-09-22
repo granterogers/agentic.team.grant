@@ -87,7 +87,7 @@ import {
   EMPTY_CAPABILITY,
   toolNames,
 } from '../agents/capability.ts'
-import { split } from '../agents/clauses.ts'
+import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
 import { type Correction, readCorrection } from '../agents/correction.ts'
@@ -121,6 +121,7 @@ import {
   PROVENANCE_NOTE,
 } from '../agents/provenance.ts'
 import { remember } from '../agents/remember.ts'
+import { readRequest } from '../agents/request.ts'
 import { readRetraction } from '../agents/retraction.ts'
 import { recordDecision, route, scanForDuplicates } from '../agents/router.ts'
 import { SET_ASIDE_LINE } from '../agents/say-what-you-dropped.ts'
@@ -3489,6 +3490,30 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       const wantedWork = requests.length
 
       /*
+        And the OTHER question, which the first wiring answered with the same
+        number: did he ask for work at all?
+
+        `other` is both a real reading - "understood as a request, none of
+        the above" - and what every non-model path returns for the whole
+        utterance. So "did you do it?" counted as wanting work, and the
+        office opened its answer to a question about its own state with "I
+        have not done this... say it again in a sentence and I will." 22 of
+        34 live turns led with that clause; 8 of them were questions.
+
+        The grammar can tell them apart and is already trusted to, all over
+        this handler. A clause of the request in the `ask` mood means he
+        asked; a question or a remark means the reading is the fallback
+        speaking rather than a request the office failed.
+
+        Used ONLY to decide whether the office volunteers a state sentence.
+        `wanted` is unchanged, so nothing here widens what an answer may
+        claim - which is what keeps the insurance-renewal escape closed.
+      */
+      const askedForWork = requests.some((text) =>
+        readRequest(text, clauses).some((c) => c.mood === 'ask'),
+      )
+
+      /*
         What this turn actually put in the world, from the tables.
 
         Asked once, here, after every writer has run. `acted` above is what
@@ -3546,6 +3571,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           is when the office is most likely to answer well.
         */
         settled: false,
+        asked: askedForWork,
       }
 
       // The same retrieval the office uses, so an instruction answered in
