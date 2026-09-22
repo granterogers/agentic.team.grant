@@ -4573,22 +4573,29 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         promise something else, so the loop ends at a sentence composed from
         canonical state rather than at another attempt.
       */
-      const held = contractFor(outcome).mayCommitToFuture
-        ? { answer: draft, outcome: 'clean' as const }
-        : await heldToWhatIsQueued(draft, outcomeLine, async (instruction) => {
-            const redo = await deps.router.complete({
-              messages: [
-                { role: 'system' as const, content: instruction },
-                { role: 'user' as const, content: draft },
-              ],
-              jobId: job.jobId,
-              maxTokens: 700,
-              // Deterministic: a correction that varies between attempts is a
-              // coin flip, and this one has exactly one job.
-              temperature: 0,
-            })
-            return scrub(redo.content)
-          })
+      const may = contractFor(outcome)
+      const held =
+        may.mayCommitToFuture && may.mayClaimCompletion
+          ? { answer: draft, outcome: 'clean' as const }
+          : await heldToWhatIsQueued(
+              draft,
+              outcomeLine,
+              async (instruction) => {
+                const redo = await deps.router.complete({
+                  messages: [
+                    { role: 'system' as const, content: instruction },
+                    { role: 'user' as const, content: draft },
+                  ],
+                  jobId: job.jobId,
+                  maxTokens: 700,
+                  // Deterministic: a correction that varies between attempts is a
+                  // coin flip, and this one has exactly one job.
+                  temperature: 0,
+                })
+                return scrub(redo.content)
+              },
+              may,
+            )
 
       /*
         Recorded when neither the rewrite nor the fallback could produce a

@@ -23,6 +23,7 @@
  */
 
 import { DURABILITY } from './durability.ts'
+import { DURABILITY_FRESH } from './durability-fresh.ts'
 import { FINAL } from './final.ts'
 import { FOURTH } from './fourth.ts'
 import { HELD_OUT } from './holdout.ts'
@@ -807,6 +808,7 @@ export const SESSIONS: readonly Session[] = [
   ...THIRD,
   ...FOURTH,
   ...DURABILITY,
+  ...DURABILITY_FRESH,
 ]
 
 export const byName = (name: string): Session | undefined => SESSIONS.find((s) => s.name === name)

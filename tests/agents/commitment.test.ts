@@ -30,7 +30,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { heldToWhatIsQueued, unsupportedCommitment } from '../../src/agents/commitment.ts'
+import {
+  claimsCompletion,
+  heldToWhatIsQueued,
+  misrepresents,
+  unsupportedCommitment,
+} from '../../src/agents/commitment.ts'
+
+/** Both halves disallowed, which is what the loop is for. */
+const BOTH_FORBIDDEN = { mayCommitToFuture: false, mayClaimCompletion: false }
 
 const fires = (s: string): boolean => unsupportedCommitment(s) !== null
 
@@ -149,16 +157,26 @@ describe('the rewrite is bounded, and ends at the truth', () => {
 
   it('leaves a clean draft alone and never spends a call', async () => {
     let calls = 0
-    const r = await heldToWhatIsQueued('There is nothing on that.', TRUTH, async () => {
-      calls++
-      return ''
-    })
+    const r = await heldToWhatIsQueued(
+      'There is nothing on that.',
+      TRUTH,
+      async () => {
+        calls++
+        return ''
+      },
+      BOTH_FORBIDDEN,
+    )
     expect(r.outcome).toBe('clean')
     expect(calls).toBe(0)
   })
 
   it('takes a rewrite that stops promising', async () => {
-    const r = await heldToWhatIsQueued(PROMISE, TRUTH, async () => `${TRUTH} Which one is it?`)
+    const r = await heldToWhatIsQueued(
+      PROMISE,
+      TRUTH,
+      async () => `${TRUTH} Which one is it?`,
+      BOTH_FORBIDDEN,
+    )
     expect(r.outcome).toBe('rewritten')
     expect(unsupportedCommitment(r.answer)).toBeNull()
   })
@@ -173,10 +191,15 @@ describe('the rewrite is bounded, and ends at the truth', () => {
   */
   it('never lets an adversarial rewriter promise something else instead', async () => {
     let calls = 0
-    const r = await heldToWhatIsQueued(PROMISE, TRUTH, async () => {
-      calls++
-      return `I'll do something completely different, attempt ${String(calls)}.`
-    })
+    const r = await heldToWhatIsQueued(
+      PROMISE,
+      TRUTH,
+      async () => {
+        calls++
+        return `I'll do something completely different, attempt ${String(calls)}.`
+      },
+      BOTH_FORBIDDEN,
+    )
     expect(calls).toBe(1)
     expect(r.outcome).toBe('fell_back')
     expect(r.answer).toBe(TRUTH)
@@ -184,14 +207,19 @@ describe('the rewrite is bounded, and ends at the truth', () => {
   })
 
   it('survives a rewriter that throws, and still lands on the truth', async () => {
-    const r = await heldToWhatIsQueued(PROMISE, TRUTH, async () => {
-      throw new Error('provider down')
-    })
+    const r = await heldToWhatIsQueued(
+      PROMISE,
+      TRUTH,
+      async () => {
+        throw new Error('provider down')
+      },
+      BOTH_FORBIDDEN,
+    )
     expect(r.answer).toBe(TRUTH)
   })
 
   it('survives a rewriter that returns nothing', async () => {
-    const r = await heldToWhatIsQueued(PROMISE, TRUTH, async () => '   ')
+    const r = await heldToWhatIsQueued(PROMISE, TRUTH, async () => '   ', BOTH_FORBIDDEN)
     expect(r.answer).toBe(TRUTH)
   })
 
@@ -203,10 +231,84 @@ describe('the rewrite is bounded, and ends at the truth', () => {
   */
   it('keeps the draft when the turn owes no sentence, rather than going silent', async () => {
     const done = "That is on your list. I'll also send it over."
-    const r = await heldToWhatIsQueued(done, null, async () => "I'll still promise things.")
+    const r = await heldToWhatIsQueued(
+      done,
+      null,
+      async () => "I'll still promise things.",
+      BOTH_FORBIDDEN,
+    )
     expect(r.outcome).toBe('fell_back')
     // The promise is REMOVED and the true report of the work survives.
     expect(r.answer).toBe('That is on your list.')
     expect(unsupportedCommitment(r.answer)).toBeNull()
+  })
+})
+
+describe('the past tense, which the contract permitted and nothing enforced', () => {
+  /*
+    Found by the durability sweep against v685. One turn apart, on a job with
+    zero tasks and zero child jobs:
+
+      "Added 'book venue' to the coaching project and moved 'write welcome
+       pack' to the Match Funding Bid project."
+      "I haven't created any tasks yet, so there's nothing to list."
+
+    At most one could be true. `claimsToHaveMade` could not see the first
+    because it requires a creation VERB and an artifact NOUN, and that
+    sentence names the task by its TITLE - so the noun never appears. The set
+    of things a person can ask to be created is open; a list of nouns is
+    always one short.
+
+    The noun requirement is dropped and the closed part kept: a
+    brought-into-existence verb, in the past, with the office as agent.
+  */
+  const real =
+    'Added “book venue” to the coaching project and moved “write welcome pack” to the Match Funding Bid project.'
+
+  it('catches the live one that the noun list could not', () => {
+    expect(claimsCompletion(real)).not.toBeNull()
+  })
+
+  for (const [what, said] of [
+    ['first person perfect', 'I have added the task for you.'],
+    ['sentence-initial past', 'Created a note on the bid.'],
+    ['set up', 'I set up a reminder for Tuesday.'],
+    ['sent', 'I sent the note to the funding officer.'],
+    ['after a truthful sentence', `There is nothing indexed. ${real}`],
+  ] as [string, string][]) {
+    it(`fires: ${what}`, () => {
+      expect(claimsCompletion(said)).not.toBeNull()
+    })
+  }
+
+  /*
+    The negatives, and they carry the weight. The composed sentence and the
+    honest answer are BOTH negated past tense, so a detector that fired on
+    them would refuse the office for telling the truth - which is the
+    failure this repository records twice as the one somebody switches off.
+  */
+  for (const [what, said] of [
+    [
+      'the composed sentence itself',
+      'I have not done this. I understood what you want and could not carry it out — say it again in a sentence and I will.',
+    ],
+    ['the honest denial', "I haven't created any tasks yet, so there's nothing to list."],
+    ['no record', 'I have no record of the insurance being sorted.'],
+    ['an offer as a question', 'Would you like me to add it?'],
+    ['shall I', 'Shall I create the task?'],
+    ['conditional', 'If you tell me the project I will add it.'],
+    ['a refusal', 'I could not create it without a project.'],
+    ['nothing happened', 'Nothing has been created.'],
+    ['reporting HIS action', 'You added that one yourself last week.'],
+  ] as [string, string][]) {
+    it(`stays silent: ${what}`, () => {
+      expect(claimsCompletion(said)).toBeNull()
+    })
+  }
+
+  it('is reached through the one entry point, so neither half can be forgotten', () => {
+    const may = { mayCommitToFuture: true, mayClaimCompletion: false }
+    expect(misrepresents(real, may)).not.toBeNull()
+    expect(misrepresents(real, { mayCommitToFuture: true, mayClaimCompletion: true })).toBeNull()
   })
 })

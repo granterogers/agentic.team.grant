@@ -40,7 +40,7 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { unsupportedCommitment } from '../../src/agents/commitment.ts'
+import { claimsCompletion, unsupportedCommitment } from '../../src/agents/commitment.ts'
 import type { CanonicalOutcome } from '../../src/agents/outcome.ts'
 import { classifyOutcome, sayWhatHappened } from '../../src/agents/outcome.ts'
 import { claimsToHaveMade } from '../../src/agents/quality.ts'
@@ -175,7 +175,11 @@ for (const t of turns) {
   }
 
   if (landed === 0) {
-    const made = claimsToHaveMade(answer)
+    /*
+      Both readers, because the older one is blind to a thing named by its
+      TITLE rather than by its kind - which is how the live case escaped.
+    */
+    const made = claimsToHaveMade(answer) ?? claimsCompletion(answer)?.clause ?? null
     if (made !== null) {
       findings.push({
         kind: 'CLAIM',

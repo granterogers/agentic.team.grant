@@ -232,17 +232,37 @@ export const rewriteBecauseNothingIsQueued = (
  * so the termination property can be proved against a rewriter that is
  * adversarial by construction.
  */
+/**
+ * Whichever half of the contract this answer breaks, or null.
+ *
+ * One entry point, so the handler cannot enforce the future tense and forget
+ * the past — which is exactly what happened: `mayClaimCompletion` had been on
+ * the contract since it was written with nothing reading it, and the sweep
+ * found the office claiming two operations that never happened.
+ *
+ * A permission that nothing enforces is the defaulted-parameter defect in
+ * another costume, and this repository records four of those.
+ */
+export const misrepresents = (
+  draft: string,
+  may: { readonly mayCommitToFuture: boolean; readonly mayClaimCompletion: boolean },
+): UnsupportedCommitment | null =>
+  (may.mayCommitToFuture ? null : unsupportedCommitment(draft)) ??
+  (may.mayClaimCompletion ? null : claimsCompletion(draft))
+
 export const heldToWhatIsQueued = async (
   draft: string,
   /** The sentence composed from canonical state, or null where none is owed. */
   truth: string | null,
   rewrite: (instruction: string) => Promise<string>,
+  /** What the rows permit. Both halves, so neither can be forgotten. */
+  may: { readonly mayCommitToFuture: boolean; readonly mayClaimCompletion: boolean },
 ): Promise<{ readonly answer: string; readonly outcome: 'clean' | 'rewritten' | 'fell_back' }> => {
-  const first = unsupportedCommitment(draft)
+  const first = misrepresents(draft, may)
   if (first === null) return { answer: draft, outcome: 'clean' }
 
   const second = await rewrite(rewriteBecauseNothingIsQueued(truth ?? '', first)).catch(() => '')
-  if (second.trim() !== '' && unsupportedCommitment(second) === null) {
+  if (second.trim() !== '' && misrepresents(second, may) === null) {
     return { answer: second.trim(), outcome: 'rewritten' }
   }
 
@@ -262,7 +282,7 @@ export const heldToWhatIsQueued = async (
     not say something is.
   */
   if (truth !== null) return { answer: truth, outcome: 'fell_back' }
-  return { answer: withoutCommitments(draft), outcome: 'fell_back' }
+  return { answer: withoutCommitments(draft, may), outcome: 'fell_back' }
 }
 
 /**
@@ -273,8 +293,75 @@ export const heldToWhatIsQueued = async (
  * draft only if removal would leave nothing at all — an empty answer is the
  * #302 symptom this whole change exists to end.
  */
-const withoutCommitments = (draft: string): string => {
-  const kept = sentences(straighten(draft)).filter((s) => unsupportedCommitment(s) === null)
+const withoutCommitments = (draft: string, may: Parameters<typeof misrepresents>[1]): string => {
+  const kept = sentences(straighten(draft)).filter((s) => misrepresents(s, may) === null)
   const joined = kept.join(' ').trim()
   return joined === '' ? draft : joined
+}
+
+/**
+ * Does this answer report that the office ALREADY did something — #302, the
+ * past-tense half.
+ *
+ * `mayClaimCompletion` has been on the contract since it was written and
+ * nothing enforced it. The durability sweep found what that costs:
+ *
+ *     turn 1: "Added 'book venue' to the coaching project and moved
+ *              'write welcome pack' to the Match Funding Bid project."
+ *     turn 2: "I haven't created any tasks yet, so there's nothing to list."
+ *
+ * Zero tasks and zero child jobs on both. The office told him two opposite
+ * things one turn apart, and at most one of them could be true.
+ *
+ * ## Why `claimsToHaveMade` could not see it
+ *
+ * It requires a creation VERB **and** an artifact NOUN — task, note,
+ * document, reminder. The sentence above names the thing by its TITLE
+ * instead, so the noun never appears and the detector is blind by
+ * construction. That is the enumeration failure this repository records six
+ * times, in the direction that cannot be patched: the set of things a person
+ * might ask to be created is open, and a list of nouns will always be one
+ * short.
+ *
+ * So the noun requirement is dropped. What is left is the closed part: a
+ * verb that means brought-into-existence or put-somewhere, in the past, with
+ * the office as the agent. The set of such verbs is small and stable in a
+ * way that the set of THINGS is not — and where it is wrong, it is wrong by
+ * one false positive that somebody sees immediately.
+ *
+ * Consulted only where `mayClaimCompletion` is false, so an office that
+ * really did the work is never shown it.
+ */
+const DID_IT =
+  /(?:^|[.!?]\s+|\b(?:i|we)\s+(?:have\s+|'ve\s+|just\s+)?)(?:created|added|filed|logged|made|drafted|scheduled|booked|saved|moved|put|set\s+up|opened|started|sent|posted|assigned|updated|renamed|deleted|removed)\b/i
+
+/**
+ * What takes the claim back out of the past.
+ *
+ * Negation first, because the composed sentence and the honest answer are
+ * both negated — *"I have not done this"*, *"I haven't created any tasks
+ * yet"* — and a detector that fired on those would refuse the office for
+ * telling the truth.
+ */
+const NOT_A_CLAIM =
+  /\b(?:not|never|n't|nothing|no)\b|\bcould\s+not\b|\bcannot\b|\bwithout\b|\?\s*$|\b(?:if|once|when|would|could|should|shall\s+i|want\s+me\s+to|like\s+me\s+to)\b/i
+
+/**
+ * The first sentence that reports work the rows do not show.
+ *
+ * Sentence by sentence, so an answer that truthfully says what it did NOT do
+ * and then claims something else is caught on the second sentence rather
+ * than excused by the first. That ordering is the actual live case: the
+ * composed truth led, and the claim followed it.
+ */
+export const claimsCompletion = (body: string): UnsupportedCommitment | null => {
+  const text = straighten(String(body ?? ''))
+  if (text.trim() === '') return null
+  for (const sentence of sentences(text)) {
+    const m = DID_IT.exec(sentence)
+    if (m === null) continue
+    if (NOT_A_CLAIM.test(sentence)) continue
+    return { clause: sentence.slice(0, 200), marker: m[0].trim() }
+  }
+  return null
 }

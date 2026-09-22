@@ -19,6 +19,9 @@ import { heldToWhatIsQueued, unsupportedCommitment } from '../../src/agents/comm
 import type { CanonicalOutcome, OutcomeClass } from '../../src/agents/outcome.ts'
 import { classifyOutcome, contractFor, sayWhatHappened } from '../../src/agents/outcome.ts'
 
+/** Both halves disallowed, which is what the loop is for. */
+const BOTH_FORBIDDEN = { mayCommitToFuture: false, mayClaimCompletion: false }
+
 const at = (over: Partial<CanonicalOutcome> = {}): CanonicalOutcome => ({
   wanted: 0,
   landed: 0,
@@ -181,6 +184,7 @@ describe('the refused answers end at the truth, not at another promise', () => {
           answer,
           truth,
           async () => "And I'll do something else.",
+          BOTH_FORBIDDEN,
         )
         expect(unsupportedCommitment(held.answer)).toBeNull()
         expect(held.answer.trim()).not.toBe('')

@@ -260,6 +260,14 @@ const SABOTAGES: readonly Sabotage[] = [
     replacement: "  if (truth !== null) return { answer: second, outcome: 'fell_back' }",
     check: 'tests/agents/commitment.test.ts',
   },
+  {
+    name: 'completion-claim-without-a-noun',
+    proves: 'a claim to have done something is caught when the thing is named by its title',
+    file: 'src/agents/commitment.ts',
+    anchor: '    if (NOT_A_CLAIM.test(sentence)) continue',
+    replacement: '    if (true) continue',
+    check: 'tests/agents/commitment.test.ts',
+  },
 ]
 
 const only = ((): string => {
