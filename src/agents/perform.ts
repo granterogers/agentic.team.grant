@@ -730,10 +730,22 @@ export const compile = (
           await raiseBlocker(db, {
             jobId,
             ...(projectId === null ? {} : { projectId }),
-            requestedAction: `${step.capability} — ${step.why === '' ? request : step.why}`.slice(
-              0,
-              280,
-            ),
+            /*
+              WITHOUT THE CAPABILITY IN FRONT OF IT (#307's fourth writer).
+
+              A blocker's `requestedAction` is what Grant reads when he is
+              asked to approve something — and `raiseBlocker` also puts it on
+              his task list, so this string becomes a task TITLE. On v717,
+              after the plan step's own reason had been cleaned:
+
+                  task.create — Create a task to redo the budget page on the bid
+
+              #242's rule: an internal reference in a sentence a person reads
+              is a defect. The capability is already carried in this blocker's
+              structured context two lines above, where a reader that needs it
+              can have it without Grant seeing it.
+            */
+            requestedAction: (step.why === '' ? request : step.why).slice(0, 280),
             whyNeeded: decision.because,
             consequencesOfDelay: 'The rest of the plan waits until you answer.',
             approvalOptions: ['Yes, do it', 'No, leave it'],

@@ -23,6 +23,7 @@
  * got one from is us.
  */
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { inGrantsTerms } from '../../src/agents/goal.ts'
 
@@ -74,5 +75,29 @@ describe('and an ordinary reason is left exactly alone', () => {
     */
     expect(inGrantsTerms('draft.create')).toBe('draft.create')
     expect(inGrantsTerms('task.create —')).toBe('task.create —')
+  })
+})
+
+describe('and no writer puts the capability back in front of it', () => {
+  /*
+    #307's FOURTH writer, found on v717 after the third was fixed.
+
+    A blocker's `requestedAction` is what Grant reads when asked to approve
+    something, and `raiseBlocker` also puts it on his task list — so the
+    string is a task title. `perform.ts` was composing it as
+    `${step.capability} — ${why}`, which put the identifier straight back in
+    after `inGrantsTerms` had taken it out:
+
+        task.create — Create a task to redo the budget page on the bid
+
+    A source assertion because the path needs a plan, a policy decision and a
+    database; what it protects is one line, and one line is exactly what a
+    future change would put back.
+  */
+  it('perform.ts composes no requested action from a capability', () => {
+    const source = readFileSync('src/agents/perform.ts', 'utf8')
+    const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
+    expect(withoutComments).not.toMatch(/requestedAction:\s*`\$\{step\.capability\}/)
+    expect(withoutComments).toMatch(/requestedAction: \(step\.why === '' \? request : step\.why\)/)
   })
 })
