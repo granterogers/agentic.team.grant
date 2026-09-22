@@ -25,7 +25,7 @@ const SIZES = [
   { id: 'phone', width: 390, height: 844, touch: true },
 ] as const
 
-const PICKS = ['grid', 'a', 'b'] as const
+const PICKS = ['grid', 'a', 'b', 'c'] as const
 
 const browser = await chromium.launch({ args: ['--lang=en-GB'] })
 const thrown: string[] = []
@@ -66,6 +66,22 @@ for (const size of SIZES) {
       await page.goto(url(slug), { waitUntil: 'domcontentloaded' })
       await page.waitForSelector(pick === 'grid' ? '.bcgrid' : '.bccomp', { timeout: 6000 })
       await page.waitForTimeout(450)
+      /*
+        WAIT FOR THE REAL PAGE. §21's thumbnails are rendered by pdf.js, which
+        is 330KB loaded lazily plus a worker plus a decode - comfortably longer
+        than the settle this harness used, so every capture of the Docs and
+        Files pane showed the DRAWN placeholder and none showed the product.
+        A capture that photographs the fallback is a capture of something
+        nobody sees.
+
+        Bounded and non-fatal: a screen with no PDF, or one whose file will not
+        parse, carries on after the timeout with the drawing, which is exactly
+        what a person would see.
+      */
+      if ((await page.locator('[data-bc-thumb]').count()) > 0) {
+        await page.waitForSelector('.bcthumb .realpage', { timeout: 6000 }).catch(() => null)
+        await page.waitForTimeout(250)
+      }
       await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false })
       await page.screenshot({ path: `${OUT}/${name}-full.png`, fullPage: true })
       taken += 1

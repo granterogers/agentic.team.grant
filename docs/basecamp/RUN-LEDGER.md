@@ -959,22 +959,106 @@ because three out of four findings off a PNG usually are, and the discipline of
 writing down the wrong one is what keeps the other twenty-seven trustworthy.
 
 ---
+## Grant's §21: Docs & Files on the home, and the composition it forced
+
+His correction after seeing composition B, against his own Basecamp
+screenshot: **Docs & Files must be a first-class live pane on the project
+home**, and all five of To-dos, Card Table, Docs & Files, Schedule and Chat
+must be understandable from the first 1440×900 view without clicking through
+navigation cards.
+
+### Composition C, and my §20 analysis was half wrong
+
+§21's experiment chose B — a main column with a companion rail. B cannot hold
+eight panes, so it puts Docs & Files somewhere around 1,400px down. **C is a
+three-column board of panes above a full-width Latest Activity**, which is what
+his reference does.
+
+That means the grid came back, and the honest correction is this: **§20 blamed
+the equal-weight composition and the real fault was the tile content.** Every
+preview went through one `row(title, meta)` primitive. Basecamp uses an even
+grid too. A grid of real miniatures and a grid of navigation cards look alike
+in a wireframe and are not the same product, and saying so is cheaper than
+defending the earlier reading.
+
+Measured at 1440×900, all five required panes are **fully inside the first
+view** — To-dos to 595, Card Table to 478, Docs & Files to 553, Schedule to
+900, Chat to 861 — with the team partly in and People, Sources and Latest
+Activity below. That is checked on every run, by pane, not by eye.
+
+### The thumbnails are real, and none of the machinery is new
+
+`pdf.js` (#23) has rendered page one of a PDF to a canvas with a **self-hosted**
+pdf.mjs since March, and the gateway has minted a ten-minute signed URL for any
+document with a file since #96, because the bucket is private. The pane draws
+`page.js`'s placeholder immediately and lets the real page replace it — which
+is `paint()`'s own contract, so nothing is ever empty, nothing jumps, and a
+file that will not parse degrades to the drawing rather than to a broken image.
+
+A thing with no first page gets an **object** instead: the reference shows a
+green spreadsheet tile beside two real pages, and drawing lines of fake text on
+an audio file would be a picture of a document that does not exist.
+
+**One source.** The pane, the thumbnail wall and the list view are three views
+over `p.documents`. No second store, and no fixture invented to make the home
+look busy.
+
+### Defects 59–66
+
+| # | Found | Defect |
+|---|---|---|
+| 59 | opening the capture | **The Card Table was destroyed at a third width** — four card columns in a 330px pane is 70px each, so every title wrapped to one character per line. CLAUDE.md's #67 arriving through a grid. His own reference settles it: the miniature is tinted vertical bars with the stage name turned on its side and a count, and not one card. |
+| 60 | probing | **No thumbnail rendered at all.** The sample path was relative, so under a nested route `./samples/ws01.pdf` resolved to `/basecamp/p/<slug>/samples/…` and 404'd. Absolute now. |
+| 61 | probing | **Every capture photographed the placeholder.** The harness settled for 450ms; pdf.js is 330KB lazily loaded plus a worker plus a decode. A capture of the fallback is a capture of something nobody sees. It waits for a real page, bounded and non-fatal. |
+| 62 | measuring | **Row two began at exactly the fold.** A grid row is as tall as its tallest cell, so a four-tile Docs pane pushed Schedule, Chat and the team below 900 — the thing he asked to be fixed. Each pane now shows what fits a ~320px row; the type sizes are untouched, because the instruction was explicit that shrinking until it is illegible is not the answer. |
+| 63 | opening the capture | **Two documents showed the same page**, because I had pointed a second record at a sample file to make the pane look fuller. Reverted: not every document has a file, and the drawn page says so. |
+| 64 | opening the capture | **The tool said "Documents" while the pane said "Docs & Files"** — the two-words-for-one-thing defect, third instance, on the screen he had just named. |
+| 65 | the controls audit | **The Thumbnails/List toggle announced no state.** `aria-pressed` was passed a boolean, and the attribute helper renders a boolean true as a BARE attribute — right for `disabled`, and for `aria-pressed` the empty string, which is not a valid value. The audit reported it as a press that changes nothing, which is exactly what it was for anyone listening. |
+| 66 | driving it | **The new tab opened nothing.** `window.open(url, '_blank', 'noopener')` produced a tab whose location came back as `":"` and never navigated. A real anchor with `target` and `rel`, clicked, is what a link is — and it is not caught by a popup blocker the way a scripted open can be. |
+
+### And one wrong finding, caught before it was "fixed"
+
+The check for the new tab read the popup's address and got `":"` — twenty polls, twenty times. **That is headless Chromium reporting any PDF tab that way**, not the product failing. A check written against it would have failed on correct behaviour for ever. It asserts the property instead: a second tab opened, **and** the browser fetched that file.
+
+### The three new detectors, proved
+
+`verify:basecamp-home` — 25 checks over the first view, the pane, the phone and
+the arrangement. Each detector was shown a sabotage whose own effect was
+printed first: removing the Docs pane failed 3 checks; removing the `paint`
+call failed the real-page check; making the phone tiles four-across failed the
+recognisability floor. All restored, all green.
+
+### §14 — the handling he asked to see
+
+Add, remove and reorder are **built and driven**: the panel lists every tool
+with Up, Down and Remove, disabled at the ends, with "Put it back the way it
+was". The audit proves removing a tool takes it off the home, leaves every
+other tool in place, **removes no documents**, survives a reload, comes back
+when put back, and that a reorder moves one and disturbs nothing else.
+
+Removing a tool cannot remove anything else **by construction**: the whole
+mechanism is a list of module ids and there is no delete path here to reach.
+
+It is kept **on this device**, and the panel says so with the reason.
+`dashboard_layouts` holds one arrangement per project and the default board
+already owns that row, so writing this there would take panels off his real
+dashboard. [#299](https://github.com/granterogers/agentic.team.grant/issues/299)
+is the one change that fixes it; when it lands, the save gains a call and that
+paragraph is deleted.
+
+---
 ## NEXT ACTION
 
-**Grant's review.** Every section of the redesign prompt that this workstream
-can satisfy without a backend change is built, green and captured at four
-viewports. What is left needs him:
+**Grant's review, again — the home is a different page.** Composition C is what
+`/basecamp/p/<slug>` draws: a board of live tool panes with Docs & Files
+carrying real rendered first pages, above Latest Activity. The captures are in
+`.out/basecamp/` and `.out/basecamp-compose/`, and the four compositions are
+the `*-desktop.png` files in the latter.
 
-1. **Look at it.** The captures are in `.out/basecamp/` and
-   `.out/basecamp-compose/`; the composition comparison is the three
-   `*-desktop.png` files in the latter, which is the clearest statement of what
-   §21 changed.
-2. **§14 needs a contract**, and it is one line of SQL or one small table —
-   [#299](https://github.com/granterogers/agentic.team.grant/issues/299) has
-   the evidence and two ways to do it. Nothing else in the redesign is blocked.
-3. **Nothing here is deployed**, and nothing has been verified against the real
-   office: both are blocked by credentials AND by the sandbox's egress policy,
-   which is recorded under HUMAN_BLOCKED above.
+One thing still needs him rather than more work here:
+[#299](https://github.com/granterogers/agentic.team.grant/issues/299) — one
+argument or one small table, and the arrangement moves from this device into
+his office, where he asked for it to live.
 
-Still not to be merged, still not promoted to the default route, and the
-default Team HQ is unchanged and proved so on every commit.
+Nothing merged, nothing promoted, nothing deployed, and the default Team HQ
+unchanged and proved so on every commit.

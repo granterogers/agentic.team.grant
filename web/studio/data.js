@@ -113,12 +113,12 @@ const FALLBACK_PROJECTS = [
       { id: 'm6', n: 6, name: 'Legacy Interview Roadmap', state: 'todo', docs: 1, tasks: 4 },
     ],
     documents: [
-      { title: 'WS01 — Legacy Opening Assessment', kind: 'pdf', origin: 'Yours', size: '34,606 words', file: './samples/ws01.pdf', lines: [78, 100, 94, 97, 62, 88, 91, 74] },
+      { title: 'WS01 — Legacy Opening Assessment', kind: 'pdf', origin: 'Yours', size: '34,606 words', file: '/samples/ws01.pdf', lines: [78, 100, 94, 97, 62, 88, 91, 74] },
       { title: 'Grant Rogers Avatar Document', kind: 'doc', origin: 'Yours', size: '27,841 words', lines: [66, 100, 90, 96, 71, 93] },
-      { title: 'WS02 — Creating Client Vision', kind: 'pdf', origin: 'Yours', size: '21,370 words', lines: [84, 98, 86, 92, 58, 79] },
+      { title: 'WS02 — Creating Client Vision', kind: 'pdf', origin: 'Yours', size: '21,370 words', file: '/samples/journey.pdf', lines: [84, 98, 86, 92, 58, 79] },
       { title: 'Grant Interview Questions', kind: 'pdf', origin: 'Yours', size: '11,616 words', lines: [70, 96, 88, 60] },
-      { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: './samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
-      { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+      { title: 'Journey VS Destination', kind: 'pdf', origin: 'Yours', size: '8,683 words', file: '/samples/journey.pdf', lines: [82, 94, 90, 68, 86] },
+      { title: 'Course one-pager', kind: 'made', origin: 'Oliver · 2 days ago', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
       { title: 'Legacy Questionnaire', kind: 'pdf', origin: 'Yours', size: '3,370 words', lines: [74, 92, 84] },
       { title: 'Whats App Audio From Ben', kind: 'audio', origin: 'Yours', size: '4 min · transcribed' },
     ],
@@ -288,7 +288,7 @@ const FALLBACK_PROJECTS = [
           the card is showing one of them. Without an id here the mock renders
           the old single-press button and the sheet cannot be captured at all.
         */
-        output: { id: 'o1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4', file: './samples/one-pager.pdf', lines: [70, 100, 88] },
+        output: { id: 'o1', imported: false, title: 'Course one-pager', kind: 'made', size: 'A4', file: '/samples/one-pager.pdf', lines: [70, 100, 88] },
         derived: ['WS01 — Legacy Opening Assessment', 'Journey VS Destination'],
       },
       {

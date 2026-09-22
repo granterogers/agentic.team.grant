@@ -13,7 +13,9 @@
   second mechanism would be a second set of words for one thing.
 */
 
-import { act, attempt, canWrite } from '../office.js'
+import { act, attempt, canWrite, read } from '../office.js'
+import * as pdf from '../pdf.js'
+import * as compose from './compose.js'
 import * as jump from './jump.js'
 
 let ctx = null
@@ -93,6 +95,9 @@ export const wire = (root) => {
   wireTasks(root)
   wireOutputs(root)
   wireSearch(root)
+  wireDocs(root)
+  wireArrange(root)
+  wireDocsWorkspace(root)
 }
 
 /* ----------------------------------------------------------------- search */
@@ -166,6 +171,307 @@ const wireOutputs = (root) => {
       if (done !== null) await ctx.refresh()
     })
   }
+}
+
+/* ------------------------------------------ the docs workspace (§21) ---- */
+
+/*
+  The view toggle, and adding a file.
+
+  UPLOAD GOES THROUGH `document_upload`, which is the path the current Team HQ
+  already uses (#126): the gateway takes base64, puts the bytes in the private
+  bucket under `<project>/upload/<uuid>`, and records the document row. Nothing
+  here invents a second way in.
+
+  It refuses politely without a token rather than failing into nothing, and it
+  says what it is doing while a large file encodes - a silent Add on a 4MB PDF
+  reads as a control that did not work.
+*/
+const wireDocsWorkspace = (root) => {
+  for (const b of root.querySelectorAll('[data-bc-docview]')) {
+    b.addEventListener('click', () => {
+      try {
+        globalThis.localStorage?.setItem('bc.docsview', b.dataset.bcDocview ?? 'wall')
+      } catch {
+        /* A viewer who cannot store it still gets the default. */
+      }
+      ctx.render()
+    })
+  }
+
+  const form = () => root.querySelector('[data-bc-uploadform]')
+  for (const b of root.querySelectorAll('[data-bc-upload]')) {
+    b.addEventListener('click', () => {
+      const f = form()
+      if (f === null) return
+      f.hidden = false
+      f.querySelector('input')?.focus()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-uploadcancel]')) {
+    b.addEventListener('click', () => {
+      const f = form()
+      if (f === null) return
+      f.reset()
+      f.hidden = true
+      root.querySelector('[data-bc-upload]')?.focus()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-uploadsave]')) {
+    b.addEventListener('click', async () => {
+      const f = form()
+      if (f === null) return
+      const input = f.querySelector('#bc-upload-file')
+      const file = input?.files?.[0]
+      if (file === undefined || file === null) {
+        showFieldError(f, 'bc-upload-file', 'Choose a file first.')
+        return
+      }
+      clearFieldError(f, 'bc-upload-file')
+      if (!canWrite()) {
+        showFieldError(f, 'bc-upload-file', 'This browser is read-only — sign in to add a file.')
+        return
+      }
+      const done = await attempt(
+        b,
+        'Adding…',
+        async () => {
+          const base64 = await asBase64(file)
+          return act('document_upload', {
+            p_project_id: ctx.projects().find((x) => x.slug === ctx.state.project)?.id,
+            p_name: file.name,
+            p_base64: base64,
+          })
+        },
+        'Added to the project.',
+      )
+      if (done !== null) {
+        f.reset()
+        f.hidden = true
+        await ctx.refresh()
+      }
+    })
+  }
+}
+
+/*
+  Base64 without loading the whole file into a string twice.
+
+  `readAsDataURL` gives `data:<mime>;base64,<payload>` and the gateway wants
+  the payload, so the prefix is cut at the first comma rather than by a regex
+  over several megabytes of text.
+*/
+const asBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => {
+      reject(new Error('that file could not be read'))
+    }
+    reader.onload = () => {
+      const out = String(reader.result ?? '')
+      const at = out.indexOf(',')
+      resolve(at < 0 ? out : out.slice(at + 1))
+    }
+    reader.readAsDataURL(file)
+  })
+
+/* ------------------------------------------- arranging the home (§14) --- */
+
+/*
+  Every press here rewrites ONE list of module ids and repaints. There is no
+  path from this panel to any record, which is §14's requirement met
+  structurally rather than by being careful.
+*/
+const wireArrange = (root) => {
+  const panel = root.querySelector('[data-bc-arrange-panel]')
+  const slug = ctx.state.project
+
+  for (const b of root.querySelectorAll('[data-bc-arrange]')) {
+    b.addEventListener('click', () => {
+      if (panel === null) return
+      panel.hidden = !panel.hidden
+      b.setAttribute('aria-expanded', String(!panel.hidden))
+      if (!panel.hidden) panel.querySelector('button')?.focus()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-arr-close]')) {
+    b.addEventListener('click', () => {
+      if (panel !== null) panel.hidden = true
+      root.querySelector('[data-bc-arrange]')?.focus()
+    })
+  }
+
+  const move = (id, by) => {
+    const ids = compose.arrangement(slug)
+    const at = ids.indexOf(id)
+    const to = at + by
+    if (at < 0 || to < 0 || to >= ids.length) return
+    ids.splice(to, 0, ids.splice(at, 1)[0])
+    compose.arrange(slug, ids)
+    ctx.render()
+    reopen()
+  }
+
+  /*
+    The panel is inside the thing being redrawn, so a press closes it unless it
+    is reopened - and a control that undoes itself on every use reads as
+    broken. #197's lesson in miniature: anything that must survive a redraw has
+    to be put back after it.
+  */
+  const reopen = () => {
+    const again = document.querySelector('[data-bc-arrange-panel]')
+    if (again !== null) again.hidden = false
+  }
+
+  for (const b of root.querySelectorAll('[data-bc-arr-up]')) {
+    b.addEventListener('click', () => {
+      move(b.dataset.bcArrUp, -1)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-arr-down]')) {
+    b.addEventListener('click', () => {
+      move(b.dataset.bcArrDown, 1)
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-arr-off]')) {
+    b.addEventListener('click', () => {
+      const id = b.dataset.bcArrOff
+      compose.arrange(slug, compose.arrangement(slug).filter((x) => x !== id))
+      ctx.render()
+      reopen()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-arr-on]')) {
+    b.addEventListener('click', () => {
+      compose.arrange(slug, [...compose.arrangement(slug), b.dataset.bcArrOn])
+      ctx.render()
+      reopen()
+    })
+  }
+  for (const b of root.querySelectorAll('[data-bc-arr-reset]')) {
+    b.addEventListener('click', () => {
+      compose.arrangeReset(slug)
+      ctx.render()
+      reopen()
+    })
+  }
+}
+
+/* ------------------------------------------------------- docs and files */
+
+/*
+  §21 — THE REAL FIRST PAGE, AND A NEW TAB.
+
+  Two jobs, both against machinery that already exists:
+
+  PAINTING. `pdf.js` renders page one of a PDF to a canvas with a self-hosted
+  pdf.mjs (#23). Its `paint()` is additive by contract - the drawn page is
+  already on screen and the real one replaces it once it has decoded - so a
+  file that 404s, will not parse, or has no worker leaves the drawing in place
+  rather than a broken image. Nothing here needs a try/catch around that;
+  `paint` swallows its own failure on purpose.
+
+  OPENING. The storage bucket is private, so a document's URL is signed for ten
+  minutes and minted per request (#96). That means the link CANNOT be an href
+  written at render time: it would be stale before most people pressed it. The
+  press fetches a fresh one and opens it, which is what the gateway's own
+  comment says the page should do.
+
+  A document the office wrote has no file at all. Its content is real text, so
+  it opens as a blob in a new tab rather than being refused - the alternative
+  is a thumbnail you cannot click, which is the dead control this repository
+  keeps paying for.
+*/
+const wireDocs = (root) => {
+  for (const host of root.querySelectorAll('[data-bc-thumb]')) {
+    const ref = host.dataset.bcThumb ?? ''
+    if (ref === '' || host.classList.contains('bcthumb--object')) continue
+    void paintThumb(host, ref)
+  }
+
+  for (const fig of root.querySelectorAll('[data-bc-doc]')) {
+    const ref = fig.dataset.bcDoc ?? ''
+    if (ref === '') continue
+    fig.classList.add('bcdoc--openable')
+    fig.addEventListener('click', () => {
+      void openDoc(ref, fig.dataset.bcDocTitle ?? 'document')
+    })
+  }
+}
+
+/** The file a reference points at, or null. Never throws. */
+const fileFor = async (ref) => {
+  if (!ref.startsWith('id:')) return { url: ref, mime: /\.pdf$/i.test(ref) ? 'application/pdf' : '' }
+  try {
+    const full = await read('document', ref.slice(3))
+    if (full === null || full === undefined || full.error) return null
+    return { url: full.url ?? '', mime: String(full.mime_type ?? ''), content: full.content ?? '', title: full.title ?? '' }
+  } catch {
+    return null
+  }
+}
+
+const paintThumb = async (host, ref) => {
+  const file = await fileFor(ref)
+  if (file === null || file.url === '') return
+  const isPdf = file.mime === 'application/pdf' || /\.pdf$/i.test(file.url)
+  if (isPdf) {
+    await pdf.paint(host, file.url, 220)
+    return
+  }
+  if (file.mime.startsWith('image/')) {
+    const img = document.createElement('img')
+    img.className = 'realpage'
+    img.alt = ''
+    img.decoding = 'async'
+    img.src = file.url
+    img.addEventListener('load', () => {
+      host.replaceChildren(img)
+    })
+  }
+}
+
+/*
+  A REAL LINK, CLICKED, rather than `window.open`.
+
+  `window.open(url, '_blank', 'noopener')` opened a tab whose location came
+  back as ":" - the feature string makes Chromium treat the call differently
+  and the navigation never happened, so the press produced an empty tab. An
+  anchor with `target` and `rel` is what a link IS: it navigates, it is not
+  caught by a popup blocker the way a scripted open can be, and `noopener`
+  stays a real attribute rather than a string that has to be parsed.
+*/
+const openInTab = (href) => {
+  const a = document.createElement('a')
+  a.href = href
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  a.style.display = 'none'
+  document.body.append(a)
+  a.click()
+  a.remove()
+}
+
+const openDoc = async (ref, title) => {
+  const file = await fileFor(ref)
+  if (file === null) return
+  if (file.url !== '') {
+    openInTab(file.url)
+    return
+  }
+  /*
+    No file, but real words. A blob is the honest way to put them in a tab:
+    it is the document's own content, not a rendering of it, and it needs no
+    route this experience has not built.
+  */
+  const text = String(file.content ?? '')
+  if (text === '') return
+  const blob = new Blob([`${title}\n\n${text}`], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  openInTab(url)
+  globalThis.setTimeout(() => {
+    URL.revokeObjectURL(url)
+  }, 60_000)
 }
 
 /* ------------------------------------------------------------------ tasks */

@@ -168,6 +168,21 @@ const taskLine = (t) => {
  * §6. Lists with their names, their progress and their tasks under them —
  * which is the structure a to-do tool has and a flat bag of rows does not.
  */
+/*
+  Mine and the team's, counted. `app.studio_tasks` returns `mine` per row -
+  ADR-0041's flag for a task assigned to a person rather than to the office -
+  so the split is a read, not a second list. It says nothing at all when the
+  project has no personal tasks, because "Mine 0" is a row of furniture.
+*/
+const mineAndTeam = (p) => {
+  const open = (p.tasks ?? []).filter((t) => t.milestone !== true && !isDone(t))
+  const mine = open.filter((t) => t.mine === true).length
+  if (mine === 0) return ''
+  return `<p class="bcsplit"><b>${esc(String(mine))}</b> yours · <b>${esc(
+    String(open.length - mine),
+  )}</b> the team's</p>`
+}
+
 export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
   const groups = listsOf(p)
   if (groups.length === 0) {
@@ -177,7 +192,7 @@ export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
   }
   const shown = groups.slice(0, lists)
   const rest = groups.length - shown.length
-  return `<div class="bclists">
+  return `${mineAndTeam(p)}<div class="bclists">
     ${shown
       .map((g) => {
         const done = g.items.filter(isDone).length
@@ -209,44 +224,40 @@ const STAGES = [
 ]
 
 /**
- * §10. The stages are the real enum — todo, doing, blocked, done, cancelled —
- * so nothing here is invented vocabulary. Compressed: the column, its count
- * and the work at the top of it, which is what a board says from a distance.
+ * §10. A COMPRESSED WORKFLOW STATE, which is a different drawing from a board.
+ *
+ * The first version put the real cards in four columns, and in a third-width
+ * pane that is 70px a column: every title wrapped to one character per line,
+ * which is CLAUDE.md's #67 arriving through a grid instead of through an
+ * invisible button. Grant's own reference settles what it should be - his
+ * Basecamp miniature is five tinted vertical bars with the stage name turned
+ * on its side and a count above it, and not one card.
+ *
+ * It says the same thing in a fifth of the room: where the work has piled up.
+ * The cards are the full tool's job.
  */
 export const cardsMini = (p) => {
   const tasks = (p.tasks ?? []).filter((t) => t.milestone !== true)
   if (tasks.length === 0) return `<p class="bcmpty">Nothing on the board yet.</p>`
   const at = (id) =>
     tasks.filter((t) => {
-      const s = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
-      if (id === 'blocked') return s === 'blocked' || (t.blocked ? s !== 'done' : false)
-      if (id === 'todo') return s === 'todo' && !t.blocked
-      return s === id
+      const st = t.state_raw ?? (t.state === 'done' ? 'done' : t.state === 'doing' ? 'doing' : 'todo')
+      if (id === 'blocked') return st === 'blocked' || (t.blocked ? st !== 'done' : false)
+      if (id === 'todo') return st === 'todo' && !t.blocked
+      return st === id
     })
-  return `<div class="bccols">
-    ${STAGES.map((st) => {
-      const items = at(st.id)
-      return `<section class="bccol" data-stage="${esc(st.id)}">
-        <header class="bccolhead">
-          <h4>${esc(st.name)}</h4>
-          <span class="bccolcount">${items.length}</span>
-        </header>
-        ${
-          items.length === 0
-            ? `<p class="bccolempty">—</p>`
-            : items
-                .slice(0, 2)
-                .map(
-                  (t) => `<article class="bccard">
-                    <span class="bccardtitle">${esc(t.title)}</span>
-                    ${t.who ? face(person(t.who)) : ''}
-                  </article>`,
-                )
-                .join('') +
-              (items.length > 2 ? `<p class="bcmore">${esc(`+${items.length - 2}`)}</p>` : '')
-        }
-      </section>`
-    }).join('')}
+  const counts = STAGES.map((st) => ({ st, n: at(st.id).length }))
+  const most = Math.max(1, ...counts.map((c) => c.n))
+  return `<div class="bcbars">
+    ${counts
+      .map(
+        ({ st, n }) => `<div class="bcbar" data-stage="${esc(st.id)}"
+          style="--fill:${Math.round((n / most) * 100)}%">
+          <span class="bcbarn">${esc(String(n))}</span>
+          <span class="bcbarname">${esc(st.name)}</span>
+        </div>`,
+      )
+      .join('')}
   </div>`
 }
 
@@ -436,34 +447,104 @@ export const crewMini = (p, { people = 4 } = {}) => {
  * Documents: they look like documents  (§11)
  * ======================================================================== */
 
-const KINDWORD = { pdf: 'PDF', doc: 'Document', made: 'Written by the team', slides: 'Slides', mindmap: 'Mind map' }
+/*
+  §21 — DOCS AND FILES ARE VISUAL OBJECTS, NOT RECORDS.
+
+  Grant's correction, against his own Basecamp screenshot: the project home
+  carries a recognisable Docs & Files pane, and the reference shows three
+  actual thumbnails side by side - a file-type tile, a rendered text page and a
+  cover image. Not a count, not a list of filenames with an Open button, not an
+  icon that takes you elsewhere.
+
+  THE REAL PAGE IS RENDERED, and none of that machinery is new: `pdf.js`
+  (#23) already renders page one of a PDF to a canvas using a SELF-HOSTED
+  pdf.mjs, and the gateway already mints a ten-minute signed URL for any
+  document with a file (#96), because the storage bucket is private. This pane
+  draws `page.js`'s placeholder immediately and lets the real page replace it
+  when it arrives - which is `paint()`'s own contract, so the pane is never
+  empty, never jumps, and a file that will not parse degrades to the drawing
+  rather than to a broken image.
+
+  ONE SOURCE. This is a VIEW over `p.documents`, the same array the full
+  Documents workspace reads. There is no second document store and no
+  duplicated fixture to make the home look busy.
+*/
+
+const KINDWORD = {
+  pdf: 'PDF',
+  doc: 'Document',
+  made: 'Written by the team',
+  slides: 'Slides',
+  mindmap: 'Mind map',
+  audio: 'Audio',
+  image: 'Image',
+  sheet: 'Spreadsheet',
+}
+
+/*
+  A document that is not a page gets an OBJECT rather than a drawn page.
+
+  Basecamp's own pane shows a green spreadsheet tile beside two real pages, and
+  that is the honest treatment: a sheet has no first page worth rendering and a
+  recording has none at all. Drawing lines of fake text on top of an audio file
+  would be a picture of a document that does not exist.
+*/
+const FACE = {
+  audio: { glyph: 'audio', tone: 'a' },
+  sheet: { glyph: 'sheet', tone: 's' },
+  mindmap: { glyph: 'map', tone: 'm' },
+  slides: { glyph: 'slides', tone: 'p' },
+}
+
+/** The drawn page, from the document's own line lengths where it has them. */
+const drawnPage = (d) => {
+  const lines = Array.isArray(d.lines) && d.lines.length > 0 ? d.lines.slice(0, 9) : [92, 100, 96, 84, 98, 70, 90]
+  return `<span class="bcpage" aria-hidden="true">
+    ${lines
+      .map((w) => `<span class="bcpline" style="width:${Math.max(24, Math.min(100, Number(w) || 80))}%"></span>`)
+      .join('')}
+  </span>`
+}
+
+const thumb = (d, i) => {
+  const kind = String(d.kind ?? 'doc')
+  const object = FACE[kind]
+  /*
+    `file` is the sample path a prototype document carries; `id` is what a real
+    one has. Either is enough to ask for a preview, and a document with
+    neither still gets a drawn page and a real title - which is the state most
+    of a young project is in.
+  */
+  const ref = d.file ?? (d.id ? `id:${d.id}` : '')
+  return `<figure class="bcdoc" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}">
+    <span class="bcthumb${object === undefined ? '' : ` bcthumb--object bcthumb--${esc(object.tone)}`}"
+      data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
+      ${object === undefined ? drawnPage(d) : `<span class="bcobjword">${esc(KINDWORD[kind] ?? kind)}</span>`}
+    </span>
+    <figcaption>
+      <span class="bcdoctitle">${esc(d.title)}</span>
+      <span class="bcdocmeta">${esc([KINDWORD[kind] ?? kind, d.size].filter(Boolean).join(' · '))}</span>
+    </figcaption>
+  </figure>`
+}
 
 /**
- * §11. A page, not a row.
+ * §21. The Docs and Files pane: real thumbnails of the project's real files.
  *
- * The lines are drawn from the record's own `lines` when it has them, so two
- * documents do not look alike, and the kind is said in words a person uses
- * rather than as a file extension shown raw.
+ * `items` is deliberately generous - the pane has to be INFORMATIVE, and three
+ * covers under a heading is a sample rather than a section.
  */
-export const docsMini = (p, { items = 3 } = {}) => {
+/** The thumbnails alone, so the full workspace and the pane share one drawing. */
+export const docThumbs = (docs) => docs.map((d, i) => thumb(d, i)).join('')
+
+export const docsMini = (p, { items = 6 } = {}) => {
   const docs = p.documents ?? []
-  if (docs.length === 0) return `<p class="bcmpty">Nothing filed on this project yet.</p>`
+  if (docs.length === 0) {
+    return `<p class="bcmpty">Nothing filed on this project yet. A document you upload, or one
+      the team writes, appears here as itself.</p>`
+  }
   return `<div class="bcdocs">
-    ${docs
-      .slice(0, items)
-      .map((d) => {
-        const lines = Array.isArray(d.lines) && d.lines.length > 0 ? d.lines.slice(0, 7) : [88, 100, 94, 80, 96, 62]
-        return `<figure class="bcdoc">
-          <span class="bcpage" aria-hidden="true">
-            ${lines.map((w) => `<span class="bcpline" style="width:${Math.max(24, Math.min(100, Number(w) || 80))}%"></span>`).join('')}
-          </span>
-          <figcaption>
-            <span class="bcdoctitle">${esc(d.title)}</span>
-            <span class="bcdocmeta">${esc([KINDWORD[d.kind] ?? d.kind, d.size].filter(Boolean).join(' · '))}</span>
-          </figcaption>
-        </figure>`
-      })
-      .join('')}
+    ${docs.slice(0, items).map((d, i) => thumb(d, i)).join('')}
     ${docs.length > items ? `<p class="bcmore">${esc(`${docs.length - items} more filed`)}</p>` : ''}
   </div>`
 }

@@ -85,6 +85,22 @@ for (const size of sizes) {
       await page.waitForSelector('.bcmain', { timeout: 6000 })
       await page.waitForTimeout(450)
       if (after !== undefined) await after()
+      /*
+        WAIT FOR THE REAL PAGE. §21's thumbnails are rendered by pdf.js, which
+        is 330KB loaded lazily plus a worker plus a decode - comfortably longer
+        than the settle this harness used, so every capture of the Docs and
+        Files pane showed the DRAWN placeholder and none showed the product.
+        A capture that photographs the fallback is a capture of something
+        nobody sees.
+
+        Bounded and non-fatal: a screen with no PDF, or one whose file will not
+        parse, carries on after the timeout with the drawing, which is exactly
+        what a person would see.
+      */
+      if ((await page.locator('[data-bc-thumb]').count()) > 0) {
+        await page.waitForSelector('.bcthumb .realpage', { timeout: 6000 }).catch(() => null)
+        await page.waitForTimeout(250)
+      }
       await page.screenshot({ path: `${OUT}/${name}-${size.id}.png`, fullPage: false })
       await page.screenshot({ path: `${OUT}/${name}-${size.id}-full.png`, fullPage: true })
       taken += 1
@@ -127,6 +143,14 @@ for (const size of sizes) {
     await shot('schedule', `${slug}/schedule`)
     await shot('team', `${slug}/team`)
     await shot('documents', `${slug}/documents`)
+    await shot('documents-list', `${slug}/documents`, async () => {
+      await page.locator('[data-bc-docview="list"]').click()
+      await page.waitForTimeout(400)
+    })
+    await shot('home-arrange', slug, async () => {
+      await page.locator('[data-bc-arrange]').first().click()
+      await page.waitForTimeout(300)
+    })
     /*
       CONTACTS WAS IN NO CAPTURE AT ALL until this line. It is one of the six
       tools this experience renders, it has a preview on the overview, and

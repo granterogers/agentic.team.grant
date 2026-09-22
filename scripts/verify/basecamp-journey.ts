@@ -525,10 +525,19 @@ await open('/basecamp/p/journey-subject')
   may reasonably rename. What it means is that the home's team module says
   what the team produced and that pressing it arrives at the team surface.
 */
-const teamMod =
-  (await page.locator('.bchome [data-slot="crew"]').count()) > 0
-    ? page.locator('.bchome [data-slot="crew"]')
-    : page.locator('.bctool', { hasText: 'Agentic Team' })
+/*
+  THE MODULE THAT LEADS TO THE TEAM, found by where its heading GOES.
+
+  This named `[data-slot="crew"]` - the slot composition B gave it - and fell
+  back to a class-plus-heading-text match, so the next composition timed out
+  on a home that was working perfectly. The address is the stable thing: one
+  module on the home links to the team surface, whatever the composition calls
+  its slot and whatever the heading says.
+*/
+const teamMod = page
+  .locator('.bchome [data-mod]')
+  .filter({ has: page.locator('a[href$="/team"]') })
+  .first()
 const preview = await teamMod.innerText()
 check(
   'the home names the latest output and that it is waiting',
@@ -536,10 +545,7 @@ check(
   preview.replace(/\n/g, ' / ').slice(0, 160),
 )
 
-const teamWay =
-  (await teamMod.locator('.bcmodhead h2 a').count()) > 0
-    ? teamMod.locator('.bcmodhead h2 a')
-    : teamMod.locator('.bcpreview')
+const teamWay = teamMod.locator('a[href$="/team"]').first()
 await teamWay.click()
 await page.waitForTimeout(700)
 check('the home opens the team surface', page.url().endsWith('/team'), page.url())
@@ -592,8 +598,15 @@ check(
 
 await open('/basecamp/p/journey-subject/documents')
 check(
-  'the document is on the project’s Documents surface',
-  (await page.locator('.bcitemtitle', { hasText: 'Course one-pager' }).count()) === 1,
+  'the document is on the project’s Docs and Files surface',
+  /*
+    BY NAME, in whichever view. This named `.bcitemtitle` - the class the list
+    view uses - and §21 made the thumbnail wall the default, so a document that
+    was plainly on screen counted as absent. What the check means is that the
+    surface names the document, and it has to be true of both views.
+  */
+  (await page.locator('.bcmain').getByText('Course one-pager', { exact: false }).count()) >= 1,
+  (await page.locator('.bcmain').innerText()).replace(/\n/g, ' / ').slice(0, 160),
 )
 
 /*

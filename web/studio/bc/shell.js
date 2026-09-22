@@ -105,7 +105,13 @@ export const TOOLS = [
     is a document; the gallery shows PDFs, written pages and uploads, and
     nobody calls one an asset out loud.
   */
-  { id: 'documents', name: 'Documents', own: true },
+  /*
+    DOCS & FILES, which is what Grant calls it and what the home pane says.
+    The tool said "Documents" while the pane said "Docs & Files" - the same
+    two-words-for-one-thing the route audit caught between the heading and the
+    breadcrumb, one screen over.
+  */
+  { id: 'documents', name: 'Docs & Files', own: true },
   { id: 'activity', name: 'Activity', own: true },
   { id: 'contacts', name: 'Contacts', own: true },
   /*
@@ -1082,30 +1088,98 @@ const outputRow = (r) => {
   </div>`
 }
 
+/*
+  §21 — THE FULL DOCS AND FILES WORKSPACE.
+
+  Two views of one list, because they answer different questions: a thumbnail
+  wall answers "which one was it" and a list answers "what is here, and when".
+  Grant asked for both, real previews in both, and a way to add a file.
+
+  The view choice is a per-viewer convenience - which of two ways you like to
+  look at a shelf - so it lives in this browser rather than in the office.
+  That is the opposite call from the arrangement of the home, and deliberately:
+  one is a preference about looking, the other is a layout he composed.
+
+  THE SAME `p.documents` THE HOME PANE READS. There is no second document
+  store and no fixture invented to make either look fuller.
+*/
+
+const docsView = () => {
+  try {
+    return globalThis.localStorage?.getItem('bc.docsview') === 'list' ? 'list' : 'wall'
+  } catch {
+    return 'wall'
+  }
+}
+
+const docRow = (d, i) => {
+  const ref = d.file ?? (d.id ? `id:${d.id}` : '')
+  return `<div class="bcitem${ref === '' ? '' : ' bcdoc--openable'}" data-bc-doc="${esc(ref)}"
+    data-bc-doc-title="${esc(d.title ?? '')}">
+    <span class="bcrowthumb bcthumb" data-bc-thumb="${esc(ref)}" data-bc-thumb-i="${esc(String(i))}">
+      ${(Array.isArray(d.lines) && d.lines.length > 0 ? d.lines : [92, 100, 84, 96])
+        .slice(0, 4)
+        .map((w) => `<span class="bcpline" style="width:${Math.max(24, Math.min(100, Number(w) || 80))}%"></span>`)
+        .join('')}
+    </span>
+    <div class="bcitembody">
+      <span class="bcitemtitle">${esc(d.title)}</span>
+      <span class="bcitemmeta">${esc([d.kind, d.origin, d.size, d.when].filter(Boolean).join(' · '))}</span>
+    </div>
+    <span class="bcpmeta">${ref === '' ? '' : 'Opens in a new tab'}</span>
+  </div>`
+}
+
 const documentsSurface = (p) => {
   const docs = p.documents ?? []
+  const view = docsView()
   return `${crumbFor(p, 'documents')}
-    <div class="bcrecordhead"><h1>${esc(toolById('documents')?.name ?? 'Documents')}</h1></div>
+    <div class="bcrecordhead">
+      <h1>${esc(toolById('documents')?.name ?? 'Docs &amp; Files')}</h1>
+      <span class="bcactions">
+        <span class="bcseg" role="group" aria-label="How to show these">
+          <!--
+            The words true and false, as strings. The attribute helper renders
+            a boolean true as a BARE attribute, which is right for disabled and
+            wrong for aria-pressed: a bare one is the empty string, which is not
+            a valid value, so the control announced no state at all and the
+            control audit reported it as a press that changes nothing. A toggle
+            that cannot say which way it is set is the same defect whether a
+            person reads it or a screen reader does.
+          -->
+          ${button('Thumbnails', { 'data-bc-docview': 'wall', 'aria-pressed': view === 'wall' ? 'true' : 'false' })}
+          ${button('List', { 'data-bc-docview': 'list', 'aria-pressed': view === 'list' ? 'true' : 'false' })}
+        </span>
+        ${button('Add a file', { kind: 'primary', 'data-bc-upload': '1' })}
+      </span>
+    </div>
+    <p class="bcpmeta bcprose bcgap-l">
+      Everything filed on this project — what the team wrote, what you uploaded
+      and anything brought in from a connected source. Opening one opens the
+      real file in a new tab.
+    </p>
+    <form class="bcaddform" data-bc-uploadform hidden>
+      <label class="bcfield">
+        <span class="bclabel" for="bc-upload-file">The file</span>
+        <input class="bcinput" type="file" id="bc-upload-file" name="file">
+      </label>
+      <div class="bcrow">
+        ${button('Add it', { kind: 'primary', 'data-bc-uploadsave': '1' })}
+        ${button('Cancel', { 'data-bc-uploadcancel': '1' })}
+      </div>
+    </form>
     ${
       docs.length === 0
-        ? empty({
-            title: 'Nothing filed yet',
-            body: 'Documents the team writes, files you upload and anything imported from a connected source all land here.',
-          })
-        : `<div class="bclist">${docs
-            .map(
-              (d) => `<div class="bcitem">
-                <span></span>
-                <div class="bcitembody">
-                  <span class="bcitemtitle">${esc(d.title)}</span>
-                  <span class="bcitemmeta">${esc(
-                    [d.kind, d.origin, d.size, d.when].filter(Boolean).join(' · '),
-                  )}</span>
-                </div>
-                <span></span>
-              </div>`,
-            )
-            .join('')}</div>`
+        ? empty(
+            {
+              title: 'Nothing filed yet',
+              body: 'Documents the team writes, files you upload and anything imported from a connected source all land here — each one as itself, not as a row in a table.',
+            },
+            button('Add a file', { kind: 'primary', 'data-bc-upload': '1' }),
+          )
+        : view === 'list'
+          ? `<div class="bclist">${docs.map((d, i) => docRow(d, i)).join('')}</div>`
+          : `<div class="bcdocs bcdocs--wall">${bcMini.docThumbs(docs)}</div>`
     }`
 }
 

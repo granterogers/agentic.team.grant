@@ -305,7 +305,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-[data-experience='basecamp'] .bcagendaitem--late .bcagendadate { box-shadow: inset 0 0 0 1.5px var(--bc-section-accent); }
+/*
+  LATE, VISIBLY. A ring in the section accent is invisible at the size the
+  miniature draws this, so an overdue day was indistinguishable from any other
+  on the one pane whose subject is dates. The number carries the colour.
+*/
+[data-experience='basecamp'] .bcagendaitem--late .bcagendadate {
+  box-shadow: inset 0 0 0 1.5px var(--bc-section-accent);
+  background: color-mix(in srgb, var(--bc-section-accent) 18%, var(--bc-canvas));
+}
+[data-experience='basecamp'] .bcagendaitem--late .bcagendadd,
+[data-experience='basecamp'] .bcagendaitem--late .bcagendamm { color: var(--bc-section-accent); }
 [data-experience='basecamp'] .bccalnote { margin: 10px 0 0; font-size: 12px; color: var(--bc-text-muted); }
 
 /* ---------------------------------------------------------------- chat -- */
@@ -931,3 +941,254 @@
   rather than being restyled into a second appearance of one thing.
 */
 [data-experience='basecamp'] .bcsources--full .bcsource { padding: 12px 0; }
+
+/* ======================================================================== *
+ * §21 — Docs & Files as visual objects
+ *
+ * The reference pane is three recognisable things side by side: a file-type
+ * tile, a rendered page and a cover. So a thumbnail here is sized to be
+ * RECOGNISED rather than merely present — a 3:4 page at ~150px is the smallest
+ * at which a rendered first page reads as a document rather than as texture.
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcdocs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 16px 14px;
+}
+[data-experience='basecamp'] .bcdocs > .bcmore { grid-column: 1 / -1; }
+[data-experience='basecamp'] .bcdoc { margin: 0; min-width: 0; }
+[data-experience='basecamp'] .bcdoc--openable { cursor: pointer; }
+
+[data-experience='basecamp'] .bcthumb {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  aspect-ratio: 3 / 4;
+  padding: 11px 10px;
+  background: color-mix(in srgb, var(--bc-text-strong) 78%, var(--bc-canvas));
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+  overflow: hidden;
+  position: relative;
+}
+/* The real page, once pdf.js has decoded it, covers the drawing underneath. */
+[data-experience='basecamp'] .bcthumb .realpage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+[data-experience='basecamp'] .bcdoc--openable:hover .bcthumb,
+[data-experience='basecamp'] .bcdoc--openable:focus-within .bcthumb {
+  box-shadow: 0 2px 10px rgb(0 0 0 / 55%);
+  border-color: var(--bc-accent);
+}
+
+/*
+  A thing with no first page is a coloured object with its kind on it, which is
+  what the reference does for a spreadsheet. Drawing lines of text on an audio
+  file would be a picture of a document that does not exist.
+*/
+[data-experience='basecamp'] .bcthumb--object {
+  place-content: center;
+  padding: 10px;
+  background: var(--bc-surface-selected);
+  border-color: var(--bc-border-subtle);
+  box-shadow: none;
+}
+[data-experience='basecamp'] .bcobjword {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcthumb--a { background: color-mix(in srgb, var(--bc-accent) 26%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcthumb--s { background: color-mix(in srgb, var(--bc-success, #4a8f6a) 30%, var(--bc-surface)); }
+[data-experience='basecamp'] .bcthumb--m,
+[data-experience='basecamp'] .bcthumb--p { background: color-mix(in srgb, var(--bc-section-accent) 24%, var(--bc-surface)); }
+
+[data-experience='basecamp'] .bcdoc figcaption { display: grid; gap: 2px; margin-top: 8px; }
+
+/* ======================================================================== *
+ * C — the board of tools, and the panel that changes it
+ * ======================================================================== */
+
+[data-experience='basecamp'] .bcheadrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+[data-experience='basecamp'] .bcheadrow .bcstate { margin-top: 0; }
+[data-experience='basecamp'] .bcheadacts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/*
+  Three columns, as the reference has. The panes are allowed to differ in
+  height and the tall ones say so, because forcing eight tools onto one
+  baseline is what made the first build read as a grid of cards.
+*/
+[data-experience='basecamp'] .bcpanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bccomp--c .bcmod { min-width: 0; }
+[data-experience='basecamp'] .bccomp--c .bcmodbody { font-size: 13.5px; }
+[data-experience='basecamp'] .bccomp--c .bcsaidtext { font-size: 13px; }
+[data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 12px 10px; }
+[data-experience='basecamp'] .bccomp--c .bccols { gap: 7px; }
+[data-experience='basecamp'] .bccomp--c .bccalwrap { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+[data-experience='basecamp'] .bccomp--c .bccal { display: none; }
+[data-experience='basecamp'] .bcsplit { margin: 0 0 12px; font-size: 12.5px; color: var(--bc-text-muted); }
+[data-experience='basecamp'] .bcsplit b { color: var(--bc-text-strong); }
+
+[data-experience='basecamp'] .bcarrange {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-accent);
+  border-radius: var(--bc-r-sheet);
+  padding: 16px 18px 18px;
+  margin-bottom: 20px;
+}
+[data-experience='basecamp'] .bcarrlist { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 2px; }
+[data-experience='basecamp'] .bcarrrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--bc-border-subtle);
+}
+[data-experience='basecamp'] .bcarrrow:last-child { border-bottom: 0; }
+[data-experience='basecamp'] .bcarrname { flex: 1 1 auto; min-width: 0; }
+[data-experience='basecamp'] .bcarract { display: flex; gap: 6px; flex: 0 0 auto; }
+[data-experience='basecamp'] .bcarradd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+[data-experience='basecamp'] .bcarrnote { margin: 0 0 14px; font-size: 12.5px; color: var(--bc-text-muted); max-width: 70ch; }
+
+/*
+  §10's compressed board: tinted bars, the stage name on its side, the count
+  above it. The fill is how full that stage is relative to the fullest one, so
+  the shape of the work is legible before a single word is read.
+*/
+[data-experience='basecamp'] .bcbars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  min-height: 150px;
+}
+[data-experience='basecamp'] .bcbar {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 2px 10px;
+  border-radius: 6px;
+  background: var(--bc-canvas);
+  border-top: 3px solid var(--bc-border-subtle);
+  overflow: hidden;
+}
+/* The fill sits behind the label, drawn from the bottom like a column. */
+[data-experience='basecamp'] .bcbar::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: var(--fill, 0%);
+  background: var(--bc-surface-selected);
+  opacity: 0.55;
+}
+[data-experience='basecamp'] .bcbar > * { position: relative; z-index: 1; }
+[data-experience='basecamp'] .bcbarn {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcbarname {
+  writing-mode: vertical-rl;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+[data-experience='basecamp'] .bcbar[data-stage='blocked'] { border-top-color: var(--bc-section-accent); }
+[data-experience='basecamp'] .bcbar[data-stage='done'] { border-top-color: var(--bc-accent); }
+[data-experience='basecamp'] .bcbar[data-stage='doing'] { border-top-color: var(--bc-text-muted); }
+
+/* Bigger document tiles in a third-width pane: two per row, captions readable. */
+/*
+  Three tiles in a row, as the reference has - which is also what keeps the
+  pane inside a 320px row. The caption is clamped to two lines so a long title
+  cannot be the thing that makes row two fall below the fold.
+*/
+[data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 9px; }
+[data-experience='basecamp'] .bccomp--c .bcdocmeta { font-size: 11px; }
+
+/* The two views of the workspace, and the segmented control that picks one. */
+[data-experience='basecamp'] .bcseg { display: inline-flex; gap: 0; }
+[data-experience='basecamp'] .bcseg .bcbtn { border-radius: 0; }
+[data-experience='basecamp'] .bcseg .bcbtn:first-child { border-start-start-radius: var(--bc-r-control); border-end-start-radius: var(--bc-r-control); }
+[data-experience='basecamp'] .bcseg .bcbtn:last-child { border-start-end-radius: var(--bc-r-control); border-end-end-radius: var(--bc-r-control); }
+[data-experience='basecamp'] .bcseg .bcbtn[aria-pressed='true'] {
+  background: var(--bc-surface-selected);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcdocs--wall { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 18px; }
+/* A small real page beside each row, so the list view is not a table of names. */
+[data-experience='basecamp'] .bcrowthumb {
+  width: 34px;
+  aspect-ratio: 3 / 4;
+  padding: 4px 3px;
+  gap: 2px;
+  border-radius: 2px;
+}
+[data-experience='basecamp'] .bcrowthumb .bcpline { height: 2px; }
+
+/* ======================================================================== *
+ * C on narrower screens. LAST in the file, because a media query adds no
+ * specificity and everything above is what it overrides.
+ * ======================================================================== */
+
+@media (max-width: 1100px) {
+  [data-experience='basecamp'] .bcpanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  /*
+    ONE COLUMN, AND DOCS AND FILES STAYS. Grant's instruction is explicit:
+    it is not optional merely because the viewport is narrow. So the panes
+    stack in a deliberate order rather than being dropped -
+
+      what needs you (the state line, in the head)
+      the work            To-dos
+      where it has got to Card Table
+      what is here        Docs and Files
+      when                Schedule
+      who and what said   Chat, the team
+      the rest            People, sources, activity
+
+    which is the order a person on a phone asks in. The DOM order already
+    matches, so this block only has to stop the grid, not reshuffle it - and an
+    order that lives in the markup is one a screen reader hears too.
+  */
+  [data-experience='basecamp'] .bcpanes { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  /*
+    Bigger tiles on a phone, not smaller. Three across a 358px column is 110px,
+    which is under the size at which a rendered page reads as a document - so
+    the pane would be present and useless, which is worse than absent. Two
+    across is 165px and legible.
+  */
+  [data-experience='basecamp'] .bccomp--c .bcdocs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  [data-experience='basecamp'] .bcdocs--wall { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-experience='basecamp'] .bcheadacts { width: 100%; }
+  [data-experience='basecamp'] .bcarrrow { flex-wrap: wrap; }
+}
