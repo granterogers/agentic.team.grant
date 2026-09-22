@@ -912,6 +912,20 @@
     display: inline-flex;
     align-items: center;
   }
+  /*
+    The two routes out of a pane - "View all N Docs & Files" and "Talk to the
+    team" - measured 15px and 21px tall. The measure caught them on the tablet
+    and phone legs the moment they were added, which is what it is for. Hit
+    area, not size: the text stays where it is.
+  */
+  [data-experience='basecamp'] .bcdocsall a,
+  [data-experience='basecamp'] .bclinky {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding-right: 8px;
+    margin: -12px 0;
+  }
   [data-experience='basecamp'] .bcitemtitle,
   [data-experience='basecamp'] .bcagendawhat {
     min-height: 44px;
@@ -1192,3 +1206,41 @@
   [data-experience='basecamp'] .bcheadacts { width: 100%; }
   [data-experience='basecamp'] .bcarrrow { flex-wrap: wrap; }
 }
+/*
+  The route out of the Docs & Files pane. A real link rather than a grey count,
+  because §21 asks for an obvious way to all of them and a heading in 14px
+  uppercase is not obvious.
+*/
+[data-experience='basecamp'] .bcdocsall { grid-column: 1 / -1; margin-top: 4px; }
+[data-experience='basecamp'] .bcdocsall a { color: var(--bc-accent); text-decoration: none; }
+[data-experience='basecamp'] .bcdocsall a:hover,
+[data-experience='basecamp'] .bcdocsall a:focus-visible { text-decoration: underline; }
+[data-experience='basecamp'] .bcmodmeta {
+  font-size: 12px;
+  color: var(--bc-text-muted);
+  white-space: nowrap;
+}
+/* A control that reads as a link, for a route out of a pane. */
+[data-experience='basecamp'] .bclinky {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--bc-accent);
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bclinky:hover,
+[data-experience='basecamp'] .bclinky:focus-visible { text-decoration: underline; }
+/*
+  A little less padding on a board of eight panes than on a page of three.
+
+  Measured: with the standard padding, Schedule ended at 901px — one pixel
+  past the fold, which fails §21's requirement exactly as surely as a hundred
+  would. Four pixels off the top and bottom of each pane buys eight per row and
+  moves the density toward the reference rather than away from it. The type
+  sizes are untouched, because the instruction was explicit that shrinking
+  until it is illegible is not the answer.
+*/
+[data-experience='basecamp'] .bccomp--c .bcmod { padding: 13px 16px 14px; }
+[data-experience='basecamp'] .bccomp--c .bcmodhead { padding-bottom: 8px; margin-bottom: 10px; }

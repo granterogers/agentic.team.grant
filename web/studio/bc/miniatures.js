@@ -174,13 +174,21 @@ const taskLine = (t) => {
   so the split is a read, not a second list. It says nothing at all when the
   project has no personal tasks, because "Mine 0" is a row of furniture.
 */
-const mineAndTeam = (p) => {
+/*
+  §21 names "To-dos - Mine / Team" as a requirement of the pane, so it is
+  always answered when there is open work.
+
+  The first version hid the line when nothing was assigned to Grant, on the
+  reasoning that "0 yours" is furniture. It is not: "none of this is on you"
+  is a real answer to the question the line exists to ask, and hiding it makes
+  a named requirement look unbuilt on exactly the projects where the answer is
+  most reassuring.
+*/
+export const mineAndTeam = (p) => {
   const open = (p.tasks ?? []).filter((t) => t.milestone !== true && !isDone(t))
+  if (open.length === 0) return ''
   const mine = open.filter((t) => t.mine === true).length
-  if (mine === 0) return ''
-  return `<p class="bcsplit"><b>${esc(String(mine))}</b> yours · <b>${esc(
-    String(open.length - mine),
-  )}</b> the team's</p>`
+  return `${String(mine)} yours · ${String(open.length - mine)} the team's`
 }
 
 export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
@@ -192,7 +200,7 @@ export const todosMini = (p, { lists = 2, per = 3 } = {}) => {
   }
   const shown = groups.slice(0, lists)
   const rest = groups.length - shown.length
-  return `${mineAndTeam(p)}<div class="bclists">
+  return `<div class="bclists">
     ${shown
       .map((g) => {
         const done = g.items.filter(isDone).length
@@ -374,12 +382,11 @@ export const chatMini = (p, { lines = 3 } = {}) => {
     return `<p class="bcmpty">Nothing has been said on this project yet. Ask the team a
       question and it starts here.</p>`
   }
-  return `<div class="bcchat">
-    ${said
-      .map(
-        (m) => said_(m),
-      )
-      .join('')}
+    return `<div class="bcchat">
+    ${said.map((m) => said_(m)).join('')}
+    <p class="bcmore bcdocsall">
+      <button type="button" class="bclinky" data-bc-dock="1">Talk to the team</button>
+    </p>
   </div>`
 }
 
@@ -543,9 +550,29 @@ export const docsMini = (p, { items = 6 } = {}) => {
     return `<p class="bcmpty">Nothing filed on this project yet. A document you upload, or one
       the team writes, appears here as itself.</p>`
   }
+  /*
+    §21 asks the pane for an obvious route to ALL of them, in those words. The
+    heading is a link, which is the two-level pattern - and a small grey
+    uppercase heading is not an obvious route, so the count at the foot says
+    where it goes instead of only how many are left. One affordance doing both
+    jobs beats a count beside a link that repeats it.
+  */
+  /*
+    The prefix, written once here rather than asked of a context that does not
+    carry it. `shell.js` and `compose.js` each have their own `at()`; a third
+    caller guessing at a helper that is not on ctx would have produced a link
+    to `undefined`.
+  */
+  const to = `/basecamp/p/${p.slug}/documents`
   return `<div class="bcdocs">
     ${docs.slice(0, items).map((d, i) => thumb(d, i)).join('')}
-    ${docs.length > items ? `<p class="bcmore">${esc(`${docs.length - items} more filed`)}</p>` : ''}
+    <p class="bcmore bcdocsall">
+      <a href="${esc(to)}" data-bc-go="${esc(to)}">${esc(
+        docs.length > items
+          ? `View all ${docs.length} Docs & Files`
+          : 'View all Docs & Files',
+      )}</a>
+    </p>
   </div>`
 }
 

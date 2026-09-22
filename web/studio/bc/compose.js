@@ -46,6 +46,7 @@ import {
   crewMini,
   docsMini,
   face,
+  mineAndTeam,
   sourcesMini,
   stateLine,
   timelineMini,
@@ -103,10 +104,11 @@ export const choose = (v) => {
  * content, and pressing content does what the content says rather than
  * navigating somewhere plausible.
  */
-const mod = (p, { id, name, body, wide = false, slot = '' }) =>
+const mod = (p, { id, name, body, wide = false, slot = '', meta = '' }) =>
   `<section class="bcmod${wide ? ' bcmod--wide' : ''}" data-mod="${esc(id)}" data-slot="${esc(slot === '' ? id : slot)}">
     <header class="bcmodhead">
       <h2><a href="${esc(at(`/p/${p.slug}/${id}`))}" data-bc-go="${esc(at(`/p/${p.slug}/${id}`))}">${esc(name)}</a></h2>
+      ${meta === '' ? '' : `<span class="bcmodmeta">${esc(meta)}</span>`}
     </header>
     <div class="bcmodbody">${body}</div>
   </section>`
@@ -395,7 +397,14 @@ export const compositionB = (p) => `<div class="bchome bccomp bccomp--b">
   type sizes are untouched - it is showing fewer things at full size.
 */
 const boardMods = (p) => [
-  { id: 'tasks', name: toolName('tasks', 'To-dos'), body: todosMini(p, { lists: 2, per: 2 }) },
+  /*
+    §21's "Mine / Team" rides in the HEADER, where it costs no height. As a
+    block above the lists it added 36px to the tallest pane in row one, and a
+    grid row is as tall as its tallest cell - so a one-line summary pushed
+    Schedule and Chat below the fold, which is the requirement it was added to
+    satisfy. A summary belongs beside the heading anyway.
+  */
+  { id: 'tasks', name: toolName('tasks', 'To-dos'), meta: mineAndTeam(p), body: todosMini(p, { lists: 2, per: 2 }) },
   { id: 'board', name: 'Card Table', body: cardsMini(p) },
   { id: 'documents', slot: 'documents', name: toolName('documents', 'Docs & Files'), body: docsMini(p, { items: 3 }) },
   { id: 'schedule', name: toolName('schedule', 'Schedule'), body: calendarMini(p, { items: 3 }) },

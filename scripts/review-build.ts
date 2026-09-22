@@ -2,9 +2,12 @@
  * A static, self-contained copy of the studio, for review.
  *
  * WHY THIS EXISTS. A deploy is the right way to give Grant something to click,
- * and this session cannot make one: the Vercel token IS present, and the
- * environment's egress policy answers 403 to CONNECT for api.vercel.com. So
- * the alternative is a bundle that works on a host with no rewrite rules.
+ * and there IS one now — `npm run deploy:preview` uses the `.out/site` output
+ * below. The header here used to say a deploy was impossible because the
+ * egress policy refused api.vercel.com; that was one 403 written up as a
+ * policy, and it was wrong. The static bundle stays because it is useful
+ * where a host with rewrite rules is not available, and because it is the
+ * thing that can be attached to a message.
  *
  * WHAT IT CHANGES, and it is deliberately almost nothing:
  *
@@ -167,6 +170,21 @@ await writeFile(
   join(SITE, 'vercel.json'),
   `${JSON.stringify(
     {
+      /*
+        THE ROOT GOES TO THE PROJECT HOME.
+
+        Without this the bare domain lands on the DEFAULT studio - "Good
+        afternoon, Grant" - because `/` is that experience's own home and the
+        experiment lives under a prefix. Grant opened the preview, got today's
+        Team HQ, and reported the redesign missing. He was right about what he
+        saw: an entry point that lands on the wrong experience is the same
+        defect as the artifact fragment, one layer out.
+
+        A redirect rather than a rewrite, so the address bar says where he
+        actually is; and only in THIS deployment's generated config, because on
+        the real site `/` must stay the default Team HQ.
+      */
+      redirects: [{ source: '/', destination: `/basecamp/p/${firstSlug}`, permanent: false }],
       rewrites: [
         { source: '/:path((?!api/|studio/|samples/|fonts/)[^.]*)', destination: '/index.html' },
       ],
