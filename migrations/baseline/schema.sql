@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict D4OPYyaBV3N66wU1sFnTGP7KwAJwak2I7X3GViWBmiOwdtFjS5kufLOIfB6HBEP
 
 -- Dumped from database version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
@@ -22,7 +21,7 @@ SET row_security = off;
 -- Name: app; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA app;
+CREATE SCHEMA IF NOT EXISTS app;
 
 
 --
@@ -36,7 +35,7 @@ COMMENT ON SCHEMA app IS 'Internal implementation surface. Deliberately NOT expo
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA public;
+CREATE SCHEMA IF NOT EXISTS public;
 
 
 --
@@ -40382,5 +40381,4 @@ GRANT SELECT ON TABLE public.usable_models TO ai_team_app;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict D4OPYyaBV3N66wU1sFnTGP7KwAJwak2I7X3GViWBmiOwdtFjS5kufLOIfB6HBEP
 

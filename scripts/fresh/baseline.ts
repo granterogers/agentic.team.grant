@@ -106,10 +106,39 @@ const CONTAMINATION: readonly { readonly name: string; readonly pattern: RegExp 
 ]
 
 function pgDump(args: readonly string[]): string {
-  return execFileSync('su', ['postgres', '-c', `pg_dump ${args.join(' ')} ${DB}`], {
+  const raw = execFileSync('su', ['postgres', '-c', `pg_dump ${args.join(' ')} ${DB}`], {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
   })
+  /*
+    Strip psql meta-commands, because the consumer is a driver.
+
+    pg_dump 16 wraps its output in `\restrict` / `\unrestrict`, which tell psql
+    to refuse the meta-commands a hostile dump might carry. They are psql
+    directives, not SQL, so `npm run fresh:install` — which applies this over
+    the Management API or the wire protocol, never through psql — died on
+    `42601: syntax error at or near "\"`, an error naming the one character in
+    the file that is not a mistake.
+
+    What is given up is psql's protection against a dump somebody else wrote.
+    That protection is not what is guarding this file: the baseline is generated
+    by this script from a database this script built, and every byte of it is
+    scanned before it is written. A dump from an untrusted source should never
+    be applied by this path at all, with or without the directive.
+  */
+  return raw
+    .split('\n')
+    .filter((line) => !/^\\(restrict|unrestrict)\b/.test(line))
+    /*
+      `public` always already exists.
+
+      Every Postgres database is created with it, and Supabase's is where
+      PostgREST looks — so a bare `CREATE SCHEMA public;` fails with 42P06 on
+      every target this baseline could ever be applied to. pg_dump emits it
+      because it is describing a schema it found, not writing an installer.
+    */
+    .map((line) => line.replace(/^CREATE SCHEMA (?!IF NOT EXISTS)/, 'CREATE SCHEMA IF NOT EXISTS '))
+    .join('\n')
 }
 
 function scan(label: string, text: string): string[] {
@@ -181,6 +210,40 @@ async function main(): Promise<void> {
   const seed = pgDump([
     '--data-only',
     '--no-owner',
+    /*
+      INSERTs, not COPY.
+
+      pg_dump's default data format is `COPY ... FROM stdin` terminated by a
+      `\.` line, and those backslash lines are psql META-COMMANDS, not SQL. psql
+      reads them; a database driver cannot. The seed would have been unusable by
+      the very thing that installs it, and it announced itself as
+      `42601: syntax error at or near "\"` — an error naming a backslash, in a
+      file whose backslash is the one thing that is not a mistake.
+
+      Slower to apply and larger on disk, and neither matters for 92KB applied
+      once. Batched so the file is a few hundred statements rather than 3,000.
+    */
+    '--inserts',
+    '--rows-per-insert=200',
+    /*
+      Do not re-fire triggers while restoring data.
+
+      `system_config` has a trigger refusing a key that begins with a schema
+      name — *"a function reading 'vault.naming' makes verify:schema report a
+      dangling reference to a relation that does not exist"* — and the office's
+      own `vault.naming` key predates it. So the seed contains a row that the
+      live database holds happily and that could not be written today, and
+      replaying it as an ordinary INSERT is refused.
+
+      That is the general case, not one row: these triggers exist to govern
+      what a PERSON or a HANDLER may write, and a restore is neither. pg_dump
+      has `--disable-triggers` for exactly this and it is what a restore does.
+
+      It needs to own the tables, which is true of `postgres` on Supabase and of
+      the harness role locally. If a future target cannot, the seed will say so
+      loudly rather than silently skipping rows.
+    */
+    '--disable-triggers',
     ...PRODUCT_SEED.map((t) => `--table=${t}`),
   ])
 
