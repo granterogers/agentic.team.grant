@@ -280,6 +280,19 @@ const SABOTAGES: readonly Sabotage[] = [
     lifecycle can be actively harmful rather than merely incomplete, and each
     was a real defect for some minutes today.
   */
+  /*
+    #308's two safety properties, both of which decide whether inheriting
+    context is trustworthy or is just the old heuristic with a longer memory.
+  */
+  {
+    name: 'a-guess-never-becomes-the-conversation',
+    proves: "only an explicit resolution is written to a conversation's memory",
+    file: 'migrations/0547_a_conversation_remembers_its_project.sql',
+    anchor: '     and v_project is distinct from app.unnamed_project()',
+    replacement: '     and true',
+    check: 'tests/agents/a-conversation-remembers-its-project.test.ts',
+  },
+
   {
     name: 'the-unnamed-project-is-not-a-project',
     proves: 'a rule from a turn carrying no project is global, not scoped to "unnamed"',
