@@ -1353,3 +1353,139 @@ is an INSERT. Sweeping would add 49 permanent rows for no gain — 0539 keeps
 them out of prompts and `check:leaks` fails if one reaches the Governance
 page, both measured at zero. So the new counter **reports and does not
 fail**: a debris class with no witness is one that comes back.
+
+---
+
+# 22 September, later — #302 and the outcome contract
+
+## The fix: what happened decides what may be said
+
+`src/agents/outcome.ts`. Six classes computed from canonical counts alone —
+completed · partially_completed · blocked_needs_user · blocked_capability ·
+pending_approval · failed_after_retries — and the one rule everything falls
+out of:
+
+> **A commitment to the future is permitted only where a canonical pending
+> action exists.**
+
+Deliberately **not** a seventh detector. Every existing gate keys on a
+CLAIM, each is a list of ways of saying a thing, and a list is always
+missing the next one. Adding "I'll" and "I will" would be worse than the
+previous six, because the future tense is also how a legitimate plan is
+expressed: a detector that cannot tell *"I'll draft it"* backed by a child
+job from the same words backed by nothing must refuse both or allow both.
+
+`sayWhatHappened` **composes** the owed sentence from the rows rather than
+policing the model's. `act()` already proved the shape — a composed
+sentence cannot be phrased around.
+
+## Two flaws found by wiring, not by reading
+
+**A false incapability.** The first classifier fell back to
+`blocked_capability` whenever nothing was named, so *"it is not something I
+can do"* would have been asserted about work the office merely failed to
+parse — a fresh fabrication inside the sentence written to stop
+fabrications. Only an explicit `capabilityRefused` licenses that claim now.
+
+**A paragraph break Grant's own rule forbids.** The line was prepended as
+its own paragraph, and he has a standing lesson reading *"keep every answer
+to a single short paragraph"* — so the office would have had to break one
+of his instructions to obey another. The coherence gate said exactly that,
+on the deployed worker, about a real lesson of his. It leads the same
+paragraph now.
+
+## The deployment ladder, reconciled at every rung
+
+v673 → **v675** → **v677** → **v679** → **v681**. Before each deploy:
+`git merge-base --is-ancestor origin/claude/production-reliability HEAD`
+and a live check of the running version. Their branch is contained at every
+step and their three files are byte-identical to theirs.
+
+## Live canonical verification, v681
+
+**The known reproduction is fixed.**
+
+| | before (v671/v673) | after (v677+) |
+|---|---|---|
+| attempts | 4, all refused | 3, **complete** |
+| reply | **EMPTY** | leads with the truth, then asks |
+| claim | *"Task added"*, 0 tasks | no completion claim |
+| `anyFailed` | true | **false** |
+
+> *"I have not done this. I understood what you want and could not carry it
+> out — say it again in a sentence and I will. I can add a task 'Ring Kevin
+> about the quote' for you. I just need a due date and the project to attach
+> it to."*
+
+**The completed control is untouched** — the grounded request still makes
+its task in one attempt with 0 impediments, and the contract correctly says
+**nothing**. No noise on a turn that worked.
+
+**Multi-turn continuity proved end to end.** Two turns, one chat
+`shadow-s302t-kevin2`, and *"what did you call it?"* resolved the bare
+referent from the thread and answered with the exact title in
+`createdTitles`.
+
+## What is NOT fixed, stated plainly
+
+**The unsupported promise survives.** With the truth leading, and with the
+writer explicitly told *"nothing is queued to happen after this answer"*,
+the office still answered:
+
+> *"I have not done this… **I'll create a task** that flags the insurance
+> renewal a week before its deadline."*  — 0 tasks, 0 child jobs.
+
+Three live probes, three times. **Prompting is advisory and did not hold
+it.** The remaining enforcement would be a state-gated backstop in the
+coherence gate — it only runs when `mayCommitToFuture` is false, so the
+state decides and the wording is only the predicate — but detecting a
+commitment does require reading the text, and shipping an under-validated
+refusal path at the end of a session is the expensive direction: a gate
+that refuses good answers is one somebody switches off.
+
+So #302 is **partially completed**, which is one of its own classes.
+Recorded rather than rounded up.
+
+## Two instrument defects, each of which read as a product defect
+
+**The run token was baked into the chat**, so `--conversation` alone could
+not join two probe runs into one thread. Found by a follow-up that looked
+like the office forgetting a title it had proposed — it had no thread, and
+asking again with no history is correct.
+
+**Then the dedupe key collided.** Sharing a token made turn 2 dedupe
+against turn 1, and the door returned turn 1's answer — which reads exactly
+like the office repeating itself. Counting `inbound_commands` was the only
+thing that could tell them apart: one row where there should have been two.
+Dedupe identity and thread identity are different questions.
+
+## Filed, not fixed — calibrated the same way as #301
+
+[#303](https://github.com/granterogers/agentic.team.grant/issues/303): a
+task title keeps its framing — *"Jot down that get back to Priya about the
+venue"*, and live, *"Stick something down to to ring Kevin about the
+quote"*. **0 occurrences in real traffic, 2 in harness.**
+
+## Acceptance evidence
+
+```
+known reproduction    FIXED, live on v681, with a matched completed control
+fresh unseen          insurance-renewal + jot-down, generated after the fix,
+                      and the first of them OVERTURNED the first wiring
+multi-turn follow-up  threading proved; referent resolved from the thread
+sabotage              16 detectors, +2 for the contract, each shown a defect
+provenance            no gap written in the last day
+containment           swept; every counter zero but the reported lesson pile
+gates                 2514 tests · lint · tsc · migrations · secrets ·
+                      templates · callers
+fingerprint           b98b6cf030e75970 UNCHANGED
+```
+
+Fresh seeds never run before:
+
+| seed | understanding | context | agency | safety |
+|---|---|---|---|---|
+| 31415 | 87% | 93% | 84% | **100%** |
+| 27182 | 89% | 95% | 85% | **100%** |
+
+`check:leaks` still fails only on **#298**'s two preserved rows.
