@@ -1684,3 +1684,61 @@ created. Eleven were left. `npm run session -- --sweep` closes it.
   four coherence refusals. Grant would receive silence. That is a different
   root cause from #302 and is filed separately.
 - 35 turns is 35 samples of a stochastic system.
+
+---
+
+# The regression the sweep that closed #302 also found — #304
+
+**22 September 2026.** The measurement above is 34 scored turns with no
+escapes, no false claims and no false refusals. Reading the answers rather
+than the tally produced a second number that no check was computing:
+
+```
+answered turns          : 34
+leading with the clause : 22 (65%)
+   8 question · 8 thought · 5 assignment · 1 light_investigation
+```
+
+The clause is `sayWhatHappened`'s `blocked_needs_user` sentence — *"I have
+not done this. I understood what you want and could not carry it out — say
+it again in a sentence and I will."* — and eight of the turns it opened were
+questions:
+
+```
+Q: so what is where now?
+Q: did you do it?
+Q: did anything get created just now?
+```
+
+On a question that sentence is not merely the wrong register. Nothing was
+asked for, so there is nothing to say again.
+
+## Layer 3, and introduced by #302's own fix
+
+`wanted` was `requests.length`, which counts every reading in `MAY_ACT`,
+which includes `other`. `other` is both a real reading and what
+`understand()` returns for the WHOLE utterance on every path where nothing
+was interpreted — including the short-single-clause shortcut that *"did you
+do it?"* takes. CLAUDE.md records the shape about `classifyIntent`'s
+`thought`: a fallback class and a real class sharing one name, and nothing
+downstream able to tell *"we decided this"* from *"we did not know"*.
+
+Neither obvious repair is available. Narrowing `wanted` reopens #302 — the
+insurance-renewal escape lands as `other` — and that is written into the
+handler as the reason it is permissive. Dropping `wanted` to zero makes the
+class `completed`, `mayClaimCompletion` true, and the office free to claim
+work it never did: the older half of #302 reopened to quieten the newer.
+
+## The fix, and what it deliberately does not touch
+
+One number was answering two questions. `CanonicalOutcome.asked` is the
+GRAMMAR's verdict — `readRequest(...).mood === 'ask'` on any clause of any
+surviving request — and it decides exactly one thing: whether the office
+VOLUNTEERS a state sentence. The class, `mayClaimCompletion` and
+`mayCommitToFuture` are byte-for-byte unchanged, so the commitment backstop
+runs on precisely the turns it ran on before, and a NAMED gap is still
+reported whatever the mood.
+
+Both halves sabotaged and proved red: removing `if (!c.asked) return null`
+turns the contract suite red, and replacing the grammar call with
+`requests.length > 0` turns the handler source assertion red.

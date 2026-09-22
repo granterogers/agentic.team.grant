@@ -128,6 +128,33 @@ const classes = new Map<string, number>()
 let scored = 0
 let noRow = 0
 
+/*
+  HOW OFTEN THE OFFICE OPENS BY SAYING IT DID NOTHING - #304.
+
+  Not a gate, because there is no honest threshold: a conversation full of
+  ungrounded requests SHOULD get the sentence every time. It is reported
+  because the first sweep returned zero findings and 65% of the answers
+  nonetheless opened with the same twenty words, eight of them on questions.
+  A tally with no escapes in it was true and was not the whole picture.
+
+  Counted against the sentence the CONTRACT composes, read from
+  `sayWhatHappened` rather than copied, so a rewording cannot make this go
+  quietly to zero.
+*/
+const LEADS_WITH = sayWhatHappened({
+  wanted: 1,
+  landed: 0,
+  pendingActions: 0,
+  awaitingApproval: false,
+  missing: [],
+  capabilityRefused: false,
+  attempt: 1,
+  maxAttempts: 4,
+  settled: false,
+  asked: true,
+})
+const boilerplate: { readonly say: string; readonly intent: string }[] = []
+
 for (const t of turns) {
   const r = byJob.get(t.jobId)
   if (r === undefined) {
@@ -162,6 +189,10 @@ for (const t of turns) {
   }
   const cls = classifyOutcome(outcome)
   classes.set(cls, (classes.get(cls) ?? 0) + 1)
+
+  if (LEADS_WITH !== null && answer.trim().startsWith(LEADS_WITH.slice(0, 40))) {
+    boilerplate.push({ say: t.say, intent: String(r.intent_class) })
+  }
 
   /*
     The invariant, restated from rows alone: nothing queued, and the answer
@@ -249,6 +280,20 @@ console.log(
 console.log(`\n  OUTCOME CLASSES REACHED`)
 for (const [k, v] of [...classes].sort((a, b) => b[1] - a[1])) {
   console.log(`    ${k.padEnd(22)} ${String(v)}`)
+}
+
+console.log(
+  `\n  OPENS BY SAYING IT DID NOTHING  ${String(boilerplate.length)} of ${String(scored)}`,
+)
+if (boilerplate.length > 0) {
+  const by = new Map<string, number>()
+  for (const b of boilerplate) by.set(b.intent, (by.get(b.intent) ?? 0) + 1)
+  for (const [k, v] of [...by].sort((a, b) => b[1] - a[1])) {
+    console.log(`    ${(k === '' ? 'unrecorded' : k).padEnd(22)} ${String(v)}`)
+  }
+  for (const b of boilerplate.filter((x) => x.intent === 'question')) {
+    console.log(`    on a QUESTION: ${b.say.slice(0, 80)}`)
+  }
 }
 
 console.log(`\n  FINDINGS  ${String(findings.length)}\n`)
