@@ -554,5 +554,11 @@
   "0552_a_task_he_typed_himself_is_still_a_referent.sql": "477bc8addabecffd96f3b2e73bb61dcd8217b71300b9062e8a8dcaa10a3bd2f0",
   "0553_the_window_not_the_first_turn.sql": "6bd4282c7a541fa51ccf4645aab86c2f9b85e128c2910e1599105d4c6ce73336",
   "0554_reference_needs_an_antecedent.sql": "38bbb8657b59cb350d68b9945b4c30eaa81bfdaad7625bd0c8712c8be8ba3374",
-  "0555_a_conversation_can_see_and_stop_its_own_work.sql": "224a67c62027e90ffda22e5163deaaaab3f6bb6bb3da05c89bec04d7fb1f2a8a"
+  "0555_a_conversation_can_see_and_stop_its_own_work.sql": "224a67c62027e90ffda22e5163deaaaab3f6bb6bb3da05c89bec04d7fb1f2a8a",
+  "0556_one_live_attempt_per_obligation.sql": "3987f520f02603a9170f8eca454e752e498af6af5c86895886e232bfbf242de5",
+  "0557_the_office_can_say_what_is_in_flight.sql": "1deae99013ac5d156bfd0cd51a9d269f697351424e08790828c87b877a0318ca",
+  "0558_a_turn_does_not_duplicate_itself.sql": "7c308ecd040ad2382c9e8a42bbbe3c12b21eb82a5a87d9e30b8a2daa81529cb4",
+  "0559_finished_work_is_still_an_answer.sql": "38307496f2135f1d131e782e2bbc7464b30c0cab67e66f812ce340dae684ce37",
+  "0560_a_refusal_is_not_an_answer.sql": "f2918f2f46f41b17f82b5e3939e516a91a63cea83b5cc1e31e72992002b086a4",
+  "0561_another_pair_of_eyes.sql": "25dc1f32dcbf1fd29222cc12f9fb7dc1c7c51832ececf97249e4f7a5511cde8f"
 }

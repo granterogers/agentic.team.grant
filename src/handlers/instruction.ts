@@ -80,6 +80,8 @@ import {
   pageRequest,
   type RequestedKind,
 } from '../agents/actions.ts'
+import { wantsAnotherGo } from '../agents/again.ts'
+import { alreadyPursuing } from '../agents/already.ts'
 import { callsItOff } from '../agents/calloff.ts'
 import {
   capabilityBrief,
@@ -131,6 +133,7 @@ import { NEEDS_A_TITLE, type TaskRequest, taskRequest, titleReply } from '../age
 import { readTeaching } from '../agents/teaching.ts'
 import { resolveAgainstThread } from '../agents/thread.ts'
 import { oneReading, type ReadingKind, understand } from '../agents/understand.ts'
+import { asksWhoIsOnIt } from '../agents/whoison.ts'
 import type { SqlExecutor } from '../db/executor.ts'
 import type { Handler, HandlerOutput, Job } from '../jobs/worker.ts'
 import {
@@ -244,15 +247,82 @@ export const planAndPursue = async (
   const doable = plan.steps.filter((s) => canDo.has(s.capability))
   if (plan.steps.length < 2 || doable.length === 0) return null
 
-  await db.execute(`
-    select app.enqueue_child(
-      ${lit(job.jobId)}::uuid, 'office.pursue',
-      jsonb_build_object(
-        'plan', ${lit(JSON.stringify(plan))}::jsonb,
-        'request', ${lit(request.slice(0, 2000))}
-      ),
-      interval '0', true
-    )::text as id`)
+  /*
+    ONCE PER OBLIGATION (#316, 0556).
+
+    Measured on Grant's REAL Telegram chat: "Write me a PDF report on where
+    the Legacy Coaching…" at 08:05:27 and the identical sentence at 08:08:37,
+    two children, two PDFs into his real project. On genuinely delivered real
+    traffic, 57 of 290 message pairs within two hours are near-duplicates —
+    this is how a person behaves when an answer has not arrived yet, not an
+    edge case.
+
+    `jobs_one_live_per_idempotency_key` has always been able to refuse this and
+    `app.enqueue_child` defeated it with `gen_random_uuid()`. The insert IS the
+    check, so two messages 120ms apart cannot both get through — proved with
+    eight concurrent equivalent requests, which produced one child and told
+    the other seven the truth.
+  */
+  /*
+    DID HE ASK FOR ANOTHER GO ON PURPOSE?
+
+    #316's invariant has a clause: unless he clearly asks for another
+    independent attempt. This is the only thing that AUTHORISES duplication,
+    so it is deterministic and narrow — a miss costs him one more sentence
+    while the office stays honest about what is running; a false positive
+    spends the model twice and produces two answers to one question.
+  */
+  const deliberate = wantsAnotherGo(request)
+
+  /*
+    THE REPHRASED CASE IS DECIDED ABOVE, ONCE.
+
+    An earlier version asked here as well. `planAndPursue` runs AFTER the
+    roster hand-off, so the two could disagree — and did: on a repeated
+    request the office convened a specialist and then said it had not started
+    anything a second time. One decision, one place. What remains here is the
+    STRUCTURAL guarantee, which is free and cannot be raced.
+  */
+  const handed = await db
+    .execute(`
+      select ${deliberate === null ? 'app.enqueue_child_once' : 'app.enqueue_child'}(
+        ${lit(job.jobId)}::uuid, 'office.pursue',
+        ${
+          deliberate === null
+            ? `${lit(request.slice(0, 2000))},
+        jsonb_build_object('plan', ${lit(JSON.stringify(plan))}::jsonb)`
+            : `jsonb_build_object(
+          'plan', ${lit(JSON.stringify(plan))}::jsonb,
+          'request', ${lit(request.slice(0, 2000))}
+        ), interval '0', true`
+        }
+      ) as r`)
+    .then((r) => {
+      const raw = (r.rows[0] as { r?: unknown })?.r
+      /*
+        `enqueue_child` returns a bare uuid and `enqueue_child_once` returns
+        an object. A deliberate second attempt always created something, by
+        definition — that is what taking the other door means.
+      */
+      if (deliberate !== null) return { created: true }
+      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as { created?: boolean } | null
+    })
+
+  /*
+    ALREADY RUNNING IS SAID, NOT SILENTLY REPEATED AND NOT SILENTLY DROPPED.
+
+    The second reply used to be the first one word for word, with no mention
+    that the office had handed the same work on ninety seconds earlier. Going
+    quiet instead would be worse: he asked twice because the first answer had
+    not arrived.
+  */
+  if (handed?.created === false) {
+    return (
+      'That is already in hand — I handed exactly this on a moment ago and it ' +
+      'is still running, so I have not started it a second time. ' +
+      'Say the word if you want somebody else to take a separate look.'
+    )
+  }
 
   /*
     WHAT IT SAYS IT WILL DO, NOT WHAT IT HAS DONE.
@@ -2116,12 +2186,240 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           CLAUDE.md gives: a swallowed error on a write nobody reads back is
           indistinguishable from a feature that was never built.
       */
+      /*
+        IS THIS ALREADY BEING PURSUED? ONE DECISION, MADE ONCE (#316).
+
+        The first version of this fix asked inside `planAndPursue`, which runs
+        AFTER the roster hand-off below — so on a repeated request the office
+        convened a specialist AND then said "I have not started it a second
+        time". Both halves right alone, only their disagreement wrong, which
+        CLAUDE.md records as the hardest kind to see. The decision belongs
+        here, above everything that starts work.
+
+        Grounded in canonical state: the candidates are the jobs this
+        conversation actually handed on, excluding this turn's own (0558).
+        Nothing is compared against a corpus or a similarity threshold —
+        suppressing "draft the pricing deck" as a duplicate of "draft the
+        pricing email" is the silent direction and the worse one.
+
+        `wantsAnotherGo` is the clause #316 names: unless he clearly asks for
+        another independent attempt. It is deterministic because it is the
+        only thing that AUTHORISES duplication.
+      */
+      const askedForAnother = wantsAnotherGo(instruction)
+      const alreadyRunning =
+        String(payload.handed_off_by ?? '') !== '' ||
+        askedForAnother !== null ||
+        asksWhoIsOnIt(instruction) !== null
+          ? null
+          : await deps.db
+              .execute(`
+                select app.conversation_work(
+                  ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
+                  interval '24 hours',
+                  ${lit(job.jobId)}::uuid) as r`)
+              .then(async (r) => {
+                const raw = (r.rows[0] as { r?: unknown })?.r
+                const work = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  in_flight?: { job?: string; about?: string; who?: string }[]
+                  recently_done?: {
+                    job?: string
+                    about?: string
+                    who?: string
+                    answer?: string
+                    hit_trouble?: boolean
+                  }[]
+                } | null
+                /*
+                  RUNNING AND JUST-FINISHED, TOGETHER (0559).
+
+                  On v741 a request repeated 54 seconds later duplicated,
+                  correctly by the letter of the earlier fix: the first
+                  attempt had COMPLETED, and only stoppable work was offered
+                  as a candidate. #316's eighth case is exactly this, and it
+                  is the real-traffic shape — Grant's two identical PDF
+                  requests were 190 seconds apart.
+                */
+                return alreadyPursuing(
+                  instruction,
+                  [
+                    ...(work?.in_flight ?? []).map((w) => ({
+                      job: String(w.job ?? ''),
+                      about: String(w.about ?? ''),
+                      who: String(w.who ?? 'someone'),
+                    })),
+                    /*
+                      A FINISHED JOB THAT RECORDED AN IMPEDIMENT IS NOT AN
+                      ANSWER (0560).
+
+                      On v743 the office relayed "here is what Grace found: I
+                      have not done this" and suppressed the retry — telling
+                      him his repeat was unnecessary at the exact moment it
+                      was the only thing that could still get him an answer.
+                      #316's ninth case: previous work failed, retry.
+
+                      Read from `job_impediments`, never from the wording: the
+                      coherence gate phrases its refusals half a dozen ways
+                      and a literal-string check is a wording lock.
+                    */
+                    ...(work?.recently_done ?? [])
+                      .filter((w) => w.hit_trouble !== true)
+                      .map((w) => ({
+                        job: String(w.job ?? ''),
+                        about: String(w.about ?? ''),
+                        who: String(w.who ?? 'someone'),
+                        answer: String(w.answer ?? ''),
+                      })),
+                  ],
+                  deps.router,
+                  { jobId: job.jobId, correlationId: job.correlationId },
+                )
+              })
+              .catch(() => null)
+
+      /*
+        TWO DIFFERENT TRUTHS, TWO DIFFERENT SENTENCES.
+
+        Still running: say who has it, and do not start a second one.
+        Just finished: give him the ANSWER, because that is what he was
+        asking for — he repeated himself because nothing had arrived, and
+        replying "that is already done" without the result would be the
+        office being right and useless in the same breath.
+
+        Both end by naming the way to get another go, because refusing to
+        duplicate is only safe if asking for a duplicate is easy.
+      */
+      const alreadyOn =
+        alreadyRunning === null
+          ? null
+          : (alreadyRunning.answer ?? '').trim() !== ''
+            ? `You asked me that a moment ago and it came back — here is what ` +
+              `${alreadyRunning.who === 'someone' ? 'it' : alreadyRunning.who} found:\n\n` +
+              `${(alreadyRunning.answer ?? '').trim().slice(0, 600)}\n\n` +
+              'Say the word if you want it done again from scratch.'
+            : `${alreadyRunning.who === 'someone' ? 'Somebody' : alreadyRunning.who} is already on that — ` +
+              `"${alreadyRunning.about.trim().slice(0, 120)}" is running now, so I have not started it ` +
+              'a second time. Say the word if you want somebody else to take a separate look.'
+
+      /*
+        AND IF HE ASKED FOR ANOTHER PERSON, PUT ANOTHER PERSON ON IT (0561).
+
+        On v745 "get another person to look at that as well" produced NOTHING.
+        The authorisation was honoured — nothing was suppressed — and then the
+        ordinary routing convened nobody, because the sentence names no
+        subject: "that" is a pro-form and `who_knows_about` has nothing to
+        match.
+
+        So every duplicate-suppressing reply ended "say the word if you want
+        somebody else to take a separate look", and the word did nothing —
+        the offer-that-cannot-be-performed defect, manufactured by the fix
+        that added the offer.
+
+        The work comes from canonical state (the conversation's most recent
+        obligation) rather than from the words, and the person is somebody not
+        already carrying it.
+      */
+      const secondOpinion =
+        askedForAnother !== 'another_person' || String(payload.handed_off_by ?? '') !== ''
+          ? null
+          : await deps.db
+              .execute(`
+                select app.another_pair_of_eyes(
+                  ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid,
+                  ${lit(job.jobId)}::uuid) as r`)
+              .then(async (r) => {
+                const raw = (r.rows[0] as { r?: unknown })?.r
+                const pick = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  ok?: boolean
+                  slug?: string
+                  about?: string
+                  why?: string
+                } | null
+                if (pick?.ok !== true) {
+                  /*
+                    Said out loud. "There is nothing to look at again" is a
+                    real answer; going quiet would be the same defect one
+                    layer further in.
+                  */
+                  return pick?.why === 'everybody is already on it'
+                    ? 'Everyone I could put on that is already on it.'
+                    : 'There is nothing of mine running or just finished that I could put somebody else on.'
+                }
+                const started = await deps.db
+                  .execute(`
+                    select app.enqueue_child_once(
+                      ${lit(job.jobId)}::uuid, 'office.instruction',
+                      ${lit(`${String(pick.slug ?? '')}: ${String(pick.about ?? '').slice(0, 2_000)}`)},
+                      jsonb_build_object(
+                        'instruction', ${lit(String(pick.about ?? '').slice(0, 4_000))},
+                        'addressed_to', ${lit(String(pick.slug ?? ''))},
+                        'origin_channel', ${lit(String(payload.origin_channel ?? 'teamhq'))},
+                        'command_id', ${lit(String(payload.command_id ?? ''))},
+                        'handed_off_by', ${lit(who.slug)}
+                      ),
+                      false
+                    ) ->> 'created' as made`)
+                  .then((x) => String((x.rows[0] as { made?: string })?.made ?? 'false'))
+                return started === 'true'
+                  ? `Asked ${String(pick.slug ?? 'somebody')} to take a separate look at ` +
+                      `"${String(pick.about ?? '')
+                        .trim()
+                        .slice(0, 120)}". I will come back with what they make of it.`
+                  : `${String(pick.slug ?? 'They')} already has that one.`
+              })
+              /*
+                RECORDED, NOT SWALLOWED.
+
+                The first version of this ended `.catch(() => null)` and the
+                path silently did nothing — indistinguishable from a feature
+                that was never built, which is the exact defect CLAUDE.md
+                records about `consultations` sitting empty for weeks behind
+                one silent catch. He asked for a second opinion; if the office
+                cannot arrange one it has to say so somewhere he looks.
+              */
+              .catch(async (error: unknown) => {
+                await deps.db
+                  .execute(`
+                    select app.cannot(${lit(job.jobId)}::uuid, 'not_capable',
+                      'put a second person on this', ${lit(who.slug)},
+                      ${lit(String((error as Error).message).slice(0, 400))},
+                      ${lit(instruction.slice(0, 280))})`)
+                  .catch(() => undefined)
+                return 'I could not arrange a second look at that just now. Ask me again and I will retry.'
+              })
+
       const branchesStarted: { agent: string; jobId: string }[] = []
-      for (const other of who.alsoConvened) {
+      /*
+        A QUESTION ABOUT THE WORK IS NOT WORK (#316).
+
+        "how many people are on that?" convened a specialist on v737 — the
+        office put somebody on answering a question canonical state answers
+        outright, and that child then looked like a duplicate of the thing it
+        was asking about. Read from the instruction rather than from the
+        clause split, because this runs before `understand` and the shape is
+        a whole short sentence by construction.
+      */
+      const aboutTheWork = asksWhoIsOnIt(instruction) !== null
+      for (const other of aboutTheWork || alreadyOn !== null ? [] : who.alsoConvened) {
+        /*
+          ONCE PER SPECIALIST PER OBLIGATION (#316, 0556).
+
+          This is the fan-out that actually happens in this office — driving
+          the fix found that `office.pursue` is the rarer one and that every
+          duplicated child in the reproduction came from here. Grant asked
+          for the same thing twice, 190 seconds apart, on his real Telegram,
+          and got two of these.
+
+          The specialist is part of the key: two people on one request are
+          two legitimate obligations, and the same person on the same request
+          twice is the duplicate. The payload keeps its own `instruction`, so
+          `enqueue_child_once` leaves it alone.
+        */
         const spawned = await deps.db
           .execute(`
-            select app.enqueue_child(
+            select app.enqueue_child_once(
               ${lit(job.jobId)}::uuid, 'office.instruction',
+              ${lit(`${other}: ${instruction.slice(0, 2_000)}`)},
               jsonb_build_object(
                 'instruction', ${lit(instruction.slice(0, 4_000))},
                 'addressed_to', ${lit(other)},
@@ -2129,8 +2427,8 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                 'command_id', ${lit(String(payload.command_id ?? ''))},
                 'handed_off_by', ${lit(who.slug)}
               ),
-              interval '0', false
-            )::text as id
+              false
+            ) ->> 'job_id' as id
           `)
           .catch((error: unknown) => ({ rows: [{ id: null, e: (error as Error).message }] }))
         const row = spawned.rows[0] as { id?: string | null; e?: string } | undefined
@@ -2689,6 +2987,80 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         is `app.hq_undo`'s question — and saying so is the difference between
         this and the answer that caused the Issue.
       */
+      /*
+        WHO IS ON IT, ANSWERED FROM THE ROWS (#316, 0557).
+
+        Measured on v733 with two children of that very conversation in
+        flight: "how many people are on that?" was answered with an offer to
+        create a task. The true answer was two, one query away. The question
+        reached document retrieval, which cannot answer it, and the model
+        filled the gap.
+
+        Checked here, BEFORE the readers that cannot answer it, and
+        deliberately narrow: only the who / how-many class short-circuits.
+        "what is happening with that?" keeps going down the ordinary path,
+        because it may legitimately want a document.
+      */
+      const headCount = isBranch ? null : firstOfHis(asksWhoIsOnIt)
+      const whoIsOn =
+        headCount === null
+          ? null
+          : await deps.db
+              .execute(
+                `select app.conversation_work(
+                   ${lit(String(payload.command_id ?? '00000000-0000-0000-0000-000000000000'))}::uuid) as r`,
+              )
+              .then((r) => {
+                const raw = (r.rows[0] as { r?: unknown })?.r
+                const work = (typeof raw === 'string' ? JSON.parse(raw) : raw) as {
+                  in_flight?: { who?: string; about?: string }[]
+                  finished?: number
+                  waiting_on_you?: number
+                } | null
+                const live = work?.in_flight ?? []
+                const finished = Number(work?.finished ?? 0)
+                const waiting = Number(work?.waiting_on_you ?? 0)
+                /*
+                  Nothing running is a real answer and it is said plainly.
+                  What must never happen again is the office reporting this
+                  from retrieval — "there's no record of anyone having started
+                  work on it" over two children it made itself (#315).
+                */
+                if (live.length === 0) {
+                  return finished === 0
+                    ? 'Nobody is on it at the moment — there is nothing of mine still running on that.'
+                    : `Nobody is still on it — ${String(finished)} ${finished === 1 ? 'piece' : 'pieces'} of that work ${finished === 1 ? 'has' : 'have'} already finished.`
+                }
+                const names = [...new Set(live.map((w) => String(w.who ?? 'someone')))]
+                const who =
+                  names.length === 1 && names[0] === 'someone'
+                    ? ''
+                    : ` — ${names.slice(0, 4).join(', ')}`
+                const head =
+                  live.length === 1
+                    ? `One piece of work is running on that${who}.`
+                    : `${String(live.length)} pieces of work are running on that${who}.`
+                /*
+                  #317's half, and it belongs in the same sentence: a blocker
+                  he has not been told about is the office waiting on him
+                  without his knowing. `waiting_on_you` existed canonically
+                  and reached him nowhere.
+                */
+                const stuck =
+                  waiting === 0
+                    ? ''
+                    : ` ${String(waiting)} of ${live.length === 1 ? 'it' : 'them'} ${waiting === 1 ? 'is' : 'are'} waiting on your answer before it can go further.`
+                const done = finished === 0 ? '' : ` ${String(finished)} has already finished.`
+                const about = live
+                  .map((w) => String(w.about ?? '').trim())
+                  .filter((a) => a !== '')
+                  .slice(0, 2)
+                  .map((a) => `\n  · ${a.slice(0, 120)}`)
+                  .join('')
+                return `${head}${stuck}${done}${about}`
+              })
+              .catch(() => null)
+
       const calledOff = isBranch || changesHis !== null ? null : firstOfHis(callsItOff)
       const stopped =
         calledOff === null
@@ -3574,6 +3946,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         noted,
         changed,
         stopped,
+        whoIsOn,
+        alreadyOn,
+        secondOpinion,
         extracting,
         enumerating,
         writingFile,
@@ -3609,6 +3984,9 @@ export function instructionHandler(deps: InstructionDeps): Handler {
           noted,
           changed,
           stopped,
+          whoIsOn,
+          alreadyOn,
+          secondOpinion,
           extracting,
           enumerating,
           writingFile,
