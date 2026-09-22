@@ -265,6 +265,34 @@ console.log(`\n#308 — a conversation remembers its project  (run ${run})\n`)
   }
 }
 
+// ------------------------------------------------- a paused project
+{
+  const r = await scenario(
+    'paused',
+    `insert into public.projects (slug, name, purpose, status)
+     values ('verify-ctx-paused-${run}', 'Context paused ${run}', 'Thrown away', 'paused')
+     returning project_id into v_q;
+     insert into public.inbound_commands
+       (origin_channel, origin_ref, actor, subject, instruction, project_id, dedupe_key)
+     values ('telegram', '8${run}7:1', '8${run}7', 'ctx-${run}', 'A message.', v_q, 'telegram:ctx:${run}_p')
+     returning command_id into v_c;
+     perform app.enqueue_inbound(v_c); ${answer('paused')}`,
+  )
+  if (r.skipped === undefined) {
+    /*
+      0548. `project_switches` refuses anything but an active project, and
+      0547 put that refusal in the path of every inbound message — so a
+      message about a PAUSED project raised and was lost before the job
+      existed. Remembering is best-effort; delivering is not.
+    */
+    ok(
+      'a message about a paused project still becomes a job',
+      r.paused === `verify-ctx-paused-${run}`,
+      `${r.paused}`,
+    )
+  }
+}
+
 // ------------------------------------------------- the other channels
 {
   const r = await scenario(
