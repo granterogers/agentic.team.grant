@@ -76,6 +76,24 @@ describe('the prohibition on promising exists and is gated on the rows', () => {
     sabotage of that one line is the control: replacing it with the length
     test must turn this red.
   */
+  /*
+    AND PENDING WORK IS COUNTED FROM ROWS TOO (#312's second half).
+
+    `pendingActions` was `pursuing === null ? 0 : 1` — a variable the handler
+    set, which is exactly what `outcome.ts`'s field comment forbids for
+    `landed`. Wrong twice over: blind to a child enqueued by any other path,
+    and saying ONE when the office fanned out to four.
+
+    Measured live on v721 with #312's fix already deployed: a turn that
+    created one child job and two consultations mentioned neither, because
+    the contract could not see the child.
+  */
+  it('counts pending work from the jobs table, not from a variable', () => {
+    expect(withoutComments).toMatch(/pendingActions: pendingChildren/)
+    expect(withoutComments).toMatch(/parent_job_id = \$\{lit\(job\.jobId\)\}::uuid\) as kids/)
+    expect(withoutComments).not.toMatch(/pendingActions: pursuing === null \? 0 : 1/)
+  })
+
   it('reads whether he asked from the mood, not from the count', () => {
     expect(withoutComments).toMatch(/asked:\s*askedForWork/)
     expect(withoutComments).toMatch(

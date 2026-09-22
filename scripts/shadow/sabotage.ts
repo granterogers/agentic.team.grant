@@ -285,6 +285,15 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'pending-work-is-counted-from-rows',
+    proves: 'the contract sees a child job whoever enqueued it',
+    file: 'src/handlers/instruction.ts',
+    anchor: '        pendingActions: pendingChildren,',
+    replacement: '        pendingActions: pursuing === null ? 0 : 1,',
+    check: 'tests/handlers/promise-needs-pending-work.test.ts',
+  },
+
+  {
     name: 'work-handed-on-is-never-silent',
     proves: 'a turn that convened somebody says so',
     file: 'src/agents/outcome.ts',

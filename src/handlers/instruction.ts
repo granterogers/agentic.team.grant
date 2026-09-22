@@ -3539,13 +3539,35 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         Asked once, here, after every writer has run. `acted` above is what
         the handler ATTEMPTED; this is what survived.
       */
-      const landedRows = await deps.db
+      const counted = await deps.db
         .execute(`
           select (select count(*) from public.tasks t where t.job_id = ${lit(job.jobId)}::uuid)
                + (select count(*) from public.documents d
-                   where d.produced_by_job = ${lit(job.jobId)}::uuid) as n`)
-        .then((r) => Number((r.rows[0] as { n?: number } | undefined)?.n ?? 0))
-        .catch(() => acted)
+                   where d.produced_by_job = ${lit(job.jobId)}::uuid) as n,
+                 (select count(*) from public.jobs c
+                   where c.parent_job_id = ${lit(job.jobId)}::uuid) as kids`)
+        .then((r) => r.rows[0] as { n?: number; kids?: number } | undefined)
+        .catch(() => undefined)
+      const landedRows = counted === undefined ? acted : Number(counted.n ?? 0)
+      /*
+        AND THE CHILDREN, COUNTED THE SAME WAY (#312's second half).
+
+        `pendingActions` was `pursuing === null ? 0 : 1` — a variable the
+        handler set, which is precisely what the field's own comment in
+        `outcome.ts` forbids for `landed` and for the same reason. It is
+        wrong twice over: it cannot see a child enqueued by any path other
+        than `pursuing`, and it says ONE when the office fanned out to four.
+
+        Measured live on v721, with the #312 fix already deployed: a turn
+        that created ONE child job and TWO consultations said "I have not
+        done this… I have no record of the three competitors' pricing" and
+        mentioned neither. The contract could not see the child, so the
+        sentence it exists to compose was never owed.
+
+        One extra count in a query that was already being made.
+      */
+      const pendingChildren =
+        counted === undefined ? (pursuing === null ? 0 : 1) : Number(counted.kids ?? 0)
 
       const outcome: CanonicalOutcome = {
         wanted: wantedWork,
@@ -3573,7 +3595,7 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         landed: landedRows,
         // The only thing that licenses a commitment to the future, and the
         // office's one way of making one here is to hand work on.
-        pendingActions: pursuing === null ? 0 : 1,
+        pendingActions: pendingChildren,
         awaitingApproval: false,
         /*
           Named only where it is KNOWN. Claiming to know what is missing when
