@@ -3504,6 +3504,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         capabilityRefused: false,
         attempt: job.attempt,
         maxAttempts: 4,
+        /*
+          Still running, always: this is asked while the answer is being
+          composed, so the turn cannot have failed after retries. Passing the
+          attempt count alone made the class fire on the LAST attempt, which
+          is when the office is most likely to answer well.
+        */
+        settled: false,
       }
 
       // The same retrieval the office uses, so an instruction answered in

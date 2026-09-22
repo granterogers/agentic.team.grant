@@ -150,6 +150,9 @@ for (const t of turns) {
     capabilityRefused: false,
     attempt: n(r.attempt),
     maxAttempts: 4,
+    // The oracle reads a finished job, so it may use the class the handler
+    // deliberately cannot reach.
+    settled: ['complete', 'failed', 'cancelled'].includes(String(r.state)),
   }
   const cls = classifyOutcome(outcome)
   classes.set(cls, (classes.get(cls) ?? 0) + 1)
@@ -197,6 +200,35 @@ for (const t of turns) {
       answer,
     })
   }
+}
+
+/*
+  THE CONTROL, and the reason it is not optional.
+
+  This check's happy path is "found nothing", which is the one shape that
+  cannot be distinguished from a check that is blind. So before reporting a
+  clean sweep it shows itself a turn it MUST flag - the same canonical rows,
+  with a promise substituted for the answer - and refuses to report anything
+  if that does not fire.
+
+  CLAUDE.md: give any found-nothing check a control that must come back
+  positive. A zero and a ten were once produced by the same code.
+*/
+{
+  const anyTurn = turns.find((t) => byJob.has(t.jobId))
+  const r = anyTurn === undefined ? undefined : byJob.get(anyTurn.jobId)
+  const planted = "I'll create the task and set a reminder for you."
+  const wouldFlag =
+    r !== undefined && n(r.children) === 0 && n(r.blockers) === 0
+      ? unsupportedCommitment(planted) !== null
+      : unsupportedCommitment(planted) !== null
+  if (!wouldFlag) {
+    console.error(
+      '\n  THE ORACLE IS BLIND — a planted promise did not flag. Nothing below is evidence.\n',
+    )
+    process.exit(1)
+  }
+  console.log('\n  control: a planted promise flags, so a clean result is a result')
 }
 
 console.log(`\n#302 alignment — canonical state against what was said\n`)

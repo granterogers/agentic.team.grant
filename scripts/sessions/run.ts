@@ -405,7 +405,20 @@ export const askOnce = async (
   projects: ReadonlyMap<string, string>,
   deadlineMs = 7 * 60 * 1000,
 ): Promise<TurnResult> => {
-  const key = `teamhq:sess_${session.name.replace(/[^a-z0-9]/g, '_')}:${chat}-${String(index)}`
+  /*
+    The MIDDLE segment takes letters and underscores only.
+
+    `inbound_dedupe_key_shaped` is `^[a-z]+:[a-z_]+:[A-Za-z0-9:_.-]+$`, and
+    this built the middle from the session name with digits left in - so any
+    session whose name carries a number was refused by the CHECK before the
+    office saw a word of it. Every session written until now happened to be
+    named in bare words, which is why it never showed.
+
+    Digits are legal in the THIRD segment and the chat is there, so nothing
+    is lost by dropping them here: the key stays unique per turn because the
+    chat and the index carry it.
+  */
+  const key = `teamhq:sess_${session.name.replace(/[^a-z]/g, '_')}:${chat}-${String(index)}`
   const projectId = turn.inProject === undefined ? null : (projects.get(turn.inProject) ?? null)
 
   /*
@@ -457,7 +470,24 @@ export const askOnce = async (
               (origin_channel, origin_ref, actor, instruction, dedupe_key, received_at, project_id)
             values ('teamhq', ${lit(`${chat}:${String(index)}`)}, ${lit(actor)},
                     ${lit(turn.say)}, ${lit(key)}, app.now_utc(),
-                    ${projectId === null ? 'null' : `${lit(projectId)}::uuid`})
+                    /*
+                      The DEFAULT, not an explicit null, when the turn names
+                      no project.
+
+                      inbound_commands.project_id is NOT NULL with a default
+                      of app.unnamed_project() - the Unnamed bucket a message
+                      that names nothing lands in. Passing null defeats the
+                      default and the insert is refused, which is the
+                      explicit-null-over-a-default trap.
+
+                      It survived because every session written until now set
+                      a project on every turn, so the path was never taken.
+                      The first turn that did not - a loose obligation with no
+                      project, which is exactly the shape 302's remaining
+                      exposure lives in - died on a 23502 before the office
+                      saw a word of it.
+                    */
+                    ${projectId === null ? 'app.unnamed_project()' : `${lit(projectId)}::uuid`})
             on conflict (dedupe_key) do nothing;
             create temp table _j as
               select coalesce(

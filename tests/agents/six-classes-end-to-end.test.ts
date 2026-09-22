@@ -28,6 +28,7 @@ const at = (over: Partial<CanonicalOutcome> = {}): CanonicalOutcome => ({
   capabilityRefused: false,
   attempt: 1,
   maxAttempts: 4,
+  settled: true,
   ...over,
 })
 

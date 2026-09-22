@@ -134,6 +134,24 @@ export interface CanonicalOutcome {
   /** Which attempt this is, and how many it gets. */
   readonly attempt: number
   readonly maxAttempts: number
+  /**
+   * Has the turn FINISHED, or is it still being answered?
+   *
+   * `failed_after_retries` is a fact about a settled job, and the handler is
+   * by definition still running when it asks. Without this the class fires on
+   * the LAST attempt - which is exactly when the office is most likely to
+   * produce a good answer, because it has the previous refusals in front of
+   * it.
+   *
+   * Found live on 22 September: a job in state `complete` on attempt 4 told
+   * Grant *"I could not get this done after 4 attempts, and nothing was
+   * created"* and then answered his question in the next sentence. The
+   * attempt count was right and the conclusion drawn from it was not.
+   *
+   * So the handler passes `false` and never reaches the class; a reader of
+   * settled state passes what the job's own state says.
+   */
+  readonly settled: boolean
 }
 
 /**
@@ -152,7 +170,15 @@ export interface CanonicalOutcome {
  *   4. Then the arithmetic.
  */
 export const classifyOutcome = (c: CanonicalOutcome): OutcomeClass => {
-  const outOfAttempts = c.attempt >= c.maxAttempts
+  /*
+    Settled FIRST, because an unfinished turn cannot have failed.
+
+    The handler asks this while it is composing an answer, so its attempt
+    count can equal the maximum while the job is about to succeed - and it
+    did, live, producing "I could not get this done after 4 attempts"
+    immediately before answering the question.
+  */
+  const outOfAttempts = c.settled && c.attempt >= c.maxAttempts
   if (outOfAttempts && c.landed === 0 && c.wanted > 0 && c.pendingActions === 0) {
     return 'failed_after_retries'
   }

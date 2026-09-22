@@ -29,6 +29,7 @@ const at = (over: Partial<CanonicalOutcome> = {}): CanonicalOutcome => ({
   capabilityRefused: false,
   attempt: 1,
   maxAttempts: 4,
+  settled: true,
   ...over,
 })
 
@@ -240,5 +241,43 @@ describe('an unexplained miss does not invent an incapability', () => {
   it('only an established refusal claims incapability', () => {
     const said = sayWhatHappened(at({ wanted: 1, landed: 0, capabilityRefused: true })) ?? ''
     expect(said).toContain('not something I can do')
+  })
+})
+
+describe('an unfinished turn cannot have failed after retries', () => {
+  /*
+    Found live, and it is a classification defect rather than a narration one.
+
+    A job in state `complete` on attempt 4 opened with *"I could not get this
+    done after 4 attempts, and nothing was created"* and then answered the
+    question in the next sentence. The attempt count was right; the
+    conclusion drawn from it was not.
+
+    The handler asks this WHILE composing an answer, so its attempt count can
+    equal the maximum on a turn that is about to succeed - which is exactly
+    when the office answers best, because it has the previous refusals in
+    front of it. `failed_after_retries` is a fact about a settled job, and
+    only a reader of settled state may reach it.
+  */
+  it('does NOT classify as failed while the turn is still being answered', () => {
+    const stillGoing = at({ wanted: 1, landed: 0, attempt: 4, maxAttempts: 4, settled: false })
+    expect(classifyOutcome(stillGoing)).not.toBe('failed_after_retries')
+  })
+
+  it('and says nothing about attempts to him', () => {
+    const said =
+      sayWhatHappened(at({ wanted: 1, landed: 0, attempt: 4, maxAttempts: 4, settled: false })) ??
+      ''
+    expect(said).not.toContain('attempts')
+  })
+
+  it('but a SETTLED job with nothing to show still reaches it', () => {
+    const done = at({ wanted: 1, landed: 0, attempt: 4, maxAttempts: 4, settled: true })
+    expect(classifyOutcome(done)).toBe('failed_after_retries')
+  })
+
+  it('and a settled turn on an early attempt does not', () => {
+    const early = at({ wanted: 1, landed: 0, attempt: 1, maxAttempts: 4, settled: true })
+    expect(classifyOutcome(early)).not.toBe('failed_after_retries')
   })
 })
