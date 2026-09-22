@@ -765,8 +765,7 @@
   color: var(--bc-text-muted);
   min-width: 0;
 }
-[data-experience='basecamp'] .bcbcol[data-stage='blocked'] .bcbcolhead { border-bottom-color: var(--bc-section-accent); }
-[data-experience='basecamp'] .bcbcol[data-stage='done'] .bcbcolhead { border-bottom-color: var(--bc-accent); }
+/* Two of four stages had a colour here. All four have one at the end of this file. */
 [data-experience='basecamp'] .bcbcard {
   background: var(--bc-surface);
   border: 1px solid var(--bc-border-subtle);
@@ -1242,52 +1241,7 @@
   above it. The fill is how full that stage is relative to the fullest one, so
   the shape of the work is legible before a single word is read.
 */
-[data-experience='basecamp'] .bcbars {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  min-height: 150px;
-}
-[data-experience='basecamp'] .bcbar {
-  position: relative;
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: 6px;
-  padding: 8px 2px 10px;
-  border-radius: 6px;
-  background: var(--bc-canvas);
-  border-top: 3px solid var(--bc-border-subtle);
-  overflow: hidden;
-}
 /* The fill sits behind the label, drawn from the bottom like a column. */
-[data-experience='basecamp'] .bcbar::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: var(--fill, 0%);
-  background: var(--bc-surface-selected);
-  opacity: 0.55;
-}
-[data-experience='basecamp'] .bcbar > * { position: relative; z-index: 1; }
-[data-experience='basecamp'] .bcbarn {
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--bc-text-strong);
-}
-[data-experience='basecamp'] .bcbarname {
-  writing-mode: vertical-rl;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--bc-text-muted);
-  white-space: nowrap;
-}
-[data-experience='basecamp'] .bcbar[data-stage='blocked'] { border-top-color: var(--bc-section-accent); }
-[data-experience='basecamp'] .bcbar[data-stage='done'] { border-top-color: var(--bc-accent); }
-[data-experience='basecamp'] .bcbar[data-stage='doing'] { border-top-color: var(--bc-text-muted); }
 
 /* Bigger document tiles in a third-width pane: two per row, captions readable. */
 /*
@@ -1463,10 +1417,18 @@
 [data-experience='basecamp'] .bcmodopen:hover,
 [data-experience='basecamp'] .bcmodopen:focus-visible { color: var(--bc-accent); }
 
-/* Cards and thumbnails inside a module get the same edge, at lower weight. */
+/*
+  Cards and thumbnails inside a module get the same edge, at lower weight.
+
+  This rule listed `.bcbar` as its third selector, and removing the dead bar
+  chart with a pattern took the DECLARATION BLOCK with it - leaving two
+  dangling selectors that merged into the next rule, so every card on the
+  card table became `position: fixed; inset: 0` and filled the viewport. The
+  capture found it in one run; nothing else could have, because the CSS still
+  parsed and the class check still passed.
+*/
 [data-experience='basecamp'] .bcbcard,
-[data-experience='basecamp'] .bcthumb,
-[data-experience='basecamp'] .bcbar {
+[data-experience='basecamp'] .bcthumb {
   border: 1.5px solid color-mix(in srgb, var(--bc-text-muted) 22%, transparent);
 }
 
@@ -1697,4 +1659,152 @@
   [data-experience='basecamp'] .bcmodctl { opacity: 1; right: 0; top: -4px; }
   [data-experience='basecamp'] .bcmodbtn { width: 44px; height: 44px; }
   [data-experience='basecamp'] .bcmod--placed .bcmodhead { padding-right: 48px; }
+}
+
+/*
+  THE CARD TABLE, IN MINIATURE AND IN FULL, WITH ITS COLOURS.
+
+  Grant: *"Make column/status differences immediately legible. Use tasteful
+  colour coding according to the card's current column/status."* One set of
+  stage colours, defined once and used by both views, because two would drift
+  - and they are hues of this experience's own palette rather than the
+  traffic-light set every dashboard uses.
+*/
+[data-experience='basecamp'] .bcminiboard,
+[data-experience='basecamp'] .bcboard {
+  --stage-todo: #7f8c99;
+  --stage-doing: #6ab3fd;
+  --stage-blocked: #ef8f6b;
+  --stage-done: #63c295;
+}
+[data-experience='basecamp'] [data-stage='todo'] { --stage: var(--stage-todo); }
+[data-experience='basecamp'] [data-stage='doing'] { --stage: var(--stage-doing); }
+[data-experience='basecamp'] [data-stage='blocked'] { --stage: var(--stage-blocked); }
+[data-experience='basecamp'] [data-stage='done'] { --stage: var(--stage-done); }
+
+[data-experience='basecamp'] .bcminiboard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+[data-experience='basecamp'] .bcminicol {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 8px 7px 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--stage) 8%, transparent);
+  border-top: 2px solid var(--stage);
+}
+[data-experience='basecamp'] .bcminicolhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+[data-experience='basecamp'] .bcminicolname {
+  font: 600 10.5px/1.3 var(--bc-font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--stage);
+}
+[data-experience='basecamp'] .bcminicoln {
+  font: 600 12px/1 var(--bc-font);
+  color: var(--bc-text-strong);
+}
+[data-experience='basecamp'] .bcminicard {
+  text-align: left;
+  font: 500 12px/1.35 var(--bc-font);
+  color: var(--bc-text);
+  background: var(--bc-surface-raised, rgba(255, 255, 255, 0.045));
+  border: 1px solid var(--bc-border-subtle);
+  border-left: 3px solid var(--stage);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+[data-experience='basecamp'] .bcminicard:hover {
+  background: color-mix(in srgb, var(--stage) 14%, transparent);
+  border-color: var(--stage);
+  transform: translateY(-1px);
+}
+[data-experience='basecamp'] .bcminicard:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcminiempty {
+  margin: 0;
+  font: 12px/1 var(--bc-font);
+  color: var(--bc-text-muted);
+  opacity: 0.6;
+}
+
+/*
+  THE FULL CARD TABLE: colour by column, and what a drag looks like.
+
+  The two per-stage border rules further up this file named only `blocked` and
+  `done` and used the experience's accent for both - so "Not started" and "In
+  progress" were identical, which is the opposite of Grant's "make
+  column/status differences immediately legible". The stage variable set on
+  the board covers all four, in both views, from one place.
+*/
+[data-experience='basecamp'] .bcbcol {
+  border-radius: 12px;
+  padding: 10px 10px 4px;
+  background: color-mix(in srgb, var(--stage) 6%, transparent);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+[data-experience='basecamp'] .bcbcolhead { border-bottom-color: var(--stage); }
+[data-experience='basecamp'] .bcbcolhead h2 { color: var(--stage); }
+[data-experience='basecamp'] .bcbcol--over {
+  background: color-mix(in srgb, var(--stage) 16%, transparent);
+  box-shadow: inset 0 0 0 2px var(--stage);
+}
+[data-experience='basecamp'] .bcbcard {
+  border-left: 3px solid var(--stage);
+  cursor: grab;
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+[data-experience='basecamp'] .bcbcard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+[data-experience='basecamp'] .bcbcard:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+[data-experience='basecamp'] .bcbcard--dragging { opacity: 0.45; cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience='basecamp'] .bcbcard,
+  [data-experience='basecamp'] .bcbcol,
+  [data-experience='basecamp'] .bcminicard { transition: none; }
+}
+
+/*
+  The card's own move control, compact: on a board the CARD is the content and
+  a full labelled form field per card triples its height. The label is still
+  there for anything that reads the page aloud.
+*/
+[data-experience='basecamp'] .bcvh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+[data-experience='basecamp'] .bcbsel {
+  font-size: 12px;
+  padding: 5px 8px;
+  min-height: 32px;
+  color: var(--stage);
+  border-color: color-mix(in srgb, var(--stage) 40%, transparent);
+}
+@media (max-width: 1180px) {
+  [data-experience='basecamp'] .bcbsel { min-height: 44px; font-size: 13px; }
 }

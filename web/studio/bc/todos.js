@@ -223,15 +223,28 @@ const memory = (project) => {
   }
 }
 
-/** Remember that a row with no record behind it was ticked, or unticked. */
-export const rememberDone = (project, key, done) => {
+/**
+ * Remember where a row with no record behind it has got to.
+ *
+ * A STAGE rather than a boolean, because the card table moves cards between
+ * four columns and a tick is just one of those moves. Storing "done: true"
+ * and a stage separately would be two records of one fact - which is the
+ * defect this file's overlay exists to avoid, so it would be a poor place to
+ * introduce it.
+ */
+export const rememberStage = (project, key, stage) => {
   try {
     const now = memory(project)
-    now[key] = done ? 'done' : 'todo'
+    now[key] = STAGES.includes(stage) ? stage : 'todo'
     globalThis.localStorage?.setItem(MEM(project), JSON.stringify(now))
   } catch {
     /* A viewer who cannot store it still sees the change until they reload. */
   }
+}
+
+/** The tick, in terms of the stage. */
+export const rememberDone = (project, key, done) => {
+  rememberStage(project, key, done ? 'done' : 'todo')
 }
 
 export const forgetLocal = (project) => {
@@ -261,7 +274,19 @@ export const overlay = (p) => {
       if (typeof t.id === 'string' && t.id !== '') return t
       const want = mem[keyOf(t)]
       if (want === undefined) return t
-      return { ...t, state: want, state_raw: want, done: want === 'done' }
+      /*
+        `blocked` is a STATE and also a REASON, and the two are different
+        columns of the record: a row whose stage is no longer blocked must
+        lose the reason with it, or the board shows it in "In progress" with
+        a blocked flag still on the card.
+      */
+      return {
+        ...t,
+        state: want,
+        state_raw: want,
+        done: want === 'done',
+        blocked: want === 'blocked' ? (t.blocked ?? 'Moved to Stuck here') : null,
+      }
     }),
   }
 }

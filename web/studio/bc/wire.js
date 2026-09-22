@@ -1047,26 +1047,109 @@ const wireTasks = (root) => {
     `blocked` is not in the options, because `hq_task_state` refuses it
     without a reason and an offer may only promise what the press can perform.
   */
+  /*
+    ONE MOVE, TWO GESTURES. `moveCard` is what both the select and the drag
+    call, so a card cannot end up somewhere the record does not agree with.
+    A row with an id writes to the office; one without is the prototype's own
+    memory, exactly as the tick is.
+  */
+  const moveCard = async (key, wanted, cardEl, control) => {
+    if (key === undefined || key === '') return false
+    cardEl?.classList.add('bcitem--pending')
+    if (key.startsWith('p:')) {
+      todos.rememberStage(ctx.state.project, key, wanted)
+      cardEl?.classList.remove('bcitem--pending')
+      ctx.render()
+      return true
+    }
+    const done = await attempt(
+      control ?? cardEl,
+      'Moving…',
+      () => todos.setStage(key, wanted),
+      'Moved.',
+    )
+    cardEl?.classList.remove('bcitem--pending')
+    if (done === null) return false
+    await ctx.refresh()
+    return true
+  }
+
   for (const sel of root.querySelectorAll('[data-bc-move]')) {
     const was = sel.value
     sel.addEventListener('change', async () => {
-      const id = sel.dataset.bcMove
-      if (id === undefined || id === '') return
-      const wanted = sel.value
-      const cardEl = sel.closest('[data-bc-card]')
-      cardEl?.classList.add('bcitem--pending')
-      const done = await attempt(
-        sel,
-        'Moving…',
-        () => act('task_state', { p_task_id: id, p_state: wanted }),
-        'Moved.',
-      )
-      cardEl?.classList.remove('bcitem--pending')
-      if (done === null) {
-        sel.value = was
+      const ok = await moveCard(sel.dataset.bcMove, sel.value, sel.closest('[data-bc-card]'), sel)
+      if (!ok) sel.value = was
+    })
+  }
+
+  /*
+    DRAGGING A CARD BETWEEN COLUMNS.
+
+    The native drag-and-drop API rather than the pointer gesture the module
+    board uses, and the difference is deliberate: a module is moved to a
+    POSITION, which needs continuous geometry, and a card is moved to a
+    COLUMN, which is a drop target the browser can hit-test for nothing. It
+    also gives the cursor, the drag image and the Escape-to-cancel behaviour
+    people already know.
+
+    The column under the pointer says so, because a drop target that looks
+    identical to every other column is a gesture taken on faith.
+  */
+  for (const c of root.querySelectorAll('[data-bc-card]')) {
+    c.addEventListener('dragstart', (e) => {
+      e.dataTransfer?.setData('text/plain', c.dataset.bcCard ?? '')
+      if (e.dataTransfer !== null && e.dataTransfer !== undefined) {
+        e.dataTransfer.effectAllowed = 'move'
+      }
+      c.classList.add('bcbcard--dragging')
+    })
+    c.addEventListener('dragend', () => {
+      c.classList.remove('bcbcard--dragging')
+      for (const col of root.querySelectorAll('[data-bc-drop]')) {
+        col.classList.remove('bcbcol--over')
+      }
+    })
+  }
+  for (const col of root.querySelectorAll('[data-bc-drop]')) {
+    col.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      if (e.dataTransfer !== null && e.dataTransfer !== undefined) {
+        e.dataTransfer.dropEffect = 'move'
+      }
+      col.classList.add('bcbcol--over')
+    })
+    col.addEventListener('dragleave', (e) => {
+      /*
+        `dragleave` fires when the pointer crosses into a CHILD as well, which
+        made the column flicker and, worse, lose its highlight while the
+        pointer was still inside it. Asking where the pointer actually is
+        settles it.
+      */
+      if (col.contains(e.relatedTarget)) return
+      col.classList.remove('bcbcol--over')
+    })
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault()
+      col.classList.remove('bcbcol--over')
+      const key = e.dataTransfer?.getData('text/plain') ?? ''
+      const wanted = col.dataset.bcDrop ?? ''
+      const cardEl = root.querySelector(`[data-bc-card="${key}"]`)
+      /*
+        A DROP INTO THE COLUMN IT CAME FROM IS NOT A MOVE. Writing it anyway
+        would spend a round trip and, on a real record, put a state change in
+        the ledger that nothing changed.
+      */
+      if (cardEl?.dataset.stage === wanted) return
+      if (wanted === 'blocked') {
+        /*
+          `hq_task_state` refuses `blocked` without a reason, so dropping into
+          Stuck opens the task where there is room to say what it is waiting
+          on. An offer may only promise what the press can perform.
+        */
+        ctx.openTask(key)
         return
       }
-      await ctx.refresh()
+      await moveCard(key, wanted, cardEl, null)
     })
   }
 

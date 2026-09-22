@@ -1468,30 +1468,51 @@ const stageOf = (t) => {
 }
 
 const card = (p, t, i) => {
-  const id = t.id ?? ''
   const key = taskKey(t)
   const list = (p.modules ?? []).find((m) => (m.id ?? m.name) === t.parent)
-  return `<article class="bcbcard" data-bc-card="${esc(key)}">
+  const stage = stageOf(t)
+  /*
+    A CARD IS DRAGGED, and the select stays.
+
+    Grant: *"Cards must be dynamically draggable between columns. Moving a
+    card must update its actual underlying state rather than merely animating
+    the UI."* Dragging is the gesture; the select is how the same move is made
+    with a keyboard, with a screen reader, and on a touch device where a drag
+    inside a scrolling column is a fight with the page. Two controls, one
+    writer - `todos.setStage` for a row with a record, the prototype's memory
+    for one without - so they cannot disagree.
+  */
+  return `<article class="bcbcard" data-bc-card="${esc(key)}" data-stage="${esc(stage)}"
+    draggable="true" tabindex="0" aria-label="${esc(`${t.title} — ${stage}`)}">
     <button type="button" class="bcitemtitle bcitemlink" data-bc-task-open="${esc(key)}">${esc(t.title)}</button>
     <div class="bcbmeta">
       ${list === undefined ? '' : `<span class="bcbwhere">${esc(list.name)}</span>`}
       ${t.due ? `<span class="bcbdue">${esc(t.due)}</span>` : ''}
     </div>
-    <!--
-      DISABLED, NOT ABSENT, when the row has no canonical id - which is the
-      precedent the tick above already sets, and for the same reason. Drawing
-      it only for a row that can be written meant §10's whole interaction
-      appeared in no capture on any viewport, because the prototype rows a
-      signed-out browser falls back to carry no ids. A screen with no capture
-      is a screen nobody is watching, and a CONTROL with no capture is the
-      same thing one level down.
-    -->
     <label class="bcbmove">
-      <span class="bclabel">Where this is</span>
-      <select class="bcinput" ${id === '' ? 'disabled' : ''} data-bc-move="${esc(id)}">
+      <span class="bcvh">Where this is</span>
+      <!--
+        A CARD THAT IS STUCK MUST SAY SO IN ITS OWN CONTROL. Stuck is not a
+        value this select may SET - the office refuses it without a reason -
+        but leaving it out entirely meant a stuck card's select fell to its
+        first option and read "Not started", which is the control contradicting
+        the column it is sitting in. It is offered as a disabled option:
+        selectable never, visible always.
+
+        Plain words only in here. A backtick inside an HTML comment inside a
+        template literal ends the string, and this is the sixth time in this
+        repository.
+      -->
+      <select class="bcinput bcbsel" data-bc-move="${esc(key)}"
+        aria-label="${esc(`Where ${t.title} has got to`)}">
+        ${
+          stage === 'blocked'
+            ? `<option value="blocked" selected disabled>Stuck</option>`
+            : ''
+        }
         ${MOVABLE.map(
           (m) =>
-            `<option value="${esc(m.id)}" ${stageOf(t) === m.id ? 'selected' : ''}>${esc(m.name)}</option>`,
+            `<option value="${esc(m.id)}" ${stage === m.id ? 'selected' : ''}>${esc(m.name)}</option>`,
         ).join('')}
       </select>
     </label>
@@ -1506,8 +1527,9 @@ const boardSurface = (p) => {
       <span class="bcactions">${button('The list instead', { 'data-bc-go': at(`/p/${p.slug}/tasks`) })}</span>
     </div>
     <p class="bcpmeta bcprose bcgap-l">
-      The same to-dos, by where the work has got to. Moving a card changes the
-      to-do — there is one set of records behind both views.
+      The same to-dos, by where the work has got to. Drag a card to another
+      column, or use the control on the card — either way the to-do itself
+      changes, because there is one set of records behind both views.
     </p>
     ${
       all.length === 0
@@ -1521,7 +1543,8 @@ const boardSurface = (p) => {
         : `<div class="bcboard">
             ${STAGE.map((st) => {
               const items = all.filter((t) => stageOf(t) === st.id)
-              return `<section class="bcbcol" data-stage="${esc(st.id)}">
+              return `<section class="bcbcol" data-stage="${esc(st.id)}" data-bc-drop="${esc(st.id)}"
+                aria-label="${esc(`${st.name} — ${String(items.length)} card(s)`)}">
                 <header class="bcbcolhead">
                   <h2>${esc(st.name)}</h2>
                   <span class="bccolcount">${items.length}</span>

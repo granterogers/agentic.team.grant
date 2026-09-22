@@ -301,18 +301,36 @@ export const cardsMini = (p) => {
       if (id === 'todo') return st === 'todo' && !t.blocked
       return st === id
     })
-  const counts = STAGES.map((st) => ({ st, n: at(st.id).length }))
-  const most = Math.max(1, ...counts.map((c) => c.n))
-  return `<div class="bcbars">
-    ${counts
-      .map(
-        ({ st, n }) => `<div class="bcbar" data-stage="${esc(st.id)}"
-          style="--fill:${Math.round((n / most) * 100)}%">
-          <span class="bcbarn">${esc(String(n))}</span>
-          <span class="bcbarname">${esc(st.name)}</span>
-        </div>`,
-      )
-      .join('')}
+  /*
+    COLUMNS WITH CARDS IN THEM, not four bars with numbers on.
+
+    Grant, 22 September: *"The Card Table module currently appears to be
+    interactive but clicking it can do nothing."* It was a bar chart of four
+    counts - decorative by §17's own definition, and there was nothing in it
+    to press. The miniature is the board now: the same columns, the same
+    colours, the same cards, fewer of them. Every card opens its to-do and
+    the whole thing scrolls, so a busy column is not a summary line.
+  */
+  return `<div class="bcminiboard">
+    ${STAGES.map((st) => {
+      const items = at(st.id)
+      return `<section class="bcminicol" data-stage="${esc(st.id)}">
+        <header class="bcminicolhead">
+          <span class="bcminicolname">${esc(st.name)}</span>
+          <span class="bcminicoln">${esc(String(items.length))}</span>
+        </header>
+        ${
+          items.length === 0
+            ? `<p class="bcminiempty">—</p>`
+            : items
+                .map(
+                  (t) => `<button type="button" class="bcminicard"
+                    data-bc-task-open="${esc(todos.keyOf(t))}">${esc(t.title)}</button>`,
+                )
+                .join('')
+        }
+      </section>`
+    }).join('')}
   </div>`
 }
 

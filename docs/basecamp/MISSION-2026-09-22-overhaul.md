@@ -355,9 +355,9 @@ Status words mean exactly one thing each:
 | 25 | Agentic Team panel removed from the project home | **verified** | off the board, still reachable from the three-dot menu; asserted by the journey and the preservation suite |
 | 26 | "Add Someone" becomes "Add Contact" | implemented | miniature, surface head and form title |
 | 27 | Contacts editable, all fields, image upload, notes | pending | |
-| 28 | Card Table opens | pending | |
-| 29 | Cards drag between columns and persist | pending | |
-| 30 | Column colour coding | pending | |
+| 28 | Card Table opens | **verified** | verify:basecamp-cards — the miniature is the board, its cards open their to-do, and the header opens the full table |
+| 29 | Cards drag between columns and persist | **verified** | dragged, RELOADED, asserted; then round the board four times; the select is the second path. Proved by a sabotage that broke the drop |
+| 30 | Column colour coding | **verified** | one stage palette used by both views; the suite asserts four distinct column colours |
 | 31 | Back closes a modal first, then reverses project state | pending | |
 | 32 | "Elsewhere on this project" removed | **verified** | the function is gone; preservation still proves every section is reachable |
 | 33 | Project Settings in the new design system | pending | |
