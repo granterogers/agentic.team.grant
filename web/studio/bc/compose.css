@@ -1848,3 +1848,31 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--bc-text) 8%, transparent);
 }
+
+/*
+  The source's mark, in the row it belongs to.
+
+  The row is a two-column grid with named areas, so the mark gets its own
+  column and its own area rather than being wedged into the name's - which
+  would have made the name wrap around it on a narrow pane.
+*/
+[data-experience='basecamp'] .bcsource {
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-areas: 'mark name when' '. what what';
+  align-items: center;
+}
+[data-experience='basecamp'] .bcsrcmark {
+  grid-area: mark;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+[data-experience='basecamp'] .bcsrcmark svg { width: 100%; height: 100%; }
+[data-experience='basecamp'] .bcsrcmark--letter {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bc-accent) 22%, transparent);
+  color: var(--bc-text-strong);
+  font: 600 11px/1 var(--bc-font);
+}
+[data-experience='basecamp'] .bcsources--full .bcsource { align-items: center; }

@@ -8586,7 +8586,47 @@ function pathNow() {
   */
   const at = state.experience === 'basecamp' ? '/basecamp' : ''
   if (state.view === 'project' && state.project !== null) {
-    if (state.tab === 'overview') return `${at}/p/${state.project}`
+    /*
+      AN EXPANDED VIEW IS A PLACE TOO.
+
+      Grant, 22 September: *"using the browser Back button or a mouse Back
+      button while inside an expanded module can immediately throw the user
+      back to Project Selection... Where technically appropriate, use browser
+      history/state correctly rather than hijacking the Back button in a
+      brittle way."*
+
+      It was held only on the state, so opening a modal wrote no history entry
+      and Back walked out of the project entirely - the same defect, and the
+      same fix, as the task record three comments down. With the modal in the
+      address the browser does the work: Back returns to the entry without the
+      suffix, `goToPath` reads no expanded view, and the dialog closes. No
+      popstate special case, and Forward reopens it.
+    */
+    /*
+      AND WHAT IS OPEN INSIDE IT. A record opened within an expanded view is
+      one level deeper, and without it in the address the two levels collapse
+      into one history entry - so Back closed the whole dialog from inside a
+      task, which is level 2 of Grant's hierarchy skipped. One suffix, one
+      optional argument, whichever kind of thing the dialog is showing.
+    */
+    const inside =
+      state.bcExpanded === 'document'
+        ? (state.bcDoc?.ref ?? '')
+        : state.bcExpanded === 'tasks'
+          ? (state.bcTask ?? '')
+          : state.bcExpanded === 'contacts'
+            ? (state.bcContactAdd === true ? 'new' : (state.bcContact ?? ''))
+            : ''
+    const x =
+      state.experience === 'basecamp' &&
+      state.bcExpanded !== null &&
+      state.bcExpanded !== undefined &&
+      state.bcExpanded !== ''
+        ? `/x/${encodeURIComponent(String(state.bcExpanded))}${
+            inside === '' || inside === null ? '' : `/${encodeURIComponent(String(inside))}`
+          }`
+        : ''
+    if (state.tab === 'overview') return `${at}/p/${state.project}${x}`
     /*
       A RECORD IS A PLACE, so it goes in the address.
 
@@ -8597,9 +8637,9 @@ function pathNow() {
       Back is the commonest way anybody takes it.
     */
     if (state.tab === 'tasks' && state.bcTask !== null && state.bcTask !== undefined) {
-      return `${at}/p/${state.project}/tasks/${encodeURIComponent(String(state.bcTask))}`
+      return `${at}/p/${state.project}/tasks/${encodeURIComponent(String(state.bcTask))}${x}`
     }
-    return `${at}/p/${state.project}/${state.tab}`
+    return `${at}/p/${state.project}/${state.tab}${x}`
   }
   if (state.view === 'bcsearch') return `${at}/search`
   if (state.view === 'tasks') return `${at}/tasks`
@@ -8616,7 +8656,7 @@ function pathNow() {
  * to it should not look like a broken product.
  */
 function goToPath(path) {
-  const bits = String(path ?? '/').split('/').filter((x) => x !== '')
+  let bits = String(path ?? '/').split('/').filter((x) => x !== '')
   /*
     THE EXPERIMENTAL EXPERIENCE, read off the front of the path (basecamp_clone.md).
 
@@ -8654,6 +8694,26 @@ function goToPath(path) {
     if (p === undefined) { state.view = 'portfolio'; state.project = null; return false }
     state.view = 'project'
     state.project = p.slug
+    /*
+      THE EXPANDED VIEW COMES OFF THE END OF THE ADDRESS FIRST, so everything
+      below parses the page the dialog is over rather than tripping on the
+      suffix. `x` is not a tool and cannot collide with one: the router's list
+      of tools is `bc.TOOLS`, and nothing in it is one character long.
+    */
+    const cut = bits.indexOf('x', 2)
+    if (state.experience === 'basecamp' && cut !== -1) {
+      state.bcExpanded = bits[cut + 1] === undefined ? null : decodeURIComponent(bits[cut + 1])
+      const inside = bits[cut + 2] === undefined ? '' : decodeURIComponent(bits[cut + 2])
+      if (inside !== '') {
+        if (state.bcExpanded === 'document') state.bcDoc = { ref: inside, title: '' }
+        if (state.bcExpanded === 'tasks') state.bcTask = inside
+        if (state.bcExpanded === 'contacts') {
+          if (inside === 'new') state.bcContactAdd = true
+          else state.bcContact = inside
+        }
+      }
+      bits = bits.slice(0, cut)
+    }
     const tab = bits[2] === undefined ? 'overview' : decodeURIComponent(bits[2])
     /*
       WHICH TAB LIST DECIDES depends on which experience you are in.
@@ -13387,6 +13447,19 @@ const bcContext = {
   openDock: () => {
     rememberDock(true)
     paintDock()
+  },
+  /*
+    A TOGGLE, because Grant asked for one in those words: *"Clicking it should
+    open the team chat sidebar. Clicking the same button again should close the
+    sidebar. The control therefore behaves as a genuine toggle."* The state is
+    the dock's own, not a variable the button keeps, so a dock closed by its
+    own X leaves the button telling the truth.
+  */
+  toggleDock: () => {
+    const open = !dockOpen()
+    rememberDock(open)
+    paintDock()
+    return open
   },
   dockIsOpen: () => dockOpen(),
   go: (path) => {

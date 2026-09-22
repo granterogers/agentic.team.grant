@@ -76,9 +76,19 @@ export const wire = (root) => {
     })
   }
 
+  /*
+    CHAT WITH TEAM IS A TOGGLE, and it says which way it is set.
+
+    `aria-pressed` is painted from the dock's own state rather than flipped on
+    each press, so closing the dock by its own X leaves the button honest -
+    which is the difference between a toggle and a button that counts its own
+    presses.
+  */
   for (const b of root.querySelectorAll('[data-bc-dock]')) {
+    b.setAttribute('aria-pressed', ctx.dockIsOpen?.() === true ? 'true' : 'false')
     b.addEventListener('click', () => {
-      ctx.openDock()
+      const open = ctx.toggleDock?.() ?? ctx.openDock()
+      b.setAttribute('aria-pressed', open === true ? 'true' : 'false')
     })
   }
 

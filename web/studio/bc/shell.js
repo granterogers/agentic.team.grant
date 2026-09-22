@@ -1446,6 +1446,7 @@ const sourcesSurface = (p) => {
               const trouble = s.health === 'blocked' || s.trouble === true
               const connected = s.kind === 'connector'
               return `<div class="bcsource${trouble ? ' bcsource--trouble' : ''}">
+                ${bcMini.sourceMark(s)}
                 <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
                 <span class="bcsourcewhat">${esc(s.what ?? s.detail ?? '')}</span>
                 <span class="bcsourcewhen">${

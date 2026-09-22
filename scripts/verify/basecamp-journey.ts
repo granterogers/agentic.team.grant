@@ -573,10 +573,19 @@ await page.waitForTimeout(250)
 const teamWay = page.locator('[data-bc-pagemenu-panel] [data-bc-expand="team"]').first()
 await teamWay.click()
 await page.waitForTimeout(700)
+/*
+  "WITHOUT NAVIGATING AWAY" IS ABOUT THE PAGE UNDERNEATH, not about the
+  address. The address now says `/x/team` deliberately - an expanded view is a
+  place, so that Back closes it rather than leaving the project - and this
+  check read that suffix as a navigation. What it means is that the project
+  HOME is still there behind the dialog, which is both stronger and immune to
+  the next change to the address.
+*/
 check(
   'the home opens the team surface AS A MODAL, without navigating away',
-  (await page.locator('[data-bc-expanded="team"]').count()) === 1 && !page.url().endsWith('/team'),
-  `dialogs: ${String(await page.locator('[data-bc-expanded]').count())}, url ${page.url()}`,
+  (await page.locator('[data-bc-expanded="team"]').count()) === 1 &&
+    (await page.locator('.bcpanes').count()) === 1,
+  `dialogs: ${String(await page.locator('[data-bc-expanded]').count())}, boards: ${String(await page.locator('.bcpanes').count())}, url ${page.url()}`,
 )
 check(
   'and the modal carries an X that closes it back to the home',

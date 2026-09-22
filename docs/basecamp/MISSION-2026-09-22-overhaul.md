@@ -345,10 +345,10 @@ Status words mean exactly one thing each:
 | 15 | Audio playback | **verified** | the recording plays in the detail view; the suite asserts a real source AND calls play(), which resolves |
 | 16 | Schedule entries resolve to the right object; no dead links | **verified** | the cause was one key scheme too many; EVERY schedule entry is now opened by the suite and must show the task it names. Proved by a sabotage that put the old key back |
 | 17 | Three-dot wording becomes "Sources" | implemented | |
-| 18 | Source logos or icons | pending | |
-| 19 | "Chat" becomes "Chat with Team" and toggles the sidebar | pending | |
-| 20 | Sidebar shows chat history | pending | |
-| 21 | Avatars only in the chat experience | pending | |
+| 18 | Source logos or icons | implemented | drawn marks for Notion, Google Drive, NotebookLM, GitHub and Slack in their own colours, with a lettered tile as the fallback; in the miniature and the full surface, from one function |
+| 19 | "Chat" becomes "Chat with Team" and toggles the sidebar | implemented | ctx.toggleDock reads the dock's own state, so closing it by its X leaves the button honest; aria-pressed painted from that state |
+| 20 | Sidebar shows chat history | implemented | chat.thread falls back to the project's own conversation; the dock and the Chat surface were two readers of one fact and the quieter one was the sidebar |
+| 21 | Avatars only in the chat experience | **verified** | the dock bubbles carry faces; verify:basecamp-home asserts there is no .bcface anywhere on the project home |
 | 22 | Microphone starts a real voice session, end to end | pending | |
 | 23 | Microphone sizing and weight harmonious with Chat with Team | pending | |
 | 24 | Voice states: loading, permission, connecting, active, error, ended | pending | |
@@ -358,7 +358,7 @@ Status words mean exactly one thing each:
 | 28 | Card Table opens | **verified** | verify:basecamp-cards — the miniature is the board, its cards open their to-do, and the header opens the full table |
 | 29 | Cards drag between columns and persist | **verified** | dragged, RELOADED, asserted; then round the board four times; the select is the second path. Proved by a sabotage that broke the drop |
 | 30 | Column colour coding | **verified** | one stage palette used by both views; the suite asserts four distinct column colours |
-| 31 | Back closes a modal first, then reverses project state | pending | |
+| 31 | Back closes a modal first, then reverses project state | **verified** | verify:basecamp-back drives page.goBack() — the real history traversal a mouse Back performs — through all three levels, plus Forward and a reload. The fix is the address, not a handler: an expanded view is a place. Proved by removing the suffix |
 | 32 | "Elsewhere on this project" removed | **verified** | the function is gone; preservation still proves every section is reachable |
 | 33 | Project Settings in the new design system | pending | |
 | 34 | Global Settings in the new design system | pending | |

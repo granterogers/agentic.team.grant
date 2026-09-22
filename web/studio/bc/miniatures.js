@@ -850,6 +850,68 @@ const SOURCEWORD = {
  * those belong on a project surface and there is nowhere here they could
  * appear from.
  */
+/*
+  THE MARK A SOURCE IS RECOGNISED BY.
+
+  Grant, 22 September: *"Grant has repeatedly requested visual identification
+  of sources. Add the appropriate logo/icon next to each source. Do not leave
+  this as another text-only source list. The source should be recognizable
+  visually as well as by name."*
+
+  Simplified marks in each provider's own colour rather than downloaded brand
+  assets: they are drawn here, so there is no fetch, no licence file, nothing
+  to 404, and they render at any size in both schemes. A provider nobody has a
+  mark for gets a lettered tile in the experience's own palette, which is a
+  fallback rather than a blank - and the NAME is always beside it, so the mark
+  never has to carry the identification on its own.
+
+  Matched on the NAME, lower-cased, because that is what the office stores for
+  a connector and what a person reads. A match on a connector id would be
+  narrower and would miss every reference, which is half the list.
+*/
+const MARK = {
+  notion: {
+    tint: '#ffffff',
+    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4.2 3.4 15 2.6c1.3-.1 1.7.1 2.5.7l2.6 1.8c.5.4.7.5.7 1v13.2c0 .8-.3 1.3-1.3 1.4l-12.5.8c-.8 0-1.2-.1-1.6-.6L3.5 19c-.4-.6-.6-1-.6-1.6V4.7c0-.7.3-1.2 1.3-1.3Z"/><path fill="#111" d="M15 2.6 4.2 3.4c-1 .1-1.3.6-1.3 1.3v12.7c0 .6.2 1 .6 1.6l1.9 2.5c.4.5.8.6 1.6.6l12.5-.8c1-.1 1.3-.6 1.3-1.4V6.1c0-.5-.2-.6-.7-1l-2.6-1.8c-.8-.6-1.2-.8-2.5-.7Zm-8.3 3c-1 0-1.2.1-1.7-.4l-1.3-1c-.1-.2 0-.4.3-.4l10.4-.8c.8-.1 1.2.2 1.5.4l1.6 1.2c.1 0 .2.3 0 .3l-10.7.7Zm-.6 12.9V7.2c0-.5.1-.7.6-.7l11-.7c.4 0 .6.2.6.7v11.1c0 .5-.1.9-.7.9l-10.5.6c-.6 0-.9-.2-.9-.7Zm10.5-10.7c.1.3 0 .6-.3.6l-.5.1v7.4c-.4.2-.8.4-1.2.4-.6 0-.7-.2-1.1-.7l-3.5-5.5v5.3l1 .3s0 .6-.8.6l-2.3.1c0-.3 0-.5.5-.6l.6-.2V8.9l-.8-.1c-.1-.3.1-.7.6-.8l2.5-.1 3.6 5.5V8.5l-.9-.1c-.1-.4.2-.6.6-.7l2-.1Z"/></svg>`,
+  },
+  'google drive': {
+    tint: '#4285f4',
+    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#0f9d58" d="M8.2 2.6 1.4 14.4h6.4L14.6 2.6Z"/><path fill="#4285f4" d="M22.6 14.4 15.8 2.6 12.6 8.2l6.8 11.8Z"/><path fill="#fbbc04" d="M1.4 14.4 4.6 20h13.1l-3.2-5.6Z"/></svg>`,
+  },
+  notebooklm: {
+    tint: '#8ab4f8',
+    svg: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 6.4C10.6 5 8.7 4.4 6 4.4H3.4v13.2H6c2.7 0 4.6.6 6 2 1.4-1.4 3.3-2 6-2h2.6V4.4H18c-2.7 0-4.6.6-6 2Z"/><path d="M12 6.4v13.2"/></svg>`,
+  },
+  github: {
+    tint: '#e6edf3',
+    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.8a10.2 10.2 0 0 0-3.2 19.9c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.2-1.5-1.2-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.7-1.4-2.2-.2-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.8-4.6 5 .4.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10.2 10.2 0 0 0 12 1.8Z"/></svg>`,
+  },
+  slack: {
+    tint: '#e01e5a',
+    svg: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#36c5f0" d="M6.4 14.9a2 2 0 1 1-2-2h2Zm1 0a2 2 0 1 1 4 0v5a2 2 0 1 1-4 0Z"/><path fill="#2eb67d" d="M9.4 6.4a2 2 0 1 1 2-2v2Zm0 1a2 2 0 1 1 0 4h-5a2 2 0 1 1 0-4Z"/><path fill="#ecb22e" d="M17.6 9.4a2 2 0 1 1 2 2h-2Zm-1 0a2 2 0 1 1-4 0v-5a2 2 0 1 1 4 0Z"/><path fill="#e01e5a" d="M14.6 17.6a2 2 0 1 1-2 2v-2Zm0-1a2 2 0 1 1 0-4h5a2 2 0 1 1 0 4Z"/></svg>`,
+  },
+}
+
+const markFor = (s) => {
+  const name = String(s?.name ?? s?.title ?? '').toLowerCase()
+  for (const [key, m] of Object.entries(MARK)) {
+    if (name.includes(key)) return m
+  }
+  return null
+}
+
+export const sourceMark = (s) => {
+  const m = markFor(s)
+  const name = String(s?.name ?? s?.title ?? '?')
+  if (m === null) {
+    /* A lettered tile is a fallback; a blank space is the absence of one. */
+    return `<span class="bcsrcmark bcsrcmark--letter" aria-hidden="true">${esc(
+      name.trim().charAt(0).toUpperCase() || '?',
+    )}</span>`
+  }
+  return `<span class="bcsrcmark" aria-hidden="true" style="color:${esc(m.tint)}">${m.svg}</span>`
+}
+
 export const sourcesMini = (p, { items = 4 } = {}) => {
   const ss = p.sources ?? []
   if (ss.length === 0) {
@@ -862,6 +924,7 @@ export const sourcesMini = (p, { items = 4 } = {}) => {
       .map((s) => {
         const trouble = s.health === 'blocked' || s.trouble
         return `<div class="bcsource${trouble ? ' bcsource--trouble' : ''}">
+          ${sourceMark(s)}
           <span class="bcsourcename">${esc(s.name ?? s.title ?? 'A source')}</span>
           <span class="bcsourcewhat">${esc(s.what ?? '')}</span>
           <span class="bcsourcewhen">${esc(
