@@ -1930,3 +1930,108 @@ is what makes the zero mean something*.
 | **#308** | no real conversation has ever recorded its project — filed |
 
 Three fixed at the layer, two filed with the evidence and the calibration.
+
+---
+
+# #310 — a standing instruction has a life, not just a birth
+
+## Why `supersedes` was unused, which was the first question asked
+
+Not recognition, not matching, not scope resolution, not retrieval. **No
+matching was ever attempted.**
+
+| stage | state before |
+|---|---|
+| recognise | works, except a WITHDRAWAL, which was not read as a teaching at all |
+| scope | `remember()` passed `p_project_id = null` always, so a project rule was impossible |
+| store | `app.learn` has taken `p_supersedes` since it was written; `remember()` passed null always |
+| retrieve | **already correct** — `lessons_live` hides superseded and retracted rows |
+| withdraw | `app.retract_lesson` existed with **no caller anywhere in `src/`** |
+
+A parameter no caller passes, which CLAUDE.md records about `recordDecision`'s
+`delegationDepth`. The machinery was complete and unreachable.
+
+## The measurement that corrected the issue's own premise
+
+#310 was filed on a pile of duplicates and contradictions. Re-measured after
+0545, **the real effective set is three rows**: the pile was harness-taught
+and the containment fix had already removed it. So the defect is structural
+rather than accumulated — the first time Grant changes his mind, the old rule
+stays live for ever — and that is what was fixed.
+
+## What makes precedence deterministic without a model
+
+A **dimension**: the closed set of things two instructions can genuinely
+disagree about. "keep replies short" and "detailed answers are fine" are one
+instruction twice. `null` is a first-class answer and the default, on 0304's
+asymmetry: *failing to recognise a dimension leaves today's behaviour;
+recognising the wrong one destroys something Grant said.*
+
+A repetition and an override are the **same operation** on the ledger — both
+supersede — differing only in the say-back. Nothing is deduplicated and
+nothing is deleted; the superseded row stays on the record and the sixth copy
+of a rule becomes the same rule with more weight.
+
+## Four defects in my own first version, each now a detector
+
+1. **Polarity was noise**, so "always paste image links" and "never paste
+   image links" had identical content words and an OVERRIDE would have been
+   recorded as agreement.
+2. **A rule at one scope superseded one at another**, so a project rule
+   retired the global one — the opposite of an override.
+3. **"no longer" put every withdrawal into two dimensions at once**, because
+   "longer" read as being about length.
+4. **The unnamed project is a real row**, so `projectId === null` was never
+   true and every follow-up rule was stored at project scope on a project
+   called `unnamed`. Found live on v707: two rows for one rule.
+
+And one the suite found by being destructive: **a harness-authored withdrawal
+retracted one of Grant's three real standing instructions** on its first run.
+Containment had only ever run one way — 0539 and 0545 stop harness traffic
+REACHING a real prompt — and the moment a writer could retire a rule it needed
+the other direction. 0546 scopes the lookup to the author's own class of
+traffic. Restored through `app.learn` rather than by deleting the retraction:
+it happened, and the record should say so.
+
+## Proved live on v709
+
+```
+say:    from now on keep everything you send me really brief
+office: Already had that one, so I have not made a second copy — it now
+        carries more weight.
+say:    actually no, I would rather have thorough answers from now on
+office: Noted for everyone, and it replaces what you told me before:
+        "detailed answers are fine from now on" is no longer in force.
+say:    do not put screenshots in anymore
+office: Dropped it: "always paste image links into every reply" is no longer
+        a standing rule. Nothing has replaced it.
+say:    so what have I told you about screenshots?
+office: Your last instruction was to stop adding screenshots… so unless you
+        ask, I won't include them.
+```
+
+The last one is the point: the narration now matches the store.
+
+## #308 is a dependency, established rather than assumed
+
+A rule stated on a NAMED project and then changed in a follow-up carrying no
+project becomes global and cannot supersede the project-scoped one, because a
+rule may only replace one at its own level. That is correct given unreliable
+context and wrong from Grant's seat, and it is exactly #308: a third of his
+messages and half his voice notes carry no project, and no real conversation
+has ever recorded one.
+
+Fixing the unnamed-project bug removed most of the pain — a follow-up is now
+global rather than scoped to nothing — and the remainder needs #308 rather
+than a guess.
+
+## Left alone deliberately
+
+`"Okay, never mind about that."` is still a live staff-scoped rule in every
+Chief of Staff prompt. It is REAL — a real job, before this fix — so the new
+code cannot have produced it and will not produce another. Retracting one of
+Grant's own rows is his call, not mine.
+
+Gates: 2732 tests · lint · tsc · migrations · secrets · templates ·
+`verify:preferences` 29/29 · sabotage **32 detectors** · containment swept,
+harness lessons reaching a real prompt 0 with the filter removing 33.
