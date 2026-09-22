@@ -81,6 +81,7 @@
     "verify:dryrun": "tsx scripts/verify/dryrun.ts",
     "verify:briefing": "tsx scripts/verify/briefing.ts",
     "verify:lessons": "tsx scripts/verify/lessons.ts",
+    "verify:preferences": "tsx scripts/verify/preferences.ts",
     "verify:rules": "tsx scripts/verify/rules.ts",
     "verify:routing-quality": "tsx scripts/verify/routing-quality.ts",
     "verify:extract": "tsx scripts/verify/extract.ts",

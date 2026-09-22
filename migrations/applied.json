@@ -544,5 +544,6 @@
   "0543_a_failed_backup_reaches_grant.sql": "b0a9c2d6d20184bff36d0a2e5c1b56b52449818ff67d8ade6d82b0e07d3ce650",
   "0543_an_offer_a_harness_made_is_not_an_offer.sql": "a87c4098bca9fde37781ba33e8dd86fa4d5737a8568048be4e19729ea1ba733e",
   "0544_exactly_once_means_exactly_once_delivered.sql": "a121b86bf175dc7e1fd2358f418fb85282880e1d9021789e00184be734e3dd98",
-  "0545_the_flag_cannot_see_whose_job_taught_it.sql": "cceb4d4af36b4a6f5380bc0b6d33640dfae88f70f7e882b5cc92c7dbbbb4cfb7"
+  "0545_the_flag_cannot_see_whose_job_taught_it.sql": "cceb4d4af36b4a6f5380bc0b6d33640dfae88f70f7e882b5cc92c7dbbbb4cfb7",
+  "0546_a_test_preference_may_not_retire_a_real_one.sql": "a317eb4429a26099b27e6c95e0417c5fcec513f6aca55f93cffcc6a00f985ce6"
 }

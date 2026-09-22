@@ -2730,6 +2730,18 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               // means a rule for Ruby quietly governing Daniel.
               (payload.addressed_to ?? '') === '' ? null : who.slug,
               job.jobId,
+              /*
+                And the PROJECT, when the message carried one (#310).
+
+                Until now this argument did not exist and the scope could only
+                be global or staff, so "on the bid, never put a due date on
+                anything" became a rule for every project for ever. Where the
+                message carried no project it stays null and the rule is
+                global, which is #308's territory and is left visible rather
+                than guessed: inventing the scope from the last project
+                mentioned would put a rule on one he was not talking about.
+              */
+              job.projectId === null ? null : String(job.projectId),
             )
       /*
         NOTHING ELSE SURVIVED, which is not the same as nothing else to WRITE.

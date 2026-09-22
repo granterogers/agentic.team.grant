@@ -275,6 +275,38 @@ const SABOTAGES: readonly Sabotage[] = [
     check: 'tests/agents/a-task-title-is-what-to-do.test.ts',
   },
 
+  /*
+    #310's three safety properties. Each is the direction in which the
+    lifecycle can be actively harmful rather than merely incomplete, and each
+    was a real defect for some minutes today.
+  */
+  {
+    name: 'polarity-is-not-noise',
+    proves: 'reversing a rule is an override, never a repetition of it',
+    file: 'src/agents/preference.ts',
+    anchor: 'const STOP = new Set([',
+    // The replacement must not CONTAIN the anchor, or the landing test
+    // — replacement present AND anchor gone — can never be satisfied.
+    replacement: "const STOP: Set<string> = new Set(['always', 'never',",
+    check: 'tests/agents/a-preference-has-a-life.test.ts',
+  },
+  {
+    name: 'a-new-prohibition-is-not-a-withdrawal',
+    proves: 'a rule stated as a prohibition is stored, not used to retire another',
+    file: 'src/agents/preference.ts',
+    anchor: "  TAKES_IT_BACK.test(String(body ?? '')) ? dimensionOf(body) : null",
+    replacement: '  dimensionOf(body)',
+    check: 'tests/agents/a-preference-has-a-life.test.ts',
+  },
+  {
+    name: 'an-ambiguous-rule-claims-nothing',
+    proves: 'an instruction spanning two dimensions supersedes neither',
+    file: 'src/agents/preference.ts',
+    anchor: '  return hits.length === 1 ? (hits[0] ?? null) : null',
+    replacement: '  return hits[0] ?? null',
+    check: 'tests/agents/a-preference-has-a-life.test.ts',
+  },
+
   {
     name: 'both-task-writers-share-the-classes',
     proves: 'a project adjunct is not part of the name, on EITHER writer',
