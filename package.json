@@ -299,7 +299,7 @@
     "basecamp:compose": "tsx scripts/verify/basecamp-compose-shots.ts",
     "verify:basecamp-home": "tsx scripts/verify/basecamp-home.ts",
     "review:build": "tsx scripts/review-build.ts",
-    "deploy:preview": "npm run review:build && cd .out/site && npx --yes vercel@latest deploy --yes --token \"$VERCEL_TOKEN\" --name agentic-team-hq-basecamp"
+    "deploy:preview": "npm run review:build && tsx scripts/deploy/site.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

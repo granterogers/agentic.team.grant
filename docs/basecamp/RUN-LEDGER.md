@@ -1189,6 +1189,81 @@ member of the crew, and opened on a project that does not exist.
 16/16.
 
 ---
+## The entry point, and three things §21 asked for that were not there
+
+Grant opened the preview and said he was being shown the old interface. He was
+right, and it was not the pane — it was the door.
+
+**`/` is the DEFAULT experience's own home.** The experiment lives under a
+prefix, so the bare domain lands on "Good afternoon, Grant" with no Docs &
+Files anywhere on it. Measured rather than assumed: `/` → the default studio,
+`/basecamp` → the portfolio ("Your projects"), and only
+`/basecamp/p/<slug>` → the redesigned home. Unless he typed the full deep link
+he never reached the thing he was being asked to review.
+
+This is the **third instance of one defect in two days**: the artifact host's
+own fragment read as a route, and now the deployment's root read as the
+default experience. Both are an entry point landing on the wrong experience,
+and both looked to him like the redesign simply not being there.
+
+The generated deployment config redirects `/` to the project home — a redirect
+rather than a rewrite so the address bar says where he is, and only in that
+generated config, because on the real site `/` must stay the default Team HQ.
+
+### Three named requirements that were missing
+
+Re-reading §21 line by line against what the home actually renders, rather
+than against what I remembered building:
+
+| §21 asks for | What was there |
+|---|---|
+| an obvious route to **"View all Docs & Files"** | the pane heading, which is a 14px grey uppercase link — a route, but not an obvious one |
+| **"To-dos — Mine / Team"** | hidden whenever nothing was assigned to Grant |
+| **"Chat — recent conversation + route into Talk to Team"** | the route was in the page header, not in the pane |
+
+The Mine/Team one is the interesting mistake. I hid the line when the count
+was zero, reasoning that "0 yours" is furniture. It is not: *none of this is
+on you* is a real answer to the question the line exists to ask, and hiding it
+makes a named requirement look unbuilt on exactly the projects where the
+answer is most reassuring.
+
+### Each fix cost height, and height is the whole constraint
+
+A grid row is as tall as its tallest cell, so a one-line summary above the
+lists put **Schedule at 901px — one pixel past the fold**, which fails §21 as
+surely as a hundred would. Fixed by moving the Mine/Team summary into the pane
+HEADER where it costs nothing, making the chat route a link rather than a
+button, and taking four pixels off each pane's padding. **The type sizes are
+untouched**, because the instruction was explicit that shrinking until it is
+illegible is not the answer.
+
+Measured at 1440×900, all five fully inside the first view:
+
+| Pane | Ends at | Showing |
+|---|---|---|
+| To-dos | 585 | 2 named lists, 4 tasks, assignees, dates, "3 more lists", and the Mine/Team split |
+| Card Table | 467 | 4 stages with counts and fill |
+| Docs & Files | 540 | 3 documents, 2 as real rendered PDF pages, titles and metadata |
+| Schedule | 879 | 3 dated items, the overdue one marked, the no-diary note |
+| Chat | 877 | 2 messages with faces and times, and the route into Talk to the team |
+
+### And the measure caught what I had just added
+
+Both new routes were **15px and 21px tall** on the tablet and phone legs.
+Found by `basecamp:measure` on the next run, which is what extending it to the
+tool surfaces was for. Hit area, not size.
+
+### The deploy stopped being a CLI call
+
+`vercel deploy` uploads everything in one request, and on this link it failed
+about four times in five with a bare `fetch failed`. `scripts/deploy/site.ts`
+uploads each file separately with per-file retries and then creates the
+deployment from the digests — a dropped connection now costs a retry rather
+than an attempt. It worked first time.
+
+**https://agentic-team-hq-basecamp.vercel.app** now opens on the project home.
+
+---
 ## NEXT ACTION
 
 **It is live — look at it.** https://agentic-team-hq-basecamp.vercel.app
