@@ -102,10 +102,37 @@ export async function remember(
     }
 
     /*
+      THE UNNAMED PROJECT IS NOT A PROJECT (#310).
+
+      `inbound_commands.project_id` is NOT NULL and defaults to
+      `app.unnamed_project()`, so the handler never hands this a null — it
+      hands it the id of a real row whose slug is `unnamed`. The first
+      version tested `projectId === null` and therefore stored every rule
+      from a follow-up turn at PROJECT scope on a project called "unnamed".
+
+      Live on v707: "always give me your answers as clear bullet points" was
+      stored once on the real project and once on `unnamed`, two rows for one
+      rule, neither superseding the other, because a rule may only replace
+      one at its own scope. The second copy the whole issue is about, created
+      by the fix for it.
+
+      One extra round trip, and only when something is actually being stored.
+    */
+    const onAProject =
+      projectId === null
+        ? null
+        : await db
+            .execute(`
+              select case when ${uuid(projectId)} = app.unnamed_project()
+                          then null else ${uuid(projectId)} end as id`)
+            .then((r) => (r.rows[0] as { id: string | null } | undefined)?.id ?? null)
+            .catch(() => null)
+
+    /*
       The scope this rule is being stored AT, named once and used by both the
       lookup and the write, because they have to agree about it.
     */
-    const scope = projectId === null ? (scoped === null ? "'global'" : "'staff'") : "'project'"
+    const scope = onAProject === null ? (scoped === null ? "'global'" : "'staff'") : "'project'"
 
     const dimension = dimensionOf(teaching.body)
     const withdrawing = withdrawsARule(teaching.body)
@@ -145,12 +172,12 @@ export async function remember(
               with mine as (select app.harness_author(${lit(by)}) as harness)
               select f.lesson_id::text as id, f.body
                 from mine,
-                     app.lessons_for(${uuid(projectId)}, ${scoped === null ? 'null' : lit(scoped)},
+                     app.lessons_for(${uuid(onAProject)}, ${scoped === null ? 'null' : lit(scoped)},
                                      null, 200, mine.harness) f
                 join public.lessons l on l.lesson_id = f.lesson_id
                where l.is_fixture = mine.harness
                  and l.scope = ${scope}
-                 and l.project_id is not distinct from ${uuid(projectId)}
+                 and l.project_id is not distinct from ${uuid(onAProject)}
                  and l.staff_slug is not distinct from ${scoped === null ? 'null' : lit(scoped)}`)
             .then((r) => r.rows as { id: string; body: string }[])
             .catch(() => [])
@@ -218,7 +245,7 @@ export async function remember(
     const { rows } = await db.execute(`
       select app.learn(
         ${scope}::public.lesson_scope,
-        ${lit(teaching.body)}, ${lit(by)}, ${uuid(projectId)}, ${scoped === null ? 'null' : lit(scoped)},
+        ${lit(teaching.body)}, ${lit(by)}, ${uuid(onAProject)}, ${scoped === null ? 'null' : lit(scoped)},
         null, ${uuid(jobId)},
         -- Grant saying it is not a hypothesis. A lesson an agent inferred
         -- starts at 0.50 and has to earn the rest; one he stated starts high,
@@ -234,7 +261,7 @@ export async function remember(
       because that is the part he can correct. ADR-0017's argument: a
       misreading has to be visible in the next sentence he reads.
     */
-    const where = projectId !== null ? ' for this project' : scoped === null ? ' for everyone' : ''
+    const where = onAProject !== null ? ' for this project' : scoped === null ? ' for everyone' : ''
     if (repeating) {
       return {
         said:

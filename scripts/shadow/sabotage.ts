@@ -281,6 +281,15 @@ const SABOTAGES: readonly Sabotage[] = [
     was a real defect for some minutes today.
   */
   {
+    name: 'the-unnamed-project-is-not-a-project',
+    proves: 'a rule from a turn carrying no project is global, not scoped to "unnamed"',
+    file: 'src/agents/remember.ts',
+    anchor: '              select case when ${uuid(projectId)} = app.unnamed_project()',
+    replacement: '              select case when false',
+    check: 'tests/agents/the-unnamed-project-is-not-a-project.test.ts',
+  },
+
+  {
     name: 'polarity-is-not-noise',
     proves: 'reversing a rule is an override, never a repetition of it',
     file: 'src/agents/preference.ts',
