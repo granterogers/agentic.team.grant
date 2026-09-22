@@ -8710,8 +8710,14 @@ function keepUrl() {
   const first = shownPath === null
   shownPath = path
   try {
-    if (first) history.replaceState({ path }, '', path)
-    else history.pushState({ path }, '', path)
+    /*
+      In a review build the address goes in the hash, so the page URL itself
+      never changes and a reload comes back to the same screen rather than to
+      a path the host has never heard of.
+    */
+    const to = REVIEW ? `#${path}` : path
+    if (first) history.replaceState({ path }, '', to)
+    else history.pushState({ path }, '', to)
   } catch {
     /* A page opened from a file has no history to write to. It still works. */
   }
@@ -13106,7 +13112,33 @@ function cameBackFromGoogle() {
   return true
 }
 
-let wantedPath = typeof location === 'undefined' ? '/' : location.pathname
+/*
+  WHERE THE ADDRESS LIVES, and the one case where it is not the path.
+
+  This studio is addressed by path, because it is served by a host that
+  rewrites every dotless path to index.html (ADR-0002, vercel.json). That is
+  the product and it does not change.
+
+  A REVIEW BUILD has no such host. Published as a static bundle - to give Grant
+  something he can click while a deploy is unreachable - there is no rewrite,
+  so `/basecamp/p/x` would be a 404 rather than the page. `window.STUDIO_REVIEW`
+  moves the address into the hash, which every static host serves correctly
+  because it never reaches the host at all.
+
+  It is a SECOND ADDRESSING VOCABULARY, which this repository has paid for
+  before, so it is confined to three functions and set by nothing but that one
+  global: with the flag unset, every line below behaves exactly as it did.
+*/
+const REVIEW = typeof window !== 'undefined' && window.STUDIO_REVIEW === true
+
+const addressNow = () => {
+  if (typeof location === 'undefined') return '/'
+  if (!REVIEW) return location.pathname
+  const h = location.hash.slice(1)
+  return h === '' ? '/basecamp' : h
+}
+
+let wantedPath = addressNow()
 if (goToPath(wantedPath)) wantedPath = null
 
 if (typeof window !== 'undefined') {
@@ -13118,7 +13150,7 @@ if (typeof window !== 'undefined') {
       that follows does not immediately push the entry we have just walked back
       out of — which would make Back appear not to work at all.
     */
-    const path = e.state?.path ?? location.pathname
+    const path = e.state?.path ?? addressNow()
     shownPath = path
     goToPath(path)
     render()

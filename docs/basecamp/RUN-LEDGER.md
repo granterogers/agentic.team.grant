@@ -1047,6 +1047,73 @@ is the one change that fixes it; when it lands, the save gains a call and that
 paragraph is deleted.
 
 ---
+## A URL to test against — what is actually possible, corrected
+
+Grant asked for a proper URL. Investigating it corrected a claim this ledger
+and the review gallery had both been making.
+
+**The credential is NOT missing.** `VERCEL_TOKEN`, `SUPABASE_ACCESS_TOKEN`,
+`GITHUB_TOKEN` and `GH_TOKEN` are all present in this environment. What blocks
+a deploy is the **egress policy**: the proxy answers `403` to `CONNECT` for
+`api.vercel.com`, and the same for `baujwlzcziasnfhhkchg.supabase.co`. Earlier
+reports said the credentials were absent. They were wrong, and the difference
+matters — a missing credential is Grant's to supply and a network policy is
+his to widen, and only one of those needed him to go looking for a token.
+
+What was tested rather than assumed:
+
+| | |
+|---|---|
+| `api.vercel.com` | **403 at CONNECT** — deploy impossible from here |
+| `baujwlzcziasnfhhkchg.supabase.co` | **403 at CONNECT** — no real-office verification from here |
+| `api.github.com` | 200, but **path-restricted by the proxy**: `/pages` and `/deployments` both refused, so GitHub Pages is out |
+| `granterogers.github.io`, `api.netlify.com` | refused at CONNECT |
+
+So the one URL this session can create is an **Artifact**, and one exists:
+a static review build of the whole experience.
+
+### The review build, and the one product change it needed
+
+`npm run review:build` generates `.out/review/` from `web/studio`. It is
+GENERATED, never hand-maintained, because a copied frontend that is edited by
+hand is a second product. It changes three things and no more: root-absolute
+asset references become relative, a banner says what it is, and
+`window.STUDIO_REVIEW` is set.
+
+That flag is the only change to the product, and it is confined to three
+functions: **the address moves into the hash**. The studio is addressed by
+path because Vercel rewrites every dotless path to `index.html`; a static
+bundle has no such host, so `/basecamp/p/x` would be a 404 on reload. A second
+addressing vocabulary is a thing this repository has paid for, so it is set by
+nothing but that global and, unset, every line behaves exactly as before.
+
+**The pdf.js worker travels as base64.** `pdf.worker.mjs` is minified and
+carries an ESC byte, which the artifact host refuses to serve as text.
+Dropping the worker was tried first and every real document page stopped
+rendering — caught by the check, not by reading. The bytes go as base64 in a
+plain ASCII module and the page rebuilds them into a blob URL: same file, same
+library, legal worker source.
+
+`npm run verify:review` proves the bundle on the least forgiving host shape
+there is — a deliberately dumb static server with **no SPA fallback**, under a
+sub-path. 12/12: it boots, every asset resolves, it opens on the experiment,
+the address goes to the hash and the page address is left alone, **a reload of
+a project address comes back to that project**, the real document pages still
+render from inside the bundle, navigation works and Back comes back.
+
+### The real deploy is one command, and it is his to run
+
+`npm run deploy:preview` (`vercel deploy --yes`) produces a genuine preview
+URL on Vercel's own infrastructure, with `vercel.json`'s rewrites — so path
+addressing, deep links and reloads all behave as the product does, which the
+review bundle can only approximate. It is not production and does not touch
+`ai-team-hq`.
+
+**It has not been run from here and cannot be.** Saying so is the point: a
+deploy script shipped as verified when the network refuses the host is the
+faking-completeness failure the redesign prompt forbids by name.
+
+---
 ## NEXT ACTION
 
 **Grant's review, again — the home is a different page.** Composition C is what
