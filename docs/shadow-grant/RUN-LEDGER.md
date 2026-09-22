@@ -1598,3 +1598,89 @@ established is durability across many turns and personas — five live probes
 is five samples of a stochastic system, and the detector's exposure is a
 clause read as `other`, acted on by nobody and planned by nobody. #302
 stays open until a broader multi-turn sweep says otherwise.
+
+---
+
+# 22 September — #302 durability, and closing it
+
+## The sweep
+
+Six sessions written against v683, four more written after remediation and
+held until it was done. **35 turns, all live, all re-recorded against the
+final v689** so no evidence predates the code it is evidence for.
+
+Covered: direct and indirect requests · grounded and ungrounded referents ·
+partial completion · approval-required work · failed and retried work ·
+corrections and withdrawals · changed instructions after partial execution ·
+several actions in one message · project switching · specialist delegation ·
+dictated language · and the follow-ups that carry no content of their own —
+*"did you do it?"*, *"what happened?"*, *"try again"*, *"do that"*,
+*"actually leave it"*.
+
+## The oracle is independent, and proves it is not blind
+
+`npm run shadow:alignment` reads the jobs a session recorded and then asks
+the DATABASE what happened — tasks, documents, child jobs, blockers,
+impediments, attempt, state — rather than trusting anything the runner wrote
+down. Its `wanted` comes from `routing_decisions.intent_class`, a second
+opinion rather than the same opinion twice.
+
+Its happy path is "found nothing", which is the one shape indistinguishable
+from a check that cannot fire, so **it shows itself a planted promise before
+reporting anything** and exits non-zero if that does not flag.
+
+## Three defects, all found by the sweep, all fixed
+
+1. **`failed_after_retries` fired on a turn that was about to succeed** —
+   layer 3. A job in state `complete` on attempt 4 told Grant *"I could not
+   get this done after 4 attempts, and nothing was created"* and then
+   answered his question. The class is a fact about a SETTLED job;
+   `CanonicalOutcome` gains `settled`, the handler always passes false.
+2. **The past tense was on the contract and nothing enforced it** — layer 4.
+   *"Added 'book venue' to the coaching project and moved 'write welcome
+   pack'…"* against zero rows, and one turn later *"I haven't created any
+   tasks yet"*. `claimsToHaveMade` needs a creation VERB **and** an artifact
+   NOUN; that sentence names the task by its TITLE. The noun requirement is
+   dropped; `misrepresents()` is now the one entry point so neither half can
+   be forgotten again.
+3. **`landed` was `acted`** — layer 3, and mine. `outcome.ts`'s own field
+   comment says landed is *"counted from rows the turn produced, never from
+   what the handler decided to attempt"*, and the first wiring passed
+   `acted` anyway. A turn that asked to MOVE a task counted it as done, the
+   class came out `completed`, and the backstop was never consulted.
+
+## Final measurement, v689
+
+```
+35 turns recorded · 34 scored (one answered nothing)
+ESCAPES 0 · FALSE CLAIMS 0 · FALSE REFUSALS 0
+classes reached live: completed 28 · blocked_needs_user 4 · pending_approval 2
+```
+
+Gates: 2626 tests · lint · tsc · migrations · secrets · templates ·
+provenance clean · fingerprint `b98b6cf030e75970` unchanged · sabotage **19
+detectors**, each shown a defect and each red · containment swept to zero on
+every counter but the reported lesson pile.
+
+## Two harness defects the sweep hit before the office saw a word
+
+Both in the session runner, both surviving because no session had taken the
+path: `inbound_commands.project_id` is NOT NULL with a DEFAULT of
+`app.unnamed_project()` and the runner passed an explicit null; and the
+dedupe key's middle segment is `[a-z_]+` while the runner built it from a
+session name with digits in. A turn with no project is exactly the shape
+#302's exposure lives in, so the first one mattered.
+
+And a third: `tidy` cancels leftover JOBS and never touched the TASKS they
+created. Eleven were left. `npm run session -- --sweep` closes it.
+
+## What is NOT claimed
+
+- The live oracle reaches **three** of the six classes. The other three are
+  proved in `tests/agents/six-classes-end-to-end.test.ts` against canonical
+  counts, and `failed_after_retries` was additionally observed live before
+  the fix and confirmed absent after.
+- **One turn in 35 answered nothing** — `d302-dictated#1`, four attempts,
+  four coherence refusals. Grant would receive silence. That is a different
+  root cause from #302 and is filed separately.
+- 35 turns is 35 samples of a stochastic system.
