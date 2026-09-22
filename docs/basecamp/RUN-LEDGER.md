@@ -1353,6 +1353,28 @@ and an empty panel and a missing one are indistinguishable from a count.
 Proved by removing `data-bc-expand` from the module heading and watching four
 checks go red, with the sabotage printing its own effect first.
 
+### The v2 deploy, and what was actually verified
+
+**https://agentic-team-hq-basecamp.vercel.app** carries project home v2.
+
+What was proved, and how, because "deployed" on its own is a claim:
+
+- the bare domain still redirects to `/basecamp/p/legacy-coaching-course`
+  (HTTP 307, checked);
+- **all eight of the experience's files are byte-identical** between the live
+  host, the build in `.out/site/` and the source in `web/studio/` — compared by
+  sha256, so the thing the local gate and captures ran against is the thing
+  serving.
+
+What was NOT done, stated rather than glossed: **the deployed page was not
+rendered in a browser from this sandbox.** Chromium here does not trust the
+agent proxy's certificate authority, and three attempts to add that authority
+as an extra trust anchor (NODE_EXTRA_CA_CERTS, then the CA's SPKI, then the
+served leaf's) all still failed with ERR_CERT_AUTHORITY_INVALID. Turning
+verification off would have produced a green line and no evidence, so it was
+not done. The rendered evidence is the local run over the identical files:
+`basecamp:gate` green end to end and 92 captures at four widths.
+
 ---
 ## NEXT ACTION
 
