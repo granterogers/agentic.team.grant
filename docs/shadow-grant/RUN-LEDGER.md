@@ -1809,3 +1809,75 @@ Gates: 2655 tests · lint · tsc · migrations · secrets · templates ·
 fingerprint `b98b6cf030e75970` unchanged · sabotage **21 detectors**, each
 shown a defect and each red · containment swept to zero on every counter but
 the reported lesson pile and #298's two preserved rows.
+
+---
+
+# Discovery — looking where nothing had looked, 22 September
+
+#302 and #304 are closed. This run is not a neighbourhood of either: a corpus
+that found a defect cannot find the next one in the thing it caused to be
+built.
+
+## Where to look was chosen from measurements, not from intuition
+
+`npm run breadth`: **8 of 37 coverage dimensions have no cases at all**, and
+four of them are the working day — cross-project-work, changed-intent,
+contradictory-instructions, permission-gated-actions.
+
+`npm run measure`, real traffic only: 85 of 180 routing decisions go to the
+Chief of Staff, the **finance director has never been chosen**, delegation
+depth is 1 on two decisions in the office's entire history, and the worst
+real latency in 14 days is 15 hours against a median of 32 seconds.
+
+## A second oracle, because the first is blind between turns
+
+`shadow:alignment` asks one question per TURN and cannot see a row created
+twice, a row on the wrong project after a switch, work done in silence, or an
+answer denying what the conversation itself put there. Those are the failures
+that make an office frustrating rather than wrong: nothing in any single turn
+is false and the conversation is unusable.
+
+`npm run shadow:coherence` asks those four from rows alone. It corrected
+itself twice before reporting anything — its silent-action control used
+"Noted, thanks." and `noted` is in the acknowledgement list, so it was testing
+the exemption; and `projects` is keyed on `project_id`. Then the real finding
+forced a widening, with a control bounding it.
+
+## Three findings, in the order of what they cost Grant
+
+**#306 — the office told him a task existed when none did.** First run, v695.
+Three independent causes, each sufficient alone, all established by driving
+the readers against the exact text: `DID_IT` could not see `I've created` at
+all (its `'ve` branch sat behind `(?:i|we)\s+`, so it could only match
+"I 've"); a negation anywhere in the sentence exempted the whole sentence,
+including the clause before it; and `misrepresents` asked one of the two
+readers of the past tense, under a comment saying it was the one entry point
+so neither could be forgotten. **The alignment oracle had asked both since the
+day it was written — the instrument knew and the product did not.**
+
+**#307 — every task title written from a real message in 45 days is
+malformed.** Four of four, not a sample: a job kind, a raw dictated false
+start he had retracted, a question he asked, and today's `down for the printer
+quote, due Tuesday`. #249's defect returning in the half that was not rebuilt
+— recognition moved onto grammar, titling kept stripping a frame with
+patterns, so the better recognition got the worse the titles became. Fixed at
+four closed classes plus `withoutTheDate`, which subtracts the deadline only
+after `dueOn` has consumed it. **Verified live on v699: `get a task down for
+the printer quote, due Tuesday` now stores "the printer quote" with
+`due_on = 2026-09-22`.**
+
+**#308 — no real conversation has ever recorded which project it is about.**
+All 169 `project_switches` rows are harness traffic; `app.current_project` has
+no caller in `src/`; `resolveProject` and `switchTo` have no importer. A third
+of real messages and **52% of voice notes** arrive with no project. Filed
+rather than fixed: its measured consequence in real traffic is small today
+precisely because of #307's other half — **160 real messages in 45 days
+produced one task** — so fixing #307 raises this one's frequency, which is an
+argument for that order rather than for leaving it.
+
+## The instrument was wrong before the product was, twice
+
+Both caught by controls rather than by reading, which is the whole reason the
+controls exist. And one regression of my own, caught by #249's suite on the
+first run: `in` is a particle and a preposition, so stripping it before the
+project adjunct turned "Raise a task in alpha to…" into "alpha to…".
