@@ -548,5 +548,6 @@
   "0546_a_test_preference_may_not_retire_a_real_one.sql": "a317eb4429a26099b27e6c95e0417c5fcec513f6aca55f93cffcc6a00f985ce6",
   "0547_a_conversation_remembers_its_project.sql": "4fd807d412dc7fb07d5771412ff192a13b0e7f34da900bb6b2668186f866e6b8",
   "0548_remembering_the_project_may_never_lose_the_message.sql": "0ffa6661c797b8ae8ffb2e1a4a534c90fb781982e3a5dea7ec982aa93440b6a4",
-  "0549_what_the_specialists_found_reaches_the_conversation.sql": "30cd7220b7ebb6625059fa9ebe7ccb2fbc6b1cc53c132f8ebbf6c56b29ed4452"
+  "0549_what_the_specialists_found_reaches_the_conversation.sql": "30cd7220b7ebb6625059fa9ebe7ccb2fbc6b1cc53c132f8ebbf6c56b29ed4452",
+  "0550_the_office_knows_what_it_is_still_doing.sql": "440828cbd7dfc5973391b59e8d595a5066ac64cd1be98c85050824b3e5413bce"
 }

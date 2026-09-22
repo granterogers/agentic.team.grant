@@ -1627,13 +1627,30 @@ async function recallOlder(
 async function conversationBefore(
   db: SqlExecutor,
   commandId: string,
-): Promise<readonly { said: string; answered: string | null; colleagues: string[] }[]> {
+): Promise<
+  readonly {
+    said: string
+    answered: string | null
+    colleagues: string[]
+    stillGoing: number
+    waitingOnYou: number
+  }[]
+> {
   if (commandId === '') return []
   const { rows } = await db.execute(`select app.conversation_before(${lit(commandId)}::uuid) as t`)
   const raw = (rows[0] as { t: unknown } | undefined)?.t
   if (!Array.isArray(raw)) return []
   return raw
-    .map((entry) => entry as { said?: string; answered?: string | null; colleagues?: unknown })
+    .map(
+      (entry) =>
+        entry as {
+          said?: string
+          answered?: string | null
+          colleagues?: unknown
+          stillGoing?: number
+          waitingOnYou?: number
+        },
+    )
     .filter((entry) => typeof entry.said === 'string' && entry.said.trim() !== '')
     .map((entry) => ({
       said: String(entry.said),
@@ -1655,6 +1672,13 @@ async function conversationBefore(
       colleagues: Array.isArray(entry.colleagues)
         ? entry.colleagues.map((c) => String(c)).filter((c) => c.trim() !== '')
         : [],
+      /*
+        AND WHAT HAS NOT COME BACK (0550). A child still running, and one
+        paused with an open blocker waiting on him. The office could not
+        answer "what are you working on" because nothing told it.
+      */
+      stillGoing: Number(entry.stillGoing ?? 0),
+      waitingOnYou: Number(entry.waitingOnYou ?? 0),
     }))
 }
 
@@ -4443,15 +4467,30 @@ export function instructionHandler(deps: InstructionDeps): Handler {
                   what came back — and said so in the first person so the model
                   cannot mistake it for something Grant told it.
                 */
-                const from =
-                  t.colleagues.length === 0
+                /*
+                  What came back, and what has not (0549, 0550). Both as the
+                  OFFICE's own turn: a colleague's answer replayed as Grant's
+                  would read as something he told it, which is the
+                  fabrication-laundering shape `provenance.ts` prevents.
+                */
+                const outstanding =
+                  t.waitingOnYou > 0
+                    ? `Still open from that: ${String(t.waitingOnYou)} piece(s) of it are waiting on your answer.`
+                    : t.stillGoing > 0
+                      ? `Still open from that: ${String(t.stillGoing)} piece(s) are still running.`
+                      : ''
+                const lines = [
+                  ...(t.colleagues.length === 0
                     ? []
                     : [
-                        {
-                          role: 'assistant' as const,
-                          content: `What the colleagues I asked came back with:\n${t.colleagues.join('\n\n')}`,
-                        },
-                      ]
+                        `What the colleagues I asked came back with:\n${t.colleagues.join('\n\n')}`,
+                      ]),
+                  ...(outstanding === '' ? [] : [outstanding]),
+                ]
+                const from =
+                  lines.length === 0
+                    ? []
+                    : [{ role: 'assistant' as const, content: lines.join('\n\n') }]
                 return t.answered === null
                   ? [{ role: 'user' as const, content: t.said }, ...from]
                   : [

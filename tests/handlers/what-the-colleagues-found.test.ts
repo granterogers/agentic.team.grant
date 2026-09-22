@@ -42,9 +42,15 @@ const sql = readFileSync(
 describe('all three places learned the key', () => {
   it('the reader carries it', () => {
     expect(withoutComments).toMatch(/colleagues: Array\.isArray\(entry\.colleagues\)/)
-    expect(withoutComments).toMatch(
-      /said: string; answered: string \| null; colleagues: string\[\]/,
-    )
+    /*
+      0550 added two more keys to the same payload, so the signature is a
+      block rather than a line now — assert the keys, not the layout. A test
+      that pins formatting goes red on a correct change, which this
+      repository records five times.
+    */
+    expect(withoutComments).toMatch(/colleagues: string\[\]/)
+    expect(withoutComments).toMatch(/stillGoing: number/)
+    expect(withoutComments).toMatch(/waitingOnYou: number/)
   })
 
   it('the prompt shows it, attributed', () => {
@@ -54,7 +60,7 @@ describe('all three places learned the key', () => {
       user turn would read as something he told the office, which is the
       fabrication-laundering shape `provenance.ts` exists to prevent.
     */
-    expect(withoutComments).toMatch(/role: 'assistant' as const,\s*content: `What the colleagues/)
+    expect(withoutComments).toMatch(/role: 'assistant' as const, content: lines\.join/)
   })
 
   it('and provenance files it as the office own prose, never as evidence', () => {
@@ -68,6 +74,25 @@ describe('all three places learned the key', () => {
     const colleagues = withoutComments.indexOf('turns.flatMap((t) => t.colleagues)', before)
     expect(colleagues).toBeGreaterThan(before)
     expect(colleagues).toBeLessThan(retrieved === -1 ? Number.MAX_SAFE_INTEGER : retrieved)
+  })
+})
+
+describe('and what has NOT come back is there too (0550)', () => {
+  /*
+    Live on v727: turn 0 fanned out, its child PAUSED with an open blocker,
+    and three turns later "so what is actually being worked on now?" was
+    answered "I don't have a current task list in the records I can see."
+    The question is about the OFFICE and it was answered from document
+    retrieval, because nothing could say what was in flight.
+  */
+  it('counts what is still running and what is waiting on him', () => {
+    expect(withoutComments).toMatch(/stillGoing: Number\(entry\.stillGoing \?\? 0\)/)
+    expect(withoutComments).toMatch(/waitingOnYou: Number\(entry\.waitingOnYou \?\? 0\)/)
+  })
+
+  it('and says which of the two it is, because they need different answers', () => {
+    expect(withoutComments).toContain('waiting on your answer')
+    expect(withoutComments).toContain('still running')
   })
 })
 
