@@ -317,6 +317,46 @@ const piles = await db.execute(`
     (select count(*) from public.lessons l where l.is_fixture and l.row_kind = 'lesson'
        and not exists (select 1 from public.lessons r where r.supersedes = l.lesson_id))
       as harness_lessons_stored,
+    /*
+      AND THE ONE THAT IS NOT A PILE BUT A BREACH (0545).
+
+      The line above counts harness lessons that EXIST, which is tolerable -
+      they are append-only and hq_governance knows what they are. This one
+      counts harness lessons that reach a real PROMPT, which is not
+      tolerable at any number.
+
+      0539 filtered on lessons.is_fixture, which is GENERATED from
+      learned_by and therefore cannot see that the JOB was harness traffic:
+      a session driving the real enqueue path records learned_by as grant.
+      12 of the 15 lessons in every real prompt were that kind, including
+      two contradictory prices for Grant's middle tier, one of them a figure
+      the office had invented.
+
+      Asked through the READER rather than by restating its predicate, so a
+      future change to what harness means cannot leave this check agreeing
+      with a stale copy of the rule.
+
+      No backticks in this comment: it lives inside a template literal.
+    */
+    (select count(*)
+       from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 500) f
+       join public.lessons l on l.lesson_id = f.lesson_id
+      where l.from_job is not null and app.harness_job(l.from_job))
+      as harness_lessons_in_a_real_prompt,
+    /*
+      THE CONTROL FOR THE LINE ABOVE, and not optional.
+
+      Its happy path is zero, which is the one shape indistinguishable from
+      a check that cannot fire. The same join through the same reader with
+      the harness door OPEN must come back positive; if it does not, there
+      are no harness-taught lessons to detect and the zero above says
+      nothing about the filter.
+    */
+    (select count(*)
+       from app.lessons_for(null, 'chief-of-staff', 'office.instruction', 500, true) f
+       join public.lessons l on l.lesson_id = f.lesson_id
+      where l.from_job is not null and app.harness_job(l.from_job))
+      as harness_lessons_the_filter_removes,
     (select count(*) from public.provider_health where provider like 'probe\\_%') as probe_providers,
     /*
       Fixture CONNECTORS, which had no witness at all until 0505.
@@ -514,6 +554,8 @@ console.log(
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `harness offers on the Governance page: ${String(pile.harness_offers)} · ` +
     `harness lessons stored (reported, not swept - see the comment): ${String(pile.harness_lessons_stored)} · ` +
+    `harness lessons REACHING A REAL PROMPT: ${String(pile.harness_lessons_in_a_real_prompt)} ` +
+    `(the filter removes ${String(pile.harness_lessons_the_filter_removes)}, which is what makes the zero mean something) · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
 /*
