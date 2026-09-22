@@ -37,7 +37,7 @@ function section(entry: ContractEntry, n: number): string {
         `About ${entry.human.minutes} minutes. Cost: ${entry.human.cost}.`,
     )
     lines.push('')
-    entry.human.steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`))
+    for (const [i, step] of entry.human.steps.entries()) lines.push(`${i + 1}. ${step}`)
   } else if (entry.automatedBy !== undefined) {
     /*
       Not everything without a `human` block is done by the computer.
@@ -135,7 +135,7 @@ function render(): string {
   out.push('')
   out.push('## The required steps')
   out.push('')
-  core.forEach((entry, i) => out.push(section(entry, i + 1)))
+  for (const [i, entry] of core.entries()) out.push(section(entry, i + 1))
   out.push('---')
   out.push('')
   out.push('## When it is done')
@@ -164,7 +164,7 @@ function render(): string {
           `Cost: ${entry.human.cost}.`,
       )
       out.push('')
-      entry.human.steps.forEach((step, i) => out.push(`${i + 1}. ${step}`))
+      for (const [i, step] of entry.human.steps.entries()) out.push(`${i + 1}. ${step}`)
     } else if (entry.automatedBy !== undefined) {
       out.push(`Run: \`${entry.automatedBy}\``)
     }
