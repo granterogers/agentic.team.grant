@@ -285,6 +285,15 @@ const SABOTAGES: readonly Sabotage[] = [
     context is trustworthy or is just the old heuristic with a longer memory.
   */
   {
+    name: 'colleagues-reach-the-conversation',
+    proves: 'what a specialist came back with is visible to a later turn',
+    file: 'src/handlers/instruction.ts',
+    anchor: '      colleagues: Array.isArray(entry.colleagues)',
+    replacement: '      colleagues: ([] as string[]).length > 0 && Array.isArray(entry.colleagues)',
+    check: 'tests/handlers/what-the-colleagues-found.test.ts',
+  },
+
+  {
     name: 'waiting-on-him-is-reachable',
     proves: 'the office can tell Grant it is waiting on HIM, including through a child',
     file: 'src/handlers/instruction.ts',

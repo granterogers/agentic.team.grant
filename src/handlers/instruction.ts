@@ -1627,18 +1627,34 @@ async function recallOlder(
 async function conversationBefore(
   db: SqlExecutor,
   commandId: string,
-): Promise<readonly { said: string; answered: string | null }[]> {
+): Promise<readonly { said: string; answered: string | null; colleagues: string[] }[]> {
   if (commandId === '') return []
   const { rows } = await db.execute(`select app.conversation_before(${lit(commandId)}::uuid) as t`)
   const raw = (rows[0] as { t: unknown } | undefined)?.t
   if (!Array.isArray(raw)) return []
   return raw
-    .map((entry) => entry as { said?: string; answered?: string | null })
+    .map((entry) => entry as { said?: string; answered?: string | null; colleagues?: unknown })
     .filter((entry) => typeof entry.said === 'string' && entry.said.trim() !== '')
     .map((entry) => ({
       said: String(entry.said),
       answered:
         entry.answered === null || entry.answered === undefined ? null : String(entry.answered),
+      /*
+        WHAT THE SPECIALISTS CAME BACK WITH (0549).
+
+        All 56 real child jobs had written an output and not one could reach
+        a later turn, because the reader took only the parent's own. So the
+        office asked two specialists, they answered, and it told Grant it had
+        nothing.
+
+        A payload gaining a key needs THREE places to learn it — the reader,
+        the prompt and the provenance bucket — and the two that are not the
+        renderer fail silently, which CLAUDE.md records costing a Governance
+        section that read "0 open" over fourteen rows.
+      */
+      colleagues: Array.isArray(entry.colleagues)
+        ? entry.colleagues.map((c) => String(c)).filter((c) => c.trim() !== '')
+        : [],
     }))
 }
 
@@ -4419,14 +4435,31 @@ export function instructionHandler(deps: InstructionDeps): Handler {
               // than pasted into the system prompt as a transcript: a model
               // handed "here is what was said" reasons about the text, and a
               // model handed the turns reasons about the conversation.
-              ...turns.flatMap((t) =>
-                t.answered === null
-                  ? [{ role: 'user' as const, content: t.said }]
+              ...turns.flatMap((t) => {
+                /*
+                  A colleague's answer is part of the exchange and is ATTRIBUTED
+                  as one (0549). Replayed as the office's own turn, because
+                  that is what it is — the office asked somebody and this is
+                  what came back — and said so in the first person so the model
+                  cannot mistake it for something Grant told it.
+                */
+                const from =
+                  t.colleagues.length === 0
+                    ? []
+                    : [
+                        {
+                          role: 'assistant' as const,
+                          content: `What the colleagues I asked came back with:\n${t.colleagues.join('\n\n')}`,
+                        },
+                      ]
+                return t.answered === null
+                  ? [{ role: 'user' as const, content: t.said }, ...from]
                   : [
                       { role: 'user' as const, content: t.said },
                       { role: 'assistant' as const, content: t.answered },
-                    ],
-              ),
+                      ...from,
+                    ]
+              }),
               { role: 'user', content: instruction },
             ],
             // 2,000, and NOT the 400 that looked obviously better.
@@ -4834,6 +4867,13 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         */
         answeredBefore: [
           ...turns.map((t) => t.answered ?? ''),
+          /*
+            And what the specialists came back with (0549), HERE and not in
+            `retrieved` — for exactly the reason the comment below gives about
+            a handover. A colleague's output is the office's own prose, so it
+            is conversation and never evidence.
+          */
+          ...turns.flatMap((t) => t.colleagues),
           ...memory.recalled.map((m) => m.answered),
           /*
             A colleague's handover is the office's own prose (#128).
