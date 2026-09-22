@@ -38,9 +38,29 @@ if (!door.reachable) {
 console.log(`\n  run token   ${runToken}`)
 console.log(`  said        ${JSON.stringify(said)}\n`)
 
+/*
+  The conversation is nameable, so two probes can share one or deliberately
+  NOT share one.
+
+  Live multi-turn ARCS are throughput-bound: a turn that drafts something
+  spends minutes, and four of them outrun a foreground session. But the
+  continuity properties do not need slow turns - they need two turns and
+  control over which conversation each belongs to:
+
+    - a preference is a LESSON. It must still hold in a conversation that
+      has never heard it said.
+    - a bare referent is a THREAD fact. After a boundary there is nothing
+      to resolve it against and the office should ASK rather than guess.
+
+  Those have opposite right answers and only a named conversation tells
+  them apart.
+*/
+const conversation = arg('conversation', `probe-${runToken}`)
+console.log(`  chat        ${conversation}\n`)
+
 const o = await door.ask(
   { text: said, channel: 'teamhq' },
-  { conversation: `probe-${runToken}`, history: [], standing: [], hadAnswer: false },
+  { conversation, history: [], standing: [], hadAnswer: false },
 )
 
 console.log(`  reading     ${o.reading === '' ? '(none)' : o.reading}`)

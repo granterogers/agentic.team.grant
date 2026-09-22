@@ -297,6 +297,26 @@ const piles = await db.execute(`
     (select count(*) from jsonb_array_elements((app.hq_governance(400))->'lessons') x
       where coalesce(x->>'by', '') like 'verify%'
          or coalesce(x->>'learned_by', '') like 'verify%') as harness_lessons,
+    /*
+      The PILE, which nothing counted.
+
+      public.lessons is append-only - it rejects DELETE, UPDATE and TRUNCATE -
+      and app.retract_lesson withdraws by INSERTING a retraction row. So the
+      333 harness lessons standing on 22 September cannot be removed, and
+      sweeping them would add 333 more permanent rows to a table that can
+      never shrink, for no behavioural gain: 0539 keeps them out of every
+      prompt and the counter above keeps them off the Governance page, and
+      both report zero.
+
+      So this one is DELIBERATELY reported and not failed. It exists because
+      a debris class with no witness is one that comes back, and because a
+      number that starts growing is the signal that a filter has stopped
+      holding - which is a thing to notice before it reaches a screen rather
+      than after.
+    */
+    (select count(*) from public.lessons l where l.is_fixture and l.row_kind = 'lesson'
+       and not exists (select 1 from public.lessons r where r.supersedes = l.lesson_id))
+      as harness_lessons_stored,
     (select count(*) from public.provider_health where provider like 'probe\\_%') as probe_providers,
     /*
       Fixture CONNECTORS, which had no witness at all until 0505.
@@ -493,6 +513,7 @@ console.log(
     `test destinations registered: ${String(pile.registered_test_destinations)} · ` +
     `harness tools in the registry: ${String(pile.harness_tools)} · ` +
     `harness offers on the Governance page: ${String(pile.harness_offers)} · ` +
+    `harness lessons stored (reported, not swept - see the comment): ${String(pile.harness_lessons_stored)} · ` +
     `roster: ${String(pile.retired_fixture_staff)} retired fixture specialist(s)`,
 )
 /*
