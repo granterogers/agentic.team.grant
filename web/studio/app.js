@@ -13311,6 +13311,32 @@ const bcContext = {
     state.bcDoc = null
     render()
   },
+  /*
+    PROJECT SETTINGS, RENDERED AND WIRED BY ITS OWN MODULE.
+
+    The experiment draws the same `project-settings.js` the default studio
+    does - same renderer, same wiring, same writes - so there is no second
+    implementation to drift, which is what "preserve existing settings
+    functionality; avoid regressions" actually requires. Only the frame and
+    the stylesheet are the experiment's.
+  */
+  needProjectSettings: (p) => {
+    void projectSettings.need(p, render)
+  },
+  projectSettingsBody: (p) => projectSettings.section(p, state.setpane, people),
+  wireProjectSettings: (root, p) => {
+    projectSettings.wire(root, p, people, render)
+  },
+  setPane: (id) => {
+    state.setpane = id
+    render()
+  },
+  /* The office's own settings, in the sheet that already holds them. */
+  openGlobalSettings: (tab) => {
+    if (typeof tab === 'string' && tab !== '') state.setting = tab
+    settingsSheet()
+    sheet($('#settings'), true)
+  },
   chatFor: (slug) => chat.thread(slug),
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, token.get()),

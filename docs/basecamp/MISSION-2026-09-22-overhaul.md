@@ -360,7 +360,7 @@ Status words mean exactly one thing each:
 | 30 | Column colour coding | **verified** | one stage palette used by both views; the suite asserts four distinct column colours |
 | 31 | Back closes a modal first, then reverses project state | **verified** | verify:basecamp-back drives page.goBack() — the real history traversal a mouse Back performs — through all three levels, plus Forward and a reload. The fix is the address, not a handler: an expanded view is a place. Proved by removing the suffix |
 | 32 | "Elsewhere on this project" removed | **verified** | the function is gone; preservation still proves every section is reachable |
-| 33 | Project Settings in the new design system | pending | |
-| 34 | Global Settings in the new design system | pending | |
+| 33 | Project Settings in the new design system | **verified** | it is the experience's own surface now — no hand-off out of the experiment — drawn by the SAME project-settings.js with the same wiring, inside a scoped stylesheet that gives it this experience's type, spacing, panels, edges, shadows, controls and states. verify:basecamp-settings measures the rendered pixels and compares the panel edge with the board's |
+| 34 | Global Settings in the new design system | **verified** | a centred dialog with a scrim rather than a flush drawer pinned beside a rail this experience does not have; same tab strip, panels, controls and typography. All nine tabs still there and still switching |
 | 35 | Visual and interaction quality throughout | pending | |
 | 36 | Systemic audit per defect class | pending | |

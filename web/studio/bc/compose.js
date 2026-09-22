@@ -249,7 +249,14 @@ const head = (p) => {
             <button type="button" role="menuitem" data-bc-arrange="1">Arrange this page</button>
             <button type="button" role="menuitem" data-bc-expand="team">The team</button>
             <button type="button" role="menuitem" data-bc-sources="1">Sources</button>
-            <button type="button" role="menuitem" data-bc-leave="/p/${esc(p.slug)}/settings">Project settings</button>
+            <button type="button" role="menuitem" data-bc-go="${esc(at(`/p/${p.slug}/settings`))}">Project settings</button>
+            <!--
+              And the office's own, which is a different scope and says so.
+              Grant, #158: "Separate them explicitly into Global Settings and
+              Project Settings. Do not make users guess which scope they are
+              editing."
+            -->
+            <button type="button" role="menuitem" data-bc-settings="1">Settings for everything</button>
           </div>
         </span>
       </span>

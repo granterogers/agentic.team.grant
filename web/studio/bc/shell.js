@@ -135,7 +135,25 @@ export const TOOLS = [
     business.
   */
   { id: 'sources', name: 'Sources', own: true },
-  { id: 'settings', name: 'Project Settings', own: false },
+  /*
+    PROJECT SETTINGS IS THE EXPERIENCE'S OWN SURFACE NOW.
+
+    Grant, 22 September: *"Project Settings is still exposing the
+    old-fashioned/legacy interface. Do not continue mixing the redesigned
+    project UI with legacy screens... stop dropping the user into an obviously
+    legacy-looking interface; make Project Settings visually coherent with the
+    new application; preserve existing settings functionality; avoid
+    regressions."*
+
+    Note what preserving the functionality and avoiding regressions RULES OUT:
+    re-authoring eight hundred lines of settings controls in a second
+    vocabulary. So the surface renders `project-settings.js` - the same
+    renderer, the same wiring, the same writes - inside this experience's
+    shell, and a scoped stylesheet gives its markup this experience's
+    typography, spacing, panels, borders and controls. The information
+    architecture is untouched, which he asked for in the same breath.
+  */
+  { id: 'settings', name: 'Project Settings', own: true },
 ]
 
 /*
@@ -1919,6 +1937,27 @@ const documentRecord = (p) => {
     </dl>`
 }
 
+/*
+  PROJECT SETTINGS, INSIDE THE EXPERIENCE.
+
+  `projectSettings.section` returns the whole pane including its own tab strip;
+  this adds the record head the rest of the experience uses and nothing else,
+  because anything added here would be the IA expanding, which Grant ruled out
+  for this pass.
+*/
+const settingsSurface = (p) => {
+  ctx?.needProjectSettings?.(p)
+  return `${crumbFor(p, 'settings')}
+    <div class="bcrecordhead">
+      <h1>Project Settings</h1>
+    </div>
+    <p class="bcpmeta bcprose bcgap-l">
+      Settings for ${esc(p.name)} alone. What the whole office does — the team,
+      its behaviour, what it is connected to — is under Settings for everything.
+    </p>
+    <div class="bcsetframe">${ctx?.projectSettingsBody?.(p) ?? ''}</div>`
+}
+
 const SURFACE = {
   overview,
   tasks: (p) => (state().bcTask === null || state().bcTask === undefined ? tasksSurface(p) : taskRecord(p)),
@@ -1931,6 +1970,7 @@ const SURFACE = {
   schedule: scheduleSurface,
   chat: chatSurface,
   document: documentRecord,
+  settings: settingsSurface,
 }
 
 /* ======================================================================== *

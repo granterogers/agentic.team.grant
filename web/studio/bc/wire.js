@@ -115,6 +115,7 @@ export const wire = (root) => {
   wireDocsWorkspace(root)
   wireVoice(root)
   wireContacts(root)
+  wireProjectSettings(root)
   wirePageMenu(root)
   wireExpanded(root)
 }
@@ -371,6 +372,28 @@ const paintMic = (b) => {
         : 'Talk to the team out loud'
   b.setAttribute('aria-label', label)
   b.title = label
+}
+
+/*
+  PROJECT SETTINGS, WIRED BY ITS OWN MODULE.
+
+  The pane's controls belong to `project-settings.js` and are wired by it, so
+  the experiment hands it the root rather than re-implementing a single
+  handler - which is what keeps "preserve existing settings functionality"
+  true by construction rather than by care. The tab strip is the one thing the
+  experiment wires itself, because the pane is a state of this experience's
+  own render.
+*/
+const wireProjectSettings = (root) => {
+  if (root.querySelector('.bcsetframe') === null) return
+  const p = ctx.projects().find((x) => x.slug === ctx.state.project)
+  if (p === undefined) return
+  ctx.wireProjectSettings?.(root, p)
+  for (const b of root.querySelectorAll('[data-setpane]')) {
+    b.addEventListener('click', () => {
+      ctx.setPane?.(b.dataset.setpane)
+    })
+  }
 }
 
 const wireVoice = (root) => {
@@ -630,6 +653,19 @@ const wirePageMenu = (root) => {
     b.addEventListener('click', () => {
       shut()
       ctx.openExpanded?.('sources')
+    })
+  }
+
+  /*
+    The office's settings, in the sheet that already holds them - restyled
+    under this experience rather than rebuilt in it. The sheet lives outside
+    the render root and survives every repaint, which is exactly why it is the
+    right thing to reuse.
+  */
+  for (const b of root.querySelectorAll('[data-bc-settings]')) {
+    b.addEventListener('click', () => {
+      shut()
+      ctx.openGlobalSettings?.()
     })
   }
 }

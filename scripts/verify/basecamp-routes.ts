@@ -190,7 +190,18 @@ const tools = (() => {
   )
 })()
 
-if (tools.length < 5 || !tools.some((t) => t.own) || !tools.some((t) => !t.own)) {
+/*
+  THE BLIND GUARD ASKS ABOUT THE PARSER, not about the product.
+
+  It required at least one tool with `own: false` - true while Project
+  Settings was a hand-off into the default studio, and false the moment that
+  stopped being true, which is the change this run made deliberately. A guard
+  that fails when the product improves is the "assert the mechanism" defect
+  wearing a safety jacket. What it is FOR is noticing that the regex has
+  stopped matching, so it asks that: a plausible number of tools, every one of
+  them with a name, and at least one owned.
+*/
+if (tools.length < 5 || !tools.some((t) => t.own) || tools.some((t) => t.name === '')) {
   console.error(
     `parsed ${String(tools.length)} tool(s) out of bc/shell.js, ${String(tools.filter((t) => t.own).length)} owned — the shape has changed and this check has gone blind`,
   )
@@ -221,6 +232,12 @@ if (slug !== null) {
       /*
         A hand-off is not a route of this experience. Landing on the overview
         is correct; keeping the address is not.
+
+        NOTHING TAKES THIS BRANCH TODAY - every tool is the experience's own
+        since Project Settings came inside - and it is kept rather than
+        deleted because the next tool that cannot be built here will need it,
+        and re-deriving the rule from scratch is how the address came to lie
+        the first time.
       */
       check(
         `${slug}/${t.id} is a hand-off, so it falls back and CORRECTS the address`,

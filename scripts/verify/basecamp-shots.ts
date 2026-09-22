@@ -188,6 +188,18 @@ for (const size of sizes) {
       nobody had ever looked at the surface behind it — which is exactly how
       the Activity defect survived four capture runs.
     */
+    /*
+      THE TWO SETTINGS SURFACES, which is where the legacy interface was still
+      showing through. A screen with no capture is a screen nobody is
+      watching, and these are the two Grant named.
+    */
+    await shot('settings', `${slug}/settings`)
+    await shot('global-settings', slug, async () => {
+      await page.locator('[data-bc-pagemenu]').first().click()
+      await page.waitForTimeout(200)
+      await page.locator('[data-bc-settings]').first().click()
+      await page.waitForTimeout(700)
+    })
     await shot('contacts', `${slug}/contacts`)
     await shot('sources', `${slug}/sources`)
     await shot('activity', `${slug}/activity`)
