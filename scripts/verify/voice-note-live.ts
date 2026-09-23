@@ -142,10 +142,88 @@ check(
   JSON.stringify(tinied.json),
 )
 
+/* ====================================================================== *
+ * AND THE OTHER MICROPHONE'S INFRASTRUCTURE, since it is deployed too.
+ *
+ * `voice-token` takes NO authentication, so its origin allowlist is the whole
+ * of its security, and a live call from the experiment was impossible until
+ * the experiment's origin was on it. Both facts are asked here, over the
+ * network, against what is actually deployed.
+ * ====================================================================== */
+const MINT = `https://${ref}.supabase.co/functions/v1/voice-token`
+const PREVIEW = 'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app'
+const TEAM_HQ = 'https://ai-team-hq.vercel.app'
+
+const preflight = async (origin: string): Promise<string> => {
+  const r = await fetch(MINT, {
+    method: 'OPTIONS',
+    headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
+  })
+  return r.headers.get('access-control-allow-origin') ?? ''
+}
+check('the experiment may mint a live credential', (await preflight(PREVIEW)) === PREVIEW)
+check(
+  'and so may Team HQ, which must not have been broken by that',
+  (await preflight(TEAM_HQ)) === TEAM_HQ,
+)
+check(
+  'and a page that is neither is refused',
+  (await preflight('https://not-our-page.example.com')) !== 'https://not-our-page.example.com',
+)
+
+/*
+  WHAT THE SESSION WAS GIVEN. The instructions are never echoed - the page must
+  not be able to read or rewrite them - so the mint reports whether each brief
+  was attached, which is what makes this checkable at all rather than assumed.
+*/
+const mint = async (body: unknown): Promise<Record<string, unknown>> => {
+  const r = await fetch(MINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: PREVIEW },
+    body: JSON.stringify(body),
+  })
+  const j = (await r.json()) as Record<string, unknown>
+  /* The credential is never read, never logged and never returned from here. */
+  return {
+    ok: r.status === 200 && typeof j.client_secret === 'string',
+    model: String(j.model ?? ''),
+    context: (j.context ?? {}) as Record<string, unknown>,
+    degraded: j.degraded === true,
+  }
+}
+const withProject = await mint({ project: 'legacy-coaching-course' })
+const withNone = await mint({})
+check('a credential is minted', withProject.ok === true && withNone.ok === true)
+check(
+  'the office state of play is attached to every call',
+  (withProject.context as Record<string, unknown>).state_of_play === true &&
+    (withNone.context as Record<string, unknown>).state_of_play === true,
+  JSON.stringify([withProject.context, withNone.context]),
+)
+check(
+  'and the project in view is attached when the page says which one',
+  (withProject.context as Record<string, unknown>).project_brief === true &&
+    (withProject.context as Record<string, unknown>).project === 'legacy-coaching-course',
+  JSON.stringify(withProject.context),
+)
+check(
+  'while a call opened from nowhere in particular carries no project brief',
+  (withNone.context as Record<string, unknown>).project_brief === false,
+  JSON.stringify(withNone.context),
+)
+check(
+  'the call is not degraded, so the team can actually be reached from it',
+  withProject.degraded === false,
+  JSON.stringify(withProject),
+)
+
 console.log(`\n${String(pass)}/${String(pass + fail)} passed`)
 console.log(
   '\nREAL MEDIA, NOT A REAL PERSON: the speech is synthesised by espeak-ng and\n' +
     'posted over the network to the deployed function. A human speaking into a\n' +
-    'handset is still the one thing no check in this repository can perform.',
+    'handset is still the one thing no check in this repository can perform.\n' +
+    '\nAND NOT PROVED HERE EITHER: that a minted credential completes a call with\n' +
+    'OpenAI. This proves the office mints one, from the right origins, carrying\n' +
+    'the right briefs.',
 )
 process.exit(fail === 0 ? 0 : 1)

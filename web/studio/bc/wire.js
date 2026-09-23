@@ -15,10 +15,19 @@
 
 import { act, attempt, canWrite, read } from '../office.js'
 import { esc } from './parts.js'
+import * as live from './livevoice.js'
 import * as notes from './notestore.js'
 import * as recorder from './voicenote.js'
 import * as pdf from '../pdf.js'
-import { callPhase, callSays, syncCallButtons, toggleCall } from '../call.js'
+import {
+  callAbout,
+  callActivity,
+  callPhase,
+  callSays,
+  callTurns,
+  syncCallButtons,
+  toggleCall,
+} from '../call.js'
 import * as compose from './compose.js'
 import * as grid from './layout.js'
 import * as contacts from './contacts.js'
@@ -824,9 +833,24 @@ const wireVoice = (root) => {
     said.textContent = words
     said.hidden = words === ''
   }
+  /*
+    THE LIVE CONVERSATION'S OWN CONTROLS - mute and end - delegated on the head,
+    which is not replaced while the panel inside it redraws.
+  */
+  live.wire(root, { redraw: () => ctx.render() })
+
   for (const b of root.querySelectorAll('[data-bc-voice]')) {
     paintMic(b)
     b.addEventListener('click', () => {
+      /*
+        WHICH PROJECT THIS CALL IS ABOUT, said before it starts.
+
+        The surface is the only thing that knows what Grant is looking at, and
+        §8 of the brief is explicit that a call opened inside project A must
+        not become a conversation about project B. `call.js` sends it to the
+        office, which looks it up and tells Claire what "this project" means.
+      */
+      callAbout(ctx.state.project ?? '')
       toggleCall()
       syncCallButtons()
       paintMic(b)
@@ -837,11 +861,29 @@ const wireVoice = (root) => {
         call.js know about this experience; it stops as soon as the call
         settles either way.
       */
+      /*
+        AND THE PANEL WITH IT. The call's own states - connecting, listening,
+        the team answering, a transcript landing - arrive over the data channel
+        and nothing repaints this page, so the panel would freeze on whatever
+        it said when it was drawn. The poll runs for as long as the call does
+        and stops the moment it ends, which is what makes the conversation feel
+        live rather than logged.
+      */
       let ticks = 0
+      let was = ''
       const watch = globalThis.setInterval(() => {
         ticks += 1
         paintMic(b)
-        if (ticks > 40 || callPhase() !== 'connecting') globalThis.clearInterval(watch)
+        const now = `${callPhase()}:${callActivity()}:${String(callTurns().length)}:${callSays()}`
+        if (now !== was) {
+          was = now
+          ctx.render()
+        }
+        /* An hour at 400ms, which is longer than any call, and it stops on
+           idle rather than on a tick count so a long conversation is not
+           silently abandoned by its own painter. */
+        if (callPhase() === 'idle' && ticks > 6) globalThis.clearInterval(watch)
+        if (ticks > 9000) globalThis.clearInterval(watch)
       }, 400)
     })
   }

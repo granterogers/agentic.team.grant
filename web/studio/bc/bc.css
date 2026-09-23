@@ -1297,6 +1297,9 @@
   transition: background var(--bc-t-in), border-color var(--bc-t-in);
 }
 [data-experience="basecamp"] .bcnotemic:hover { background: var(--bc-hover); }
+[data-experience="basecamp"] .bcnotemictxt {
+  white-space: nowrap;
+}
 [data-experience="basecamp"] .bcnotemicdot {
   width: 11px;
   height: 11px;
@@ -1381,3 +1384,113 @@
   cursor: pointer;
 }
 [data-experience="basecamp"] .bcsaidplay:hover { color: var(--bc-text-strong); }
+
+/* ---------------------------------------------------------------------- *
+ * THE LIVE CONVERSATION.
+ *
+ * Deliberately plain: it is for talking, not configuring. One status dot, one
+ * line of what is happening, one line of what to do about it, two controls,
+ * and the turns so far. Nothing on it names a session, a token or a protocol.
+ * ---------------------------------------------------------------------- */
+[data-experience="basecamp"] .bclive {
+  margin-top: var(--bc-3);
+  padding: var(--bc-3);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-sheet);
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-surface);
+}
+[data-experience="basecamp"] .bcliverow {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-3);
+  flex-wrap: wrap;
+}
+[data-experience="basecamp"] .bclivewhat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+[data-experience="basecamp"] .bcliveline {
+  font: 650 16px/1.2 var(--bc-font);
+  color: var(--bc-text-strong);
+}
+[data-experience="basecamp"] .bcliveunder,
+[data-experience="basecamp"] .bclivewhere,
+[data-experience="basecamp"] .bclivesaid,
+[data-experience="basecamp"] .bclivehint {
+  font: 400 13px/1.45 var(--bc-font);
+  color: var(--bc-text-muted);
+  margin: 0;
+}
+[data-experience="basecamp"] .bclivewhere,
+[data-experience="basecamp"] .bclivehint { margin-top: var(--bc-2); }
+[data-experience="basecamp"] .bcliveacts { display: flex; gap: var(--bc-2); }
+[data-experience="basecamp"] .bcliveacts .bcbtn { min-height: 44px; }
+
+/*
+  THE DOT IS THE STATE. Connecting pulses, listening breathes, the team
+  speaking is solid and loud, muted is grey and still - so the state is
+  readable without reading, which is what somebody mid-sentence needs.
+*/
+[data-experience="basecamp"] .bclivedot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bc-text-muted);
+  flex: none;
+}
+[data-experience="basecamp"] .bclivedot[data-dot="connecting"] {
+  background: var(--bc-accent);
+  animation: bclivepulse 1.1s ease-in-out infinite;
+}
+[data-experience="basecamp"] .bclivedot[data-dot="listening"] {
+  background: var(--bc-success);
+  animation: bclivepulse 2.4s ease-in-out infinite;
+}
+[data-experience="basecamp"] .bclivedot[data-dot="answering"] {
+  background: var(--bc-accent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--bc-accent) 22%, transparent);
+}
+[data-experience="basecamp"] .bclivedot[data-dot="muted"] { background: var(--bc-danger); }
+@keyframes bclivepulse { 50% { opacity: .35 } }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience="basecamp"] .bclivedot { animation: none !important; }
+}
+
+[data-experience="basecamp"] .bcliveturns {
+  list-style: none;
+  margin: var(--bc-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bc-2);
+  max-height: 210px;
+  overflow-y: auto;
+}
+[data-experience="basecamp"] .bcliveturn {
+  display: flex;
+  gap: var(--bc-2);
+  font: 400 13.5px/1.5 var(--bc-font);
+  color: var(--bc-text);
+}
+[data-experience="basecamp"] .bcliveturnwho {
+  flex: none;
+  min-width: 46px;
+  font-weight: 650;
+  color: var(--bc-text-muted);
+}
+[data-experience="basecamp"] .bcliveturn--mine .bcliveturnwho { color: var(--bc-accent); }
+/*
+  The words themselves. Named and then never defined in the first draft, which
+  `npm run check:icons`' sibling in the gate caught before anybody saw it: a
+  class that does not exist is not an error anywhere, it just silently styles
+  nothing.
+*/
+[data-experience="basecamp"] .bcliveturntext {
+  flex: 1;
+  min-width: 0;
+  color: var(--bc-text);
+}

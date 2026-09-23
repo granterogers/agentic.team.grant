@@ -79,4 +79,12 @@ Three words only, each meaning exactly one thing.
 | V7 | The recording stays playable | **verified** | kept in IndexedDB against the message id, offered only where one exists, still there after a reload. It is LOCAL and the panel says so |
 | V8 | The microphone is released on every exit | **verified** | stop, cancel, error and navigation all go through `release()`; the suite asserts no live track survives a cancel and that recording can start again |
 | V9 | Transcription failure is honest | **verified** | the office's own words on screen, nothing put into the conversation, the recording still there to retry |
+| L1 | The live microphone opens a real conversation | **verified at the protocol** | `verify:basecamp-livevoice`, 25 checks, with a SECOND peer connection in the page answering the offer - so the offer, the answer, ICE, the remote audio track and the `oai-events` data channel are all real, and the suite speaks as the team by sending the events the Realtime API sends |
+| L2 | Multi-turn, and it flows | **verified** | two full exchanges, each continuing the same conversation rather than starting one |
+| L3 | Barge-in | **verified** | the team speaking, an interruption, the response truncated, and what he said over her heard - driven through the same events the server sends. `call.js` already had the hard half right: the SERVER decides what counts as an interruption |
+| L4 | Simple, conversational UI with no developer words | **verified** | six states (connecting, listening, the team talking, muted, ended, and what went wrong), mute and end. Asserted that nothing on it says session, token, SDP, realtime or WebRTC |
+| L5 | Mute really mutes | **verified** | the microphone TRACK is disabled, not a label changed, and the suite asserts the track |
+| L6 | Cleanup | **verified** | every microphone the page was ever handed is `ended` after the call; a second call can be started and mints its own credential |
+| L7 | The call knows which project it is about | **verified against the deployed mint** | the page sends the slug, the office looks it up and tells Claire that "this project" means that one. `verify:voice-note-live` asserts over the network that a call with a project carries the brief and one without does not |
+| L8 | A real conversation with OpenAI | **BLOCKED — needs a person** | everything up to the model is proved. No human has spoken into a microphone and heard the team answer. The shortest test Grant can run is in the acceptance report |
 

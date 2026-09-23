@@ -39,6 +39,7 @@
 
 import * as icons from '../icons.js'
 import * as grid from './layout.js'
+import * as live from './livevoice.js'
 import { button, esc } from './parts.js'
 import {
   calendarMini,
@@ -211,7 +212,7 @@ const projectMark = (p) => {
 }
 
 const head = (p) => {
-  return `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}">
+  return `<header class="bchead" data-bc-hue="${esc(p.iconHue ?? p.hue ?? '')}" data-bc-livehost>
     <div class="bcheadtop">
       <h1 class="bcprojtitle">${projectMark(p)}<span>${esc(p.name)}</span></h1>
     </div>
@@ -299,6 +300,15 @@ const head = (p) => {
         </span>
       </span>
     </div>
+    <!--
+      THE LIVE CONVERSATION, when there is one.
+
+      Under the head rather than in a modal, because a conversation is not a
+      dialog: Grant can keep reading the project, open a task, scroll the
+      board, and the conversation carries on beside it. It draws nothing at all
+      when no call is up, so it is never furniture.
+    -->
+    ${live.panel(p.name)}
   </header>`
 }
 
