@@ -8,7 +8,8 @@ than what is close.
 |---|---|
 | **Live URL** | https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app |
 | **Opens at** | `/` redirects (307) to `/basecamp/p/legacy-coaching-course` |
-| **Final HEAD** | `f6f4cae` on `claude/basecamp-team-hq`, pushed |
+| **HEAD under test** | `f6f4cae` on `claude/basecamp-team-hq` — the commit that was built and deployed, and the one every result below was gathered against |
+| **Final HEAD** | this report, and any documentation commit after it, sits on top of `f6f4cae` and changes no code the deployment serves |
 | **Deployed** | 78 files; every one byte-identical to the working tree by sha256 |
 | **Not merged** | nothing on `main`, no pull request, the default Team HQ untouched |
 
