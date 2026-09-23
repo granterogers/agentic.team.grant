@@ -3024,6 +3024,40 @@ Each of these cost real time. They are here so they cost it once.
   recogniser ruled out by a negative control). A registry row is prompt
   surface, not just data.
 
+- **A VETO MUST BE AT LEAST AS GROUNDED AS THE THING IT VETOES.** `changesHis`
+  reads Grant's own words through `firstOfHis` — #313's rule — and `titleReply`
+  read `instruction`, which `resolveAgainstThread` replaced two thousand lines
+  earlier with a MODEL PARAPHRASE. So a rename grounded in what he said was
+  guarded by a check grounded in what a model made of it, and the guard
+  vanished whenever the rewrite drifted: "The task should be called X" and
+  "Set the title of the new task to X" both return null from `titleReply`, the
+  veto disappears, and the office answers *"I am not sure which task you
+  mean"*. Three other rewrites keep the veto and corrupt the TITLE. Reproduced
+  with NO MODEL AT ALL by putting plausible rewrites through the pure function
+  — which is the cheapest reproduction in this file and was available the
+  whole time. #313 established the rule and `namedLater` was never brought
+  across; grep for every reader of `instruction` when you add one.
+- **Establish WHICH PROMPT a hypothesis implicates before believing it.** #322
+  was filed saying the capability brief was the likely cause, because two
+  registry rows had just been added and a neighbouring check went red in the
+  same run. One grep settles it: `capabilityBrief` has exactly ONE consumer,
+  the answering prompt at `instruction.ts:4987`, `cap` is built at 4803 —
+  AFTER every decision in the cascade — and `src/agents/thread.ts`, which
+  produces the rewrite, never receives it. **The brief could not have caused
+  it.** A correlation in time between a change and a red check is not a causal
+  path, and the causal path is usually three greps away.
+- **A gate that is red BY DESIGN teaches people to skip it.** `check:leaks`
+  exits 1 on the two deliveries #298 deliberately preserved as evidence, and
+  will for as long as they are preserved — so a fresh session read the red
+  exit as a live containment failure and filed a duplicate issue. The guard is
+  in fact working: 236 refused, 0 escaped since 21 September, the sent count
+  unchanged at 2. When evidence must be kept in a table a gate reads, the gate
+  needs a way to say "2 known, 0 new" or it stops being able to say anything.
+- **`verify:mytasks` needs 597 seconds, three inside the ten-minute ceiling.**
+  It exceeded 580 twice and reported nothing about the section under test.
+  Give it the full timeout, and when a suite passes the ceiling, split it
+  rather than reading a timeout as a result.
+
 ---
 
 ## Visual standard
