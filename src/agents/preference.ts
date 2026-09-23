@@ -155,6 +155,18 @@ const TAKES_IT_BACK =
  * again the safe direction, because retiring the wrong rule is worse than
  * retiring none.
  */
+/**
+ * He said the withdrawal applies everywhere, not only where he is standing.
+ *
+ * The one thing that authorises taking a rule off EVERY project from inside
+ * one of them. Narrow for the reason `again.ts` gives about its own
+ * authorisation: a miss costs him one more sentence, and the office has just
+ * told him which one; a false positive undoes a rule for every other project
+ * from a sentence about this one.
+ */
+export const EVERYWHERE =
+  /\b(?:every ?where|for everything|for all(?: of| the)? (?:projects?|it)|on all projects?|in general|altogether|across the board|globally|for good)\b/i
+
 export const withdrawsARule = (body: string): Dimension | null =>
   TAKES_IT_BACK.test(String(body ?? '')) ? dimensionOf(body) : null
 

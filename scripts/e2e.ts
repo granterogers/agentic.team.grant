@@ -509,6 +509,20 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   */
   ['check:standing', 'every standing rule in a real prompt is one the office would accept today'],
   /*
+    AND A RULE HE CANNOT SEE FROM WHERE HE IS STANDING IS STILL ONE IT HOLDS.
+
+    `believed` is scoped to the level the turn is at, so from inside a project
+    a global rule was invisible to the withdrawal lookup and the office
+    answered *"I do not have a standing rule about that"* about a rule in the
+    prompt that composed the sentence. #320's invariant family. The suite also
+    asserts the retraction row says who did it and why in the right columns,
+    which is the defect 0567 records as permanent in the rows before it.
+  */
+  [
+    'verify:withdraw',
+    'the office does not deny holding a rule it holds, and can be told to drop it',
+  ],
+  /*
     And the same invariant driven through the real handler, live.
 
     `check:capabilities` asks whether the registry KNOWS about a capability.

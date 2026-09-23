@@ -25,7 +25,13 @@
  */
 
 import type { SqlExecutor } from '../db/executor.ts'
-import { boundToThisConversation, dimensionOf, restates, withdrawsARule } from './preference.ts'
+import {
+  boundToThisConversation,
+  dimensionOf,
+  EVERYWHERE,
+  restates,
+  withdrawsARule,
+} from './preference.ts'
 import type { Teaching } from './teaching.ts'
 
 const lit = (v: string): string => `'${v.replace(/'/g, "''")}'`
@@ -199,8 +205,24 @@ export async function remember(
     */
     if (withdrawing !== null && inForce !== undefined) {
       const { rows } = await db.execute(`
-        select app.retract_lesson(${lit(inForce.id)}::uuid, ${lit(by)},
-          'Withdrawn: ' || ${lit(teaching.body.slice(0, 200))}) as r`)
+        select app.retract_lesson(
+          p_lesson_id => ${lit(inForce.id)}::uuid,
+          /*
+            NAMED, because the two text arguments were the wrong way round and
+            nothing could see it. app.retract_lesson takes the lesson, then
+            the REASON, then the author -- and it writes the reason into the
+            body column and the author into learned_by. Passing the author
+            second put the AUTHOR in the reason column and the REASON in the
+            author column, on every retraction the office has ever written.
+            The ledger's record of why a rule was dropped was the word
+            "grant", and is_fixture is generated from learned_by, so a
+            harness retraction read as Grant's own.
+
+            No backticks in here: this comment lives inside a template
+            literal, which CLAUDE.md records costing an afternoon five times.
+          */
+          p_why => 'Withdrawn: ' || ${lit(teaching.body.slice(0, 200))},
+          p_by => ${lit(by)}) as r`)
       const r = (rows[0] as { r?: { error?: string; ok?: boolean } })?.r ?? {}
       if (typeof r.error === 'string') {
         return { said: `I could not take that back: ${r.error}`, stored: null }
@@ -212,6 +234,73 @@ export async function remember(
         stored: 'lesson',
       }
     }
+    /*
+      AND A RULE HE CANNOT SEE FROM HERE IS STILL A RULE THE OFFICE HOLDS.
+
+      `believed` is scoped to the level this turn is AT -- deliberately, and
+      the comment above says why: a project rule must not retire a global
+      one. So from inside a project, a global or staff rule is invisible to
+      the lookup, and withdrawing one produced *"I do not have a standing
+      rule about that"* about a rule sitting in the prompt that composed the
+      sentence. The same invariant family as #320: the office must not tell
+      Grant something false about its own state.
+
+      He mostly works on Telegram, where a project is usually in scope, so
+      this is the ordinary way he would try to turn a rule off. It has not
+      bitten yet -- zero such denials in real traffic -- and the denial is
+      the kind he would believe.
+
+      Naming it is honest whatever he meant. RETIRING it needs him to have
+      said so, because "stop doing that" said inside one project is genuinely
+      ambiguous between here and everywhere, and guessing "everywhere" is the
+      expensive direction: it would undo a rule for every other project from
+      a sentence about this one.
+    */
+    const wider =
+      withdrawing === null || inForce !== undefined || onAProject === null || dimension === null
+        ? []
+        : await db
+            .execute(`
+              with mine as (select app.harness_author(${lit(by)}) as harness)
+              select f.lesson_id::text as id, f.scope::text as scope, f.body
+                from mine,
+                     app.lessons_for(null, ${scoped === null ? 'null' : lit(scoped)},
+                                     null, 200, mine.harness) f
+                join public.lessons l on l.lesson_id = f.lesson_id
+               where l.is_fixture = mine.harness
+                 and l.scope in ('global', 'staff')`)
+            .then((r) => r.rows as { id: string; scope: string; body: string }[])
+            .catch(() => [])
+    const widerInForce = wider.find((l) => dimensionOf(l.body) === dimension)
+
+    if (withdrawing !== null && widerInForce !== undefined && !EVERYWHERE.test(teaching.body)) {
+      return {
+        said:
+          `I do not have that as a rule for this project, but I do hold it ` +
+          `${widerInForce.scope === 'global' ? 'for everything' : 'for the person you asked'}: ` +
+          `“${widerInForce.body}”. Say “drop that everywhere” and I will take it off altogether.`,
+        stored: null,
+      }
+    }
+
+    if (withdrawing !== null && widerInForce !== undefined) {
+      const { rows } = await db.execute(`
+        select app.retract_lesson(
+          p_lesson_id => ${lit(widerInForce.id)}::uuid,
+          p_why => 'Withdrawn everywhere: ' || ${lit(teaching.body.slice(0, 200))},
+          p_by => ${lit(by)}) as r`)
+      const r = (rows[0] as { r?: { error?: string } })?.r ?? {}
+      if (typeof r.error === 'string') {
+        return { said: `I could not take that back: ${r.error}`, stored: null }
+      }
+      return {
+        said:
+          `Dropped it everywhere: “${widerInForce.body}” is no longer a standing rule ` +
+          'on any project. Nothing has replaced it.',
+        stored: 'lesson',
+      }
+    }
+
     if (withdrawing !== null) {
       /*
         He took back a rule the office does not hold. Saying so is better than

@@ -571,5 +571,6 @@
   "0563_one_specialist_is_a_fan_in.sql": "90c821f3399206cfb0df25d18aa22e3cd4c438c1d0dde2bce3b96b1ae194c6fa",
   "0564_the_conversation_can_name_the_obligation.sql": "fd28affbf5a8243e49612655debbdfb60634d8978eb3c94e27d4d753d724e5b3",
   "0565_a_capability_nothing_claims.sql": "81e0cda51cc9e4870c5b1707510844095a6cdf1ebbe475796bb823d5f08c6bb8",
-  "0566_a_known_escape_is_not_a_new_one.sql": "7e80b7e30196bfd0d423174a2bcac9bbf90482b0a49a0a23ba4a6313f32f75ba"
+  "0566_a_known_escape_is_not_a_new_one.sql": "7e80b7e30196bfd0d423174a2bcac9bbf90482b0a49a0a23ba4a6313f32f75ba",
+  "0567_a_retraction_said_who_in_the_why_column.sql": "1897c101db6ace30fff5a82215fc6db8bf5c8a7c810cc47c28765d9c337c83e9"
 }
