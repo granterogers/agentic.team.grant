@@ -612,25 +612,51 @@ if (stuck.length > 0) {
 const guard = (
   (await db.execute('select app.harness_escapes() as v')).rows[0] as { v?: unknown } | undefined
 )?.v
+type Escape = { channel?: string; target?: string; by?: string; at?: string; issue?: string }
 const esc = (typeof guard === 'string' ? JSON.parse(guard) : (guard ?? {})) as {
   since?: string
-  escaped?: { channel?: string; target?: string; by?: string; at?: string }[]
+  escaped?: Escape[]
+  known?: Escape[]
+  new?: Escape[]
   refused?: number
   before_the_guard?: number
 }
+/*
+  KNOWN and NEW, reported apart (0566).
+
+  #298 deliberately kept two escaped deliveries as the record of a defect, so
+  this gate exited 1 for ever on evidence somebody chose to preserve — and a
+  fresh session read that red exit as a live containment failure and filed a
+  duplicate (#323). A gate red by design is one people learn to skip, which is
+  the only failure mode this one cannot survive.
+
+  The total is still printed, because the honest number is the whole one. Only
+  an UNACKNOWLEDGED escape fails the run, and an acknowledgement names a single
+  `delivery_id` with its issue and reason — it can never pre-approve an escape
+  that has not happened yet.
+*/
 const got = esc.escaped ?? []
+const known = esc.known ?? []
+const fresh = esc.new ?? []
 console.log(
   `\n  harness traffic that reached a real destination SINCE the guard: ${String(got.length)}` +
+    ` (known historical escapes: ${String(known.length)}` +
+    ` · new escapes since containment fix: ${String(fresh.length)})` +
     ` · refused by it: ${String(esc.refused ?? 0)}` +
     ` · before it existed: ${String(esc.before_the_guard ?? 0)}`,
 )
+for (const k of known) {
+  console.log(
+    `    known ${String(k.issue)}: ${String(k.by)} -> ${String(k.channel)} ${String(k.target)}`,
+  )
+}
 
-if (got.length > 0) {
+if (fresh.length > 0) {
   console.error(
     [
       ``,
-      `check:leaks FAILED — ${String(got.length)} harness delivery(s) REACHED a real destination.`,
-      ...got
+      `check:leaks FAILED — ${String(fresh.length)} NEW harness delivery(s) REACHED a real destination.`,
+      ...fresh
         .slice(0, 6)
         .map((g) => `  ${String(g.by)} -> ${String(g.channel)} ${String(g.target)}`),
       ``,
