@@ -638,6 +638,56 @@ is a script, not part of the worker.
 
 Clean-pass count after pass 13: **0 of 5.**
 
+## Pass 14 — retrieval: does the office find the right material, and only that
+
+**CLEAN.** No defect found. The first qualifying clean pass since pass 5.
+
+Territory: retrieval — the core of every answered turn, and not previously
+probed in this programme. Five substantive probes, **each with its own
+positive control**, because four of the five ask a found-nothing question and
+this file records three occasions where a zero meant the instrument was blind
+rather than the product sound.
+
+1. **Does retrieval find material at all?** Searching each active project for
+   one of its OWN document titles: `ai-learning` 1 hit, `ai-team-hq-test` 2,
+   `legacy-coaching-course` 3. Four other projects hold no documents at all,
+   which is stated rather than counted as a pass. **This is the control every
+   result below leans on.**
+2. **Is it silently missing material?** Of his real delivered answers that
+   cited nothing, on a named project, with a substantial instruction —
+   **0 of 24** had documents retrieval would have found. Every uncited answer
+   genuinely had nothing to cite.
+3. **Can one project read another's documents?** **0 leaks across 168
+   cross-project searches**, each using another project's real document title,
+   which is the hardest case.
+4. **Do mirrors come back beside their originals?** 16 mirror documents exist
+   in the estate; **0 duplicate titles across 60 retrieved documents**. 0169's
+   rule is holding, and the corpus is non-empty, so the zero means something.
+5. **End to end through the DEPLOYED worker**, contained: *"what do our
+   documents say about the opening assessment?"* on his real Legacy Coaching
+   Course project. One attempt, complete, answered from his real material with
+   numbered citations and **five well-formed distinct sources** across two
+   connectors — no `null:` scheme (pass 9's fix holding), no duplicates. The
+   one pair that looked like a mirror was checked: both originals, a PDF and
+   a Notion page, legitimately cited separately.
+
+**Containment.** `is_fixture` and `app.deliverable_to(job, 'telegram', his
+chat) = false` asserted BEFORE the job ran, not after — pass 12's lesson
+applied. The turn left **0 documents, 0 children, 0 tasks, 0 deliveries to
+him**; the one delivery was suppressed. After the pass: `check:leaks` green
+with **0 new escapes** and 270 refused, `check:chatter` green.
+
+**Two leads chased and dropped on evidence.** Messages about
+`identity-proof-*` fixture subjects were sent to his real chat — 760 of them,
+which is the known #333 `office.provision_channels` burst of 16–17 September,
+already fixed by 0477 with `check:chatter` as its witness, and that witness is
+green. And `app.harness_job` correctly reads those projects as real, because
+`identity-proof-%` is deliberately not a fixture name under #45.
+
+No code change, so nothing to deploy.
+
+Clean-pass count after pass 14: **1 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
