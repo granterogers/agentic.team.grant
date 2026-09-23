@@ -2488,3 +2488,97 @@ output, with no invention.
 Yes. This pass found a defect already putting duplicate documents in Grant's
 real project, an offer the office could not perform, and a reader that answered
 from invention while the answer sat in a table. None of it is an edge case.
+
+---
+
+# Iteration — an obligation is not a job
+
+## The shape under four separate fixes
+
+`jobs.state = 'complete'` means ONE job stopped executing. Nothing has ever
+meant *"what Grant asked for has been done"* — so #312, #315, #316 and #317
+each rebuilt that idea out of descendants and bolted it onto
+`conversation_before`.
+
+Traced canonically rather than assumed:
+
+```
+real parent/child pairs               56
+child finished AFTER the parent       53   (95%)
+of those, wrote something             53
+of those, delivered to anybody        21
+```
+
+**The parent finishing before its children is what always happens.** The
+office answers, completes, and leaves work running behind it.
+
+## The aggregation existed and had never been used
+
+```
+branch_groups                         40
+of them real traffic                   0
+real children outside any group     1055
+```
+
+`app.fan_in_over` was wired behind `branchesStarted.length >= 2`, and real
+traffic is **5138 turns convening nobody, 2 convening one, none ever
+convening two**. The gate stood one above the only shape that occurs. The
+mechanism was not broken — it covered a shape that does not happen while the
+shape that does was uncovered.
+
+The two "real" late specialist answers are both `Positive control 37qp9xjj`,
+harness probe text `app.harness_job` cannot see. So the owed-response gap is
+**structural and unfired**, and the reason is the adjacent finding, now #318:
+the office essentially never delegates.
+
+## What was built
+
+- **0562** — `app.obligation_state` derived across the job tree:
+  `working · waiting_on_user · partially_complete · fulfilled · failed ·
+  cancelled`. Derived, never stored, which removes a failure class by
+  construction: no counter exists to get stuck, so a terminal child cannot
+  strand an obligation. `jobs.state` untouched.
+- **0563** — one specialist is a fan-in. Both halves held the same threshold,
+  so lowering either alone did nothing **and said nothing**: `fan_in_over`
+  returns `{error}` rather than raising and the caller had only a `.catch`.
+- **0564** — the model got a reader. `check:callers` named it unread within
+  minutes, which is the dial-with-no-reader defect and the right answer.
+- `office.synthesise` **relays** a lone branch verbatim and attributed rather
+  than spending a model, and asks provenance rather than claiming
+  `deterministic_retrieval` — which the branch's own model calls on the same
+  correlation would have refused.
+
+## Verified live on v757
+
+```
+Grant : what is the state of that?
+        (the job says complete; the obligation says waiting_on_user)
+office: Grace looked at this and came back with: …
+```
+
+Two branch groups created — **the first ever outside the harness**. #315 still
+answers *"Nothing was still running — 3 had already finished."*
+
+## Three instruments were wrong before the product was
+
+- `verify:parallel`'s three ownership **controls shared one parent**, so once
+  the one-branch call succeeded the rest returned early and stopped being
+  controls.
+- A control on the fan-in's error handling **sliced past its own block** into a
+  neighbour containing the same strings, and passed its sabotage.
+- `verify:mytasks` seeded `today + 5` and asserted a date *changed* — on a
+  Wednesday that is next Monday, so a correct product read as broken. A
+  date-dependent test is wrong one day in seven.
+
+## Verification
+
+`verify:obligation` 12/12 (sabotage turns three red) · `verify:parallel` 31/31
+· `verify:context` 32/32 · `verify:mytasks` 89/89 · 2892 unit tests · lint,
+typecheck, migrations, secrets, templates, callers green · deployed v759.
+
+## Is another iteration justified?
+
+This one found the architecture under four separate fixes, and a mechanism
+that had been complete and unreachable since it was written. That is not
+diminishing returns. The open question is #318: everything built for
+delegation is correct and almost nothing reaches it.
