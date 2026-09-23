@@ -3445,6 +3445,32 @@ Each of these cost real time. They are here so they cost it once.
   corpus looks identical to a blocked route until you ask how many turns could
   ever have gone there.**
 
+- **Derive a check from the code that COULD act, not from the data that has —
+  and it paid on the first run.** `app.hq_undo` dispatches on
+  `reversal ->> 'action'` through a CLOSED case and raises on anything else.
+  Four names the writers record were missing from it, covering 34 rows. A
+  check written over `undoable_actions` would have stopped there;
+  `npm run check:undo` reads the WRITERS instead and immediately found two
+  more — `document_move` and `document_restore` — which have **no rows at
+  all**, because nobody has moved or superseded a document yet. They would
+  have raised the first time Grant did. **A defect waiting for its first user
+  is invisible to every query over history.**
+- **Third instance of "an offer may only promise what the press can perform",
+  and this file already named this exact function.** The tell was a near-miss
+  vocabulary: `hq_undo` knew `contact_fields_set` while the writer recorded
+  `contact_update`. Two words for one thing (0311) on the mechanism Grant's
+  *"always check before making any destructive action"* depends on. Every
+  performer already existed; only the dispatch was missing, which is why
+  reading either half alone looked fine.
+- **Three theories died before the real one, and one of them was my own
+  regex.** `undo_offers` is a VIEW showing only LIVE offers, so zero now is
+  expected rather than damning; the 4-minute window with no message per
+  correlation is correct for dashboard actions, where the undo id returns in
+  the action's own response; and `hq_overview_base` looked like a writer that
+  never returns an id because `undo_offer` matched inside `undo_offers` in its
+  overview count. **Validate the test before believing the finding** remains
+  the most-used rule in this file.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

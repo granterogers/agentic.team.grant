@@ -688,6 +688,60 @@ No code change, so nothing to deploy.
 
 Clean-pass count after pass 14: **1 of 5.**
 
+## Pass 15 — the undo, which is the net under "always check before destroying"
+
+**NOT CLEAN.** One systemic product defect
+([#346](https://github.com/granterogers/agentic.team.grant/issues/346)).
+
+Territory: the reversal path. `public.undoable_actions` holds 377 rows, 376
+expired and **not one ever used**; `undo_requests` is empty. That is the
+found-nothing shape, so the question was whether the feature is unused or
+unreachable.
+
+**Three wrong theories dropped before the real one.**
+`undo_offers` turned out to be a VIEW over the base table showing only live
+offers, so zero *now* is expected. The 4-minute window with **0 of 377 having
+any message sent for their correlation** looked damning until the kinds were
+read: most are dashboard actions, where the undo id comes back in the action's
+own response and a Telegram message would be wrong — a sound design, and the
+page is out of scope. And `hq_overview_base` appeared to register a reversal
+without returning an id; **my own regex had matched `undo_offers` inside its
+overview count.**
+
+**The real defect.** `app.hq_undo` dispatches on `reversal ->> 'action'`
+through a CLOSED case and raises on anything else. **Six** action names the
+writers record were missing: `contact_archive` (13 rows),
+`contact_photo_set` (8), `contact_update` (10), `document_rename` (3) — and
+`document_move` and `document_restore` with **no rows at all**. Pressing Undo
+on any of the 34 raised out of a SECURITY DEFINER function.
+
+The tell: `hq_undo` knows `contact_fields_set`; the writer records
+`contact_update`. Two vocabularies for one set of things — 0311's defect, on
+the mechanism his *"always check before making any destructive action"*
+depends on. Every performer already existed; only the dispatch was missing.
+
+**Fix.** 0572 teaches it the four with rows, spliced from the live definition,
+asserting the property over the real 377. 0573 teaches it the two without,
+asserting the same question **of the writers**. `npm run check:undo` is in the
+gate with **both sides derived** — the names writers pass, and the names the
+press performs.
+
+**Reading the writers rather than the rows is what found the last two**, and
+it paid on the first run: they have no rows, so no query over what had already
+happened could ever have seen them. They would have raised the first time
+Grant moved a document.
+
+**Verification.** `check:undo` reports 17 offered by 16 writers against 19
+performable, all covered. It has already **failed on real data**, naming both
+orphans before 0573 existed — stronger than a synthetic sabotage. Both vacuity
+guards sabotaged and proved: blinding either side reports `N offered, 0
+performed` and refuses to pass rather than comparing nothing.
+
+No deploy: a database function plus a script, and the gateway calls `hq_undo`
+by name.
+
+Clean-pass count after pass 15: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

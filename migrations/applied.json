@@ -576,5 +576,7 @@
   "0568_a_failure_on_a_kind_that_never_ran.sql": "9ef6c0abf695128a747678885b9c4f6881262ab2240737b998d94308bd5d712c",
   "0569_what_is_waiting_on_him_is_his.sql": "0344478eb7335ec6ac4db1c69b15b63532a3d2e2a161b544fc82b30977095208",
   "0570_the_overflow_line_counts_his_too.sql": "c3164a121e898f3dffba347c4cbec9cb8d3aaa8ba18c515b773125a3608f2ca5",
-  "0571_a_turn_that_died_owes_him_a_sentence.sql": "d6af0be7969a8b7fe31edff9d3353871b84bdc36ba12c2c1c80c4a1d36a1a2b2"
+  "0571_a_turn_that_died_owes_him_a_sentence.sql": "d6af0be7969a8b7fe31edff9d3353871b84bdc36ba12c2c1c80c4a1d36a1a2b2",
+  "0572_an_undo_it_offers_it_can_perform.sql": "d8edc7102f3d3a5f75884e3a27e478d895876cd0e9c8114048f5964820af9e23",
+  "0573_the_two_the_rows_could_not_show.sql": "a578ad1a4369a49bd36176715609f951bb49e08cf5639439a74f5dcdc82dd5d2"
 }

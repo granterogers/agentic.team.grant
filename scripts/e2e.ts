@@ -519,6 +519,7 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     perfectly is none of those.
   */
   ['check:chatter', 'no duty is sending Grant more than a hundred messages a day'],
+  ['check:undo', 'every reversal the office offers, app.hq_undo can actually perform'],
   /*
     AND A RULE HE CANNOT SEE FROM WHERE HE IS STANDING IS STILL ONE IT HOLDS.
 
