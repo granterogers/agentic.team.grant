@@ -1183,6 +1183,36 @@ No code change, so nothing to deploy.
 
 Clean-pass count after pass 25: **1 of 5.**
 
+## Pass 26 — a regression sweep, NOT counted toward the streak
+
+**No defect found — and deliberately not counted.** The brief asks for
+*materially fresh behavioural territories*, and this is a sweep over ground
+already covered. Counting it would be padding the number, which is the one
+thing the stopping criteria must not allow.
+
+It is recorded because thirteen fixes went in this session and something had
+to check them.
+
+**What `--report` actually measures, corrected before relying on it.** It
+scores turns already RECORDED, so a green 340/340 says nothing about current
+code. Two sessions were therefore re-run with `--reset`, chosen because they
+cover what this session changed:
+
+- **`d302-dictated`** — dictated speech with a mid-message withdrawal, which
+  is pass 11's `taskTitle` retraction seam. **3/3 on fresh turns.**
+- **`again-after-stopping`** — *"#315: it must actually stop, and say what it
+  stopped"* and *"a cancelled obligation frees its key"*, which is the retry
+  grounding work of passes 10 and 11. **3/3 on fresh turns.**
+
+The whole corpus holds at **340/340 across 113 turns**.
+
+**The reruns left debris and the witness caught it**: a task on Grant's
+personal list, *"Summarize supplier info for Grant"*, written by a harness job
+whose suite does not tear down — `check:leaks` named it and 0530 already
+records the gap. Removed; both `check:leaks` and `check:chatter` green.
+
+Clean-pass count after pass 26: **1 of 5** (unchanged, by design).
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
