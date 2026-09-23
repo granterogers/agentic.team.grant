@@ -209,6 +209,35 @@ bottom of the file.
 
 Clean-pass count after pass 3: **0 of 5.**
 
+### Pass 4 — corpus archaeology (not a qualifying pass)
+
+Read Grant's own task-related turns against canonical state. **Two apparent
+defects, both already fixed, and one live containment violation.**
+
+- The task on his real list titled *"For me and the um... No actually, you know
+  what? Scan the entirety of the Legacy Coaching Project…"* — the disfluency
+  and the withdrawn clause in the title. Reproduced deterministically:
+  `readRetraction` reads the pivot correctly and `personalTaskRequest` on the
+  kept clause returns null, correctly. **#291 fixed it on 21 September; the row
+  was written on the 20th.** Residue, not a live defect. Left alone: it is his
+  list, and a title is his to correct.
+- *"Could you point me to the project or task board where they're logged?"* —
+  asked at 08:34 on 20 September. The fix supplying his tasks as canonical
+  state landed at **14:28 the same day**. Already fixed.
+- **Live, and fixed here:** *"Chase the printers gmzvgkuw"* was on his real
+  open list — a task he can see, written by a crashed run of
+  `scripts/poc/call-it-x.ts`. The containment brief names creating tasks he can
+  see as a violation. `check:leaks`' detector wanted a token mixing letters and
+  digits, and roughly one run token in fifteen holds no digit. Swept; the
+  looser reading now PRINTS the titles rather than counting them, proved by a
+  control inserted and removed.
+
+**Does not qualify as a clean pass:** it was archaeology against stored
+evidence, not multi-turn driving against the deployed worker. Recorded as such
+rather than counted.
+
+Clean-pass count after pass 4: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
