@@ -1107,6 +1107,46 @@ its most-recorded one.
 
 Clean-pass count after pass 23: **0 of 5.**
 
+## Pass 24 — backup and restore
+
+**NOT CLEAN**, but the finding is a HARNESS defect rather than a product one:
+[#352](https://github.com/granterogers/agentic.team.grant/issues/352).
+
+Territory: the last untouched one, and the highest-consequence if wrong.
+
+**The backup itself is in good order.** The duty ran 7 of 8 times in the last
+week (one failure on 17 September), and `backup:rehearse`'s five checks all
+pass: an archive exists, **124 objects checksum clean byte for byte**, it
+decompresses into 123 tables, the next run would skip nothing, and the stored
+copy is *honestly behind* by one table. That last check is the script at its
+best — it noticed `public.sign_in_requests`, created minutes earlier by the
+concurrent session, and reported drift rather than failing on it.
+
+**What does not happen is the restore.** The script's own header says the
+point is the data round trip into a scratch schema. Across runs at 480s, 590s
+and 200s it never reaches `create schema`: `restore_rehearsal` does not exist
+afterwards, and nothing is left behind. So the only part that proves a backup
+is RESTORABLE does not run, and `verify:db` — which contains it — cannot
+complete either.
+
+**Ruled out**: API throttling (a plain query round-trips in ~2s), a DDL
+problem (`create schema` through the same executor persists and drops cleanly
+when driven by hand), and debris.
+
+**A correction to my own reasoning, made before relying on it.** I inferred
+from the five checks appearing in a 200s run that the checks were fast and the
+restore was the slow half. That inference is unsound: piping stdout to a file
+makes Node block-buffer it, so those lines may have been flushed at kill. The
+likely mechanism — checks 1–3 fetching and checksumming **124 archive
+objects** — is stated as a hypothesis, not a finding, and isolating it needs
+timing inside the script.
+
+Recorded rather than forced, which is what the brief asks for. The shape of a
+fix is phases (`--verify` / `--restore`), since CLAUDE.md's rule is to SPLIT
+what cannot finish in ten minutes and the script takes no arguments at all.
+
+Clean-pass count after pass 24: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
