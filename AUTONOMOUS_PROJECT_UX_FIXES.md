@@ -67,9 +67,9 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** Clicking the panel title maximises the whole Contacts view
 
 ### 6. Panel resizing
-- [ ] **TODO** Widening one panel shrinks its neighbour rather than shoving it away
-- [ ] **TODO** Minimum and maximum sizes respected, no overlap
-- [ ] **TODO** A panel only moves to another row when both cannot fit at minimum width
+- [x] **VERIFIED** Widening one panel shrinks its neighbour; nothing beyond it moves
+- [x] **VERIFIED** Minimums respected, no overlap at any width (property test over every width)
+- [x] **VERIFIED** A panel moves rows only when it cannot fit at its minimum width
 
 ### 7. Card Table
 - [ ] **TODO** Miniature rendering designed deliberately, not a shrunken full view
@@ -169,6 +169,27 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**6. Panel resizing — VERIFIED.**
+- **The cause:** `place()` clamped the new rectangle and handed it to
+  `compact()`, whose only tool is vertical. A panel widened by one column shoved
+  its neighbour onto a row of its own.
+- A `squeeze()` step now negotiates horizontally first: a neighbour sharing the
+  row gives way by shrinking, and only what still cannot reach its own minimum
+  width is left for `compact` to move down — which is the one case Grant says a
+  row change is right.
+- **The first version passed the problem along:** it moved the neighbour
+  rightwards keeping its width, so with three panels on a row the THIRD was
+  shoved off instead of the second. Holding the neighbour's RIGHT edge and
+  shrinking from the left means nothing beyond it moves at all.
+- 7 new unit tests including two property tests (no width below its minimum, and
+  no overlap, at every width from 3 to 12 columns), plus a real pointer drag in
+  `verify:basecamp-torture`: the neighbour shrinks, stays on the row, nothing
+  overlaps, and the panel beyond it does not move by a pixel. 30/30.
+- **Two wrong findings of my own:** a drag of 180px that the panel absorbed as
+  empty space (so the neighbour had no reason to give way), and a drag halfway
+  across the neighbour, which asserted "shrinks" and "stays on the row" at a
+  width where only one can be true.
 
 **5. Contacts — VERIFIED. Three defects, three different causes.**
 

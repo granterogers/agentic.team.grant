@@ -220,9 +220,69 @@ export const off = (slug) => {
  * compaction to disagree - which is the defect CLAUDE.md records as a row
  * list built twice.
  */
+/**
+ * Make room for a module by asking its neighbours to give way, not to leave.
+ *
+ * Grant, 23 September: *"when two panels occupy the same row and one is
+ * widened, the neighbouring panel should intelligently shrink to compensate
+ * where possible... Only move a panel to another row when the available width
+ * genuinely cannot accommodate both panels at their minimum viable widths."*
+ *
+ * What happened before: `place` clamped the new rectangle and handed it to
+ * `compact`, whose only tool is vertical. A panel widened by one column shoved
+ * its neighbour onto a row of its own - the whole board reflowing because of a
+ * gesture that meant "a bit wider".
+ *
+ * So the negotiation happens first, and it is horizontal:
+ *
+ *   - a neighbour sharing this row band and sitting to the RIGHT is moved to
+ *     the right edge of the resized module and narrowed to whatever is left;
+ *   - one sitting to the LEFT is narrowed against the resized module's edge;
+ *   - a neighbour that cannot reach its own minimum width is left alone, and
+ *     `compact` then moves it down - which is the case Grant says is the ONLY
+ *     one where a row change is right.
+ *
+ * Pure, and takes the list rather than a slug, so it can be tested without a
+ * browser.
+ */
+export const squeeze = (list, id) => {
+  const me = list.find((m) => m.id === id)
+  if (me === undefined) return list
+  return list.map((o) => {
+    if (o.id === id) return o
+    if (!hits(o, me)) return o
+    /* Only a neighbour on the same band is a neighbour to negotiate with. */
+    const sharesRow = o.y < me.y + me.h && me.y < o.y + o.h
+    if (!sharesRow) return o
+    const b = bounds(o.id)
+    if (o.x >= me.x) {
+      /*
+        ITS RIGHT EDGE STAYS PUT.
+
+        A first version moved the neighbour rightwards and kept its width,
+        which merely passed the problem along: with three panels on a row the
+        third was shoved off the row instead of the second - the same jump,
+        one module further away. Holding the right edge and shrinking from the
+        left means nothing beyond the neighbour moves at all, which is what
+        "spatially predictable" has to mean.
+      */
+      const edge = o.x + o.w
+      const x = me.x + me.w
+      const room = edge - x
+      return room >= b.minW ? { ...o, x, w: room } : o
+    }
+    const room = me.x - o.x
+    return room >= b.minW ? { ...o, w: room } : o
+  })
+}
+
 export const place = (slug, id, rect) => {
   const now = layout(slug)
   const next = now.map((m) => (m.id === id ? clamp({ ...m, ...rect, id }) : m))
-  save(slug, compact(next, id))
+  /*
+    Squeeze, THEN compact: the neighbours give way horizontally where they can,
+    and only what still cannot fit is moved to another row.
+  */
+  save(slug, compact(squeeze(next, id).map(clamp), id))
   return layout(slug)
 }

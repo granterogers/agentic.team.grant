@@ -255,6 +255,107 @@ check(
   `${String(spare)}% of the pane is empty below its content`,
 )
 
+/* --- 3b. a neighbour gives way rather than leaving ----------------------- *
+ *
+ * Grant, 23 September: "enlarging one panel can cause the neighbouring panel
+ * to jump/move away... the neighbouring panel should intelligently shrink to
+ * compensate where possible... Only move a panel to another row when the
+ * available width genuinely cannot accommodate both panels at their minimum
+ * viable widths."
+ *
+ * Driven with the real handle rather than through the layout functions,
+ * because the question is what the board does under a pointer.
+ */
+await home()
+await page.evaluate(
+  inPage(`for (const k of Object.keys(localStorage)) {
+   if (k.startsWith('bc.layout.')) localStorage.removeItem(k)
+ }
+ return true`),
+)
+await home()
+{
+  const before = await boxes()
+  /* A pair that really shares a row: same top, side by side. */
+  const rowmates = before.filter((a) =>
+    before.some((b) => b.id !== a.id && Math.abs(b.y - a.y) < 8 && b.x !== a.x),
+  )
+  check(
+    'the default board has two modules sharing a row to test with',
+    rowmates.length >= 2,
+    before.map((b) => `${b.id}@${String(b.x)},${String(b.y)}`).join(' '),
+  )
+  if (rowmates.length >= 2) {
+    const left = [...rowmates].sort((a, b) => a.x - b.x)[0] as Box
+    const right = rowmates.find((m) => m.id !== left.id && Math.abs(m.y - left.y) < 8) as Box
+    await page.locator(`[data-mod="${left.id}"]`).first().hover()
+    await page.waitForTimeout(100)
+    const grip = await page
+      .locator(`[data-mod="${left.id}"] [data-bc-resize]`)
+      .first()
+      .boundingBox()
+    if (grip !== null) {
+      /*
+        FAR ENOUGH TO ACTUALLY REACH THE NEIGHBOUR. A first attempt dragged by
+        180px, which the panel absorbed as empty space to its right - so the
+        neighbour had no reason to give way and the check reported correct
+        behaviour as a failure. The drag now ends past the neighbour's left
+        edge, which is the case the requirement is about.
+      */
+      /*
+        ONE COLUMN INTO THE NEIGHBOUR, which is the case the requirement is
+        about: enough that it must give way, not so much that it cannot fit at
+        its minimum and legitimately moves down. Dragging halfway across it
+        asserted "shrinks" and "stays on the row" at a width where only one of
+        them can be true.
+      */
+      const third = before.find(
+        (m) => m.id !== left.id && m.id !== right.id && Math.abs(m.y - left.y) < 8,
+      )
+      await drag(
+        { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 },
+        { x: right.x + 120, y: grip.y + grip.height / 2 },
+      )
+      const after = await boxes()
+      const leftNow = after.find((m) => m.id === left.id) as Box
+      const rightNow = after.find((m) => m.id === right.id) as Box
+      check(
+        'widening one panel really widens it',
+        leftNow.w > left.w + 10,
+        `${String(left.w)} -> ${String(leftNow.w)}`,
+      )
+      check(
+        'and its neighbour stays on the same row rather than jumping away',
+        Math.abs(rightNow.y - leftNow.y) < 8,
+        `the neighbour was at y=${String(right.y)} and is now at y=${String(rightNow.y)}`,
+      )
+      check(
+        'and gives way by shrinking',
+        rightNow.w < right.w,
+        `the neighbour was ${String(right.w)}px wide and is now ${String(rightNow.w)}px`,
+      )
+      check(
+        'and nothing overlaps after the negotiation',
+        overlapping(after) === '',
+        overlapping(after),
+      )
+      /*
+        AND NOTHING BEYOND THE NEIGHBOUR MOVED. This is what holding the
+        neighbour's right edge buys: the negotiation is between two panels and
+        the rest of the row never learns about it.
+      */
+      if (third !== undefined) {
+        const thirdNow = after.find((m) => m.id === third.id) as Box
+        check(
+          'and the panel beyond the neighbour did not move at all',
+          Math.abs(thirdNow.x - third.x) <= 2 && Math.abs(thirdNow.y - third.y) <= 2,
+          `${third.id} was at ${String(third.x)},${String(third.y)} and is now at ${String(thirdNow.x)},${String(thirdNow.y)}`,
+        )
+      }
+    }
+  }
+}
+
 /* --- 4. scroll panes still usable at every size ------------------------- */
 const scrollable = (await page.evaluate(
   inPage(`const out = []

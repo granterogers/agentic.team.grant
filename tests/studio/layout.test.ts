@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a browser module with no types; ADR-0002, no build step.
-import { BOUNDS, COLS, clamp, compact, DEFAULT } from '../../web/studio/bc/layout.js'
+import { BOUNDS, COLS, DEFAULT, clamp, compact, squeeze } from '../../web/studio/bc/layout.js'
 
 type Rect = { id: string; x: number; y: number; w: number; h: number }
 
@@ -133,5 +133,83 @@ describe('the layout engine', () => {
       expect(b.minW, id).toBeGreaterThanOrEqual(3)
       expect(b.minH, id).toBeGreaterThanOrEqual(3)
     }
+  })
+})
+
+/*
+ * MAKING ROOM WITHOUT MAKING SOMEBODY LEAVE.
+ *
+ * Grant, 23 September: "enlarging one panel can cause the neighbouring panel to
+ * jump/move away... the neighbouring panel should intelligently shrink to
+ * compensate where possible... Only move a panel to another row when the
+ * available width genuinely cannot accommodate both panels at their minimum
+ * viable widths."
+ */
+describe('squeezing a row rather than reflowing it', () => {
+  /* Two six-column panels side by side on one row. */
+  const pair = () => [
+    { id: 'tasks', x: 0, y: 0, w: 6, h: 5 },
+    { id: 'board', x: 6, y: 0, w: 6, h: 5 },
+  ]
+
+  it('shrinks the neighbour to the right instead of pushing it down', () => {
+    const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
+    const after = squeeze(widened, 'tasks')
+    const board = after.find((m) => m.id === 'board')
+    expect(board).toMatchObject({ x: 8, y: 0, w: 4 })
+  })
+
+  it('and the neighbour stays on the same row', () => {
+    const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
+    const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
+    expect(after.find((m) => m.id === 'board')?.y).toBe(0)
+  })
+
+  it('narrows a neighbour on the LEFT when the resized panel grows leftwards', () => {
+    const widened = pair().map((m) => (m.id === 'board' ? { ...m, x: 4, w: 8 } : m))
+    const after = squeeze(widened, 'board')
+    expect(after.find((m) => m.id === 'tasks')).toMatchObject({ x: 0, w: 4 })
+  })
+
+  /*
+    THE ONE CASE WHERE A ROW CHANGE IS RIGHT. `board` cannot go below its own
+    minimum, so when there is not enough left for it, it is NOT mangled - it is
+    left alone and compaction moves it down.
+  */
+  it('moves a neighbour down only when it cannot fit at its minimum width', () => {
+    const min = BOUNDS.board.minW
+    const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w: COLS - (min - 1) } : m))
+    const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
+    expect(after.find((m) => m.id === 'board')?.y).toBeGreaterThan(0)
+  })
+
+  it('never lets a squeezed neighbour fall below its minimum width', () => {
+    for (let w = 3; w <= COLS; w += 1) {
+      const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w } : m))
+      for (const m of compact(squeeze(widened, 'tasks').map(clamp), 'tasks')) {
+        expect(m.w).toBeGreaterThanOrEqual(BOUNDS[m.id].minW)
+      }
+    }
+  })
+
+  it('and never produces an overlap, whatever the width', () => {
+    for (let w = 3; w <= COLS; w += 1) {
+      const widened = pair().map((m) => (m.id === 'tasks' ? { ...m, w } : m))
+      const after = compact(squeeze(widened, 'tasks').map(clamp), 'tasks')
+      for (const a of after) {
+        for (const b of after) {
+          if (a === b) continue
+          const over = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+          expect(over).toBe(false)
+        }
+      }
+    }
+  })
+
+  it('leaves a module on another row alone', () => {
+    const below = [...pair(), { id: 'documents', x: 0, y: 5, w: 6, h: 5 }]
+    const widened = below.map((m) => (m.id === 'tasks' ? { ...m, w: 8 } : m))
+    const after = squeeze(widened, 'tasks')
+    expect(after.find((m) => m.id === 'documents')).toMatchObject({ x: 0, y: 5, w: 6 })
   })
 })
