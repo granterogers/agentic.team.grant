@@ -2165,6 +2165,55 @@ the tick. **Ask what drives a thing before concluding that nothing does.**
 
 Clean-pass count after pass 43: **2 of 5.**
 
+## Pass 44 — his personal task list: CLEAN
+
+**Territory:** #259's path — the list he actually keeps, and how a spoken
+sentence becomes a title on it. Distinct from pass 30, which checked the
+reminder duty.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **What is actually on his list.** Five real tasks: three `todo`, two `done`.
+    Most are legitimate — *"Reconnect Slack — config token (12h)"* and two
+    completed reconnects.
+2. **The alarming one is HISTORICAL debris, not a live defect.** One task is
+    titled *"For me and the um... No actually, you know what? Scan the entirety
+    of the Legacy Coaching Project and create appropriate tasks for me to
+    review"* — a whole voice note, disfluency and abandoned clause included,
+    stored as a title. It dates from **20 September**, and `taskTitle` run on
+    that exact sentence today returns *"Scan the entirety of the Legacy
+    Coaching Project and create appropriate tasks for me to review"*. The fix
+    landed after the row.
+3. **`readRetraction` is right, including where it declines.** It keeps
+    *"book the caterer instead"* from *"Book the venue. Actually, forget that —
+    book the caterer instead."*, returns an EMPTY kept for *"…No wait, scrap
+    that."* (everything withdrawn), and returns null for *"forget about the
+    venue"* and *"scrap that"* — correctly, because there is nothing in the
+    text to withdraw.
+4. **And the one output that looked wrong is unreachable.**
+    `taskTitle("Actually, forget the venue. Book the caterer instead.")` yields
+    *"forget the venue. Book the caterer instead"*, which would be a bad title —
+    but `personalTaskRequest` returns **null** for that sentence, so no task is
+    ever made from it. The withdrawn thing lives in a previous TURN, which is
+    why `readRetraction` cannot see it and why the recogniser declines.
+    Legitimate phrasings give clean titles: *"Book the caterer"*, *"Chase the
+    printers"*.
+
+**Third time this session a finding dissolved on checking reachability.** An
+ugly output from a function is not a defect until something can produce it.
+
+**Noted, not acted on:** *"Chase the printers 1db56cwn"* sits on his real list
+with a run token in the title — `check:leaks` already reports it under
+*"personal tasks ending in a token-shaped word"*. Left alone deliberately:
+deleting a row from his own task list is destructive and his standing
+instruction is to confirm first.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 44: **3 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
