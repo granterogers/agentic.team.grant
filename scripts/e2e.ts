@@ -479,6 +479,25 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every registered job kind has something that can start it — #66 and #265 were both unreachable',
   ],
   /*
+    And the mirror of that question, which is the one #320 turned up.
+
+    `check:reachable` asks whether a capability can be STARTED — the failure
+    where a whole tier exists and no sentence reaches it. This asks whether a
+    capability a conversation CAN start is one the agents have been TOLD about,
+    because `capabilityBrief` is built from `tool_permissions` and an agent
+    reads that brief as the truth about itself.
+
+    `artifact.report` was reachable and unclaimed: 139 PDFs produced, no row
+    naming it, so asked to improve one it had just made the office answered
+    "I can't create a PDF directly in Telegram" and offered a Notion page to
+    export by hand. 0298 made a registry CLAIM checkable and said in its own
+    comment what the other direction costs; this is that direction.
+  */
+  [
+    'check:capabilities',
+    'every capability a conversation can start is one the agents know they hold — #320 denied a PDF it had made 139 times',
+  ],
+  /*
     A cheap integration through the DEPLOYED gateway, which is where this one
     hid.
 

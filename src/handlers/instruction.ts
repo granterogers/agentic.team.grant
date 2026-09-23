@@ -90,6 +90,7 @@ import {
   EMPTY_CAPABILITY,
   toolNames,
 } from '../agents/capability.ts'
+import { capabilityLies } from '../agents/capability-claims.ts'
 import { clauses, split } from '../agents/clauses.ts'
 import { heldToWhatIsQueued } from '../agents/commitment.ts'
 import { connectRequest, populateRequest } from '../agents/connect.ts'
@@ -5384,11 +5385,49 @@ export function instructionHandler(deps: InstructionDeps): Handler {
       }
       const said = scrub(completion.content)
 
+      /*
+        And the same question about a CAPABILITY rather than a connector (#320).
+
+        `contradictsReality` reads `reach`, so it catches "I can't get into
+        Notion" and cannot see "I can't create a PDF" — a capability is a row
+        in `tool_permissions` and that row was never consulted. The office had
+        made 139 PDFs when it told Grant it could not make one, and offered him
+        a Notion page to export by hand instead.
+
+        Corrected rather than suppressed, for the reason the connector version
+        gives: the reply is usually right about everything else. The sentence
+        uses the registry's own description rather than the tool's id, because
+        the brief already tells every agent to say what it cannot do "plainly
+        in his words rather than naming the switch", and a correction that
+        breaks that rule reads as the machine talking past him.
+
+        Measured against 1292 real delivered answers before it was wired in:
+        five findings, every one a genuine denial of something the office
+        could do, no false positives. `capabilityLies` returns only the two
+        defect verdicts — a capability that is off, needs approval, or whose
+        attempt failed is reported by `capabilityClaims` and corrected by
+        nobody, because those three sentences are true.
+      */
+      // The description opens with a capital because it is written for the
+      // Governance page; mid-sentence it needs to read as prose.
+      const lowerFirst = (t: string): string =>
+        t === '' ? t : `${t.charAt(0).toLowerCase()}${t.slice(1)}`
+      const cannotReally = capabilityLies(said, cap)[0] ?? null
       const denied = contradictsReality(said, reach)
+      const answerC =
+        cannotReally === null
+          ? said
+          : cannotReally.verdict === 'false_denial'
+            ? `${said}\n\n(Correction, from the system rather than from me: this office CAN ` +
+              `${lowerFirst(cannotReally.what)}. If I said otherwise above, ignore it — say the ` +
+              `word and I will start it.)`
+            : `${said}\n\n(Correction, from the system rather than from me: I cannot ` +
+              `${lowerFirst(cannotReally.what)} — that is switched off here. If I offered it ` +
+              `above, ignore the offer.)`
       const answer0 =
         denied === null
-          ? said
-          : `${said}\n\n(Correction, from the system rather than from me: ` +
+          ? answerC
+          : `${answerC}\n\n(Correction, from the system rather than from me: ` +
             `${denied} IS connected and reachable right now. If I said otherwise above, ` +
             `ignore it — the honest version is that I could not find what you asked about, ` +
             `not that I cannot get in.)`

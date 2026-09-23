@@ -563,5 +563,6 @@
   "0561_another_pair_of_eyes.sql": "25dc1f32dcbf1fd29222cc12f9fb7dc1c7c51832ececf97249e4f7a5511cde8f",
   "0562_an_obligation_is_not_a_job.sql": "5ef89ed545da17657884293770830505cd903953ab6e1f4509be6a123e7e0304",
   "0563_one_specialist_is_a_fan_in.sql": "90c821f3399206cfb0df25d18aa22e3cd4c438c1d0dde2bce3b96b1ae194c6fa",
-  "0564_the_conversation_can_name_the_obligation.sql": "fd28affbf5a8243e49612655debbdfb60634d8978eb3c94e27d4d753d724e5b3"
+  "0564_the_conversation_can_name_the_obligation.sql": "fd28affbf5a8243e49612655debbdfb60634d8978eb3c94e27d4d753d724e5b3",
+  "0565_a_capability_nothing_claims.sql": "81e0cda51cc9e4870c5b1707510844095a6cdf1ebbe475796bb823d5f08c6bb8"
 }

@@ -323,6 +323,33 @@ const ARTIFACT_NOUN =
 const MAKE_IT =
   /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together)\b/i
 
+/*
+  Asking for it AGAIN, because the first attempt was not what he meant (#320).
+
+  Every verb in `MAKE_IT` is a present-tense imperative, which is how a FRESH
+  request is worded. A follow-up that restates an unmet request is in the past
+  tense and has no imperative in it at all:
+
+      Grant : Write me a PDF report on where the Legacy Coaching Course is
+      office: (makes one)
+      Grant : Okay, that's pretty good. But what I asked for was a proper
+              beautifully illustrated PDF, not just a couple of small
+              paragraphs.
+
+  The second message fell through every recogniser, so the turn answered in
+  prose -- and the model, whose brief did not mention `artifact.report` at all,
+  filled the gap with "I can't create a PDF directly in Telegram" and offered
+  him a Notion page to export by hand. The capability half is fixed in the
+  registry; this is the half that decides whether anything gets MADE.
+
+  Not a keyword for "illustrated". The shape is the restatement, which is how a
+  person says "you did the thing, but not the thing I meant" -- and the
+  exclusion below still holds, so "the report you wrote yesterday" is a request
+  for DELIVERY and never makes a second one.
+*/
+const RESTATED =
+  /\b(?:(?:what|all)\s+I\s+(?:asked\s+for|wanted|meant)\s+was|I\s+(?:asked\s+for|wanted|was\s+after)\s+(?:a|an|the|proper|something)|not\s+what\s+I\s+asked\s+for)\b/i
+
 /**
  * A request for a file, and what it should be about.
  *
@@ -358,7 +385,7 @@ export interface ArtifactRequest {
 function asksForAFile(said: string): boolean {
   if (said === '') return false
   if (!ARTIFACT_NOUN.test(said)) return false
-  if (!MAKE_IT.test(said)) return false
+  if (!MAKE_IT.test(said) && !RESTATED.test(said)) return false
   // "Send me the report you wrote yesterday" is a delivery request, not a
   // writing one, and answering it by writing a second report is the worst
   // available outcome.
