@@ -834,6 +834,13 @@ const ACTIONS: Readonly<Record<string, { fn: string; required: readonly string[]
     try to check it here. §5: the page translates, the RPC decides.
   */
   dashboard_layout_set: { fn: 'hq_dashboard_layout_set', required: ['p_slug', 'p_panels'] },
+  /*
+    The order Grant put a project's documents in (§§29-31). A list of ids
+    rather than a position per document, so "the order he chose" and "the order
+    they arrived in" stay two different facts.
+  */
+  document_order_set: { fn: 'hq_document_order_set', required: ['p_slug', 'p_ids'] },
+  document_order_reset: { fn: 'hq_document_order_reset', required: ['p_slug'] },
   dashboard_layout_reset: { fn: 'hq_dashboard_layout_reset', required: ['p_slug'] },
   /*
     And the home screen's own (#219, migration 0376).

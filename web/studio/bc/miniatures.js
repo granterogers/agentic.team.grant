@@ -41,6 +41,7 @@ import * as notes from './notestore.js'
 import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
 import * as todos from './todos.js'
+import * as docorder from './docorder.js'
 import { esc, status } from './parts.js'
 
 let ctx = null
@@ -933,6 +934,28 @@ export const thumbFace = (d, i, extra = '') => {
   </span>`
 }
 
+/*
+  THE ORDERING CONTROL, one definition for both surfaces.
+
+  A native `select`: it is compact, it is keyboard-operable and screen-reader
+  announced without a line of code, and §25 asked for no unnecessary chrome. A
+  custom menu would have been three controls, a popover and a keyboard model,
+  all to do what this does.
+
+  The label is visually hidden rather than absent: "Custom" on its own tells
+  somebody reading the page aloud nothing about what it orders.
+*/
+export const sortControl = (slug, how, where) => `<span class="bcdocsort">
+    <label class="bcvh" for="bc-docsort-${esc(where)}-${esc(slug)}">Order these documents by</label>
+    <select class="bcdocsortpick" id="bc-docsort-${esc(where)}-${esc(slug)}"
+      data-bc-docsort="${esc(slug)}">
+      ${docorder.MODES.map(
+        (m) =>
+          `<option value="${esc(m.id)}"${m.id === how ? ' selected' : ''}>${esc(m.name)}</option>`,
+      ).join('')}
+    </select>
+  </span>`
+
 const thumb = (d, i) => {
   const ref = docRef(d)
   /*
@@ -940,7 +963,20 @@ const thumb = (d, i) => {
     figure, which is not focusable and not announced as a control, so the
     whole gallery was unreachable by keyboard and silent to a screen reader.
   */
-  return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}">
+  /*
+    DRAGGABLE, AND STILL A BUTTON (§§29, 35).
+
+    Click opens, drag reorders, and the two must not be confused -- which is
+    the Card Table's defect in another costume. The figure carries the drag and
+    the button inside it carries the press, so the browser does the separation
+    for us: a gesture that becomes a drag never delivers a click.
+
+    The id is on the figure as `data-bc-docid` rather than reusing the ref,
+    because the ref is what OPENS a document and the id is what ORDERS it, and
+    a title is not unique.
+  */
+  return `<figure class="bcdoc bcdoc--openable" data-bc-doc="${esc(ref)}" data-bc-doc-title="${esc(d.title ?? '')}"
+    data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true">
     <button type="button" class="bcdocpress" data-bc-doc-open="${esc(ref)}"
       aria-label="${esc(`Open ${d.title ?? 'document'}`)}">
       ${thumbFace(d, i)}
@@ -981,14 +1017,25 @@ export const docsMini = (p, { items = 6 } = {}) => {
     to `undefined`.
   */
   const to = `/basecamp/p/${p.slug}/documents`
-  return `<div class="bcdocs">
-    ${docs.slice(0, items).map((d, i) => thumb(d, i)).join('')}
+  /*
+    THE SAME ORDER THE EXPANDED VIEW USES (§§30, 33).
+
+    Both surfaces ask `docorder` rather than sorting for themselves, so they
+    are two views of one arrangement instead of two implementations of it. The
+    control is a native select: compact, keyboard-operable for nothing, and
+    §25 asked for no unnecessary chrome.
+  */
+  const how = docorder.mode(p.slug)
+  const shown = docorder.ordered(p.slug, docs, how)
+  return `<div class="bcdocs" data-bc-docdrop="${esc(p.slug)}">
+    ${shown.slice(0, items).map((d, i) => thumb(d, i)).join('')}
     <p class="bcmore bcdocsall">
       <a href="${esc(to)}" data-bc-go="${esc(to)}">${esc(
         docs.length > items
           ? `View all ${docs.length} Docs & Files`
           : 'View all Docs & Files',
       )}</a>
+      ${sortControl(p.slug, how, 'mini')}
     </p>
   </div>`
 }

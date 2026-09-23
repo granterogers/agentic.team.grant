@@ -34,6 +34,7 @@ import * as bcJump from './bc/jump.js'
 import * as bcNotes from './bc/notestore.js'
 import * as bcSession from './session.js'
 import * as bcGrid from './bc/layout.js'
+import * as bcDocOrder from './bc/docorder.js'
 import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
@@ -13672,6 +13673,17 @@ void bcNotes.ready().then((ok) => {
   nothing about the office; this is the one place that joins them, the same
   shape as `onWrite` in `office.js`.
 */
+/*
+  THE DOCUMENT ORDER, kept where the person is (§§29-31, §22). Same shape as
+  the board's: the domain does the ordering and knows nothing about the office,
+  and this is the one place that joins them.
+*/
+bcDocOrder.persistence({
+  save: (slug, ids) =>
+    act('document_order_set', { p_slug: slug, p_ids: ids }).catch(() => undefined),
+  reset: (slug) => act('document_order_reset', { p_slug: slug }).catch(() => undefined),
+})
+
 bcGrid.persistence({
   save: (slug, panels) =>
     act('dashboard_layout_set', { p_slug: slug, p_panels: panels, p_surface: 'basecamp' }).catch(
@@ -14802,6 +14814,7 @@ async function live() {
   */
   for (const p_ of PROJECTS) {
     if (Array.isArray(p_?.layout_board)) bcGrid.adopt(p_.slug, p_.layout_board)
+    if (Array.isArray(p_?.doc_order)) bcDocOrder.adopt(p_.slug, p_.doc_order)
   }
   /*
     Second attempt at the address the browser arrived with (#157).

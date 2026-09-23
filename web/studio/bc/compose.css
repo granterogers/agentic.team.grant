@@ -2742,3 +2742,57 @@ body:has([data-experience='basecamp'] .bcexp) { overflow: hidden; }
 [data-experience='basecamp'] .bcmodtitle { color: var(--bc-heading); }
 [data-experience='basecamp'] .bcmodhead:hover .bcmodtitle { color: var(--bc-text-strong); }
 [data-experience='basecamp'] .bcmodhead h2 a { color: var(--bc-heading); }
+
+/* ---------------------------------------------------------------------- *
+ * ORDERING DOCUMENTS (§§25-38).
+ *
+ * The control is a native select, so almost all of this is making it look
+ * like the rest of the experiment rather than like a form. The drag states are
+ * two classes and nothing moves: a document being carried dims, and the one it
+ * would land on shows an edge, so the answer to "where will this go" is on the
+ * screen rather than in the gesture.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcdocsort { display: inline-flex; align-items: center; }
+[data-experience='basecamp'] .bcdocsortpick {
+  /* 16px, never smaller: under it iOS Safari zooms the page on focus and never
+     zooms back, which verify:ui enforces across the experiment. */
+  font: 500 16px/1.2 var(--bc-font);
+  color: var(--bc-text-muted);
+  background: transparent;
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  /* 44px, because a select is a control a thumb has to hit. */
+  min-height: 44px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+[data-experience='basecamp'] .bcdocsortpick:hover { color: var(--bc-text-strong); }
+[data-experience='basecamp'] .bcdocsortpick option { background: var(--bc-surface); }
+
+/* In the miniature it sits beside the link at the foot, and the foot becomes a
+   row rather than a line of text. */
+[data-experience='basecamp'] .bcdocsall {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+}
+/* Compact there: the pane is small and the control is secondary to the link. */
+[data-experience='basecamp'] .bcdocs .bcdocsortpick {
+  font-size: 12.5px;
+  min-height: 32px;
+  padding: 0 6px;
+}
+@media (pointer: coarse) {
+  /* Except under a thumb, where it is a target like any other. */
+  [data-experience='basecamp'] .bcdocs .bcdocsortpick { min-height: 44px; font-size: 16px; }
+}
+
+[data-experience='basecamp'] [draggable='true'].bcdoc--openable { cursor: grab; }
+[data-experience='basecamp'] .bcdoc--lifting { opacity: 0.45; cursor: grabbing; }
+[data-experience='basecamp'] .bcdoc--over {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+  border-radius: var(--bc-r-control);
+}

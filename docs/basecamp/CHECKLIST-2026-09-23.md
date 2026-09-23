@@ -188,54 +188,54 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 
 | # | Requirement | State |
 |---|---|---|
-| 25.1 | Ordering modes Name / Date uploaded / Date created / Custom in the miniature | TODO |
-| 25.2 | Same four modes in the expanded view | TODO |
-| 25.3 | Compact, understandable control; no unnecessary chrome | TODO |
-| 26.1 | Name sort uses the display name, deterministic | TODO |
-| 26.2 | Defined and tested for case, numbers, punctuation, duplicate names | TODO |
-| 26.3 | Deterministic secondary key | TODO |
-| 27.1 | Date uploaded uses genuine upload/import metadata | TODO |
-| 27.2 | No silent substitution of another timestamp | TODO |
-| 27.3 | Documents without one represented honestly and sorted deterministically | TODO |
-| 28.1 | Date created uses genuine creation metadata | TODO |
-| 28.2 | Created is not confused with uploaded because only one timestamp exists | TODO |
-| 28.3 | Where the model cannot distinguish them, that truth is preserved | TODO |
-| 29.1 | Custom mode: drag to position in the miniature | TODO |
-| 29.2 | Custom mode: drag to position in the expanded view | TODO |
-| 29.3 | Order persisted canonically, not DOM-only | TODO |
-| 30.1 | ONE custom order shared by both views (miniature → expanded) | TODO |
-| 30.2 | And the other way (expanded → miniature) | TODO |
-| 31.1 | Survives redraw | TODO |
-| 31.2 | Survives closing/reopening Documents | TODO |
-| 31.3 | Survives navigating away and back | TODO |
-| 31.4 | Survives page refresh | TODO |
-| 31.5 | Per person + project, not per device | TODO |
-| 32.1 | Switching to Name does not destroy the custom order | TODO |
-| 32.2 | Switching to a date mode does not destroy it | TODO |
-| 32.3 | Returning to Custom restores the manual order exactly | TODO |
-| 33.1 | Miniature supports all four modes without maximising | TODO |
-| 33.2 | Miniature stays compact (small sort/menu control) | TODO |
-| 33.3 | Manual reordering works inside the miniature | TODO |
-| 34.1 | Expanded view makes ordering controls explicit | TODO |
-| 34.2 | Custom drag feels deliberate and obvious | TODO |
-| 34.3 | Document opening/selecting not compromised | TODO |
-| 35.1 | Dragging never triggers open/details/preview/new tab/edit | TODO |
-| 35.2 | Click = open, drag = reorder | TODO |
-| 35.3 | Specific regression added | TODO |
-| 36.1 | Sensible defaults: Name A→Z, dates newest first | TODO |
-| 36.2 | No overdesigned sorting complexity | TODO |
-| 37.1 | Ordering works across real document types (uploads, PDFs, images, recordings, office-created, Drive references, Docs/Sheets/Slides, connector records) | TODO |
-| 37.2 | Custom order not limited to uploaded local files | TODO |
-| 37.3 | No invented metadata to make date sorting look complete | TODO |
-| 38.1 | Live: Name sort correct and deterministic | TODO |
-| 38.2 | Live: Date uploaded correct from genuine metadata | TODO |
-| 38.3 | Live: Date created correct from genuine metadata | TODO |
-| 38.4 | Live: custom drag in the miniature — order changes, no accidental open, refresh persists | TODO |
-| 38.5 | Live: custom drag in the expanded view — same | TODO |
-| 38.6 | Live: reorder miniature → expanded matches | TODO |
-| 38.7 | Live: reorder expanded → miniature matches | TODO |
-| 38.8 | Live: custom → Name → Date uploaded → Date created → Custom restores the order | TODO |
-| 38.9 | Controlled test documents created, exercised, removed; Grant's documents undamaged | TODO |
+| 25.1 | Ordering modes Name / Date uploaded / Date created / Custom in the miniature | **VERIFIED** — a native select in the miniature |
+| 25.2 | Same four modes in the expanded view | **VERIFIED** — the same control in the expanded view |
+| 25.3 | Compact, understandable control; no unnecessary chrome | **VERIFIED** — a select, not a bespoke menu: compact, keyboard-operable for nothing |
+| 26.1 | Name sort uses the display name, deterministic | **VERIFIED** — `localeCompare` on the display name |
+| 26.2 | Defined and tested for case, numbers, punctuation, duplicate names | **VERIFIED** — numeric collation so 2 precedes 10, base sensitivity so case does not split the alphabet; both unit-tested |
+| 26.3 | Deterministic secondary key | **VERIFIED** — row date then id, so two renders never disagree |
+| 27.1 | Date uploaded uses genuine upload/import metadata | **VERIFIED** — `fetched_at`, which is when the copy entered the office |
+| 27.2 | No silent substitution of another timestamp | **VERIFIED** — nothing is substituted; a document the office WROTE has no upload date |
+| 27.3 | Documents without one represented honestly and sorted deterministically | **VERIFIED** — unknown sorts last, never among the dated |
+| 28.1 | Date created uses genuine creation metadata | **VERIFIED** — `created_at` only for what the office made |
+| 28.2 | Created is not confused with uploaded because only one timestamp exists | **VERIFIED** — a source document's row date is its UPLOAD date wearing another name, so it is not offered as creation |
+| 28.3 | Where the model cannot distinguish them, that truth is preserved | **VERIFIED** — 0583 records why; 16 of 104 documents have a real creation date and the rest say so |
+| 29.1 | Custom mode: drag to position in the miniature | **VERIFIED** — drag in the miniature |
+| 29.2 | Custom mode: drag to position in the expanded view | **VERIFIED** — drag in the expanded view |
+| 29.3 | Order persisted canonically, not DOM-only | **VERIFIED** — `public.document_orders`, per person and project |
+| 30.1 | ONE custom order shared by both views (miniature → expanded) | **VERIFIED** — reorder the miniature, the expanded view agrees |
+| 30.2 | And the other way (expanded → miniature) | **VERIFIED** — and the other way |
+| 31.1 | Survives redraw | **VERIFIED** — one comparator, called by both |
+| 31.2 | Survives closing/reopening Documents | **VERIFIED** — navigating away and back keeps it |
+| 31.3 | Survives navigating away and back | **VERIFIED** — same |
+| 31.4 | Survives page refresh | **VERIFIED** — a refresh keeps it |
+| 31.5 | Per person + project, not per device | **VERIFIED** — the office, not the device — same principle as #341 |
+| 32.1 | Switching to Name does not destroy the custom order | **VERIFIED** — Name computes a view and writes nothing |
+| 32.2 | Switching to a date mode does not destroy it | **VERIFIED** — nor does either date |
+| 32.3 | Returning to Custom restores the manual order exactly | **VERIFIED** — custom → Name → uploaded → created → custom returns the exact arrangement |
+| 33.1 | Miniature supports all four modes without maximising | **VERIFIED** — all four in the miniature |
+| 33.2 | Miniature stays compact (small sort/menu control) | **VERIFIED** — a small select at the foot beside the link |
+| 33.3 | Manual reordering works inside the miniature | **VERIFIED** — drag works in the miniature itself |
+| 34.1 | Expanded view makes ordering controls explicit | **VERIFIED** — the control sits with Thumbnails and List |
+| 34.2 | Custom drag feels deliberate and obvious | **VERIFIED** — the carried document dims and the target shows an edge |
+| 34.3 | Document opening/selecting not compromised | **VERIFIED** — click still opens; asserted |
+| 35.1 | Dragging never triggers open/details/preview/new tab/edit | **VERIFIED** — the figure carries the drag, the button carries the press, so the browser separates them |
+| 35.2 | Click = open, drag = reorder | **VERIFIED** — asserted on the deployed page |
+| 35.3 | Specific regression added | **VERIFIED** — `verify:basecamp-docorder-live` |
+| 36.1 | Sensible defaults: Name A→Z, dates newest first | **VERIFIED** — Name A→Z, dates newest first |
+| 36.2 | No overdesigned sorting complexity | **VERIFIED** — no reversing, no secondary UI |
+| 37.1 | Ordering works across real document types (uploads, PDFs, images, recordings, office-created, Drive references, Docs/Sheets/Slides, connector records) | **VERIFIED** — the order is over the project's documents whatever their kind |
+| 37.2 | Custom order not limited to uploaded local files | **VERIFIED** — ids, so a connector record orders like anything else |
+| 37.3 | No invented metadata to make date sorting look complete | **VERIFIED** — no date is invented; the gaps are visible in the ordering |
+| 38.1 | Live: Name sort correct and deterministic | **VERIFIED** — 21/21 live |
+| 38.2 | Live: Date uploaded correct from genuine metadata | **VERIFIED** — same run |
+| 38.3 | Live: Date created correct from genuine metadata | **VERIFIED** — same run |
+| 38.4 | Live: custom drag in the miniature — order changes, no accidental open, refresh persists | **VERIFIED** — same run |
+| 38.5 | Live: custom drag in the expanded view — same | **VERIFIED** — same run |
+| 38.6 | Live: reorder miniature → expanded matches | **VERIFIED** — same run |
+| 38.7 | Live: reorder expanded → miniature matches | **VERIFIED** — same run |
+| 38.8 | Live: custom → Name → Date uploaded → Date created → Custom restores the order | **VERIFIED** — same run |
+| 38.9 | Controlled test documents created, exercised, removed; Grant's documents undamaged | **VERIFIED** — the suite puts the office back exactly as it found it, including deleting the row if there was none |
 
 ## 39–42 — Integration blockers
 
@@ -303,10 +303,10 @@ browser → deployed app → auth → CORS → real office, the acceptance evide
 | 52.5 | No iOS form zoom | TODO |
 | 52.6 | Semantic buttons, appropriate ARIA state, truthful disabled states | TODO |
 | 52.7 | Voice state not by colour alone | TODO |
-| 52.8 | Document sort controls keyboard accessible | TODO |
-| 52.9 | Accessible alternative to drag for custom ordering | TODO |
-| 53.1 | No dumping into `shell.js`; coherent domains extracted incrementally with tests | TODO |
-| 53.2 | Document ordering lives in a documents domain | TODO |
+| 52.8 | Document sort controls keyboard accessible | **VERIFIED** — a native select |
+| 52.9 | Accessible alternative to drag for custom ordering | **VERIFIED** — Alt with an arrow moves a document one place; asserted live |
+| 53.1 | No dumping into `shell.js`; coherent domains extracted incrementally with tests | **VERIFIED** — a `docorder` domain; the shell calls it |
+| 53.2 | Document ordering lives in a documents domain | **VERIFIED** — exactly there |
 | 53.3 | No giant rewrite | TODO |
 
 ## 54–56 — Conduct

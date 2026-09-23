@@ -35,6 +35,7 @@ import { act, attempt, canWrite, read } from '../office.js'
 import * as compose from './compose.js'
 import { MARKS } from '../logos/marks.js'
 import * as bcMini from './miniatures.js'
+import * as bcDocOrder from './docorder.js'
 import * as contacts from './contacts.js'
 import * as bcDrive from './drive.js'
 import * as todos from './todos.js'
@@ -1343,7 +1344,10 @@ const docRow = (d, i) => {
     presses like the tile does.
   */
   const ref = bcMini.docRef(d)
+  /* Draggable for the same reason the tile is, and with the same separation:
+     the row carries the drag, the control inside it carries the press. */
   return `<div class="bcitem bcdoc--openable" data-bc-doc="${esc(ref)}"
+    data-bc-docid="${esc(String(d.id ?? ''))}" draggable="true"
     data-bc-doc-title="${esc(d.title ?? '')}">
     <!--
       THE SAME DRAWING THE GALLERY USES. This row drew four lines of text
@@ -1383,7 +1387,15 @@ const opensAs = (d) => {
 }
 
 const documentsSurface = (p) => {
-  const docs = p.documents ?? []
+  /*
+    THE SAME ORDER THE MINIATURE USES (§§30, 34).
+
+    Both surfaces ask `docorder`, so they are two views of one arrangement
+    rather than two implementations of it -- which is §30's requirement stated
+    as an architecture rather than as a promise.
+  */
+  const how = bcDocOrder.mode(p.slug)
+  const docs = bcDocOrder.ordered(p.slug, p.documents ?? [], how)
   const view = docsView()
   return `${crumbFor(p, 'documents')}
     <div class="bcrecordhead">
@@ -1402,6 +1414,7 @@ const documentsSurface = (p) => {
           ${button('Thumbnails', { 'data-bc-docview': 'wall', 'aria-pressed': view === 'wall' ? 'true' : 'false' })}
           ${button('List', { 'data-bc-docview': 'list', 'aria-pressed': view === 'list' ? 'true' : 'false' })}
         </span>
+        ${bcMini.sortControl(p.slug, how, 'full')}
         ${button('Add a file', { kind: 'primary', 'data-bc-upload': '1' })}
       </span>
     </div>
@@ -1451,8 +1464,8 @@ const documentsSurface = (p) => {
             button('Add a file', { kind: 'primary', 'data-bc-upload': '1' }),
           )
         : view === 'list'
-          ? `<div class="bclist">${docs.map((d, i) => docRow(d, i)).join('')}</div>`
-          : `<div class="bcdocs bcdocs--wall">${bcMini.docThumbs(docs)}</div>`
+          ? `<div class="bclist" data-bc-docdrop="${esc(p.slug)}">${docs.map((d, i) => docRow(d, i)).join('')}</div>`
+          : `<div class="bcdocs bcdocs--wall" data-bc-docdrop="${esc(p.slug)}">${bcMini.docThumbs(docs)}</div>`
     }`
 }
 

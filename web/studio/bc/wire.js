@@ -35,6 +35,7 @@ import * as compose from './compose.js'
 import * as grid from './layout.js'
 import * as contacts from './contacts.js'
 import * as todos from './todos.js'
+import * as docorder from './docorder.js'
 import * as jump from './jump.js'
 
 let ctx = null
@@ -2247,6 +2248,95 @@ const wireTasks = (root) => {
       const why = wanted === 'blocked' ? 'Marked stuck on the board — no reason given yet' : ''
       await moveCard(key, wanted, cardEl, null, why)
     })
+  }
+
+  /* ------------------------------------------- ordering documents (§§25-38) */
+  /*
+    ONE CONTROL, TWO SURFACES, and the same handler for both. The select says
+    how to show them; a drag says what the order IS. Choosing a mode never
+    writes an order, which is §32 -- the whole reason returning to Custom
+    returns to what he arranged.
+  */
+  for (const pick of root.querySelectorAll('[data-bc-docsort]')) {
+    pick.addEventListener('change', () => {
+      docorder.setMode(pick.dataset.bcDocsort, pick.value)
+      ctx.render()
+    })
+  }
+
+  /*
+    DRAGGING A DOCUMENT.
+
+    The same mechanism as the Card Table, for the same reason: the browser's
+    own drag events, so a gesture that becomes a drag never delivers a click
+    and §35 is satisfied by construction rather than by a timer.
+
+    A drop always arranges what is CURRENTLY DRAWN -- so dragging while sorted
+    by name takes the list he can see and makes it his, which is what a person
+    means by moving something, and it switches the view to Custom because that
+    is now what he is looking at.
+  */
+  for (const holder of root.querySelectorAll('[data-bc-docdrop]')) {
+    const slug = holder.dataset.bcDocdrop
+    const each = () => [...holder.querySelectorAll('[data-bc-docid]')]
+
+    for (const card of each()) {
+      card.addEventListener('dragstart', (e) => {
+        e.dataTransfer?.setData('text/plain', card.dataset.bcDocid ?? '')
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+        card.classList.add('bcdoc--lifting')
+      })
+      card.addEventListener('dragend', () => {
+        card.classList.remove('bcdoc--lifting')
+        for (const other of each()) other.classList.remove('bcdoc--over')
+      })
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        card.classList.add('bcdoc--over')
+      })
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('bcdoc--over')
+      })
+      card.addEventListener('drop', (e) => {
+        e.preventDefault()
+        card.classList.remove('bcdoc--over')
+        const moved = e.dataTransfer?.getData('text/plain') ?? ''
+        const onto = card.dataset.bcDocid ?? ''
+        if (moved === '' || onto === '' || moved === onto) return
+        const drawn = each().map((el) => ({ id: el.dataset.bcDocid }))
+        if (docorder.moveWithin(slug, drawn, moved, onto) === null) return
+        /*
+          A hand-made order IS the custom order, so the view follows it rather
+          than showing him a date sort that no longer describes what he did.
+        */
+        docorder.setMode(slug, 'custom')
+        ctx.render()
+      })
+
+      /*
+        AND A WAY THAT IS NOT A DRAG (§52).
+
+        "Custom document ordering must have an accessible interaction strategy
+        where practical; do not make drag-and-drop the only possible mechanism
+        for users who cannot drag." Alt with an arrow moves the focused
+        document one place, which needs no pointer and no sustained gesture.
+      */
+      card.addEventListener('keydown', (e) => {
+        if (!e.altKey) return
+        const by = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : 0
+        if (by === 0) return
+        e.preventDefault()
+        const drawn = each().map((el) => ({ id: el.dataset.bcDocid }))
+        if (docorder.nudge(slug, drawn, card.dataset.bcDocid ?? '', by) === null) return
+        docorder.setMode(slug, 'custom')
+        ctx.render()
+        /* Follow it, or the keyboard is left where the document used to be. */
+        root
+          .querySelector(`[data-bc-docid="${CSS.escape(card.dataset.bcDocid ?? '')}"] button, [data-bc-docid="${CSS.escape(card.dataset.bcDocid ?? '')}"]`)
+          ?.focus?.()
+      })
+    }
   }
 
   for (const b of root.querySelectorAll('[data-bc-task-open]')) {
