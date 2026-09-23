@@ -3785,6 +3785,20 @@ Each of these cost real time. They are here so they cost it once.
   reversed. Before excluding the unattributable, check who writes it: the only
   product caller is `worker.ts` and it always passes the job.
 
+
+- **A HEURISTIC THAT RETURNS OUTRIGHT IS A PRECEDENCE DECISION, AND IT BEAT THE
+  EXPLICIT VERB.** `pageRequest` asked "is this message essentially just a
+  link?" BEFORE "did he ask for it to be read?", and returned `bare` from the
+  first — so `Read https://… for me` (9 letters of framing),
+  `Take a look at https://…` (11) and `Open https://…` (4) were all filed to the
+  notebook instead of opened, although `read`, `open` and `take a look at` were
+  already in the verb list. The shortest phrasings are the commonest, so the
+  gate fired on precisely the sentences it should have deferred to. When two
+  tests can claim one sentence, state the precedence deliberately — and confine
+  the override to the branch that needs it: letting the verb win in the LONG
+  branch too would turn `<link> check this out later` into a gather, because a
+  bare `check` is in that list.
+
 ---
 
 ## Visual standard

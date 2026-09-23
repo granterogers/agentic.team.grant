@@ -99,4 +99,42 @@ describe('a request to read a page', () => {
     expect(artifactRequest(said)).toBeNull()
     expect(pageRequest(said)).not.toBeNull()
   })
+
+  /*
+    THE TWO SHORTEST WAYS OF ASKING, which are the two commonest (#359).
+
+    `pageRequest` tested the length heuristic FIRST and returned `bare`
+    outright, so a sentence carrying an explicit reading verb was read as a
+    paste whenever the framing was short — and the framing around a link
+    usually is:
+
+      "Read https://... for me"      letters outside the url = 9
+      "Take a look at https://..."   letters outside the url = 11
+
+    Both verbs were already in READ_IT and neither was ever reached. He asked
+    for the words now and the office filed the page in the notebook for later,
+    with nothing anywhere saying that is what happened.
+  */
+  it.each([
+    'Read https://example.com/pricing for me',
+    'Take a look at https://example.com/pricing',
+    'Open https://example.com/pricing',
+  ])('reads a page when the ask is short and explicit: %s', (said) => {
+    expect(pageRequest(said)?.why).toBe('asked')
+  })
+
+  /*
+    THE CONTROL, and the reason the override is confined to the short branch.
+
+    A link with no reading verb is still a paste, which `linkRequest` files to
+    the notebook — the default nobody asked to change. If this stopped being
+    `bare`, every shared link would start spending the browser budget.
+  */
+  it.each([
+    'https://example.com/pricing',
+    'https://example.com/pricing thanks',
+    'https://example.com/pricing — mine',
+  ])('still treats a link with no reading verb as a paste: %s', (said) => {
+    expect(pageRequest(said)?.why).toBe('bare')
+  })
 })

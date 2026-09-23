@@ -1652,6 +1652,57 @@ nothing needs is manufactured work.
 
 Clean-pass count after pass 33: **2 of 5.**
 
+## Pass 34 — "Read this for me" filed the page instead of reading it
+
+**Territory:** the browser tier, which CLAUDE.md records as having once been
+unreachable from any sentence Grant could say. The door exists now, so the
+question is the next layer of #264's own lesson: not *does it work*, but **does
+the way he would actually phrase it reach it.**
+
+**Classification: SYSTEMIC PRODUCT DEFECT** in a recogniser. Filed as
+[#359](https://github.com/granterogers/agentic.team.grant/issues/359), fixed in
+`src/agents/actions.ts`, deployed.
+
+**The defect.** `pageRequest` decides between "read this now" and "file this for
+later", and tested the LENGTH heuristic before the reading verb:
+
+    if (rest.length <= 12) return bare        // returns outright
+    return READ_IT.test(said) ? asked : null
+
+so the verb was never reached whenever the framing around the link was short —
+which is most of the time:
+
+| he types | letters outside the url | got |
+|---|---|---|
+| `Read https://… for me` | 9 | `bare` |
+| `Take a look at https://…` | 11 | `bare` |
+| `Open https://…` | 4 | `bare` |
+
+`read`, `open` and `take a look at` are all already IN `READ_IT`. He asked for
+the words now and got a source indexed for later, silently.
+
+**The fix is confined to the short branch**, and that matters: letting the verb
+win everywhere would turn `<link> check this out later` — sharing, 17 letters —
+into a gather that spends the browser budget, because `READ_IT` carries a bare
+`check`. The long branch is untouched and still falls through to `linkRequest`.
+
+**Two of my own expectations were wrong**, both caught by driving the pair of
+recognisers together rather than one alone:
+
+- `<link> — for the project` returns null from `pageRequest`, which looked like
+  "nothing happens". `linkRequest` catches it and files it; the default holds.
+- `<link> check this out later` returns `asked`, and I briefly thought my change
+  caused it. It did not — that sentence takes the long branch, which my diff
+  does not touch. Pre-existing, marginal, and deliberately left alone rather
+  than bundled in.
+
+**Sabotage:** reverting the precedence turns exactly the three new cases red,
+green on restore, with the proof line confirming the revert landed.
+
+**Gates:** lint, typecheck, test (3,036) — green. Worker deployed.
+
+Clean-pass count after pass 34: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

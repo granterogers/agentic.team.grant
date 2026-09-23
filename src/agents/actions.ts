@@ -511,7 +511,32 @@ export function pageRequest(text: string): PageRequest | null {
   // A message that is essentially just the link. Punctuation and a word or two
   // of framing ("this:", "have a look —") still count.
   const rest = said.replace(found[0], '').replace(/[^a-z]/gi, '')
-  if (rest.length <= 12) return { because: said, url, why: 'bare' }
+
+  /*
+    AN EXPLICIT READING VERB BEATS THE LENGTH HEURISTIC, and only inside this
+    branch (#359).
+
+    The length test used to run first and return `bare` outright, so the two
+    shortest ways of asking -- which are the two commonest -- were read as
+    pastes and filed to the notebook instead of opened:
+
+      "Read https://... for me"      rest = "Readforme"   =  9
+      "Take a look at https://..."   rest = "Takealookat"  = 11
+
+    Both carry a verb that is already in READ_IT. He asked for the words now
+    and got a source indexed for later, with nothing saying so.
+
+    The override is deliberately confined to the short branch. Letting the verb
+    win everywhere would turn "<link> check this out later" -- sharing, not
+    asking, and 17 letters of it -- into a gather that spends the browser
+    budget, because READ_IT contains a bare `check`. The long branch is
+    untouched: it still falls through to `linkRequest`, which files it.
+  */
+  if (rest.length <= 12) {
+    return READ_IT.test(said)
+      ? { because: said, url, why: 'asked' }
+      : { because: said, url, why: 'bare' }
+  }
 
   return READ_IT.test(said) ? { because: said, url, why: 'asked' } : null
 }
