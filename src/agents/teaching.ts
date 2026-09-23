@@ -35,6 +35,7 @@
  * bar for a skill in particular is a message that actually contains a sequence.
  */
 
+import { opensByDroppingIt } from './clarify.ts'
 import { withdrawsARule } from './preference.ts'
 
 /** A standing preference. Short by construction — see ADR-0015. */
@@ -294,6 +295,24 @@ export function readTeaching(instruction: string, alreadyAPreference = false): T
     rule rather than stating one.
   */
   const takingItBack = withdrawsARule(text) !== null
+
+  /*
+    AND A SENTENCE THAT OPENS BY DROPPING SOMETHING IS NOT A RULE.
+
+    `STANDING` above contains the bare word `never`, and *"Okay, never mind
+    about that."* matches it. `dimensionOf` returns null for that sentence and
+    `withdrawsARule` therefore returns null too, so neither the retraction
+    branch nor the nothing-to-drop branch in `remember()` could fire and it
+    was stored as a standing instruction -- at 0.95 confidence, learned_by
+    grant, live in every Chief of Staff prompt from 15 September. `remember()`
+    names that exact sentence in its own comment as the thing a fix prevented;
+    the fix was elsewhere and this sentence would be stored again today.
+
+    Anchored, and the vocabulary is `clarify.ts`'s rather than a second list:
+    *"From now on there is no need to cc me"* is a standing rule that contains
+    one of these phrases, and it opens with a standing marker instead.
+  */
+  if (opensByDroppingIt(text)) return null
 
   if (standing || asked || takingItBack || (alreadyAPreference && !JUST_THIS_ONCE.test(text))) {
     const body = firstSentence(text)

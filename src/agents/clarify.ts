@@ -78,6 +78,29 @@ const NAMING =
 const CANCELS =
   /\b(?:forget\s+it|never\s+mind|nevermind|leave\s+it|drop\s+it|cancel\s+(?:it|that)|don'?t\s+bother|no\s+need|scrap\s+it|actually\s+no)\b/i
 
+/**
+ * The same vocabulary, anchored: the sentence OPENS by dropping something.
+ *
+ * Exported because `teaching.ts` needs exactly this question and inventing a
+ * second list of the ways English cancels is how two words for one thing get
+ * into a codebase. Anchored, because the force of a sentence is set by its
+ * main clause: *"Okay, never mind about that."* is a cancellation, while
+ * *"From now on there is no need to cc me"* is a standing rule that happens
+ * to contain one of these phrases further in.
+ *
+ * It exists because `STANDING` in `teaching.ts` contains the bare word
+ * `never`, so *"Okay, never mind about that."* was stored as a standing
+ * instruction and sat in every Chief of Staff prompt for eight days. The same
+ * shape as a destructive-tool matcher that could not see inside
+ * `delete_everything`: a marker matching inside a fixed phrase whose meaning
+ * is the opposite of the marker's.
+ */
+export const opensByDroppingIt = (text: string): boolean =>
+  new RegExp(
+    `^\\s*(?:ok(?:ay)?|right|well|actually|sorry|no)?[,\\s]*(?:${CANCELS.source})`,
+    'i',
+  ).test(String(text ?? '').trim())
+
 /** Not an answer yet. */
 const UNSURE =
   /\b(?:not\s+sure|no\s+idea|don'?t\s+know|do\s+not\s+know|let\s+me\s+think|haven'?t\s+decided|undecided|good\s+question|dunno)\b/i

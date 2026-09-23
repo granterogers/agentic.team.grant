@@ -498,6 +498,17 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
     'every capability a conversation can start is one the agents know they hold — #320 denied a PDF it had made 139 times',
   ],
   /*
+    AND EVERY STANDING RULE IS ONE THE OFFICE WOULD STORE TODAY.
+
+    `STANDING` in `teaching.ts` contains the bare word `never`, so *"Okay,
+    never mind about that."* was read as a standing instruction and sat in
+    every Chief of Staff prompt for eight days at 0.95 confidence. A code fix
+    stops the next one and cannot see the one already stored -- and nothing
+    was looking: `check:leaks` asks whether HARNESS lessons reach a real
+    prompt and had no opinion about whether a REAL one makes sense.
+  */
+  ['check:standing', 'every standing rule in a real prompt is one the office would accept today'],
+  /*
     And the same invariant driven through the real handler, live.
 
     `check:capabilities` asks whether the registry KNOWS about a capability.
