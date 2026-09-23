@@ -252,6 +252,15 @@ const API = () =>
   window.HQ_API || 'https://baujwlzcziasnfhhkchg.supabase.co/functions/v1/hq-api'
 const TURN = () => API().replace(/\/hq-api$/, '/voice')
 
+/**
+ * Where the voice surface lives, for anything that needs it besides a turn.
+ *
+ * Exported rather than re-derived by the caller: the basecamp voice note posts
+ * a recording to `/note` on this same function, and two derivations of one
+ * endpoint is the shape 0310 was spent undoing.
+ */
+export const endpoint = () => TURN()
+
 /** One session per visit, so the office can group the turns of a conversation. */
 const SESSION = `s${Math.random().toString(36).slice(2, 12)}`
 

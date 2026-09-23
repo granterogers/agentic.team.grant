@@ -36,6 +36,7 @@
   template.
 */
 
+import * as notes from './notestore.js'
 import { MARKS } from '../logos/marks.js'
 import * as when from '../when.js'
 import * as todos from './todos.js'
@@ -490,13 +491,42 @@ export const calendarMini = (p, { items = 4 } = {}) => {
 export const said_ = (m) => {
   const who = m.who ?? m.from ?? ''
   const mine = who === 'grant'
-  const when = m.when ?? m.at ?? ''
+  const when_ = m.when ?? m.at ?? ''
   return `<div class="bcsaid${mine ? ' bcsaid--mine' : ''}">
     ${face(mine ? { name: 'Grant', slug: 'grant' } : person(who))}
     <div class="bcsaidbody">
       <span class="bcsaidwho">${esc(mine ? 'You' : named(who) || who)}</span>
-      <span class="bcsaidwhen">${esc(when)}</span>
+      <!--
+        THE TIME, as a person reads it.
+
+        This escaped whatever it was handed, and what the office and the
+        optimistic tail both hand it is an ISO instant - so every line of the
+        conversation was stamped with a raw instant like
+        2026-09-23T10:14:17.560Z. The studio's own stamp helper renders "4
+        minutes ago", with the exact instant in its title and the relative
+        marker the studio already re-times on a tick. The prototype rows carry
+        words like "yesterday" and fall through the fallback unchanged.
+
+        No backticks in this comment: it lives inside a template literal, and
+        one here ends the string. That is how this file broke a moment ago.
+      -->
+      <span class="bcsaidwhen">${when.stamp(when_, when_)}</span>
       <p class="bcsaidtext">${esc(m.text ?? '')}</p>
+      <!--
+        PLAY IT BACK, only where there is something to play.
+
+        A voice note reaches the team as words, because that is what the
+        office can read, route and answer. The recording is kept in this
+        browser and this is where it is offered - drawn only when the store
+        actually holds one, so it can never be a control that does nothing.
+      -->
+      ${
+        notes.has(m.id ?? '')
+          ? `<button type="button" class="bcsaidplay" data-bc-noteplay="${esc(m.id ?? '')}">
+               <span aria-hidden="true">▶</span> Play the recording
+             </button>`
+          : ''
+      }
     </div>
   </div>`
 }

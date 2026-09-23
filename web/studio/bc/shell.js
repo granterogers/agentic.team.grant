@@ -2069,8 +2069,27 @@ const chatSurface = (p) => {
     <form class="bcaddform bcsay" data-bc-sayform>
       ${input({ id: 'bc-say', label: `Ask the team about ${p.name}`, name: 'say', autocomplete: 'off' })}
       <div class="bcrow">
+        <!--
+          THE VOICE NOTE, and it is deliberately HERE rather than at the top of
+          the project. Grant drew that line himself: the microphone inside the
+          chat sends a voice message, and the one on the project head opens a
+          live conversation. Its place is what says which it is, so this one
+          sits in the composer beside Send, where the thing you are composing
+          is a message.
+        -->
+        <button type="button" class="bcnotemic" data-bc-note="idle"
+          aria-label="Record a voice note">
+          <span class="bcnotemicdot" aria-hidden="true"></span>
+          <span class="bcnotemictxt">Voice note</span>
+        </button>
         ${button('Send', { kind: 'primary', 'data-bc-say': '1' })}
       </div>
+      <!--
+        One panel, three states, because a recorder that appears in a different
+        place depending on what it is doing is a recorder you have to look for.
+        Empty and hidden until the microphone is pressed.
+      -->
+      <div class="bcnote" data-bc-notepanel hidden></div>
     </form>`
 }
 

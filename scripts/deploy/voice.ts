@@ -27,7 +27,23 @@ const ref = process.env.SUPABASE_PROJECT_REF ?? 'baujwlzcziasnfhhkchg'
  * authentication, so the allowlist is the only thing between a stranger's page
  * and a credential minted against Grant's OpenAI key.
  */
-const PAGE_ORIGINS = ['https://ai-team-hq.vercel.app']
+const PAGE_ORIGINS = [
+  'https://ai-team-hq.vercel.app',
+  /*
+    The basecamp experiment's own origin (`claude/basecamp-team-hq`).
+    `voice-token` takes NO authentication - the allowlist is the only thing
+    between a stranger's page and a credential minted against Grant's OpenAI
+    key - so an origin that is not on this list cannot mint one, and live voice
+    on the experiment could never have worked from the deployed preview
+    however good the client was. Adding it is what makes the microphone at the
+    top of `/basecamp` able to open a real session at all.
+
+    It is a stable alias, not a per-deployment URL: Vercel gives every
+    deployment its own hostname, and putting those here would be an allowlist
+    that grows without bound and never shrinks.
+  */
+  'https://agentic-team-hq-basecamp-agentic-team-grant.vercel.app',
+]
 const api = `https://api.supabase.com/v1/projects/${ref}`
 const db = new ManagementApiExecutor(ref, supabaseToken)
 

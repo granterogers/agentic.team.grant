@@ -1274,3 +1274,110 @@
     line-height: 1.35;
   }
 }
+
+/* ---------------------------------------------------------------------- *
+ * THE VOICE NOTE, in the chat composer.
+ *
+ * Quiet until it is recording, and then unmistakable: this is the one control
+ * in the product where "is it on?" has a privacy answer, so the recording
+ * state is a colour and a moving meter rather than a changed label.
+ * ---------------------------------------------------------------------- */
+[data-experience="basecamp"] .bcnotemic {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bc-2);
+  min-height: 44px;
+  padding: 0 var(--bc-3);
+  border: 1px solid var(--bc-border-control);
+  border-radius: var(--bc-r-control);
+  background: var(--bc-surface);
+  color: var(--bc-text);
+  font: 600 14px/1 var(--bc-font);
+  cursor: pointer;
+  transition: background var(--bc-t-in), border-color var(--bc-t-in);
+}
+[data-experience="basecamp"] .bcnotemic:hover { background: var(--bc-hover); }
+[data-experience="basecamp"] .bcnotemicdot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--bc-danger);
+}
+[data-experience="basecamp"] .bcnotemic[data-bc-note="recording"] {
+  border-color: var(--bc-danger);
+  color: var(--bc-danger);
+}
+[data-experience="basecamp"] .bcnotemic[data-bc-note="recording"] .bcnotemicdot {
+  animation: bcnotepulse 1.1s ease-in-out infinite;
+}
+@keyframes bcnotepulse { 50% { opacity: .25 } }
+@media (prefers-reduced-motion: reduce) {
+  [data-experience="basecamp"] .bcnotemic[data-bc-note="recording"] .bcnotemicdot {
+    animation: none;
+  }
+}
+
+[data-experience="basecamp"] .bcnote {
+  margin-top: var(--bc-3);
+  padding: var(--bc-3);
+  border: 1px solid var(--bc-border-subtle);
+  border-radius: var(--bc-r-row);
+  background: var(--bc-hover);
+}
+[data-experience="basecamp"] .bcnoterow {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-3);
+  flex-wrap: wrap;
+}
+[data-experience="basecamp"] .bcnoteclock {
+  font: 600 15px/1 var(--bc-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-strong);
+  min-width: 52px;
+}
+/*
+  THE METER IS THE RECORDING INDICATOR, and it moves because the microphone is
+  hearing something rather than because a timer is running - which is the
+  difference between "it is recording" and "it can hear you".
+*/
+[data-experience="basecamp"] .bcnotemeter {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  flex: 1;
+  min-width: 90px;
+}
+[data-experience="basecamp"] .bcnotebar {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bc-border-subtle);
+  transform-origin: center;
+}
+[data-experience="basecamp"] .bcnotebar[data-lit="1"] {
+  background: var(--bc-danger);
+  height: 100%;
+}
+[data-experience="basecamp"] .bcnotesaid {
+  margin: var(--bc-2) 0 0;
+  font: 400 13px/1.45 var(--bc-font);
+  color: var(--bc-text-muted);
+}
+[data-experience="basecamp"] .bcnoteplayer { width: 100%; max-width: 320px; }
+[data-experience="basecamp"] .bcsaidplay {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--bc-border-control);
+  border-radius: 999px;
+  background: var(--bc-surface);
+  color: var(--bc-text-muted);
+  font: 600 12.5px/1 var(--bc-font);
+  cursor: pointer;
+}
+[data-experience="basecamp"] .bcsaidplay:hover { color: var(--bc-text-strong); }

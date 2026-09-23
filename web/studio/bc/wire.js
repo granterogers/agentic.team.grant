@@ -14,6 +14,9 @@
 */
 
 import { act, attempt, canWrite, read } from '../office.js'
+import { esc } from './parts.js'
+import * as notes from './notestore.js'
+import * as recorder from './voicenote.js'
 import * as pdf from '../pdf.js'
 import { callPhase, callSays, syncCallButtons, toggleCall } from '../call.js'
 import * as compose from './compose.js'
@@ -53,6 +56,294 @@ export const wire = (root) => {
     b.addEventListener('click', (e) => {
       e.preventDefault()
       ctx.goAnywhere(b.dataset.bcGo)
+    })
+  }
+
+  /*
+    ASKING THE TEAM — one path, whether the words were typed or spoken.
+
+    The last line of this is why it exists. `chat.ask` reports its states
+    through the callback (sending, then waiting) and writes the ANSWER after
+    the last of them, so a page that redraws only from the callback keeps the
+    waiting bubble for ever: the stored thread had Claire's reply in it while
+    the screen showed an empty one. That was true of the typed Send button
+    before the voice note was built, and it was found by building the voice
+    note - two callers of one path, of which only one was being looked at.
+  */
+  const askTheTeam = async (project, text, { alreadySaid = false } = {}) => {
+    if (!alreadySaid) ctx.chatSend?.(project, text)
+    ctx.render()
+    await ctx.chatAsk?.(project, text, () => {
+      ctx.render()
+    })
+    ctx.render()
+  }
+
+  /*
+    THE VOICE NOTE, end to end.
+
+    Record -> stop -> listen back -> send. The words then take the ORDINARY
+    typed path (`ctx.chatSend` and `ctx.chatAsk`, the same two calls the Send
+    button makes), which is Grant's "do not create a separate voice note
+    conversation" implemented rather than merely agreed with.
+
+    The panel holds three states and draws them here rather than in the shell,
+    because they change many times a second while recording and a shell redraw
+    would take the microphone with it.
+  */
+  const notePanel = () => root.querySelector('[data-bc-notepanel]')
+  const noteMic = () => root.querySelector('[data-bc-note]')
+  const clock = (n) =>
+    `${String(Math.floor(n / 60))}:${String(Math.floor(n % 60)).padStart(2, '0')}`
+  const meter = (lvl) => {
+    const bars = 14
+    /* A square root, so an ordinary speaking voice fills most of the meter -
+       a linear scale spends nine tenths of it on sounds nobody makes. */
+    const lit = Math.min(bars, Math.round(Math.sqrt(Math.min(1, lvl)) * bars))
+    let out = ''
+    for (let i = 0; i < bars; i += 1) out += `<i class="bcnotebar" data-lit="${i < lit ? 1 : 0}"></i>`
+    return `<div class="bcnotemeter" aria-hidden="true">${out}</div>`
+  }
+  const noteSay = (words, phase = '') => {
+    const panel = notePanel()
+    if (panel === null) return
+    panel.hidden = false
+    if (phase !== '') panel.dataset.bcNotephase = phase
+    const line = panel.querySelector('.bcnotesaid')
+    if (line !== null) line.textContent = words
+  }
+  const noteShut = () => {
+    const panel = notePanel()
+    if (panel !== null) {
+      panel.hidden = true
+      panel.innerHTML = ''
+      delete panel.dataset.bcNotephase
+    }
+    const mic = noteMic()
+    if (mic !== null) {
+      mic.dataset.bcNote = 'idle'
+      mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
+    }
+  }
+
+  let held = null
+
+  const drawRecording = ({ seconds, level }) => {
+    const panel = notePanel()
+    if (panel === null) return
+    const shown = panel.querySelector('.bcnoteclock')
+    if (shown === null) {
+      panel.hidden = false
+      panel.dataset.bcNotephase = 'recording'
+      panel.innerHTML =
+        `<div class="bcnoterow">
+          <span class="bcnoteclock">${clock(seconds)}</span>
+          ${meter(level)}
+          <button type="button" class="bcbtn bcbtn--primary" data-bc-notestop>Stop</button>
+          <button type="button" class="bcbtn" data-bc-notecancel>Cancel</button>
+        </div>
+        <p class="bcnotesaid">Recording. Stop when you have finished and you can listen back before it goes.</p>`
+      return
+    }
+    shown.textContent = clock(seconds)
+    const bars = panel.querySelectorAll('.bcnotebar')
+    const lit = Math.min(bars.length, Math.round(Math.sqrt(Math.min(1, level)) * bars.length))
+    bars.forEach((b, i) => {
+      b.dataset.lit = i < lit ? '1' : '0'
+    })
+  }
+
+  const drawReview = async (kept) => {
+    const panel = notePanel()
+    if (panel === null) return
+    held = kept
+    const url = URL.createObjectURL(kept.blob)
+    panel.hidden = false
+    panel.dataset.bcNotephase = 'review'
+    panel.innerHTML =
+      `<div class="bcnoterow">
+        <span class="bcnoteclock">${clock(kept.seconds)}</span>
+        <audio class="bcnoteplayer" controls preload="metadata" src="${url}"
+          data-bc-noteplayback></audio>
+      </div>
+      <div class="bcnoterow">
+        <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Send to the team</button>
+        <button type="button" class="bcbtn" data-bc-noteagain>Record again</button>
+        <button type="button" class="bcbtn" data-bc-notecancel>Delete</button>
+      </div>
+      <p class="bcnotesaid">The team is sent what you said, in words. The recording itself stays in this browser.</p>`
+  }
+
+  const startNote = async () => {
+    const mic = noteMic()
+    try {
+      await recorder.start(drawRecording)
+      if (mic !== null) {
+        mic.dataset.bcNote = 'recording'
+        mic.querySelector('.bcnotemictxt').textContent = 'Recording'
+      }
+      drawRecording({ seconds: 0, level: 0 })
+    } catch (e) {
+      noteShut()
+      noteSay('', 'failed')
+      const panel = notePanel()
+      if (panel !== null) {
+        panel.hidden = false
+        panel.dataset.bcNotephase = 'failed'
+        panel.innerHTML =
+          `<p class="bcnotesaid">${esc(e instanceof Error ? e.message : String(e))}</p>
+           <div class="bcnoterow">
+             <button type="button" class="bcbtn" data-bc-noteagain>Try again</button>
+             <button type="button" class="bcbtn" data-bc-notecancel>Close</button>
+           </div>`
+      }
+    }
+  }
+
+  const stopNote = async () => {
+    const mic = noteMic()
+    if (mic !== null) {
+      mic.dataset.bcNote = 'idle'
+      mic.querySelector('.bcnotemictxt').textContent = 'Voice note'
+    }
+    const kept = await recorder.stop().catch(() => null)
+    if (kept === null) {
+      noteShut()
+      return
+    }
+    /*
+      NOTHING WAS HEARD, and this is where that is settled rather than at the
+      speech service, which cannot tell: three seconds of digital silence comes
+      back from it as "Thank you.", with the same no-speech probability as real
+      speech. The browser measured the sound, so the browser is what knows.
+    */
+    if (!kept.heard) {
+      const panel = notePanel()
+      if (panel !== null) {
+        panel.hidden = false
+        panel.dataset.bcNotephase = 'failed'
+        panel.innerHTML =
+          `<p class="bcnotesaid">Nothing was picked up — the microphone stayed silent the whole
+             time. Nothing has been sent.</p>
+           <div class="bcnoterow">
+             <button type="button" class="bcbtn bcbtn--primary" data-bc-noteagain>Record again</button>
+             <button type="button" class="bcbtn" data-bc-notecancel>Close</button>
+           </div>`
+      }
+      return
+    }
+    await drawReview(kept)
+  }
+
+  const sendNote = async () => {
+    if (held === null) return
+    const panel = notePanel()
+    if (panel !== null) {
+      panel.dataset.bcNotephase = 'sending'
+      panel.innerHTML = '<p class="bcnotesaid">Working out what you said…</p>'
+    }
+    const project = ctx.state.project
+    let heard = ''
+    try {
+      heard = await recorder.words(held.blob, {
+        endpoint: ctx.voiceEndpoint?.() ?? '',
+        token: ctx.officeToken?.() ?? '',
+        /* A spelling hint only: the project's name and the team's. */
+        vocabulary: [
+          ctx.projectName?.(project) ?? '',
+          ...(ctx.crew ?? []).map((c) => c.name ?? ''),
+        ],
+      })
+    } catch (e) {
+      if (panel !== null) {
+        panel.dataset.bcNotephase = 'failed'
+        panel.innerHTML =
+          `<p class="bcnotesaid">${esc(e instanceof Error ? e.message : String(e))}
+             Your recording is still here.</p>
+           <div class="bcnoterow">
+             <button type="button" class="bcbtn bcbtn--primary" data-bc-notesend>Try sending again</button>
+             <button type="button" class="bcbtn" data-bc-notecancel>Delete it</button>
+           </div>`
+      }
+      return
+    }
+    /*
+      AND FROM HERE IT IS AN ORDINARY MESSAGE. Same two calls as the Send
+      button, same thread, same office - the only difference is where the words
+      came from.
+    */
+    const said = ctx.chatSend?.(project, heard) ?? []
+    const mine = [...said].reverse().find((m) => (m.who ?? m.from) === 'grant')
+    if (mine !== undefined) await notes.keep(mine.id, held.blob, { seconds: held.seconds })
+    held = null
+    noteShut()
+    await askTheTeam(project, heard, { alreadySaid: true })
+  }
+
+  /*
+    DELEGATED, on the form, because the panel replaces its own contents.
+
+    Stop, Cancel, Send and Record again are all drawn by `drawRecording` and
+    `drawReview` AFTER this runs, so a listener attached per button here would
+    be attached to nothing - which is exactly what the first run of
+    `verify:basecamp-voicenote` found: the meter moved, the clock ran, and
+    pressing Stop did nothing at all. CLAUDE.md records this trap three times
+    in one afternoon in one file; the cure is the same one: listen on the
+    element that does NOT get replaced.
+  */
+  for (const form of root.querySelectorAll('[data-bc-sayform]')) {
+    form.addEventListener('click', async (e) => {
+      const pressed = e.target?.closest?.(
+        '[data-bc-note], [data-bc-notestop], [data-bc-noteagain], [data-bc-notecancel], [data-bc-notesend]',
+      )
+      if (pressed === null || pressed === undefined) return
+      e.preventDefault()
+      if (pressed.hasAttribute('data-bc-notestop')) {
+        await stopNote()
+        return
+      }
+      if (pressed.hasAttribute('data-bc-noteagain')) {
+        held = null
+        await startNote()
+        return
+      }
+      if (pressed.hasAttribute('data-bc-notecancel')) {
+        held = null
+        recorder.cancel()
+        noteShut()
+        return
+      }
+      if (pressed.hasAttribute('data-bc-notesend')) {
+        await sendNote()
+        return
+      }
+      /* The microphone itself: press to start, press again to stop. */
+      if (recorder.active()) await stopNote()
+      else await startNote()
+    })
+  }
+
+  /*
+    PLAYING ONE BACK. The control is only drawn for a message that HAS a
+    recording, so it can never be the button that does nothing.
+  */
+  for (const b of root.querySelectorAll('[data-bc-noteplay]')) {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.bcNoteplay ?? ''
+      const src = await notes.url(id)
+      if (src === '') return
+      const existing = b.parentElement?.querySelector('[data-bc-noteaudio]')
+      if (existing !== null && existing !== undefined) {
+        void existing.play()
+        return
+      }
+      const player = document.createElement('audio')
+      player.className = 'bcnoteplayer'
+      player.controls = true
+      player.src = src
+      player.dataset.bcNoteaudio = id
+      b.parentElement?.append(player)
+      void player.play()
     })
   }
 
@@ -1405,11 +1696,7 @@ const wireTasks = (root) => {
         return
       }
       if (box !== null) box.value = ''
-      ctx.chatSend?.(ctx.state.project, text)
-      ctx.render()
-      await ctx.chatAsk?.(ctx.state.project, text, () => {
-        ctx.render()
-      })
+      await askTheTeam(ctx.state.project, text)
     })
   }
 

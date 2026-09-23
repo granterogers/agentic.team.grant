@@ -71,3 +71,12 @@ Three words only, each meaning exactly one thing.
 | # | Requirement | State | Evidence |
 |---|---|---|---|
 | V1 | Trace the existing voice architecture before writing any of it | **verified** | the table above; nothing was written until it was filled in |
+| V2 | The preview origin can mint a live credential at all | **verified** | `VOICE_ALLOWED_ORIGIN` held only the Team HQ origin, so live voice from `/basecamp` was refused by the browser before any JavaScript saw it. Added to `PAGE_ORIGINS`, deployed, and preflighted over the network from three origins: the preview is echoed its own, Team HQ is echoed its own, a stranger's is refused |
+| V3 | A voice note is recorded, measured, stopped, reviewed and sent | **verified** | `verify:basecamp-voicenote`, 36 checks, with Chromium given a WAV file as its capture device - so the stream, the meter, the encoder and the silence guard are all real |
+| V4 | The words are transcribed by the office | **verified with real media** | `verify:voice-note-live` posts synthesised speech over the network to the DEPLOYED `/note` and asserts the meaning came back. Not a human voice |
+| V5 | The transcript takes the ordinary typed path | **verified** | one `askTheTeam` used by the Send button and the voice note alike; the suite asserts `/turn` is reached and the answer appears in the project thread |
+| V6 | Silence is refused where it can be detected | **verified** | three seconds of digital silence comes back from the speech service as "Thank you.", `no_speech_prob` 0 - identical to real speech, so the answer cannot be keyed on. The browser measured the sound, so the browser refuses it; the suite records a silent WAV and proves nothing is sent |
+| V7 | The recording stays playable | **verified** | kept in IndexedDB against the message id, offered only where one exists, still there after a reload. It is LOCAL and the panel says so |
+| V8 | The microphone is released on every exit | **verified** | stop, cancel, error and navigation all go through `release()`; the suite asserts no live track survives a cancel and that recording can start again |
+| V9 | Transcription failure is honest | **verified** | the office's own words on screen, nothing put into the conversation, the recording still there to retry |
+

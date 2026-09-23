@@ -31,6 +31,7 @@ import { act, attempt, canWrite, onWrite, read, say, sure, token, why } from './
 */
 import * as bc from './bc/shell.js'
 import * as bcJump from './bc/jump.js'
+import * as bcNotes from './bc/notestore.js'
 import * as bcWire from './bc/wire.js'
 import * as plane from './plane.js'
 import * as undo from './undo.js'
@@ -13372,6 +13373,19 @@ const bcContext = {
   chatIsReal: (slug) => chat.isReal(slug),
   chatLoad: (slug) => chat.load(slug, PROJECTS.find((x) => x.slug === slug)?.id, token.get()),
   chatSend: (slug, text) => chat.send(slug, text, null),
+  /*
+    WHERE THE VOICE NOTE IS TRANSCRIBED, and the token to do it with.
+
+    Handed over rather than derived in the experience, because the endpoint and
+    the token are this module's business and there must not be a second idea of
+    either. `chat.js` already derives the voice endpoint from the API base the
+    same way, which is why `/note` lands on the function the conversation
+    already talks to.
+  */
+  voiceEndpoint: () => chat.endpoint(),
+  /* The project's own name, for the transcriber's spelling hint. */
+  projectName: (slug) => PROJECTS.find((x) => x.slug === slug)?.name ?? '',
+  officeToken: () => token.get(),
   chatAsk: (slug, text, onState) => chat.ask(slug, text, null, token.get(), undefined, undefined, onState),
   crew: CREW,
   tools: bc.TOOLS,
@@ -13606,6 +13620,17 @@ const bcContext = {
 bc.mount(bcContext)
 bcJump.mount(bcContext)
 bcWire.mount(bcContext)
+/*
+  WHICH MESSAGES HAVE A RECORDING, learned once.
+
+  The thread renderer is synchronous and IndexedDB is not, so the keys are read
+  at boot and the play control is drawn from that. A browser that cannot keep
+  audio resolves false and simply never draws one, which is the honest state
+  rather than a control that cannot work.
+*/
+void bcNotes.ready().then((ok) => {
+  if (ok) render()
+})
 
 render()
 
