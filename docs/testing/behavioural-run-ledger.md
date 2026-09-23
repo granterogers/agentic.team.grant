@@ -742,6 +742,44 @@ by name.
 
 Clean-pass count after pass 15: **0 of 5.**
 
+## Pass 16 — the review gate: approve, discard, and whether he can press either
+
+**CLEAN.** No defect found.
+
+Territory: #28's document review gate — chosen because CLAUDE.md records two
+separate defects in it (`discard_document` writing a state the constraint
+forbids, and `awaiting_review` filtering a state nothing writes), so it is the
+place a regression would most likely have survived.
+
+1. **`app.discard_document` now writes `archived`**, not the forbidden
+   `rejected`. 17 archived documents are the evidence the path runs.
+2. **`app.awaiting_review` agrees with the table.** Per project:
+   `ai-team-hq-test` 1 awaiting against 1 made draft, every other project 0
+   against 0. It first appeared to return nothing — **that was my own
+   argument**: the predicate is `project_id = p_project`, and `= null` is
+   never true.
+3. **`app.approve_document` works** — 84 approved documents.
+4. **Both buttons are reachable.** `check:pressable` is green: 85 actions and
+   59 sections, 13 named by nothing in `web/`, all baselined and the baseline
+   may only shrink. **Neither approve nor discard is among them**, so the 27
+   CLAUDE.md records have since become 13 and these two were fixed.
+5. **Driven end to end inside one rolled-back statement**: a made draft appears
+   in the queue (1 row) → approve → state `approved` and **out** of the queue
+   → a second draft → discard → state `archived`. Every assertion held; the
+   closing raise rolled it all back and the teardown was asserted (0 projects,
+   0 documents left, `check:leaks` green).
+6. **The debris pile was measured rather than assumed**: 250 suite-subject
+   projects not flagged `is_fixture` (#45 requires real names), all archived or
+   paused, **none active**. The single "active" match was my own regex hitting
+   the word *test* inside his real `ai-team-hq-test`.
+
+Two of the six checks were wrong before the product was — the null argument
+and the regex — which is now the commonest event in this programme.
+
+No code change, so nothing to deploy.
+
+Clean-pass count after pass 16: **1 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
