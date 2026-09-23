@@ -216,6 +216,55 @@ console.log('briefing —')
     `${String((f.waiting_on_you ?? []).length)} vs ${String(needs.length)}`,
   )
 
+  /*
+    AND EVERY ONE OF THEM IS HIS (0569, 0570).
+
+    The headline of his briefing was 94% test traffic: 67 open blockers, 63 of
+    them raised by suites, printed to him as "54 items are waiting on you; 50
+    more sit on the dashboard". public.needs_me had no harness filter at all
+    and it has eight consumers, so the dashboard and the voice answer said the
+    same thing.
+
+    Asserted as a PROPERTY of the population rather than as a count, so it
+    survives the next harness run: no row the briefing shows him belongs to a
+    harness job. The same wording CLAUDE.md settled on after the fixture-job
+    pile came back because somebody had asserted a number.
+  */
+  const harnessShown = await all(`
+    select 1 from public.needs_me n where coalesce(app.harness_job(n.job_id), false)`)
+  ok(
+    'and none of what needs him is a suite’s',
+    harnessShown.length === 0,
+    `${String(harnessShown.length)} harness blocker(s) visible`,
+  )
+
+  /*
+    CONTROL: the guard is load-bearing right now. Without it the same query
+    returns the harness rows, so a zero above means the filter is working
+    rather than that the table is empty — the found-nothing shape this
+    repository has built three times.
+  */
+  const unfiltered = await all(`
+    select 1 from public.blockers
+     where state = 'open' and coalesce(app.harness_job(job_id), false)`)
+  ok(
+    'CONTROL: and there were harness blockers for it to exclude',
+    unfiltered.length > 0,
+    `${String(unfiltered.length)} excluded by the filter`,
+  )
+
+  /*
+    And the overflow line counts the same population. Before 0570 it read
+    public.blockers directly, so the two halves of one sentence were about
+    different sets — four waiting on him and fifty more behind them.
+  */
+  const pressure = await one('select open_items from app.needs_me_pressure()')
+  ok(
+    'and the overflow line counts the same population as the list',
+    Number(pressure?.open_items) === needs.length,
+    `pressure ${String(pressure?.open_items)} vs needs_me ${String(needs.length)}`,
+  )
+
   const lines = briefingLines(f as never)
   ok('and it composes into sentences', lines.length > 0)
   ok(
