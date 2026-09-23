@@ -2133,6 +2133,38 @@ model's account of itself.
 
 Clean-pass count after pass 42: **1 of 5.**
 
+## Pass 43 — Slack channel provisioning: CLEAN
+
+**Territory:** the duty that sent Grant **756 messages in one day**, 746 of them
+on 17 September, asking for a channel that could never be made. Bounded by 0477;
+nothing had checked the bound since.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **The burst has not returned.** 746 runs on 09-17, 22 on 09-16, and **zero
+    since** — six days.
+2. **0477's three bounds are all present**, which is what makes that zero a
+    guard rather than luck: a project must be older than 15 minutes (0419's
+    rule, so a suite's subject is gone before anything fires), no job for that
+    project within 24 hours, and **none at all while a blocker about it is
+    open** — *"not at all while Grant is being asked about it"*.
+3. **There is genuinely nothing to provision.** All five active non-fixture
+    projects already hold a Slack channel, so the enqueuer correctly enqueues
+    nothing.
+
+**My alarm was unfounded, and it is the same shape as every other clean pass
+this session.** `office.provision_channels` has NO row in
+`public.responsibilities`, which read as a capability silently switched off —
+a new dashboard project would never get its channel. It is not a scheduled duty
+at all: `src/jobs/worker.ts:1580` calls `app.provision_missing_channels()` on
+the tick. **Ask what drives a thing before concluding that nothing does.**
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 43: **2 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
