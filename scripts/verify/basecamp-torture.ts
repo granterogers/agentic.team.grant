@@ -393,7 +393,17 @@ await page.locator('[data-bc-arr-on="documents"]').click()
 await page.waitForTimeout(400)
 check('and it can be put back', (await page.locator('[data-mod="documents"]').count()) === 1)
 
-/* --- 10. the default Team HQ is untouched by any of it ------------------ */
+/*
+ * --- 10. the default Team HQ is untouched by any of it --------------------
+ *
+ * WHICH SUBJECT CAN ANSWER THIS. The review deployment redirects its root
+ * INTO the experiment on purpose - that redirect is how the experiment stays
+ * off the product's address - so against the deployed bytes there is no
+ * default Team HQ at "/" to inspect, and asserting there is reported the
+ * isolation working as the isolation broken. Against the working tree "/" is
+ * the default studio and the question is answerable, so it is asked there and
+ * NAMED as unanswerable here rather than quietly passed.
+ */
 await page.goto(url('/'), { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(700)
 const def = (await page.evaluate(
@@ -401,13 +411,26 @@ const def = (await page.evaluate(
      experience: document.documentElement.dataset.experience ?? 'none',
      bc: document.querySelectorAll('.bctop, .bcpanes').length,
      rail: document.querySelectorAll('.rail').length,
+     at: location.pathname,
    }`),
-)) as { experience: string; bc: number; rail: number }
-check(
-  'the default Team HQ has no experimental shell and still draws its rail',
-  def.experience === 'none' && def.bc === 0 && def.rail > 0,
-  JSON.stringify(def),
-)
+)) as { experience: string; bc: number; rail: number; at: string }
+if (def.at.startsWith('/basecamp')) {
+  check(
+    'the review deployment keeps its root pointed into the experiment, off the product',
+    def.experience === 'basecamp',
+    JSON.stringify(def),
+  )
+  console.log(
+    '      NOT ASKED HERE: whether the default Team HQ is untouched. This host serves\n' +
+      '      the experiment alone; run SUBJECT=source for that half.',
+  )
+} else {
+  check(
+    'the default Team HQ has no experimental shell and still draws its rail',
+    def.experience === 'none' && def.bc === 0 && def.rail > 0,
+    JSON.stringify(def),
+  )
+}
 
 /* --- 11. and all of it again at the narrow widths ----------------------- */
 for (const [name, width, height] of [
