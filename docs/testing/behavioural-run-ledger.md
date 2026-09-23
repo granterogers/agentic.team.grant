@@ -1703,6 +1703,48 @@ green on restore, with the proof line confirming the revert landed.
 
 Clean-pass count after pass 34: **0 of 5** — reset by a systemic product defect.
 
+## Pass 35 — made documents and the review gate: CLEAN
+
+**Territory:** what the office WRITES — the documents it makes, whether harness
+debris is still retrievable on his real projects, and whether #28's review gate
+can actually be worked.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**What was checked:**
+
+1. **The recorded PDF debris is contained.** CLAUDE.md records three
+    near-duplicate reports landing in his real Legacy Coaching Course project
+    and staying RETRIEVABLE, because search excludes archived and not drafts.
+    All seven reports from 17 September are `archived`, and a search for
+    *"module status report"* on that project returns **0** archived rows. The
+    cleanup held and the exclusion works.
+2. **The one live draft is where it belongs.** One made document sits in
+    `draft` on a real active project (`AI Team HQ Test`, which is genuinely his
+    — CLAUDE.md records a regex once misreading that name as debris), and
+    `public.awaiting_review` returns exactly it. That is the review gate
+    working, not debris.
+3. **`app.discard_document`'s recorded defect is FIXED.** It wrote
+    `state = 'rejected'`, which `documents_state_check` forbids, so it raised
+    23514 every time and #28 offered two buttons of which one was real. It
+    writes `archived` now. Driven rather than read: `draft → archived`.
+4. **Approve works too**, driven in the same rollback: `draft → approved`.
+    Nothing persisted — 6 approved / 3 draft / 7 archived, unchanged.
+5. **Both are pressable.** `document_approve` and `document_discard` are
+    gateway actions AND the studio calls both (`app.js:10614`, `10642`).
+    `check:pressable` green, 13 baselined, neither of these among them.
+
+**My own instrument was wrong once**, and it looked alarming: I queried
+`public.awaiting_review` as a TABLE and got *relation does not exist*, which
+reads like the review section's public wrapper having been dropped — PostgREST
+only exposes `public`, so that would have killed the section. It is a FUNCTION
+taking `p_project`, it exists, and it returns 0 for a null project because it is
+project-scoped. Validate the query before believing the finding.
+
+**Gates:** check:pressable green; nothing else changed.
+
+Clean-pass count after pass 35: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
