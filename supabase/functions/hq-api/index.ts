@@ -96,6 +96,8 @@ const kickWorker = (): void => {
     .EdgeRuntime?.waitUntil
   if (keepAlive === undefined) void kick
   else keepAlive(kick)
+}
+
 /*
   A GOOGLE ACCESS TOKEN, minted here and never sent anywhere near the browser.
 
