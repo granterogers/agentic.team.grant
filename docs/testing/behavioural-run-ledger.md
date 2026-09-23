@@ -938,6 +938,48 @@ success on its own marker.
 
 Clean-pass count after pass 19: **0 of 5.**
 
+## Pass 20 — skills and procedures, which reach every prompt in scope
+
+**CLEAN.** No defect found.
+
+Territory: what the office has been TAUGHT — chosen because CLAUDE.md records
+a real defect here (an eight-clause work request filed as a global procedure
+called *"Shoulding decide"*), and because a skill reaches every prompt in its
+scope, so a bad one is expensive on every turn.
+
+1. **The corpus is clean.** Three live skills — a global one on handling a
+   request you cannot finish, a status-update procedure for the chief of
+   staff, and a research procedure for the research director. No nonsense
+   entry; the recorded defect is gone.
+2. **`skills_for` selects by SCOPE, not by matching the condition**, so
+   `when_to_use` is descriptive text the model reads rather than a predicate.
+   That makes the global skill's vague *"Whenever it applies to the work in
+   hand"* harmless rather than circular.
+3. **They reach the right agents**, and the briefs are 928–2,199 characters —
+   nowhere near the pressure the capability brief hit at its 4,000 ceiling.
+4. **The one skill naming a tool its owner lacks says so in the prompt.** The
+   research director's procedure lists `github.read` and
+   `app.staff_may_use('research-director','github.read')` is false; the brief
+   renders *"We do not currently hold github.read, so that part cannot be
+   done. Do the rest and say plainly which part we could not do."* That is the
+   offer-versus-press invariant working, in the prompt, computed through the
+   authorisation path rather than around it (ADR-0017).
+5. **`readTeaching` still declines a work request** that merely contains a
+   conditional — #237's fix holding — and recognises a real conditional
+   procedure, a standing preference and a method announcement.
+6. **The 140-character floor on a BARE conditional was chased and dropped.**
+   It genuinely blocks *"When you write me a status update, lead with what
+   changed"* (76 chars) — which is word-for-word a live skill. But that skill
+   was SEEDED (`from_job` null), not learned, and against his real corpus only
+   1 of 5 conditional messages falls under the floor — a work request the
+   recogniser correctly declines anyway. A method marker bypasses the floor at
+   109 characters. No harm, so no change: **a latent gap with no evidence of
+   the shape he would use is not work.**
+
+No code change, so nothing to deploy.
+
+Clean-pass count after pass 20: **1 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and
