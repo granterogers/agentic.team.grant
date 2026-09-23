@@ -2356,6 +2356,52 @@ worker deployed.
 **Classification: SYSTEMIC PRODUCT DEFECT** — a coherence gate with a hole in
 the exact shape it was built for. **The streak resets to 0 of 5.**
 
+## Pass 47 — the same second-person hole, one gate over
+
+**Territory:** `assertsRecordsUnseen`, the #257 gate, probed with the technique
+that worked in the synthesis pass rather than the one that produced five clean
+passes: **drive it over a table of realistic phrasings, including ones expected
+to pass.**
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Filed as
+[#362](https://github.com/granterogers/agentic.team.grant/issues/362), fixed and
+deployed.
+
+**The defect.** The container shape's determiner was `the`, so with nothing
+consulted:
+
+| sentence | caught before |
+|---|---|
+| `The diary is empty.` | yes |
+| `The calendar is empty.` | yes |
+| **`Your diary is empty.`** | **no** |
+| **`Your inbox is empty.`** | **no** |
+
+**And this is #361's class, one gate over.** An hour earlier
+`deniesWhatItHolds` turned out to match `there are | we have | i have` and not
+`you have`. Same shape, neighbouring gate: **both were written in the office's
+voice and the second person fell out of both** — which is how the office
+actually addresses Grant about his own things. So the determiner was widened as
+a CLASS (`the|your|his|her|their|our|my`) rather than by adding `your`, which
+is #249/#254's lesson applied before the third instance rather than after it.
+
+**It stays narrow** because `CONTAINER` still does the work — only `diary`,
+`calendar`, `inbox`, `mailbox` — and both controls are asserted: *"Your diary is
+empty."* with the calendar CONSULTED does NOT fire, which is the gate's whole
+point, and *"Your desk is empty."* is not a container.
+
+**Verified:** 71 in the file, 3,049 in the suite, sabotage red (3 failed) then
+green, worker deployed.
+
+**Left open deliberately, with the evidence, in the same issue:** the same probe
+showed `I see no emails from Sergio.` and `I found no meetings.` also missed.
+Those need a VERB vocabulary rather than a determiner, and widening a provenance
+gate's verbs has real false-positive risk — this file records what that costs,
+after `£63.50` was read as a clock time and refused four good answers. Not
+rushed at the end of a long run.
+
+Clean-pass count after pass 47: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

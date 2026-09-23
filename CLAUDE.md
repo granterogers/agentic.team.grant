@@ -3856,6 +3856,18 @@ Each of these cost real time. They are here so they cost it once.
   this bug and the probe caught it in one run — which is the argument for
   driving a detector over a table of sentences rather than reading it.
 
+
+- **THE COHERENCE GATES WERE WRITTEN IN THE OFFICE'S VOICE AND THE SECOND
+  PERSON FELL OUT OF ALL OF THEM.** `deniesWhatItHolds` matched
+  `there are | we have | i have` and not `you have` (#361); one gate over,
+  `assertsRecordsUnseen`'s container shape matched `the diary is empty` and not
+  `your diary is empty` (#362). Both are the phrasing the office ACTUALLY uses
+  when talking to Grant about his own things, so in each case the one form that
+  slipped was the canonical one. Two instances an hour apart is a class: widen
+  the determiner and the subject together, and when you fix one of these, grep
+  the neighbouring gates for the same pronoun assumption before the third
+  instance arrives.
+
 ---
 
 ## Visual standard

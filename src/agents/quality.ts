@@ -1207,7 +1207,21 @@ export const assertsRecordsUnseen = (
     {
       needs: 'consulted',
       re: new RegExp(
-        String.raw`\bthe\s+(?:\w+\s+){0,2}?(?:${Object.keys(CONTAINER).join('|')})\s+(?:is|was)\s+(?:empty|clear|blank)\b`,
+        /*
+          `your diary`, not only `the diary` (#362).
+
+          The determiner was `the`, so *"The diary is empty."* was caught and
+          *"Your diary is empty."* was not — and `your` is how the office
+          addresses Grant about his own things. Same class as #361, where
+          `deniesWhatItHolds` matched `there are | we have | i have` and missed
+          `you have`: these gates were written in the office's voice and the
+          second person fell out of both.
+
+          Narrow because the CONTAINER vocabulary still does the work — only
+          `diary`, `calendar`, `inbox` and `mailbox` can match, and the
+          sentence must still say one of them is empty.
+        */
+        String.raw`\b(?:the|your|his|her|their|our|my)\s+(?:\w+\s+){0,2}?(?:${Object.keys(CONTAINER).join('|')})\s+(?:is|was)\s+(?:empty|clear|blank)\b`,
         'gi',
       ),
     },

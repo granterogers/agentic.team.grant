@@ -599,3 +599,42 @@ describe('multi-turn contamination, one session per domain', () => {
     expect(assertsRecordsUnseen(body, established(c), may())).toBeNull()
   })
 })
+
+describe('a container he owns is still a container (#362)', () => {
+  const none = { consulted: [] as const, complete: [] as const }
+
+  /*
+    The determiner was `the`, so *"The diary is empty."* was caught and
+    *"Your diary is empty."* was not — and `your` is how the office addresses
+    Grant about his own things.
+
+    Same class as #361, where `deniesWhatItHolds` matched
+    `there are | we have | i have` and missed `you have`. Both gates were
+    written in the office's voice and the second person fell out of both, which
+    is why this was fixed as a class the moment the first instance turned up.
+  */
+  it.each([
+    'Your diary is empty.',
+    'Your calendar is empty.',
+    'Your inbox is empty.',
+    'The diary is empty.',
+  ])('refuses %s when nothing was consulted', (said) => {
+    expect(assertsRecordsUnseen(said, '', none)).not.toBeNull()
+  })
+
+  it('stays silent when the diary WAS consulted, which is the whole point', () => {
+    expect(
+      assertsRecordsUnseen('Your diary is empty.', '', {
+        consulted: ['calendar'],
+        complete: [],
+      }),
+    ).toBeNull()
+  })
+
+  it('CONTROL: a noun that is not a container is left alone', () => {
+    // The CONTAINER vocabulary still does the work — only diary, calendar,
+    // inbox and mailbox can match, so widening the determiner cannot widen
+    // what counts as a record.
+    expect(assertsRecordsUnseen('Your desk is empty.', '', none)).toBeNull()
+  })
+})
