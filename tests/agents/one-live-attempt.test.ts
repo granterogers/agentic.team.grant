@@ -156,7 +156,19 @@ describe('the hand-off is the fan-out that actually happens', () => {
       canonical state answers outright, and that child then looked like a
       duplicate of the thing it was asking about.
     */
-    expect(withoutComments).toMatch(/const aboutTheWork = asksWhoIsOnIt\(instruction\) !== null/)
+    /*
+      Asserted as the grounded CALL rather than the exact expression — which
+      is what the assertion below already says it learned, and this line was
+      still the artefact. It went red on a correct change: the guard now reads
+      `resolved.from`, because `instruction` is the thread resolver's REWRITE
+      and an elliptical follow-up is exactly what the resolver expands. Live:
+      "who have you got on that" became "Who have you got on the task of
+      providing Grant with a view of the budget impact of the venue change and
+      a view on sponsor participation?", which this pattern correctly declines
+      — so the guard declined, the hand-off ran, and two more people were
+      convened to answer a question the rows already held (#327).
+    */
+    expect(withoutComments).toMatch(/const aboutTheWork =[\s\S]{0,200}asksWhoIsOnIt\(resolved\.from/)
     expect(withoutComments).toMatch(
       /*
         The loop honours BOTH gates now — a head-count question, and a

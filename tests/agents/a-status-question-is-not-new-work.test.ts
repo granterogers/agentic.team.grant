@@ -78,3 +78,10 @@ describe('and asking for an assignment is not asking for a status', () => {
     expect(asksWhoIsOnIt('what is the state of that?')).toBeNull()
   })
 })
+
+/*
+  The hand-off guard's own assertion lives in
+  `tests/agents/one-live-attempt.test.ts`, beside the rest of the convening
+  contract, rather than being stated a second time here. One assembly, one
+  caller — two copies of a source assertion is how they come to disagree.
+*/

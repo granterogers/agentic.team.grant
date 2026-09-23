@@ -2400,7 +2400,32 @@ export function instructionHandler(deps: InstructionDeps): Handler {
         clause split, because this runs before `understand` and the shape is
         a whole short sentence by construction.
       */
-      const aboutTheWork = asksWhoIsOnIt(instruction) !== null
+      /*
+        HIS OWN WORDS, because the rewrite is never the short sentence this
+        reads for (#327, and #322's rule one reader further out).
+
+        The comment above says "the shape is a whole short sentence by
+        construction". That is true of what Grant typed and false of what
+        reaches here: `instruction` was replaced by `resolveAgainstThread` two
+        hundred lines up, and an elliptical follow-up is exactly what the
+        resolver EXPANDS. Measured on a live turn —
+
+            he said : who have you got on that
+            resolved: Who have you got on the task of providing Grant with a
+                      view of the budget impact of the venue change and a view
+                      on sponsor participation?
+
+        — and `asksWhoIsOnIt` correctly declines the second, because it is
+        anchored to a sentence ending in a referent. So the guard declined, the
+        hand-off ran, and asking who was on the work CONVENED TWO MORE PEOPLE
+        and spent two more model calls on an answer the rows already held.
+
+        It cannot use `firstOfHis`: that is built from `understood`, three
+        hundred lines below, and this deliberately runs before it. `resolved.from`
+        is his pre-rewrite text and is what the pattern was written against.
+      */
+      const aboutTheWork =
+        asksWhoIsOnIt(resolved.from ?? instruction) !== null || asksWhoIsOnIt(instruction) !== null
       for (const other of aboutTheWork || alreadyOn !== null ? [] : who.alsoConvened) {
         /*
           ONCE PER SPECIALIST PER OBLIGATION (#316, 0556).
