@@ -834,6 +834,58 @@ undo fix made `hq_contact_archive`, `hq_contact_photo_set` and
 
 Clean-pass count after pass 17: **0 of 5.**
 
+## Pass 18 — the diary, and the suite hiding inside his conversation
+
+**NOT CLEAN.** One systemic product defect
+([#348](https://github.com/granterogers/agentic.team.grant/issues/348)).
+
+Territory opened on the calendar, which came back clean, and the finding came
+out of the instrument used to check it.
+
+**The calendar is sound.** 14 events, 6 ahead, fetched minutes before the
+check; the duty ran 48/48 complete in two days. `calendar_ahead` IS called —
+by `hq_overview` and `voice_answer`, SQL-to-SQL, which a grep of `src/` misses
+and `check:callers` was right about. The conversational handler deliberately
+does NOT read the diary and says *"I have no record"* rather than inventing,
+which is the failure that actually happened; and **he has never once asked
+about his diary in conversation** — 0 real turns — so the gap has no
+frequency. `fabricatedWhen` still refuses both invented clock times and still
+allows the derived £26, the £63.50 price and an honest absence, which are the
+three false-refusal regressions on record.
+
+**The finding.** Measuring how often that guard fires on real traffic returned
+three hits — all *"Simultaneous probe"*. Quantified: **35 of 173**
+`office.instruction` jobs `app.harness_job` called real were a test suite, and
+only 12 look like a probe by name.
+
+`harness_job` read three signals and a suite driving the real enqueue path
+defeats all three by design — #45 requires real subjects, and
+`enqueue_inbound` composes `requested_by` from the SUBJECT. The marker existed
+and nothing read it: `inbound_commands.dedupe_key`. The namespaces separate
+completely, and `verify` is the only one spanning three channels.
+
+**It was a containment gap, not just a measurement one.** `claim_delivery`
+asks the same function, so on 14 September six `verify:chaos` deliveries
+reached a real Slack channel and **his real Telegram chat**, uncounted because
+`harness_escapes()` asks it too. They predate the guard; the defect is that
+the same run today would send them again.
+
+**Fix.** 0574 adds the fourth signal. 173 → 138 real turns, 0 suite-signed
+left, **0 real messages lost** — asserted, because a false positive here costs
+him a delivery. `check:leaks` still green with 0 new escapes, and the pre-guard
+bucket correctly grew 162 → 168: reclassified, not hidden.
+
+**Deliberately still not caught**: four `verify:escapes` positive controls,
+which are real-looking BY DESIGN — catching them would destroy the control.
+
+**The guard against the next one** fails on any UNCLASSIFIED dedupe namespace
+rather than guessing. It found the `asset` namespace on its first run — a
+GENUINE dashboard message of his asking for a document review. The check was
+right to stop; the answer was to classify it, not to call it harness. Proven
+able to fire with a synthetic `probe:` command inside a rolled-back statement.
+
+Clean-pass count after pass 18: **0 of 5.**
+
 Filed on the way past, not fixed:
 [#338](https://github.com/granterogers/agentic.team.grant/issues/338) —
 `vault-export`'s wrong-passphrase check fails about one full run in three and

@@ -3499,6 +3499,32 @@ Each of these cost real time. They are here so they cost it once.
   report. When adding a recogniser, ask what happens to the sentence it does
   not match, not only to the one it does.
 
+- **A suite signs its own messages and nothing read the signature — 20% of
+  "his" conversation was a test.** `app.harness_job` read three signals and a
+  suite driving the REAL enqueue path defeats all three ON PURPOSE: #45
+  requires real subjects, and `enqueue_inbound` composes `requested_by` from
+  the SUBJECT. The marker was `inbound_commands.dedupe_key`, written by the
+  adapter that received the turn, and the namespaces separate completely —
+  `teamhq`, `slack`, `telegram`, `voice` and `asset` each on their own
+  channel, and **`verify` spanning three**, which is the signature of a suite
+  impersonating all of them. 35 of 173 turns, only 12 of them probe-shaped by
+  name, so a name list would have missed 23. **When a harness is
+  indistinguishable by attribution, ask what it wrote in a column only an
+  adapter writes.**
+- **And the containment GUARD asked the same blind question as the
+  measurement.** `claim_delivery` calls `harness_job`, so six `verify:chaos`
+  deliveries reached a real Slack channel and his real Telegram chat, and
+  `harness_escapes()` did not count them because it asks it too. Widening the
+  predicate made containment STRICTER — but the cost of a false positive is a
+  real message suppressed, so the migration asserts that **not one** command
+  in a real channel namespace became harness.
+- **A check that fails on the UNCLASSIFIED rather than guessing found a real
+  message on its first run.** The new namespace guard flagged `asset:` — which
+  turned out to be a genuine dashboard message of his asking for a document
+  review. Stopping the gate on something nobody has classified is the right
+  behaviour in both directions: guessing "harness" suppresses a message he is
+  waiting for, and guessing "real" hides test traffic in his numbers.
+
 - **A guard decided from a proxy while the real number sat one join away.**
   `app.mail_coverage` computes `associated` — how many cached messages a
   project actually matches — and the `MailCoverage` interface did not carry the

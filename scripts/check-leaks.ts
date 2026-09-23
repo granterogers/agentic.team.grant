@@ -637,6 +637,70 @@ if (stuck.length > 0) {
 }
 
 /*
+  A SUITE THAT SIGNS ITS MESSAGES IN A NAMESPACE NOBODY RECOGNISES (#348).
+
+  `inbound_commands.dedupe_key` is written by the adapter that received the
+  turn, and the namespaces separate completely: `teamhq`, `slack`, `telegram`
+  and `voice` are the real ones, each used on its own channel, and `verify` is
+  a suite impersonating three of them. 0574 taught `app.harness_job` to read
+  it - which removed 35 suite turns from what the office called Grant's
+  conversation, and closed the same blind spot in `app.claim_delivery`, which
+  asks that function before allowing a real destination.
+
+  What can still go wrong is a NEW namespace: the next suite writes
+  `probe:...` or `sim:...`, nothing recognises it, and its traffic is counted
+  as his again - and may be delivered to him. So this asserts the property
+  rather than the list: every namespace is either a real channel or one the
+  harness predicate already knows about.
+*/
+const spaces = (
+  await db.execute(`
+    select split_part(c.dedupe_key, ':', 1) as space,
+           count(*)::int as n,
+           count(*) filter (where app.harness_job(j.job_id))::int as seen_as_harness
+      from public.inbound_commands c
+      join public.jobs j on j.pinned_config ->> 'command_id' = c.command_id::text
+     where c.dedupe_key is not null
+     group by 1`)
+).rows as { space: string; n: number; seen_as_harness: number }[]
+
+if (spaces.length === 0) {
+  console.error('\ncheck:leaks could not read any dedupe namespaces — fix the query')
+  process.exitCode = 1
+}
+/*
+  Namespaces that are Grant's own, each classified deliberately.
+
+  `asset` was not in the first version of this list and the check found it on
+  its first run: `asset:document:<uuid>:review:2` on teamhq, a real message of
+  his from the dashboard asking the office to review a document he had
+  uploaded. The check was right to stop on a namespace nobody had classified;
+  the answer was to classify it, not to call it harness.
+
+  That is the whole design. It fails on anything UNCLASSIFIED rather than
+  guessing, so the next suite that invents `probe:` or `sim:` stops the gate
+  until somebody says which it is — and a wrong guess here would either hide
+  test traffic in his numbers or suppress a message he is waiting for.
+*/
+const REAL_CHANNELS = new Set([
+  'teamhq',
+  'slack',
+  'telegram',
+  'voice',
+  // A review he asked for on a document, raised from the dashboard.
+  'asset',
+])
+for (const sp of spaces) {
+  if (REAL_CHANNELS.has(sp.space)) continue
+  if (sp.seen_as_harness === sp.n) continue
+  noisy.push(
+    `${String(sp.n - sp.seen_as_harness)} message(s) in the "${sp.space}" dedupe namespace are ` +
+      "counted as Grant's own — no real adapter writes that namespace, so teach " +
+      'app.harness_job about it (0574 did this for "verify")',
+  )
+}
+
+/*
   THE ONE THIS CHECK COULD NOT SEE, and the reason Grant got a test reminder.
 
   Everything above asks whether the database is CLEAN NOW. A delivery is not a
