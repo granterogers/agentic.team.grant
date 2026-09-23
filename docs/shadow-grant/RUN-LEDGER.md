@@ -2582,3 +2582,90 @@ This one found the architecture under four separate fixes, and a mechanism
 that had been complete and unreachable since it was written. That is not
 diminishing returns. The open question is #318: everything built for
 delegation is correct and almost nothing reaches it.
+
+---
+
+# Iteration — #318: measured, and the answer is that the Chief is right
+
+## The verdict
+
+```
+delegation UNNECESSARY         23  88%
+optional but BENEFICIAL         2   8%
+clearly WARRANTED               1   4%
+actual delegation rate          0   0%
+MISSED warranted delegation     1   4%
+unnecessary delegation          0   0%
+multi-specialist collaboration  0   0%
+```
+
+26 scored of 34 delivered real requests since 14 September. Bounded there
+because `recipient_agent` was not written before it — **79 of the 120
+delivered real requests have no recorded answerer**, so no routing question
+can be asked of them at all.
+
+The one `warranted` case is a **capability** gap, not an expertise gap
+(`office.extract_tasks` performs it). Both `beneficial` cases are the same
+shape. So the reading is (1): the office is correctly solving mostly
+single-specialist work itself. **#318 closed without changing routing.**
+
+## The classifier was calibrated before it was believed
+
+Four invented controls, two plainly needing nobody and two plainly needing
+somebody. 3/4 — and the miss is on the `warranted` side, so the 88% is
+trustworthy and the beneficial/warranted split is soft. The run refuses to
+score below 3/4: a classifier that cannot separate the two cannot measure a
+question about that separation.
+
+## Collaboration works when it is genuinely needed
+
+Five fresh two-domain requests. **Four of five routed to two specialists and
+convened one.** Project, attribution and obligation lifecycle all survived
+the hand-off.
+
+The fifth is structural, reproduced twice, and filed as **#319**: *"the
+reading was contested, so one specialist"* — two intent rules matching is
+read as *we are unsure what he means* when it means *he asked for two
+things*. CLAUDE.md records the same lesson one layer up, for
+`assignment`-led sentences; a `question`-led sentence with a second clause
+still falls through.
+
+## The quality delta is NOT measured, and the run says so
+
+Every fresh request bottoms out in an empty fixture project, so every
+contribution came back "I have no record". `delegation:delta` seeds a
+contained project to make the question answerable and compares the
+answerer's own output against the synthesis, blind and swapped — and on its
+run the office convened nobody, so it printed `INCONCLUSIVE` and scored
+nothing rather than a number over a missing side.
+
+## Two live defects found by the measurement
+
+- **#320** — the office says *"I can't create a PDF directly in Telegram"*
+  and it can. `artifactRequest` recognises the fresh imperative and declines
+  the follow-up complaint, so the turn fell through to prose and the model
+  filled the gap with a capability denial. Worse than an ordinary miss: he
+  has no way to check it and every reason to believe it.
+- **Fixed** — the dictation breath survived a change of mind into a task
+  title on his list: `public.tasks` holds *"For me and the um... No actually,
+  you know what? Scan the entire project"*. Stripped in `readRetraction`, at
+  the shared layer, because two callers stripping it their own way is how
+  `taskTitle` and `personalTaskRequest` came to disagree about the retraction
+  itself.
+- **#321** — `taskTitle` uses `requestBody`, which returns the OBJECT of a
+  request, as a TITLE, so *"chase the caterers"* names a task *"the
+  caterers"*. The old test was green for the wrong reason: the filler was the
+  thing being stripped, so the verb survived by accident.
+
+## Verification
+
+`verify:obligation` 12/12 (the new architecture intact — `jobs.state =
+complete` and `obligation_state = fulfilled` stay distinct) · `verify:context`
+32/32 · `verify:mytasks` 89/89 · `verify:parallel` 31/31 · 2897 unit tests ·
+checks green · deployed v761.
+
+## Is another iteration justified?
+
+This one answered a measurement question with a measurement, declined to
+change routing on synthetic evidence, and still found two live defects and
+filed a third. The discoveries are still at the architectural level.
