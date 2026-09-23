@@ -2088,6 +2088,51 @@ long is the one thing the brief forbids.
 
 Clean-pass count after the synthesis pass: **0 of 5.**
 
+## Pass 42 — delegation and consultation: CLEAN
+
+**Territory:** §9's question — is convening specialists real, or nominal?
+CLAUDE.md records three separate defects that made it unanswerable, and this
+pass checks all three against live traffic.
+
+**Classification: NO DEFECT FOUND.** Nothing fixed, nothing filed.
+
+**The three recorded defects are all closed, in the data rather than the code:**
+
+1. **The swallowed consultation write.** `public.consultations` *"had never
+    held a row"* — a `.catch(() => undefined)` around an INSERT passing a
+    `text[]` and a slug where two uuids belonged. It now holds **2,458 rows
+    across 1,543 jobs, latest today.**
+2. **The parameter no caller passed.** `recordDecision`'s fourth argument had
+    existed as long as the column and nothing ever supplied it, so
+    `delegation_depth` was 0 on every row BY CONSTRUCTION and "is the office
+    delegating" was unanswerable whatever it did. Now **794 decisions at depth
+    1** against 2,839 at depth 0.
+3. **The fallback stored as a person.** `roster[0] ?? 'chief-of-staff'` is the
+    right fallback and the wrong thing to STORE, so a question convening nobody
+    was recorded as having convened Claire — in the column `npm run measure`
+    counts from. **730 rows now carry an empty roster**, stored honestly.
+
+**And the question those three existed to answer, answered:**
+
+| roster | decisions | with a real consultation |
+|---|---|---|
+| 2 | 461 | **453** |
+| 3 | 65 | **65** |
+| 4 | 2 | **2** |
+
+**All eight exceptions are `cancelled` jobs** — stopped before they could
+consult. So among jobs that actually ran, multi-agent delegation is **100%
+real**: when the office says it convened two specialists, two specialists were
+convened.
+
+That is the strongest available answer to the thing CLAUDE.md says was
+unanswerable for weeks, and it is drawn from canonical rows rather than from a
+model's account of itself.
+
+**Gates:** not re-run; nothing changed.
+
+Clean-pass count after pass 42: **1 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
