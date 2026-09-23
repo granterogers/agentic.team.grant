@@ -1,4 +1,23 @@
--- 0534 — a contact can be corrected, and can have a face
+-- PENDING: a contact can be corrected, and can have a face
+--
+-- NOT A MIGRATION OF RECORD, AND NOT APPLIED. It is held here, outside
+-- `migrations/`, on purpose.
+--
+-- This is the UX workstream's branch. It does not own the database, and the
+-- main workstream is applying migrations to it daily - it was at 0565 on 23
+-- September while this branch carries 533. So this file cannot have a number
+-- yet and be honest about it: numbered 0534, where it started, it collides
+-- with `0534_the_harness_can_ask_to_see_its_own_projects.sql`, which was
+-- applied on 21 September; numbered above that head it leaves a 32-file gap
+-- that `check:migrations` refuses, correctly, because the gap is real - those
+-- migrations are on main and not here.
+--
+-- Leaving it in `migrations/` under either number would hand the failure to
+-- whoever merges rather than to whoever wrote it, and a numbered file that
+-- nobody can apply is worse than an unnumbered one that says so.
+--
+-- TO LAND IT: docs/basecamp/CONTACTS-BACKEND-HANDOFF.md has the exact steps,
+-- the verification, and what it unlocks in the interface.
 --
 -- Grant, 22 September 2026:
 --
