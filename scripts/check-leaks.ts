@@ -508,7 +508,20 @@ const piles = await db.execute(`
       receive harness traffic is a decision rather than a default — so this
       names it and stops, exactly as it does for a pinned project.
     */
-    (select count(*) from public.test_destinations) as registered_test_destinations
+    (select count(*) from public.test_destinations) as registered_test_destinations,
+    /*
+      AND HIS ACTIVITY PANEL (#356).
+
+      app.hq_studio_lately answers the studio's "what has the office been
+      doing" panel. Its COUNTERS already asked app.harness_job; its FEED
+      filtered only fixture PROJECTS — and #45 sends any suite testing a
+      fixture filter to use a REAL project, so 73 of 125 items were suites.
+      This check passed throughout, because it did not know the reader existed.
+    */
+    (select count(*)
+       from jsonb_array_elements(app.hq_studio_lately(200) -> 'office') e,
+            jsonb_to_record(e) as x(who text)
+      where app.harness_label(x.who)) as harness_on_his_activity_panel
 `)
 const pile = (piles.rows[0] ?? {}) as Record<string, number>
 const noisy: string[] = []
@@ -518,6 +531,13 @@ if (Number(pile.registered_test_destinations ?? 0) > 0) {
       'public.test_destinations — a suite registers one so its fixture job can be ' +
       'delivered at all (0523) and removes it in teardown, so a row at rest means a ' +
       'crashed run left the default-deny guard open for that destination',
+  )
+}
+if (Number(pile.harness_on_his_activity_panel ?? 0) > 0) {
+  noisy.push(
+    `${String(pile.harness_on_his_activity_panel)} suite row(s) on his Recent activity ` +
+      'panel (app.hq_studio_lately) — the feed filters fixture PROJECTS and #45 sends ' +
+      'suites to real ones, so filter the ACTOR with app.harness_label (0586)',
   )
 }
 if (Number(pile.fixture_tasks ?? 0) > 0) {

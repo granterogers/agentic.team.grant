@@ -1457,6 +1457,58 @@ check:chatter — all green.
 
 Clean-pass count after pass 29: **0 of 5** — reset by a systemic product defect.
 
+## Pass 30 — his activity panel was mostly test traffic
+
+**Territory:** the dashboard surfaces, reached by asking what `tasks.remind`
+does with 379 runs. It turned out to be correct, and the panel it writes into
+was not.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Filed as
+[#356](https://github.com/granterogers/agentic.team.grant/issues/356), fixed in
+0586 and 0587, witness added to `check:leaks`.
+
+**The finding.** `app.hq_studio_lately` answers the studio's *"what has the
+office been doing"* panel. Asked for 200 it returned **125 items, 73 of them
+suites** — `verify:pursues changed a autonomy` eight times,
+`verify-sess-pref-override learned something` three — with **6 in the top 20**,
+which is the only part anyone reads. After the fix: 55 items, 0 harness, still
+populated.
+
+**Both halves of one function, and only one wrong.** Its counters already asked
+`not app.harness_job(...)`; the FEED filtered `p.project_id is null or not
+p.is_fixture`, which excludes a fixture PROJECT and says nothing about who
+acted — and #45 sends any suite testing a fixture filter to a REAL project, so
+those events walk straight through. The numbers above the list were clean and
+the list was not. Fifth instance of that shape in this file.
+
+**Why nothing caught it.** `check:leaks` has a *"harness traffic on a table
+Grant reads"* check and it passed throughout, because it did not know this
+reader existed. It counts this surface now, proved by pointing it at
+`public.events` the way the feed used to look: **red at 99 suite rows, green on
+restore.**
+
+**A defect the fix uncovered, which is the part worth keeping.** With the suites
+filtered out his own rows could be read properly, and `app.action_in_words`
+composes the article as a bare `'a ' || noun` — so a vowel noun reads
+**"changed a autonomy"**. Exactly one noun does today and it is not a rare one:
+`autonomy.changed` has 441 events and #15 made that dial something he sets. It
+was invisible only because the vowel rows all belonged to `verify:pursues`.
+0587 fixes it by SOUND rather than by listing nouns, with the control that
+`office`, `ledger` and `system` still take no article.
+
+**Cleared, not fixed:** `tasks.remind` runs 379 times in 14 days and has
+announced nothing — correctly. All three of his open tasks carry no due date, so
+nothing can be due. Recorded so nobody re-investigates it.
+
+**A trap paid for again:** backticks inside a comment inside a template literal,
+in `check-leaks.ts` — two passes after writing that lesson into CLAUDE.md. It
+announces itself as an esbuild parse error pointing somewhere else.
+
+**Gates:** lint, typecheck, test, check:migrations, check:secrets,
+check:templates, check:callers, check:consumed, check:leaks — all green.
+
+Clean-pass count after pass 30: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

@@ -3748,6 +3748,23 @@ Each of these cost real time. They are here so they cost it once.
   to the rows you are describing before reading a max, and say so when you got
   it wrong rather than building on it.
 
+
+- **A READER'S COUNTERS AND ITS LIST CAN FILTER DIFFERENTLY, AND ONLY ONE OF
+  THEM WILL BE RIGHT.** `app.hq_studio_lately` asked `not app.harness_job(...)`
+  for `jobs_done` and `jobs_failed`, and filtered the FEED beneath them on
+  `p.project_id is null or not p.is_fixture` — a fixture PROJECT, saying nothing
+  about who acted. #45 sends any suite testing a fixture filter to a REAL
+  project, so **73 of 125 items on his Recent activity panel were suites**, six
+  of them on the first page. The clean numbers sat directly above the dirty
+  list. When one function answers a question twice, diff the two predicates.
+- **Filtering the noise is what lets you read what is left.** With the suites
+  gone, `app.action_in_words` was visibly composing `'a ' || noun`, so
+  `autonomy.changed` — 441 events, and #15 made that dial something Grant sets —
+  reads *"changed a autonomy"*. It had been invisible because every vowel row on
+  the panel belonged to `verify:pursues`. Fix an article by SOUND, never by
+  listing the nouns: a list is wrong the first time the office grows an
+  `action_type` nobody wrote down.
+
 ---
 
 ## Visual standard
