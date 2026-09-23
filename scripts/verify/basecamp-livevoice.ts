@@ -175,6 +175,26 @@ check(
 )
 
 /* --- 1. placing it ------------------------------------------------------ */
+/* Measured BEFORE the press, because anything you need to know about "before"
+   has to have been recorded before. */
+const idleGeometry = (await page.evaluate(
+  inPage(`const out = {}
+     for (const el of document.querySelectorAll('.bcheadacts > *')) {
+       const r = el.getBoundingClientRect()
+       const key = el.dataset.bcVoice !== undefined
+         ? 'mic'
+         : (el.dataset.bcDock !== undefined ? 'chat' : (el.dataset.bcPagemenu !== undefined ? 'menu' : (el.className || 'other')))
+       out[String(key)] = [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 100) / 100).join(',')
+     }
+     return out`),
+)) as Record<string, string>
+const idlePaint = (await page.evaluate(
+  inPage(`const el = document.querySelector('[data-bc-voice]')
+     if (el === null) return {}
+     const cs = getComputedStyle(el)
+     return { background: cs.backgroundColor, border: cs.borderTopColor, width: cs.borderTopWidth, colour: cs.color }`),
+)) as Record<string, string>
+
 await page.locator('[data-bc-voice]').first().click()
 await page
   .waitForFunction('document.querySelector(\'[data-bc-live="listening"]\') !== null', undefined, {
@@ -216,11 +236,124 @@ check(
   words.replace(/\n+/g, ' / ').slice(0, 160),
 )
 
+/*
+ * --- COLOUR, AND NOTHING MOVING ------------------------------------------
+ *
+ * Grant, 23 September: "Clicking the voice button must not move, resize or
+ * reflow surrounding buttons/UI. Inactive microphone/icon state = red.
+ * Active/listening/conversation state = green. State changes should happen
+ * without layout movement."
+ *
+ * Measured rather than eyeballed: the microphone's own box and the box of
+ * every control beside it, before the press and while the call is up. A
+ * border that thickens by half a pixel moves its neighbour, which is exactly
+ * the class of defect this is about.
+ */
+const geometry = async (): Promise<Record<string, string>> =>
+  (await page.evaluate(
+    inPage(`const out = {}
+       for (const el of document.querySelectorAll('.bcheadacts > *')) {
+         const r = el.getBoundingClientRect()
+         const key = el.dataset.bcVoice !== undefined
+           ? 'mic'
+           : (el.dataset.bcDock !== undefined ? 'chat' : (el.dataset.bcPagemenu !== undefined ? 'menu' : (el.className || 'other')))
+         out[String(key)] = [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 100) / 100).join(',')
+       }
+       return out`),
+  )) as Record<string, string>
+
+const paint = async (): Promise<Record<string, string>> =>
+  (await page.evaluate(
+    inPage(`const el = document.querySelector('[data-bc-voice]')
+       if (el === null) return {}
+       const cs = getComputedStyle(el)
+       return { background: cs.backgroundColor, border: cs.borderTopColor, width: cs.borderTopWidth, colour: cs.color }`),
+  )) as Record<string, string>
+
+const stillPaint = idlePaint
+const livePaint = await paint()
+const liveGeometry = await geometry()
+
+/* Red when it is not on, green when it is - as colours, not as words. */
+const redish = (c: string): boolean => {
+  const [r, g, b] = (c.match(/\d+/g) ?? ['0', '0', '0']).map(Number) as [number, number, number]
+  return r > g + 20 && r > b + 20
+}
+const greenish = (c: string): boolean => {
+  const [r, g, b] = (c.match(/\d+/g) ?? ['0', '0', '0']).map(Number) as [number, number, number]
+  return g > r + 20 && g > b + 10
+}
+check(
+  'the microphone is red while it is not on',
+  redish(String(stillPaint.colour ?? '')) || redish(String(stillPaint.border ?? '')),
+  JSON.stringify(stillPaint),
+)
+check(
+  'and green once the conversation is live',
+  greenish(String(livePaint.background ?? '')) || greenish(String(livePaint.border ?? '')),
+  JSON.stringify(livePaint),
+)
+/*
+  THE CONTROLS, not the status line.
+
+  The line that reports what the call is doing is SUPPOSED to appear - that is
+  its whole job - so comparing it against itself reported a correct fix as a
+  failure. What must not move is everything a person aims at: Chat with Team,
+  the microphone itself, and the project menu.
+*/
+const controlsOnly = (g: Record<string, string>): Record<string, string> => {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(g)) {
+    if (k.includes('callsay')) continue
+    out[k] = v
+  }
+  return out
+}
+check(
+  'and nothing beside it moved by so much as a pixel',
+  JSON.stringify(controlsOnly(idleGeometry)) === JSON.stringify(controlsOnly(liveGeometry)),
+  `before ${JSON.stringify(controlsOnly(idleGeometry))}\n        after  ${JSON.stringify(controlsOnly(liveGeometry))}`,
+)
+/*
+  AND THE LINE ITSELF DOES NOT OVERLAP A CONTROL, which is the way an
+  out-of-flow element goes wrong: it stops pushing things and starts covering
+  them instead.
+*/
+const covered = (await page.evaluate(
+  inPage(`const line = document.querySelector('[data-callsay]')
+     if (line === null || line.hidden) return []
+     const r = line.getBoundingClientRect()
+     const hit = []
+     for (const el of document.querySelectorAll('.bcmain button, .bcmain a, .bctop button')) {
+       const b = el.getBoundingClientRect()
+       if (b.width < 4 || b.height < 4) continue
+       if (r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom) {
+         hit.push((el.textContent ?? el.getAttribute('aria-label') ?? '?').trim().slice(0, 28))
+       }
+     }
+     return hit`),
+)) as string[]
+check('and it covers no control while it is up', covered.length === 0, covered.join(', '))
+
 /* --- 2. a turn each, then another ---------------------------------------- */
 const say = async (event: Record<string, unknown>): Promise<void> => {
   await page.evaluate(`window.__say(${JSON.stringify(event)})`)
-  await page.waitForTimeout(350)
+  /*
+    The panel repaints from a poll, so a fixed sleep races it - and a race is
+    what this was: the same check passed and failed on the same code depending
+    on what else the run had done first. Waited for properly.
+  */
+  await page.waitForTimeout(500)
 }
+const settlesTo = async (activity: string): Promise<boolean> =>
+  await page
+    .waitForFunction(`document.querySelector('[data-bc-live="${activity}"]') !== null`, undefined, {
+      timeout: 6000,
+    })
+    .then(
+      () => true,
+      () => false,
+    )
 await say({
   type: 'conversation.item.input_audio_transcription.completed',
   transcript: 'What is late on this project?',
@@ -228,7 +361,7 @@ await say({
 await say({ type: 'response.created' })
 check(
   'while the team is answering, the panel says so rather than still saying listening',
-  (await page.locator('[data-bc-live="answering"]').count()) === 1,
+  await settlesTo('answering'),
   await page.locator('.bclive').innerText(),
 )
 await say({
@@ -241,7 +374,7 @@ check('what he said is shown', afterOne.includes('What is late on this project?'
 check('what the team said is shown', afterOne.includes('Two things are late'), afterOne)
 check(
   'and it goes back to listening, ready for the next thing he says',
-  (await page.locator('[data-bc-live="listening"]').count()) === 1,
+  await settlesTo('listening'),
 )
 
 await say({
@@ -269,13 +402,13 @@ await say({
   type: 'response.output_audio_transcript.done',
   transcript: 'The other thing I wanted to raise is',
 })
-check('the team is speaking', (await page.locator('[data-bc-live="answering"]').count()) === 1)
+check('the team is speaking', await settlesTo('answering'))
 await say({ type: 'input_audio_buffer.speech_started' })
 await say({ type: 'conversation.item.truncated' })
 await say({ type: 'response.done' })
 check(
   'interrupting stops the answer and the conversation carries on',
-  (await page.locator('[data-bc-live="listening"]').count()) === 1,
+  await settlesTo('listening'),
   await page.locator('.bclive').innerText(),
 )
 await say({

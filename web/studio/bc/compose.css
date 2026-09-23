@@ -2062,12 +2062,40 @@
   [data-experience='basecamp'] .bcmic.connecting { animation: none; }
   [data-experience='basecamp'] .bcmic { transition: none; }
 }
+/*
+  WHAT THE CALL IS DOING, SAID WITHOUT MOVING ANYTHING.
+
+  Grant, 23 September: "Clicking the voice button must not move, resize or
+  reflow surrounding buttons/UI."
+
+  This was `flex-basis: 100%` inside the actions row, so the moment the call
+  said anything the line claimed a whole row of its own: Chat with Team slid
+  309px sideways and the project menu dropped onto a new line. Measured, not
+  guessed - the geometry of every control in that row was recorded before the
+  press and again while the call was up, and every one of them had moved.
+
+  Out of flow entirely now, anchored under the row it belongs to. It cannot
+  push anything because it occupies nothing, and it carries its own surface so
+  it stays readable over whatever is beneath it.
+*/
+[data-experience='basecamp'] .bcheadacts { position: relative; }
 [data-experience='basecamp'] .bccallsay {
-  flex-basis: 100%;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--bc-r-control);
+  background: var(--bc-surface);
+  box-shadow: var(--bc-shadow-surface);
   text-align: right;
   font-size: 12.5px;
   color: var(--bc-text-muted);
+  /* It reports; it is not a target. */
+  pointer-events: none;
+  z-index: 2;
 }
+[data-experience='basecamp'] .bccallsay[hidden] { display: none; }
 
 /*
   AND THE CHAT BUTTON GROWS TO MEET IT. The pair was 32px of text beside a
@@ -2410,3 +2438,56 @@
   [data-experience='basecamp'] .bcsignin { margin-left: 0; width: 100%; }
   [data-experience='basecamp'] .bcsignininput { flex: 1; width: auto; }
 }
+
+/* ---------------------------------------------------------------------- *
+ * THE MICROPHONE SAYS WHETHER IT IS ON, IN COLOUR.
+ *
+ * Grant, 23 September: "Inactive microphone/icon state = red. Active /
+ * listening / conversation state = green. State changes should happen without
+ * layout movement... Clicking the voice button must not move, resize or reflow
+ * surrounding buttons/UI."
+ *
+ * So the three states differ only in COLOUR - never in width, height, border
+ * width, padding or font. The border stays 1.5px in every state and the box
+ * stays 44x44, which is what keeps Chat with Team beside it from shifting by a
+ * pixel when the call starts. The pulse is opacity only, which composites
+ * without touching layout, and it is off for anybody who asked for stillness.
+ * ---------------------------------------------------------------------- */
+[data-experience='basecamp'] .bcmic {
+  background: color-mix(in srgb, var(--bc-danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--bc-danger) 55%, transparent);
+  color: var(--bc-danger);
+}
+[data-experience='basecamp'] .bcmic:hover {
+  background: color-mix(in srgb, var(--bc-danger) 26%, transparent);
+  border-color: var(--bc-danger);
+}
+/* Connecting is on its way to green and is not there yet. */
+[data-experience='basecamp'] .bcmic.connecting {
+  background: color-mix(in srgb, var(--bc-success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--bc-success) 55%, transparent);
+  color: var(--bc-success);
+}
+[data-experience='basecamp'] .bcmic.ringing,
+[data-experience='basecamp'] .bcmic[aria-pressed='true'] {
+  background: var(--bc-success);
+  border-color: var(--bc-success);
+  /* Ink chosen against the fill rather than inherited, so the glyph stays
+     legible in both schemes. */
+  color: var(--bc-accent-ink);
+}
+
+/*
+  ONE PLACE SAYS WHAT THE CALL IS DOING.
+
+  Taking the head's status line out of flow stopped it pushing the controls
+  sideways and started it covering the live panel's Mute and End instead -
+  which is the way an absolutely positioned element goes wrong, and the check
+  found it in the same run.
+
+  While a conversation is up, the panel below reports everything: connecting,
+  listening, the team talking, muted. The head's line is for the moments there
+  is no panel yet - a refused microphone, a session that would not start - so
+  it stands down as soon as the panel exists.
+*/
+[data-experience='basecamp'] .bchead:has(.bclive) .bccallsay { display: none; }

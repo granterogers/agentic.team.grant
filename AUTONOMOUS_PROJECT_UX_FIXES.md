@@ -48,11 +48,11 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** Opening Chat still uses the sidebar
 
 ### 3. Live voice (BLOCKER)
-- [ ] **TODO** "unauthorized" — trace and repair the auth/session path
-- [ ] **TODO** A voice session can actually be established
-- [ ] **TODO** Pressing the voice button moves nothing around it
-- [ ] **TODO** Inactive = red, active/listening = green
-- [ ] **TODO** State changes cause no layout movement
+- [x] **VERIFIED** "unauthorized" — same root cause as Chat, plus honest 401 handling
+- [x] **VERIFIED** A session is established (protocol-level; OpenAI itself still unproved)
+- [x] **VERIFIED** Pressing the voice button moves nothing around it — measured
+- [x] **VERIFIED** Inactive = red, live = green, asserted as colours
+- [x] **VERIFIED** No layout movement, and the status line covers no control
 
 ### 4. To-dos
 - [ ] **TODO** Completing a to-do must not make it disappear
@@ -169,6 +169,28 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**3. Live voice — VERIFIED (except OpenAI itself).**
+- Same root cause as Chat: `call.js` reads the same `hq.token`, so with none its
+  `look_up` and `ask_the_team` calls came back 401 and Claire said
+  "unauthorized" out loud. Both paths now clear the token and say a sentence,
+  and a call started while signed out SAYS SO before connecting rather than
+  failing on every tool.
+- **A real layout defect, found by measuring rather than looking:** the call's
+  status line was `flex-basis: 100%` inside the actions row, so the moment the
+  call said anything, Chat with Team slid 309px sideways and the project menu
+  dropped onto a new row. Out of flow now; every control's box is identical
+  before and while the call is up.
+- Taking it out of flow then made it COVER the panel's Mute and End — the way
+  an absolutely positioned element goes wrong — which the same check caught in
+  the same run. The head's line now stands down while the panel is up, so one
+  place says what the call is doing.
+- Red inactive / green live, asserted as computed colours rather than class
+  names.
+- `verify:basecamp-livevoice` 29/29, with real WebRTC and a loopback peer.
+- A flaky check of my own was fixed properly: three state assertions used fixed
+  sleeps against a 400ms repaint poll, so they passed or failed depending on
+  what else the run had done first. They wait for the state now.
 
 **1. Settings access — VERIFIED.**
 - Measured at 5 viewport/auth states before and after; 44x44 minimum everywhere,

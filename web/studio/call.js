@@ -353,6 +353,26 @@ if (typeof window !== 'undefined') {
   something one select away. `/look` is a read of canonical state and returns
   in about a second, which is what makes it usable mid-sentence.
 */
+/*
+  A TOKEN THE OFFICE WILL NOT ACCEPT, said in words.
+
+  Both calls below present the browser's bearer token, and with none - which is
+  every browser on this hostname until somebody signs in, because storage is per
+  origin - the office answers 401 `unauthorized`. That word then travelled all
+  the way to Claire as a tool result and she said it out loud, which is what
+  "Talk to Team returns unauthorized" was.
+
+  The credential is cleared on the way past for the same reason `office.js` and
+  `chat.js` clear it: a browser holding a token the office has refused will fail
+  identically for ever, and the page can only offer a way back in once it knows
+  it is signed out.
+*/
+const refused = (r) => {
+  if (r.status !== 401) return null
+  try { localStorage.removeItem(KEY) } catch (e) { /* private window */ }
+  return new Error('This browser is not signed in to the office. Sign in and try again.')
+}
+
 const lookUp = async (about) => {
   const r = await fetch(VOICE + '/look', {
     method: 'POST',
@@ -362,6 +382,8 @@ const lookUp = async (about) => {
     },
     body: JSON.stringify({ about }),
   })
+  const no = refused(r)
+  if (no !== null) throw no
   const body = await r.json()
   if (!r.ok) throw new Error(body.error || ('The office returned ' + r.status))
   return body.found
@@ -376,6 +398,8 @@ const askOffice = async (said) => {
     },
     body: JSON.stringify({ said, session }),
   })
+  const no = refused(r)
+  if (no !== null) throw no
   const body = await r.json()
   if (!r.ok) throw new Error(body.error || ('The office returned ' + r.status))
   return body
@@ -538,6 +562,19 @@ export async function startCall() {
     if (stale()) return abandon()
     if (degraded) show('Claire', 'I am on a stripped-down session and cannot reach the team ' +
       'on this call — worth telling whoever looks after this.', 'bad')
+
+    /*
+      SIGNED OUT IS WORTH SAYING BEFORE THE CALL, not after every tool fails.
+
+      Minting a credential needs no office token, so a call CONNECTS perfectly
+      well while signed out - and then everything Claire tries to look up or put
+      to the team comes back unauthorized, which sounds like a broken assistant
+      rather than a browser that is not signed in.
+    */
+    if ((localStorage.getItem(KEY) || '') === '') {
+      show('Claire', 'This browser is not signed in to the office, so I cannot look ' +
+        'anything up or put work to the team on this call. Sign in and call me back.', 'bad')
+    }
 
     say('Asking for the microphone…')
     mic = await navigator.mediaDevices.getUserMedia({
