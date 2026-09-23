@@ -1383,6 +1383,80 @@ check:templates, check:callers, check:consumed, check:leaks — all green.
 
 Clean-pass count after pass 28: **0 of 5** — reset by a systemic product defect.
 
+## Pass 29 — a duty that told him the same thing every hour
+
+**Territory:** what actually reaches his phone. Chosen by measuring deliveries
+per kind rather than by picking a feature, which is what surfaced it.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.** Filed as
+[#355](https://github.com/granterogers/agentic.team.grant/issues/355), fixed in
+0584 + 0585 and the worker seam, deployed.
+
+**What he received.** His Google refresh token was revoked on 15 September.
+Every hour after that `google.read_mail` and `google.read_calendar` each failed
+and each told him so: 65 Telegram + 65 Slack + 64 Slack = **194 deliveries over
+four days, with ONE distinct body between them.** The connection was restored
+around the 19th and both duties have run silently since — so the incident is
+over and the defect is not, because the message itself says the OAuth app is in
+testing mode where refresh tokens expire every seven days.
+
+**The same shape, hiding better.** `office.notion_sync`: 137 sends, **128
+distinct bodies**, saying one unchanged fact every two hours — the page count
+was 60 for 72 consecutive runs, then 57 for 51. A model rewords it each time, so
+it reads as news and **a text-based witness cannot see it at all**. Its
+`announce` is correct about changes and fires on `skipped.length > 0`, where the
+skipped set is four permanently-empty Notion sections.
+
+**Why nothing caught it, and this is the part worth keeping.**
+`check:chatter`'s ceiling is 100/day per kind and this peaked near 36.
+`app.recurring_failures` and `app.notice`'s `failure_repeats` branch both read
+**failed** jobs — and these jobs **completed successfully while reporting a
+failure**. A duty that succeeds at saying it failed is invisible to every
+failure mechanism the office has.
+
+**The fix**, at the one place `jobs.announce` is written: `app.say_once`. A duty
+speaks when what it has to say CHANGES, and at most once a day when it does not
+— not never, because he should still be told daily that his mail has been
+unreadable for a week. It never turns silence into speech (it runs under
+`if (announce)`), never touches conversation (scoped to kinds
+`public.responsibilities` schedules, derived rather than listed), and **fails
+open**: `?.say !== false`, so an empty row makes the office speak.
+
+**A hole I found in my own fix before it could bite.** 0584 keyed the
+fingerprint on KIND alone. `drive.watch` runs per project across 14 projects, so
+two projects whose news read identically would have had the second MUTED —
+losing real information rather than sparing a repeat, which is the expensive
+direction. 0585 keys on (kind, project) with `app.unnamed_project()` as the
+sentinel, because a NULL in a key never matches `on conflict`, which is the
+`documents_one_per_external_ref` lesson. `duty_said` had never held a row, so
+nothing was ever muted by the narrower version.
+
+**Two instrument corrections, both mine, both caught by reading:**
+
+1. I read a `max(created_at)` over ALL runs as the last FAILURE date and said
+   `notion_sync` was "still failing today". Every one of its 30 failures is from
+   18 September, the day it was fixed. Corrected before building on it — and
+   then I did the same thing again with the 194 messages, calling them ongoing
+   when they stopped on the 18th. Twice in one pass.
+2. 0585's drive block failed on `no subject to drive with` because I pointed the
+   cross-project control at `notion_sync`, which covers every project in one run
+   and carries no `project_id`. The subject was wrong, not the fix.
+
+**Sabotage:** disabling the seam turned the wired-call test red; restoring it
+green. Honest limitation — **one half of that sabotage did not apply** (a
+template-literal replacement matched nothing) and the proof line reported
+`0 occurrences`, which is the only reason I knew.
+
+**Verified deployed:** worker deployed clean. End-to-end confirmation of the
+mute is pending the next scheduled `office.notion_sync`; the mechanism itself is
+driven against real rows in both migrations.
+
+**Gates:** lint, typecheck, test (189 files / 3,030 tests), check:migrations,
+check:secrets, check:templates, check:callers, check:consumed, check:leaks,
+check:chatter — all green.
+
+Clean-pass count after pass 29: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own

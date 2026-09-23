@@ -3714,6 +3714,40 @@ Each of these cost real time. They are here so they cost it once.
   that must never be produced is evidence removed rather than recorded. A gate
   red by design is one somebody starts skipping.
 
+
+- **A DUTY THAT SUCCEEDS AT SAYING IT FAILED IS INVISIBLE TO EVERY FAILURE
+  MECHANISM THE OFFICE HAS.** Grant's Google token was revoked on 15 September
+  and `google.read_mail` and `google.read_calendar` each told him so EVERY HOUR
+  for four days — **194 deliveries, one distinct body**. `check:chatter`'s
+  ceiling is a hundred a day per kind and this peaked near 36;
+  `app.recurring_failures` and `app.notice`'s `failure_repeats` branch both read
+  FAILED jobs, and these jobs COMPLETED. A gap between two correct halves.
+  `app.say_once` (0584) is asked at the one place `jobs.announce` is written.
+- **A model rewording an unchanged fact defeats every text-based witness.**
+  `office.notion_sync` sent 137 messages with **128 distinct bodies**, saying one
+  thing — the count was 60 for 72 consecutive runs, then 57 for 51. Counting
+  distinct bodies says "barely any repetition"; counting the NUMBER INSIDE them
+  says it never moved. When a duty's announcement passes through `sayAs`, dedupe
+  on what it is ABOUT, never on what it says.
+- **"Do not repeat" is the wrong rule; "say it when it changes, and once a day
+  when it does not" is the right one.** He should still be told daily that his
+  mail has been unreadable for a week. Once an hour is not telling him, it is
+  teaching him to swipe the notification away — the same cost as a health
+  reading that cries wolf.
+- **A dedupe rule must fail OPEN, never turn silence into speech, and never key
+  more coarsely than the thing it is about.** `?.say !== false` so an empty row
+  speaks; it runs under `if (announce)` so a handler with nothing to say is
+  untouched; and 0585 keys on (kind, PROJECT) because `drive.watch` runs per
+  project and two projects whose news reads identically would otherwise have had
+  the second MUTED — losing real information, which is the expensive direction.
+  A NULL in that key would never match `on conflict`, so the sentinel is
+  `app.unnamed_project()`.
+- **`max(created_at)` over ALL runs is not the last FAILURE — misread twice in
+  one hour.** It made a handler fixed on 18 September look like it was still
+  failing today, and a message burst that ended on the 18th look ongoing. Filter
+  to the rows you are describing before reading a max, and say so when you got
+  it wrong rather than building on it.
+
 ---
 
 ## Visual standard

@@ -1122,8 +1122,34 @@ export const runJob = async (
   // `jobs.announce` as its first act, so a handler's verdict has to be on the
   // row by then rather than passed alongside it.
   if (output.announce !== undefined) {
+    /*
+      A DUTY MAY NOT SAY THE SAME THING EVERY HOUR (#355, 0584).
+
+      A handler decides whether it has anything to say. It cannot decide
+      whether it has said it already, because it sees one run. `app.say_once`
+      does: it compares this body against the last one this KIND announced and
+      keeps it quiet for twenty hours if nothing changed.
+
+      Grant's Google token was revoked on 15 September and for four days
+      `google.read_mail` and `google.read_calendar` each told him so every
+      hour -- 194 messages, ONE distinct body. `office.notion_sync` does the
+      same and hides it: 137 sends, 128 distinct bodies, because a model
+      rewords the identical fact every two hours.
+
+      Asked here rather than in the notifier because this is where the verdict
+      is WRITTEN, and asked only when the handler already said yes -- a silence
+      is never turned into speech. Scoped to kinds `public.responsibilities`
+      schedules, so a question Grant asks twice still gets two answers.
+    */
+    let announce = output.announce
+    if (announce) {
+      const { rows } = await db.execute(
+        `select app.say_once(${lit(job.jobId)}::uuid, ${lit(output.body)}) as say`,
+      )
+      announce = (rows[0] as { say?: boolean } | undefined)?.say !== false
+    }
     await db.execute(
-      `update public.jobs set announce = ${output.announce ? 'true' : 'false'}
+      `update public.jobs set announce = ${announce ? 'true' : 'false'}
         where job_id = ${lit(job.jobId)}::uuid`,
     )
   }
