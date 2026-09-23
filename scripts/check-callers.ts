@@ -353,14 +353,37 @@ if (fresh.length > 0) {
 }
 
 if (fixed.length > 0) {
+  /*
+    GAINED A CALLER, OR GONE ALTOGETHER — and saying "now reachable" for both
+    sends the reader looking for a caller that does not exist.
+
+    A baselined entry leaves the unreached set for two completely different
+    reasons: something started calling it, or the function was DROPPED. The
+    second is common on a shared database, where another branch removes what
+    it created. Four `public.sign_in_*` entries went that way and the report
+    said they were "now reachable", which cost six queries to disbelieve —
+    grepping the repository, then pg_proc for a caller, then the check's own
+    source, before asking whether the functions still existed at all.
+
+    That is the defect CLAUDE.md records twice in other instruments: a line
+    that names the wrong cause is worse than a bare count, because it points
+    somewhere and somewhere is wrong.
+  */
+  const live = new Set(fns.map((f) => `${f.schema}.${f.name}`))
+  const reached = fixed.filter((f) => live.has(f))
+  const gone = fixed.filter((f) => !live.has(f))
+
   console.error(
     // A report line a person reads must be a sentence, not a template with the
     // plural left in it. CLAUDE.md already records what "12 of 6" cost.
     `\ncheck:callers FAILED — ${String(fixed.length)} baseline ${
       fixed.length === 1 ? 'entry is' : 'entries are'
-    } now reachable. ` + `Remove them from ${BASELINE} so the number keeps going down:`,
+    } no longer unreached. Remove them from ${BASELINE} so the number keeps going down:`,
   )
-  for (const f of fixed) console.error(`  ${f}`)
+  for (const f of reached) console.error(`  ${f} — something calls it now`)
+  for (const f of gone) {
+    console.error(`  ${f} — NO LONGER EXISTS; it was dropped, not wired`)
+  }
   process.exit(1)
 }
 

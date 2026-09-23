@@ -3822,6 +3822,23 @@ Each of these cost real time. They are here so they cost it once.
   properties — the body is passed, the topic is passed, the arity follows the
   question, it fails open — not the characters that currently express them.
 
+
+- **"NO LONGER UNREACHED" HAS TWO CAUSES AND THE REPORT NAMED ONE.**
+  `check:callers` said four `public.sign_in_*` baseline entries were *"now
+  reachable"*. Nothing called them: not the repository, not `pg_proc`, not the
+  gateway. **They had been DROPPED** — on a shared database another branch
+  removes what it created. Disbelieving one wrong word cost six queries. The
+  check now distinguishes *something calls it now* from *NO LONGER EXISTS; it
+  was dropped, not wired*, and both branches are proved. Third instrument in
+  this file to name the wrong cause, after "12 of 6" and `check:templates`
+  blaming a backtick for a duplicate `const`.
+- **Every filter can hide something real, so audit a session's filters
+  together.** A run that fixes leakage fix by fix ends up having narrowed five
+  readers, and each one's expensive direction is the same: hiding HIS work, not
+  showing a suite's. Check them as a set — widened predicate, filtered feed,
+  narrowed failure reader, deduped announcements — with one question each: what
+  of his does this no longer show?
+
 ---
 
 ## Visual standard

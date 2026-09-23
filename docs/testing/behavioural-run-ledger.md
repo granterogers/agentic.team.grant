@@ -2030,6 +2030,64 @@ constraints directly rather than end to end through live turns. That is a real
 limitation, deliberately chosen — a fresh live corpus is what the standing rule
 forbids manufacturing — and the synthesis pass should attack it.
 
+## FINAL ADVERSARIAL SYNTHESIS PASS — a defect. Streak resets.
+
+**Not a fresh territory: an attack on this session's own work**, aimed at the
+limitation stated before it began.
+
+**The systemic risk I set out to find.** Nearly every fix in passes 27–36 was a
+FILTER — `harness_job` widened (0582), the activity feed filtered (0586),
+`recurring_failures` narrowed (0588), duty announcements deduped (0584/0585),
+two settings claims removed (0580/0581). **Every filter can hide something
+real**, and hiding his work is the expensive direction in all five.
+
+**All five checked for over-reach, and none over-reaches:**
+
+- **0582** — 39 jobs read as harness whose dedupe key carries no label, which
+   looked like over-reach. All are `verify:escapes` (`U0HISTREAL`) and a
+   context suite (`ctx-mucse7hi`), caught by a DIFFERENT signal that predates
+   my change. His 3,293 real jobs in seven days are untouched.
+- **0584/0585** — driven against the LIVE function, not the migration's copy:
+   conversation `t/t` (the same answer twice speaks twice) and duty `t/f`. It
+   cannot silence him.
+- **0586** — his rows survive: `grant` 13, `chief-of-staff` 9, `office` 9, and
+   the specialists.
+- **0588** — the only product caller always passes the job, so no real failure
+   is excluded; the migration drove both directions.
+- **0580/0581** — zero occurrences of either false claim remain.
+
+**THE DEFECT, and it is in an instrument I touched this session.**
+`check:callers` went red reporting four `public.sign_in_*` baseline entries as
+*"now reachable — remove them so the number keeps going down"*. Nothing calls
+them. Nothing in the repository names them outside the migration that DEFINES
+them. No database function calls them either. **They no longer exist** — the
+concurrent session dropped what its own 0577 created.
+
+A baselined entry leaves the unreached set for two unrelated reasons: something
+started calling it, or it was **dropped**. The report said "now reachable" for
+both, and disbelieving it cost six queries — the repository, `pg_proc` for a
+caller, the check's own source, and finally whether the function existed at all.
+That is exactly the class CLAUDE.md records twice: *a line that names the wrong
+cause is worse than a bare count, because it points somewhere and somewhere is
+wrong.*
+
+Fixed: the check now says which of the two happened. Both branches proved —
+`NO LONGER EXISTS; it was dropped, not wired` on the real case, and
+`something calls it now` under a sabotage that adds a genuinely-called function
+to the baseline, green on restore. The four stale entries removed: **16 → 12**,
+and the note records that the baseline shrank because the subject went away
+rather than because anything was wired.
+
+**Classification: LOCAL DEFECT in an instrument.** Not a product defect — but
+the synthesis rule is *any meaningful defect*, and a gate whose failure line
+points the reader somewhere false is meaningful by this repository's own
+standard. **The streak resets to 0 of 5.** Lowering the bar because the run is
+long is the one thing the brief forbids.
+
+**Gates:** lint, typecheck, test, and all twelve `check:*` — green.
+
+Clean-pass count after the synthesis pass: **0 of 5.**
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
