@@ -40,8 +40,32 @@ const HOW_MANY = new RegExp(
   'i',
 )
 
+/*
+  How the OFFICE holds the work, which is where a dictated question puts its
+  verb (#327).
+
+  The first version went straight from `who` to a working verb, so "who is on
+  that" was recognised and "who have you got on that" was not — and the cost of
+  the miss is not a worse sentence, it is WORK. A status question nothing
+  recognises falls through to the ordinary instruction path, which convenes
+  specialists: measured on a twelve-turn session, "who have you got on that"
+  spawned two children and re-convened the quality director to answer a
+  question the rows already held. Invisible duplicated work, triggered by the
+  commonest follow-up there is.
+
+  Not a longer list of sentences. The enumeration that was wrong is of ENGLISH
+  VERB FORMS, which is unbounded, so the span is bounded by WHAT IT MAY
+  CONTAIN — an auxiliary and the office as its subject — rather than by length.
+  That is what keeps "who SHOULD WE PUT on that" out: it asks for an
+  assignment, and `should` is not something the office already has.
+*/
+const OFFICE_HAS = String.raw`(?:have|has|did|do)\s+(?:you|we|they|the team)\s+(?:got|put|working)?`
+
 const WHO = new RegExp(
-  String.raw`^\s*(?:and\s+)?(?:so\s+)?who(?:'s| is| are)?\s+(?:actually\s+)?${ON_IT}\s+${IT}\s*\??\s*$`,
+  // `whos` without the apostrophe as well: dictation drops it, and
+  // `straighten` normalises a curly quote rather than supplying a missing one.
+  String.raw`^\s*(?:and\s+)?(?:so\s+)?who(?:'s|s| is| are)?\s+(?:actually\s+)?` +
+    String.raw`(?:${OFFICE_HAS}\s+)?${ON_IT}\s+${IT}\s*\??\s*$`,
   'i',
 )
 
