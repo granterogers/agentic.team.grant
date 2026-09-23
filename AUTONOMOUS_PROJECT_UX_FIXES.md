@@ -101,6 +101,11 @@ repairing the completion defect requires it.
 - [x] **VERIFIED** The task counts left the header for the to-dos surface, still as filters
 - [x] **VERIFIED** The board begins at 205px rather than 283px (desktop) and 217px rather than 281px (phone)
 
+### 11. Final reconciliation
+- [x] **VERIFIED** A fresh end-to-end browser pass of the Project page, all ten in one session
+- [x] **VERIFIED** Every item above reconciled against what the pass actually saw
+- [x] **VERIFIED** `basecamp:gate` green end to end, and the two new suites are IN it
+
 ## Discoveries, decisions, files changed
 
 ### 1. Settings access — what was actually wrong
@@ -174,6 +179,46 @@ word.
 `scripts/verify/basecamp-chat.ts` (new), `scripts/verify/chat-live.ts` (new).
 
 ## Verification log
+
+**11. Final reconciliation — VERIFIED.**
+- `verify:basecamp-reconcile`, new and in the gate: **20/20**. One browser
+  session, one visit, every item in the order a person would meet them — the
+  header's height, the mark in the top bar, the project menu, the chat sidebar
+  (Shift+Enter makes a newline, Enter sends and empties the composer, the
+  sidebar survives the send), the microphone (the layout does not move, the box
+  is identical in every state, it says what happened), a to-do ticked and still
+  there after a reload, the Card Table miniature's cards and columns, every
+  thumbnail on the home, and a contact pressed by face.
+- It exists because every other suite opens a fresh browser on ONE surface, and
+  the interactions between fixes — a redraw that loses the dock, a tick that
+  resets a filter, a call that moves the layout under a menu — only appear when
+  one person does all of it in one visit. **Control:** breaking the dock's
+  wiring turns two of its checks red.
+- **Three findings in its first run, and two were the harness.** It looked for
+  the sidebar as `.bcdock` when the studio calls it `#dock`, and it counted the
+  sandbox's own TLS interception as failed requests: outbound HTTPS here goes
+  through an agent proxy whose certificate this Chromium does not carry, so
+  every avatar and every edge function fails with
+  `ERR_CERT_AUTHORITY_INVALID`. That is the environment, not the page — and
+  counting it would make every future run red for a reason no person will ever
+  see. The pass now names and discounts exactly that, and reports how many it
+  discounted rather than hiding them.
+
+### What was NOT verified, and why
+- **Nothing was tested against a signed-in deployed page in a browser.** The
+  suites drive a local server with the prototype store, plus, where a backend
+  is genuinely the subject, the deployed gateway or the database over the
+  network (`chat-live`, and `basecamp-look`'s office leg). The sandbox cannot
+  reach `*.supabase.co` from Chromium at all, so a signed-in end-to-end browser
+  session is not available here — it is available to Grant.
+- **Item 9's persistence is proved in the office, not through the picker's own
+  press.** `hq_project_look` stores and clears a mark, a colour and a picture
+  inside a rolled-back transaction, and the picker sends `p_slug` plus those
+  arguments; the prototype has no backend, so pressing a colour in this
+  environment correctly refuses rather than pretending.
+- **Real media, a physical microphone and a real Drive account remain untested
+  here**, as recorded in the earlier voice/contacts/Drive run. Unchanged by
+  this pass.
 
 **10. Header space — VERIFIED.**
 - **Measured, not estimated.** Signed in, discounting the prototype strip a
