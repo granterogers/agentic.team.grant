@@ -2696,34 +2696,54 @@ const notLive = () => {
     <!--
       SIGNING IN, where the page already says you are not.
 
-      THE DEFECT THIS FIXES. Browser storage is per ORIGIN, and this experiment
-      is served from its own hostname - so a token entered on Team HQ does not
-      exist here, and there was no way whatever to enter one. Every call to the
-      office therefore came back 401, which is precisely the "unauthorized"
-      that Chat and the microphone were reporting. It was never a broken
-      endpoint: the same request with the right token answers with real state.
+      THE DEFECT THIS FIXES. One bearer token is the whole of the
+      authorisation here, and the way it reached a browser was a Telegram
+      message saying "paste it once, per device". Grant never asked for that
+      and met it as an interruption in front of Chat, Voice, Settings,
+      appearance and every write.
 
-      One bearer token is the whole of the authorisation in this office - a
-      hard constraint, not a preference - and it reaches Grant through the
-      token command, which sends it to him on Telegram. So the honest control
-      is a place to put it, beside the sentence explaining why the page cannot
-      see anything.
+      So the page asks instead. The office sends the ask to the chat it
+      already knows is his, he taps once, and this browser is handed the same
+      token it would have been given to paste. The credential is never
+      rendered, never in a chat log, never in a clipboard.
 
-      A password field, no autocomplete and no value on redraw: a bearer token
-      is a credential and must not sit in the DOM, in a screenshot, or in this
-      repository's own captures.
+      THE CODE IS NOT A SECOND SECRET. This endpoint cannot authenticate the
+      ask, so anybody reaching the page can start one. The code is shown here
+      and repeated in the message so he can compare them, and tap only if
+      they match.
+
+      THE FALLBACK STAYS, folded away. A preview deployment gets its own
+      hostname and is deliberately not on the allowlist, so it cannot ask -
+      and a page with no way in at all would be worse than one asking for a
+      paste.
+
+      A password field, no autocomplete and no value on redraw: a credential
+      must not sit in the DOM, in a screenshot, or in this repository own
+      captures.
 
       No backticks anywhere in this comment: it lives inside a template
       literal and one here ends the string.
     -->
-    <form class="bcsignin" data-bc-signinform${signedOut ? '' : ' hidden'}>
-      <label class="bcvh" for="bc-token">The office token</label>
-      <input class="bcinput bcsignininput" id="bc-token" type="password"
-        name="token" autocomplete="off" spellcheck="false"
-        placeholder="Paste the office token">
-      ${button('Sign in', { kind: 'primary', 'data-bc-signin': '1' })}
-      <span class="bcsigninsaid" data-bc-signin-said role="status"></span>
-    </form>
+    <div class="bcsignin" data-bc-signinform${signedOut ? '' : ' hidden'}>
+      <div class="bcsigninask">
+        ${button('Sign in', { kind: 'primary', 'data-bc-signin-ask': '1' })}
+        <span class="bcsigninsaid" data-bc-signin-said role="status"></span>
+      </div>
+      <p class="bcsignincode" data-bc-signin-code hidden>
+        <span class="bcvh">Check this code matches the one in the message</span>
+        <b data-bc-signin-digits></b>
+      </p>
+      <details class="bcsigninelse">
+        <summary>Sign in with a token instead</summary>
+        <form class="bcsigninform" data-bc-tokenform>
+          <label class="bcvh" for="bc-token">The office token</label>
+          <input class="bcinput bcsignininput" id="bc-token" type="password"
+            name="token" autocomplete="off" spellcheck="false"
+            placeholder="The office token">
+          ${button('Use it', { 'data-bc-signin': '1' })}
+        </form>
+      </details>
+    </div>
   </div>`
 }
 

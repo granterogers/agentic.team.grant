@@ -146,6 +146,8 @@
     "slack:tidy": "tsx scripts/slack/tidy-channels.ts",
     "slack:backfill": "tsx scripts/slack/backfill.ts",
     "hq:token": "tsx scripts/deploy/hq-token.ts",
+    "deploy:signin": "tsx scripts/deploy/signin.ts",
+    "verify:signin": "tsx scripts/verify/signin.ts",
     "verify:hq": "tsx scripts/verify/hq.ts",
     "backup:notify": "tsx scripts/backup/notify-failure.ts",
     "export:portable": "tsx scripts/backup/export-portable.ts",

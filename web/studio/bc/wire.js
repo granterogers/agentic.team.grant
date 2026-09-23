@@ -14,6 +14,7 @@
 */
 
 import { act, attempt, canWrite, read, token } from '../office.js'
+import * as session from '../session.js'
 import { esc } from './parts.js'
 import * as bcDrive from './drive.js'
 import * as live from './livevoice.js'
@@ -437,29 +438,90 @@ export const wire = (root) => {
   */
   for (const form of root.querySelectorAll('[data-bc-signinform]')) {
     const said = form.querySelector('[data-bc-signin-said]')
-    const field = form.querySelector('#bc-token')
+    const codeBox = form.querySelector('[data-bc-signin-code]')
+    const digits = form.querySelector('[data-bc-signin-digits]')
     const tell = (words) => {
       if (said !== null) said.textContent = words
     }
-    const tryIt = async () => {
+    const done = async () => {
+      /*
+        Signed in: ask the office again and redraw. Nothing here judges the
+        credential -- the read is the authority, and `office.js` clears one the
+        office refuses, which is exactly the behaviour a browser that could not
+        reach the office used to hide.
+      */
+      tell('Signed in.')
+      await ctx.refresh()
+      ctx.render()
+    }
+
+    /*
+      ASKING. One press, then a code to compare and a wait.
+
+      The button is disabled while an ask is live, because a second press would
+      start a second request and put a second message on his phone -- and the
+      code he is looking at would no longer be the one that works.
+    */
+    for (const b of form.querySelectorAll('[data-bc-signin-ask]')) {
+      b.addEventListener('click', (e) => {
+        e.preventDefault()
+        void (async () => {
+          b.disabled = true
+          tell('Asking…')
+          let asked
+          try {
+            asked = await session.begin()
+          } catch (err) {
+            b.disabled = false
+            tell(err instanceof Error ? err.message : String(err))
+            return
+          }
+          if (digits !== null) digits.textContent = asked.code
+          if (codeBox !== null) codeBox.hidden = false
+          tell('Check your Telegram. Tap the link if it shows this code.')
+          const settled = await session.settle(asked.requestId, {
+            onWait: () => {
+              tell('Waiting for you to tap…')
+            },
+          })
+          if (settled.ok) {
+            if (codeBox !== null) codeBox.hidden = true
+            await done()
+            return
+          }
+          b.disabled = false
+          if (codeBox !== null) codeBox.hidden = true
+          tell(session.SAID[settled.reason] ?? 'That did not work. Try again.')
+        })()
+      })
+    }
+
+    /*
+      THE FALLBACK, folded away behind a disclosure.
+
+      A preview deployment gets its own hostname and is deliberately not on the
+      sign-in allowlist, so it cannot ask -- and it is where this experiment is
+      verified. Validated by USE, not by shape: the office is the only thing
+      that can say whether a token is good, and a token it refuses is removed
+      again so the browser is never left holding one.
+    */
+    const field = form.querySelector('#bc-token')
+    const tryToken = async () => {
       const offered = String(field?.value ?? '').trim()
       if (offered === '') {
-        tell('Paste the token first.')
+        tell('Put the token in first.')
         field?.focus()
         return
       }
       tell('Checking…')
       if (!token.set(offered)) {
-        tell('This browser will not keep it — private windows cannot stay signed in.')
+        tell(session.SAID.private)
         return
       }
       try {
         await read('studio')
-        /* It worked: the credential leaves the field at once. */
         if (field !== null) field.value = ''
-        tell('')
-        await ctx.refresh()
-        ctx.render()
+        await done()
       } catch (e) {
         token.clear()
         tell(
@@ -469,14 +531,16 @@ export const wire = (root) => {
         )
       }
     }
-    form.addEventListener('submit', (e) => {
-      e.preventDefault()
-      void tryIt()
-    })
+    for (const f of form.querySelectorAll('[data-bc-tokenform]')) {
+      f.addEventListener('submit', (e) => {
+        e.preventDefault()
+        void tryToken()
+      })
+    }
     for (const b of form.querySelectorAll('[data-bc-signin]')) {
       b.addEventListener('click', (e) => {
         e.preventDefault()
-        void tryIt()
+        void tryToken()
       })
     }
   }

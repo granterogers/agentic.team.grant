@@ -2473,8 +2473,44 @@
   font: 500 13px/1.4 var(--bc-font);
   color: var(--bc-danger);
 }
+[data-experience='basecamp'] .bcsignin {
+  flex-direction: column;
+  align-items: flex-end;
+}
+[data-experience='basecamp'] .bcsigninask {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+}
+/* Not danger red. Most of what this line says is ordinary progress -- asking,
+   waiting, signed in -- and a status that is always red teaches the eye that
+   red means nothing. */
+[data-experience='basecamp'] .bcsigninsaid { color: var(--bc-text-muted); }
+/* The code, big enough to compare with a phone held beside the screen without
+   leaning in. Tabular figures so two readings of the same code look the same. */
+[data-experience='basecamp'] .bcsignincode {
+  margin: 0;
+  font: 600 22px/1.2 var(--bc-font);
+  letter-spacing: .18em;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-accent);
+}
+[data-experience='basecamp'] .bcsigninelse > summary {
+  font: 500 12.5px/1.4 var(--bc-font);
+  color: var(--bc-text-muted);
+  cursor: pointer;
+  /* A 44px row for a control a thumb has to find, without a box around it. */
+  padding: 12px 2px;
+}
+[data-experience='basecamp'] .bcsigninform {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-2);
+  flex-wrap: wrap;
+}
 @media (max-width: 720px) {
-  [data-experience='basecamp'] .bcsignin { margin-left: 0; width: 100%; }
+  [data-experience='basecamp'] .bcsignin { margin-left: 0; width: 100%; align-items: stretch; }
   [data-experience='basecamp'] .bcsignininput { flex: 1; width: auto; }
 }
 
