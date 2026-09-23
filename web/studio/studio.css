@@ -1770,10 +1770,17 @@ button.woutfile:focus-visible { outline: 2px solid var(--accent); outline-offset
    class, so this one does not. */
 .askwho .t-meta { flex: 1 1 auto; min-width: 0; }
 .crow { display: flex; align-items: flex-end; gap: var(--s3); }
+/*
+  16px, NOT 15. Below 16px iOS Safari zooms the page when the field takes
+  focus, which is the floor §17 states and `verify:ui` enforces for every other
+  input in the product - the conversation's own box was the one that had been
+  missed, and it is the field somebody uses most on a phone. Found by measuring
+  the composer at 390px rather than by reading this rule.
+*/
 .crow textarea {
   flex: 1; min-width: 0; min-height: 48px; max-height: 160px; resize: none; border: 0;
   background: transparent; color: var(--ink); padding: 10px 4px;
-  font: 400 15px/1.5 var(--text);
+  font: 400 16px/1.5 var(--text);
 }
 .crow textarea:focus { outline: none; }
 
