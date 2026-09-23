@@ -412,6 +412,7 @@ npm run slack:add-scope -- channels:join   # a Slack scope by manifest, not by b
 GO=lately npm run probe -- '.main'         # measure a rail destination, not a project tab
 npm run check:icons      # every project-mark default names a mark the page can draw (#221)
 npm run check:callers    # no NEW capability ships with nothing that calls it (#72)
+npm run check:consumed   # no table the product writes is one nothing can ever read (#72)
 npm run space            # now walks the home board's panels too, and reports spare room (#267)
 npm run verify:rules             # a correction becomes a standing rule, only on a press (#147)
 npm run verify:routing-quality   # a model is chosen on what it has done, per kind (#127)
@@ -3634,6 +3635,48 @@ Each of these cost real time. They are here so they cost it once.
   are one to three. Generalising the first to the second produced a confident
   wrong diagnosis, and the correction is what produced the real one — which is
   this file's most-used rule arriving from the other direction.
+
+- **A TABLE the product writes and nothing reads is #72's shape in a fourth
+  vocabulary, and nothing was walking tables.** `check:callers` walks database
+  FUNCTIONS, `check:pressable` GATEWAY ACTIONS, `check:capabilities` HANDLER
+  KINDS. 0274's own comment had already named it about `failure_signatures` —
+  *"the mechanism built and the mouth forgotten, which is #72's shape and which
+  this repository keeps producing"* — and it produced it again: a thumbs up or
+  down on Telegram or Slack writes `public.feedback`, which has NO reader
+  anywhere, and moves `notification_events`, whose only reader
+  (`app.notification_patterns`) has no caller. Both Settings cards told Grant
+  the press was read. `npm run check:consumed` is the missing witness, in the
+  gate: 122 tables, 2 written and never read, each with a reason.
+- **A sweep for unread tables is wrong until it counts VIEWS, OPERATOR COMMANDS
+  and PostgREST as readers — three false positives before one true one.** View
+  definitions cleared `notebook_budgets` and `notebook_capability_probes`;
+  #272's operator rule cleared `preference_instructions`, an audit ledger
+  `npm run levels` reads; and `/rest/v1/<table>` cleared `slack_workspaces` —
+  55 rows with an edge function reading it on every Slack event, reported as
+  never read because a REST fetch names no FROM and no JOIN. **A table read
+  over PostgREST is still read, and a SQL-shaped pattern cannot see it.**
+- **The same false claim, in the next card, phrased so the grep missed it.**
+  0580 fixed `app.hq_studio_settings`' Slack sentence by searching for the word
+  *feedback*. The Telegram card promised the same thing in different words —
+  *"teaches the office something"* — and survived, found only by reading the
+  function's LIVE OUTPUT rather than trusting the search. Grep for the CALL, not
+  the noun, is already in this file; this is its prose form, and a settings card
+  is one of the few places the office speaks to Grant with no model in the way.
+- **A baselined reason is a claim about the product — the THIRD false one.**
+  `app.notification_patterns` was excused with *"npm run levels and the learning
+  page answer the question a person actually asks"*. Neither names it: one grep
+  of `scripts/` and one `pg_proc` query settle it, and the only row returned is
+  the function itself. A documented excuse is worse than a bare gap because it
+  stops the next person looking.
+- **`npm run lint` had been RED on the branch for several passes and nobody
+  noticed — third instance.** Three `noTemplateCurlyInString` ERRORS sat under
+  25 warnings, and the failure prints as one unattributed *"Some errors were
+  emitted"* far below them. All three were legitimate (`${...}` quoted verbatim
+  inside a sabotage anchor, and a test building the defect it checks for), so
+  the fix is a suppression with a reason, never a rewrite. **Read the exit
+  code** — and `biome ci` fails on FORMATTING and IMPORT ORDER too, which is
+  what the last two of those five errors actually were.
+
 
 ---
 

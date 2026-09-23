@@ -89,6 +89,7 @@ describe('#41 §8 — a lease is timed by the database, never by a worker', () =
   it('CONTROL: it would notice a lease timed in JavaScript', () => {
     // The realistic regression, checked against the predicate rather than by
     // writing the defect into a real file.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the defect under test IS a dollar-brace in a SQL string, built by concatenation so it stays literal
     const bad = "leased_until = '" + '${new Date(Date.now() + 300000).toISOString()}' + "'"
     expect(DB_CLOCK.test(bad)).toBe(false)
     const good = 'leased_until = app.now_utc() + make_interval(mins => 5)'

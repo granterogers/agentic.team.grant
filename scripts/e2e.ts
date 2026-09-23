@@ -521,6 +521,22 @@ const GATE: ReadonlyArray<readonly [script: string, why: string]> = [
   ['check:chatter', 'no duty is sending Grant more than a hundred messages a day'],
   ['check:undo', 'every reversal the office offers, app.hq_undo can actually perform'],
   /*
+    AND NOTHING IS WRITING INTO A VOID.
+
+    `check:callers` walks database FUNCTIONS, `check:pressable` walks GATEWAY
+    ACTIONS, `check:capabilities` walks HANDLER KINDS. All three ask whether a
+    mechanism that was built is reachable, and nothing asked it about TABLES --
+    which 0274 had already named, about `failure_signatures`: "the mechanism
+    built and the mouth forgotten, which is #72's shape and which this
+    repository keeps producing".
+
+    Pass 27 produced it again. A thumbs up or down on Telegram or Slack writes
+    `public.feedback`, which nothing reads, and moves `notification_events`,
+    whose only reader has no caller -- while both Settings cards told Grant the
+    press was read (0580, 0581).
+  */
+  ['check:consumed', 'no table the product writes is one nothing can ever read'],
+  /*
     AND A RULE HE CANNOT SEE FROM WHERE HE IS STANDING IS STILL ONE IT HOLDS.
 
     `believed` is scoped to the level the turn is at, so from inside a project

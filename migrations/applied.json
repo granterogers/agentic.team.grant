@@ -582,5 +582,10 @@
   "0574_a_suite_that_signs_its_own_messages.sql": "974404be694012ee999c05fb7f96663be21f8996cf89fac331cfed39eed39ed4",
   "0575_the_verdict_outlives_the_evidence.sql": "06cddd5f0f2f13c2f8e09ad9f79586a762dd77ed1e3aa82f719a192efd53e569",
   "0576_a_tool_description_is_written_in_the_third_person.sql": "049a762dbbaaf13d245b6fb0183411b8469371205f3344818d07564ad961f6d6",
-  "0577_a_suggestion_he_can_act_on_and_read.sql": "b17280f44efd494f400686bf8a2f98620636afe30e8cc40d0ef43270a9f7d3d4"
+  "0577_a_suggestion_he_can_act_on_and_read.sql": "b17280f44efd494f400686bf8a2f98620636afe30e8cc40d0ef43270a9f7d3d4",
+  "0577_signing_in_without_pasting_a_credential.sql": "a65a8e9541757b7d84304478de8251e87c4378e07c40428c7a391b130c34930a",
+  "0578_the_pulse_had_no_public_wrapper.sql": "28098d0af9046a699b9100a2ab7091c3e5381380f71f9cd033b5cddfeacfbb2a",
+  "0579_a_tick_is_not_a_reason_to_move.sql": "4dfeafd8c2a28c8cf5a6fe1034d5bd215869940f2b5f099df858abd7d2a6a84b",
+  "0580_a_reaction_slack_never_reads.sql": "5e1591cc97c07e3ac62f1e8eb9322f4d290ccf8b8a2edea3e793db7d869055a5",
+  "0581_a_thumbs_up_teaches_nothing.sql": "910beda89b173f5d31cdcee39fe37c969b89e7d4f82d233c03880a77fa459fbe"
 }

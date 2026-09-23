@@ -1218,6 +1218,95 @@ Filed on the way past, not fixed:
 `vault-export`'s wrong-passphrase check fails about one full run in three and
 passes alone every time. #226's shape, on a SECURITY assertion.
 
+## Pass 27 — the feedback loop, and a claim the product could not honour
+
+**Territory:** the thumbs up / thumbs down buttons on Telegram and Slack (#59)
+— the mechanism by which the office is meant to learn whether an answer was
+any good. Chosen because Telegram is the surface Grant uses most.
+
+**Classification: SYSTEMIC PRODUCT DEFECT.**
+
+**What is canonically true.** Every Telegram message carries 👍/👎 as the
+DEFAULT keyboard (`src/telegram/transport.ts:177`), and Slack maps `:+1:` and
+`:-1:` to the same two actions (`src/slack/events.ts:103`). A press does three
+things: it writes `public.feedback`, it moves `notification_events` past
+`delivered`, and — on Telegram only — a 👎 replies *"What should I have done
+instead? … I will take it as an instruction, not just a note."*
+
+Only the third does anything.
+
+- `public.feedback` has **no reader at all**: no TypeScript outside the insert,
+  no `app.*` function, no view, no operator command. Seven rows, every one
+  `positive`, none since 6 September.
+- `notification_events` has exactly **one** reader, `app.notification_patterns`,
+  and that function has **no caller**.
+- `askForTheCorrection` returns early unless `origin_channel === 'telegram'`, so
+  on Slack both signals do nothing whatever.
+
+And `app.hq_studio_settings` told him so on both Connections cards — Slack:
+*"Reacting with a thumbs up or down is read as feedback."* Telegram: *"A thumbs
+up or down on any reply teaches the office something."* The first is entirely
+untrue on the surface it describes; the second is half true.
+
+**Fixed:** 0580 (Slack) and 0581 (Telegram) replace both sentences with what is
+true and what he can do instead, each with a drive block that raises if the
+false claim survives or the honest one is not served.
+
+**Not fixed, deliberately, and filed instead:** no consumer was built.
+`public.feedback` holds seven rows of one signal and none in seventeen days;
+building learning over it is the `public.contacts` trap this file already
+records. What a reaction should DO is a product decision, made once rather than
+guessed at here.
+
+**Systemic fix — `npm run check:consumed`, in the gate.** `check:callers` walks
+FUNCTIONS, `check:pressable` GATEWAY ACTIONS, `check:capabilities` HANDLER
+KINDS. Nothing walked TABLES, and 0274 had already named the shape about
+`failure_signatures`: *"the mechanism built and the mouth forgotten, which is
+#72's shape and which this repository keeps producing."* 122 tables, 2 written
+and never read, each with a reason. Proved red-then-green on real exit codes.
+
+**The instrument was wrong five times before the product was wrong once** —
+which is the reusable part of this pass:
+
+1. I grepped for a guessed noun (`buttonsFor`), found nothing, and nearly
+   reported that the buttons were never attached. They are.
+2. Reading the effect rather than the table nearly made me withdraw the finding
+   entirely — `resolveNotification` looked like a working consumer until its
+   only reader turned out to have no caller.
+3. The sweep missed VIEW definitions: `notebook_budgets` and
+   `notebook_capability_probes` both looked dead and neither is.
+4. It missed OPERATOR COMMANDS: `preference_instructions` is an audit ledger
+   `npm run levels` reads.
+5. It missed **PostgREST** reads — `slack_workspaces`, 55 rows with an edge
+   function reading it on every Slack event, was reported as never read because
+   `/rest/v1/<table>` names no FROM and no JOIN.
+
+**A false baselined reason, the third this programme has found.**
+`app.notification_patterns`' entry claimed *"npm run levels and the learning
+page answer the question a person actually asks"*. Neither names it: checked by
+grepping `scripts/` and by asking `pg_proc` for any function mentioning it —
+the only row returned is the function itself. Corrected in place.
+
+**Found on the way, and not mine to celebrate:** `npm run lint` had been **red
+on this branch** since an earlier pass of this programme — three
+`noTemplateCurlyInString` errors in `scripts/shadow/sabotage.ts` and
+`tests/jobs/one-clock.test.ts`, all three legitimate uses, now suppressed with
+reasons. A commit went out with lint red, which is the trap CLAUDE.md records,
+for the third time. Green now.
+
+**#326 hit and worked around.** `npm run migrate` refused to run: the sibling
+session on `claude/basecamp-team-hq` had applied 0577, 0578 and 0579 to the
+shared database. Copied in from `de5a448` rather than renamed — renaming would
+make the repository claim a number it did not run under. Mine renumbered
+0578 → 0580. Their four `public.sign_in_*` functions then entered
+`check:callers`, and each is baselined naming the branch it belongs to and
+whether a caller was verified there (three yes, `sign_in_sweep` no).
+
+**Gates:** lint, typecheck, test (188 files / 3,027 tests), check:migrations,
+check:secrets, check:templates, check:callers, check:consumed — all green.
+
+Clean-pass count after pass 27: **0 of 5** — reset by a systemic product defect.
+
 ## Outstanding investigations
 
 - ~~**#325**~~ — closed in pass 1. The collision was demonstrated on his own
