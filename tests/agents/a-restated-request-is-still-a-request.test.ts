@@ -97,3 +97,59 @@ describe('and does not make a second one by mistake', () => {
     expect(artifactRequest('What I asked for was a quieter office.')).toBeNull()
   })
 })
+
+/**
+ * And the two plainest ways to ask, which it also declined (#327).
+ *
+ * Measured in the twelve-turn `long-day` session, where a request for a
+ * document produced "I have not done this. I understood what you want and
+ * could not carry it out" — nothing made, and no artifact child enqueued.
+ * Two independent gaps ended in that one sentence:
+ *
+ *   `document` was admitted only as "document for", so "write me a DOCUMENT ON
+ *   where the venue thing has got to" matched no noun at all;
+ *
+ *   every request form was an imperative to MAKE something, so "I WANT a
+ *   one-pager" was declined although `one-pager` was already in the list.
+ *
+ * The negatives are where the widening is paid for. A bare `summary` is
+ * deliberately NOT a file — "give me a summary of what Emma said" wants a
+ * sentence, and answering it with a PDF is the worse error of the pair.
+ */
+describe('the plainest ways to ask for a document', () => {
+  it('are requests', () => {
+    for (const said of [
+      'write me a document on where the venue thing has got to',
+      'I want a one-pager on the venue change',
+      'can you do me a write-up of where the venue thing has got to',
+      'put together a short written summary of where it has got to, as a document I can read',
+      'I need a brief document on the sponsor position',
+    ]) {
+      expect(artifactRequest(said), said).not.toBeNull()
+    }
+  })
+
+  it('and asking to be TOLD something is not asking for a file', () => {
+    for (const said of [
+      'give me a summary of what Emma said',
+      'I need the numbers on the venue change',
+      'I need to know what the sponsors think',
+      'give me a quick verbal update',
+      'put together a short written summary of where the venue thing has got to',
+    ]) {
+      expect(artifactRequest(said), said).toBeNull()
+    }
+  })
+
+  it('and a document that already exists is still never remade', () => {
+    for (const said of [
+      'did you see the document from the accountants?',
+      'send me the report you wrote yesterday',
+      'I want the report you already sent',
+      'the document looked fine to me',
+      'can you do me a favour and chase the caterers',
+    ]) {
+      expect(artifactRequest(said), said).toBeNull()
+    }
+  })
+})

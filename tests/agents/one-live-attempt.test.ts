@@ -168,7 +168,9 @@ describe('the hand-off is the fan-out that actually happens', () => {
       — so the guard declined, the hand-off ran, and two more people were
       convened to answer a question the rows already held (#327).
     */
-    expect(withoutComments).toMatch(/const aboutTheWork =[\s\S]{0,200}asksWhoIsOnIt\(resolved\.from/)
+    expect(withoutComments).toMatch(
+      /const aboutTheWork =[\s\S]{0,200}asksWhoIsOnIt\(resolved\.from/,
+    )
     expect(withoutComments).toMatch(
       /*
         The loop honours BOTH gates now — a head-count question, and a

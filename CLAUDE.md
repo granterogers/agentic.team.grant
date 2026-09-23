@@ -3058,6 +3058,52 @@ Each of these cost real time. They are here so they cost it once.
   Give it the full timeout, and when a suite passes the ceiling, split it
   rather than reading a timeout as a result.
 
+- **A GUARD READING THE REWRITE HAD NEVER FIRED, AND THE COST WAS WORK RATHER
+  THAN WORDING.** `const aboutTheWork = asksWhoIsOnIt(instruction)` decides
+  whether a status question convenes anybody, and its own comment says *"the
+  shape is a whole short sentence by construction"* — true of what Grant typed,
+  false of what reaches it. `resolveAgainstThread` had already expanded
+  "who have you got on that" into *"Who have you got on the task of providing
+  Grant with a view of the budget impact of the venue change and a view on
+  sponsor participation?"*, which the pattern correctly declines because it is
+  anchored to a sentence ending in a referent. So the guard declined, the
+  hand-off ran, the quality director was convened a SECOND time and a second
+  synthesis spawned — to answer a question `app.conversation_work` already
+  held. An elliptical follow-up is the only shape that guard was ever going to
+  see, and the expansion is exactly what the resolver is for, so it had never
+  fired in practice. #322's rule one reader further out, and the tell is the
+  same: the action was grounded in his words and its guard was not.
+- **Fixing the recogniser changed nothing live, and that was the useful
+  half.** Widening `asksWhoIsOnIt` to catch "who have you got on that" was
+  correct, deployed, and the next run convened two people again — which is what
+  sent the search upstream to the guard's INPUT. A fix that provably lands in
+  the code and provably does not change the behaviour is evidence about where
+  the decision really is; ship it, re-run, and read the non-result.
+- **A corpus of one-to-four-turn sessions cannot find what the mechanisms do to
+  each other.** Every session in the corpus isolates one property, which is the
+  right shape for finding a defect in one mechanism and blind to the defects
+  above — both found in the FIRST run of a twelve-turn conversation with two
+  projects, work started, part finished, called off, repeated and corrected
+  under it. `long-day` is that session. Length is a coverage dimension.
+- **`document` was admitted only as "document for", so the plainest request
+  there is matched nothing.** "Write me a DOCUMENT ON where the venue thing has
+  got to" fell through to prose and the office answered *"I understood what you
+  want and could not carry it out"*. Beside it, every request form was an
+  imperative to MAKE something, so "I WANT a one-pager" was declined although
+  `one-pager` was already in the noun list. Two gaps, one sentence, and #320's
+  whole capability registration cannot help when nothing recognises the ask.
+  A bare `summary` is deliberately still NOT a file — "give me a summary of
+  what Emma said" wants a sentence, and answering it with a PDF is the worse
+  error of the pair.
+- **The session corpus runs on `teamhq` and Grant mostly works on Telegram,
+  and the two do not scope projects the same way.** A session declares the
+  project per TURN; the real surfaces SWITCH scope — 202 switches on record,
+  163 of them `telegram_chat`, 34 Slack, 5 dashboard. So an undeclared
+  follow-up in the corpus lands on the catch-all project `unnamed` (1157 jobs,
+  72 of them real) while the same follow-up on Telegram inherits his scope.
+  Anything a session concludes about project continuity is a conclusion about
+  the dashboard path only.
+
 ---
 
 ## Visual standard

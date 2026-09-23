@@ -315,13 +315,42 @@ export function artifactListing(instruction: string): ArtifactListingRequest | n
   verb like "write" or "produce", which govern half the things he asks for.
 */
 
-/** The words for a thing you can open, as opposed to a thing you can read. */
+/*
+  The words for a thing you can open, as opposed to a thing you can read.
+
+  `document` on its own is here now, behind an article (#327). It was admitted
+  only as `document for`, so "write me a DOCUMENT ON where the venue thing has
+  got to" — the plainest way there is to ask — matched nothing, the turn fell
+  through to prose, and the office answered "I understood what you want and
+  could not carry it out". A bare `document` is safe in a way a bare `summary`
+  is not, and deliberately: a document IS a file, whereas "give me a summary of
+  what Emma said" asks for a sentence, and answering that with a PDF would be
+  the worse error in the pair.
+
+  What keeps "the document you sent me" out is not this list — it is the
+  request verb below and the you-already-made-it exclusion in `asksForAFile`.
+*/
 const ARTIFACT_NOUN =
-  /\b(pdf|report|white\s?paper|whitepaper|one[-\s]?pager|brief(?:ing)?\s+document|document\s+for|briefing\s+note|dossier|(?:a|an|the|your|this)\s+write[-\s]?up)\b/i
+  /\b(pdf|report|white\s?paper|whitepaper|one[-\s]?pager|brief(?:ing)?\s+document|document\s+for|briefing\s+note|dossier|(?:a|an|the|your|this)\s+(?:short\s+|brief\s+|quick\s+|written\s+)?(?:write[-\s]?up|document))\b/i
 
 /** Asking for it to be MADE, as opposed to asking about one that exists. */
 const MAKE_IT =
   /\b(write|create|produce|draft|generate|put\s+together|prepare|make|compile|pull\s+together)\b/i
+
+/*
+  Asking for one WITHOUT a making verb, which is how people mostly ask.
+
+  "I want a one-pager on the venue change" was declined although `one-pager` is
+  in the list above: every request form the reader had was an imperative to
+  MAKE something, and wanting is not making. Measured beside the noun defect in
+  the same twelve-turn session, both ending in the same sentence — the office
+  understood and did nothing.
+
+  Narrower than MAKE_IT on purpose. It only ever combines with a noun that is
+  already a FILE, so "I need the numbers" and "give me a summary" are untouched.
+*/
+const WANTS_ONE =
+  /\b(?:I(?:'|\u2019)?(?:d| would)?\s+(?:want|need|would like)|can you do me|could I have|send me|give me)\b/i
 
 /*
   Asking for it AGAIN, because the first attempt was not what he meant (#320).
@@ -385,7 +414,7 @@ export interface ArtifactRequest {
 function asksForAFile(said: string): boolean {
   if (said === '') return false
   if (!ARTIFACT_NOUN.test(said)) return false
-  if (!MAKE_IT.test(said) && !RESTATED.test(said)) return false
+  if (!MAKE_IT.test(said) && !RESTATED.test(said) && !WANTS_ONE.test(said)) return false
   // "Send me the report you wrote yesterday" is a delivery request, not a
   // writing one, and answering it by writing a second report is the worst
   // available outcome.
